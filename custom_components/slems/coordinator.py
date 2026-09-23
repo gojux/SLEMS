@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import time
 
@@ -74,9 +74,15 @@ from .battery_distribution import (
 from .efficiency import EfficiencyTracker, EnergyIntegrator, LossCurveLearner
 from .forecast import ConsumptionForecast, ConsumptionForecaster, ForecastSources
 from .grid_filter import GridPowerFilter
-from .grid_friendly import feed_in_limit, pv_correction, remaining_surplus
+from .grid_friendly import (
+    feed_in_limit,
+    planned_charging,
+    pv_correction,
+    remaining_surplus,
+    remaining_surplus_by_hour,
+)
 from .night_discharge import NightDischargePlan, plan_night_discharge
-from .pv_forecast import PvForecast, async_get_pv_forecast
+from .pv_forecast import PvForecast, async_get_pv_forecast, hourly
 from .util import state_as_watts
 
 _LOGGER = logging.getLogger(__name__)
@@ -193,6 +199,9 @@ class SystemSnapshot:
     feed_in_limit_w: float | None = None
     # Ratio of today's PV production to the forecast until now.
     pv_correction: float = 1.0
+    # Hours of today for the dashboard: start, corrected PV forecast (Wh),
+    # consumption forecast (Wh), planned battery charging (W, remaining hours).
+    day_plan: list[dict] = field(default_factory=list)
     allocation: Allocation | None = None
     # Planned power per battery subentry id (+charge / -discharge, AC).
     distribution: Distribution | None = None
@@ -589,6 +598,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 battery.energy_to_full_wh + settings.charge_secured_buffer_kwh * 1000,
                 battery.max_charge_w,
             )
+        if pv_forecast is not None:
+            snapshot.day_plan = self._day_plan(
+                pv_forecast, consumption.total if consumption else None, load, wall_now,
+                battery, snapshot.feed_in_limit_w,
+            )
 
         requests = [
             ConsumerRequest(
@@ -655,6 +669,44 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             ),
             now,
         )
+
+    def _day_plan(
+        self,
+        pv_forecast: PvForecast,
+        consumption: dict[datetime, float] | None,
+        load_w: float | None,
+        wall_now: datetime,
+        battery: BatteryGroup | None,
+        limit_w: float | None,
+    ) -> list[dict]:
+        planned: dict[datetime, float] = {}
+        if battery is not None:
+            by_hour = remaining_surplus_by_hour(pv_forecast, consumption, load_w, wall_now)
+            needed = battery.energy_to_full_wh + self.settings.charge_secured_buffer_kwh * 1000
+            charges = planned_charging(
+                [(power, hours) for _, power, hours in by_hour],
+                limit_w,
+                battery.max_charge_w,
+                needed,
+            )
+            planned = {start: charge for (start, _, _), charge in zip(by_hour, charges)}
+        pv_hourly = hourly(pv_forecast)
+        consumption_hourly = hourly(consumption) if consumption else {}
+        day_start = dt_util.start_of_local_day(wall_now)
+        rows = []
+        for hour in range(24):
+            start = day_start + timedelta(hours=hour)
+            rows.append(
+                {
+                    "start": start.isoformat(),
+                    "pv_wh": round(pv_hourly.get(start, 0.0)),
+                    "consumption_wh": (
+                        round(consumption_hourly[start]) if start in consumption_hourly else None
+                    ),
+                    "planned_charge_w": round(planned[start]) if start in planned else None,
+                }
+            )
+        return rows
 
     def fast_snapshot(
         self,

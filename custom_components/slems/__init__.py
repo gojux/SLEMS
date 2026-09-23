@@ -23,6 +23,7 @@ from .consumers import ConsumerConfig
 from .coordinator import BatteryRuntime, SlemsConfigEntry, SlemsCoordinator
 from .drivers import BatteryDriver, create_driver
 from .efficiency import EfficiencyTracker
+from .panel import async_register_panel, async_unregister_panel
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -69,6 +70,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
     entry.runtime_data = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await async_register_panel(hass, entry)
     return True
 
 
@@ -76,6 +78,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> bo
     """Unload a config entry."""
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
+        async_unregister_panel(hass)
         await entry.runtime_data.async_shutdown()
     return unloaded
 

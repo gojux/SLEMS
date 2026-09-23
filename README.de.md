@@ -12,9 +12,9 @@ und PV-Ertrag.
 
 Der Name setzt sich aus *Slug* und *EMS* (Energiemanagementsystem) zusammen.
 
-> **Status: frühe Entwicklung.** Prognose, Planung und Regelung sind
-> umgesetzt, aber noch nicht an einer echten Batterie getestet. Das Dashboard
-> fehlt noch (siehe [Roadmap](#roadmap)).
+> **Status: frühe Entwicklung.** Prognose, Planung, Regelung und Dashboard
+> sind umgesetzt, aber noch nicht an einer echten Batterie getestet (siehe
+> [Roadmap](#roadmap)).
 
 ## Funktionen
 
@@ -39,7 +39,7 @@ Der Name setzt sich aus *Slug* und *EMS* (Energiemanagementsystem) zusammen.
 | Nachtentladung bis zu einer prognosebasierten Reserve | ✅ |
 | Aufteilung auf Batterien nach Wirkungsgrad, Wechsel mit sanftem Übergang | ✅ |
 | Echtzeit-Regelung von Batterien und Verbrauchern (Betriebsmodus *Aktiv*) | ✅ |
-| Dashboard mit Energiefluss und Tagesprognose | geplant |
+| Dashboard (Seitenleiste): Energiefluss, Kennzahlen, Tagesdiagramm mit Prognose und Plan, Batterien, Verbraucher, Einstellungen | ✅ |
 
 ## Installation
 
@@ -135,6 +135,27 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
 Wirkungsgrad der Batterie: je Batterie aus den eigenen Lade-/Entladezählern
 der Batterie, aus der gemessenen Leistung gelernt oder manuell vorgegeben. Er
 fließt in die Entscheidung ein, ob der PV-Überschuss die Batterien füllt.
+
+### Dashboard
+
+SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
+
+- **Übersicht**: Energiefluss zwischen Netz, PV, Haus und Batterien
+  (animiert, je schneller die Punkte, desto höher die Leistung), darunter die
+  Verbraucher, Kennzahlen (Betriebsmodus, Regelstatus, Strategie,
+  Ladezustand, Einspeisegrenze, Prognosen) und das Diagramm *Heute: Prognose
+  und Plan* mit PV- und Verbrauchsprognose (gestrichelt), den bisher
+  gemessenen Werten (durchgezogen) und dem geplanten Laden der Batterien
+  (Balken). Beim Überfahren erscheinen die Werte einer Stunde; *Tabelle
+  anzeigen* schaltet auf eine Tabelle um.
+- **Batterien**: Ladezustand, Leistung, geplante Leistung, Wirkungsgrad,
+  Status und der Schalter *Aktiviert* jeder Batterie.
+- **Verbraucher**: gemessene und geplante Leistung, gesperrt/gesättigt und
+  die gelernte Reaktionszeit.
+- **Einstellungen**: alle Einstellwerte gruppiert und direkt änderbar.
+
+Das Dashboard folgt der Sprache und dem hellen/dunklen Design von Home
+Assistant und funktioniert auch am Handy.
 
 ### Batterien
 
@@ -293,7 +314,6 @@ ab, an Tagen mit weniger Überschuss einen deutlich größeren Anteil.
 ## Roadmap
 
 1. Tests am echten System (siehe offene Punkte in developers.md)
-2. Dashboard: Energiefluss-Schema, Tagesdiagramm mit Prognose und Plan
 
 ## Entwicklung
 

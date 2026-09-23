@@ -12,9 +12,8 @@ absorbed, based on forecasts of consumption and PV production.
 The name is a combination of *Slug* and *EMS* (energy
 management system).
 
-> **Status: early development.** Forecast, planning and control are
-> implemented, but not yet tested on a real battery. The dashboard is still
-> missing (see [roadmap](#roadmap)).
+> **Status: early development.** Forecast, planning, control and dashboard
+> are implemented, but not yet tested on a real battery (see [roadmap](#roadmap)).
 
 ## Features
 
@@ -39,7 +38,7 @@ management system).
 | Night discharge to a forecast based reserve | ✅ |
 | Distribution between batteries by efficiency, rotation with smooth transition | ✅ |
 | Real-time control of batteries and consumers (operating mode *active*) | ✅ |
-| Dashboard with energy flow and daily forecast chart | planned |
+| Dashboard (sidebar panel): energy flow, key figures, daily forecast and plan chart, batteries, consumers, settings | ✅ |
 
 ## Installation
 
@@ -134,6 +133,26 @@ Every consumer needs its own power **and** energy sensor.
 Battery efficiency: per battery from the battery's own charge/discharge
 counters, learned from the measured power, or a manual value. It is taken
 into account when deciding whether the PV surplus will fill the batteries.
+
+### Dashboard
+
+SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
+
+- **Overview**: energy flow between grid, PV, house and batteries (animated,
+  the faster the dots the higher the power), the consumers below it, key
+  figures (operating mode, control status, strategy, state of charge, feed-in
+  limit, forecasts), and the chart *Today: forecast and plan* with PV and
+  consumption forecast (dashed), the measured values so far (solid) and the
+  planned battery charging (bars). Hovering shows the values of an hour;
+  *Show table* switches to a table.
+- **Batteries**: state of charge, power, planned power, efficiency, state and
+  the *Enabled* switch of every battery.
+- **Consumers**: measured and planned power, blocked/saturated state and the
+  learned response time.
+- **Settings**: all settings grouped and editable directly.
+
+The dashboard follows the language and the light/dark theme of Home
+Assistant and works on phones.
 
 ### Batteries
 
@@ -285,7 +304,6 @@ a much larger share.
 ## Roadmap
 
 1. Tests on the real system (see open points in developers.md)
-2. Dashboard: energy flow diagram, daily forecast and plan chart
 
 ## Development
 

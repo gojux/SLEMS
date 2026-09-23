@@ -40,6 +40,7 @@ class SystemSensorDescription(SensorEntityDescription):
     """Describes a system level sensor."""
 
     value_fn: Callable[[SystemSnapshot, SlemsCoordinator], float | None]
+    attributes_fn: Callable[[SystemSnapshot], dict] | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -180,7 +181,9 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         value_fn=lambda s, _: s.night_discharge.power_w if s.night_discharge else None,
     ),
     SystemSensorDescription(
-        **_power("feed_in_limit"), value_fn=lambda s, _: s.feed_in_limit_w
+        **_power("feed_in_limit"),
+        value_fn=lambda s, _: s.feed_in_limit_w,
+        attributes_fn=lambda s: {"day_plan": s.day_plan},
     ),
     SystemSensorDescription(
         key="pv_correction",
@@ -334,6 +337,7 @@ class SystemSensor(SlemsSystemEntity, SensorEntity):
     """System level sensor."""
 
     entity_description: SystemSensorDescription
+    _unrecorded_attributes = frozenset({"day_plan"})
 
     def __init__(
         self, coordinator: SlemsCoordinator, description: SystemSensorDescription
@@ -344,6 +348,12 @@ class SystemSensor(SlemsSystemEntity, SensorEntity):
     @property
     def native_value(self) -> float | None:
         return self.entity_description.value_fn(self.coordinator.data, self.coordinator)
+
+    @property
+    def extra_state_attributes(self) -> dict | None:
+        if self.entity_description.attributes_fn is None:
+            return None
+        return self.entity_description.attributes_fn(self.coordinator.data)
 
 
 class BatterySensor(SlemsBatteryEntity, SensorEntity):

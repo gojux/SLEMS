@@ -65,6 +65,18 @@ def remaining_surplus(
 
     Without a consumption forecast the current load is assumed to stay.
     """
+    return [(power, hours) for _, power, hours in remaining_surplus_by_hour(
+        pv_forecast, consumption_forecast, load_w, now
+    )]
+
+
+def remaining_surplus_by_hour(
+    pv_forecast: Mapping[datetime, float],
+    consumption_forecast: Mapping[datetime, float] | None,
+    load_w: float | None,
+    now: datetime,
+) -> list[tuple[datetime, float, float]]:
+    """Like ``remaining_surplus`` with the start of each hour."""
     pv = hourly(pv_forecast)
     consumption = hourly(consumption_forecast) if consumption_forecast is not None else {}
     end_of_day = dt_util.start_of_local_day(now) + timedelta(days=1)
@@ -77,7 +89,7 @@ def remaining_surplus(
         load = consumption.get(start, load_w or 0.0)
         surplus = pv_wh - load
         if surplus > 0:
-            result.append((surplus, hours))
+            result.append((start, surplus, hours))
     return result
 
 
@@ -106,3 +118,24 @@ def feed_in_limit(
         else:
             high = middle
     return low
+
+
+def planned_charging(
+    surplus: list[tuple[float, float]],
+    limit_w: float | None,
+    max_charge_w: float,
+    needed_wh: float,
+) -> list[float]:
+    """Planned charge power per entry of ``surplus`` until ``needed_wh`` is reached.
+
+    With a feed-in limit only the surplus above it, otherwise everything as
+    early as possible.
+    """
+    result = []
+    remaining = max(0.0, needed_wh)
+    for power, hours in surplus:
+        charge = min(max(0.0, power - (limit_w or 0.0)), max_charge_w)
+        charge = min(charge, remaining / hours) if hours > 0 else 0.0
+        remaining -= charge * hours
+        result.append(charge)
+    return result

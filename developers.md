@@ -72,6 +72,8 @@ custom_components/slems/
   grid_friendly.py   feed-in limit for grid friendly charging, PV forecast correction
   battery_distribution.py  split of the battery power between batteries (rotation, ramps)
   controller.py      real-time controller (active mode): commands to batteries and consumers
+  panel.py           registration of the sidebar dashboard
+  frontend/slems-panel.js  dashboard web component (no build step)
   response.py        learned meter cadence and response times
   adaptive_gain.py   automatic adaptation of the control gain
   allocation.py      distribution of available power between batteries and consumers
@@ -269,9 +271,42 @@ battery, the smaller the cut.
 Possible extensions: take the planned consumers into account in the
 surplus; persist the PV energy of the day; use 15 minute forecast periods.
 
-Not implemented yet:
+### Dashboard
 
-- **Dashboard**: custom sidebar panel (web component served by the integration).
+`panel.py` registers the sidebar panel (`panel_custom`, URL `/slems`) and
+serves `frontend/` under `/slems_static` (registered once per HA run; the
+module URL carries the file's modification time to bust the browser cache).
+The panel config passes what the frontend cannot find itself: system device
+id, batteries and consumers with their device ids and the consumers' power
+entities. The panel is removed on unload and re-registered on every setup.
+
+`frontend/slems-panel.js` is a plain custom element without build step:
+
+- Entities are found via `hass.entities` (platform `slems`, translation key,
+  device id), so renamed entity ids do not matter. Values are formatted with
+  `hass.formatEntityState` (translated states, units, locale).
+- Rendering is split into sections whose markup is only replaced when it
+  changed (`_setSection`), so inputs and the chart hover survive the frequent
+  `hass` updates. Events are delegated on the content element.
+- Day chart: data from the attribute `day_plan` of the sensor *Feed-in limit*
+  (24 rows: corrected PV forecast, consumption forecast, planned charging) plus
+  the hourly means of today from the recorder
+  (`recorder/statistics_during_period` for the SLEMS PV and house sensors,
+  refreshed every 5 min). Drawn as SVG in real pixels (redrawn on resize),
+  one axis in W, forecast dashed, measured solid, planned charging as bars;
+  crosshair tooltip per hour; table view as accessible alternative.
+- Colours: roles PV / battery / grid / consumer / house use categorical slots
+  validated for colour vision deficiency in both modes (adjacent pairs, see
+  the `COLORS` table); dark values when `hass.themes.darkMode`. Everything
+  else uses the HA theme variables. Some light-mode colours are below 3:1
+  contrast on the card; legend, direct labels and the table view carry the
+  identity.
+- Strings: English and German inside the file (`STRINGS`), picked from the HA
+  language.
+
+Screenshots for checking the layout can be taken with Playwright against the
+dev instance (log in as the dev user, open `/slems`, click the tab buttons in
+`slems-panel`); check light, dark, German and a 390 px wide viewport.
 
 ### Control structure
 
@@ -520,6 +555,7 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-23 | Disabling a discharging battery hands over within 5 s. |
 | 2026-09-23 | Real-time controller event driven on the grid meter; batteries released when the meter is stale. |
 | 2026-09-23 | Damped correction (control gain) plus learned response times instead of a fixed settle time; meter cadence learned from its reports. |
+| 2026-09-23 | Dashboard as own sidebar panel (web component without build step), like Omnibattery. |
 | 2026-09-23 | Grid friendly charging via a feed-in limit from PV and consumption forecast, recalculated every cycle; only when the charge is secured. |
 | 2026-09-23 | No PID: feedforward + dead time compensation + proportional gain; the gain adapts automatically (oscillation → lower, sluggish → higher). |
 | 2026-09-23 | Distribution between batteries by minimal conversion losses (learned per battery), rotation by SoC threshold with minimum interval and ramped transition. |
