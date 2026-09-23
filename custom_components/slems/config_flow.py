@@ -31,7 +31,12 @@ from .const import (
     CONF_CONSUMER_TYPE,
     CONF_CONTROL_ENTITY,
     CONF_CONTROL_MODE,
+    CONF_EFFICIENCY_MODE,
     CONF_ENERGY_ENTITY,
+    CONF_MIN_OFF_MINUTES,
+    CONF_MIN_ON_MINUTES,
+    CONF_ROUND_TRIP_EFFICIENCY_PCT,
+    DEFAULT_ROUND_TRIP_EFFICIENCY_PCT,
     CONF_INCLUDED_IN_METER,
     CONF_MAX_POWER_W,
     CONF_MIN_POWER_W,
@@ -61,6 +66,7 @@ from .const import (
     BatteryModel,
     ConsumerType,
     ControlMode,
+    EfficiencyMode,
 )
 from .drivers.marstek_venus_e3 import HARDWARE_MAX_POWER_W, MarstekVenusE3Driver
 from .pv_forecast import async_forecast_provider_entries
@@ -267,7 +273,7 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1, max=247, mode=selector.NumberSelectorMode.BOX)
                 ),
-                **self._limits_schema(defaults, HARDWARE_MAX_POWER_W),
+                **self._limits_schema(defaults, HARDWARE_MAX_POWER_W, list(EfficiencyMode)),
                 vol.Optional(CONF_SKIP_CONNECTION_TEST, default=False): selector.BooleanSelector(),
             }
         )
@@ -298,13 +304,17 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                 vol.Required(
                     CONF_POWER_INVERTED, default=defaults.get(CONF_POWER_INVERTED, False)
                 ): selector.BooleanSelector(),
-                **self._limits_schema(defaults, 100_000),
+                **self._limits_schema(
+                    defaults, 100_000, [EfficiencyMode.LEARNED, EfficiencyMode.MANUAL]
+                ),
             }
         )
         return self.async_show_form(step_id="ha_entities", data_schema=schema)
 
     @staticmethod
-    def _limits_schema(defaults: dict[str, Any], max_power_w: int) -> dict:
+    def _limits_schema(
+        defaults: dict[str, Any], max_power_w: int, efficiency_modes: list[EfficiencyMode]
+    ) -> dict:
         default_power = min(HARDWARE_MAX_POWER_W, max_power_w)
         return {
             vol.Required(
@@ -318,6 +328,26 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                 CONF_MAX_DISCHARGE_POWER_W,
                 default=defaults.get(CONF_MAX_DISCHARGE_POWER_W, default_power),
             ): _watts(max_power_w),
+            vol.Required(
+                CONF_EFFICIENCY_MODE,
+                default=defaults.get(CONF_EFFICIENCY_MODE, efficiency_modes[0].value),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[mode.value for mode in efficiency_modes],
+                    translation_key=CONF_EFFICIENCY_MODE,
+                )
+            ),
+            vol.Required(
+                CONF_ROUND_TRIP_EFFICIENCY_PCT,
+                default=defaults.get(
+                    CONF_ROUND_TRIP_EFFICIENCY_PCT, DEFAULT_ROUND_TRIP_EFFICIENCY_PCT
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=50, max=100, step=1, unit_of_measurement="%",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
         }
 
     def _defaults(self, user_input: dict[str, Any] | None) -> dict[str, Any]:
@@ -333,14 +363,18 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         data = dict(user_input)
         title = data.pop(CONF_NAME)
         data[CONF_MODEL] = self._model.value
-        for key in (CONF_CAPACITY_WH, CONF_MAX_CHARGE_POWER_W, CONF_MAX_DISCHARGE_POWER_W):
+        for key in (
+            CONF_CAPACITY_WH,
+            CONF_MAX_CHARGE_POWER_W,
+            CONF_MAX_DISCHARGE_POWER_W,
+            CONF_ROUND_TRIP_EFFICIENCY_PCT,
+        ):
             data[key] = int(data[key])
         if self.source == SOURCE_RECONFIGURE:
             return self.async_update_and_abort(
                 self._get_entry(), self._get_reconfigure_subentry(), title=title, data=data
             )
         return self.async_create_entry(title=title, data=data)
-
 
 
 class ConsumerSubentryFlow(ConfigSubentryFlow):
@@ -422,7 +456,8 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
         # Control entity and power fields are only reused if the mode is unchanged.
         mode = ControlMode(self._data[CONF_CONTROL_MODE])
         if defaults.get(CONF_CONTROL_MODE) != mode.value:
-            defaults = {k: v for k, v in defaults.items() if k in (CONF_BLOCK_ENTITY, CONF_PRIORITY)}
+            keep = (CONF_BLOCK_ENTITY, CONF_PRIORITY, CONF_MIN_ON_MINUTES, CONF_MIN_OFF_MINUTES)
+            defaults = {k: v for k, v in defaults.items() if k in keep}
 
         fields: dict = {}
         if mode is ControlMode.SWITCH:
@@ -446,6 +481,14 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
             fields[
                 vol.Required(CONF_MAX_POWER_W, default=defaults.get(CONF_MAX_POWER_W, vol.UNDEFINED))
             ] = _watts(100_000)
+        minutes = selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0, max=1440, step=1, unit_of_measurement="min",
+                mode=selector.NumberSelectorMode.BOX,
+            )
+        )
+        fields[_optional(CONF_MIN_ON_MINUTES, defaults)] = minutes
+        fields[_optional(CONF_MIN_OFF_MINUTES, defaults)] = minutes
         fields[_optional(CONF_BLOCK_ENTITY, defaults)] = selector.EntitySelector(
             selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch"])
         )
@@ -459,7 +502,14 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
     def _async_finish(self) -> SubentryFlowResult:
         data = dict(self._data)
         title = data.pop(CONF_NAME)
-        for key in (CONF_NOMINAL_POWER_W, CONF_MIN_POWER_W, CONF_MAX_POWER_W, CONF_PRIORITY):
+        for key in (
+            CONF_NOMINAL_POWER_W,
+            CONF_MIN_POWER_W,
+            CONF_MAX_POWER_W,
+            CONF_PRIORITY,
+            CONF_MIN_ON_MINUTES,
+            CONF_MIN_OFF_MINUTES,
+        ):
             if key in data:
                 data[key] = int(data[key])
         if self.source == SOURCE_RECONFIGURE:

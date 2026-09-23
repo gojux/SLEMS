@@ -160,9 +160,11 @@ class MarstekVenusE3Driver(BatteryDriver):
             )
         if "rs485_control" in values:
             extra["rs485_control"] = values["rs485_control"] == RS485_ENABLE
+        ac_power = values.get("ac_power")
         return BatteryTelemetry(
             soc_pct=values.get("battery_soc"),
             power_w=values.get("battery_power"),
+            ac_power_w=-ac_power if ac_power is not None else None,
             extra=extra,
         )
 

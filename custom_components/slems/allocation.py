@@ -1,0 +1,256 @@
+"""Distribution of the available power between batteries and consumers.
+
+``available_w`` is the power SLEMS can distribute: the (filtered) grid export
+plus the power currently drawn by everything SLEMS controls (batteries and
+unblocked controllable consumers). Positive = surplus, negative = deficit.
+
+Surplus:
+1. Consumers that must keep running (minimum runtime) keep their power.
+2. As long as the battery charge is not *secured*, the battery has priority.
+   Charge is secured when the total SoC is at least the priority threshold and
+   the expected PV surplus for the rest of the day covers the energy needed to
+   fill the batteries (including charge losses) with a safety margin.
+3. Once secured, the surplus is split: the battery share goes to the batteries,
+   the rest to the consumers in order of priority. Whatever one side cannot
+   take is offered to the other.
+
+Deficit: the batteries cover it (self consumption). With import peak shaving
+enabled and the SoC at or below its threshold, they only cover the import
+above the grid limit.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from enum import StrEnum
+
+from homeassistant.util import dt as dt_util
+
+from .const import ControlMode
+from .pv_forecast import PvForecast
+
+FULL_SOC_PCT = 99.5
+PV_PERIOD = timedelta(hours=1)
+
+
+class Strategy(StrEnum):
+    """Why the allocation looks the way it does."""
+
+    BATTERY_PRIORITY = "battery_priority"
+    SHARED = "shared"
+    SELF_CONSUMPTION = "self_consumption"
+    PEAK_SHAVING = "peak_shaving"
+
+
+@dataclass(frozen=True)
+class BatteryGroup:
+    """All batteries seen as one."""
+
+    soc_pct: float
+    capacity_wh: float
+    max_charge_w: float
+    max_discharge_w: float
+    # One way efficiency (charging), 0..1.
+    charge_efficiency: float
+
+    @property
+    def energy_to_full_wh(self) -> float:
+        """Energy that must be charged to fill the batteries, losses included."""
+        missing = max(0.0, 100.0 - self.soc_pct) / 100 * self.capacity_wh
+        return missing / self.charge_efficiency
+
+    @property
+    def is_full(self) -> bool:
+        return self.soc_pct >= FULL_SOC_PCT
+
+
+@dataclass(frozen=True)
+class ConsumerRequest:
+    """A controllable, currently unblocked consumer."""
+
+    subentry_id: str
+    priority: int
+    control_mode: ControlMode
+    nominal_power_w: float = 0.0
+    min_power_w: float = 0.0
+    max_power_w: float = 0.0
+    # Minimum runtime not yet elapsed: must keep running.
+    must_stay_on: bool = False
+    # Minimum pause not yet elapsed: must stay off.
+    must_stay_off: bool = False
+
+    @property
+    def minimum_running_power_w(self) -> float:
+        if self.control_mode is ControlMode.SWITCH:
+            return self.nominal_power_w
+        return self.min_power_w
+
+
+@dataclass(frozen=True)
+class AllocationSettings:
+    """User settings influencing the allocation."""
+
+    battery_priority_soc_pct: float
+    battery_share_when_secured_pct: float
+    charge_secured_margin_pct: float
+    peak_shaving: bool
+    peak_shaving_grid_limit_w: float
+    peak_shaving_soc_threshold_pct: float
+
+
+@dataclass
+class Allocation:
+    """Result: battery power (+charge / -discharge) and consumer powers."""
+
+    strategy: Strategy
+    battery_power_w: float = 0.0
+    consumer_power_w: dict[str, float] = field(default_factory=dict)
+    charge_secured: bool = False
+
+
+def allocate(
+    available_w: float,
+    battery: BatteryGroup | None,
+    consumers: Sequence[ConsumerRequest],
+    settings: AllocationSettings,
+    expected_surplus_wh: float | None,
+) -> Allocation:
+    """Distribute ``available_w`` between batteries and consumers."""
+    ordered = sorted(consumers, key=lambda c: (c.priority, c.subentry_id))
+    consumer_power = {c.subentry_id: 0.0 for c in ordered}
+
+    # Consumers within their minimum runtime keep at least their running power.
+    for consumer in ordered:
+        if consumer.must_stay_on:
+            consumer_power[consumer.subentry_id] = consumer.minimum_running_power_w
+    remaining = available_w - sum(consumer_power.values())
+
+    charge_secured = battery is not None and _charge_secured(
+        battery, settings, expected_surplus_wh
+    )
+
+    if remaining < 0:
+        allocation = _cover_deficit(-remaining, battery, settings)
+        allocation.consumer_power_w = consumer_power
+        allocation.charge_secured = charge_secured
+        return allocation
+
+    max_charge = 0.0 if battery is None or battery.is_full else battery.max_charge_w
+    if charge_secured:
+        strategy = Strategy.SHARED
+        battery_budget = remaining * settings.battery_share_when_secured_pct / 100
+    else:
+        strategy = Strategy.BATTERY_PRIORITY
+        battery_budget = remaining
+    battery_power = min(battery_budget, max_charge)
+    consumer_budget = remaining - battery_power
+
+    unused = _distribute(consumer_budget, ordered, consumer_power)
+    # What the consumers cannot take goes back to the batteries.
+    battery_power = min(battery_power + unused, max_charge)
+
+    return Allocation(
+        strategy=strategy,
+        battery_power_w=battery_power,
+        consumer_power_w=consumer_power,
+        charge_secured=charge_secured,
+    )
+
+
+def _charge_secured(
+    battery: BatteryGroup,
+    settings: AllocationSettings,
+    expected_surplus_wh: float | None,
+) -> bool:
+    if battery.soc_pct < settings.battery_priority_soc_pct:
+        return False
+    if battery.is_full:
+        return True
+    if expected_surplus_wh is None:
+        return False
+    required = battery.energy_to_full_wh * settings.charge_secured_margin_pct / 100
+    return expected_surplus_wh >= required
+
+
+def _cover_deficit(
+    deficit_w: float, battery: BatteryGroup | None, settings: AllocationSettings
+) -> Allocation:
+    if battery is None:
+        return Allocation(strategy=Strategy.SELF_CONSUMPTION)
+    if settings.peak_shaving and battery.soc_pct <= settings.peak_shaving_soc_threshold_pct:
+        discharge = max(0.0, deficit_w - settings.peak_shaving_grid_limit_w)
+        strategy = Strategy.PEAK_SHAVING
+    else:
+        discharge = deficit_w
+        strategy = Strategy.SELF_CONSUMPTION
+    return Allocation(
+        strategy=strategy, battery_power_w=-min(discharge, battery.max_discharge_w)
+    )
+
+
+def _distribute(
+    budget: float,
+    consumers: Iterable[ConsumerRequest],
+    consumer_power: dict[str, float],
+) -> float:
+    """Hand out ``budget`` in order of priority; return what is left."""
+    for consumer in consumers:
+        if budget <= 0:
+            break
+        if consumer.must_stay_off:
+            continue
+        current = consumer_power[consumer.subentry_id]
+        if consumer.control_mode is ControlMode.SWITCH:
+            if current == 0 and budget >= consumer.nominal_power_w:
+                consumer_power[consumer.subentry_id] = consumer.nominal_power_w
+                budget -= consumer.nominal_power_w
+            continue
+        extra = min(budget, consumer.max_power_w - current)
+        if current + extra < consumer.min_power_w:
+            continue
+        consumer_power[consumer.subentry_id] = current + extra
+        budget -= extra
+    return budget
+
+
+def remaining_pv_wh(forecast: PvForecast, now: datetime) -> float:
+    """Forecast PV energy from ``now`` until the end of the local day."""
+    end_of_day = dt_util.start_of_local_day(now) + timedelta(days=1)
+    total = 0.0
+    for start, wh in forecast.items():
+        end = start + PV_PERIOD
+        if end <= now or start >= end_of_day:
+            continue
+        # Pro rata share of the running period.
+        covered = (min(end, end_of_day) - max(start, now)) / PV_PERIOD
+        total += wh * covered
+    return total
+
+
+def pv_end_today(forecast: PvForecast, now: datetime) -> datetime | None:
+    """End of the last period with PV production today, None if already over."""
+    end_of_day = dt_util.start_of_local_day(now) + timedelta(days=1)
+    ends = [
+        start + PV_PERIOD
+        for start, wh in forecast.items()
+        if wh > 0 and start < end_of_day and start + PV_PERIOD > now
+    ]
+    return max(ends) if ends else None
+
+
+def expected_surplus_wh(
+    forecast: PvForecast | None, now: datetime, load_w: float | None
+) -> float | None:
+    """PV energy left today minus the load until PV production ends.
+
+    ``load_w`` is assumed to stay constant (persistence forecast).
+    """
+    if forecast is None or load_w is None:
+        return None
+    end = pv_end_today(forecast, now)
+    if end is None:
+        return 0.0
+    hours = (end - now).total_seconds() / 3600
+    return remaining_pv_wh(forecast, now) - max(0.0, load_w) * hours

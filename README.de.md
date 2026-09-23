@@ -34,7 +34,10 @@ statt eines Hauses.
 | Bezugsspitzen abfangen bei niedrigem Ladezustand (manuell aktivierbar) | ✅ Entities, Logik folgt |
 | Verbrauchsprognose (Historie + Wetter) | geplant |
 | Netzdienliches Laden: PV-Einspeisespitzen abfangen | geplant |
-| Verbrauchersteuerung (Schalter / Leistungsvorgabe, externe Sperre, Priorität) | geplant |
+| Verteilung des Überschusses auf Batterien und Verbraucher (Priorität, Aufteilung, Mindestlaufzeit/-pause) | ✅ berechnet und angezeigt, Ausführung folgt |
+| Wirkungsgrad der Batterie (Batteriezähler, gelernt oder manuell) | ✅ |
+| Gemittelter Netzüberschuss (0–300 s) | ✅ |
+| Verbrauchersteuerung (Befehle senden) | geplant |
 | Dashboard mit Energiefluss und Tagesprognose | geplant |
 
 ## Installation
@@ -99,7 +102,11 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   Leistungsvorgabe über eine Number-Entity in W. Für gesteuerte Verbraucher
   kann eine Entity für eine externe Sperre gewählt werden (solange sie
   eingeschaltet ist, steuert SLEMS den Verbraucher nicht), dazu eine
-  Priorität (1 = höchste).
+  Priorität (1 = höchste) und optional eine Mindestlaufzeit und Mindestpause.
+
+Wirkungsgrad der Batterie: je Batterie aus den eigenen Lade-/Entladezählern
+der Batterie, aus der gemessenen Leistung gelernt oder manuell vorgegeben. Er
+fließt in die Entscheidung ein, ob der PV-Überschuss die Batterien füllt.
 
 ### Batterien
 
@@ -124,6 +131,16 @@ Die Entity *SLEMS Betriebsmodus* schaltet zwischen:
 ### Weitere Einstellungen (Entities)
 
 - *Urlaub* (Schalter): Der Haushalt ist abwesend; manuell oder per Automation schalten.
+- *Batterievorrang unter Ladezustand* (Standard 30 %), *Sicherheitszuschlag
+  gesicherte Ladung* (Standard 120 %) und *Batterieanteil bei gesicherter
+  Ladung* (Standard 75 %): Die Batterien bekommen den gesamten Überschuss, bis
+  ihre Ladung gesichert ist, d. h. der Ladezustand über der Schwelle liegt und
+  der erwartete PV-Überschuss des Tages die Energie bis zur Vollladung samt
+  Zuschlag deckt. Danach wird aufgeteilt, der Anteil der Verbraucher geht nach
+  Priorität. Was eine Seite nicht nutzen kann, bekommt die andere.
+- *Mittelungsfenster Überschuss* (0–300 s, Standard 5 s, 0 = aus): Die
+  Netzleistung wird gemittelt; es gilt der ungünstigere Wert aus Mittelwert
+  und aktuellem Wert, damit die Regelung bei schwankender PV nicht überschießt.
 - *Bezugsspitzen abfangen* (Schalter): standardmäßig aus. Wenn aktiviert und
   der Gesamt-Ladezustand auf oder unter der *Ladezustand-Schwelle für
   Spitzenabfang* liegt, entladen die Batterien nur noch, um den Netzbezug
@@ -131,9 +148,9 @@ Die Entity *SLEMS Betriebsmodus* schaltet zwischen:
 
 ## Roadmap
 
-1. Verbrauchermodell: Details der Steuerung (Mindestlaufzeiten, Hysterese, …)
-2. Verbrauchsprognose aus Historie und Wetter
-3. Planer (netzdienliches Laden, Spitzen abfangen) und Echtzeit-Regler
+1. Verbrauchsprognose aus Historie und Wetter
+2. Planer (netzdienliches Laden) und Echtzeit-Regler, der die Verteilung umsetzt
+3. Aufteilung auf mehrere Batterien nach Wirkungsgrad-Optimum
 4. Dashboard: Energiefluss-Schema, Tagesdiagramm mit Prognose und Plan
 
 ## Entwicklung

@@ -27,7 +27,8 @@ from homeassistant.util import dt as dt_util
 from .const import CONF_PV_FORECAST_ENTRIES
 from .coordinator import SlemsConfigEntry, SlemsCoordinator, SystemSnapshot
 from .drivers import BatteryTelemetry
-from .entity import SlemsBatteryEntity, SlemsSystemEntity
+from .allocation import Strategy
+from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 from .pv_forecast import energy_on_day
 
 
@@ -101,6 +102,35 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
     ),
     _energy_forecast("pv_forecast_today", 0),
     _energy_forecast("pv_forecast_tomorrow", 1),
+    SystemSensorDescription(
+        **_power("grid_power_filtered"),
+        entity_registry_enabled_default=False,
+        value_fn=lambda s, _: s.grid_power_filtered_w,
+    ),
+    SystemSensorDescription(
+        **_power("available_power"), value_fn=lambda s, _: s.available_power_w
+    ),
+    SystemSensorDescription(
+        **_power("planned_battery_power"),
+        value_fn=lambda s, _: s.allocation.battery_power_w if s.allocation else None,
+    ),
+    SystemSensorDescription(
+        key="allocation_strategy",
+        translation_key="allocation_strategy",
+        device_class=SensorDeviceClass.ENUM,
+        options=[strategy.value for strategy in Strategy],
+        value_fn=lambda s, _: s.allocation.strategy.value if s.allocation else None,
+    ),
+    SystemSensorDescription(
+        key="expected_surplus_energy",
+        translation_key="expected_surplus_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+        value_fn=lambda s, _: (
+            None if s.expected_surplus_wh is None else s.expected_surplus_wh / 1000
+        ),
+    ),
     SystemSensorDescription(
         **_power("battery_power_total"), value_fn=lambda s, _: s.battery_power_w
     ),
@@ -213,9 +243,18 @@ async def async_setup_entry(
             d for d in BATTERY_EXTRA_SENSORS if d.key in extra_keys
         )
         async_add_entities(
-            (BatterySensor(coordinator, battery, d) for d in descriptions),
+            [
+                *(BatterySensor(coordinator, battery, d) for d in descriptions),
+                EfficiencySensor(coordinator, battery),
+            ],
             config_subentry_id=battery.subentry_id,
         )
+    for consumer in coordinator.consumers:
+        if consumer.controllable:
+            async_add_entities(
+                [PlannedConsumerPowerSensor(coordinator, consumer)],
+                config_subentry_id=consumer.subentry_id,
+            )
 
 
 class SystemSensor(SlemsSystemEntity, SensorEntity):
@@ -249,3 +288,52 @@ class BatterySensor(SlemsBatteryEntity, SensorEntity):
         if telemetry is None:
             return None
         return self.entity_description.value_fn(telemetry)
+
+
+class EfficiencySensor(SlemsBatteryEntity, SensorEntity):
+    """Round trip efficiency currently used for the battery."""
+
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_suggested_display_precision = 1
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: SlemsCoordinator, battery) -> None:
+        super().__init__(coordinator, battery, "round_trip_efficiency")
+
+    @property
+    def available(self) -> bool:
+        # Also meaningful while the battery is temporarily unreachable.
+        return self.coordinator.last_update_success
+
+    @property
+    def native_value(self) -> float:
+        return self.battery.efficiency.round_trip * 100
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        efficiency = self.battery.efficiency
+        return {"mode": efficiency.mode.value, "measured": efficiency.is_learned}
+
+
+class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
+    """Power SLEMS assigns to a consumer (commanded only in active mode)."""
+
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_suggested_display_precision = 0
+
+    def __init__(self, coordinator: SlemsCoordinator, consumer) -> None:
+        super().__init__(coordinator, consumer, "planned_power")
+
+    @property
+    def native_value(self) -> float | None:
+        allocation = self.coordinator.data.allocation
+        if allocation is None:
+            return None
+        return allocation.consumer_power_w.get(self.consumer.subentry_id)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        state = self.coordinator.data.consumers.get(self.consumer.subentry_id)
+        return {"blocked": state.blocked if state else None}

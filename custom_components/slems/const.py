@@ -34,6 +34,11 @@ CONF_SKIP_CONNECTION_TEST: Final = "skip_connection_test"
 CONF_SOC_ENTITY: Final = "soc_entity"
 CONF_POWER_ENTITY: Final = "power_entity"
 CONF_POWER_INVERTED: Final = "power_inverted"
+CONF_EFFICIENCY_MODE: Final = "efficiency_mode"
+CONF_ROUND_TRIP_EFFICIENCY_PCT: Final = "round_trip_efficiency_pct"
+
+# Used until a learned value is reliable, and as manual default.
+DEFAULT_ROUND_TRIP_EFFICIENCY_PCT: Final = 88
 
 DEFAULT_MODBUS_PORT: Final = 502
 DEFAULT_UNIT_ID: Final = 1
@@ -51,12 +56,18 @@ CONF_MIN_POWER_W: Final = "min_power_w"
 CONF_MAX_POWER_W: Final = "max_power_w"
 CONF_BLOCK_ENTITY: Final = "block_entity"
 CONF_PRIORITY: Final = "priority"
+CONF_MIN_ON_MINUTES: Final = "min_on_minutes"
+CONF_MIN_OFF_MINUTES: Final = "min_off_minutes"
 
 DEFAULT_PRIORITY: Final = 5
 
 # --- runtime settings (entities, restored after restart) ----------------------
 DEFAULT_PEAK_SHAVING_GRID_LIMIT_W: Final = 3000
 DEFAULT_PEAK_SHAVING_SOC_THRESHOLD_PCT: Final = 20
+DEFAULT_SURPLUS_AVERAGE_WINDOW_S: Final = 5
+DEFAULT_BATTERY_PRIORITY_SOC_PCT: Final = 30
+DEFAULT_BATTERY_SHARE_WHEN_SECURED_PCT: Final = 75
+DEFAULT_CHARGE_SECURED_MARGIN_PCT: Final = 120
 
 
 class BatteryModel(StrEnum):
@@ -66,6 +77,16 @@ class BatteryModel(StrEnum):
     # Read-only battery backed by existing Home Assistant entities. Allows running
     # SLEMS in simulation mode while another integration still controls the device.
     HA_ENTITIES = "ha_entities"
+
+
+class EfficiencyMode(StrEnum):
+    """Source of a battery's round trip efficiency."""
+
+    # Lifetime charge/discharge counters reported by the battery.
+    BATTERY_COUNTERS = "battery_counters"
+    # Learned by integrating the measured battery power.
+    LEARNED = "learned"
+    MANUAL = "manual"
 
 
 class ConsumerType(StrEnum):

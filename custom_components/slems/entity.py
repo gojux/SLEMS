@@ -6,6 +6,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MANUFACTURER
+from .consumers import ConsumerConfig
 from .coordinator import BatteryRuntime, SlemsCoordinator
 
 
@@ -52,4 +53,25 @@ class SlemsBatteryEntity(CoordinatorEntity[SlemsCoordinator]):
         return (
             super().available
             and self.battery.subentry_id in self.coordinator.data.batteries
+        )
+
+
+class SlemsConsumerEntity(CoordinatorEntity[SlemsCoordinator]):
+    """Entity belonging to one consumer device."""
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self, coordinator: SlemsCoordinator, consumer: ConsumerConfig, key: str
+    ) -> None:
+        super().__init__(coordinator)
+        self.consumer = consumer
+        self._attr_translation_key = key
+        self._attr_unique_id = f"{consumer.subentry_id}_{key}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, consumer.subentry_id)},
+            name=consumer.name,
+            manufacturer=MANUFACTURER,
+            model="Consumer",
+            via_device_id=coordinator.system_device_id,
         )

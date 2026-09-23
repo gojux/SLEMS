@@ -32,7 +32,10 @@ management system); the slug in the logo carries a battery instead of a shell.
 | Import peak shaving at low state of charge (manually enabled) | ✅ entities, logic follows |
 | Consumption forecast (history + weather) | planned |
 | Grid friendly charging: absorb PV feed-in peaks | planned |
-| Consumer control (switch / power set point, external block, priority) | planned |
+| Distribution of surplus between batteries and consumers (priorities, split, minimum runtime/pause) | ✅ computed and shown, execution follows |
+| Battery efficiency (battery counters, learned or manual) | ✅ |
+| Averaged grid surplus (0–300 s) | ✅ |
+| Consumer control (sending commands) | planned |
 | Dashboard with energy flow and daily forecast chart | planned |
 
 ## Installation
@@ -94,7 +97,12 @@ Every consumer needs its own power **and** energy sensor.
 - **Control**: none (measurement only), on/off via a switch, or a power set
   point via a number entity in W. For controlled consumers an entity can be
   selected that blocks them externally (while it is on, SLEMS leaves the
-  consumer alone), plus a priority (1 = highest).
+  consumer alone), a priority (1 = highest) and optionally a minimum runtime
+  and a minimum pause.
+
+Battery efficiency: per battery from the battery's own charge/discharge
+counters, learned from the measured power, or a manual value. It is taken
+into account when deciding whether the PV surplus will fill the batteries.
 
 ### Batteries
 
@@ -118,6 +126,16 @@ The entity *SLEMS Operating mode* switches between:
 ### Further settings (entities)
 
 - *Vacation* (switch) – the household is away; switch manually or by an automation.
+- *Battery priority below state of charge* (default 30 %), *Charge secured
+  safety margin* (default 120 %) and *Battery share when charge is secured*
+  (default 75 %) – the batteries get all surplus until their charge is
+  secured: the state of charge is above the threshold and the expected PV
+  surplus of the day covers the energy to fill them with the safety margin.
+  Afterwards the surplus is split, the consumers' share is distributed by
+  priority. Power one side cannot use goes to the other.
+- *Surplus averaging window* (0–300 s, default 5 s, 0 = off) – the grid power
+  is averaged; the less favourable of average and current value is used, so
+  the control does not overshoot with fluctuating PV.
 - *Import peak shaving* (switch) – off by default. When enabled and the total
   state of charge is at or below *Peak shaving state of charge threshold*, the
   batteries only discharge to keep the grid import below *Peak shaving grid
@@ -125,9 +143,9 @@ The entity *SLEMS Operating mode* switches between:
 
 ## Roadmap
 
-1. Consumer model: control details (minimum runtimes, hysteresis, …)
-2. Consumption forecast from history and weather
-3. Planner (grid friendly charging, peak shaving) and real-time controller
+1. Consumption forecast from history and weather
+2. Planner (grid friendly charging) and real-time controller that executes the allocation
+3. Distribution between several batteries at the efficiency optimum
 4. Dashboard: energy flow diagram, daily forecast and plan chart
 
 ## Development

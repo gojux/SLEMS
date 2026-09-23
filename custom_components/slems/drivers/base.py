@@ -35,8 +35,16 @@ class BatteryTelemetry:
     soc_pct: float | None = None
     # DC side battery power, +charge / -discharge.
     power_w: float | None = None
+    # AC side power at the inverter output, +charge / -discharge; None if the
+    # battery does not report it.
+    ac_power_w: float | None = None
     # Driver specific extra values (voltage, temperature, counters, ...).
     extra: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def grid_side_power_w(self) -> float | None:
+        """Power as seen by the house installation (AC if known)."""
+        return self.ac_power_w if self.ac_power_w is not None else self.power_w
 
 
 class BatteryDriverError(Exception):

@@ -2,16 +2,30 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
-from .const import DOMAIN, MANUFACTURER, SUBENTRY_TYPE_BATTERY, SUBENTRY_TYPE_CONSUMER
+from .const import (
+    CONF_EFFICIENCY_MODE,
+    CONF_ROUND_TRIP_EFFICIENCY_PCT,
+    DEFAULT_ROUND_TRIP_EFFICIENCY_PCT,
+    DOMAIN,
+    MANUFACTURER,
+    SUBENTRY_TYPE_BATTERY,
+    SUBENTRY_TYPE_CONSUMER,
+    EfficiencyMode,
+)
 from .consumers import ConsumerConfig
 from .coordinator import BatteryRuntime, SlemsConfigEntry, SlemsCoordinator
-from .drivers import create_driver
+from .drivers import BatteryDriver, create_driver
+from .efficiency import EfficiencyTracker
 
 PLATFORMS: list[Platform] = [
+    Platform.BINARY_SENSOR,
     Platform.NUMBER,
     Platform.SELECT,
     Platform.SENSOR,
@@ -32,15 +46,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
         manufacturer=MANUFACTURER,
         model="Energy manager",
     )
-    batteries = [
-        BatteryRuntime(
-            subentry_id=subentry.subentry_id,
-            name=subentry.title,
-            driver=create_driver(hass, subentry.data),
+    batteries = []
+    for subentry in entry.subentries.values():
+        if subentry.subentry_type != SUBENTRY_TYPE_BATTERY:
+            continue
+        driver = create_driver(hass, subentry.data)
+        batteries.append(
+            BatteryRuntime(
+                subentry_id=subentry.subentry_id,
+                name=subentry.title,
+                driver=driver,
+                efficiency=_efficiency_tracker(driver, subentry.data),
+            )
         )
-        for subentry in entry.subentries.values()
-        if subentry.subentry_type == SUBENTRY_TYPE_BATTERY
-    ]
     consumers = [
         ConsumerConfig.from_subentry(subentry.subentry_id, subentry.title, subentry.data)
         for subentry in entry.subentries.values()
@@ -65,3 +83,24 @@ async def async_unload_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> bo
 async def _async_reload_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> None:
     """Reload the entry after its configuration changed."""
     hass.config_entries.async_schedule_reload(entry.entry_id)
+
+
+def _efficiency_tracker(driver: BatteryDriver, data: Mapping[str, Any]) -> EfficiencyTracker:
+    """Build the efficiency tracker; counters are preferred if the battery has them."""
+    mode = data.get(CONF_EFFICIENCY_MODE)
+    if mode is None:
+        mode = (
+            EfficiencyMode.BATTERY_COUNTERS
+            if supports_energy_counters(driver)
+            else EfficiencyMode.LEARNED
+        )
+    return EfficiencyTracker(
+        EfficiencyMode(mode),
+        data.get(CONF_ROUND_TRIP_EFFICIENCY_PCT, DEFAULT_ROUND_TRIP_EFFICIENCY_PCT),
+        driver.capabilities.capacity_wh / 1000,
+    )
+
+
+def supports_energy_counters(driver: BatteryDriver) -> bool:
+    """True if the driver reports lifetime charge/discharge counters."""
+    return {"total_charging_energy", "total_discharging_energy"} <= driver.extra_telemetry_keys

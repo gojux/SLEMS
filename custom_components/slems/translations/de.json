@@ -69,10 +69,14 @@
             "capacity_wh": "Nutzbare Kapazität",
             "max_charge_power_w": "Maximale Ladeleistung",
             "max_discharge_power_w": "Maximale Entladeleistung",
-            "skip_connection_test": "Verbindungstest überspringen"
+            "skip_connection_test": "Verbindungstest überspringen",
+            "efficiency_mode": "Quelle des Wirkungsgrads",
+            "round_trip_efficiency_pct": "Gesamtwirkungsgrad"
           },
           "data_description": {
-            "skip_connection_test": "Ohne Verbindungstest speichern, z. B. solange eine andere Integration die Modbus-Verbindung belegt."
+            "skip_connection_test": "Ohne Verbindungstest speichern, z. B. solange eine andere Integration die Modbus-Verbindung belegt.",
+            "efficiency_mode": "Batteriezähler: aus den Gesamtzählern für Laden/Entladen der Batterie. Gelernt: aus der gemessenen Batterieleistung. Manuell: fester Wert.",
+            "round_trip_efficiency_pct": "Entnommene / eingespeicherte Energie (AC). Im manuellen Modus fester Wert, sonst Startwert, bis genug Messdaten vorliegen."
           }
         },
         "ha_entities": {
@@ -85,10 +89,14 @@
             "power_inverted": "Vorzeichen der Leistung umkehren",
             "capacity_wh": "Nutzbare Kapazität",
             "max_charge_power_w": "Maximale Ladeleistung",
-            "max_discharge_power_w": "Maximale Entladeleistung"
+            "max_discharge_power_w": "Maximale Entladeleistung",
+            "efficiency_mode": "Quelle des Wirkungsgrads",
+            "round_trip_efficiency_pct": "Gesamtwirkungsgrad"
           },
           "data_description": {
-            "power_inverted": "SLEMS erwartet positiv = Laden. Aktivieren, wenn der Sensor Entladen positiv meldet."
+            "power_inverted": "SLEMS erwartet positiv = Laden. Aktivieren, wenn der Sensor Entladen positiv meldet.",
+            "efficiency_mode": "Batteriezähler: aus den Gesamtzählern für Laden/Entladen der Batterie. Gelernt: aus der gemessenen Batterieleistung. Manuell: fester Wert.",
+            "round_trip_efficiency_pct": "Entnommene / eingespeicherte Energie (AC). Im manuellen Modus fester Wert, sonst Startwert, bis genug Messdaten vorliegen."
           }
         }
       },
@@ -130,12 +138,16 @@
             "min_power_w": "Minimale Leistung",
             "max_power_w": "Maximale Leistung",
             "block_entity": "Externe Sperre",
-            "priority": "Priorität"
+            "priority": "Priorität",
+            "min_on_minutes": "Mindestlaufzeit",
+            "min_off_minutes": "Mindestpause"
           },
           "data_description": {
             "control_entity": "Schalter für Ein/Aus-Verbraucher, Number-Entity in W für leistungsgeregelte Verbraucher.",
             "block_entity": "Solange diese Entity eingeschaltet ist, steuert SLEMS den Verbraucher nicht (z. B. vom Gerät oder einer Automation gesperrt).",
-            "priority": "1 = höchste Priorität bei der Verteilung von Überschuss."
+            "priority": "1 = höchste Priorität bei der Verteilung von Überschuss.",
+            "min_on_minutes": "Optional. Nach dem Einschalten durch SLEMS läuft der Verbraucher mindestens so lange.",
+            "min_off_minutes": "Optional. Nach dem Ausschalten durch SLEMS bleibt der Verbraucher mindestens so lange aus."
           }
         }
       },
@@ -163,6 +175,13 @@
         "none": "Keine (nur Messung)",
         "switch": "Ein/Aus (Schalter)",
         "power": "Leistungsvorgabe (Number)"
+      }
+    },
+    "efficiency_mode": {
+      "options": {
+        "battery_counters": "Batteriezähler",
+        "learned": "Gelernt",
+        "manual": "Manuell"
       }
     }
   },
@@ -238,6 +257,33 @@
       },
       "pv_forecast_tomorrow": {
         "name": "PV-Prognose morgen"
+      },
+      "grid_power_filtered": {
+        "name": "Netzleistung gefiltert"
+      },
+      "available_power": {
+        "name": "Verfügbare Leistung"
+      },
+      "planned_battery_power": {
+        "name": "Geplante Batterieleistung"
+      },
+      "allocation_strategy": {
+        "name": "Strategie",
+        "state": {
+          "battery_priority": "Batterievorrang",
+          "shared": "Aufgeteilt",
+          "self_consumption": "Eigenverbrauch",
+          "peak_shaving": "Spitzenabfang"
+        }
+      },
+      "expected_surplus_energy": {
+        "name": "Erwarteter PV-Überschuss heute"
+      },
+      "round_trip_efficiency": {
+        "name": "Gesamtwirkungsgrad"
+      },
+      "planned_power": {
+        "name": "Geplante Leistung"
       }
     },
     "switch": {
@@ -254,6 +300,23 @@
       },
       "peak_shaving_soc_threshold": {
         "name": "Ladezustand-Schwelle für Spitzenabfang"
+      },
+      "surplus_average_window": {
+        "name": "Mittelungsfenster Überschuss"
+      },
+      "battery_priority_soc": {
+        "name": "Batterievorrang unter Ladezustand"
+      },
+      "battery_share_when_secured": {
+        "name": "Batterieanteil bei gesicherter Ladung"
+      },
+      "charge_secured_margin": {
+        "name": "Sicherheitszuschlag gesicherte Ladung"
+      }
+    },
+    "binary_sensor": {
+      "charge_secured": {
+        "name": "Batterieladung gesichert"
       }
     }
   }

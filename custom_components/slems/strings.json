@@ -69,10 +69,14 @@
             "capacity_wh": "Usable capacity",
             "max_charge_power_w": "Maximum charge power",
             "max_discharge_power_w": "Maximum discharge power",
-            "skip_connection_test": "Skip connection test"
+            "skip_connection_test": "Skip connection test",
+            "efficiency_mode": "Efficiency source",
+            "round_trip_efficiency_pct": "Round trip efficiency"
           },
           "data_description": {
-            "skip_connection_test": "Save without testing the connection, e.g. while another integration still holds the Modbus connection."
+            "skip_connection_test": "Save without testing the connection, e.g. while another integration still holds the Modbus connection.",
+            "efficiency_mode": "Battery counters: from the lifetime charge/discharge counters of the battery. Learned: from the measured battery power. Manual: fixed value.",
+            "round_trip_efficiency_pct": "Energy out / energy in (AC). Fixed value in manual mode, otherwise used until enough data has been measured."
           }
         },
         "ha_entities": {
@@ -85,10 +89,14 @@
             "power_inverted": "Invert power sign",
             "capacity_wh": "Usable capacity",
             "max_charge_power_w": "Maximum charge power",
-            "max_discharge_power_w": "Maximum discharge power"
+            "max_discharge_power_w": "Maximum discharge power",
+            "efficiency_mode": "Efficiency source",
+            "round_trip_efficiency_pct": "Round trip efficiency"
           },
           "data_description": {
-            "power_inverted": "SLEMS expects positive = charging. Enable if the sensor reports discharging as positive."
+            "power_inverted": "SLEMS expects positive = charging. Enable if the sensor reports discharging as positive.",
+            "efficiency_mode": "Battery counters: from the lifetime charge/discharge counters of the battery. Learned: from the measured battery power. Manual: fixed value.",
+            "round_trip_efficiency_pct": "Energy out / energy in (AC). Fixed value in manual mode, otherwise used until enough data has been measured."
           }
         }
       },
@@ -130,12 +138,16 @@
             "min_power_w": "Minimum power",
             "max_power_w": "Maximum power",
             "block_entity": "External block",
-            "priority": "Priority"
+            "priority": "Priority",
+            "min_on_minutes": "Minimum runtime",
+            "min_off_minutes": "Minimum pause"
           },
           "data_description": {
             "control_entity": "Switch for on/off consumers, number entity in W for power controlled consumers.",
             "block_entity": "While this entity is on, SLEMS does not control the consumer (e.g. blocked by the device or an automation).",
-            "priority": "1 = highest priority when distributing surplus power."
+            "priority": "1 = highest priority when distributing surplus power.",
+            "min_on_minutes": "Optional. Once switched on by SLEMS, the consumer keeps running at least this long.",
+            "min_off_minutes": "Optional. Once switched off by SLEMS, the consumer stays off at least this long."
           }
         }
       },
@@ -163,6 +175,13 @@
         "none": "None (measurement only)",
         "switch": "On/off (switch)",
         "power": "Power set point (number)"
+      }
+    },
+    "efficiency_mode": {
+      "options": {
+        "battery_counters": "Battery counters",
+        "learned": "Learned",
+        "manual": "Manual"
       }
     }
   },
@@ -238,6 +257,33 @@
       },
       "pv_forecast_tomorrow": {
         "name": "PV forecast tomorrow"
+      },
+      "grid_power_filtered": {
+        "name": "Grid power filtered"
+      },
+      "available_power": {
+        "name": "Available power"
+      },
+      "planned_battery_power": {
+        "name": "Planned battery power"
+      },
+      "allocation_strategy": {
+        "name": "Strategy",
+        "state": {
+          "battery_priority": "Battery priority",
+          "shared": "Shared",
+          "self_consumption": "Self consumption",
+          "peak_shaving": "Peak shaving"
+        }
+      },
+      "expected_surplus_energy": {
+        "name": "Expected PV surplus today"
+      },
+      "round_trip_efficiency": {
+        "name": "Round trip efficiency"
+      },
+      "planned_power": {
+        "name": "Planned power"
       }
     },
     "switch": {
@@ -254,6 +300,23 @@
       },
       "peak_shaving_soc_threshold": {
         "name": "Peak shaving state of charge threshold"
+      },
+      "surplus_average_window": {
+        "name": "Surplus averaging window"
+      },
+      "battery_priority_soc": {
+        "name": "Battery priority below state of charge"
+      },
+      "battery_share_when_secured": {
+        "name": "Battery share when charge is secured"
+      },
+      "charge_secured_margin": {
+        "name": "Charge secured safety margin"
+      }
+    },
+    "binary_sensor": {
+      "charge_secured": {
+        "name": "Battery charge secured"
       }
     }
   }

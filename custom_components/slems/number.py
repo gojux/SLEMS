@@ -10,7 +10,7 @@ from homeassistant.components.number import (
     NumberMode,
     RestoreNumber,
 )
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfPower
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfPower, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -25,7 +25,36 @@ class SettingNumberDescription(NumberEntityDescription):
     attribute: str
 
 
+def _percentage(key: str, attribute: str, minimum: float = 0, maximum: float = 100):
+    return SettingNumberDescription(
+        key=key,
+        translation_key=key,
+        attribute=attribute,
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=minimum,
+        native_max_value=maximum,
+        native_step=1,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+    )
+
+
 SETTING_NUMBERS: tuple[SettingNumberDescription, ...] = (
+    SettingNumberDescription(
+        key="surplus_average_window",
+        translation_key="surplus_average_window",
+        attribute="surplus_average_window_s",
+        device_class=NumberDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        native_min_value=0,
+        native_max_value=300,
+        native_step=1,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    _percentage("battery_priority_soc", "battery_priority_soc_pct"),
+    _percentage("battery_share_when_secured", "battery_share_when_secured_pct"),
+    _percentage("charge_secured_margin", "charge_secured_margin_pct", 100, 300),
     SettingNumberDescription(
         key="peak_shaving_grid_limit",
         translation_key="peak_shaving_grid_limit",

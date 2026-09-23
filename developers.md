@@ -57,11 +57,15 @@ custom_components/slems/
   coordinator.py     SlemsCoordinator → SystemSnapshot; ControlSettings (runtime settings)
   consumers.py       ConsumerConfig (from subentry), ConsumerState (measured)
   pv_forecast.py     PV forecast via the HA energy platform (provider independent)
+  allocation.py      distribution of available power between batteries and consumers
+  grid_filter.py     conservative moving average of the grid power
+  efficiency.py      round trip efficiency (battery counters / learned / manual)
   entity.py          base classes (system device, battery devices)
   sensor.py          system and battery sensors
   select.py          operating mode (off / simulation / active)
   switch.py          vacation, import peak shaving
-  number.py          peak shaving grid limit and SoC threshold
+  number.py          numeric runtime settings (averaging window, allocation, peak shaving)
+  binary_sensor.py   battery charge secured
   util.py            unit conversion of HA states
   drivers/
     base.py          BatteryDriver contract (read_telemetry, apply_power, release_control)
@@ -74,6 +78,38 @@ Runtime settings (operating mode, vacation, peak shaving) live in
 `ControlSettings` on the coordinator. They are changed via entities and
 restored after a restart by those entities (`RestoreEntity` / `RestoreNumber`).
 
+### Allocation
+
+Every coordinator update (operating mode *simulation* or *active*) computes an
+`Allocation` (`allocation.py`); in simulation mode it is only shown via
+sensors. Inputs:
+
+- **Available power** = −(filtered grid power) + AC battery power + power of
+  the controllable, unblocked consumers behind the meter. It is what SLEMS
+  could distribute if it controlled everything it is allowed to.
+- **Grid filter**: time weighted average over 0–300 s (0 = off); the larger
+  import (= smaller surplus) of average and current value is used, so PV drops
+  are followed immediately and PV rises only after the window.
+- **Charge secured**: SoC ≥ *battery priority SoC* and expected PV surplus
+  today ≥ energy to full (divided by the charge efficiency) × *safety margin*.
+  The expected surplus is the remaining PV forecast today minus the current
+  uncontrolled load until the end of PV production (persistence forecast; the
+  consumption forecast will replace it).
+- **Order**: consumers within their minimum runtime keep their power; not
+  secured → battery first; secured → *battery share* to the batteries, the
+  rest to consumers by priority (1 first). Unused power of one side goes to
+  the other. Deficit → batteries discharge (self consumption), with import
+  peak shaving only the import above the limit.
+- **Minimum runtime / pause** are tracked on the state commanded by SLEMS
+  (`RuntimeTracker`), in simulation mode on the virtual state.
+
+Efficiency: `EfficiencyTracker` per battery. *Battery counters* uses the
+lifetime counters (Venus: registers 33000/33002), *learned* integrates the AC
+battery power (persisted in `.storage/slems.<entry_id>.efficiency`), *manual*
+uses the configured value, which is also the start value of the other modes
+until 3 full cycles of throughput exist. Charge and discharge efficiency are
+each √RTE.
+
 Planned layers (not implemented yet):
 
 - **Forecast**: see [Consumption forecast](#consumption-forecast).
@@ -81,7 +117,10 @@ Planned layers (not implemented yet):
   prepared for a later LP optimisation.
 - **Real-time controller**: follows the plan and corrects deviations from the
   grid set point in seconds; the only component that sends commands, and only
-  in operating mode *active*.
+  in operating mode *active*. It must be triggered by grid meter state changes:
+  the coordinator cycle (5 s + battery reads) reacts only within ~5–10 s.
+  Consumers with their own thermostat (heating rod) may draw no power although
+  switched on; the controller has to detect this and release their share.
 - **Consumer manager**: switch and number entities, priorities, external block.
 - **Import peak shaving** (only when switched on): at or below the SoC
   threshold the batteries stop regular discharging and only cover the grid
@@ -236,3 +275,8 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-23 | PV forecast via the HA energy platform instead of a sensor, so the provider can be exchanged. |
 | 2026-09-23 | Vacation as switch entity (manual or by automation). |
 | 2026-09-23 | Weather entity optional. |
+| 2026-09-23 | Priority between battery and consumers: battery first until charge is secured (SoC threshold + PV forecast), then configurable split; settings as number entities. |
+| 2026-09-23 | Battery efficiency from battery counters, learned or manual (per battery). |
+| 2026-09-23 | Grid power averaging window 0–300 s, the less favourable of average and current value is used. |
+| 2026-09-23 | Minimum runtime and pause are optional per consumer; power set points only in W. |
+| 2026-09-23 | Heating rod has its own thermostat; SLEMS needs no tank temperature. |

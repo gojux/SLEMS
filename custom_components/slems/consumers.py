@@ -17,6 +17,8 @@ from .const import (
     CONF_ENERGY_ENTITY,
     CONF_INCLUDED_IN_METER,
     CONF_MAX_POWER_W,
+    CONF_MIN_OFF_MINUTES,
+    CONF_MIN_ON_MINUTES,
     CONF_MIN_POWER_W,
     CONF_NOMINAL_POWER_W,
     CONF_POWER_ENTITY,
@@ -50,6 +52,13 @@ class ConsumerConfig:
     block_entity_id: str | None
     # 1 = highest priority.
     priority: int
+    # Optional minimum runtime and minimum pause in seconds (0 = none).
+    min_on_s: float = 0.0
+    min_off_s: float = 0.0
+
+    @property
+    def controllable(self) -> bool:
+        return self.control_mode is not ControlMode.NONE and bool(self.control_entity_id)
 
     @classmethod
     def from_subentry(
@@ -69,6 +78,8 @@ class ConsumerConfig:
             max_power_w=data.get(CONF_MAX_POWER_W),
             block_entity_id=data.get(CONF_BLOCK_ENTITY),
             priority=data.get(CONF_PRIORITY, DEFAULT_PRIORITY),
+            min_on_s=(data.get(CONF_MIN_ON_MINUTES) or 0) * 60,
+            min_off_s=(data.get(CONF_MIN_OFF_MINUTES) or 0) * 60,
         )
 
 
@@ -92,3 +103,28 @@ def read_consumer_state(hass: HomeAssistant, consumer: ConsumerConfig) -> Consum
         energy_kwh=state_as_kwh(hass.states.get(consumer.energy_entity_id)),
         blocked=blocked,
     )
+
+
+class RuntimeTracker:
+    """Tracks when SLEMS switched a consumer on or off.
+
+    Enforces the optional minimum runtime and minimum pause. The tracked state
+    is the one commanded by SLEMS (in simulation mode the virtual one).
+    """
+
+    def __init__(self) -> None:
+        # subentry id -> (is on, monotonic time of the last change)
+        self._states: dict[str, tuple[bool, float]] = {}
+
+    def update(self, subentry_id: str, is_on: bool, now: float) -> None:
+        previous = self._states.get(subentry_id)
+        if previous is None or previous[0] != is_on:
+            self._states[subentry_id] = (is_on, now)
+
+    def must_stay_on(self, consumer: ConsumerConfig, now: float) -> bool:
+        state = self._states.get(consumer.subentry_id)
+        return state is not None and state[0] and now - state[1] < consumer.min_on_s
+
+    def must_stay_off(self, consumer: ConsumerConfig, now: float) -> bool:
+        state = self._states.get(consumer.subentry_id)
+        return state is not None and not state[0] and now - state[1] < consumer.min_off_s
