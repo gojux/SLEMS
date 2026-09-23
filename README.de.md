@@ -178,13 +178,55 @@ Die Entity *SLEMS Betriebsmodus* schaltet zwischen:
   (60 s bzw. zehn Aktualisierungsintervalle; die Batterien folgen dann ihrer
   eigenen Logik, bis der Zähler wieder meldet).
 
-SLEMS lernt das Aktualisierungsintervall des Smart Meters und die
-Reaktionszeit der Batterien und Verbraucher selbst (Diagnose-Sensoren
-*Aktualisierungsintervall Smart Meter* und *Reaktionszeit Batterie*, Attribut
-*response_time_s* der *Geplanten Leistung* eines Verbrauchers). Jeder
-Regelzyklus korrigiert nur einen Teil der Abweichung: *Regelverstärkung*
-(Standard 0,5). Schwankt die Netzleistung hin und her, verringern; das
+### So funktioniert die Regelung
+
+Im Betriebsmodus *Aktiv* reagiert SLEMS auf jeden neuen Wert des Smart
+Meters:
+
+1. Aus der Energiebilanz berechnet es, welche Batterieleistung die
+   Netzleistung genau auf den Zielwert bringen würde (z. B. 100 W Einspeisung
+   beim Laden).
+2. Es berücksichtigt nur Batteriebefehle, die der Smart Meter bereits zeigen
+   kann. Ein neuer Befehl braucht eine Weile, bis er im Zählerwert
+   auftaucht; diese *Reaktionszeit* lernt SLEMS und zählt einen Befehl nicht
+   doppelt.
+3. Es springt nicht sofort auf den berechneten Wert, sondern geht pro Zyklus
+   einen Teil des Weges, die *Regelverstärkung*. Bei 0,5 wird pro Zyklus die
+   Hälfte der verbleibenden Abweichung korrigiert. Eine hohe Verstärkung
+   reagiert schneller, eine zu hohe schießt über und lässt die Netzleistung
+   hin- und herschwingen.
+
+**Automatische Regelverstärkung** (Schalter, standardmäßig an): SLEMS
+beobachtet seine eigenen Korrekturen und passt die Verstärkung zwischen 0,2
+und 0,9 an:
+
+- Wechseln die Korrekturen mehrmals hintereinander die Richtung, ohne
+  kleiner zu werden, schwingt die Regelung: Die Verstärkung wird sofort
+  verringert (× 0,8).
+- Nähert sich die Netzleistung über viele Zyklen nur langsam dem Ziel, ohne
+  je überzuschwingen, wird die Verstärkung in kleinen Schritten erhöht
+  (+ 0,05).
+- Nach jeder Änderung wartet SLEMS 30 Sekunden, um die Wirkung zu sehen.
+  Normale Laständerungen (Wasserkocher, Wolke) werden nicht als Schwingen
+  gewertet. Der gelernte Wert bleibt über Neustarts erhalten.
+
+Die *Regelverstärkung* ist der Startwert der automatischen Anpassung; eine
+Änderung startet die Anpassung ab dem neuen Wert. Ist die Automatik
+ausgeschaltet, gilt die *Regelverstärkung* als fester Wert. Das
 *Regelintervall* (Standard 1 s) begrenzt, wie oft SLEMS Befehle sendet.
+
+Diagnose-Sensoren zeigen, was SLEMS gelernt hat:
+
+| Sensor | Bedeutung |
+|---|---|
+| *Aktuelle Regelverstärkung* | die gerade verwendete Verstärkung |
+| *Aktualisierungsintervall Smart Meter* | wie oft der Smart Meter meldet |
+| *Reaktionszeit Batterie* | Zeit von einem Batteriebefehl, bis der Smart Meter ihn zeigt |
+| *Geplante Leistung* eines Verbrauchers, Attribut `response_time_s` | Zeit von einem Befehl, bis der eigene Leistungssensor des Verbrauchers reagiert |
+
+Die Automatik nur ausschalten, wenn sich die Verstärkung ständig deutlich
+ändert, z. B. weil der Smart Meter sehr unregelmäßig meldet; dann einen festen
+Wert setzen (0,3–0,5 ist ein guter Start).
 
 ### Weitere Einstellungen (Entities)
 

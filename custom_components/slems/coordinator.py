@@ -82,6 +82,8 @@ _LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 1
 STORAGE_SAVE_DELAY_S = 600
+# Store key of the controller data (next to the per battery subentry ids).
+CONTROL_STORE_KEY = "control"
 
 
 @dataclass
@@ -133,8 +135,10 @@ class ControlSettings:
     rotation_ramp_max_s: float = DEFAULT_ROTATION_RAMP_MAX_S
     # Minimum time between two control cycles.
     control_interval_s: float = DEFAULT_CONTROL_INTERVAL_S
-    # Share of the remaining deviation corrected per control cycle.
+    # Share of the remaining deviation corrected per control cycle: fixed value,
+    # or start value of the automatic adaptation.
     control_gain: float = DEFAULT_CONTROL_GAIN
+    auto_gain: bool = True
     night_discharge: bool = False
     # Night discharge reserve in % of tomorrow's forecast daily consumption.
     night_reserve_pct: float = DEFAULT_NIGHT_RESERVE_PCT
@@ -298,6 +302,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     async def _async_setup(self) -> None:
         """Restore learned data and follow the grid meter."""
         stored = await self._store.async_load() or {}
+        if gain := (stored.get(CONTROL_STORE_KEY) or {}).get("gain"):
+            self.controller.gain_adapter.reset(gain)
         for battery in self.batteries:
             data = stored.get(battery.subentry_id) or {}
             if integrator := data.get("integrator"):
@@ -398,13 +404,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         return grid
 
     def _data_to_store(self) -> dict:
-        return {
+        data: dict = {
             b.subentry_id: {
                 "integrator": b.efficiency.integrator.as_dict(),
                 "loss_curve": b.loss_curve.as_dict(),
             }
             for b in self.batteries
         }
+        data[CONTROL_STORE_KEY] = {"gain": self.controller.gain_adapter.gain}
+        return data
 
     async def _async_update_data(self) -> SystemSnapshot:
         config = self._config

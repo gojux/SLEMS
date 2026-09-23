@@ -14,11 +14,12 @@ from .const import OperatingMode
 from .coordinator import BatteryRuntime, SlemsConfigEntry, SlemsCoordinator
 from .entity import SlemsBatteryEntity, SlemsSystemEntity
 
-# Switch key -> attribute of ControlSettings. All default to off.
+# Switch key -> attribute of ControlSettings (defaults in ControlSettings).
 SETTING_SWITCHES: dict[str, str] = {
     "vacation": "vacation",
     "peak_shaving": "peak_shaving",
     "night_discharge": "night_discharge",
+    "auto_gain": "auto_gain",
 }
 
 

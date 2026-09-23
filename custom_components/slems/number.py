@@ -233,4 +233,7 @@ class SettingNumber(SlemsSystemEntity, RestoreNumber):
 
     async def async_set_native_value(self, value: float) -> None:
         self._set(value)
+        if self.entity_description.attribute == "control_gain":
+            # A new start value restarts the automatic adaptation from there.
+            self.coordinator.controller.gain_adapter.reset(value)
         self.async_write_ha_state()

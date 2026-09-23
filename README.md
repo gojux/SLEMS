@@ -176,13 +176,49 @@ The entity *SLEMS Operating mode* switches between:
   update intervals; the batteries then follow their own logic until the meter
   is back).
 
-SLEMS learns the update interval of the smart meter and the response time of
-the batteries and consumers by itself (diagnostic sensors *Smart meter update
-interval* and *Battery response time*, attribute *response_time_s* of a
-consumer's *Planned power*). Each control cycle corrects only a share of the
-deviation: *Control gain* (default 0.5). If the grid power swings back and
-forth, reduce it; *Control interval* (default 1 s) limits how often SLEMS
-sends commands.
+### How the control works
+
+In operating mode *active* SLEMS reacts to every new value of the smart
+meter:
+
+1. From the energy balance it calculates which battery power would bring the
+   grid power exactly to the target (e.g. 100 W export while charging).
+2. It only counts battery commands that the smart meter can already show.
+   A new command needs some time until it appears in the meter value; SLEMS
+   learns this *response time* and does not count a command twice.
+3. It does not jump to the calculated value at once but moves a share of the
+   way per cycle, the *control gain*. With 0.5, half of the remaining
+   deviation is corrected per cycle. A high gain reacts faster, a too high
+   gain overshoots and makes the grid power swing back and forth.
+
+**Automatic control gain** (switch, on by default): SLEMS watches its own
+corrections and adjusts the gain between 0.2 and 0.9:
+
+- If the corrections change direction several times in a row without dying
+  out, the control swings: the gain is lowered at once (× 0.8).
+- If the grid power approaches the target only slowly over many cycles
+  without ever overshooting, the gain is raised in small steps (+ 0.05).
+- After each change SLEMS waits 30 seconds to see its effect. Normal load
+  changes (a kettle, a cloud) are not mistaken for swinging. The learned value
+  is kept across restarts.
+
+*Control gain* is the start value of the automatic adjustment; changing it
+restarts the adjustment from the new value. With the automatic adjustment
+switched off, *Control gain* is used as a fixed value. *Control interval*
+(default 1 s) limits how often SLEMS sends commands.
+
+Diagnostic sensors show what SLEMS has learned:
+
+| Sensor | Meaning |
+|---|---|
+| *Current control gain* | gain used right now |
+| *Smart meter update interval* | how often the smart meter reports |
+| *Battery response time* | time from a battery command until the smart meter shows it |
+| *Planned power* of a consumer, attribute `response_time_s` | time from a command until the consumer's own power sensor reacts |
+
+Switch the automatic adjustment off only if the gain keeps changing
+noticeably, e.g. because the smart meter reports very irregularly; then set a
+fixed value (0.3–0.5 is a good start).
 
 ### Further settings (entities)
 

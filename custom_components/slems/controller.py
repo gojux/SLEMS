@@ -10,8 +10,9 @@ command only after a while:
 * The battery power assumed in the energy balance is the one the meter can
   already see: the last command older than the learned battery response time
   (see ``response``). Newer commands are not counted twice.
-* Each cycle corrects only a share of the remaining deviation (*control gain*,
-  setting), like a proportional controller.
+* Each cycle corrects only a share of the remaining deviation (control gain),
+  like a proportional controller. The gain adapts itself to the observed
+  behaviour (see ``adaptive_gain``) unless the user fixed it.
 
 Safety:
 * Without a report of the grid meter for ``max(GRID_STALE_S, 10 × meter
@@ -37,6 +38,7 @@ from homeassistant.const import ATTR_ENTITY_ID, STATE_ON
 from homeassistant.core import CALLBACK_TYPE, callback
 from homeassistant.helpers.event import async_call_later
 
+from .adaptive_gain import AdaptiveGain
 from .battery_distribution import LEAVE_RAMP_S
 from .const import ControlMode, OperatingMode
 from .response import (
@@ -99,6 +101,7 @@ class RealTimeController:
         self.meter = MeterCadence()
         self.battery_response = StepResponse(DEFAULT_BATTERY_RESPONSE_S)
         self.consumer_response: dict[str, StepResponse] = {}
+        self.gain_adapter = AdaptiveGain(coordinator.settings.control_gain)
         self.status = ControlStatus.INACTIVE
 
     # --- observations ---------------------------------------------------------
@@ -122,6 +125,12 @@ class RealTimeController:
             state = snapshot.consumers.get(subentry_id)
             if state is not None and state.power_w is not None:
                 learner.sample(now, state.power_w)
+
+    @property
+    def gain(self) -> float:
+        """Gain used for the next control cycle."""
+        settings = self._coordinator.settings
+        return self.gain_adapter.gain if settings.auto_gain else settings.control_gain
 
     def consumer_response_s(self, subentry_id: str) -> float | None:
         learner = self.consumer_response.get(subentry_id)
@@ -247,11 +256,13 @@ class RealTimeController:
             seen,
             self.saturated,
             previous_total_w=latest_total if self._battery_history else None,
-            gain=coordinator.settings.control_gain,
+            gain=self.gain,
         )
         if snapshot is None or snapshot.distribution is None or snapshot.allocation is None:
             return
-        await self._async_apply_batteries(snapshot, latest_total)
+        new_total = await self._async_apply_batteries(snapshot, latest_total)
+        if new_total is not None and coordinator.settings.auto_gain:
+            self.gain_adapter.observe(start, new_total - latest_total)
         await self._async_apply_consumers(snapshot)
         self.observe_consumers(snapshot)
         coordinator.publish(snapshot)
@@ -310,7 +321,8 @@ class RealTimeController:
 
     async def _async_apply_batteries(
         self, snapshot: SystemSnapshot, previous_total: float
-    ) -> None:
+    ) -> float | None:
+        """Send the set points; return the new total if anything was sent."""
         now = time.monotonic()
 
         def magnitude_change(battery: BatteryRuntime) -> float:
@@ -344,9 +356,11 @@ class RealTimeController:
                 changed = True
             elif latest is not None:
                 new_total += latest
-        if changed:
-            # The grid power moves by the change of the battery power.
-            self.battery_response.command(now, self._last_grid_w, new_total - previous_total)
+        if not changed:
+            return None
+        # The grid power moves by the change of the battery power.
+        self.battery_response.command(now, self._last_grid_w, new_total - previous_total)
+        return new_total
 
     # --- consumers ------------------------------------------------------------
 

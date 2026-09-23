@@ -141,6 +141,14 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         value_fn=lambda _, c: c.controller.status.value,
     ),
     SystemSensorDescription(
+        key="control_gain_current",
+        translation_key="control_gain_current",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda _, c: c.controller.gain,
+    ),
+    SystemSensorDescription(
         key="meter_interval",
         translation_key="meter_interval",
         device_class=SensorDeviceClass.DURATION,

@@ -71,6 +71,8 @@ custom_components/slems/
   night_discharge.py night discharge planning
   battery_distribution.py  split of the battery power between batteries (rotation, ramps)
   controller.py      real-time controller (active mode): commands to batteries and consumers
+  response.py        learned meter cadence and response times
+  adaptive_gain.py   automatic adaptation of the control gain
   allocation.py      distribution of available power between batteries and consumers
   grid_filter.py     conservative moving average of the grid power
   efficiency.py      round trip efficiency (battery counters / learned / manual)
@@ -200,12 +202,10 @@ sends commands.
   polling, and publishes the result to the entities without rescheduling the
   polling. In active mode only the controller plans; the coordinator shows
   its latest result.
-- **Response compensation**: the battery power in the energy balance is the
-  last command the meter can already show, i.e. issued at least the learned
-  *battery response time* ago; newer commands are not counted twice.
-- **Damping**: each cycle moves the total battery power by *control gain*
-  (default 0.5) of the remaining difference (proportional control, like the
-  PD controller of Omnibattery with Kp 0.35 at 1–2 s cycles).
+- **Control structure** (see [Control structure](#control-structure)):
+  feedforward from the energy balance, dead time compensation with the
+  learned battery response time, proportional correction with an adaptive
+  gain.
 - **Learned timing** (`response.py`, moving averages):
   meter cadence from every report of the grid meter (also unchanged values,
   `EVENT_STATE_REPORTED`); battery response time from commands with ≥ 300 W
@@ -223,12 +223,11 @@ sends commands.
 - **Consumers**: switch → `turn_on`/`turn_off`, power → `set_value` (clamped to
   the entity's min/max/step, dead band 50 W); at most one command per consumer
   every 10 s. Blocked consumers are left alone.
-- **Saturation**: a consumer drawing < 10 % of its command for 120 s (own
-  thermostat) counts as saturated for 15 min and is planned like an
-  uncontrolled load; its last command stays.
+- **Saturation**: a consumer drawing < 10 % of its command for longer than
+  5 × its response time (30–300 s; own thermostat) counts as saturated for
+  15 min and is planned like an uncontrolled load; its last command stays.
 - **Grid meter stale** (no report within max(60 s, 10 × meter interval),
-  based on `last_reported`): all
-  batteries are handed back to their internal logic until the meter reports
+  based on `last_reported`): all batteries are handed back to their internal logic until the meter reports
   again (status *grid meter stale*).
 - **Maximum export while discharging** is applied as hard limit on the
   current, unfiltered grid power (`limit_discharge_export`).
@@ -240,6 +239,71 @@ Not implemented yet:
 - **Grid friendly charging**: shift charging into the PV feed-in peak instead
   of charging as early as possible.
 - **Dashboard**: custom sidebar panel (web component served by the integration).
+
+### Control structure
+
+The controller is not a textbook PID. Per cycle it computes the battery power
+that would bring the grid to its target (feedforward from the energy
+balance), then moves only a share of the way there:
+
+```
+seen      = battery commands issued at least the battery response time ago
+available = -grid_filtered + seen + controllable consumer power
+target    = allocation(available, ...)            # absolute set point
+new       = latest + gain · (target - latest)     # latest = last commanded total
+new       = limit_discharge_export(new, ...)      # hard export limit
+```
+
+- **Feedforward** gives an absolute target each cycle, so there is no
+  steady-state error and no integral part is needed. An I part would also
+  wind up against the dead band and the averaging window.
+- **Dead time compensation** (Smith predictor principle): the energy balance
+  uses the command the meter can already show, so a command is not counted
+  again while it is on its way. This removes the main cause of oscillation.
+- **No D part**: smart meter values are noisy (switching loads); a derivative
+  would amplify that noise. Omnibattery uses a PD controller (Kp 0.35,
+  Kd 0.3) because it corrects on the error only, without an energy balance.
+- **Proportional gain** absorbs what the model does not know (variance of the
+  response time, meter jitter, battery ramping).
+
+#### Adaptive gain
+
+`adaptive_gain.py`, active while the switch *Automatic control gain* is on.
+Input per control cycle: the correction of the total battery power
+(`new − latest`) whenever set points were sent. Corrections below 50 W carry
+no direction and are ignored; corrections more than 15 s apart belong to
+different movements (history cleared).
+
+| Rule | Condition | Action |
+|---|---|---|
+| Oscillation | 4 significant corrections alternate in sign, each ≥ 70 % of the previous (not dying out) | gain × 0.8 |
+| Sluggish | 5 significant corrections in a row with the same sign, each smaller than the previous (slow approach to a fixed target) | gain + 0.05 |
+| Cooldown | after every adjustment | history cleared, no change for 30 s |
+
+Bounds 0.2–0.9. The asymmetry (fast down, slow up) is deliberate: swinging
+costs grid import/export and battery cycles, a slower approach only a little
+self consumption.
+
+Why these patterns: a well damped loop answering a step gives corrections of
+one sign that shrink geometrically (ratio 1 − gain). Alternating signs that do
+not decay can only come from the loop itself; outside load changes produce a
+series of one sign per change. A slowly moving target (PV ramp) produces
+corrections of similar size, which neither rule matches.
+
+The number *Control gain* is the start value: changing it calls
+`AdaptiveGain.reset`. With the switch off it is used directly. The current
+gain is stored with the battery learning data (`.storage`, key `control`) and
+restored at startup; restoring the number entity does not reset it.
+
+Tests: `tests/test_adaptive_gain.py` covers oscillation, decaying
+alternation, external load steps, slow approach, ramps, cooldown, gaps and
+bounds. In the dev environment the loop with learned response time does not
+oscillate even at gain 0.9, so the decrease can only be seen there with an
+artificially wrong response time.
+
+Possible extensions: separate gains for charging and discharging; adapting
+the averaging window; using the scatter of the learned response time to
+limit the maximum gain.
 
 ### Configuration model
 
@@ -423,6 +487,7 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-23 | Disabling a discharging battery hands over within 5 s. |
 | 2026-09-23 | Real-time controller event driven on the grid meter; batteries released when the meter is stale. |
 | 2026-09-23 | Damped correction (control gain) plus learned response times instead of a fixed settle time; meter cadence learned from its reports. |
+| 2026-09-23 | No PID: feedforward + dead time compensation + proportional gain; the gain adapts automatically (oscillation → lower, sluggish → higher). |
 | 2026-09-23 | Distribution between batteries by minimal conversion losses (learned per battery), rotation by SoC threshold with minimum interval and ramped transition. |
 | 2026-09-23 | Consumption forecast from long-term statistics; optional history entity for the house consumption and optional outdoor temperature sensor, otherwise SLEMS records the weather temperature itself. |
 | 2026-09-23 | Night discharge: evenly spread until PV exceeds consumption, target = reserve raised to what tomorrow's PV can refill; grid target ignored, maximum export respected. |
