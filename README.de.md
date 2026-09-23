@@ -149,7 +149,8 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
   (Balken). Beim Überfahren erscheinen die Werte einer Stunde; *Tabelle
   anzeigen* schaltet auf eine Tabelle um.
 - **Batterien**: Ladezustand, Leistung, geplante Leistung, Wirkungsgrad,
-  Status und der Schalter *Aktiviert* jeder Batterie.
+  Status und der Schalter *Aktiviert* jeder Batterie (das Deaktivieren muss
+  bestätigt werden).
 - **Verbraucher**: gemessene und geplante Leistung, gesperrt/gesättigt und
   die gelernte Reaktionszeit.
 - **Einstellungen**: alle Einstellwerte gruppiert und direkt änderbar.

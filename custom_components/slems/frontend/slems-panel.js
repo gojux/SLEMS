@@ -82,6 +82,11 @@ const STRINGS = {
     notControlled: "measured only",
     noBatteries: "No batteries configured.",
     noConsumers: "No consumers configured.",
+    cancel: "Cancel",
+    disableBatteryTitle: "Disable {name}?",
+    disableBatteryText:
+      "The battery is then no longer planned with or controlled by SLEMS and hands over to its own logic. If it is discharging right now, the other batteries take over within 5 seconds.",
+    disableBatteryConfirm: "Disable",
     groups: {
       mode: "Operation",
       control: "Control",
@@ -135,6 +140,11 @@ const STRINGS = {
     notControlled: "nur gemessen",
     noBatteries: "Keine Batterien konfiguriert.",
     noConsumers: "Keine Verbraucher konfiguriert.",
+    cancel: "Abbrechen",
+    disableBatteryTitle: "{name} deaktivieren?",
+    disableBatteryText:
+      "Die Batterie wird dann von SLEMS nicht mehr eingeplant und gesteuert und folgt ihrer eigenen Logik. Entlädt sie gerade, übernehmen die anderen Batterien innerhalb von 5 Sekunden.",
+    disableBatteryConfirm: "Deaktivieren",
     groups: {
       mode: "Betrieb",
       control: "Regelung",
@@ -310,7 +320,25 @@ class SlemsPanel extends HTMLElement {
           <nav id="tabs"></nav>
         </header>
         <main id="content"></main>
-      </div>`;
+      </div>
+      <dialog id="confirm">
+        <h2 id="confirm-title"></h2>
+        <p id="confirm-text"></p>
+        <div class="dialog-buttons">
+          <button class="link" data-answer="cancel"></button>
+          <button class="danger" data-answer="confirm"></button>
+        </div>
+      </dialog>`;
+    const dialog = this.shadowRoot.getElementById("confirm");
+    dialog.addEventListener("click", (event) => {
+      const answer = event.target.closest("button")?.dataset.answer;
+      if (answer) dialog.close(answer);
+      else if (event.target === dialog) dialog.close("cancel"); // click on the backdrop
+    });
+    dialog.addEventListener("close", () => {
+      if (dialog.returnValue === "confirm") this._confirmAction?.();
+      this._confirmAction = null;
+    });
     this.shadowRoot.getElementById("tabs").addEventListener("click", (event) => {
       const tab = event.target.closest("button")?.dataset.tab;
       if (tab) {
@@ -682,7 +710,7 @@ class SlemsPanel extends HTMLElement {
           ].filter(([, st]) => st);
           return `<section class="card">
             <div class="card-head"><h2>${escapeHtml(b.name)}</h2>
-              ${enabled ? this._toggle(enabled, t.enabled) : ""}</div>
+              ${enabled ? this._toggle(enabled, t.enabled, b.name) : ""}</div>
             <div class="soc"><div class="soc-bar"><div style="width:${soc ?? 0}%"></div></div>
               <span>${soc === null ? "–" : Math.round(soc) + " %"}</span></div>
             <dl>${rows.map(([label, st]) => `<dt>${label}</dt><dd>${escapeHtml(this._format(st))}</dd>`).join("")}</dl>
@@ -745,9 +773,10 @@ class SlemsPanel extends HTMLElement {
     );
   }
 
-  _toggle(stateObj, label) {
+  _toggle(stateObj, label, confirmOffName = null) {
+    const confirm = confirmOffName ? ` data-confirm-off="${escapeHtml(confirmOffName)}"` : "";
     return `<label class="switch" title="${escapeHtml(label)}">
-      <input type="checkbox" data-entity="${stateObj.entity_id}" data-kind="switch" ${stateObj.state === "on" ? "checked" : ""}>
+      <input type="checkbox" data-entity="${stateObj.entity_id}" data-kind="switch"${confirm} ${stateObj.state === "on" ? "checked" : ""}>
       <span></span></label>`;
   }
 
@@ -773,6 +802,18 @@ class SlemsPanel extends HTMLElement {
 
   // --- events ------------------------------------------------------------------
 
+  _confirm(title, text, confirmLabel, action) {
+    const dialog = this.shadowRoot.getElementById("confirm");
+    this.shadowRoot.getElementById("confirm-title").textContent = title;
+    this.shadowRoot.getElementById("confirm-text").textContent = text;
+    dialog.querySelector('[data-answer="cancel"]').textContent = this._t.cancel;
+    dialog.querySelector('[data-answer="confirm"]').textContent = confirmLabel;
+    this._confirmAction = action;
+    dialog.returnValue = "";
+    dialog.showModal();
+    dialog.querySelector('[data-answer="cancel"]').focus();
+  }
+
   _onClick(event) {
     if (event.target.closest("[data-action='toggle-table']")) {
       this._showTable = !this._showTable;
@@ -786,6 +827,18 @@ class SlemsPanel extends HTMLElement {
     const entityId = target.dataset?.entity;
     if (!entityId) return;
     const kind = target.dataset.kind;
+    if (kind === "switch" && !target.checked && target.dataset.confirmOff) {
+      // Keep the switch on until the user confirmed.
+      target.checked = true;
+      const t = this._t;
+      this._confirm(
+        t.disableBatteryTitle.replace("{name}", target.dataset.confirmOff),
+        t.disableBatteryText,
+        t.disableBatteryConfirm,
+        () => this._hass.callService("switch", "turn_off", { entity_id: entityId })
+      );
+      return;
+    }
     if (kind === "switch") {
       this._hass.callService("switch", target.checked ? "turn_on" : "turn_off", { entity_id: entityId });
     } else if (kind === "select") {
@@ -898,6 +951,14 @@ const STYLE = `
     background: var(--card-background-color); transition: transform 0.2s; }
   .switch input:checked + span { background: var(--primary-color); }
   .switch input:checked + span::before { transform: translateX(16px); }
+  dialog { border: none; border-radius: var(--ha-card-border-radius, 12px); padding: 24px; max-width: 420px;
+    width: calc(100% - 32px); box-sizing: border-box; background: var(--card-background-color);
+    color: var(--primary-text-color); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+  dialog::backdrop { background: rgba(0,0,0,0.4); }
+  dialog p { color: var(--secondary-text-color); line-height: 1.4; margin: 0 0 20px; }
+  .dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; }
+  button.danger { background: var(--error-color, #d03b3b); color: #fff; border: none; border-radius: 8px;
+    padding: 8px 16px; font: inherit; cursor: pointer; }
 `;
 
 customElements.define("slems-panel", SlemsPanel);

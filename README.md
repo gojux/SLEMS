@@ -146,7 +146,7 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   planned battery charging (bars). Hovering shows the values of an hour;
   *Show table* switches to a table.
 - **Batteries**: state of charge, power, planned power, efficiency, state and
-  the *Enabled* switch of every battery.
+  the *Enabled* switch of every battery (disabling asks for confirmation).
 - **Consumers**: measured and planned power, blocked/saturated state and the
   learned response time.
 - **Settings**: all settings grouped and editable directly.

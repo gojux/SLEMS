@@ -303,6 +303,8 @@ entities. The panel is removed on unload and re-registered on every setup.
   identity.
 - Strings: English and German inside the file (`STRINGS`), picked from the HA
   language.
+- Switches marked with `data-confirm-off` (battery *Enabled*) are kept on and
+  open a native `<dialog>` first; only the confirmation turns them off.
 
 Screenshots for checking the layout can be taken with Playwright against the
 dev instance (log in as the dev user, open `/slems`, click the tab buttons in
