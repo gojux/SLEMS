@@ -355,6 +355,15 @@
       },
       "night_reserve": {
         "name": "Night discharge reserve"
+      },
+      "rotation_soc_threshold": {
+        "name": "Battery rotation threshold"
+      },
+      "rotation_min_interval": {
+        "name": "Battery rotation minimum interval"
+      },
+      "rotation_ramp": {
+        "name": "Battery rotation ramp time"
       }
     },
     "binary_sensor": {

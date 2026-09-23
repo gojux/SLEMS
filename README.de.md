@@ -37,6 +37,7 @@ Der Name setzt sich aus *Slug* und *EMS* (Energiemanagementsystem) zusammen.
 | Gemittelter Netzüberschuss (0–300 s) | ✅ |
 | Ziel-Netzüberschuss beim Laden/Entladen, maximale Einspeisung beim Entladen | ✅ |
 | Nachtentladung bis zu einer prognosebasierten Reserve | ✅ berechnet und angezeigt, Ausführung folgt |
+| Aufteilung auf Batterien nach Wirkungsgrad, Wechsel mit sanftem Übergang | ✅ berechnet und angezeigt, Ausführung folgt |
 | Verbrauchersteuerung (Befehle senden) | geplant |
 | Dashboard mit Energiefluss und Tagesprognose | geplant |
 
@@ -146,6 +147,16 @@ fließt in die Entscheidung ein, ob der PV-Überschuss die Batterien füllt.
   an eine solche Batterie nie Befehle. So kann SLEMS im Simulationsmodus
   parallel zu einer bestehenden Batterie-Integration laufen.
 
+Bei mehreren Batterien entscheidet SLEMS, wie viele und welche laufen: Bei
+kleiner Leistung ist meist eine einzelne Batterie effizienter, bei großer das
+Aufteilen. Beim Entladen läuft die Batterie mit dem höchsten Ladezustand, beim
+Laden die mit dem niedrigsten. Entfernt sich die laufende Batterie um mehr als
+die *Schwelle Batteriewechsel* (Standard 5 %) von der besten inaktiven, wird
+gewechselt, höchstens einmal pro *Mindestabstand Batteriewechsel* (Standard
+15 min) und mit sanftem Übergang über die *Übergangszeit Batteriewechsel*
+(Standard 30 s). Die Umwandlungsverluste je Leistungsbereich lernt SLEMS aus
+AC- und DC-Leistung der Batterie.
+
 Jede Batterie hat einen Schalter *Aktiviert*. Eine deaktivierte Batterie wird
 weiter gemessen (ihre Leistung gehört zur Energiebilanz), aber weder
 eingeplant noch gesteuert und zählt nicht zum Gesamt-Ladezustand.
@@ -194,9 +205,8 @@ Die Entity *SLEMS Betriebsmodus* schaltet zwischen:
 
 ## Roadmap
 
-1. Aufteilung auf mehrere Batterien nach Wirkungsgrad-Optimum, mit Umschalten
-2. Echtzeit-Regler, der die Verteilung umsetzt
-3. Dashboard: Energiefluss-Schema, Tagesdiagramm mit Prognose und Plan
+1. Echtzeit-Regler, der die Verteilung umsetzt
+2. Dashboard: Energiefluss-Schema, Tagesdiagramm mit Prognose und Plan
 
 ## Entwicklung
 

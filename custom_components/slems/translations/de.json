@@ -355,6 +355,15 @@
       },
       "night_reserve": {
         "name": "Reserve Nachtentladung"
+      },
+      "rotation_soc_threshold": {
+        "name": "Schwelle Batteriewechsel"
+      },
+      "rotation_min_interval": {
+        "name": "Mindestabstand Batteriewechsel"
+      },
+      "rotation_ramp": {
+        "name": "Übergangszeit Batteriewechsel"
       }
     },
     "binary_sensor": {

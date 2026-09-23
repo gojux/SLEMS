@@ -28,6 +28,7 @@ from .const import CONF_PV_FORECAST_ENTRIES, CONF_WEATHER_ENTITY
 from .coordinator import SlemsConfigEntry, SlemsCoordinator, SystemSnapshot
 from .drivers import BatteryTelemetry
 from .allocation import Strategy
+from .battery_distribution import LossModel
 from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 from .pv_forecast import energy_on_day
 
@@ -272,6 +273,7 @@ async def async_setup_entry(
             [
                 *(BatterySensor(coordinator, battery, d) for d in descriptions),
                 EfficiencySensor(coordinator, battery),
+                PlannedBatteryPowerSensor(coordinator, battery),
             ],
             config_subentry_id=battery.subentry_id,
         )
@@ -405,4 +407,40 @@ class ConsumptionForecastSensor(SlemsSystemEntity, SensorEntity):
                 for start, total in forecast.total.items()
                 if dt_util.as_local(start).date() == day
             ],
+        }
+
+
+class PlannedBatteryPowerSensor(SlemsBatteryEntity, SensorEntity):
+    """Power SLEMS assigns to one battery (commanded only in active mode)."""
+
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_suggested_display_precision = 0
+
+    def __init__(self, coordinator: SlemsCoordinator, battery) -> None:
+        super().__init__(coordinator, battery, "planned_power")
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success
+
+    @property
+    def native_value(self) -> float | None:
+        distribution = self.coordinator.data.distribution
+        if distribution is None or not self.battery.enabled:
+            return None
+        return distribution.power_w.get(self.battery.subentry_id, 0.0)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        distribution = self.coordinator.data.distribution
+        model = self.battery.loss_curve.model(LossModel())
+        return {
+            "selected": bool(
+                distribution and self.battery.subentry_id in distribution.selected
+            ),
+            "loss_fixed_w": round(model.fixed_w, 1),
+            "loss_linear": round(model.linear, 4),
+            "loss_quadratic_per_w": model.quadratic_per_w,
         }

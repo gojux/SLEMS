@@ -37,6 +37,7 @@ management system).
 | Averaged grid surplus (0–300 s) | ✅ |
 | Grid surplus targets for charging/discharging, maximum export while discharging | ✅ |
 | Night discharge to a forecast based reserve | ✅ computed and shown, execution follows |
+| Distribution between batteries by efficiency, rotation with smooth transition | ✅ computed and shown, execution follows |
 | Consumer control (sending commands) | planned |
 | Dashboard with energy flow and daily forecast chart | planned |
 
@@ -144,6 +145,16 @@ into account when deciding whether the PV surplus will fill the batteries.
   commands to such a battery. This allows running SLEMS in simulation mode side
   by side with an existing battery integration.
 
+With several batteries SLEMS decides how many run and which: at low power a
+single battery is usually more efficient, at high power sharing is. When
+discharging the battery with the highest state of charge runs, when charging
+the one with the lowest. If the running battery drifts more than *Battery
+rotation threshold* (default 5 %) away from the best inactive one, SLEMS
+switches, at most once per *Battery rotation minimum interval* (default
+15 min) and with a smooth transition over *Battery rotation ramp time*
+(default 30 s). The conversion losses per power level are learned from the
+battery's AC and DC power.
+
 Every battery has an *Enabled* switch. A disabled battery is still measured
 (its power is part of the energy balance), but it is neither planned with nor
 controlled, and it does not count towards the total state of charge.
@@ -192,9 +203,8 @@ The entity *SLEMS Operating mode* switches between:
 
 ## Roadmap
 
-1. Distribution between several batteries at the efficiency optimum, with rotation
-2. Real-time controller that executes the allocation
-3. Dashboard: energy flow diagram, daily forecast and plan chart
+1. Real-time controller that executes the allocation
+2. Dashboard: energy flow diagram, daily forecast and plan chart
 
 ## Development
 

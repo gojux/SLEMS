@@ -43,6 +43,9 @@ from .const import (
     DEFAULT_DISCHARGE_GRID_TARGET_W,
     DEFAULT_DISCHARGE_MAX_GRID_EXPORT_W,
     DEFAULT_NIGHT_RESERVE_PCT,
+    DEFAULT_ROTATION_MIN_INTERVAL_MIN,
+    DEFAULT_ROTATION_RAMP_S,
+    DEFAULT_ROTATION_SOC_THRESHOLD_PCT,
     DEFAULT_OPERATING_MODE,
     DEFAULT_PEAK_SHAVING_GRID_LIMIT_W,
     DEFAULT_PEAK_SHAVING_SOC_THRESHOLD_PCT,
@@ -54,7 +57,14 @@ from .const import (
 )
 from .consumers import ConsumerConfig, ConsumerState, RuntimeTracker, read_consumer_state
 from .drivers import BatteryDriver, BatteryDriverError, BatteryTelemetry
-from .efficiency import EfficiencyTracker, EnergyIntegrator
+from .battery_distribution import (
+    BatteryDistributor,
+    BatteryUnit,
+    Distribution,
+    LossModel,
+    RotationSettings,
+)
+from .efficiency import EfficiencyTracker, EnergyIntegrator, LossCurveLearner
 from .forecast import ConsumptionForecast, ConsumptionForecaster, ForecastSources
 from .grid_filter import GridPowerFilter
 from .night_discharge import NightDischargePlan, plan_night_discharge
@@ -75,6 +85,7 @@ class BatteryRuntime:
     name: str
     driver: BatteryDriver
     efficiency: EfficiencyTracker
+    loss_curve: LossCurveLearner = field(default_factory=LossCurveLearner)
     # Temporarily disabled batteries are still measured (their power is part of
     # the energy balance) but neither planned with nor controlled.
     enabled: bool = True
@@ -100,6 +111,10 @@ class ControlSettings:
     charge_grid_target_w: float = DEFAULT_CHARGE_GRID_TARGET_W
     discharge_grid_target_w: float = DEFAULT_DISCHARGE_GRID_TARGET_W
     discharge_max_grid_export_w: float = DEFAULT_DISCHARGE_MAX_GRID_EXPORT_W
+    # Rotation between batteries.
+    rotation_soc_threshold_pct: float = DEFAULT_ROTATION_SOC_THRESHOLD_PCT
+    rotation_min_interval_min: float = DEFAULT_ROTATION_MIN_INTERVAL_MIN
+    rotation_ramp_s: float = DEFAULT_ROTATION_RAMP_S
     night_discharge: bool = False
     # Night discharge reserve in % of tomorrow's forecast daily consumption.
     night_reserve_pct: float = DEFAULT_NIGHT_RESERVE_PCT
@@ -145,6 +160,8 @@ class SystemSnapshot:
     available_power_w: float | None = None
     expected_surplus_wh: float | None = None
     allocation: Allocation | None = None
+    # Planned power per battery subentry id (+charge / -discharge, AC).
+    distribution: Distribution | None = None
 
     @property
     def battery_power_w(self) -> float | None:
@@ -231,6 +248,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.settings = ControlSettings()
         self._grid_filter = GridPowerFilter(self.settings.surplus_average_window_s)
         self._runtime = RuntimeTracker()
+        self._distributor = BatteryDistributor()
         self._store: Store[dict] = Store(
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.efficiency"
         )
@@ -244,8 +262,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         """Restore learned data and follow the grid meter."""
         stored = await self._store.async_load() or {}
         for battery in self.batteries:
-            if data := stored.get(battery.subentry_id):
-                battery.efficiency.integrator = EnergyIntegrator.from_dict(data)
+            data = stored.get(battery.subentry_id) or {}
+            if integrator := data.get("integrator"):
+                battery.efficiency.integrator = EnergyIntegrator.from_dict(integrator)
+            if loss_curve := data.get("loss_curve"):
+                battery.loss_curve = LossCurveLearner.from_dict(loss_curve)
 
         grid_entity = self._config[CONF_GRID_POWER_ENTITY]
         self._add_grid_sample(self.hass.states.get(grid_entity))
@@ -327,7 +348,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._grid_filter.add(time.monotonic(), grid)
 
     def _data_to_store(self) -> dict:
-        return {b.subentry_id: b.efficiency.integrator.as_dict() for b in self.batteries}
+        return {
+            b.subentry_id: {
+                "integrator": b.efficiency.integrator.as_dict(),
+                "loss_curve": b.loss_curve.as_dict(),
+            }
+            for b in self.batteries
+        }
 
     async def _async_update_data(self) -> SystemSnapshot:
         config = self._config
@@ -366,6 +393,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 continue
             snapshot.batteries[battery.subentry_id] = telemetry
             self._update_efficiency(battery, telemetry, now)
+            if telemetry.ac_power_w is not None:
+                battery.loss_curve.add(telemetry.ac_power_w, telemetry.power_w)
         self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
 
         if self.settings.operating_mode is not OperatingMode.OFF:
@@ -474,6 +503,34 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         for subentry_id, power in allocation.consumer_power_w.items():
             self._runtime.update(subentry_id, power > 0, now)
         snapshot.allocation = allocation
+        snapshot.distribution = self._distributor.distribute(
+            allocation.battery_power_w,
+            self._battery_units(snapshot),
+            RotationSettings(
+                soc_threshold_pct=settings.rotation_soc_threshold_pct,
+                min_interval_s=settings.rotation_min_interval_min * 60,
+                ramp_s=settings.rotation_ramp_s,
+            ),
+            now,
+        )
+
+    def _battery_units(self, snapshot: SystemSnapshot) -> list[BatteryUnit]:
+        units = []
+        for battery in self.batteries:
+            telemetry = snapshot.batteries.get(battery.subentry_id)
+            if not battery.enabled or telemetry is None or telemetry.soc_pct is None:
+                continue
+            caps = battery.driver.capabilities
+            units.append(
+                BatteryUnit(
+                    battery_id=battery.subentry_id,
+                    soc_pct=telemetry.soc_pct,
+                    max_charge_w=caps.max_charge_power_w,
+                    max_discharge_w=caps.max_discharge_power_w,
+                    loss_model=battery.loss_curve.model(LossModel()),
+                )
+            )
+        return units
 
     async def async_release_batteries(self) -> None:
         """Hand all controllable batteries back to their internal logic."""

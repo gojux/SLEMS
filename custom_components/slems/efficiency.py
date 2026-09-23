@@ -11,9 +11,12 @@ cycles have been charged, the configured value is used.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 
+import numpy as np
+
+from .battery_distribution import LossModel
 from .const import EfficiencyMode
 
 MIN_CYCLES = 3
@@ -142,3 +145,66 @@ class EfficiencyTracker:
     def one_way(self) -> float:
         """Charge or discharge efficiency (0..1)."""
         return math.sqrt(self.round_trip)
+
+
+LOSS_BIN_W = 250
+LOSS_MIN_POWER_W = 100
+LOSS_EMA_ALPHA = 0.05
+LOSS_MIN_SAMPLES = 20
+LOSS_MIN_BINS = 3
+
+
+@dataclass
+class LossCurveLearner:
+    """Learns the conversion loss per AC power range from AC and DC power.
+
+    Discharging: loss = |DC| - |AC|; charging: loss = |AC| - |DC|. Each 250 W
+    bin keeps an exponential moving average; the loss model is a quadratic fit
+    through the bins with enough samples.
+    """
+
+    # bin index -> [mean loss in W, sample count, mean AC power in W]
+    bins: dict[int, list[float]] = field(default_factory=dict)
+
+    def add(self, ac_power_w: float | None, dc_power_w: float | None) -> None:
+        if ac_power_w is None or dc_power_w is None or abs(ac_power_w) < LOSS_MIN_POWER_W:
+            return
+        # Opposite directions of AC and DC side are transients; skip them.
+        if (ac_power_w > 0) != (dc_power_w > 0):
+            return
+        if ac_power_w > 0:
+            loss = abs(ac_power_w) - abs(dc_power_w)
+        else:
+            loss = abs(dc_power_w) - abs(ac_power_w)
+        power = abs(ac_power_w)
+        index = int(power // LOSS_BIN_W)
+        mean, count, mean_power = self.bins.get(index, [loss, 0.0, power])
+        alpha = max(LOSS_EMA_ALPHA, 1 / (count + 1))
+        self.bins[index] = [
+            mean + alpha * (loss - mean),
+            count + 1,
+            mean_power + alpha * (power - mean_power),
+        ]
+
+    def model(self, default: LossModel) -> LossModel:
+        """Fitted loss model, or ``default`` while there is not enough data."""
+        usable = [
+            (mean_power, mean)
+            for mean, count, mean_power in self.bins.values()
+            if count >= LOSS_MIN_SAMPLES
+        ]
+        if len(usable) < LOSS_MIN_BINS:
+            return default
+        power = np.array([p for p, _ in usable])
+        loss = np.array([value for _, value in usable])
+        design = np.column_stack([np.ones_like(power), power, power**2])
+        coefficients, *_ = np.linalg.lstsq(design, loss, rcond=None)
+        fixed, linear, quadratic = (max(0.0, float(c)) for c in coefficients)
+        return LossModel(fixed_w=fixed, linear=linear, quadratic_per_w=quadratic)
+
+    def as_dict(self) -> dict:
+        return {str(index): values for index, values in self.bins.items()}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> LossCurveLearner:
+        return cls({int(index): list(values) for index, values in data.items()})

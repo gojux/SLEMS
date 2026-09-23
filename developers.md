@@ -63,6 +63,7 @@ custom_components/slems/
   pv_forecast.py     PV forecast via the HA energy platform (provider independent)
   forecast/          consumption forecast (history, models, forecaster)
   night_discharge.py night discharge planning
+  battery_distribution.py  split of the battery power between batteries (rotation, ramps)
   allocation.py      distribution of available power between batteries and consumers
   grid_filter.py     conservative moving average of the grid power
   efficiency.py      round trip efficiency (battery counters / learned / manual)
@@ -121,6 +122,29 @@ sensors. Inputs:
   logic immediately.
 - **Minimum runtime / pause** are tracked on the state commanded by SLEMS
   (`RuntimeTracker`), in simulation mode on the virtual state.
+
+### Distribution between batteries
+
+`battery_distribution.py` splits the planned battery power (AC) between the
+enabled batteries; result per battery in the sensor *Planned power*.
+
+- **How many**: each battery has a loss model
+  `loss(P) = fixed + linear·P + quadratic·P²`. The number of batteries with
+  the lowest total loss is used (current number kept within 5 %). The model is
+  learned per battery from AC and DC power (`LossCurveLearner`, 250 W bins,
+  moving average, quadratic fit once 3 bins have 20 samples); until then the
+  default 15 W + 4 % + 1e-5·P² applies (sharing pays off above ~1.7 kW). It
+  requires that the driver reports both AC and DC power; the Venus registers
+  30006 (AC) and 30001 (DC) are assumed to be exactly that, to be verified.
+- **Which**: discharging highest SoC first, charging lowest first. An active
+  battery is replaced when it is more than the *rotation threshold* (default
+  5 %) worse than the best inactive one, at most once per *minimum interval*
+  (default 15 min).
+- **Smooth transition**: weights ramp between 0 and 1 within the *ramp time*
+  (default 30 s); the power is split by weight × maximum power, the sum always
+  matches the plan. If the weighted batteries cannot deliver it, the others
+  help immediately.
+- Learned loss curves are stored with the efficiency data in `.storage`.
 
 Efficiency: `EfficiencyTracker` per battery. *Battery counters* uses the
 lifetime counters (Venus: registers 33000/33002), *learned* integrates the AC
@@ -343,5 +367,6 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-23 | Charge secured uses a safety buffer in kWh instead of a percentage margin. |
 | 2026-09-23 | Grid surplus targets for charging (0…5 kW) and discharging (−1…+1 kW) plus a maximum grid export while discharging. |
 | 2026-09-23 | Batteries can be disabled temporarily via a switch; they stay measured. |
+| 2026-09-23 | Distribution between batteries by minimal conversion losses (learned per battery), rotation by SoC threshold with minimum interval and ramped transition. |
 | 2026-09-23 | Consumption forecast from long-term statistics; optional history entity for the house consumption and optional outdoor temperature sensor, otherwise SLEMS records the weather temperature itself. |
 | 2026-09-23 | Night discharge: evenly spread until PV exceeds consumption, target = reserve raised to what tomorrow's PV can refill; grid target ignored, maximum export respected. |
