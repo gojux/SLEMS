@@ -283,7 +283,8 @@
           "self_consumption": "Eigenverbrauch",
           "peak_shaving": "Spitzenabfang",
           "idle": "Ruhe",
-          "night_discharge": "Nachtentladung"
+          "night_discharge": "Nachtentladung",
+          "grid_friendly": "Netzdienlich"
         }
       },
       "expected_surplus_energy": {
@@ -326,6 +327,12 @@
       },
       "control_gain_current": {
         "name": "Aktuelle Regelverstärkung"
+      },
+      "feed_in_limit": {
+        "name": "Einspeisegrenze"
+      },
+      "pv_correction": {
+        "name": "Korrektur PV-Prognose"
       }
     },
     "switch": {
@@ -343,6 +350,9 @@
       },
       "auto_gain": {
         "name": "Automatische Regelverstärkung"
+      },
+      "grid_friendly_charging": {
+        "name": "Netzdienliches Laden"
       }
     },
     "number": {

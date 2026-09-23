@@ -24,6 +24,9 @@ or below its threshold, they only cover the import above the grid limit.
 
 In between the batteries stay idle.
 
+Grid friendly charging (optional, see grid_friendly): once the charge is
+secured, the batteries only charge with the surplus above the feed-in limit.
+
 Night discharge (optional, see night_discharge): outside a surplus the
 batteries discharge at least with the planned night power, ignoring the
 discharge grid target but still respecting the maximum grid export.
@@ -53,6 +56,7 @@ class Strategy(StrEnum):
     SELF_CONSUMPTION = "self_consumption"
     PEAK_SHAVING = "peak_shaving"
     NIGHT_DISCHARGE = "night_discharge"
+    GRID_FRIENDLY = "grid_friendly"
     IDLE = "idle"
 
 
@@ -134,6 +138,7 @@ def allocate(
     settings: AllocationSettings,
     expected_surplus_wh: float | None,
     night_discharge_w: float | None = None,
+    feed_in_limit_w: float | None = None,
 ) -> Allocation:
     """Distribute ``available_w`` between batteries and consumers."""
     ordered = sorted(consumers, key=lambda c: (c.priority, c.subentry_id))
@@ -187,6 +192,11 @@ def allocate(
     if charge_secured:
         strategy = Strategy.SHARED
         battery_budget = remaining * settings.battery_share_when_secured_pct / 100
+        if feed_in_limit_w is not None:
+            cap = max(0.0, remaining - feed_in_limit_w)
+            if cap < min(max_charge, battery_budget):
+                strategy = Strategy.GRID_FRIENDLY
+            max_charge = min(max_charge, cap)
     else:
         strategy = Strategy.BATTERY_PRIORITY
         battery_budget = remaining

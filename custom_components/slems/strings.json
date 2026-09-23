@@ -283,7 +283,8 @@
           "self_consumption": "Self consumption",
           "peak_shaving": "Peak shaving",
           "idle": "Idle",
-          "night_discharge": "Night discharge"
+          "night_discharge": "Night discharge",
+          "grid_friendly": "Grid friendly"
         }
       },
       "expected_surplus_energy": {
@@ -326,6 +327,12 @@
       },
       "control_gain_current": {
         "name": "Current control gain"
+      },
+      "feed_in_limit": {
+        "name": "Feed-in limit"
+      },
+      "pv_correction": {
+        "name": "PV forecast correction"
       }
     },
     "switch": {
@@ -343,6 +350,9 @@
       },
       "auto_gain": {
         "name": "Automatic control gain"
+      },
+      "grid_friendly_charging": {
+        "name": "Grid friendly charging"
       }
     },
     "number": {

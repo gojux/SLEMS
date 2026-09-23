@@ -74,6 +74,7 @@ from .battery_distribution import (
 from .efficiency import EfficiencyTracker, EnergyIntegrator, LossCurveLearner
 from .forecast import ConsumptionForecast, ConsumptionForecaster, ForecastSources
 from .grid_filter import GridPowerFilter
+from .grid_friendly import feed_in_limit, pv_correction, remaining_surplus
 from .night_discharge import NightDischargePlan, plan_night_discharge
 from .pv_forecast import PvForecast, async_get_pv_forecast
 from .util import state_as_watts
@@ -139,6 +140,8 @@ class ControlSettings:
     # or start value of the automatic adaptation.
     control_gain: float = DEFAULT_CONTROL_GAIN
     auto_gain: bool = True
+    # Charge into the PV feed-in peak instead of as early as possible.
+    grid_friendly_charging: bool = True
     night_discharge: bool = False
     # Night discharge reserve in % of tomorrow's forecast daily consumption.
     night_reserve_pct: float = DEFAULT_NIGHT_RESERVE_PCT
@@ -186,6 +189,10 @@ class SystemSnapshot:
     # Power SLEMS can distribute, +surplus / -deficit.
     available_power_w: float | None = None
     expected_surplus_wh: float | None = None
+    # Grid friendly charging: batteries charge only the surplus above this.
+    feed_in_limit_w: float | None = None
+    # Ratio of today's PV production to the forecast until now.
+    pv_correction: float = 1.0
     allocation: Allocation | None = None
     # Planned power per battery subentry id (+charge / -discharge, AC).
     distribution: Distribution | None = None
@@ -285,6 +292,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._grid_filter = GridPowerFilter(self.settings.surplus_average_window_s)
         self._runtime = RuntimeTracker()
         self._distributor = BatteryDistributor()
+        # PV energy produced today (in memory): (local date, Wh, last sample).
+        self._pv_day: tuple[object, float, float | None, float | None] | None = None
+        # True once the integration covers a whole day since midnight.
+        self._pv_complete = False
         self._store: Store[dict] = Store(
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.efficiency"
         )
@@ -429,6 +440,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         snapshot.grid_power_filtered_w = self._grid_filter.conservative(now)
         if pv_entity := config.get(CONF_PV_POWER_ENTITY):
             snapshot.pv_power_w = state_as_watts(self.hass.states.get(pv_entity))
+        self._integrate_pv(snapshot.pv_power_w, now)
 
         for consumer in self.consumers:
             snapshot.consumers[consumer.subentry_id] = read_consumer_state(
@@ -474,6 +486,24 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # Runs after the new data has been stored.
         self.hass.loop.call_soon(self.controller.request)
         return snapshot
+
+    def _integrate_pv(self, pv_power_w: float | None, now: float) -> None:
+        """Add up today's PV energy (restarts at midnight and after a restart)."""
+        today = dt_util.now().date()
+        day, energy, last_time, last_power = self._pv_day or (today, 0.0, None, None)
+        if day != today:
+            day, energy, last_time, last_power = today, 0.0, None, None
+            self._pv_complete = True
+        if last_time is not None and last_power is not None and now - last_time < 300:
+            energy += last_power * (now - last_time) / 3600
+        self._pv_day = (day, energy, now, pv_power_w)
+
+    @property
+    def _pv_today_wh(self) -> float | None:
+        """PV energy today, None if it is not known since midnight."""
+        if self._pv_day is None or not self._pv_complete:
+            return None
+        return self._pv_day[1]
 
     @staticmethod
     def _update_efficiency(
@@ -540,9 +570,25 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         house = snapshot.house_power_w
         load = None if house is None else house - controlled_w
         consumption = snapshot.consumption_forecast
+        pv_forecast = snapshot.pv_forecast
+        if pv_forecast is not None:
+            snapshot.pv_correction = pv_correction(pv_forecast, wall_now, self._pv_today_wh)
+            pv_forecast = {k: v * snapshot.pv_correction for k, v in pv_forecast.items()}
         snapshot.expected_surplus_wh = expected_surplus_wh(
-            snapshot.pv_forecast, wall_now, load, consumption.total if consumption else None
+            pv_forecast, wall_now, load, consumption.total if consumption else None
         )
+        battery = self._battery_group(snapshot)
+        settings = self.settings
+        snapshot.feed_in_limit_w = None
+        if settings.grid_friendly_charging and battery is not None and pv_forecast is not None:
+            surplus = remaining_surplus(
+                pv_forecast, consumption.total if consumption else None, load, wall_now
+            )
+            snapshot.feed_in_limit_w = feed_in_limit(
+                surplus,
+                battery.energy_to_full_wh + settings.charge_secured_buffer_kwh * 1000,
+                battery.max_charge_w,
+            )
 
         requests = [
             ConsumerRequest(
@@ -558,8 +604,6 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             for consumer in self.consumers
             if snapshot.is_controllable_now(consumer.subentry_id)
         ]
-        battery = self._battery_group(snapshot)
-        settings = self.settings
         if (
             settings.night_discharge
             and battery is not None
@@ -584,6 +628,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             settings.allocation_settings(),
             snapshot.expected_surplus_wh,
             snapshot.night_discharge.power_w if snapshot.night_discharge else None,
+            snapshot.feed_in_limit_w,
         )
         if previous_total_w is not None:
             allocation.battery_power_w = previous_total_w + gain * (

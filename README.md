@@ -31,7 +31,7 @@ management system).
 | Vacation switch | ✅ |
 | Import peak shaving at low state of charge (manually enabled) | ✅ |
 | Consumption forecast today/tomorrow (history + weather, heat pump temperature dependent) | ✅ |
-| Grid friendly charging: absorb PV feed-in peaks | planned |
+| Grid friendly charging: absorb PV feed-in peaks | ✅ |
 | Distribution of surplus between batteries and consumers (priorities, split, minimum runtime/pause) | ✅ |
 | Battery efficiency (battery counters, learned or manual) | ✅ |
 | Averaged grid surplus (0–300 s) | ✅ |
@@ -219,6 +219,35 @@ Diagnostic sensors show what SLEMS has learned:
 Switch the automatic adjustment off only if the gain keeps changing
 noticeably, e.g. because the smart meter reports very irregularly; then set a
 fixed value (0.3–0.5 is a good start).
+
+### Grid friendly charging
+
+Charging as soon as there is surplus fills the batteries in the morning, and
+the PV feed-in peak around noon then goes to the grid in full. With *Grid
+friendly charging* (switch, on by default) SLEMS shifts charging into the
+peak:
+
+- From the PV and consumption forecasts it calculates a *Feed-in limit*: the
+  highest grid export at which the surplus above it still fills the batteries
+  by the end of the day (charge losses, maximum charge power and *Charge
+  secured safety buffer* included).
+- The batteries only charge with the surplus above this limit; below it the
+  power goes to the consumers or to the grid. The highest hours of the day
+  are cut, wherever the clouds put them.
+- The limit is recalculated continuously from the current state of charge
+  and the remaining forecast. If charging falls behind (e.g. more clouds
+  than forecast), the limit drops by itself.
+- The PV forecast is corrected with today's actual production (diagnostic
+  sensor *PV forecast correction*, available from the first midnight after a
+  restart).
+- As long as the charge is not secured (state of charge below *Battery
+  priority below state of charge* or the forecast is not sufficient), SLEMS
+  charges at once as before.
+
+How much of the peak can be absorbed depends on the battery size compared to
+the day's surplus: on a clear summer day with a large surplus a 10 kWh
+battery takes about the top kilowatt of the peak, on days with less surplus
+a much larger share.
 
 ### Further settings (entities)
 

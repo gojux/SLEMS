@@ -31,7 +31,7 @@ Der Name setzt sich aus *Slug* und *EMS* (Energiemanagementsystem) zusammen.
 | Urlaubsschalter | ✅ |
 | Bezugsspitzen abfangen bei niedrigem Ladezustand (manuell aktivierbar) | ✅ |
 | Verbrauchsprognose heute/morgen (Historie + Wetter, Wärmepumpe temperaturabhängig) | ✅ |
-| Netzdienliches Laden: PV-Einspeisespitzen abfangen | geplant |
+| Netzdienliches Laden: PV-Einspeisespitzen abfangen | ✅ |
 | Verteilung des Überschusses auf Batterien und Verbraucher (Priorität, Aufteilung, Mindestlaufzeit/-pause) | ✅ |
 | Wirkungsgrad der Batterie (Batteriezähler, gelernt oder manuell) | ✅ |
 | Gemittelter Netzüberschuss (0–300 s) | ✅ |
@@ -227,6 +227,35 @@ Diagnose-Sensoren zeigen, was SLEMS gelernt hat:
 Die Automatik nur ausschalten, wenn sich die Verstärkung ständig deutlich
 ändert, z. B. weil der Smart Meter sehr unregelmäßig meldet; dann einen festen
 Wert setzen (0,3–0,5 ist ein guter Start).
+
+### Netzdienliches Laden
+
+Wird geladen, sobald Überschuss da ist, sind die Batterien schon am Vormittag
+voll, und die PV-Einspeisespitze zu Mittag geht vollständig ins Netz. Mit
+*Netzdienliches Laden* (Schalter, standardmäßig an) verschiebt SLEMS das
+Laden in die Spitze:
+
+- Aus PV- und Verbrauchsprognose berechnet es eine *Einspeisegrenze*: die
+  höchste Einspeisung, bei der der Überschuss darüber die Batterien bis
+  Tagesende trotzdem füllt (Ladeverluste, maximale Ladeleistung und
+  *Sicherheitspuffer gesicherte Ladung* eingerechnet).
+- Die Batterien laden nur mit dem Überschuss oberhalb dieser Grenze;
+  darunter geht die Leistung an die Verbraucher oder ins Netz. Gekappt werden
+  die höchsten Stunden des Tages, egal wohin die Wolken sie schieben.
+- Die Grenze wird laufend aus dem aktuellen Ladezustand und der restlichen
+  Prognose neu berechnet. Hinkt das Laden hinterher (z. B. mehr Wolken als
+  vorhergesagt), sinkt sie von selbst.
+- Die PV-Prognose wird mit der tatsächlichen Erzeugung des Tages korrigiert
+  (Diagnose-Sensor *Korrektur PV-Prognose*, verfügbar ab der ersten
+  Mitternacht nach einem Neustart).
+- Solange die Ladung nicht gesichert ist (Ladezustand unter
+  *Batterievorrang unter Ladezustand* oder die Prognose reicht nicht), lädt
+  SLEMS wie bisher sofort.
+
+Wie viel der Spitze abgefangen werden kann, hängt von der Batteriegröße im
+Verhältnis zum Tagesüberschuss ab: An einem klaren Sommertag mit großem
+Überschuss nimmt eine 10-kWh-Batterie etwa das oberste Kilowatt der Spitze
+ab, an Tagen mit weniger Überschuss einen deutlich größeren Anteil.
 
 ### Weitere Einstellungen (Entities)
 

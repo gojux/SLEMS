@@ -180,6 +180,17 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         value_fn=lambda s, _: s.night_discharge.power_w if s.night_discharge else None,
     ),
     SystemSensorDescription(
+        **_power("feed_in_limit"), value_fn=lambda s, _: s.feed_in_limit_w
+    ),
+    SystemSensorDescription(
+        key="pv_correction",
+        translation_key="pv_correction",
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda s, _: s.pv_correction * 100,
+    ),
+    SystemSensorDescription(
         key="expected_surplus_energy",
         translation_key="expected_surplus_energy",
         device_class=SensorDeviceClass.ENERGY,

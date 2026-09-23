@@ -69,6 +69,7 @@ custom_components/slems/
   pv_forecast.py     PV forecast via the HA energy platform (provider independent)
   forecast/          consumption forecast (history, models, forecaster)
   night_discharge.py night discharge planning
+  grid_friendly.py   feed-in limit for grid friendly charging, PV forecast correction
   battery_distribution.py  split of the battery power between batteries (rotation, ramps)
   controller.py      real-time controller (active mode): commands to batteries and consumers
   response.py        learned meter cadence and response times
@@ -234,10 +235,42 @@ sends commands.
 - Leaving *active* hands the batteries back immediately; consumers keep their
   last state.
 
+### Grid friendly charging
+
+`grid_friendly.py`, switch *Grid friendly charging* (default on). Every plan
+computes the feed-in limit `T` (sensor *Feed-in limit*):
+
+```
+surplus_h = corrected PV forecast_h − consumption forecast_h   (remaining hours today, > 0)
+needed    = energy to full / charge efficiency + safety buffer
+T = max { T : Σ min(max(0, surplus_h − T), max_charge) · hours_h ≥ needed }
+```
+
+found by bisection (10 W resolution). `None` if even `T = 0` is not enough
+(charge at once); with a full battery `T` is the highest surplus. Without a
+consumption forecast the current uncontrolled load is assumed per hour.
+
+In the allocation, only when the charge is secured: the battery charge is
+capped at `remaining − T` (strategy *grid_friendly* while the cap limits);
+the rest goes to the consumers by priority, then to the grid. Not secured →
+battery priority as before, no cap.
+
+PV correction: ratio of today's measured PV energy (integrated from the PV
+power sensor in memory) to the forecast until now, limited to 0.5–1.2, used
+once the forecast until now exceeds 1 kWh. After a restart it is only known
+from the next midnight on (the integration must cover the whole day).
+
+Effect (`tests/test_grid_friendly.py::test_day_simulation_absorbs_the_peak`,
+15 min steps, clear day, 8 kWp, 500 W load, 10 kWh battery from 20 %):
+charging early leaves the full 6.5 kW peak, grid friendly 5.4 kW; both fill
+the battery. The broader the peak and the larger the surplus compared to the
+battery, the smaller the cut.
+
+Possible extensions: take the planned consumers into account in the
+surplus; persist the PV energy of the day; use 15 minute forecast periods.
+
 Not implemented yet:
 
-- **Grid friendly charging**: shift charging into the PV feed-in peak instead
-  of charging as early as possible.
 - **Dashboard**: custom sidebar panel (web component served by the integration).
 
 ### Control structure
@@ -487,6 +520,7 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-23 | Disabling a discharging battery hands over within 5 s. |
 | 2026-09-23 | Real-time controller event driven on the grid meter; batteries released when the meter is stale. |
 | 2026-09-23 | Damped correction (control gain) plus learned response times instead of a fixed settle time; meter cadence learned from its reports. |
+| 2026-09-23 | Grid friendly charging via a feed-in limit from PV and consumption forecast, recalculated every cycle; only when the charge is secured. |
 | 2026-09-23 | No PID: feedforward + dead time compensation + proportional gain; the gain adapts automatically (oscillation → lower, sluggish → higher). |
 | 2026-09-23 | Distribution between batteries by minimal conversion losses (learned per battery), rotation by SoC threshold with minimum interval and ramped transition. |
 | 2026-09-23 | Consumption forecast from long-term statistics; optional history entity for the house consumption and optional outdoor temperature sensor, otherwise SLEMS records the weather temperature itself. |
