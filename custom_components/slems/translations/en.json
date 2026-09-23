@@ -9,14 +9,18 @@
           "grid_power_inverted": "Invert grid power sign",
           "pv_power_entity": "PV power",
           "weather_entity": "Weather",
-          "pv_forecast_entries": "PV forecast"
+          "pv_forecast_entries": "PV forecast",
+          "outdoor_temperature_entity": "Outdoor temperature",
+          "house_history_entity": "House consumption history"
         },
         "data_description": {
           "grid_power_entity": "Power at the grid connection point. Expected sign: positive = import, negative = export.",
           "grid_power_inverted": "Enable if your meter reports export as positive.",
           "pv_power_entity": "Current PV production. Used for the energy flow and the house consumption balance.",
           "weather_entity": "Optional. Improves the consumption forecast (e.g. heat pump demand).",
-          "pv_forecast_entries": "Solar forecast integrations (e.g. Forecast.Solar, Solcast). Several entries, e.g. one per roof plane, are summed up."
+          "pv_forecast_entries": "Solar forecast integrations (e.g. Forecast.Solar, Solcast). Several entries, e.g. one per roof plane, are summed up.",
+          "outdoor_temperature_entity": "Optional. Temperature sensor with history for the heat pump forecast. Without it, SLEMS records the temperature of the weather entity itself.",
+          "house_history_entity": "Optional. Power sensor of the house consumption with existing history (e.g. from another integration). Used for the time before SLEMS recorded its own values."
         }
       }
     },
@@ -33,13 +37,17 @@
           "grid_power_inverted": "Invert grid power sign",
           "pv_power_entity": "PV power",
           "weather_entity": "Weather",
-          "pv_forecast_entries": "PV forecast"
+          "pv_forecast_entries": "PV forecast",
+          "outdoor_temperature_entity": "Outdoor temperature",
+          "house_history_entity": "House consumption history"
         },
         "data_description": {
           "grid_power_entity": "Power at the grid connection point. Expected sign: positive = import, negative = export.",
           "grid_power_inverted": "Enable if your meter reports export as positive.",
           "pv_forecast_entries": "Solar forecast integrations (e.g. Forecast.Solar, Solcast). Several entries, e.g. one per roof plane, are summed up.",
-          "weather_entity": "Optional. Improves the consumption forecast (e.g. heat pump demand)."
+          "weather_entity": "Optional. Improves the consumption forecast (e.g. heat pump demand).",
+          "outdoor_temperature_entity": "Optional. Temperature sensor with history for the heat pump forecast. Without it, SLEMS records the temperature of the weather entity itself.",
+          "house_history_entity": "Optional. Power sensor of the house consumption with existing history (e.g. from another integration). Used for the time before SLEMS recorded its own values."
         }
       }
     }
@@ -292,6 +300,15 @@
       },
       "night_discharge_power": {
         "name": "Night discharge power"
+      },
+      "outdoor_temperature": {
+        "name": "Outdoor temperature"
+      },
+      "consumption_forecast_today": {
+        "name": "Consumption forecast today"
+      },
+      "consumption_forecast_tomorrow": {
+        "name": "Consumption forecast tomorrow"
       }
     },
     "switch": {

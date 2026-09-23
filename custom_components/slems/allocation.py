@@ -31,7 +31,7 @@ discharge grid target but still respecting the maximum grid export.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -39,7 +39,7 @@ from enum import StrEnum
 from homeassistant.util import dt as dt_util
 
 from .const import ControlMode
-from .pv_forecast import PvForecast
+from .pv_forecast import PvForecast, hourly
 
 FULL_SOC_PCT = 99.5
 PV_PERIOD = timedelta(hours=1)
@@ -295,13 +295,32 @@ def pv_end_today(forecast: PvForecast, now: datetime) -> datetime | None:
 
 
 def expected_surplus_wh(
-    forecast: PvForecast | None, now: datetime, load_w: float | None
+    forecast: PvForecast | None,
+    now: datetime,
+    load_w: float | None,
+    consumption_forecast: Mapping[datetime, float] | None = None,
 ) -> float | None:
-    """PV energy left today minus the load until PV production ends.
+    """Expected PV surplus for the rest of today.
 
-    ``load_w`` is assumed to stay constant (persistence forecast).
+    With a consumption forecast: sum of the hourly surpluses (PV above
+    consumption). Without: PV energy left minus ``load_w`` (assumed constant)
+    until PV production ends.
     """
-    if forecast is None or load_w is None:
+    if forecast is None:
+        return None
+    if consumption_forecast is not None:
+        pv = hourly(forecast)
+        consumption = hourly(consumption_forecast)
+        end_of_day = dt_util.start_of_local_day(now) + timedelta(days=1)
+        total = 0.0
+        for start in pv:
+            end = start + PV_PERIOD
+            if end <= now or start >= end_of_day:
+                continue
+            covered = (end - max(start, now)) / PV_PERIOD
+            total += max(0.0, pv[start] - consumption.get(start, 0.0)) * covered
+        return total
+    if load_w is None:
         return None
     end = pv_end_today(forecast, now)
     if end is None:

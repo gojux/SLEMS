@@ -54,6 +54,8 @@ class SettingSwitch(SlemsSystemEntity, SwitchEntity, RestoreEntity):
 
     def _set(self, value: bool) -> None:
         setattr(self.coordinator.settings, self._attribute, value)
+        if self._attribute == "vacation" and self.hass is not None:
+            self.hass.async_create_task(self.coordinator.async_refresh_forecast())
 
     @property
     def is_on(self) -> bool:

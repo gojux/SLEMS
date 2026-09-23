@@ -19,6 +19,8 @@ from datetime import datetime, timedelta
 
 from homeassistant.util import dt as dt_util
 
+from .pv_forecast import hourly
+
 PERIOD = timedelta(hours=1)
 MAX_LOOKAHEAD = timedelta(hours=36)
 
@@ -40,13 +42,6 @@ def _energy(forecast: Mapping[datetime, float], start: datetime) -> float:
     return forecast.get(start, 0.0)
 
 
-def hourly(forecast: Mapping[datetime, float]) -> dict[datetime, float]:
-    """Sum periods of any length (e.g. 30 min) into hourly local buckets."""
-    buckets: dict[datetime, float] = {}
-    for start, wh in forecast.items():
-        hour = dt_util.as_local(start).replace(minute=0, second=0, microsecond=0)
-        buckets[hour] = buckets.get(hour, 0.0) + wh
-    return buckets
 
 
 def plan_night_discharge(

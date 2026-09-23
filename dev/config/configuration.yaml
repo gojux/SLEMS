@@ -1,4 +1,7 @@
 # Development configuration for SLEMS.
+homeassistant:
+  time_zone: Europe/Vienna
+
 default_config:
 
 logger:

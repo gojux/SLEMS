@@ -9,10 +9,16 @@ import time
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.event import (
+    async_track_state_change_event,
+    async_track_time_change,
+)
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.const import UnitOfTemperature
 from homeassistant.util import dt as dt_util
+from homeassistant.util.unit_conversion import TemperatureConverter
 
 from .allocation import (
     Allocation,
@@ -25,8 +31,11 @@ from .allocation import (
 from .const import (
     CONF_GRID_POWER_ENTITY,
     CONF_GRID_POWER_INVERTED,
+    CONF_HOUSE_HISTORY_ENTITY,
+    CONF_OUTDOOR_TEMPERATURE_ENTITY,
     CONF_PV_FORECAST_ENTRIES,
     CONF_PV_POWER_ENTITY,
+    CONF_WEATHER_ENTITY,
     DEFAULT_BATTERY_PRIORITY_SOC_PCT,
     DEFAULT_BATTERY_SHARE_WHEN_SECURED_PCT,
     DEFAULT_CHARGE_GRID_TARGET_W,
@@ -40,11 +49,13 @@ from .const import (
     DEFAULT_SURPLUS_AVERAGE_WINDOW_S,
     DOMAIN,
     SCAN_INTERVAL,
+    ConsumerType,
     OperatingMode,
 )
 from .consumers import ConsumerConfig, ConsumerState, RuntimeTracker, read_consumer_state
 from .drivers import BatteryDriver, BatteryDriverError, BatteryTelemetry
 from .efficiency import EfficiencyTracker, EnergyIntegrator
+from .forecast import ConsumptionForecast, ConsumptionForecaster, ForecastSources
 from .grid_filter import GridPowerFilter
 from .night_discharge import NightDischargePlan, plan_night_discharge
 from .pv_forecast import PvForecast, async_get_pv_forecast
@@ -126,8 +137,9 @@ class SystemSnapshot:
     consumer_configs: dict[str, ConsumerConfig] = field(default_factory=dict)
     consumers: dict[str, ConsumerState] = field(default_factory=dict)
     pv_forecast: PvForecast | None = None
-    # Hourly consumption forecast (period start -> Wh) of the whole house.
-    consumption_forecast: dict[datetime, float] | None = None
+    consumption_forecast: ConsumptionForecast | None = None
+    # Current outdoor temperature of the weather entity (°C).
+    outdoor_temperature_c: float | None = None
     night_discharge: NightDischargePlan | None = None
     # Power SLEMS can distribute, +surplus / -deficit.
     available_power_w: float | None = None
@@ -222,6 +234,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._store: Store[dict] = Store(
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.efficiency"
         )
+        self.forecaster = ConsumptionForecaster(hass, self._forecast_sources())
 
     @property
     def _config(self):
@@ -238,6 +251,67 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._add_grid_sample(self.hass.states.get(grid_entity))
         self.config_entry.async_on_unload(
             async_track_state_change_event(self.hass, grid_entity, self._on_grid_change)
+        )
+        # The forecast is refitted every hour; the first run must not delay setup.
+        self.config_entry.async_on_unload(
+            async_track_time_change(
+                self.hass, self._on_forecast_time, minute=5, second=0
+            )
+        )
+        self.config_entry.async_create_background_task(
+            self.hass, self.async_refresh_forecast(), "slems consumption forecast"
+        )
+
+    async def _on_forecast_time(self, _now: datetime) -> None:
+        await self.async_refresh_forecast()
+
+    async def async_refresh_forecast(self) -> None:
+        """Refit the consumption forecast from the recorder statistics."""
+        self.forecaster.sources = self._forecast_sources()
+        try:
+            await self.forecaster.async_refresh(self.settings.vacation)
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Consumption forecast failed")
+
+    def _forecast_sources(self) -> ForecastSources:
+        config = self._config
+        registry = er.async_get(self.hass)
+        entry_id = self.config_entry.entry_id
+
+        def own(unique_id: str) -> str | None:
+            return registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+
+        included = [c for c in self.consumers if c.included_in_meter]
+        return ForecastSources(
+            house=tuple(
+                entity_id
+                for entity_id in (
+                    own(f"{entry_id}_house_power"),
+                    config.get(CONF_HOUSE_HISTORY_ENTITY),
+                )
+                if entity_id
+            ),
+            grid=config[CONF_GRID_POWER_ENTITY],
+            grid_inverted=config.get(CONF_GRID_POWER_INVERTED, False),
+            pv=config.get(CONF_PV_POWER_ENTITY),
+            batteries=tuple(
+                entity_id
+                for battery in self.batteries
+                if (entity_id := own(f"{battery.subentry_id}_battery_power"))
+            ),
+            heat_pumps=tuple(
+                c.power_entity_id
+                for c in included
+                if c.consumer_type is ConsumerType.HEAT_PUMP
+            ),
+            controllable=tuple(
+                c.power_entity_id
+                for c in included
+                if c.controllable and c.consumer_type is not ConsumerType.HEAT_PUMP
+            ),
+            temperature=config.get(CONF_OUTDOOR_TEMPERATURE_ENTITY)
+            or own(f"{entry_id}_outdoor_temperature"),
+            weather=config.get(CONF_WEATHER_ENTITY),
         )
 
     @callback
@@ -278,6 +352,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
 
         if forecast_entries := config.get(CONF_PV_FORECAST_ENTRIES):
             snapshot.pv_forecast = await async_get_pv_forecast(self.hass, forecast_entries)
+        snapshot.consumption_forecast = self.forecaster.forecast
+        if weather := config.get(CONF_WEATHER_ENTITY):
+            snapshot.outdoor_temperature_c = _weather_temperature(self.hass.states.get(weather))
 
         # A failing battery must not take the whole system down: it is simply
         # missing from the snapshot and its entities become unavailable.
@@ -346,8 +423,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
         house = snapshot.house_power_w
         load = None if house is None else house - controlled_w
+        consumption = snapshot.consumption_forecast
         snapshot.expected_surplus_wh = expected_surplus_wh(
-            snapshot.pv_forecast, wall_now, load
+            snapshot.pv_forecast, wall_now, load, consumption.total if consumption else None
         )
 
         requests = [
@@ -381,7 +459,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 battery.charge_efficiency,
                 battery.charge_efficiency,
                 snapshot.pv_forecast,
-                snapshot.consumption_forecast,
+                snapshot.consumption_forecast.total,
                 settings.night_reserve_pct,
                 settings.charge_secured_buffer_kwh * 1000,
             )
@@ -415,3 +493,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             await self.async_release_batteries()
         for battery in self.batteries:
             await battery.driver.close()
+
+
+def _weather_temperature(state) -> float | None:
+    """Current temperature of a weather entity in °C."""
+    if state is None:
+        return None
+    temperature = state.attributes.get("temperature")
+    if temperature is None:
+        return None
+    unit = state.attributes.get("temperature_unit", UnitOfTemperature.CELSIUS)
+    return TemperatureConverter.convert(
+        float(temperature), unit, UnitOfTemperature.CELSIUS
+    )

@@ -6,7 +6,8 @@ import pytest
 
 from homeassistant.util import dt as dt_util
 
-from custom_components.slems.night_discharge import hourly, plan_night_discharge
+from custom_components.slems.night_discharge import plan_night_discharge
+from custom_components.slems.pv_forecast import hourly
 
 
 @pytest.fixture(autouse=True)

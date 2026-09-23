@@ -19,6 +19,9 @@ CONF_PV_POWER_ENTITY: Final = "pv_power_entity"
 # Config entry ids of solar forecast providers (HA energy platform), summed up.
 CONF_PV_FORECAST_ENTRIES: Final = "pv_forecast_entries"
 CONF_WEATHER_ENTITY: Final = "weather_entity"
+# Optional history sources for the consumption forecast.
+CONF_HOUSE_HISTORY_ENTITY: Final = "house_history_entity"
+CONF_OUTDOOR_TEMPERATURE_ENTITY: Final = "outdoor_temperature_entity"
 
 # --- battery subentry ---------------------------------------------------------
 SUBENTRY_TYPE_BATTERY: Final = "battery"

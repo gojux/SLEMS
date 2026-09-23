@@ -30,13 +30,13 @@ management system).
 | Operating mode *Off / Simulation (read-only) / Active* | ✅ entity, logic follows |
 | Vacation switch | ✅ entity, logic follows |
 | Import peak shaving at low state of charge (manually enabled) | ✅ entities, logic follows |
-| Consumption forecast (history + weather) | planned |
+| Consumption forecast today/tomorrow (history + weather, heat pump temperature dependent) | ✅ |
 | Grid friendly charging: absorb PV feed-in peaks | planned |
 | Distribution of surplus between batteries and consumers (priorities, split, minimum runtime/pause) | ✅ computed and shown, execution follows |
 | Battery efficiency (battery counters, learned or manual) | ✅ |
 | Averaged grid surplus (0–300 s) | ✅ |
 | Grid surplus targets for charging/discharging, maximum export while discharging | ✅ |
-| Night discharge to a forecast based reserve | ✅ logic, active once the consumption forecast exists |
+| Night discharge to a forecast based reserve | ✅ computed and shown, execution follows |
 | Consumer control (sending commands) | planned |
 | Dashboard with energy flow and daily forecast chart | planned |
 
@@ -85,6 +85,34 @@ pump. Recommendations for Vorarlberg / the Alpine region:
   weather models.
 - **Met.no** (Home Assistant default): works everywhere, less detailed in
   alpine terrain.
+
+### Consumption forecast
+
+SLEMS learns the consumption from the long-term statistics of Home Assistant
+and forecasts today and tomorrow hourly. Recent days count more than older
+ones, so changes are followed within days. Heat pumps are forecast from the
+outdoor temperature of the day, so a warm day in the heating season
+immediately predicts less heating energy. Two optional settings help at the
+start:
+
+- **Outdoor temperature**: a temperature sensor with history. Without it,
+  SLEMS records the temperature of the weather entity itself; the heat pump
+  model then needs about a week before it uses the temperature.
+- **House consumption history**: a power sensor of the house consumption with
+  existing history (e.g. from another battery integration), used for the time
+  before SLEMS recorded its own values.
+
+Recommended setup when switching from another battery integration:
+
+1. Select that integration's house consumption sensor as *House consumption
+   history*. SLEMS then learns from the full history right away. Without it,
+   SLEMS derives the history from grid and PV only; the battery power before
+   SLEMS is unknown, so charging and discharging would distort the learned
+   consumption.
+2. Select an outdoor temperature sensor with history if one exists. Otherwise
+   the heat pump forecast uses the mean of the last days until SLEMS has
+   recorded about a week of temperatures.
+3. Holidays are currently treated like workdays.
 
 ### Consumers
 
@@ -164,10 +192,9 @@ The entity *SLEMS Operating mode* switches between:
 
 ## Roadmap
 
-1. Consumption forecast from history and weather
-2. Planner (grid friendly charging) and real-time controller that executes the allocation
-3. Distribution between several batteries at the efficiency optimum
-4. Dashboard: energy flow diagram, daily forecast and plan chart
+1. Distribution between several batteries at the efficiency optimum, with rotation
+2. Real-time controller that executes the allocation
+3. Dashboard: energy flow diagram, daily forecast and plan chart
 
 ## Development
 

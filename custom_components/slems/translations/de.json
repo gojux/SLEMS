@@ -9,14 +9,18 @@
           "grid_power_inverted": "Vorzeichen der Netzleistung umkehren",
           "pv_power_entity": "PV-Leistung",
           "weather_entity": "Wetter",
-          "pv_forecast_entries": "PV-Prognose"
+          "pv_forecast_entries": "PV-Prognose",
+          "outdoor_temperature_entity": "Außentemperatur",
+          "house_history_entity": "Historie Hausverbrauch"
         },
         "data_description": {
           "grid_power_entity": "Leistung am Netzanschlusspunkt. Erwartetes Vorzeichen: positiv = Bezug, negativ = Einspeisung.",
           "grid_power_inverted": "Aktivieren, wenn dein Zähler Einspeisung positiv meldet.",
           "pv_power_entity": "Aktuelle PV-Erzeugung. Wird für den Energiefluss und die Bilanz des Hausverbrauchs verwendet.",
           "weather_entity": "Optional. Verbessert die Verbrauchsprognose (z. B. Bedarf der Wärmepumpe).",
-          "pv_forecast_entries": "Integrationen mit Solarprognose (z. B. Forecast.Solar, Solcast). Mehrere Einträge, z. B. einer je Dachfläche, werden addiert."
+          "pv_forecast_entries": "Integrationen mit Solarprognose (z. B. Forecast.Solar, Solcast). Mehrere Einträge, z. B. einer je Dachfläche, werden addiert.",
+          "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entity selbst auf.",
+          "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Wird für die Zeit verwendet, bevor SLEMS eigene Werte aufgezeichnet hat."
         }
       }
     },
@@ -33,13 +37,17 @@
           "grid_power_inverted": "Vorzeichen der Netzleistung umkehren",
           "pv_power_entity": "PV-Leistung",
           "weather_entity": "Wetter",
-          "pv_forecast_entries": "PV-Prognose"
+          "pv_forecast_entries": "PV-Prognose",
+          "outdoor_temperature_entity": "Außentemperatur",
+          "house_history_entity": "Historie Hausverbrauch"
         },
         "data_description": {
           "grid_power_entity": "Leistung am Netzanschlusspunkt. Erwartetes Vorzeichen: positiv = Bezug, negativ = Einspeisung.",
           "grid_power_inverted": "Aktivieren, wenn dein Zähler Einspeisung positiv meldet.",
           "pv_forecast_entries": "Integrationen mit Solarprognose (z. B. Forecast.Solar, Solcast). Mehrere Einträge, z. B. einer je Dachfläche, werden addiert.",
-          "weather_entity": "Optional. Verbessert die Verbrauchsprognose (z. B. Bedarf der Wärmepumpe)."
+          "weather_entity": "Optional. Verbessert die Verbrauchsprognose (z. B. Bedarf der Wärmepumpe).",
+          "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entity selbst auf.",
+          "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Wird für die Zeit verwendet, bevor SLEMS eigene Werte aufgezeichnet hat."
         }
       }
     }
@@ -292,6 +300,15 @@
       },
       "night_discharge_power": {
         "name": "Leistung Nachtentladung"
+      },
+      "outdoor_temperature": {
+        "name": "Außentemperatur"
+      },
+      "consumption_forecast_today": {
+        "name": "Verbrauchsprognose heute"
+      },
+      "consumption_forecast_tomorrow": {
+        "name": "Verbrauchsprognose morgen"
       }
     },
     "switch": {

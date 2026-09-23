@@ -45,6 +45,8 @@ from .const import (
     DEFAULT_PRIORITY,
     CONF_GRID_POWER_ENTITY,
     CONF_GRID_POWER_INVERTED,
+    CONF_HOUSE_HISTORY_ENTITY,
+    CONF_OUTDOOR_TEMPERATURE_ENTITY,
     CONF_HOST,
     CONF_MAX_CHARGE_POWER_W,
     CONF_MAX_DISCHARGE_POWER_W,
@@ -143,6 +145,8 @@ async def _async_system_schema(
             ): _POWER_SENSOR,
             vol.Required(
                 CONF_GRID_POWER_INVERTED,
+    CONF_HOUSE_HISTORY_ENTITY,
+    CONF_OUTDOOR_TEMPERATURE_ENTITY,
                 default=defaults.get(CONF_GRID_POWER_INVERTED, False),
             ): selector.BooleanSelector(),
             optional(CONF_PV_POWER_ENTITY): _POWER_SENSOR,
@@ -150,6 +154,12 @@ async def _async_system_schema(
             optional(CONF_WEATHER_ENTITY): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="weather")
             ),
+            optional(CONF_OUTDOOR_TEMPERATURE_ENTITY): selector.EntitySelector(
+                selector.EntitySelectorConfig(
+                    domain="sensor", device_class=SensorDeviceClass.TEMPERATURE
+                )
+            ),
+            optional(CONF_HOUSE_HISTORY_ENTITY): _POWER_SENSOR,
         }
     )
 

@@ -79,3 +79,12 @@ def energy_on_day(forecast: PvForecast, day: date) -> float:
     return sum(
         wh for start, wh in forecast.items() if dt_util.as_local(start).date() == day
     )
+
+
+def hourly(series: Mapping[datetime, float]) -> dict[datetime, float]:
+    """Sum periods of any length (e.g. 30 min) into hourly local buckets."""
+    buckets: dict[datetime, float] = {}
+    for start, wh in series.items():
+        hour = dt_util.as_local(start).replace(minute=0, second=0, microsecond=0)
+        buckets[hour] = buckets.get(hour, 0.0) + wh
+    return buckets

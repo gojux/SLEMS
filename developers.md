@@ -39,7 +39,11 @@ docker compose down
 `input_number` sliders: smart meter, PV, a heat pump (power + energy) and a
 heating rod controlled via `input_number.sim_heating_rod_setpoint` that can be
 blocked via `input_boolean.sim_heating_rod_blocked`. For a PV forecast add the
-Forecast.Solar integration in the dev instance (no account needed). Everything else in
+Forecast.Solar integration in the dev instance (no account needed).
+
+`dev/seed_statistics.py` imports 60 days of synthetic hourly statistics (see
+its docstring) so the consumption forecast has history to learn from. An
+access token can be created in the user profile of the dev instance. Everything else in
 `dev/config` is created by Home Assistant and ignored by git. To start from
 scratch, stop the stack and delete everything in `dev/config` except
 `configuration.yaml`.
@@ -57,6 +61,8 @@ custom_components/slems/
   coordinator.py     SlemsCoordinator → SystemSnapshot; ControlSettings (runtime settings)
   consumers.py       ConsumerConfig (from subentry), ConsumerState (measured)
   pv_forecast.py     PV forecast via the HA energy platform (provider independent)
+  forecast/          consumption forecast (history, models, forecaster)
+  night_discharge.py night discharge planning
   allocation.py      distribution of available power between batteries and consumers
   grid_filter.py     conservative moving average of the grid power
   efficiency.py      round trip efficiency (battery counters / learned / manual)
@@ -190,12 +196,33 @@ Planned layers (not implemented yet):
 
 ## Consumption forecast
 
-Concept (not implemented yet). Horizon: today and tomorrow, hourly, later
-interpolated to the 15 minute planner slots.
+`forecast/` – horizon today and tomorrow, hourly. The forecast covers the
+consumption behind the smart meter that SLEMS does not control: base load plus
+heat pumps (controllable consumers are scheduled by the allocation). It is
+refitted every hour (minute 5), after a restart and when the vacation switch
+changes; fitting runs in the executor.
 
-Training data comes from the recorder long-term statistics (hourly, kept
-indefinitely), read with `statistics_during_period`. More than a year of data
-is available on the target system; the models must still work with a few weeks.
+Training data are the hourly means of the recorder long-term statistics
+(`statistics_during_period`, up to 365 days):
+
+- **House consumption**, per hour from the first available source: the SLEMS
+  sensor *House consumption*, the optional *House consumption history* entity
+  (e.g. from Omnibattery, for the time before SLEMS existed), otherwise
+  grid + PV − SLEMS battery power.
+- **Base load** = house − heat pumps − controllable consumers (behind the meter).
+- **Outdoor temperature**: the optional temperature sensor, otherwise the
+  SLEMS sensor *Outdoor temperature* that mirrors the weather entity (weather
+  entities have no long-term statistics).
+- **Forecast temperature**: `weather.get_forecasts` (hourly, else daily);
+  measured hours of today override forecast hours; without weather the mean of
+  the last 3 days is used.
+
+Sensors *Consumption forecast today/tomorrow* carry the hourly values (total,
+base, heat pump) in the attribute `hourly` (not recorded). The allocation
+uses the forecast for the expected PV surplus (sum of hourly PV above
+consumption) and the night discharge.
+
+Model details (`forecast/models.py`):
 
 The forecast is split into components that react differently to the weather:
 
@@ -217,13 +244,11 @@ Requirements and how the models meet them:
   predicts little heating energy and changed behaviour is learned within weeks.
 - **Short-term correction**: the residual of the last days shifts the forecast
   (bias correction), which absorbs effects the model does not know.
-- **Improve with more data**: with more history more features are added
-  (e.g. global radiation, wind, previous day temperature) and chosen by the
-  error on the most recent weeks (rolling validation); with little data the
-  model falls back to the simple profile.
-- **Vacation**: the vacation switch selects the absence profile learned from
-  earlier vacation periods; without such data the base load is scaled down to
-  its night level.
+- **Improve with more data**: the models use all available history (weighted
+  by age). Planned: more features (global radiation, wind, previous day
+  temperature) chosen by the error on the most recent weeks.
+- **Vacation**: with the vacation switch on, the base load is limited to its
+  night level (mean of 01:00–05:00).
 - **Without weather entity** the mean temperature of the last days is used as
   persistence forecast.
 
@@ -231,8 +256,11 @@ Hot water in winter is part of the heat pump energy; in summer the heating rod
 is used, both may run at the same time. The heat pump model therefore keeps
 the hot water share `a` independent of the temperature term.
 
-Only numpy (bundled with Home Assistant) is used; fitting runs in the executor
-once a day and after a restart.
+Parameters: base load half-life 14 days over 8 weeks, correction from the
+last 72 h limited to 0.8…1.25; heat pump half-life 21 days over 365 days,
+heating limit chosen from 10…20 °C, correction from the last 3 days limited to
+±30 %. Only numpy (bundled with Home Assistant) is used. Holidays are treated
+as workdays (no holiday calendar yet).
 
 ## Marstek Venus E 3.0
 
@@ -315,4 +343,5 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-23 | Charge secured uses a safety buffer in kWh instead of a percentage margin. |
 | 2026-09-23 | Grid surplus targets for charging (0…5 kW) and discharging (−1…+1 kW) plus a maximum grid export while discharging. |
 | 2026-09-23 | Batteries can be disabled temporarily via a switch; they stay measured. |
+| 2026-09-23 | Consumption forecast from long-term statistics; optional history entity for the house consumption and optional outdoor temperature sensor, otherwise SLEMS records the weather temperature itself. |
 | 2026-09-23 | Night discharge: evenly spread until PV exceeds consumption, target = reserve raised to what tomorrow's PV can refill; grid target ignored, maximum export respected. |

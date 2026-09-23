@@ -2,11 +2,13 @@
   "domain": "slems",
   "name": "SLEMS",
   "after_dependencies": [
-    "energy",
-    "recorder"
+    "energy"
   ],
   "codeowners": [],
   "config_flow": true,
+  "dependencies": [
+    "recorder"
+  ],
   "documentation": "https://example.invalid/slems",
   "integration_type": "hub",
   "iot_class": "local_polling",

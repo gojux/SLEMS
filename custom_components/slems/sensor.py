@@ -24,7 +24,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_PV_FORECAST_ENTRIES
+from .const import CONF_PV_FORECAST_ENTRIES, CONF_WEATHER_ENTITY
 from .coordinator import SlemsConfigEntry, SlemsCoordinator, SystemSnapshot
 from .drivers import BatteryTelemetry
 from .allocation import Strategy
@@ -102,6 +102,15 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
     ),
     _energy_forecast("pv_forecast_today", 0),
     _energy_forecast("pv_forecast_tomorrow", 1),
+    SystemSensorDescription(
+        key="outdoor_temperature",
+        translation_key="outdoor_temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_display_precision=1,
+        value_fn=lambda s, _: s.outdoor_temperature_c,
+    ),
     SystemSensorDescription(
         **_power("grid_power_filtered"),
         entity_registry_enabled_default=False,
@@ -247,8 +256,12 @@ async def async_setup_entry(
     async_add_entities(
         SystemSensor(coordinator, description)
         for description in SYSTEM_SENSORS
-        if config.get(CONF_PV_FORECAST_ENTRIES)
-        or not description.key.startswith("pv_forecast")
+        if (config.get(CONF_PV_FORECAST_ENTRIES) or not description.key.startswith("pv_forecast"))
+        and (config.get(CONF_WEATHER_ENTITY) or description.key != "outdoor_temperature")
+    )
+    async_add_entities(
+        ConsumptionForecastSensor(coordinator, key, day_offset)
+        for key, day_offset in (("consumption_forecast_today", 0), ("consumption_forecast_tomorrow", 1))
     )
     for battery in coordinator.batteries:
         extra_keys = battery.driver.extra_telemetry_keys
@@ -350,3 +363,46 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
     def extra_state_attributes(self) -> dict:
         state = self.coordinator.data.consumers.get(self.consumer.subentry_id)
         return {"blocked": state.blocked if state else None}
+
+
+class ConsumptionForecastSensor(SlemsSystemEntity, SensorEntity):
+    """Forecast consumption of a day; hourly values as attribute."""
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_suggested_display_precision = 1
+    _unrecorded_attributes = frozenset({"hourly"})
+
+    def __init__(self, coordinator: SlemsCoordinator, key: str, day_offset: int) -> None:
+        super().__init__(coordinator, key)
+        self._day_offset = day_offset
+
+    def _day(self):
+        return dt_util.now().date() + timedelta(days=self._day_offset)
+
+    @property
+    def native_value(self) -> float | None:
+        forecast = self.coordinator.data.consumption_forecast
+        if forecast is None:
+            return None
+        return forecast.energy_on_day(self._day()) / 1000
+
+    @property
+    def extra_state_attributes(self) -> dict | None:
+        forecast = self.coordinator.data.consumption_forecast
+        if forecast is None:
+            return None
+        day = self._day()
+        return {
+            "mean_temperature": forecast.temperature.get(day),
+            "hourly": [
+                {
+                    "start": dt_util.as_local(start).isoformat(),
+                    "total_wh": round(total),
+                    "base_wh": round(forecast.base[start]),
+                    "heat_pump_wh": round(forecast.heat_pump[start]),
+                }
+                for start, total in forecast.total.items()
+                if dt_util.as_local(start).date() == day
+            ],
+        }

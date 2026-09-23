@@ -30,13 +30,13 @@ Der Name setzt sich aus *Slug* und *EMS* (Energiemanagementsystem) zusammen.
 | Betriebsmodus *Aus / Simulation (nur lesend) / Aktiv* | ✅ Entity, Logik folgt |
 | Urlaubsschalter | ✅ Entity, Logik folgt |
 | Bezugsspitzen abfangen bei niedrigem Ladezustand (manuell aktivierbar) | ✅ Entities, Logik folgt |
-| Verbrauchsprognose (Historie + Wetter) | geplant |
+| Verbrauchsprognose heute/morgen (Historie + Wetter, Wärmepumpe temperaturabhängig) | ✅ |
 | Netzdienliches Laden: PV-Einspeisespitzen abfangen | geplant |
 | Verteilung des Überschusses auf Batterien und Verbraucher (Priorität, Aufteilung, Mindestlaufzeit/-pause) | ✅ berechnet und angezeigt, Ausführung folgt |
 | Wirkungsgrad der Batterie (Batteriezähler, gelernt oder manuell) | ✅ |
 | Gemittelter Netzüberschuss (0–300 s) | ✅ |
 | Ziel-Netzüberschuss beim Laden/Entladen, maximale Einspeisung beim Entladen | ✅ |
-| Nachtentladung bis zu einer prognosebasierten Reserve | ✅ Logik, aktiv sobald die Verbrauchsprognose existiert |
+| Nachtentladung bis zu einer prognosebasierten Reserve | ✅ berechnet und angezeigt, Ausführung folgt |
 | Verbrauchersteuerung (Befehle senden) | geplant |
 | Dashboard mit Energiefluss und Tagesprognose | geplant |
 
@@ -87,6 +87,33 @@ Wärmepumpe. Empfehlungen für Vorarlberg bzw. den Alpenraum:
   mehrere Wettermodelle.
 - **Met.no** (Standard in Home Assistant): funktioniert überall, im
   alpinen Gelände weniger detailliert.
+
+### Verbrauchsprognose
+
+SLEMS lernt den Verbrauch aus den Langzeitstatistiken von Home Assistant und
+prognostiziert heute und morgen stundenweise. Jüngere Tage zählen mehr als
+ältere, Änderungen werden so innerhalb weniger Tage übernommen. Wärmepumpen
+werden über die Außentemperatur des Tages prognostiziert, ein warmer Tag in der
+Heizsaison ergibt also sofort weniger Heizenergie. Zwei optionale Einstellungen
+helfen beim Start:
+
+- **Außentemperatur**: ein Temperatursensor mit Historie. Ohne ihn zeichnet
+  SLEMS die Temperatur der Wetter-Entity selbst auf; das Wärmepumpenmodell
+  nutzt die Temperatur dann nach etwa einer Woche.
+- **Historie Hausverbrauch**: ein Leistungssensor des Hausverbrauchs mit
+  vorhandener Historie (z. B. aus einer anderen Batterie-Integration), für die
+  Zeit, bevor SLEMS eigene Werte aufgezeichnet hat.
+
+Empfohlene Einrichtung beim Umstieg von einer anderen Batterie-Integration:
+
+1. Den Hausverbrauchssensor dieser Integration als *Historie Hausverbrauch*
+   wählen. SLEMS lernt dann sofort aus der gesamten Historie. Ohne ihn leitet
+   SLEMS die Historie nur aus Netz und PV ab; die Batterieleistung vor SLEMS
+   ist unbekannt, Laden und Entladen würden den gelernten Verbrauch verfälschen.
+2. Falls vorhanden, einen Außentemperatursensor mit Historie wählen. Sonst
+   nutzt die Wärmepumpenprognose den Durchschnitt der letzten Tage, bis SLEMS
+   etwa eine Woche Temperaturen aufgezeichnet hat.
+3. Feiertage werden derzeit wie Werktage behandelt.
 
 ### Verbraucher
 
@@ -167,10 +194,9 @@ Die Entity *SLEMS Betriebsmodus* schaltet zwischen:
 
 ## Roadmap
 
-1. Verbrauchsprognose aus Historie und Wetter
-2. Planer (netzdienliches Laden) und Echtzeit-Regler, der die Verteilung umsetzt
-3. Aufteilung auf mehrere Batterien nach Wirkungsgrad-Optimum
-4. Dashboard: Energiefluss-Schema, Tagesdiagramm mit Prognose und Plan
+1. Aufteilung auf mehrere Batterien nach Wirkungsgrad-Optimum, mit Umschalten
+2. Echtzeit-Regler, der die Verteilung umsetzt
+3. Dashboard: Energiefluss-Schema, Tagesdiagramm mit Prognose und Plan
 
 ## Entwicklung
 
