@@ -13,9 +13,16 @@ is more than the rotation threshold below (discharging) or above (charging) the
 best inactive one, but not more often than the minimum rotation interval.
 
 Transitions are smooth: every battery has a weight that ramps towards 1
-(selected) or 0 (not selected) within the ramp time; the total power is split
-in proportion to weight × maximum power, so the sum always matches. If the
-weighted batteries cannot deliver the total, the remaining ones help at once.
+(selected) or 0 (not selected); the total power is split in proportion to
+weight × maximum power, so the sum always matches. The ramp moves the power
+with the configured rate (W/s) but takes at most the maximum ramp time, so
+small powers switch quickly and large ones never take longer than the maximum.
+If the weighted batteries cannot deliver the total, the others help at once.
+
+A battery that is being disabled while discharging is *leaving*: it is no
+longer selected, its weight is limited to the remaining fraction of
+``LEAVE_RAMP_S`` (independent of how often the distribution runs) and it
+never helps out.
 """
 
 from __future__ import annotations
@@ -24,6 +31,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 KEEP_TOLERANCE = 1.05
+# Below this total loss the loss model gives no reason to run more batteries.
+MIN_RELEVANT_LOSS_W = 1.0
+# Ramp-out of a disabled battery; with the command transfer (about 1 s for two
+# Venus) the handover completes within 5 s.
+LEAVE_RAMP_S = 3.5
 FULL_SOC_PCT = 99.5
 EMPTY_SOC_PCT = 0.5
 
@@ -52,6 +64,12 @@ class BatteryUnit:
     max_charge_w: float
     max_discharge_w: float
     loss_model: LossModel = field(default_factory=LossModel)
+    # Being disabled: remaining share of the ramp-out (1 -> 0), None otherwise.
+    leaving_fraction: float | None = None
+
+    @property
+    def leaving(self) -> bool:
+        return self.leaving_fraction is not None
 
     def max_power_w(self, charging: bool) -> float:
         return self.max_charge_w if charging else self.max_discharge_w
@@ -66,7 +84,9 @@ class BatteryUnit:
 class RotationSettings:
     soc_threshold_pct: float
     min_interval_s: float
-    ramp_s: float
+    # Ramp speed in W/s and upper limit of the ramp duration.
+    ramp_rate_w_per_s: float
+    ramp_max_s: float
 
 
 @dataclass
@@ -97,20 +117,22 @@ class BatteryDistributor:
         """Split ``total_w`` (+charge / -discharge) between ``units``."""
         elapsed = 0.0 if self._last_call is None else max(0.0, now - self._last_call)
         self._last_call = now
+        power = abs(total_w)
+        leaving = {u.battery_id: u.leaving_fraction for u in units if u.leaving}
         if total_w == 0 or not units:
-            self._ramp(elapsed, settings, set(self._selected))
+            self._ramp(elapsed, settings, set(self._selected), power, leaving)
             return Distribution({u.battery_id: 0.0 for u in units}, self._selected)
 
         charging = total_w > 0
-        power = abs(total_w)
-        candidates = [u for u in units if u.can(charging)]
+        candidates = [u for u in units if u.can(charging) and not u.leaving]
         if not candidates:
             return Distribution({u.battery_id: 0.0 for u in units}, ())
 
         count = self._choose_count(power, candidates, charging)
         self._select(candidates, count, charging, settings, now)
-        self._ramp(elapsed, settings, set(self._selected))
-        split = self._split(power, candidates, charging)
+        self._ramp(elapsed, settings, set(self._selected), power, leaving)
+        ramping_out = [u for u in units if u.leaving and u.can(charging)]
+        split = self._split(power, candidates, ramping_out, charging)
         sign = 1 if charging else -1
         return Distribution(
             {
@@ -136,7 +158,10 @@ class BatteryDistributor:
                 u.loss_model.loss(power * u.max_power_w(charging) / capacity)
                 for u in chosen
             )
-        best = min(losses, key=losses.get)
+        # Equal losses (e.g. a battery that reports no losses): fewer batteries.
+        best = min(losses, key=lambda count: (round(losses[count]), count))
+        if losses[best] < MIN_RELEVANT_LOSS_W:
+            return best
         candidate_ids = {u.battery_id for u in candidates}
         current = sum(1 for b in self._selected if b in candidate_ids)
         if (
@@ -193,8 +218,23 @@ class BatteryDistributor:
 
     # --- smooth transition ------------------------------------------------------
 
-    def _ramp(self, elapsed: float, settings: RotationSettings, targets: set[str]) -> None:
-        step = 1.0 if settings.ramp_s <= 0 else elapsed / settings.ramp_s
+    def _ramp(
+        self,
+        elapsed: float,
+        settings: RotationSettings,
+        targets: set[str],
+        power: float,
+        leaving: dict[str, float],
+    ) -> None:
+        # Weight change per call: moving the whole power takes
+        # power / rate seconds, but never longer than the maximum ramp time.
+        by_rate = (
+            elapsed * settings.ramp_rate_w_per_s / power
+            if settings.ramp_rate_w_per_s > 0 and power > 0
+            else 1.0
+        )
+        by_duration = elapsed / settings.ramp_max_s if settings.ramp_max_s > 0 else 1.0
+        step = max(by_rate, by_duration)
         for battery_id in set(self._weights) | targets:
             target = 1.0 if battery_id in targets else 0.0
             weight = self._weights.get(battery_id, 0.0)
@@ -202,17 +242,25 @@ class BatteryDistributor:
                 weight = min(target, weight + step)
             else:
                 weight = max(target, weight - step)
+            if battery_id in leaving:
+                weight = min(weight, leaving[battery_id])
+            if abs(weight - target) < 1e-9:
+                weight = target
             self._weights[battery_id] = weight
 
     def _split(
-        self, power: float, candidates: Sequence[BatteryUnit], charging: bool
+        self,
+        power: float,
+        candidates: Sequence[BatteryUnit],
+        ramping_out: Sequence[BatteryUnit],
+        charging: bool,
     ) -> dict[str, float]:
-        result = {u.battery_id: 0.0 for u in candidates}
+        result = {u.battery_id: 0.0 for u in [*candidates, *ramping_out]}
         remaining = power
         # First the weighted (selected or ramping) batteries, in proportion.
         weighted = [
             (u, self._weights.get(u.battery_id, 0.0) * u.max_power_w(charging))
-            for u in candidates
+            for u in [*candidates, *ramping_out]
         ]
         weighted = [(u, w) for u, w in weighted if w > 0]
         total_weight = sum(w for _, w in weighted)

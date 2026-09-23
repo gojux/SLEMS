@@ -152,6 +152,8 @@ LOSS_MIN_POWER_W = 100
 LOSS_EMA_ALPHA = 0.05
 LOSS_MIN_SAMPLES = 20
 LOSS_MIN_BINS = 3
+# Maximum relative change to the previous sample that still counts as steady.
+LOSS_STEADY_RATIO = 0.05
 
 
 @dataclass
@@ -160,14 +162,20 @@ class LossCurveLearner:
 
     Discharging: loss = |DC| - |AC|; charging: loss = |AC| - |DC|. Each 250 W
     bin keeps an exponential moving average; the loss model is a quadratic fit
-    through the bins with enough samples.
+    through the bins with enough samples. Only steady operation is learned:
+    while the power changes, AC and DC values are read at slightly different
+    moments and do not belong together.
     """
 
     # bin index -> [mean loss in W, sample count, mean AC power in W]
     bins: dict[int, list[float]] = field(default_factory=dict)
+    last_ac_power_w: float | None = None
 
     def add(self, ac_power_w: float | None, dc_power_w: float | None) -> None:
+        previous, self.last_ac_power_w = self.last_ac_power_w, ac_power_w
         if ac_power_w is None or dc_power_w is None or abs(ac_power_w) < LOSS_MIN_POWER_W:
+            return
+        if previous is None or abs(ac_power_w - previous) > LOSS_STEADY_RATIO * abs(ac_power_w):
             return
         # Opposite directions of AC and DC side are transients; skip them.
         if (ac_power_w > 0) != (dc_power_w > 0):

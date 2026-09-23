@@ -53,7 +53,9 @@ scratch, stop the stack and delete everything in `dev/config` except
 
 The simulator deliberately has no dependencies (plain asyncio Modbus TCP) so it
 is independent of pymodbus API changes. Like the real device it accepts only a
-single TCP connection.
+single TCP connection. The set points drive the AC power; the DC power (30001)
+differs by conversion losses (same shape as the SLEMS default loss model), so
+the loss learning can be tested.
 
 ## Architecture
 
@@ -144,10 +146,20 @@ enabled batteries; result per battery in the sensor *Planned power*.
   battery is replaced when it is more than the *rotation threshold* (default
   5 %) worse than the best inactive one, at most once per *minimum interval*
   (default 15 min).
-- **Smooth transition**: weights ramp between 0 and 1 within the *ramp time*
-  (default 30 s); the power is split by weight × maximum power, the sum always
-  matches the plan. If the weighted batteries cannot deliver it, the others
-  help immediately.
+- **Smooth transition**: weights ramp between 0 and 1; the power is split by
+  weight × maximum power, the sum always matches the plan. The ramp moves the
+  power with the *ramp rate* (default 100 W/s), but takes at most the *maximum
+  ramp time* (default 30 s): 600 W move in 6 s, 5 kW in 30 s. In active mode
+  the controller applies it in steps of the settle time. If the weighted
+  batteries cannot deliver the power, the others help immediately.
+- **Disabling a discharging battery** (active mode): it ramps out within
+  3.5 s (`LEAVE_RAMP_S`, its share limited to the remaining time fraction);
+  the controller follows every 2 s without settle time (the sum does not
+  change) and places the last step exactly at the end. After the battery was
+  commanded to 0 W it is released in a separate cycle; with the Modbus writes
+  the handover takes about 4–5 s. Other batteries are released at once.
+- With equal losses (below 1 W, e.g. a battery that reports AC = DC) the
+  smallest number of batteries is used.
 - Learned loss curves are stored with the efficiency data in `.storage`.
 
 Efficiency: `EfficiencyTracker` per battery. *Battery counters* uses the
@@ -194,6 +206,9 @@ sends commands.
   its meter is composed of the 5 s battery polling.
 - **Batteries**: new set point only when it changes by ≥ 25 W or changes
   direction; repeated every 60 s as keep-alive (also re-enables RS485 control).
+  Batteries that reduce their power are written first, so the short gap
+  between the writes causes a little import instead of feeding battery energy
+  into the grid. Set points are logged at debug level.
 - **Consumers**: switch → `turn_on`/`turn_off`, power → `set_value` (clamped to
   the entity's min/max/step, dead band 50 W); at most one command per consumer
   every 10 s. Blocked consumers are left alone.
@@ -392,6 +407,8 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-23 | Charge secured uses a safety buffer in kWh instead of a percentage margin. |
 | 2026-09-23 | Grid surplus targets for charging (0…5 kW) and discharging (−1…+1 kW) plus a maximum grid export while discharging. |
 | 2026-09-23 | Batteries can be disabled temporarily via a switch; they stay measured. |
+| 2026-09-23 | Battery rotation ramp by rate (W/s) with maximum duration instead of a fixed duration. |
+| 2026-09-23 | Disabling a discharging battery hands over within 5 s. |
 | 2026-09-23 | Real-time controller event driven on the grid meter with settle time after commands; batteries released when the meter is stale. |
 | 2026-09-23 | Distribution between batteries by minimal conversion losses (learned per battery), rotation by SoC threshold with minimum interval and ramped transition. |
 | 2026-09-23 | Consumption forecast from long-term statistics; optional history entity for the house consumption and optional outdoor temperature sensor, otherwise SLEMS records the weather temperature itself. |

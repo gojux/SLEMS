@@ -151,13 +151,16 @@ discharging the battery with the highest state of charge runs, when charging
 the one with the lowest. If the running battery drifts more than *Battery
 rotation threshold* (default 5 %) away from the best inactive one, SLEMS
 switches, at most once per *Battery rotation minimum interval* (default
-15 min) and with a smooth transition over *Battery rotation ramp time*
-(default 30 s). The conversion losses per power level are learned from the
+15 min) and with a smooth transition: the power moves with *Battery rotation
+ramp rate* (default 100 W/s), but never takes longer than *Battery rotation
+maximum ramp time* (default 30 s). The conversion losses per power level are learned from the
 battery's AC and DC power.
 
 Every battery has an *Enabled* switch. A disabled battery is still measured
 (its power is part of the energy balance), but it is neither planned with nor
-controlled, and it does not count towards the total state of charge.
+controlled, and it does not count towards the total state of charge. If it is
+discharging in active mode, the other batteries take over within 5 seconds
+before it is handed back to its own logic.
 
 ### Operating mode
 

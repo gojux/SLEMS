@@ -3,8 +3,9 @@
 Plain asyncio without dependencies. It implements the function codes the
 driver uses (3 = read holding registers, 6 = write single register,
 16 = write multiple registers) and a simple battery model. In RS485 control
-mode the force mode and set points drive the battery power; the state of charge
-is integrated once per second.
+mode the force mode and set points drive the AC power; the DC battery power
+differs by the conversion losses (15 W + 4 % + 1e-5 * P², like the SLEMS default
+model); the state of charge is integrated once per second.
 
 Like the real device it accepts only one TCP connection at a time.
 
@@ -38,8 +39,12 @@ REG_SET_DISCHARGE_POWER = 42021
 
 RS485_ENABLE = 0x55AA
 MAX_POWER_W = 2500
-CHARGE_EFFICIENCY = 0.96
 TICK_S = 1.0
+
+
+def conversion_loss(ac_power: float) -> float:
+    power = abs(ac_power)
+    return 0.0 if power == 0 else 15 + 0.04 * power + 1e-5 * power**2
 
 EXC_ILLEGAL_FUNCTION = 1
 EXC_ILLEGAL_ADDRESS = 2
@@ -77,17 +82,18 @@ class VenusModel:
         ):
             power = 0
 
-        delta_wh = power * TICK_S / 3600
+        # power is the AC power (+charge); the DC side gets the losses less
+        # when charging and delivers them additionally when discharging.
+        dc_power = power - conversion_loss(power)
         if power > 0:
-            self._energy_wh += delta_wh * CHARGE_EFFICIENCY
-            self._charged_wh += delta_wh
+            self._charged_wh += power * TICK_S / 3600
         else:
-            self._energy_wh += delta_wh
-            self._discharged_wh -= delta_wh
+            self._discharged_wh -= power * TICK_S / 3600
+        self._energy_wh += dc_power * TICK_S / 3600
         self._energy_wh = max(0.0, min(self._capacity_wh, self._energy_wh))
         soc = self._energy_wh / self._capacity_wh * 100
 
-        self.write(REG_BATTERY_POWER, [power])
+        self.write(REG_BATTERY_POWER, [round(dc_power)])
         self.write(REG_AC_POWER, [-power])
         self.write(REG_BATTERY_VOLTAGE, [int((48 + soc * 0.06) * 100)])
         self.write(REG_INTERNAL_TEMPERATURE, [250 + abs(power) // 100])

@@ -46,7 +46,8 @@ from .const import (
     DEFAULT_NIGHT_RESERVE_PCT,
     DEFAULT_CONTROL_SETTLE_S,
     DEFAULT_ROTATION_MIN_INTERVAL_MIN,
-    DEFAULT_ROTATION_RAMP_S,
+    DEFAULT_ROTATION_RAMP_MAX_S,
+    DEFAULT_ROTATION_RAMP_RATE_W_PER_S,
     DEFAULT_ROTATION_SOC_THRESHOLD_PCT,
     DEFAULT_OPERATING_MODE,
     DEFAULT_PEAK_SHAVING_GRID_LIMIT_W,
@@ -61,6 +62,7 @@ from .controller import RealTimeController
 from .consumers import ConsumerConfig, ConsumerState, RuntimeTracker, read_consumer_state
 from .drivers import BatteryDriver, BatteryDriverError, BatteryTelemetry
 from .battery_distribution import (
+    LEAVE_RAMP_S,
     BatteryDistributor,
     BatteryUnit,
     Distribution,
@@ -92,6 +94,14 @@ class BatteryRuntime:
     # Temporarily disabled batteries are still measured (their power is part of
     # the energy balance) but neither planned with nor controlled.
     enabled: bool = True
+    # Set while a battery disabled during discharging ramps out: the moment its
+    # share reaches zero. It is released after it was commanded to 0 W.
+    leaving_until: float | None = None
+
+    @property
+    def participating(self) -> bool:
+        """Enabled, or still ramping out after being disabled."""
+        return self.enabled or self.leaving_until is not None
 
 
 @dataclass
@@ -117,7 +127,8 @@ class ControlSettings:
     # Rotation between batteries.
     rotation_soc_threshold_pct: float = DEFAULT_ROTATION_SOC_THRESHOLD_PCT
     rotation_min_interval_min: float = DEFAULT_ROTATION_MIN_INTERVAL_MIN
-    rotation_ramp_s: float = DEFAULT_ROTATION_RAMP_S
+    rotation_ramp_rate_w_per_s: float = DEFAULT_ROTATION_RAMP_RATE_W_PER_S
+    rotation_ramp_max_s: float = DEFAULT_ROTATION_RAMP_MAX_S
     # Wait time after a command until the grid meter shows its effect.
     control_settle_s: float = DEFAULT_CONTROL_SETTLE_S
     night_discharge: bool = False
@@ -421,7 +432,19 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
 
         snapshot.saturated = self.controller.saturated
-        if self.settings.operating_mode is not OperatingMode.OFF:
+        mode = self.settings.operating_mode
+        if mode is OperatingMode.ACTIVE and self.data is not None:
+            # In active mode only the controller plans (it owns the state of
+            # distribution and runtimes); keep showing its latest result.
+            for name in (
+                "available_power_w",
+                "expected_surplus_wh",
+                "allocation",
+                "distribution",
+                "night_discharge",
+            ):
+                setattr(snapshot, name, getattr(self.data, name))
+        elif mode is not OperatingMode.OFF:
             self.plan(snapshot, dt_util.now(), now)
         # Runs after the new data has been stored.
         self.hass.loop.call_soon(self.controller.request)
@@ -470,7 +493,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         enabled_battery_w = sum(
             power
             for battery in self.batteries
-            if battery.enabled
+            if battery.participating
             and (telemetry := snapshot.batteries.get(battery.subentry_id)) is not None
             and (power := telemetry.grid_side_power_w) is not None
         )
@@ -541,7 +564,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             RotationSettings(
                 soc_threshold_pct=settings.rotation_soc_threshold_pct,
                 min_interval_s=settings.rotation_min_interval_min * 60,
-                ramp_s=settings.rotation_ramp_s,
+                ramp_rate_w_per_s=settings.rotation_ramp_rate_w_per_s,
+                ramp_max_s=settings.rotation_ramp_max_s,
             ),
             now,
         )
@@ -596,7 +620,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         units = []
         for battery in self.batteries:
             telemetry = snapshot.batteries.get(battery.subentry_id)
-            if not battery.enabled or telemetry is None or telemetry.soc_pct is None:
+            if not battery.participating or telemetry is None or telemetry.soc_pct is None:
                 continue
             caps = battery.driver.capabilities
             units.append(
@@ -606,6 +630,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     max_charge_w=caps.max_charge_power_w,
                     max_discharge_w=caps.max_discharge_power_w,
                     loss_model=battery.loss_curve.model(LossModel()),
+                    leaving_fraction=(
+                        None
+                        if battery.enabled
+                        else max(0.0, (battery.leaving_until or 0) - time.monotonic())
+                        / LEAVE_RAMP_S
+                    ),
                 )
             )
         return units

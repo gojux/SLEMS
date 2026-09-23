@@ -34,6 +34,7 @@ from homeassistant.core import CALLBACK_TYPE, callback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
+from .battery_distribution import LEAVE_RAMP_S
 from .const import ControlMode, OperatingMode
 from .util import state_as_float
 
@@ -70,6 +71,7 @@ class RealTimeController:
         self._lock = asyncio.Lock()
         self._last_run = 0.0
         self._pending: CALLBACK_TYPE | None = None
+        self._pending_at = 0.0
         self._rerun = False
         # battery id -> (commanded power, monotonic time of the command)
         self._battery_commands: dict[str, tuple[float, float]] = {}
@@ -101,12 +103,25 @@ class RealTimeController:
         if self._lock.locked():
             self._rerun = True
             return
-        if self._pending is not None:
-            return
         now = time.monotonic()
         settle = self._coordinator.settings.control_settle_s
-        wait = max(MIN_INTERVAL_S - (now - self._last_run), settle - (now - self._last_command))
+        if any(
+            b.leaving_until is not None and now <= b.leaving_until + MIN_INTERVAL_S
+            for b in self._coordinator.batteries
+        ):
+            # Moving power between batteries keeps the sum, the meter does not
+            # need to settle; follow the ramp-out closely.
+            settle = 0.0
+        min_interval = 0.0 if settle == 0.0 else MIN_INTERVAL_S
+        wait = max(min_interval - (now - self._last_run), settle - (now - self._last_command))
+        if self._pending is not None:
+            if now + wait >= self._pending_at:
+                return
+            # An earlier cycle is needed (e.g. a battery ramps out).
+            self._pending()
+            self._pending = None
         if wait > 0:
+            self._pending_at = now + wait
             self._pending = async_call_later(self._hass, wait, self._on_timer)
         else:
             self._start()
@@ -121,6 +136,24 @@ class RealTimeController:
         self._coordinator.config_entry.async_create_background_task(
             self._hass, self._async_run(), "slems control cycle"
         )
+
+    @callback
+    def disable_battery(self, battery) -> bool:
+        """Start ramping out a discharging battery; False if not applicable.
+
+        Only in active mode and only while SLEMS lets the battery discharge;
+        otherwise the caller releases the battery at once.
+        """
+        commanded = self._battery_commands.get(battery.subentry_id)
+        if not self._active or commanded is None or commanded[0] >= 0:
+            return False
+        battery.leaving_until = time.monotonic() + LEAVE_RAMP_S
+        self.request()
+        return True
+
+    @callback
+    def _on_ramp_timer(self, _now) -> None:
+        self.request()
 
     @callback
     def shutdown(self) -> None:
@@ -152,6 +185,10 @@ class RealTimeController:
             self.status = ControlStatus.GRID_STALE
             return
         self.status = ControlStatus.ACTIVE
+        start = time.monotonic()
+        if await self._async_release_ramped_out():
+            # Only the handover in this cycle; the meter first has to catch up.
+            return
 
         commanded = {battery_id: power for battery_id, (power, _) in self._battery_commands.items()}
         snapshot = coordinator.fast_snapshot(commanded, self.saturated)
@@ -160,6 +197,34 @@ class RealTimeController:
         await self._async_apply_batteries(snapshot)
         await self._async_apply_consumers(snapshot)
         coordinator.publish(snapshot)
+
+        leaving = [b.leaving_until for b in coordinator.batteries if b.leaving_until is not None]
+        if leaving:
+            # Follow a ramp-out step by step, even without meter updates: every
+            # MIN_INTERVAL_S from the start of this cycle, the last step exactly
+            # at the end of the ramp, then the release.
+            end = min(leaving)
+            due = min(start + MIN_INTERVAL_S, end) if start < end else time.monotonic()
+            async_call_later(self._hass, max(0.05, due - time.monotonic()), self._on_ramp_timer)
+
+    async def _async_release_ramped_out(self) -> bool:
+        """Release batteries whose ramp-out ended and that got 0 W; True if any."""
+        now = time.monotonic()
+        released = False
+        for battery in self._coordinator.batteries:
+            previous = self._battery_commands.get(battery.subentry_id)
+            if (
+                battery.leaving_until is not None
+                and now >= battery.leaving_until
+                and previous is not None
+                and previous[0] == 0
+            ):
+                _LOGGER.debug("Battery %s: ramp-out finished, released", battery.name)
+                battery.leaving_until = None
+                self._battery_commands.pop(battery.subentry_id, None)
+                await battery.driver.release_control()
+                released = True
+        return released
 
     def _grid_stale(self) -> bool:
         state = self._hass.states.get(self._coordinator.grid_entity_id)
@@ -170,11 +235,22 @@ class RealTimeController:
 
     async def _async_apply_batteries(self, snapshot: SystemSnapshot) -> None:
         now = time.monotonic()
-        for battery in self._coordinator.batteries:
-            if not battery.enabled or not battery.driver.capabilities.controllable:
-                continue
-            target = round(snapshot.distribution.power_w.get(battery.subentry_id, 0.0))
+
+        def magnitude_change(battery) -> float:
+            target = abs(snapshot.distribution.power_w.get(battery.subentry_id, 0.0))
             previous = self._battery_commands.get(battery.subentry_id)
+            return target - (abs(previous[0]) if previous else 0.0)
+
+        # Batteries that reduce their power are written first: while power
+        # moves between batteries, the short gap between the writes then
+        # causes a little import instead of feeding battery energy into the grid.
+        for battery in sorted(self._coordinator.batteries, key=magnitude_change):
+            if not battery.driver.capabilities.controllable:
+                continue
+            if not battery.participating:
+                continue
+            previous = self._battery_commands.get(battery.subentry_id)
+            target = round(snapshot.distribution.power_w.get(battery.subentry_id, 0.0))
             if previous is not None:
                 power, sent = previous
                 same_direction = (power > 0) == (target > 0) and (power < 0) == (target < 0)
@@ -184,6 +260,7 @@ class RealTimeController:
                     and now - sent < BATTERY_KEEPALIVE_S
                 ):
                     continue
+            _LOGGER.debug("Battery %s: set point %d W", battery.name, target)
             if await battery.driver.apply_power(target):
                 self._battery_commands[battery.subentry_id] = (target, now)
                 self._last_command = time.monotonic()

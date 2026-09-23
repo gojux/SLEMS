@@ -370,11 +370,14 @@
       "rotation_min_interval": {
         "name": "Battery rotation minimum interval"
       },
-      "rotation_ramp": {
-        "name": "Battery rotation ramp time"
-      },
       "control_settle": {
         "name": "Control settle time"
+      },
+      "rotation_ramp_rate": {
+        "name": "Battery rotation ramp rate"
+      },
+      "rotation_ramp_max": {
+        "name": "Battery rotation maximum ramp time"
       }
     },
     "binary_sensor": {

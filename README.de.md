@@ -153,13 +153,16 @@ Aufteilen. Beim Entladen läuft die Batterie mit dem höchsten Ladezustand, beim
 Laden die mit dem niedrigsten. Entfernt sich die laufende Batterie um mehr als
 die *Schwelle Batteriewechsel* (Standard 5 %) von der besten inaktiven, wird
 gewechselt, höchstens einmal pro *Mindestabstand Batteriewechsel* (Standard
-15 min) und mit sanftem Übergang über die *Übergangszeit Batteriewechsel*
-(Standard 30 s). Die Umwandlungsverluste je Leistungsbereich lernt SLEMS aus
+15 min) und mit sanftem Übergang: Die Leistung wandert mit der *Rampe
+Batteriewechsel* (Standard 100 W/s), aber nie länger als die *Maximale
+Übergangszeit Batteriewechsel* (Standard 30 s). Die Umwandlungsverluste je Leistungsbereich lernt SLEMS aus
 AC- und DC-Leistung der Batterie.
 
 Jede Batterie hat einen Schalter *Aktiviert*. Eine deaktivierte Batterie wird
 weiter gemessen (ihre Leistung gehört zur Energiebilanz), aber weder
-eingeplant noch gesteuert und zählt nicht zum Gesamt-Ladezustand.
+eingeplant noch gesteuert und zählt nicht zum Gesamt-Ladezustand. Entlädt sie
+im Modus *Aktiv* gerade, übernehmen die anderen Batterien innerhalb von
+5 Sekunden, bevor sie an ihre eigene Logik zurückgegeben wird.
 
 ### Betriebsmodus
 

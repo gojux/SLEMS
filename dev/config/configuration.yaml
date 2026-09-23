@@ -46,9 +46,10 @@ input_boolean:
     name: Heating rod externally blocked
 
 template:
-  # Closed loop: the grid power results from load, PV and the (simulated)
-  # batteries, so SLEMS sees the effect of its own commands. Updated every 2 s
-  # like a real meter. Assumes the batteries are named "Venus 1" / "Venus 2".
+  # Closed loop: the grid power results from load, PV and the AC power of the
+  # (simulated) batteries (+discharge), so SLEMS sees the effect of its own
+  # commands. Updated every 2 s like a real meter. Assumes the batteries are
+  # named "Venus 1" / "Venus 2".
   - trigger:
       - trigger: time_pattern
         seconds: "/2"
@@ -63,8 +64,8 @@ template:
               + states('sensor.heat_pump_power') | float(0)
               + states('sensor.heating_rod_power') | float(0)
               - states('input_number.sim_pv_power') | float(0)
-              + states('sensor.venus_1_battery_power') | float(0)
-              + states('sensor.venus_2_battery_power') | float(0)) | round(0) }}
+              - states('sensor.venus_1_ac_power') | float(0)
+              - states('sensor.venus_2_ac_power') | float(0)) | round(0) }}
   - sensor:
       - name: PV power
         unique_id: sim_pv_power

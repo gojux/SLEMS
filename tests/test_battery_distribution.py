@@ -10,13 +10,15 @@ from custom_components.slems.battery_distribution import (
 )
 from custom_components.slems.efficiency import LossCurveLearner
 
-SETTINGS = RotationSettings(soc_threshold_pct=5, min_interval_s=900, ramp_s=60)
+SETTINGS = RotationSettings(
+    soc_threshold_pct=5, min_interval_s=900, ramp_rate_w_per_s=100, ramp_max_s=30
+)
 # fixed 15 W, 4 %, 1e-5 per W: sharing pays off above about 1.7 kW
 LOSSES = LossModel()
 
 
-def unit(battery_id: str, soc: float) -> BatteryUnit:
-    return BatteryUnit(battery_id, soc, 2500, 2500, LOSSES)
+def unit(battery_id: str, soc: float, leaving: float | None = None) -> BatteryUnit:
+    return BatteryUnit(battery_id, soc, 2500, 2500, LOSSES, leaving_fraction=leaving)
 
 
 def settle(distributor, total, units, start=0.0, seconds=300, step=5):
@@ -89,9 +91,68 @@ def test_loss_curve_learning() -> None:
     learner = LossCurveLearner()
     model = LossModel(fixed_w=10, linear=0.03, quadratic_per_w=2e-5)
     for power in (300, 800, 1300, 1800, 2300):
-        for _ in range(30):
+        # The first sample after a change is not steady and is skipped.
+        for _ in range(31):
             # discharging: DC side delivers AC plus losses
             learner.add(-power, -(power + model.loss(power)))
     learned = learner.model(LossModel())
     assert learned.loss(1000) == pytest.approx(model.loss(1000), rel=0.05)
     assert LossCurveLearner().model(LOSSES) is LOSSES
+
+
+def _rotation_duration(total: float) -> float:
+    """Seconds until a rotation has moved all power (5 s control steps)."""
+    distributor = BatteryDistributor()
+    settle(distributor, total, [unit("a", 70), unit("b", 72)], seconds=995)
+    units = [unit("a", 70), unit("b", 60)]
+    t = 1000.0
+    while True:
+        result = distributor.distribute(total, units, SETTINGS, t)
+        if result.power_w["b"] == 0:
+            return t - 995
+        t += 5
+
+
+def test_ramp_duration_follows_rate_with_maximum() -> None:
+    # 100 W/s with 5 s steps: 400 W within one step, 1500 W in 15 s.
+    assert _rotation_duration(-400) == 5
+    assert _rotation_duration(-1500) == 15
+    # A slow rate is capped by the maximum ramp time.
+    settings = RotationSettings(5, 900, ramp_rate_w_per_s=10, ramp_max_s=30)
+    distributor = BatteryDistributor()
+    for t in range(0, 1000, 5):
+        distributor.distribute(-600, [unit("a", 70), unit("b", 72)], settings, t)
+    units = [unit("a", 70), unit("b", 60)]
+    t = 1000
+    while distributor.distribute(-600, units, settings, t).power_w["b"] != 0:
+        t += 5
+    # 10 W/s would take 60 s, the maximum limits it to 30 s.
+    assert t - 995 == 30
+
+
+def test_disabled_battery_ramps_out_with_remaining_fraction() -> None:
+    distributor = BatteryDistributor()
+    settle(distributor, -2000, [unit("a", 60), unit("b", 80)], seconds=100)
+    # 1.2 s into the 5 s ramp-out: b keeps at most its remaining fraction.
+    first = distributor.distribute(-2000, [unit("a", 60), unit("b", 80, 0.76)], SETTINGS, 102)
+    assert -2000 * 0.76 / 1.76 <= first.power_w["b"] < 0
+    assert sum(first.power_w.values()) == pytest.approx(-2000)
+    later = distributor.distribute(-2000, [unit("a", 60), unit("b", 80, 0.0)], SETTINGS, 106)
+    assert later.power_w == {"a": pytest.approx(-2000), "b": 0}
+
+
+def test_leaving_battery_never_helps_out() -> None:
+    distributor = BatteryDistributor()
+    settle(distributor, -600, [unit("a", 60), unit("b", 80)], seconds=100)
+    units = [unit("a", 60), unit("b", 80, leaving=0.5)]
+    distributor.distribute(-600, units, SETTINGS, 110)
+    result = distributor.distribute(-4000, units, SETTINGS, 115)
+    assert result.power_w["b"] == 0
+    assert result.power_w["a"] == -2500
+
+
+def test_loss_curve_ignores_transients() -> None:
+    learner = LossCurveLearner()
+    for power in (500, 1500, 500, 1500) * 30:
+        learner.add(-power, -power * 0.5)  # nonsense values during changes
+    assert learner.bins == {}

@@ -93,10 +93,14 @@ class BatteryEnabledSwitch(SlemsBatteryEntity, SwitchEntity, RestoreEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         self.battery.enabled = True
+        self.battery.leaving_until = None
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self.battery.enabled = False
-        if self.coordinator.settings.operating_mode is OperatingMode.ACTIVE:
-            await self.coordinator.async_release_battery(self.battery)
+        coordinator = self.coordinator
+        if coordinator.settings.operating_mode is OperatingMode.ACTIVE:
+            # A discharging battery ramps out first, the others are released at once.
+            if not coordinator.controller.disable_battery(self.battery):
+                await coordinator.async_release_battery(self.battery)
         self.async_write_ha_state()

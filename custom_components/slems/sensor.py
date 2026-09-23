@@ -193,7 +193,6 @@ BATTERY_SENSORS: tuple[BatterySensorDescription, ...] = (
 BATTERY_EXTRA_SENSORS: tuple[BatterySensorDescription, ...] = (
     BatterySensorDescription(
         **_power("ac_power"),
-        entity_registry_enabled_default=False,
         value_fn=lambda t: t.extra.get("ac_power"),
     ),
     BatterySensorDescription(
@@ -440,7 +439,7 @@ class PlannedBatteryPowerSensor(SlemsBatteryEntity, SensorEntity):
     @property
     def native_value(self) -> float | None:
         distribution = self.coordinator.data.distribution
-        if distribution is None or not self.battery.enabled:
+        if distribution is None or not self.battery.participating:
             return None
         return distribution.power_w.get(self.battery.subentry_id, 0.0)
 

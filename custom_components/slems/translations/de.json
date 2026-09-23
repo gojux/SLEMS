@@ -370,11 +370,14 @@
       "rotation_min_interval": {
         "name": "Mindestabstand Batteriewechsel"
       },
-      "rotation_ramp": {
-        "name": "Übergangszeit Batteriewechsel"
-      },
       "control_settle": {
         "name": "Beruhigungszeit Regelung"
+      },
+      "rotation_ramp_rate": {
+        "name": "Rampe Batteriewechsel"
+      },
+      "rotation_ramp_max": {
+        "name": "Maximale Übergangszeit Batteriewechsel"
       }
     },
     "binary_sensor": {
