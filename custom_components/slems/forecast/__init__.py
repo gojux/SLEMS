@@ -11,6 +11,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 import logging
+from typing import Literal
 
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.statistics import statistics_during_period
@@ -65,10 +66,14 @@ class ConsumptionForecast:
         )
 
 
-async def async_hourly_means(
-    hass: HomeAssistant, statistic_ids: Iterable[str], start: datetime, end: datetime
+async def async_statistic_means(
+    hass: HomeAssistant,
+    statistic_ids: Iterable[str],
+    start: datetime,
+    end: datetime,
+    period: Literal["5minute", "hour"] = "hour",
 ) -> dict[str, dict[datetime, float]]:
-    """Hourly means of the given statistics (W is Wh per hour)."""
+    """Means per period (default hourly; W is Wh per hour) of the given statistics."""
     ids = {statistic_id for statistic_id in statistic_ids if statistic_id}
     if not ids:
         return {}
@@ -78,7 +83,7 @@ async def async_hourly_means(
         start,
         end,
         ids,
-        "hour",
+        period,
         {"power": UnitOfPower.WATT, "temperature": UnitOfTemperature.CELSIUS},
         {"mean"},
     )
@@ -130,7 +135,7 @@ class ConsumptionForecaster:
         """Refit all models from the statistics and update the forecast."""
         now = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
         sources = self.sources
-        means = await async_hourly_means(
+        means = await async_statistic_means(
             self._hass,
             [
                 *sources.house,

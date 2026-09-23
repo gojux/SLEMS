@@ -72,9 +72,15 @@ from .battery_distribution import (
     RotationSettings,
 )
 from .efficiency import EfficiencyTracker, EnergyIntegrator, LossCurveLearner
-from .forecast import ConsumptionForecast, ConsumptionForecaster, ForecastSources
+from .forecast import (
+    ConsumptionForecast,
+    ConsumptionForecaster,
+    ForecastSources,
+    async_statistic_means,
+)
 from .grid_filter import GridPowerFilter
 from .grid_friendly import (
+    energy_from_means,
     feed_in_limit,
     planned_charging,
     pv_correction,
@@ -348,6 +354,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.config_entry.async_create_background_task(
             self.hass, self.async_refresh_forecast(), "slems consumption forecast"
         )
+        self.config_entry.async_create_background_task(
+            self.hass, self._async_restore_pv_today(), "slems pv energy today"
+        )
 
     async def _on_forecast_time(self, _now: datetime) -> None:
         await self.async_refresh_forecast()
@@ -497,7 +506,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         return snapshot
 
     def _integrate_pv(self, pv_power_w: float | None, now: float) -> None:
-        """Add up today's PV energy (restarts at midnight and after a restart)."""
+        """Add up today's PV energy from the live values (restarts at midnight)."""
         today = dt_util.now().date()
         day, energy, last_time, last_power = self._pv_day or (today, 0.0, None, None)
         if day != today:
@@ -506,6 +515,34 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if last_time is not None and last_power is not None and now - last_time < 300:
             energy += last_power * (now - last_time) / 3600
         self._pv_day = (day, energy, now, pv_power_w)
+
+    async def _async_restore_pv_today(self) -> None:
+        """Take today's PV energy from the recorder so a restart loses nothing.
+
+        Without statistics for the PV sensor the integration only becomes
+        complete at the next midnight.
+        """
+        pv_entity = self._config.get(CONF_PV_POWER_ENTITY)
+        if not pv_entity:
+            return
+        wall_now = dt_util.now()
+        try:
+            means = await async_statistic_means(
+                self.hass, [pv_entity], dt_util.start_of_local_day(wall_now), wall_now, "5minute"
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("PV statistics of today not available", exc_info=True)
+            return
+        energy, covered_until = energy_from_means(means.get(pv_entity, {}), timedelta(minutes=5))
+        if covered_until is None:
+            return
+        # Bridge the minutes since the last statistics period with the current value.
+        pv_now = self.data.pv_power_w if self.data is not None else None
+        gap_h = max(0.0, (dt_util.now() - covered_until).total_seconds() / 3600)
+        energy += (pv_now or 0.0) * gap_h
+        self._pv_day = (wall_now.date(), energy, time.monotonic(), pv_now)
+        self._pv_complete = True
+        _LOGGER.debug("PV energy today restored from statistics: %.0f Wh", energy)
 
     @property
     def _pv_today_wh(self) -> float | None:

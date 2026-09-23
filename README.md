@@ -257,8 +257,8 @@ peak:
   and the remaining forecast. If charging falls behind (e.g. more clouds
   than forecast), the limit drops by itself.
 - The PV forecast is corrected with today's actual production (diagnostic
-  sensor *PV forecast correction*, available from the first midnight after a
-  restart).
+  sensor *PV forecast correction*). After a restart SLEMS takes the production
+  so far from the statistics of the PV sensor, so nothing is lost.
 - As long as the charge is not secured (state of charge below *Battery
   priority below state of charge* or the forecast is not sufficient), SLEMS
   charges at once as before.

@@ -15,7 +15,9 @@ current state of charge and the remaining forecast, so it drops by itself when
 charging falls behind.
 
 The PV forecast is corrected by the ratio of the PV energy produced today to
-the energy forecast for the same time (``pv_correction``).
+the energy forecast for the same time (``pv_correction``). The energy produced
+today comes from the 5 minute statistics of the PV power sensor at startup
+(``energy_from_means``) and is then integrated from the live values.
 """
 
 from __future__ import annotations
@@ -139,3 +141,14 @@ def planned_charging(
         remaining -= charge * hours
         result.append(charge)
     return result
+
+
+def energy_from_means(
+    means: Mapping[datetime, float], period: timedelta
+) -> tuple[float, datetime | None]:
+    """Energy (Wh) of consecutive mean power values and the end of the last period."""
+    if not means:
+        return 0.0, None
+    hours = period / PERIOD
+    energy = sum(max(0.0, power) * hours for power in means.values())
+    return energy, max(means) + period

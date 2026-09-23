@@ -257,10 +257,13 @@ capped at `remaining − T` (strategy *grid_friendly* while the cap limits);
 the rest goes to the consumers by priority, then to the grid. Not secured →
 battery priority as before, no cap.
 
-PV correction: ratio of today's measured PV energy (integrated from the PV
-power sensor in memory) to the forecast until now, limited to 0.5–1.2, used
-once the forecast until now exceeds 1 kWh. After a restart it is only known
-from the next midnight on (the integration must cover the whole day).
+PV correction: ratio of today's measured PV energy to the forecast until now,
+limited to 0.5–1.2, used once the forecast until now exceeds 1 kWh. The
+energy of today is read at startup from the 5 minute statistics of the PV
+power sensor (`energy_from_means`; the minutes since the last statistics
+period are bridged with the current PV power) and then integrated from the
+live values in memory. Without statistics for the PV sensor (no
+`state_class`) it is only complete from the next midnight on.
 
 Effect (`tests/test_grid_friendly.py::test_day_simulation_absorbs_the_peak`,
 15 min steps, clear day, 8 kWp, 500 W load, 10 kWh battery from 20 %):
@@ -269,7 +272,7 @@ the battery. The broader the peak and the larger the surplus compared to the
 battery, the smaller the cut.
 
 Possible extensions: take the planned consumers into account in the
-surplus; persist the PV energy of the day; use 15 minute forecast periods.
+surplus; use 15 minute forecast periods.
 
 ### Dashboard
 

@@ -268,8 +268,9 @@ Laden in die Spitze:
   Prognose neu berechnet. Hinkt das Laden hinterher (z. B. mehr Wolken als
   vorhergesagt), sinkt sie von selbst.
 - Die PV-Prognose wird mit der tatsächlichen Erzeugung des Tages korrigiert
-  (Diagnose-Sensor *Korrektur PV-Prognose*, verfügbar ab der ersten
-  Mitternacht nach einem Neustart).
+  (Diagnose-Sensor *Korrektur PV-Prognose*). Nach einem Neustart übernimmt
+  SLEMS die bisherige Erzeugung aus den Statistiken des PV-Sensors, es geht
+  also nichts verloren.
 - Solange die Ladung nicht gesichert ist (Ladezustand unter
   *Batterievorrang unter Ladezustand* oder die Prognose reicht nicht), lädt
   SLEMS wie bisher sofort.

@@ -159,3 +159,14 @@ def test_day_simulation_absorbs_the_peak() -> None:
     # 1 kW (6.5 kW -> 5.4 kW); the smaller the surplus, the larger the effect.
     assert friendly_soc > 99
     assert friendly_export < early_export - 900
+
+
+def test_energy_from_five_minute_means() -> None:
+    from custom_components.slems.grid_friendly import energy_from_means
+
+    start = day().replace(hour=10)
+    means = {start + timedelta(minutes=5 * i): 1200.0 for i in range(24)}  # 2 h at 1.2 kW
+    energy, covered_until = energy_from_means(means, timedelta(minutes=5))
+    assert energy == pytest.approx(2400)
+    assert covered_until == start + timedelta(hours=2)
+    assert energy_from_means({}, timedelta(minutes=5)) == (0.0, None)
