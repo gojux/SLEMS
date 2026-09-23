@@ -1,0 +1,172 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "SLEMS-System",
+        "description": "Wähle die Messwerte deines Energiesystems. Batterien werden danach auf der Integrationsseite hinzugefügt.",
+        "data": {
+          "grid_power_entity": "Netzleistung (Smart Meter)",
+          "grid_power_inverted": "Vorzeichen der Netzleistung umkehren",
+          "pv_power_entity": "PV-Leistung",
+          "pv_forecast_entity": "PV-Prognose",
+          "weather_entity": "Wetter"
+        },
+        "data_description": {
+          "grid_power_entity": "Leistung am Netzanschlusspunkt. Erwartetes Vorzeichen: positiv = Bezug, negativ = Einspeisung.",
+          "grid_power_inverted": "Aktivieren, wenn dein Zähler Einspeisung positiv meldet.",
+          "pv_power_entity": "Aktuelle PV-Erzeugung. Wird für den Energiefluss und die Bilanz des Hausverbrauchs verwendet.",
+          "pv_forecast_entity": "Vorhandener PV-Prognose-Sensor in Home Assistant.",
+          "weather_entity": "Wird für die Verbrauchsprognose verwendet (z. B. Heizbedarf)."
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "SLEMS ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SLEMS-System",
+        "data": {
+          "grid_power_entity": "Netzleistung (Smart Meter)",
+          "grid_power_inverted": "Vorzeichen der Netzleistung umkehren",
+          "pv_power_entity": "PV-Leistung",
+          "pv_forecast_entity": "PV-Prognose",
+          "weather_entity": "Wetter"
+        },
+        "data_description": {
+          "grid_power_entity": "Leistung am Netzanschlusspunkt. Erwartetes Vorzeichen: positiv = Bezug, negativ = Einspeisung.",
+          "grid_power_inverted": "Aktivieren, wenn dein Zähler Einspeisung positiv meldet."
+        }
+      }
+    }
+  },
+  "config_subentries": {
+    "battery": {
+      "entry_type": "Batterie",
+      "initiate_flow": {
+        "user": "Batterie hinzufügen",
+        "reconfigure": "Batterie bearbeiten"
+      },
+      "step": {
+        "user": {
+          "title": "Batterie hinzufügen",
+          "data": {
+            "model": "Modell"
+          }
+        },
+        "marstek_venus_e3": {
+          "title": "Marstek Venus E 3.0",
+          "description": "Anbindung über Modbus TCP (LAN). Die Batterie akzeptiert nur eine Modbus-Verbindung: Betreibe nicht gleichzeitig eine andere Integration an derselben Batterie.",
+          "data": {
+            "name": "Name",
+            "host": "Host / IP-Adresse",
+            "port": "Port",
+            "unit_id": "Modbus Unit-ID",
+            "capacity_wh": "Nutzbare Kapazität",
+            "max_charge_power_w": "Maximale Ladeleistung",
+            "max_discharge_power_w": "Maximale Entladeleistung",
+            "skip_connection_test": "Verbindungstest überspringen"
+          },
+          "data_description": {
+            "skip_connection_test": "Ohne Verbindungstest speichern, z. B. solange eine andere Integration die Modbus-Verbindung belegt."
+          }
+        },
+        "ha_entities": {
+          "title": "Batterie aus vorhandenen Entities (nur lesend)",
+          "description": "SLEMS liest diese Batterie nur und sendet nie Befehle. Geeignet für den Simulationsmodus, solange eine andere Integration die Batterie steuert.",
+          "data": {
+            "name": "Name",
+            "soc_entity": "Ladezustand",
+            "power_entity": "Batterieleistung",
+            "power_inverted": "Vorzeichen der Leistung umkehren",
+            "capacity_wh": "Nutzbare Kapazität",
+            "max_charge_power_w": "Maximale Ladeleistung",
+            "max_discharge_power_w": "Maximale Entladeleistung"
+          },
+          "data_description": {
+            "power_inverted": "SLEMS erwartet positiv = Laden. Aktivieren, wenn der Sensor Entladen positiv meldet."
+          }
+        }
+      },
+      "error": {
+        "cannot_connect": "Keine Verbindung zur Batterie möglich."
+      },
+      "abort": {
+        "reconfigure_successful": "Batterie aktualisiert."
+      }
+    }
+  },
+  "selector": {
+    "model": {
+      "options": {
+        "marstek_venus_e3": "Marstek Venus E 3.0 (Modbus TCP)",
+        "ha_entities": "Vorhandene Home-Assistant-Entities (nur lesend)"
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "operating_mode": {
+        "name": "Betriebsmodus",
+        "state": {
+          "off": "Aus",
+          "simulation": "Simulation (nur lesend)",
+          "active": "Aktiv"
+        }
+      }
+    },
+    "sensor": {
+      "grid_power": {
+        "name": "Netzleistung"
+      },
+      "pv_power": {
+        "name": "PV-Leistung"
+      },
+      "house_power": {
+        "name": "Hausverbrauch"
+      },
+      "battery_power_total": {
+        "name": "Batterieleistung gesamt"
+      },
+      "battery_soc_total": {
+        "name": "Ladezustand gesamt"
+      },
+      "battery_soc": {
+        "name": "Ladezustand"
+      },
+      "battery_power": {
+        "name": "Batterieleistung"
+      },
+      "ac_power": {
+        "name": "AC-Leistung"
+      },
+      "battery_voltage": {
+        "name": "Batteriespannung"
+      },
+      "internal_temperature": {
+        "name": "Innentemperatur"
+      },
+      "inverter_state": {
+        "name": "Wechselrichterstatus",
+        "state": {
+          "sleep": "Schlafmodus",
+          "standby": "Bereitschaft",
+          "charge": "Laden",
+          "discharge": "Entladen",
+          "backup": "Notstrom",
+          "ota_upgrade": "Firmware-Update",
+          "bypass": "Bypass",
+          "unknown": "Unbekannt"
+        }
+      },
+      "total_charging_energy": {
+        "name": "Geladene Energie gesamt"
+      },
+      "total_discharging_energy": {
+        "name": "Entladene Energie gesamt"
+      }
+    }
+  }
+}

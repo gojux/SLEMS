@@ -1,0 +1,172 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "SLEMS system",
+        "description": "Select the measurements of your energy system. Batteries are added afterwards on the integration page.",
+        "data": {
+          "grid_power_entity": "Grid power (smart meter)",
+          "grid_power_inverted": "Invert grid power sign",
+          "pv_power_entity": "PV power",
+          "pv_forecast_entity": "PV forecast",
+          "weather_entity": "Weather"
+        },
+        "data_description": {
+          "grid_power_entity": "Power at the grid connection point. Expected sign: positive = import, negative = export.",
+          "grid_power_inverted": "Enable if your meter reports export as positive.",
+          "pv_power_entity": "Current PV production. Used for the energy flow and the house consumption balance.",
+          "pv_forecast_entity": "Existing PV forecast sensor in Home Assistant.",
+          "weather_entity": "Used for the consumption forecast (e.g. heating demand)."
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "SLEMS is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SLEMS system",
+        "data": {
+          "grid_power_entity": "Grid power (smart meter)",
+          "grid_power_inverted": "Invert grid power sign",
+          "pv_power_entity": "PV power",
+          "pv_forecast_entity": "PV forecast",
+          "weather_entity": "Weather"
+        },
+        "data_description": {
+          "grid_power_entity": "Power at the grid connection point. Expected sign: positive = import, negative = export.",
+          "grid_power_inverted": "Enable if your meter reports export as positive."
+        }
+      }
+    }
+  },
+  "config_subentries": {
+    "battery": {
+      "entry_type": "Battery",
+      "initiate_flow": {
+        "user": "Add battery",
+        "reconfigure": "Edit battery"
+      },
+      "step": {
+        "user": {
+          "title": "Add battery",
+          "data": {
+            "model": "Model"
+          }
+        },
+        "marstek_venus_e3": {
+          "title": "Marstek Venus E 3.0",
+          "description": "Connection via Modbus TCP (LAN). The battery accepts only one Modbus connection: do not run another integration on the same battery at the same time.",
+          "data": {
+            "name": "Name",
+            "host": "Host / IP address",
+            "port": "Port",
+            "unit_id": "Modbus unit ID",
+            "capacity_wh": "Usable capacity",
+            "max_charge_power_w": "Maximum charge power",
+            "max_discharge_power_w": "Maximum discharge power",
+            "skip_connection_test": "Skip connection test"
+          },
+          "data_description": {
+            "skip_connection_test": "Save without testing the connection, e.g. while another integration still holds the Modbus connection."
+          }
+        },
+        "ha_entities": {
+          "title": "Battery from existing entities (read-only)",
+          "description": "SLEMS only reads this battery and never sends commands. Suitable for simulation mode while another integration controls the battery.",
+          "data": {
+            "name": "Name",
+            "soc_entity": "State of charge",
+            "power_entity": "Battery power",
+            "power_inverted": "Invert power sign",
+            "capacity_wh": "Usable capacity",
+            "max_charge_power_w": "Maximum charge power",
+            "max_discharge_power_w": "Maximum discharge power"
+          },
+          "data_description": {
+            "power_inverted": "SLEMS expects positive = charging. Enable if the sensor reports discharging as positive."
+          }
+        }
+      },
+      "error": {
+        "cannot_connect": "Cannot connect to the battery."
+      },
+      "abort": {
+        "reconfigure_successful": "Battery updated."
+      }
+    }
+  },
+  "selector": {
+    "model": {
+      "options": {
+        "marstek_venus_e3": "Marstek Venus E 3.0 (Modbus TCP)",
+        "ha_entities": "Existing Home Assistant entities (read-only)"
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "operating_mode": {
+        "name": "Operating mode",
+        "state": {
+          "off": "Off",
+          "simulation": "Simulation (read-only)",
+          "active": "Active"
+        }
+      }
+    },
+    "sensor": {
+      "grid_power": {
+        "name": "Grid power"
+      },
+      "pv_power": {
+        "name": "PV power"
+      },
+      "house_power": {
+        "name": "House consumption"
+      },
+      "battery_power_total": {
+        "name": "Battery power total"
+      },
+      "battery_soc_total": {
+        "name": "Battery state of charge total"
+      },
+      "battery_soc": {
+        "name": "State of charge"
+      },
+      "battery_power": {
+        "name": "Battery power"
+      },
+      "ac_power": {
+        "name": "AC power"
+      },
+      "battery_voltage": {
+        "name": "Battery voltage"
+      },
+      "internal_temperature": {
+        "name": "Internal temperature"
+      },
+      "inverter_state": {
+        "name": "Inverter state",
+        "state": {
+          "sleep": "Sleep",
+          "standby": "Standby",
+          "charge": "Charging",
+          "discharge": "Discharging",
+          "backup": "Backup",
+          "ota_upgrade": "Firmware update",
+          "bypass": "Bypass",
+          "unknown": "Unknown"
+        }
+      },
+      "total_charging_energy": {
+        "name": "Total charged energy"
+      },
+      "total_discharging_energy": {
+        "name": "Total discharged energy"
+      }
+    }
+  }
+}

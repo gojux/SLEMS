@@ -1,0 +1,52 @@
+# Development configuration for SLEMS.
+default_config:
+
+logger:
+  default: info
+  logs:
+    custom_components.slems: debug
+
+# Simulated measurements. Adjust the sliders to play with grid and PV values.
+input_number:
+  sim_grid_power:
+    name: Simulated grid power
+    min: -10000
+    max: 10000
+    step: 50
+    unit_of_measurement: W
+    initial: 400
+  sim_pv_power:
+    name: Simulated PV power
+    min: 0
+    max: 10000
+    step: 50
+    unit_of_measurement: W
+    initial: 1500
+  sim_consumer_power:
+    name: Simulated consumer power setpoint
+    min: 0
+    max: 3000
+    step: 100
+    unit_of_measurement: W
+    initial: 0
+
+input_boolean:
+  sim_consumer_switch:
+    name: Simulated on/off consumer
+  sim_consumer_blocked:
+    name: Simulated consumer externally blocked
+
+template:
+  - sensor:
+      - name: Smart meter power
+        unique_id: sim_smart_meter_power
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        state: "{{ states('input_number.sim_grid_power') | float(0) }}"
+      - name: PV power
+        unique_id: sim_pv_power
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        state: "{{ states('input_number.sim_pv_power') | float(0) }}"

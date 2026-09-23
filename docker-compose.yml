@@ -1,0 +1,47 @@
+name: slems
+
+x-venus-sim: &venus-sim
+  image: python:3.13-alpine
+  command: ["python", "/sim/simulator.py"]
+  volumes:
+    - ./dev/venus_sim:/sim:ro
+  restart: unless-stopped
+
+services:
+  homeassistant:
+    # Keep in sync with the Home Assistant version used in production.
+    image: ghcr.io/home-assistant/home-assistant:2026.9.3
+    ports:
+      - "8123:8123"
+    volumes:
+      - ./dev/config:/config
+      - ./custom_components/slems:/config/custom_components/slems:ro
+    environment:
+      TZ: Europe/Vienna
+    depends_on:
+      - venus-sim-1
+      - venus-sim-2
+    restart: unless-stopped
+
+  # Two simulated Marstek Venus E 3.0 batteries (host names venus-sim-1/2, port 502).
+  venus-sim-1:
+    <<: *venus-sim
+    environment:
+      SIM_INITIAL_SOC: "40"
+
+  venus-sim-2:
+    <<: *venus-sim
+    environment:
+      SIM_INITIAL_SOC: "75"
+
+  # Test runner using the same Python and Home Assistant version as production.
+  # Usage: docker compose run --rm tests
+  tests:
+    build:
+      context: dev
+      dockerfile: tests.Dockerfile
+    working_dir: /repo
+    volumes:
+      - .:/repo
+    entrypoint: ["python", "-m", "pytest"]
+    profiles: ["tests"]

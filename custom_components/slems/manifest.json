@@ -1,0 +1,17 @@
+{
+  "domain": "slems",
+  "name": "SLEMS",
+  "after_dependencies": [
+    "recorder"
+  ],
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://example.invalid/slems",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "requirements": [
+    "pymodbus>=3.8.0"
+  ],
+  "single_config_entry": true,
+  "version": "0.1.0"
+}
