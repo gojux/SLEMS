@@ -6,11 +6,17 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
-from .const import DOMAIN, MANUFACTURER, SUBENTRY_TYPE_BATTERY
+from .const import DOMAIN, MANUFACTURER, SUBENTRY_TYPE_BATTERY, SUBENTRY_TYPE_CONSUMER
+from .consumers import ConsumerConfig
 from .coordinator import BatteryRuntime, SlemsConfigEntry, SlemsCoordinator
 from .drivers import create_driver
 
-PLATFORMS: list[Platform] = [Platform.SELECT, Platform.SENSOR]
+PLATFORMS: list[Platform] = [
+    Platform.NUMBER,
+    Platform.SELECT,
+    Platform.SENSOR,
+    Platform.SWITCH,
+]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> bool:
@@ -35,7 +41,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
         for subentry in entry.subentries.values()
         if subentry.subentry_type == SUBENTRY_TYPE_BATTERY
     ]
-    coordinator = SlemsCoordinator(hass, entry, batteries, system_device.id)
+    consumers = [
+        ConsumerConfig.from_subentry(subentry.subentry_id, subentry.title, subentry.data)
+        for subentry in entry.subentries.values()
+        if subentry.subentry_type == SUBENTRY_TYPE_CONSUMER
+    ]
+    coordinator = SlemsCoordinator(hass, entry, batteries, consumers, system_device.id)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
 

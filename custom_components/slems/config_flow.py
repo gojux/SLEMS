@@ -22,11 +22,22 @@ from homeassistant.config_entries import (
     SubentryFlowResult,
 )
 from homeassistant.const import CONF_NAME
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_BLOCK_ENTITY,
     CONF_CAPACITY_WH,
+    CONF_CONSUMER_TYPE,
+    CONF_CONTROL_ENTITY,
+    CONF_CONTROL_MODE,
+    CONF_ENERGY_ENTITY,
+    CONF_INCLUDED_IN_METER,
+    CONF_MAX_POWER_W,
+    CONF_MIN_POWER_W,
+    CONF_NOMINAL_POWER_W,
+    CONF_PRIORITY,
+    DEFAULT_PRIORITY,
     CONF_GRID_POWER_ENTITY,
     CONF_GRID_POWER_INVERTED,
     CONF_HOST,
@@ -36,7 +47,7 @@ from .const import (
     CONF_PORT,
     CONF_POWER_ENTITY,
     CONF_POWER_INVERTED,
-    CONF_PV_FORECAST_ENTITY,
+    CONF_PV_FORECAST_ENTRIES,
     CONF_PV_POWER_ENTITY,
     CONF_SKIP_CONNECTION_TEST,
     CONF_SOC_ENTITY,
@@ -46,15 +57,22 @@ from .const import (
     DEFAULT_UNIT_ID,
     DOMAIN,
     SUBENTRY_TYPE_BATTERY,
+    SUBENTRY_TYPE_CONSUMER,
     BatteryModel,
+    ConsumerType,
+    ControlMode,
 )
 from .drivers.marstek_venus_e3 import HARDWARE_MAX_POWER_W, MarstekVenusE3Driver
+from .pv_forecast import async_forecast_provider_entries
 
 # Venus E 3.0 usable capacity.
 DEFAULT_CAPACITY_WH = 5120
 
 _POWER_SENSOR = selector.EntitySelector(
     selector.EntitySelectorConfig(domain="sensor", device_class=SensorDeviceClass.POWER)
+)
+_ENERGY_SENSOR = selector.EntitySelector(
+    selector.EntitySelectorConfig(domain="sensor", device_class=SensorDeviceClass.ENERGY)
 )
 _BATTERY_SENSOR = selector.EntitySelector(
     selector.EntitySelectorConfig(domain="sensor", device_class=SensorDeviceClass.BATTERY)
@@ -81,13 +99,36 @@ _CAPACITY = selector.NumberSelector(
 )
 
 
-def _system_schema(defaults: dict[str, Any]) -> vol.Schema:
+def _optional(key: str, defaults: dict[str, Any]) -> vol.Optional:
+    """Optional field that can be cleared again in the UI."""
+    if defaults.get(key) is not None:
+        return vol.Optional(key, description={"suggested_value": defaults[key]})
+    return vol.Optional(key)
+
+
+async def _async_system_schema(
+    hass: HomeAssistant, defaults: dict[str, Any]
+) -> vol.Schema:
     """Schema for the system settings, shared by config and options flow."""
+    providers = await async_forecast_provider_entries(hass)
+    forecast_field: dict = {}
+    if providers:
+        forecast_field[_optional(CONF_PV_FORECAST_ENTRIES, defaults)] = (
+            selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        selector.SelectOptionDict(
+                            value=entry.entry_id, label=f"{entry.title} ({entry.domain})"
+                        )
+                        for entry in providers
+                    ],
+                    multiple=True,
+                )
+            )
+        )
 
     def optional(key: str) -> vol.Optional:
-        if key in defaults:
-            return vol.Optional(key, description={"suggested_value": defaults[key]})
-        return vol.Optional(key)
+        return _optional(key, defaults)
 
     return vol.Schema(
         {
@@ -99,9 +140,7 @@ def _system_schema(defaults: dict[str, Any]) -> vol.Schema:
                 default=defaults.get(CONF_GRID_POWER_INVERTED, False),
             ): selector.BooleanSelector(),
             optional(CONF_PV_POWER_ENTITY): _POWER_SENSOR,
-            optional(CONF_PV_FORECAST_ENTITY): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="sensor")
-            ),
+            **forecast_field,
             optional(CONF_WEATHER_ENTITY): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="weather")
             ),
@@ -119,7 +158,9 @@ class SlemsConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         if user_input is not None:
             return self.async_create_entry(title="SLEMS", data=user_input)
-        return self.async_show_form(step_id="user", data_schema=_system_schema({}))
+        return self.async_show_form(
+            step_id="user", data_schema=await _async_system_schema(self.hass, {})
+        )
 
     @staticmethod
     @callback
@@ -131,7 +172,10 @@ class SlemsConfigFlow(ConfigFlow, domain=DOMAIN):
     def async_get_supported_subentry_types(
         cls, config_entry: ConfigEntry
     ) -> dict[str, type[ConfigSubentryFlow]]:
-        return {SUBENTRY_TYPE_BATTERY: BatterySubentryFlow}
+        return {
+            SUBENTRY_TYPE_BATTERY: BatterySubentryFlow,
+            SUBENTRY_TYPE_CONSUMER: ConsumerSubentryFlow,
+        }
 
 
 class SlemsOptionsFlow(OptionsFlow):
@@ -145,7 +189,9 @@ class SlemsOptionsFlow(OptionsFlow):
         # Options fully replace the initial data, so a cleared optional field
         # does not fall back to the value from the first setup.
         current = dict(self.config_entry.options or self.config_entry.data)
-        return self.async_show_form(step_id="init", data_schema=_system_schema(current))
+        return self.async_show_form(
+            step_id="init", data_schema=await _async_system_schema(self.hass, current)
+        )
 
 
 class BatterySubentryFlow(ConfigSubentryFlow):
@@ -295,3 +341,129 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             )
         return self.async_create_entry(title=title, data=data)
 
+
+
+class ConsumerSubentryFlow(ConfigSubentryFlow):
+    """Add or reconfigure a consumer.
+
+    Every consumer must provide its own power and energy sensor. Control via a
+    switch or a power set point is optional.
+    """
+
+    def __init__(self) -> None:
+        self._data: dict[str, Any] = {}
+
+    def _existing(self) -> dict[str, Any]:
+        if self.source == SOURCE_RECONFIGURE:
+            subentry = self._get_reconfigure_subentry()
+            return {CONF_NAME: subentry.title, **subentry.data}
+        return {}
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Measurement and control mode."""
+        if user_input is not None:
+            self._data = user_input
+            if ControlMode(user_input[CONF_CONTROL_MODE]) is ControlMode.NONE:
+                return self._async_finish()
+            return await self.async_step_control()
+
+        defaults = self._existing()
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, vol.UNDEFINED)): str,
+                vol.Required(
+                    CONF_CONSUMER_TYPE,
+                    default=defaults.get(CONF_CONSUMER_TYPE, ConsumerType.OTHER.value),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[t.value for t in ConsumerType],
+                        translation_key=CONF_CONSUMER_TYPE,
+                    )
+                ),
+                vol.Required(
+                    CONF_POWER_ENTITY, default=defaults.get(CONF_POWER_ENTITY, vol.UNDEFINED)
+                ): _POWER_SENSOR,
+                vol.Required(
+                    CONF_ENERGY_ENTITY, default=defaults.get(CONF_ENERGY_ENTITY, vol.UNDEFINED)
+                ): _ENERGY_SENSOR,
+                vol.Required(
+                    CONF_INCLUDED_IN_METER, default=defaults.get(CONF_INCLUDED_IN_METER, True)
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_CONTROL_MODE,
+                    default=defaults.get(CONF_CONTROL_MODE, ControlMode.NONE.value),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[m.value for m in ControlMode],
+                        translation_key=CONF_CONTROL_MODE,
+                    )
+                ),
+            }
+        )
+        return self.async_show_form(step_id="user", data_schema=schema)
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Edit an existing consumer."""
+        return await self.async_step_user(user_input)
+
+    async def async_step_control(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Control entity, power range, external block and priority."""
+        if user_input is not None:
+            self._data.update(user_input)
+            return self._async_finish()
+
+        defaults = self._existing()
+        # Control entity and power fields are only reused if the mode is unchanged.
+        mode = ControlMode(self._data[CONF_CONTROL_MODE])
+        if defaults.get(CONF_CONTROL_MODE) != mode.value:
+            defaults = {k: v for k, v in defaults.items() if k in (CONF_BLOCK_ENTITY, CONF_PRIORITY)}
+
+        fields: dict = {}
+        if mode is ControlMode.SWITCH:
+            fields[
+                vol.Required(CONF_CONTROL_ENTITY, default=defaults.get(CONF_CONTROL_ENTITY, vol.UNDEFINED))
+            ] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["switch", "input_boolean"])
+            )
+            fields[
+                vol.Required(CONF_NOMINAL_POWER_W, default=defaults.get(CONF_NOMINAL_POWER_W, vol.UNDEFINED))
+            ] = _watts(100_000)
+        else:
+            fields[
+                vol.Required(CONF_CONTROL_ENTITY, default=defaults.get(CONF_CONTROL_ENTITY, vol.UNDEFINED))
+            ] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["number", "input_number"])
+            )
+            fields[
+                vol.Required(CONF_MIN_POWER_W, default=defaults.get(CONF_MIN_POWER_W, 0))
+            ] = _watts(100_000)
+            fields[
+                vol.Required(CONF_MAX_POWER_W, default=defaults.get(CONF_MAX_POWER_W, vol.UNDEFINED))
+            ] = _watts(100_000)
+        fields[_optional(CONF_BLOCK_ENTITY, defaults)] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch"])
+        )
+        fields[
+            vol.Required(CONF_PRIORITY, default=defaults.get(CONF_PRIORITY, DEFAULT_PRIORITY))
+        ] = selector.NumberSelector(
+            selector.NumberSelectorConfig(min=1, max=10, step=1, mode=selector.NumberSelectorMode.SLIDER)
+        )
+        return self.async_show_form(step_id="control", data_schema=vol.Schema(fields))
+
+    def _async_finish(self) -> SubentryFlowResult:
+        data = dict(self._data)
+        title = data.pop(CONF_NAME)
+        for key in (CONF_NOMINAL_POWER_W, CONF_MIN_POWER_W, CONF_MAX_POWER_W, CONF_PRIORITY):
+            if key in data:
+                data[key] = int(data[key])
+        if self.source == SOURCE_RECONFIGURE:
+            return self.async_update_and_abort(
+                self._get_entry(), self._get_reconfigure_subentry(), title=title, data=data
+            )
+        return self.async_create_entry(title=title, data=data)

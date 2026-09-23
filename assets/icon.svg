@@ -4,26 +4,47 @@
       <stop offset="0" stop-color="#0e4f4d"/>
       <stop offset="1" stop-color="#0a2f33"/>
     </linearGradient>
-    <linearGradient id="charge" x1="0" y1="1" x2="0" y2="0">
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fdba74"/>
+      <stop offset="1" stop-color="#f97316"/>
+    </linearGradient>
+    <linearGradient id="charge" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#22c55e"/>
       <stop offset="1" stop-color="#86efac"/>
     </linearGradient>
   </defs>
   <rect width="256" height="256" rx="56" fill="url(#bg)"/>
   <!-- sun -->
-  <circle cx="194" cy="66" r="22" fill="#fbbf24"/>
+  <circle cx="62" cy="58" r="20" fill="#fbbf24"/>
   <g stroke="#fbbf24" stroke-width="7" stroke-linecap="round">
-    <line x1="194" y1="28" x2="194" y2="34"/>
-    <line x1="194" y1="98" x2="194" y2="104"/>
-    <line x1="226" y1="66" x2="232" y2="66"/>
-    <line x1="167" y1="39" x2="171" y2="43"/>
-    <line x1="217" y1="89" x2="221" y2="93"/>
-    <line x1="221" y1="39" x2="217" y2="43"/>
+    <line x1="62" y1="22" x2="62" y2="28"/>
+    <line x1="62" y1="88" x2="62" y2="94"/>
+    <line x1="26" y1="58" x2="32" y2="58"/>
+    <line x1="92" y1="58" x2="98" y2="58"/>
+    <line x1="37" y1="33" x2="41" y2="37"/>
+    <line x1="83" y1="79" x2="87" y2="83"/>
+    <line x1="87" y1="33" x2="83" y2="37"/>
+    <line x1="37" y1="83" x2="41" y2="79"/>
   </g>
-  <!-- battery -->
-  <rect x="86" y="62" width="36" height="18" rx="6" fill="#e6fffb"/>
-  <rect x="50" y="78" width="108" height="146" rx="22" fill="none" stroke="#e6fffb" stroke-width="12"/>
-  <rect x="66" y="138" width="76" height="70" rx="10" fill="url(#charge)"/>
-  <!-- bolt -->
-  <path d="M112 92 L78 158 H104 L94 206 L132 134 H106 Z" fill="#fbbf24" stroke="#0a2f33" stroke-width="5" stroke-linejoin="round"/>
+  <!-- eye stalks -->
+  <g stroke="#f97316" stroke-width="7" stroke-linecap="round" fill="none">
+    <path d="M198 128 Q192 104 186 86"/>
+    <path d="M216 128 Q220 106 228 88"/>
+  </g>
+  <circle cx="185" cy="82" r="9" fill="#fff7ed"/>
+  <circle cx="229" cy="84" r="9" fill="#fff7ed"/>
+  <circle cx="187" cy="83" r="4" fill="#0a2f33"/>
+  <circle cx="231" cy="85" r="4" fill="#0a2f33"/>
+  <!-- slug body -->
+  <path d="M24 212 Q24 196 52 192 L150 186 Q172 184 178 164 Q186 124 208 122 Q236 122 238 158 Q240 206 214 214 L36 218 Q24 218 24 212 Z" fill="url(#body)"/>
+  <path d="M40 214 L212 210" stroke="#c2410c" stroke-width="5" stroke-linecap="round" opacity="0.6"/>
+  <!-- face -->
+  <path d="M204 164 Q214 174 224 164" stroke="#7c2d12" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <circle cx="198" cy="156" r="5" fill="#fb7185" opacity="0.7"/>
+  <circle cx="230" cy="156" r="5" fill="#fb7185" opacity="0.7"/>
+  <!-- battery carried instead of a shell -->
+  <rect x="160" y="140" width="10" height="24" rx="3" fill="#e6fffb"/>
+  <rect x="58" y="120" width="104" height="64" rx="14" fill="#0a2f33" stroke="#e6fffb" stroke-width="9"/>
+  <rect x="70" y="132" width="58" height="40" rx="6" fill="url(#charge)"/>
+  <path d="M118 126 L92 156 H108 L100 180 L128 146 H112 Z" fill="#fbbf24" stroke="#0a2f33" stroke-width="4" stroke-linejoin="round"/>
 </svg>

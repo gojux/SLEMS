@@ -8,15 +8,15 @@
           "grid_power_entity": "Grid power (smart meter)",
           "grid_power_inverted": "Invert grid power sign",
           "pv_power_entity": "PV power",
-          "pv_forecast_entity": "PV forecast",
-          "weather_entity": "Weather"
+          "weather_entity": "Weather",
+          "pv_forecast_entries": "PV forecast"
         },
         "data_description": {
           "grid_power_entity": "Power at the grid connection point. Expected sign: positive = import, negative = export.",
           "grid_power_inverted": "Enable if your meter reports export as positive.",
           "pv_power_entity": "Current PV production. Used for the energy flow and the house consumption balance.",
-          "pv_forecast_entity": "Existing PV forecast sensor in Home Assistant.",
-          "weather_entity": "Used for the consumption forecast (e.g. heating demand)."
+          "weather_entity": "Optional. Improves the consumption forecast (e.g. heat pump demand).",
+          "pv_forecast_entries": "Solar forecast integrations (e.g. Forecast.Solar, Solcast). Several entries, e.g. one per roof plane, are summed up."
         }
       }
     },
@@ -32,12 +32,14 @@
           "grid_power_entity": "Grid power (smart meter)",
           "grid_power_inverted": "Invert grid power sign",
           "pv_power_entity": "PV power",
-          "pv_forecast_entity": "PV forecast",
-          "weather_entity": "Weather"
+          "weather_entity": "Weather",
+          "pv_forecast_entries": "PV forecast"
         },
         "data_description": {
           "grid_power_entity": "Power at the grid connection point. Expected sign: positive = import, negative = export.",
-          "grid_power_inverted": "Enable if your meter reports export as positive."
+          "grid_power_inverted": "Enable if your meter reports export as positive.",
+          "pv_forecast_entries": "Solar forecast integrations (e.g. Forecast.Solar, Solcast). Several entries, e.g. one per roof plane, are summed up.",
+          "weather_entity": "Optional. Improves the consumption forecast (e.g. heat pump demand)."
         }
       }
     }
@@ -96,6 +98,50 @@
       "abort": {
         "reconfigure_successful": "Battery updated."
       }
+    },
+    "consumer": {
+      "entry_type": "Consumer",
+      "initiate_flow": {
+        "user": "Add consumer",
+        "reconfigure": "Edit consumer"
+      },
+      "step": {
+        "user": {
+          "title": "Consumer",
+          "description": "Every consumer needs its own power and energy sensor.",
+          "data": {
+            "name": "Name",
+            "consumer_type": "Type",
+            "power_entity": "Power sensor",
+            "energy_entity": "Energy sensor",
+            "included_in_meter": "Included in smart meter",
+            "control_mode": "Control"
+          },
+          "data_description": {
+            "consumer_type": "Heat pump consumption is forecast from the weather; a heating rod is typically used for hot water in summer.",
+            "included_in_meter": "Enable if the consumer is behind the smart meter, i.e. its consumption is already part of the measured grid power."
+          }
+        },
+        "control": {
+          "title": "Control",
+          "data": {
+            "control_entity": "Control entity",
+            "nominal_power_w": "Power when on",
+            "min_power_w": "Minimum power",
+            "max_power_w": "Maximum power",
+            "block_entity": "External block",
+            "priority": "Priority"
+          },
+          "data_description": {
+            "control_entity": "Switch for on/off consumers, number entity in W for power controlled consumers.",
+            "block_entity": "While this entity is on, SLEMS does not control the consumer (e.g. blocked by the device or an automation).",
+            "priority": "1 = highest priority when distributing surplus power."
+          }
+        }
+      },
+      "abort": {
+        "reconfigure_successful": "Consumer updated."
+      }
     }
   },
   "selector": {
@@ -103,6 +149,20 @@
       "options": {
         "marstek_venus_e3": "Marstek Venus E 3.0 (Modbus TCP)",
         "ha_entities": "Existing Home Assistant entities (read-only)"
+      }
+    },
+    "consumer_type": {
+      "options": {
+        "heat_pump": "Heat pump (heating and hot water)",
+        "heating_rod": "Heating rod",
+        "other": "Other"
+      }
+    },
+    "control_mode": {
+      "options": {
+        "none": "None (measurement only)",
+        "switch": "On/off (switch)",
+        "power": "Power set point (number)"
       }
     }
   },
@@ -166,6 +226,34 @@
       },
       "total_discharging_energy": {
         "name": "Total discharged energy"
+      },
+      "base_load": {
+        "name": "Base load"
+      },
+      "total_consumption": {
+        "name": "Total consumption"
+      },
+      "pv_forecast_today": {
+        "name": "PV forecast today"
+      },
+      "pv_forecast_tomorrow": {
+        "name": "PV forecast tomorrow"
+      }
+    },
+    "switch": {
+      "vacation": {
+        "name": "Vacation"
+      },
+      "peak_shaving": {
+        "name": "Import peak shaving"
+      }
+    },
+    "number": {
+      "peak_shaving_grid_limit": {
+        "name": "Peak shaving grid import limit"
+      },
+      "peak_shaving_soc_threshold": {
+        "name": "Peak shaving state of charge threshold"
       }
     }
   }

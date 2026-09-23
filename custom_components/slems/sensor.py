@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import timedelta
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -21,10 +22,13 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import dt as dt_util
 
+from .const import CONF_PV_FORECAST_ENTRIES
 from .coordinator import SlemsConfigEntry, SlemsCoordinator, SystemSnapshot
 from .drivers import BatteryTelemetry
 from .entity import SlemsBatteryEntity, SlemsSystemEntity
+from .pv_forecast import energy_on_day
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -66,10 +70,37 @@ def _average_soc(snapshot: SystemSnapshot, coordinator: SlemsCoordinator) -> flo
     return energy / capacity if capacity else None
 
 
+def _pv_forecast_kwh(day_offset: int) -> Callable[[SystemSnapshot, SlemsCoordinator], float | None]:
+    def value(snapshot: SystemSnapshot, _: SlemsCoordinator) -> float | None:
+        if snapshot.pv_forecast is None:
+            return None
+        day = dt_util.now().date() + timedelta(days=day_offset)
+        return energy_on_day(snapshot.pv_forecast, day) / 1000
+
+    return value
+
+
+def _energy_forecast(key: str, day_offset: int) -> SystemSensorDescription:
+    return SystemSensorDescription(
+        key=key,
+        translation_key=key,
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+        value_fn=_pv_forecast_kwh(day_offset),
+    )
+
+
 SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
     SystemSensorDescription(**_power("grid_power"), value_fn=lambda s, _: s.grid_power_w),
     SystemSensorDescription(**_power("pv_power"), value_fn=lambda s, _: s.pv_power_w),
     SystemSensorDescription(**_power("house_power"), value_fn=lambda s, _: s.house_power_w),
+    SystemSensorDescription(**_power("base_load"), value_fn=lambda s, _: s.base_load_w),
+    SystemSensorDescription(
+        **_power("total_consumption"), value_fn=lambda s, _: s.total_consumption_w
+    ),
+    _energy_forecast("pv_forecast_today", 0),
+    _energy_forecast("pv_forecast_tomorrow", 1),
     SystemSensorDescription(
         **_power("battery_power_total"), value_fn=lambda s, _: s.battery_power_w
     ),
@@ -169,8 +200,12 @@ async def async_setup_entry(
 ) -> None:
     """Set up SLEMS sensors."""
     coordinator = entry.runtime_data
+    config = entry.options or entry.data
     async_add_entities(
-        SystemSensor(coordinator, description) for description in SYSTEM_SENSORS
+        SystemSensor(coordinator, description)
+        for description in SYSTEM_SENSORS
+        if config.get(CONF_PV_FORECAST_ENTRIES)
+        or not description.key.startswith("pv_forecast")
     )
     for battery in coordinator.batteries:
         extra_keys = battery.driver.extra_telemetry_keys

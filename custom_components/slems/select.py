@@ -33,19 +33,17 @@ class OperatingModeSelect(SlemsSystemEntity, SelectEntity, RestoreEntity):
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
         if last_state is not None and last_state.state in self._attr_options:
-            self.coordinator.operating_mode = OperatingMode(last_state.state)
+            self.coordinator.settings.operating_mode = OperatingMode(last_state.state)
 
     @property
     def current_option(self) -> str:
-        return self.coordinator.operating_mode.value
+        return self.coordinator.settings.operating_mode.value
 
     async def async_select_option(self, option: str) -> None:
         mode = OperatingMode(option)
-        previous = self.coordinator.operating_mode
-        self.coordinator.operating_mode = mode
+        settings = self.coordinator.settings
+        previous = settings.operating_mode
+        settings.operating_mode = mode
         if previous is OperatingMode.ACTIVE and mode is not OperatingMode.ACTIVE:
-            # Hand the batteries back to their internal logic immediately.
-            for battery in self.coordinator.batteries:
-                if battery.driver.capabilities.controllable:
-                    await battery.driver.release_control()
+            await self.coordinator.async_release_batteries()
         self.async_write_ha_state()

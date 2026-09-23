@@ -8,15 +8,15 @@
           "grid_power_entity": "Netzleistung (Smart Meter)",
           "grid_power_inverted": "Vorzeichen der Netzleistung umkehren",
           "pv_power_entity": "PV-Leistung",
-          "pv_forecast_entity": "PV-Prognose",
-          "weather_entity": "Wetter"
+          "weather_entity": "Wetter",
+          "pv_forecast_entries": "PV-Prognose"
         },
         "data_description": {
           "grid_power_entity": "Leistung am Netzanschlusspunkt. Erwartetes Vorzeichen: positiv = Bezug, negativ = Einspeisung.",
           "grid_power_inverted": "Aktivieren, wenn dein Zähler Einspeisung positiv meldet.",
           "pv_power_entity": "Aktuelle PV-Erzeugung. Wird für den Energiefluss und die Bilanz des Hausverbrauchs verwendet.",
-          "pv_forecast_entity": "Vorhandener PV-Prognose-Sensor in Home Assistant.",
-          "weather_entity": "Wird für die Verbrauchsprognose verwendet (z. B. Heizbedarf)."
+          "weather_entity": "Optional. Verbessert die Verbrauchsprognose (z. B. Bedarf der Wärmepumpe).",
+          "pv_forecast_entries": "Integrationen mit Solarprognose (z. B. Forecast.Solar, Solcast). Mehrere Einträge, z. B. einer je Dachfläche, werden addiert."
         }
       }
     },
@@ -32,12 +32,14 @@
           "grid_power_entity": "Netzleistung (Smart Meter)",
           "grid_power_inverted": "Vorzeichen der Netzleistung umkehren",
           "pv_power_entity": "PV-Leistung",
-          "pv_forecast_entity": "PV-Prognose",
-          "weather_entity": "Wetter"
+          "weather_entity": "Wetter",
+          "pv_forecast_entries": "PV-Prognose"
         },
         "data_description": {
           "grid_power_entity": "Leistung am Netzanschlusspunkt. Erwartetes Vorzeichen: positiv = Bezug, negativ = Einspeisung.",
-          "grid_power_inverted": "Aktivieren, wenn dein Zähler Einspeisung positiv meldet."
+          "grid_power_inverted": "Aktivieren, wenn dein Zähler Einspeisung positiv meldet.",
+          "pv_forecast_entries": "Integrationen mit Solarprognose (z. B. Forecast.Solar, Solcast). Mehrere Einträge, z. B. einer je Dachfläche, werden addiert.",
+          "weather_entity": "Optional. Verbessert die Verbrauchsprognose (z. B. Bedarf der Wärmepumpe)."
         }
       }
     }
@@ -96,6 +98,50 @@
       "abort": {
         "reconfigure_successful": "Batterie aktualisiert."
       }
+    },
+    "consumer": {
+      "entry_type": "Verbraucher",
+      "initiate_flow": {
+        "user": "Verbraucher hinzufügen",
+        "reconfigure": "Verbraucher bearbeiten"
+      },
+      "step": {
+        "user": {
+          "title": "Verbraucher",
+          "description": "Jeder Verbraucher braucht einen eigenen Leistungs- und Energiesensor.",
+          "data": {
+            "name": "Name",
+            "consumer_type": "Typ",
+            "power_entity": "Leistungssensor",
+            "energy_entity": "Energiesensor",
+            "included_in_meter": "Im Smart Meter enthalten",
+            "control_mode": "Steuerung"
+          },
+          "data_description": {
+            "consumer_type": "Der Verbrauch einer Wärmepumpe wird wetterabhängig prognostiziert; eine Heizpatrone wird typischerweise im Sommer für Warmwasser genutzt.",
+            "included_in_meter": "Aktivieren, wenn der Verbraucher hinter dem Smart Meter hängt, sein Verbrauch also bereits in der gemessenen Netzleistung enthalten ist."
+          }
+        },
+        "control": {
+          "title": "Steuerung",
+          "data": {
+            "control_entity": "Steuer-Entity",
+            "nominal_power_w": "Leistung im eingeschalteten Zustand",
+            "min_power_w": "Minimale Leistung",
+            "max_power_w": "Maximale Leistung",
+            "block_entity": "Externe Sperre",
+            "priority": "Priorität"
+          },
+          "data_description": {
+            "control_entity": "Schalter für Ein/Aus-Verbraucher, Number-Entity in W für leistungsgeregelte Verbraucher.",
+            "block_entity": "Solange diese Entity eingeschaltet ist, steuert SLEMS den Verbraucher nicht (z. B. vom Gerät oder einer Automation gesperrt).",
+            "priority": "1 = höchste Priorität bei der Verteilung von Überschuss."
+          }
+        }
+      },
+      "abort": {
+        "reconfigure_successful": "Verbraucher aktualisiert."
+      }
     }
   },
   "selector": {
@@ -103,6 +149,20 @@
       "options": {
         "marstek_venus_e3": "Marstek Venus E 3.0 (Modbus TCP)",
         "ha_entities": "Vorhandene Home-Assistant-Entities (nur lesend)"
+      }
+    },
+    "consumer_type": {
+      "options": {
+        "heat_pump": "Wärmepumpe (Heizung und Warmwasser)",
+        "heating_rod": "Heizpatrone",
+        "other": "Sonstiges"
+      }
+    },
+    "control_mode": {
+      "options": {
+        "none": "Keine (nur Messung)",
+        "switch": "Ein/Aus (Schalter)",
+        "power": "Leistungsvorgabe (Number)"
       }
     }
   },
@@ -166,6 +226,34 @@
       },
       "total_discharging_energy": {
         "name": "Entladene Energie gesamt"
+      },
+      "base_load": {
+        "name": "Grundlast"
+      },
+      "total_consumption": {
+        "name": "Gesamtverbrauch"
+      },
+      "pv_forecast_today": {
+        "name": "PV-Prognose heute"
+      },
+      "pv_forecast_tomorrow": {
+        "name": "PV-Prognose morgen"
+      }
+    },
+    "switch": {
+      "vacation": {
+        "name": "Urlaub"
+      },
+      "peak_shaving": {
+        "name": "Bezugsspitzen abfangen"
+      }
+    },
+    "number": {
+      "peak_shaving_grid_limit": {
+        "name": "Bezugsgrenze für Spitzenabfang"
+      },
+      "peak_shaving_soc_threshold": {
+        "name": "Ladezustand-Schwelle für Spitzenabfang"
       }
     }
   }

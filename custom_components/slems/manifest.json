@@ -2,6 +2,7 @@
   "domain": "slems",
   "name": "SLEMS",
   "after_dependencies": [
+    "energy",
     "recorder"
   ],
   "codeowners": [],

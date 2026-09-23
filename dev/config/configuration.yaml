@@ -6,7 +6,7 @@ logger:
   logs:
     custom_components.slems: debug
 
-# Simulated measurements. Adjust the sliders to play with grid and PV values.
+# Simulated measurements. Adjust the sliders to play with the values.
 input_number:
   sim_grid_power:
     name: Simulated grid power
@@ -22,8 +22,16 @@ input_number:
     step: 50
     unit_of_measurement: W
     initial: 1500
-  sim_consumer_power:
-    name: Simulated consumer power setpoint
+  sim_heat_pump_power:
+    name: Simulated heat pump power
+    min: 0
+    max: 5000
+    step: 50
+    unit_of_measurement: W
+    initial: 800
+  # Power set point of the heating rod, controlled by SLEMS.
+  sim_heating_rod_setpoint:
+    name: Heating rod set point
     min: 0
     max: 3000
     step: 100
@@ -31,10 +39,8 @@ input_number:
     initial: 0
 
 input_boolean:
-  sim_consumer_switch:
-    name: Simulated on/off consumer
-  sim_consumer_blocked:
-    name: Simulated consumer externally blocked
+  sim_heating_rod_blocked:
+    name: Heating rod externally blocked
 
 template:
   - sensor:
@@ -50,3 +56,31 @@ template:
         device_class: power
         state_class: measurement
         state: "{{ states('input_number.sim_pv_power') | float(0) }}"
+      - name: Heat pump power
+        unique_id: sim_heat_pump_power
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        state: "{{ states('input_number.sim_heat_pump_power') | float(0) }}"
+      - name: Heating rod power
+        unique_id: sim_heating_rod_power
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        state: >-
+          {{ 0 if is_state('input_boolean.sim_heating_rod_blocked', 'on')
+             else states('input_number.sim_heating_rod_setpoint') | float(0) }}
+
+sensor:
+  - platform: integration
+    source: sensor.heat_pump_power
+    name: Heat pump energy
+    unique_id: sim_heat_pump_energy
+    unit_prefix: k
+    method: left
+  - platform: integration
+    source: sensor.heating_rod_power
+    name: Heating rod energy
+    unique_id: sim_heating_rod_energy
+    unit_prefix: k
+    method: left
