@@ -312,6 +312,24 @@ ab, an Tagen mit weniger Überschuss einen deutlich größeren Anteil.
   Spitzenabfang* liegt, entladen die Batterien nur noch, um den Netzbezug
   unter der *Bezugsgrenze für Spitzenabfang* zu halten.
 
+## Sprache
+
+SLEMS gibt es auf Deutsch und Englisch. Home Assistant verwendet dafür zwei
+verschiedene Spracheinstellungen:
+
+- **Namen der Entities** (z. B. *Hausverbrauch*, *Betriebsmodus*, auch die
+  Kennzahlen im Dashboard) folgen der **Serversprache** unter
+  *Einstellungen → System → Allgemein*. Sie werden beim Laden der Integration
+  gesetzt; nach einer Änderung SLEMS neu laden.
+- Dialoge, Menüs, Zustände (z. B. *Simulation (nur lesend)*) und die Texte des
+  Dashboards folgen der Sprache im **Benutzerprofil**.
+
+Bleiben Namen nach einem Update von SLEMS in der falschen Sprache, Home
+Assistant neu starten (Übersetzungen werden nur beim Start gelesen) und den
+Browser ohne Cache neu laden. Entity-IDs wie `sensor.slems_house_consumption`
+behalten die Sprache, in der sie angelegt wurden; nur die angezeigten Namen
+ändern sich.
+
 ## Roadmap
 
 1. Tests am echten System (siehe offene Punkte in developers.md)

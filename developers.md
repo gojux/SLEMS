@@ -469,8 +469,39 @@ the hot water share `a` independent of the temperature term.
 Parameters: base load half-life 14 days over 8 weeks, correction from the
 last 72 h limited to 0.8…1.25; heat pump half-life 21 days over 365 days,
 heating limit chosen from 10…20 °C, correction from the last 3 days limited to
-±30 %. Only numpy (bundled with Home Assistant) is used. Holidays are treated
-as workdays (no holiday calendar yet).
+±30 %. Only numpy (bundled with Home Assistant) is used.
+
+#### Holidays (open)
+
+The day type is derived from the weekday only (`models.day_type`): Monday to
+Friday are workdays, Saturday and Sunday weekend. Public holidays are
+therefore forecast with the workday profile, and past holidays are learned as
+workdays.
+
+Impact: on a holiday the forecast follows the workday shape (e.g. lower
+consumption during working hours) although the household behaves like on a
+weekend; the short-term correction (last 72 h) partly compensates on the
+following days. Each holiday also slightly distorts the workday profile it is
+learned into (weighted by age, so the effect fades).
+
+Options, in order of preference:
+
+1. **Workday binary sensor** (HA integration *Workday*, configured for
+   Austria / Vorarlberg): optional setting in the system options. Its state
+   covers today; for tomorrow the integration offers the action
+   `workday.check_date`. History would have to come from the recorder states
+   of that sensor, which are only kept for the recorder's purge period.
+2. **`holidays` Python package** (already a dependency of Home Assistant via
+   the Workday integration): compute holidays for past and future days
+   directly from country and subdivision (derived from the HA location, or a
+   setting). No history problem; covers training and forecast alike.
+3. **Calendar entity** (e.g. a holiday or school holiday calendar): most
+   flexible, also for school holidays, but the most work for the user.
+
+Recommended: option 2 for the training data and the forecast, with the
+country/subdivision taken from the HA configuration and overridable in the
+options; holidays then use the weekend profile. School holidays or other
+special days could later come from a calendar entity (option 3).
 
 ## Marstek Venus E 3.0
 

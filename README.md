@@ -301,6 +301,23 @@ a much larger share.
   batteries only discharge to keep the grid import below *Peak shaving grid
   import limit*.
 
+## Language
+
+SLEMS is available in English and German. Home Assistant uses two different
+language settings:
+
+- **Entity names** (e.g. *House consumption*, *Operating mode*, also the key
+  figures in the dashboard) follow the **server language** under
+  *Settings → System → General*. They are set when the integration loads, so
+  reload SLEMS after changing it.
+- Dialogs, menus, states (e.g. *Simulation (read-only)*) and the texts of the
+  dashboard follow the language in the **user profile**.
+
+If names stay in the wrong language after an update of SLEMS, restart Home
+Assistant (translations are only read at startup) and reload the browser
+without cache. Entity IDs such as `sensor.slems_house_consumption` keep the
+language of their creation; only the displayed names change.
+
 ## Roadmap
 
 1. Tests on the real system (see open points in developers.md)
