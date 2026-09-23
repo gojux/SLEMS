@@ -7,10 +7,14 @@ mode the force mode and set points drive the AC power; the DC battery power
 differs by the conversion losses (15 W + 4 % + 1e-5 * P², like the SLEMS default
 model); the state of charge is integrated once per second.
 
-Like the real device it accepts only one TCP connection at a time.
+Like the real device it accepts only one TCP connection at a time. A second,
+read-only port (``SIM_TAP_PORT``) serves the same registers to any number of
+clients; the dev instance reads the AC power there every second to build a
+realistic smart meter.
 
 Environment variables:
     SIM_PORT          TCP port (default 502)
+    SIM_TAP_PORT      read-only TCP port (default 5020)
     SIM_CAPACITY_WH   usable capacity (default 5120)
     SIM_INITIAL_SOC   initial state of charge in % (default 50)
 """
@@ -107,9 +111,11 @@ def _split_32(value: int) -> list[int]:
     return [(value >> 16) & 0xFFFF, value & 0xFFFF]
 
 
-def handle_pdu(model: VenusModel, pdu: bytes) -> bytes:
+def handle_pdu(model: VenusModel, pdu: bytes, read_only: bool = False) -> bytes:
     """Process one request PDU and return the response PDU."""
     function = pdu[0]
+    if read_only and function != 3:
+        return bytes((function | 0x80, EXC_ILLEGAL_FUNCTION))
     try:
         if function == 3:
             address, count = struct.unpack(">HH", pdu[1:5])
@@ -132,28 +138,31 @@ def handle_pdu(model: VenusModel, pdu: bytes) -> bytes:
 
 
 class ModbusServer:
-    """Modbus TCP server accepting a single client like the real battery."""
+    """Modbus TCP server; the control port accepts a single client like the real battery."""
 
-    def __init__(self, model: VenusModel) -> None:
+    def __init__(self, model: VenusModel, *, single_client: bool, read_only: bool) -> None:
         self._model = model
+        self._single_client = single_client
+        self._read_only = read_only
         self._busy = False
 
     async def handle_client(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         peer = writer.get_extra_info("peername")
-        if self._busy:
+        if self._single_client and self._busy:
             _LOGGER.warning("Rejecting second connection from %s", peer)
             writer.close()
             return
-        self._busy = True
-        _LOGGER.info("Client connected: %s", peer)
+        if self._single_client:
+            self._busy = True
+            _LOGGER.info("Client connected: %s", peer)
         try:
             while True:
                 header = await reader.readexactly(7)
                 transaction_id, protocol_id, length, unit_id = struct.unpack(">HHHB", header)
                 pdu = await reader.readexactly(length - 1)
-                response = handle_pdu(self._model, pdu)
+                response = handle_pdu(self._model, pdu, self._read_only)
                 writer.write(
                     struct.pack(">HHHB", transaction_id, protocol_id, len(response) + 1, unit_id)
                     + response
@@ -162,9 +171,10 @@ class ModbusServer:
         except (asyncio.IncompleteReadError, ConnectionError):
             pass
         finally:
-            self._busy = False
             writer.close()
-            _LOGGER.info("Client disconnected: %s", peer)
+            if self._single_client:
+                self._busy = False
+                _LOGGER.info("Client disconnected: %s", peer)
 
 
 async def run_model(model: VenusModel) -> None:
@@ -180,11 +190,16 @@ async def main() -> None:
         float(os.environ.get("SIM_CAPACITY_WH", "5120")),
         float(os.environ.get("SIM_INITIAL_SOC", "50")),
     )
-    server = ModbusServer(model)
-    tcp_server = await asyncio.start_server(server.handle_client, "0.0.0.0", port)
-    _LOGGER.info("Venus E 3.0 simulator listening on port %d", port)
-    async with tcp_server:
-        await asyncio.gather(tcp_server.serve_forever(), run_model(model))
+    tap_port = int(os.environ.get("SIM_TAP_PORT", "5020"))
+    control = ModbusServer(model, single_client=True, read_only=False)
+    tap = ModbusServer(model, single_client=False, read_only=True)
+    control_server = await asyncio.start_server(control.handle_client, "0.0.0.0", port)
+    tap_server = await asyncio.start_server(tap.handle_client, "0.0.0.0", tap_port)
+    _LOGGER.info("Venus E 3.0 simulator listening on port %d (read-only tap %d)", port, tap_port)
+    async with control_server, tap_server:
+        await asyncio.gather(
+            control_server.serve_forever(), tap_server.serve_forever(), run_model(model)
+        )
 
 
 if __name__ == "__main__":

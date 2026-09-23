@@ -12,6 +12,7 @@ from homeassistant.core import Event, EventStateChangedData, HomeAssistant, call
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import (
     async_track_state_change_event,
+    async_track_state_report_event,
     async_track_time_change,
 )
 from homeassistant.helpers.storage import Store
@@ -44,7 +45,8 @@ from .const import (
     DEFAULT_DISCHARGE_GRID_TARGET_W,
     DEFAULT_DISCHARGE_MAX_GRID_EXPORT_W,
     DEFAULT_NIGHT_RESERVE_PCT,
-    DEFAULT_CONTROL_SETTLE_S,
+    DEFAULT_CONTROL_GAIN,
+    DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_ROTATION_MIN_INTERVAL_MIN,
     DEFAULT_ROTATION_RAMP_MAX_S,
     DEFAULT_ROTATION_RAMP_RATE_W_PER_S,
@@ -129,8 +131,10 @@ class ControlSettings:
     rotation_min_interval_min: float = DEFAULT_ROTATION_MIN_INTERVAL_MIN
     rotation_ramp_rate_w_per_s: float = DEFAULT_ROTATION_RAMP_RATE_W_PER_S
     rotation_ramp_max_s: float = DEFAULT_ROTATION_RAMP_MAX_S
-    # Wait time after a command until the grid meter shows its effect.
-    control_settle_s: float = DEFAULT_CONTROL_SETTLE_S
+    # Minimum time between two control cycles.
+    control_interval_s: float = DEFAULT_CONTROL_INTERVAL_S
+    # Share of the remaining deviation corrected per control cycle.
+    control_gain: float = DEFAULT_CONTROL_GAIN
     night_discharge: bool = False
     # Night discharge reserve in % of tomorrow's forecast daily consumption.
     night_reserve_pct: float = DEFAULT_NIGHT_RESERVE_PCT
@@ -306,6 +310,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.config_entry.async_on_unload(
             async_track_state_change_event(self.hass, grid_entity, self._on_grid_change)
         )
+        self.config_entry.async_on_unload(
+            async_track_state_report_event(self.hass, grid_entity, self._on_grid_report)
+        )
         # The forecast is refitted every hour; the first run must not delay setup.
         self.config_entry.async_on_unload(
             async_track_time_change(
@@ -370,16 +377,25 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
 
     @callback
     def _on_grid_change(self, event: Event[EventStateChangedData]) -> None:
-        self._add_grid_sample(event.data["new_state"])
+        self.controller.observe_meter_report()
+        grid = self._add_grid_sample(event.data["new_state"])
+        if grid is not None:
+            self.controller.observe_grid(grid)
         self.controller.request()
 
-    def _add_grid_sample(self, state) -> None:
+    @callback
+    def _on_grid_report(self, _event: Event) -> None:
+        # Reported without a change of the value: only the cadence is new.
+        self.controller.observe_meter_report()
+
+    def _add_grid_sample(self, state) -> float | None:
         grid = state_as_watts(state)
         if grid is None:
-            return
+            return None
         if self._config.get(CONF_GRID_POWER_INVERTED, False):
             grid = -grid
         self._grid_filter.add(time.monotonic(), grid)
+        return grid
 
     def _data_to_store(self) -> dict:
         return {
@@ -432,6 +448,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
 
         snapshot.saturated = self.controller.saturated
+        self.controller.observe_consumers(snapshot)
         mode = self.settings.operating_mode
         if mode is OperatingMode.ACTIVE and self.data is not None:
             # In active mode only the controller plans (it owns the state of
@@ -485,8 +502,20 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             charge_efficiency=weighted_eff / capacity,
         )
 
-    def plan(self, snapshot: SystemSnapshot, wall_now: datetime, now: float) -> None:
-        """Compute allocation and distribution for ``snapshot`` (in place)."""
+    def plan(
+        self,
+        snapshot: SystemSnapshot,
+        wall_now: datetime,
+        now: float,
+        *,
+        previous_total_w: float | None = None,
+        gain: float = 1.0,
+    ) -> None:
+        """Compute allocation and distribution for ``snapshot`` (in place).
+
+        With ``previous_total_w`` the total battery power only moves by
+        ``gain`` of the difference towards the allocation (damped correction).
+        """
         if snapshot.grid_power_filtered_w is None:
             return
         controlled_w = snapshot.controlled_consumer_power_w()
@@ -548,6 +577,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             snapshot.expected_surplus_wh,
             snapshot.night_discharge.power_w if snapshot.night_discharge else None,
         )
+        if previous_total_w is not None:
+            allocation.battery_power_w = previous_total_w + gain * (
+                allocation.battery_power_w - previous_total_w
+            )
         if snapshot.grid_power_w is not None:
             allocation.battery_power_w = limit_discharge_export(
                 allocation.battery_power_w,
@@ -571,12 +604,20 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
 
     def fast_snapshot(
-        self, commanded_w: dict[str, float], saturated: frozenset[str]
+        self,
+        battery_power_w: dict[str, float],
+        saturated: frozenset[str],
+        *,
+        previous_total_w: float | None,
+        gain: float,
     ) -> SystemSnapshot | None:
         """Snapshot for the real-time controller without polling the batteries.
 
-        Measurements come from the current HA states, battery powers are the
-        last commanded values (what the batteries deliver after a moment).
+        Measurements come from the current HA states. ``battery_power_w`` are
+        the battery powers the grid meter currently reflects (commands older
+        than the response time); batteries without one use their telemetry.
+        The planned total battery power moves from ``previous_total_w`` by
+        ``gain`` of the difference.
         """
         if self.data is None:
             return None
@@ -588,7 +629,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         batteries = {
             battery_id: replace(
                 telemetry,
-                ac_power_w=commanded_w.get(battery_id, telemetry.grid_side_power_w),
+                ac_power_w=battery_power_w.get(battery_id, telemetry.grid_side_power_w),
             )
             for battery_id, telemetry in self.data.batteries.items()
         }
@@ -607,7 +648,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
         if pv_entity := config.get(CONF_PV_POWER_ENTITY):
             snapshot.pv_power_w = state_as_watts(self.hass.states.get(pv_entity))
-        self.plan(snapshot, dt_util.now(), now)
+        self.plan(snapshot, dt_util.now(), now, previous_total_w=previous_total_w, gain=gain)
         return snapshot
 
     @callback

@@ -172,13 +172,17 @@ The entity *SLEMS Operating mode* switches between:
 - **Active** – plans are executed: SLEMS sends set points to the batteries
   and switches/sets the consumers. It reacts to every change of the smart
   meter. The entity *Control status* shows whether the control is active or
-  paused because the smart meter did not report for 60 s (the batteries then
-  follow their own logic until the meter is back).
+  paused because the smart meter did not report for a while (60 s or ten
+  update intervals; the batteries then follow their own logic until the meter
+  is back).
 
-Before switching to *active*, set *Control settle time* (default 5 s): the
-time between a command and the moment the smart meter shows its effect,
-roughly the meter's update interval plus about one second. If the grid power
-swings back and forth, increase it.
+SLEMS learns the update interval of the smart meter and the response time of
+the batteries and consumers by itself (diagnostic sensors *Smart meter update
+interval* and *Battery response time*, attribute *response_time_s* of a
+consumer's *Planned power*). Each control cycle corrects only a share of the
+deviation: *Control gain* (default 0.5). If the grid power swings back and
+forth, reduce it; *Control interval* (default 1 s) limits how often SLEMS
+sends commands.
 
 ### Further settings (entities)
 

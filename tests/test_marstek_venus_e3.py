@@ -117,3 +117,17 @@ def test_power_limits_are_capped_to_hardware() -> None:
     driver = make_driver(FakeLink(), max_power=5000)
     assert driver.capabilities.max_charge_power_w == 2500
     assert driver.capabilities.max_discharge_power_w == 2500
+
+
+async def test_unchanged_registers_are_not_written_again() -> None:
+    link = FakeLink()
+    driver = make_driver(link)
+    await driver.apply_power(-800)
+    assert len(link.writes) == 4
+    link.writes.clear()
+    await driver.apply_power(-900)
+    # Only the discharge set point changed.
+    assert link.writes == [(REG_SET_DISCHARGE_POWER, 900)]
+    link.writes.clear()
+    await driver.apply_power(-900, refresh=True)
+    assert len(link.writes) == 4

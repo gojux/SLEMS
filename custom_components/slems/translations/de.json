@@ -317,6 +317,12 @@
           "active": "Aktiv",
           "grid_stale": "Smart Meter ohne aktuelle Werte"
         }
+      },
+      "meter_interval": {
+        "name": "Aktualisierungsintervall Smart Meter"
+      },
+      "battery_response_time": {
+        "name": "Reaktionszeit Batterie"
       }
     },
     "switch": {
@@ -370,14 +376,17 @@
       "rotation_min_interval": {
         "name": "Mindestabstand Batteriewechsel"
       },
-      "control_settle": {
-        "name": "Beruhigungszeit Regelung"
-      },
       "rotation_ramp_rate": {
         "name": "Rampe Batteriewechsel"
       },
       "rotation_ramp_max": {
         "name": "Maximale Übergangszeit Batteriewechsel"
+      },
+      "control_interval": {
+        "name": "Regelintervall"
+      },
+      "control_gain": {
+        "name": "Regelverstärkung"
       }
     },
     "binary_sensor": {

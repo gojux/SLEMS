@@ -47,12 +47,12 @@ input_boolean:
 
 template:
   # Closed loop: the grid power results from load, PV and the AC power of the
-  # (simulated) batteries (+discharge), so SLEMS sees the effect of its own
-  # commands. Updated every 2 s like a real meter. Assumes the batteries are
-  # named "Venus 1" / "Venus 2".
+  # simulated batteries (+discharge, read every second from their read-only
+  # tap port), so SLEMS sees the effect of its own commands. Updated every
+  # second like a fast real meter.
   - trigger:
       - trigger: time_pattern
-        seconds: "/2"
+        seconds: "/1"
     sensor:
       - name: Smart meter power
         unique_id: sim_smart_meter_power
@@ -64,8 +64,8 @@ template:
               + states('sensor.heat_pump_power') | float(0)
               + states('sensor.heating_rod_power') | float(0)
               - states('input_number.sim_pv_power') | float(0)
-              - states('sensor.venus_1_ac_power') | float(0)
-              - states('sensor.venus_2_ac_power') | float(0)) | round(0) }}
+              - states('sensor.sim_venus_1_ac_power') | float(0)
+              - states('sensor.sim_venus_2_ac_power') | float(0)) | round(0) }}
   - sensor:
       - name: PV power
         unique_id: sim_pv_power
@@ -101,3 +101,34 @@ sensor:
     unique_id: sim_heating_rod_energy
     unit_prefix: k
     method: left
+
+# Read-only access to the simulated batteries for the closed-loop meter.
+modbus:
+  - name: venus_sim_1_tap
+    type: tcp
+    host: venus-sim-1
+    port: 5020
+    sensors:
+      - name: Sim Venus 1 AC power
+        unique_id: sim_venus_1_ac_power
+        device_address: 1
+        address: 30006
+        input_type: holding
+        data_type: int16
+        unit_of_measurement: W
+        device_class: power
+        scan_interval: 1
+  - name: venus_sim_2_tap
+    type: tcp
+    host: venus-sim-2
+    port: 5020
+    sensors:
+      - name: Sim Venus 2 AC power
+        unique_id: sim_venus_2_ac_power
+        device_address: 1
+        address: 30006
+        input_type: holding
+        data_type: int16
+        unit_of_measurement: W
+        device_class: power
+        scan_interval: 1

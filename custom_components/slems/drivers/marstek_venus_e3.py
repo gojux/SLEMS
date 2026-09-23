@@ -102,6 +102,9 @@ class MarstekVenusE3Driver(BatteryDriver):
             timeout_s=TIMEOUT_S,
             patch_v3_frames=True,
         )
+        # Last value written per control register; unchanged values are not
+        # written again (each write costs 150 ms on the v3 firmware).
+        self._written: dict[int, int] = {}
         self._capabilities = BatteryCapabilities(
             capacity_wh=capacity_wh,
             max_charge_power_w=min(max_charge_power_w, HARDWARE_MAX_POWER_W),
@@ -126,6 +129,7 @@ class MarstekVenusE3Driver(BatteryDriver):
         )
 
     async def connect(self) -> None:
+        self._written.clear()
         if not await self._link.connect():
             raise BatteryDriverError("Cannot connect to Marstek Venus E 3.0")
 
@@ -168,8 +172,10 @@ class MarstekVenusE3Driver(BatteryDriver):
             extra=extra,
         )
 
-    async def apply_power(self, net_power_w: int) -> bool:
+    async def apply_power(self, net_power_w: int, *, refresh: bool = False) -> bool:
         await self._ensure_connected()
+        if refresh:
+            self._written.clear()
         if net_power_w > 0:
             charge = min(net_power_w, self._capabilities.max_charge_power_w)
             discharge = 0
@@ -182,19 +188,29 @@ class MarstekVenusE3Driver(BatteryDriver):
             charge = discharge = 0
             force_mode = FORCE_NONE
 
-        # RS485 control can drop after a reconnect or a BMS cut-off; enabling it
-        # again is idempotent.
-        ok = await self._link.write(REG_RS485_CONTROL, RS485_ENABLE)
-        # Zero the opposite direction first so there is never a moment with both
-        # set points active.
-        ok &= await self._link.write(REG_SET_DISCHARGE_POWER, discharge)
-        ok &= await self._link.write(REG_SET_CHARGE_POWER, charge)
-        ok &= await self._link.write(REG_FORCE_MODE, force_mode)
+        # RS485 control can drop after a reconnect or a BMS cut-off; it is
+        # enabled again with every refresh. The set points come before the
+        # force mode so a new direction starts with valid values.
+        ok = True
+        for register, value in (
+            (REG_RS485_CONTROL, RS485_ENABLE),
+            (REG_SET_DISCHARGE_POWER, discharge),
+            (REG_SET_CHARGE_POWER, charge),
+            (REG_FORCE_MODE, force_mode),
+        ):
+            if self._written.get(register) == value:
+                continue
+            if await self._link.write(register, value):
+                self._written[register] = value
+            else:
+                self._written.pop(register, None)
+                ok = False
         if not ok:
             _LOGGER.warning("Setting battery power to %d W failed", net_power_w)
         return ok
 
     async def release_control(self) -> None:
+        self._written.clear()
         if not self._link.connected:
             return
         await self._link.write(REG_SET_DISCHARGE_POWER, 0)

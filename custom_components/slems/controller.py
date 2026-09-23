@@ -1,20 +1,24 @@
 """Real-time controller: executes the plan in operating mode *active*.
 
 It is the only component that sends commands. A control cycle runs on every
-change of the grid meter (at most every ``MIN_INTERVAL_S``) and after every
-coordinator update. It plans with the current measurements and the last
-commanded battery powers, so it does not wait for the slow battery polling.
+change of the grid meter and after every coordinator update, at most every
+*control interval* (setting). It plans with the current measurements and does
+not wait for the slow battery polling.
 
-After a command the controller waits for the settle time (setting) before it
-corrects again: until the grid meter shows the effect of the command, the
-measured grid power and the assumed battery power do not match, and
-correcting in between makes the loop oscillate.
+Two measures keep the loop stable although the meter shows the effect of a
+command only after a while:
+* The battery power assumed in the energy balance is the one the meter can
+  already see: the last command older than the learned battery response time
+  (see ``response``). Newer commands are not counted twice.
+* Each cycle corrects only a share of the remaining deviation (*control gain*,
+  setting), like a proportional controller.
 
 Safety:
-* Without a fresh grid meter value for ``GRID_STALE_S`` all batteries are
-  handed back to their internal logic until the meter reports again.
+* Without a report of the grid meter for ``max(GRID_STALE_S, 10 × meter
+  interval)`` all batteries are handed back to their internal logic until the
+  meter reports again.
 * Battery commands are only sent when the set point changes by more than a
-  dead band, and repeated as keep-alive.
+  dead band, and repeated completely as keep-alive.
 * Consumers get at most one command per ``CONSUMER_COMMAND_INTERVAL_S``.
 * A consumer that draws (almost) nothing although commanded, e.g. because its
   own thermostat switched off, is treated as saturated for
@@ -32,26 +36,36 @@ from typing import TYPE_CHECKING
 from homeassistant.const import ATTR_ENTITY_ID, STATE_ON
 from homeassistant.core import CALLBACK_TYPE, callback
 from homeassistant.helpers.event import async_call_later
-from homeassistant.util import dt as dt_util
 
 from .battery_distribution import LEAVE_RAMP_S
 from .const import ControlMode, OperatingMode
+from .response import (
+    DEFAULT_BATTERY_RESPONSE_S,
+    DEFAULT_CONSUMER_RESPONSE_S,
+    MeterCadence,
+    StepResponse,
+)
 from .util import state_as_float
 
 if TYPE_CHECKING:
-    from .coordinator import SlemsCoordinator, SystemSnapshot
+    from .coordinator import BatteryRuntime, SlemsCoordinator, SystemSnapshot
 
 _LOGGER = logging.getLogger(__name__)
 
-MIN_INTERVAL_S = 2.0
 GRID_STALE_S = 60.0
 BATTERY_DEADBAND_W = 25.0
 BATTERY_KEEPALIVE_S = 60.0
+# Commands kept per battery to know which one the meter already shows.
+BATTERY_HISTORY = 8
 CONSUMER_DEADBAND_W = 50.0
 CONSUMER_COMMAND_INTERVAL_S = 10.0
+CONSUMER_MIN_STEP_W = 100.0
 SATURATION_RATIO = 0.1
-SATURATION_DELAY_S = 120.0
 SATURATION_HOLD_S = 900.0
+# Saturation is assumed after this many consumer response times (bounded).
+SATURATION_RESPONSE_FACTOR = 5
+SATURATION_DELAY_RANGE_S = (30.0, 300.0)
+RAMP_STEP_S = 1.0
 
 
 class ControlStatus(StrEnum):
@@ -73,14 +87,47 @@ class RealTimeController:
         self._pending: CALLBACK_TYPE | None = None
         self._pending_at = 0.0
         self._rerun = False
-        # battery id -> (commanded power, monotonic time of the command)
-        self._battery_commands: dict[str, tuple[float, float]] = {}
+        # battery id -> [(monotonic time, commanded power)], oldest first
+        self._battery_history: dict[str, list[tuple[float, float]]] = {}
+        # battery id -> monotonic time of the last complete write
+        self._battery_refreshed: dict[str, float] = {}
         # consumer id -> (commanded power, monotonic time of the command)
         self._consumer_commands: dict[str, tuple[float, float]] = {}
         # consumer id -> monotonic time until which it counts as saturated
         self._saturated_until: dict[str, float] = {}
-        self._last_command = 0.0
+        self._last_grid_w: float | None = None
+        self.meter = MeterCadence()
+        self.battery_response = StepResponse(DEFAULT_BATTERY_RESPONSE_S)
+        self.consumer_response: dict[str, StepResponse] = {}
         self.status = ControlStatus.INACTIVE
+
+    # --- observations ---------------------------------------------------------
+
+    @callback
+    def observe_meter_report(self) -> None:
+        """The grid meter reported a value (changed or not)."""
+        self.meter.report(time.monotonic())
+
+    @callback
+    def observe_grid(self, grid_w: float) -> None:
+        """A new grid power value arrived."""
+        self._last_grid_w = grid_w
+        self.battery_response.sample(time.monotonic(), grid_w)
+
+    @callback
+    def observe_consumers(self, snapshot: SystemSnapshot) -> None:
+        """Feed the consumers' measured power into their response learners."""
+        now = time.monotonic()
+        for subentry_id, learner in self.consumer_response.items():
+            state = snapshot.consumers.get(subentry_id)
+            if state is not None and state.power_w is not None:
+                learner.sample(now, state.power_w)
+
+    def consumer_response_s(self, subentry_id: str) -> float | None:
+        learner = self.consumer_response.get(subentry_id)
+        return learner.response_s if learner else None
+
+    # --- scheduling -----------------------------------------------------------
 
     @property
     def saturated(self) -> frozenset[str]:
@@ -93,27 +140,19 @@ class RealTimeController:
 
     @callback
     def request(self) -> None:
-        """Ask for a control cycle as soon as the minimum interval allows."""
+        """Ask for a control cycle as soon as the control interval allows."""
         if not self._active:
             self.status = ControlStatus.INACTIVE
             # Batteries were released; the next activation must send again.
-            self._battery_commands.clear()
+            self._battery_history.clear()
+            self._battery_refreshed.clear()
             self._consumer_commands.clear()
             return
         if self._lock.locked():
             self._rerun = True
             return
         now = time.monotonic()
-        settle = self._coordinator.settings.control_settle_s
-        if any(
-            b.leaving_until is not None and now <= b.leaving_until + MIN_INTERVAL_S
-            for b in self._coordinator.batteries
-        ):
-            # Moving power between batteries keeps the sum, the meter does not
-            # need to settle; follow the ramp-out closely.
-            settle = 0.0
-        min_interval = 0.0 if settle == 0.0 else MIN_INTERVAL_S
-        wait = max(min_interval - (now - self._last_run), settle - (now - self._last_command))
+        wait = self._coordinator.settings.control_interval_s - (now - self._last_run)
         if self._pending is not None:
             if now + wait >= self._pending_at:
                 return
@@ -138,14 +177,14 @@ class RealTimeController:
         )
 
     @callback
-    def disable_battery(self, battery) -> bool:
+    def disable_battery(self, battery: BatteryRuntime) -> bool:
         """Start ramping out a discharging battery; False if not applicable.
 
         Only in active mode and only while SLEMS lets the battery discharge;
         otherwise the caller releases the battery at once.
         """
-        commanded = self._battery_commands.get(battery.subentry_id)
-        if not self._active or commanded is None or commanded[0] >= 0:
+        latest = self._latest_command(battery.subentry_id)
+        if not self._active or latest is None or latest >= 0:
             return False
         battery.leaving_until = time.monotonic() + LEAVE_RAMP_S
         self.request()
@@ -160,6 +199,8 @@ class RealTimeController:
         if self._pending is not None:
             self._pending()
             self._pending = None
+
+    # --- control cycle --------------------------------------------------------
 
     async def _async_run(self) -> None:
         async with self._lock:
@@ -181,7 +222,8 @@ class RealTimeController:
             if self.status is not ControlStatus.GRID_STALE:
                 _LOGGER.warning("Grid meter stale, handing batteries back to their own logic")
                 await coordinator.async_release_batteries()
-                self._battery_commands.clear()
+                self._battery_history.clear()
+                self._battery_refreshed.clear()
             self.status = ControlStatus.GRID_STALE
             return
         self.status = ControlStatus.ACTIVE
@@ -190,80 +232,123 @@ class RealTimeController:
             # Only the handover in this cycle; the meter first has to catch up.
             return
 
-        commanded = {battery_id: power for battery_id, (power, _) in self._battery_commands.items()}
-        snapshot = coordinator.fast_snapshot(commanded, self.saturated)
+        seen_before = start - self.battery_response.value
+        seen = {
+            battery_id: power
+            for battery_id in self._battery_history
+            if (power := self._seen_command(battery_id, seen_before)) is not None
+        }
+        latest_total = sum(
+            power
+            for battery_id in self._battery_history
+            if (power := self._latest_command(battery_id)) is not None
+        )
+        snapshot = coordinator.fast_snapshot(
+            seen,
+            self.saturated,
+            previous_total_w=latest_total if self._battery_history else None,
+            gain=coordinator.settings.control_gain,
+        )
         if snapshot is None or snapshot.distribution is None or snapshot.allocation is None:
             return
-        await self._async_apply_batteries(snapshot)
+        await self._async_apply_batteries(snapshot, latest_total)
         await self._async_apply_consumers(snapshot)
+        self.observe_consumers(snapshot)
         coordinator.publish(snapshot)
 
         leaving = [b.leaving_until for b in coordinator.batteries if b.leaving_until is not None]
         if leaving:
             # Follow a ramp-out step by step, even without meter updates: every
-            # MIN_INTERVAL_S from the start of this cycle, the last step exactly
+            # RAMP_STEP_S from the start of this cycle, the last step exactly
             # at the end of the ramp, then the release.
             end = min(leaving)
-            due = min(start + MIN_INTERVAL_S, end) if start < end else time.monotonic()
+            due = min(start + RAMP_STEP_S, end) if start < end else time.monotonic()
             async_call_later(self._hass, max(0.05, due - time.monotonic()), self._on_ramp_timer)
+
+    def _grid_stale(self) -> bool:
+        state = self._hass.states.get(self._coordinator.grid_entity_id)
+        if state is None or state_as_float(state) is None:
+            return True
+        age = time.time() - state.last_reported.timestamp()
+        return age > max(GRID_STALE_S, 10 * self.meter.value)
+
+    # --- batteries ------------------------------------------------------------
+
+    def _latest_command(self, battery_id: str) -> float | None:
+        history = self._battery_history.get(battery_id)
+        return history[-1][1] if history else None
+
+    def _seen_command(self, battery_id: str, before: float) -> float | None:
+        """Last command the meter can already show (issued before ``before``)."""
+        for issued, power in reversed(self._battery_history.get(battery_id, [])):
+            if issued <= before:
+                return power
+        return None
+
+    def _record_command(self, battery_id: str, power: float, now: float) -> None:
+        history = self._battery_history.setdefault(battery_id, [])
+        history.append((now, power))
+        del history[:-BATTERY_HISTORY]
 
     async def _async_release_ramped_out(self) -> bool:
         """Release batteries whose ramp-out ended and that got 0 W; True if any."""
         now = time.monotonic()
         released = False
         for battery in self._coordinator.batteries:
-            previous = self._battery_commands.get(battery.subentry_id)
             if (
                 battery.leaving_until is not None
                 and now >= battery.leaving_until
-                and previous is not None
-                and previous[0] == 0
+                and self._latest_command(battery.subentry_id) == 0
             ):
                 _LOGGER.debug("Battery %s: ramp-out finished, released", battery.name)
                 battery.leaving_until = None
-                self._battery_commands.pop(battery.subentry_id, None)
+                self._battery_history.pop(battery.subentry_id, None)
+                self._battery_refreshed.pop(battery.subentry_id, None)
                 await battery.driver.release_control()
                 released = True
         return released
 
-    def _grid_stale(self) -> bool:
-        state = self._hass.states.get(self._coordinator.grid_entity_id)
-        if state is None or state_as_float(state) is None:
-            return True
-        age = (dt_util.utcnow() - state.last_reported).total_seconds()
-        return age > GRID_STALE_S
-
-    async def _async_apply_batteries(self, snapshot: SystemSnapshot) -> None:
+    async def _async_apply_batteries(
+        self, snapshot: SystemSnapshot, previous_total: float
+    ) -> None:
         now = time.monotonic()
 
-        def magnitude_change(battery) -> float:
+        def magnitude_change(battery: BatteryRuntime) -> float:
             target = abs(snapshot.distribution.power_w.get(battery.subentry_id, 0.0))
-            previous = self._battery_commands.get(battery.subentry_id)
-            return target - (abs(previous[0]) if previous else 0.0)
+            latest = self._latest_command(battery.subentry_id)
+            return target - (abs(latest) if latest is not None else 0.0)
 
+        new_total = 0.0
+        changed = False
         # Batteries that reduce their power are written first: while power
         # moves between batteries, the short gap between the writes then
         # causes a little import instead of feeding battery energy into the grid.
         for battery in sorted(self._coordinator.batteries, key=magnitude_change):
-            if not battery.driver.capabilities.controllable:
+            if not battery.participating or not battery.driver.capabilities.controllable:
                 continue
-            if not battery.participating:
-                continue
-            previous = self._battery_commands.get(battery.subentry_id)
             target = round(snapshot.distribution.power_w.get(battery.subentry_id, 0.0))
-            if previous is not None:
-                power, sent = previous
-                same_direction = (power > 0) == (target > 0) and (power < 0) == (target < 0)
-                if (
-                    abs(power - target) < BATTERY_DEADBAND_W
-                    and same_direction
-                    and now - sent < BATTERY_KEEPALIVE_S
-                ):
+            latest = self._latest_command(battery.subentry_id)
+            last_refresh = self._battery_refreshed.get(battery.subentry_id, 0.0)
+            refresh = now - last_refresh >= BATTERY_KEEPALIVE_S
+            if latest is not None and not refresh:
+                same_direction = (latest > 0) == (target > 0) and (latest < 0) == (target < 0)
+                if abs(latest - target) < BATTERY_DEADBAND_W and same_direction:
+                    new_total += latest
                     continue
             _LOGGER.debug("Battery %s: set point %d W", battery.name, target)
-            if await battery.driver.apply_power(target):
-                self._battery_commands[battery.subentry_id] = (target, now)
-                self._last_command = time.monotonic()
+            if await battery.driver.apply_power(target, refresh=refresh):
+                self._record_command(battery.subentry_id, target, now)
+                if refresh:
+                    self._battery_refreshed[battery.subentry_id] = now
+                new_total += target
+                changed = True
+            elif latest is not None:
+                new_total += latest
+        if changed:
+            # The grid power moves by the change of the battery power.
+            self.battery_response.command(now, self._last_grid_w, new_total - previous_total)
+
+    # --- consumers ------------------------------------------------------------
 
     async def _async_apply_consumers(self, snapshot: SystemSnapshot) -> None:
         now = time.monotonic()
@@ -302,7 +387,11 @@ class RealTimeController:
                     {ATTR_ENTITY_ID: consumer.control_entity_id, "value": value},
                 )
             self._consumer_commands[subentry_id] = (target, now)
-            self._last_command = time.monotonic()
+            measured = snapshot.consumers[subentry_id].power_w
+            learner = self.consumer_response.setdefault(
+                subentry_id, StepResponse(DEFAULT_CONSUMER_RESPONSE_S, CONSUMER_MIN_STEP_W)
+            )
+            learner.command(now, measured, target - (measured or 0.0))
 
     def _check_saturation(self, subentry_id: str, snapshot: SystemSnapshot, now: float) -> None:
         """Mark a consumer saturated if it ignores its command for a while."""
@@ -311,11 +400,11 @@ class RealTimeController:
         if previous is None or measured is None:
             return
         commanded, since = previous
-        if (
-            commanded > 0
-            and now - since > SATURATION_DELAY_S
-            and measured < commanded * SATURATION_RATIO
-        ):
+        learner = self.consumer_response.get(subentry_id)
+        response = learner.value if learner else DEFAULT_CONSUMER_RESPONSE_S
+        low, high = SATURATION_DELAY_RANGE_S
+        delay = min(high, max(low, SATURATION_RESPONSE_FACTOR * response))
+        if commanded > 0 and now - since > delay and measured < commanded * SATURATION_RATIO:
             _LOGGER.debug("Consumer %s saturated (draws %.0f W)", subentry_id, measured)
             self._saturated_until[subentry_id] = now + SATURATION_HOLD_S
             del self._consumer_commands[subentry_id]

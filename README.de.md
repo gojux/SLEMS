@@ -174,13 +174,17 @@ Die Entity *SLEMS Betriebsmodus* schaltet zwischen:
 - **Aktiv**: Pläne werden ausgeführt: SLEMS sendet Sollwerte an die
   Batterien und schaltet bzw. stellt die Verbraucher. Es reagiert auf jede
   Änderung des Smart Meters. Die Entity *Regelstatus* zeigt, ob die Regelung
-  aktiv ist oder pausiert, weil der Smart Meter 60 s lang nichts gemeldet hat
-  (die Batterien folgen dann ihrer eigenen Logik, bis der Zähler wieder meldet).
+  aktiv ist oder pausiert, weil der Smart Meter eine Weile nichts gemeldet hat
+  (60 s bzw. zehn Aktualisierungsintervalle; die Batterien folgen dann ihrer
+  eigenen Logik, bis der Zähler wieder meldet).
 
-Vor dem Umschalten auf *Aktiv* die *Beruhigungszeit Regelung* einstellen
-(Standard 5 s): die Zeit zwischen einem Befehl und dem Moment, in dem der
-Smart Meter die Wirkung zeigt, etwa das Aktualisierungsintervall des Zählers
-plus rund eine Sekunde. Schwankt die Netzleistung hin und her, erhöhen.
+SLEMS lernt das Aktualisierungsintervall des Smart Meters und die
+Reaktionszeit der Batterien und Verbraucher selbst (Diagnose-Sensoren
+*Aktualisierungsintervall Smart Meter* und *Reaktionszeit Batterie*, Attribut
+*response_time_s* der *Geplanten Leistung* eines Verbrauchers). Jeder
+Regelzyklus korrigiert nur einen Teil der Abweichung: *Regelverstärkung*
+(Standard 0,5). Schwankt die Netzleistung hin und her, verringern; das
+*Regelintervall* (Standard 1 s) begrenzt, wie oft SLEMS Befehle sendet.
 
 ### Weitere Einstellungen (Entities)
 

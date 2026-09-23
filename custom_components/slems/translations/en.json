@@ -317,6 +317,12 @@
           "active": "Active",
           "grid_stale": "Grid meter stale"
         }
+      },
+      "meter_interval": {
+        "name": "Smart meter update interval"
+      },
+      "battery_response_time": {
+        "name": "Battery response time"
       }
     },
     "switch": {
@@ -370,14 +376,17 @@
       "rotation_min_interval": {
         "name": "Battery rotation minimum interval"
       },
-      "control_settle": {
-        "name": "Control settle time"
-      },
       "rotation_ramp_rate": {
         "name": "Battery rotation ramp rate"
       },
       "rotation_ramp_max": {
         "name": "Battery rotation maximum ramp time"
+      },
+      "control_interval": {
+        "name": "Control interval"
+      },
+      "control_gain": {
+        "name": "Control gain"
       }
     },
     "binary_sensor": {

@@ -37,9 +37,10 @@ docker compose down
 
 `dev/config/configuration.yaml` provides simulated measurements driven by
 `input_number` sliders. The smart meter is a closed loop: house load + heat
-pump + heating rod − PV + battery power of "Venus 1" and "Venus 2", updated
-every 2 s, so the controller sees the effect of its commands (set the settle
-time to ~9 s in the dev instance). Further: PV, a heat pump (power + energy) and a
+pump + heating rod − PV − AC power of both simulated batteries, updated every
+second. The AC power is read by the HA Modbus integration from a read-only
+port of the simulators (5020) every second, so the loop behaves like a real
+installation with a fast meter. Further: PV, a heat pump (power + energy) and a
 heating rod controlled via `input_number.sim_heating_rod_setpoint` that can be
 blocked via `input_boolean.sim_heating_rod_blocked`. For a PV forecast add the
 Forecast.Solar integration in the dev instance (no account needed).
@@ -154,8 +155,8 @@ enabled batteries; result per battery in the sensor *Planned power*.
   batteries cannot deliver the power, the others help immediately.
 - **Disabling a discharging battery** (active mode): it ramps out within
   3.5 s (`LEAVE_RAMP_S`, its share limited to the remaining time fraction);
-  the controller follows every 2 s without settle time (the sum does not
-  change) and places the last step exactly at the end. After the battery was
+  the controller follows every second and places the last step exactly at
+  the end. After the battery was
   commanded to 0 W it is released in a separate cycle; with the Modbus writes
   the handover takes about 4–5 s. Other batteries are released at once.
 - With equal losses (below 1 W, e.g. a battery that reports AC = DC) the
@@ -194,18 +195,28 @@ batteries only cover the house consumption at night.
 sends commands.
 
 - **Trigger**: every grid meter state change and every coordinator update,
-  at most every 2 s. It plans with the current HA states and the last
-  commanded battery powers (`SlemsCoordinator.fast_snapshot`), without waiting
-  for the battery polling, and publishes the result to the entities without
-  rescheduling the polling.
-- **Settle time** (setting, default 5 s): after a command the next correction
-  waits until the meter can show the effect. Too short makes the loop
-  oscillate (the new command is assumed delivered while the meter still shows
-  the old state); too long makes it slow. Rule of thumb: meter update interval
-  + battery reaction (~1 s) + margin. The dev environment needs ~9 s because
-  its meter is composed of the 5 s battery polling.
+  at most every *control interval* (default 1 s). It plans with the current HA
+  states (`SlemsCoordinator.fast_snapshot`), without waiting for the battery
+  polling, and publishes the result to the entities without rescheduling the
+  polling. In active mode only the controller plans; the coordinator shows
+  its latest result.
+- **Response compensation**: the battery power in the energy balance is the
+  last command the meter can already show, i.e. issued at least the learned
+  *battery response time* ago; newer commands are not counted twice.
+- **Damping**: each cycle moves the total battery power by *control gain*
+  (default 0.5) of the remaining difference (proportional control, like the
+  PD controller of Omnibattery with Kp 0.35 at 1–2 s cycles).
+- **Learned timing** (`response.py`, moving averages):
+  meter cadence from every report of the grid meter (also unchanged values,
+  `EVENT_STATE_REPORTED`); battery response time from commands with ≥ 300 W
+  change until the meter moved 60 % of it; consumer response time from
+  commands with ≥ 100 W change until the consumer's own power sensor moved
+  60 %. The consumer value sets the saturation delay (5 × response time,
+  30–300 s) and is shown as attribute of *Planned power*.
 - **Batteries**: new set point only when it changes by ≥ 25 W or changes
-  direction; repeated every 60 s as keep-alive (also re-enables RS485 control).
+  direction; every 60 s a complete write as keep-alive (also re-enables RS485
+  control). The Venus driver skips registers whose value did not change, so a
+  power change is usually a single write (150 ms).
   Batteries that reduce their power are written first, so the short gap
   between the writes causes a little import instead of feeding battery energy
   into the grid. Set points are logged at debug level.
@@ -215,7 +226,8 @@ sends commands.
 - **Saturation**: a consumer drawing < 10 % of its command for 120 s (own
   thermostat) counts as saturated for 15 min and is planned like an
   uncontrolled load; its last command stays.
-- **Grid meter stale** (no update within 60 s, based on `last_reported`): all
+- **Grid meter stale** (no report within max(60 s, 10 × meter interval),
+  based on `last_reported`): all
   batteries are handed back to their internal logic until the meter reports
   again (status *grid meter stale*).
 - **Maximum export while discharging** is applied as hard limit on the
@@ -409,7 +421,8 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-23 | Batteries can be disabled temporarily via a switch; they stay measured. |
 | 2026-09-23 | Battery rotation ramp by rate (W/s) with maximum duration instead of a fixed duration. |
 | 2026-09-23 | Disabling a discharging battery hands over within 5 s. |
-| 2026-09-23 | Real-time controller event driven on the grid meter with settle time after commands; batteries released when the meter is stale. |
+| 2026-09-23 | Real-time controller event driven on the grid meter; batteries released when the meter is stale. |
+| 2026-09-23 | Damped correction (control gain) plus learned response times instead of a fixed settle time; meter cadence learned from its reports. |
 | 2026-09-23 | Distribution between batteries by minimal conversion losses (learned per battery), rotation by SoC threshold with minimum interval and ramped transition. |
 | 2026-09-23 | Consumption forecast from long-term statistics; optional history entity for the house consumption and optional outdoor temperature sensor, otherwise SLEMS records the weather temperature itself. |
 | 2026-09-23 | Night discharge: evenly spread until PV exceeds consumption, target = reserve raised to what tomorrow's PV can refill; grid target ignored, maximum export respected. |

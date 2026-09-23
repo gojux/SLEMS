@@ -84,11 +84,12 @@ class BatteryDriver(ABC):
         Raise BatteryDriverError if the battery could not be reached at all.
         """
 
-    async def apply_power(self, net_power_w: int) -> bool:
+    async def apply_power(self, net_power_w: int, *, refresh: bool = False) -> bool:
         """Command a signed net power (+charge / -discharge, 0 = hold).
 
-        The value is clamped to the capability envelope by the driver. Returns
-        True if the command was accepted.
+        The value is clamped to the capability envelope by the driver. Drivers
+        may skip writing values that did not change; ``refresh`` forces a
+        complete write (keep-alive). Returns True if the command was accepted.
         """
         raise NotImplementedError(f"{self.model_name} is read-only")
 

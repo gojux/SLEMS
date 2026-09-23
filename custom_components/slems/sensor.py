@@ -19,6 +19,7 @@ from homeassistant.const import (
     UnitOfEnergy,
     UnitOfPower,
     UnitOfTemperature,
+    UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -138,6 +139,24 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         device_class=SensorDeviceClass.ENUM,
         options=[status.value for status in ControlStatus],
         value_fn=lambda _, c: c.controller.status.value,
+    ),
+    SystemSensorDescription(
+        key="meter_interval",
+        translation_key="meter_interval",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda _, c: c.controller.meter.interval_s,
+    ),
+    SystemSensorDescription(
+        key="battery_response_time",
+        translation_key="battery_response_time",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda _, c: c.controller.battery_response.response_s,
     ),
     SystemSensorDescription(
         key="night_discharge_target_soc",
@@ -375,6 +394,9 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
         return {
             "blocked": state.blocked if state else None,
             "saturated": self.consumer.subentry_id in data.saturated,
+            "response_time_s": self.coordinator.controller.consumer_response_s(
+                self.consumer.subentry_id
+            ),
         }
 
 
