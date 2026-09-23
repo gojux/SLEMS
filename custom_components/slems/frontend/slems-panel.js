@@ -56,6 +56,8 @@ const STRINGS = {
     energyFlow: "Energy flow",
     today: "Today",
     dayChart: "Today: forecast and plan",
+    dayChartTomorrow: "Tomorrow: forecast",
+    tomorrow: "Tomorrow",
     dayChartHint: "Hourly average power",
     pvForecast: "PV forecast",
     pvActual: "PV measured",
@@ -82,6 +84,7 @@ const STRINGS = {
     notControlled: "measured only",
     noBatteries: "No batteries configured.",
     noConsumers: "No consumers configured.",
+    disabled: "disabled",
     cancel: "Cancel",
     disableBatteryTitle: "Disable {name}?",
     disableBatteryText:
@@ -114,6 +117,8 @@ const STRINGS = {
     energyFlow: "Energiefluss",
     today: "Heute",
     dayChart: "Heute: Prognose und Plan",
+    dayChartTomorrow: "Morgen: Prognose",
+    tomorrow: "Morgen",
     dayChartHint: "Mittlere Leistung pro Stunde",
     pvForecast: "PV-Prognose",
     pvActual: "PV gemessen",
@@ -140,6 +145,7 @@ const STRINGS = {
     notControlled: "nur gemessen",
     noBatteries: "Keine Batterien konfiguriert.",
     noConsumers: "Keine Verbraucher konfiguriert.",
+    disabled: "deaktiviert",
     cancel: "Abbrechen",
     disableBatteryTitle: "{name} deaktivieren?",
     disableBatteryText:
@@ -202,6 +208,7 @@ class SlemsPanel extends HTMLElement {
     super();
     this._tab = "overview";
     this._showTable = false;
+    this._chartDay = "today";
     this._stats = { pv: {}, house: {} };
     this._statsFetched = 0;
     this._sections = {};
@@ -423,76 +430,195 @@ class SlemsPanel extends HTMLElement {
     this._renderDayChart();
   }
 
-  _renderFlow() {
-    const t = this._t;
-    const grid = this._number(this._state("grid_power"));
-    const pv = this._number(this._state("pv_power"));
-    const house = this._number(this._state("house_power"));
-    const battery = this._number(this._state("battery_power_total"));
-    const soc = this._number(this._state("battery_soc_total"));
-    const consumers = (this._config.consumers || []).map((c) => ({
-      name: c.name,
-      power: this._number(this._hass.states[c.power_entity]),
-    }));
+  // --- energy flow ---------------------------------------------------------------
+  //
+  // Rounded boxes in a three column grid (PV on top; grid, hub, house in the
+  // middle; one box per battery and per consumer below). The connectors are
+  // drawn in an SVG overlay from the measured box positions, so the layout
+  // adapts to any number of batteries and to the screen width. The DOM is
+  // built once per set of batteries/consumers; afterwards only texts, classes
+  // and animation speeds are updated so the animation keeps running smoothly.
 
-    // Nodes in a 400 × 300 view box; flows run through the hub in the middle.
-    const hub = [200, 150];
-    const nodes = {
-      pv: [200, 40],
-      grid: [50, 150],
-      house: [350, 150],
-      battery: [200, 260],
-    };
-    const line = (from, to, power, color, key) => {
-      const active = power !== null && Math.abs(power) >= 10;
-      const [a, b] = power !== null && power < 0 ? [to, from] : [from, to];
-      const duration = active ? Math.max(0.6, Math.min(6, 3000 / Math.abs(power))) : 0;
-      return `<line class="base" x1="${from[0]}" y1="${from[1]}" x2="${to[0]}" y2="${to[1]}"/>
-        ${active ? `<line class="flow" data-key="${key}" style="stroke:${color};animation-duration:${duration.toFixed(2)}s"
-          x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/>` : ""}`;
-    };
-    const svg = `
-      <svg viewBox="0 0 400 300" class="flow-svg" role="img" aria-label="${t.energyFlow}">
-        ${line(nodes.pv, hub, pv, this._colors.pv, "pv")}
-        ${line(nodes.grid, hub, grid, this._colors.grid, "grid")}
-        ${line(hub, nodes.house, house, this._colors.house, "house")}
-        ${line(hub, nodes.battery, battery, this._colors.battery, "battery")}
-        <circle cx="${hub[0]}" cy="${hub[1]}" r="4" class="hub"/>
-      </svg>`;
-    const node = (key, [x, y], icon, label, value, detail = "") => `
-      <div class="node ${key}" style="left:${(x / 400) * 100}%;top:${(y / 300) * 100}%">
-        <ha-icon icon="${icon}"></ha-icon>
-        <span class="node-value">${escapeHtml(value)}</span>
-        <span class="node-label">${escapeHtml(label)}${detail ? ` · ${escapeHtml(detail)}` : ""}</span>
+  _flowNodes() {
+    const t = this._t;
+    const num = (key, device) => this._number(this._state(key, device));
+    const grid = num("grid_power");
+    const nodes = [
+      { id: "pv", role: "pv", icon: "mdi:solar-power-variant", title: t.pv, power: num("pv_power") },
+      {
+        id: "grid",
+        role: "grid",
+        icon: "mdi:transmission-tower",
+        title: t.grid,
+        power: grid,
+        detail: grid === null ? "" : grid > 10 ? t.import : grid < -10 ? t.export : "",
+      },
+      { id: "house", role: "house", icon: "mdi:home-lightning-bolt", title: t.house, power: num("house_power") },
+    ];
+    for (const battery of this._config.batteries || []) {
+      const ac = this._state("ac_power", battery.device_id);
+      // AC power is +discharge; the flow uses +charge.
+      const power = ac ? (this._number(ac) === null ? null : -this._number(ac)) : num("battery_power", battery.device_id);
+      const enabled = this._state("battery_enabled", battery.device_id)?.state !== "off";
+      nodes.push({
+        id: `battery-${battery.id}`,
+        role: "battery",
+        icon: "mdi:home-battery",
+        title: battery.name,
+        power,
+        soc: num("battery_soc", battery.device_id),
+        disabled: !enabled,
+        detail: !enabled ? t.disabled : power === null ? "" : power > 10 ? t.charging : power < -10 ? t.discharging : t.idle,
+      });
+    }
+    for (const consumer of this._config.consumers || []) {
+      nodes.push({
+        id: `consumer-${consumer.id}`,
+        role: "consumer",
+        icon: consumer.type === "heat_pump" ? "mdi:heat-pump" : consumer.type === "heating_rod" ? "mdi:water-boiler" : "mdi:power-plug",
+        title: consumer.name,
+        power: this._number(this._hass.states[consumer.power_entity]),
+      });
+    }
+    return nodes;
+  }
+
+  _renderFlow() {
+    const container = this.shadowRoot.getElementById("flow");
+    if (!container) return;
+    const nodes = this._flowNodes();
+    const key = nodes.map((n) => `${n.id}:${n.title}`).join("|") + this._t.pv;
+    if (container.dataset.key !== key) {
+      container.dataset.key = key;
+      container.innerHTML = this._flowSkeleton(nodes);
+      this._flowRoot = container.querySelector(".flow-root");
+      this._flowObserver?.disconnect();
+      this._flowObserver = new ResizeObserver(() => this._layoutFlow());
+      this._flowObserver.observe(this._flowRoot);
+    }
+    for (const node of nodes) this._updateFlowNode(node);
+    this._layoutFlow();
+  }
+
+  _flowSkeleton(nodes) {
+    const box = (n) => `
+      <div class="fbox ${n.role}" data-node="${n.id}">
+        <div class="fbox-head">
+          <span class="fbox-icon"><ha-icon icon="${n.icon}"></ha-icon></span>
+          <span class="fbox-title">${escapeHtml(n.title)}</span>
+        </div>
+        <div class="fbox-value" data-field="value">–</div>
+        ${n.role === "battery" ? `<div class="fbox-soc"><div class="bar"><div data-field="socbar"></div></div><span data-field="soc">–</span></div>` : ""}
+        <div class="fbox-detail" data-field="detail"></div>
       </div>`;
-    const gridDetail = grid === null ? "" : grid > 10 ? t.import : grid < -10 ? t.export : "";
-    const batteryDetail = battery === null ? "" : battery > 10 ? t.charging : battery < -10 ? t.discharging : t.idle;
-    const html = `
-      <div class="flow-box">
-        ${svg}
-        ${node("pv", nodes.pv, "mdi:solar-power-variant", t.pv, this._watts(pv))}
-        ${node("grid", nodes.grid, "mdi:transmission-tower", t.grid, this._watts(grid === null ? null : Math.abs(grid)), gridDetail)}
-        ${node("house", nodes.house, "mdi:home", t.house, this._watts(house))}
-        ${node(
-          "battery",
-          nodes.battery,
-          "mdi:battery-charging-high",
-          soc === null ? t.battery : `${Math.round(soc)} %`,
-          this._watts(battery === null ? null : Math.abs(battery)),
-          batteryDetail
-        )}
-      </div>
-      ${
-        consumers.length
-          ? `<div class="consumer-list">${consumers
-              .map(
-                (c) => `<div class="consumer-chip"><span class="node-label">${escapeHtml(c.name)}</span>
-                  <span class="node-value">${escapeHtml(this._watts(c.power))}</span></div>`
-              )
-              .join("")}</div>`
-          : ""
-      }`;
-    this._setSection("flow", html);
+    const byRole = (role) => nodes.filter((n) => n.role === role).map(box).join("");
+    const hasConsumers = nodes.some((n) => n.role === "consumer");
+    return `
+      <div class="flow-root ${hasConsumers ? "" : "no-consumers"}">
+        <svg class="flow-lines" aria-hidden="true"></svg>
+        <div class="fcell top">${byRole("pv")}</div>
+        <div class="fcell left">${byRole("grid")}</div>
+        <div class="fcell center"><span class="hub" data-node="hub"></span></div>
+        <div class="fcell right">${byRole("house")}</div>
+        <div class="fcell batteries">${byRole("battery")}</div>
+        ${hasConsumers ? `<div class="fcell consumers">${byRole("consumer")}</div>` : ""}
+      </div>`;
+  }
+
+  _updateFlowNode(n) {
+    const element = this._flowRoot?.querySelector(`[data-node="${n.id}"]`);
+    if (!element) return;
+    const set = (field, text) => {
+      const target = element.querySelector(`[data-field="${field}"]`);
+      if (target && target.textContent !== text) target.textContent = text;
+    };
+    const shown = n.role === "grid" || n.role === "battery" ? Math.abs(n.power ?? 0) : n.power;
+    set("value", n.power === null ? "–" : this._watts(shown));
+    set("detail", n.detail || "");
+    if (n.role === "battery") {
+      set("soc", n.soc === null ? "–" : `${Math.round(n.soc)} %`);
+      const bar = element.querySelector('[data-field="socbar"]');
+      if (bar) bar.style.width = `${Math.max(0, Math.min(100, n.soc ?? 0))}%`;
+    }
+    element.classList.toggle("disabled", Boolean(n.disabled));
+    element.classList.toggle("active", n.power !== null && Math.abs(n.power) >= 10);
+    this._flowPower = this._flowPower || {};
+    this._flowPower[n.id] = n.power;
+  }
+
+  _layoutFlow() {
+    const root = this._flowRoot;
+    if (!root || !root.isConnected) return;
+    const base = root.getBoundingClientRect();
+    if (!base.width) return;
+    const rect = (id) => {
+      const element = root.querySelector(`[data-node="${id}"]`);
+      if (!element) return null;
+      const r = element.getBoundingClientRect();
+      return { x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height };
+    };
+    const hub = rect("hub");
+    if (!hub) return;
+    const hx = hub.x + hub.w / 2;
+    const hy = hub.y + hub.h / 2;
+    const c = this._colors;
+    const connectors = [];
+    // Each connector is defined in the direction of positive power.
+    const pv = rect("pv");
+    if (pv) connectors.push({ id: "pv", color: c.pv, points: [[pv.x + pv.w / 2, pv.y + pv.h], [hx, hy]] });
+    // Horizontal connectors run at the height of the hub (inside both boxes
+    // even if they differ in height), so they stay straight.
+    const level = (r) => Math.min(Math.max(hy, r.y + 12), r.y + r.h - 12);
+    const grid = rect("grid");
+    if (grid) connectors.push({ id: "grid", color: c.grid, points: [[grid.x + grid.w, level(grid)], [hx, hy]] });
+    const house = rect("house");
+    if (house) connectors.push({ id: "house", color: c.house, points: [[hx, hy], [house.x, level(house)]] });
+    const batteries = [...root.querySelectorAll(".fcell.batteries [data-node]")].map((e) => e.dataset.node);
+    const batteryRects = batteries.map(rect);
+    if (batteryRects.length) {
+      const busY = (hy + Math.min(...batteryRects.map((r) => r.y))) / 2;
+      batteries.forEach((id, i) => {
+        const r = batteryRects[i];
+        connectors.push({ id, color: c.battery, points: [[hx, hy], [hx, busY], [r.x + r.w / 2, busY], [r.x + r.w / 2, r.y]] });
+      });
+    }
+    const consumers = [...root.querySelectorAll(".fcell.consumers [data-node]")].map((e) => e.dataset.node);
+    if (house && consumers.length) {
+      // Consumers are stacked below the house: a trunk runs down along the
+      // left of the column and branches into the left edge of every box.
+      const consumerRects = consumers.map(rect);
+      const trunkX = Math.min(...consumerRects.map((r) => r.x)) - 10;
+      const startX = house.x + house.w / 2;
+      const startY = house.y + house.h;
+      const bendY = (startY + consumerRects[0].y) / 2;
+      consumers.forEach((id, i) => {
+        const r = consumerRects[i];
+        const y = r.y + r.h / 2;
+        connectors.push({
+          id,
+          color: c.consumer,
+          points: [[startX, startY], [startX, bendY], [trunkX, bendY], [trunkX, y], [r.x, y]],
+        });
+      });
+    }
+    const svg = root.querySelector(".flow-lines");
+    svg.setAttribute("viewBox", `0 0 ${base.width} ${base.height}`);
+    const markup = connectors
+      .map((connector) => {
+        const d = roundedPath(connector.points, 12);
+        const power = this._flowPower?.[connector.id] ?? null;
+        const active = power !== null && Math.abs(power) >= 10;
+        // Faster dots for higher power, quantised to avoid restarting the animation.
+        const duration = active ? Math.max(0.5, Math.min(4, Math.round((2500 / Math.abs(power)) * 4) / 4)) : 0;
+        const width = active ? Math.min(5, 2 + Math.abs(power) / 1500) : 2;
+        return `<path class="fline-base" d="${d}"/>
+          ${active ? `<path class="fline ${power < 0 ? "reverse" : ""}" d="${d}" style="stroke:${connector.color};stroke-width:${width.toFixed(1)};animation-duration:${duration}s"/>` : ""}`;
+      })
+      .join("");
+    if (svg.dataset.markup !== markup) {
+      svg.dataset.markup = markup;
+      svg.innerHTML = markup;
+    }
   }
 
   async _fetchStats(force) {
@@ -526,24 +652,34 @@ class SlemsPanel extends HTMLElement {
   }
 
   _chartRows() {
-    const plan = this._state("feed_in_limit")?.attributes?.day_plan || [];
+    const attributes = this._state("feed_in_limit")?.attributes || {};
+    const today = this._chartDay === "today";
+    const plan = (today ? attributes.day_plan : attributes.day_plan_tomorrow) || [];
     return plan.map((row, hour) => ({
       hour,
       pvForecast: row.pv_wh,
       consumptionForecast: row.consumption_wh,
       plannedCharge: row.planned_charge_w,
-      pvActual: this._stats.pv[hour] ?? null,
-      consumptionActual: this._stats.house[hour] ?? null,
+      // Measured values exist for today only.
+      pvActual: today ? this._stats.pv[hour] ?? null : null,
+      consumptionActual: today ? this._stats.house[hour] ?? null : null,
     }));
   }
 
   _renderDayChart() {
     const t = this._t;
     const rows = this._chartRows();
+    const day = this._chartDay;
     const header = `
       <div class="chart-head">
-        <div><h2>${t.dayChart}</h2><span class="hint">${t.dayChartHint}</span></div>
-        <button class="link" data-action="toggle-table">${this._showTable ? t.showChart : t.showTable}</button>
+        <div><h2>${day === "today" ? t.dayChart : t.dayChartTomorrow}</h2><span class="hint">${t.dayChartHint}</span></div>
+        <div class="chart-actions">
+          <div class="segmented" role="group">
+            <button data-action="day-today" class="${day === "today" ? "active" : ""}" aria-pressed="${day === "today"}">${t.today}</button>
+            <button data-action="day-tomorrow" class="${day === "tomorrow" ? "active" : ""}" aria-pressed="${day === "tomorrow"}">${t.tomorrow}</button>
+          </div>
+          <button class="link" data-action="toggle-table">${this._showTable ? t.showChart : t.showTable}</button>
+        </div>
       </div>`;
     if (!rows.length) {
       this._setSection("daychart", `${header}<p class="empty">${t.noData}</p>`);
@@ -554,11 +690,15 @@ class SlemsPanel extends HTMLElement {
       return;
     }
     this._chartData = rows;
-    this._setSection("daychart", header + this._legend() + this._chartSvg(rows) + `<div class="tooltip" id="tooltip" hidden></div>`);
+    this._setSection(
+      "daychart",
+      header + this._legend(rows) + this._chartSvg(rows) + `<div class="tooltip" id="tooltip" hidden></div>`
+    );
   }
 
-  _legend() {
+  _legend(rows) {
     const t = this._t;
+    const has = (key) => rows.some((r) => r[key] !== null && r[key] !== undefined && r[key] !== 0);
     const item = (color, label, style) =>
       `<span class="legend-item"><svg width="22" height="10">${
         style === "bar"
@@ -567,9 +707,9 @@ class SlemsPanel extends HTMLElement {
       }</svg>${label}</span>`;
     const c = this._colors;
     return `<div class="legend">
-      ${item(c.pv, t.pvForecast, "dash")}${item(c.pv, t.pvActual, "solid")}
-      ${item(c.house, t.consumptionForecast, "dash")}${item(c.house, t.consumptionActual, "solid")}
-      ${item(c.battery, t.plannedCharge, "bar")}</div>`;
+      ${item(c.pv, t.pvForecast, "dash")}${has("pvActual") ? item(c.pv, t.pvActual, "solid") : ""}
+      ${item(c.house, t.consumptionForecast, "dash")}${has("consumptionActual") ? item(c.house, t.consumptionActual, "solid") : ""}
+      ${has("plannedCharge") ? item(c.battery, t.plannedCharge, "bar") : ""}</div>`;
   }
 
   _chartSvg(rows) {
@@ -614,13 +754,14 @@ class SlemsPanel extends HTMLElement {
     };
     const now = new Date();
     const nowHour = now.getHours() + now.getMinutes() / 60;
+    const showNow = this._chartDay === "today";
     return `
       <div class="chart-wrap"><svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="chart" role="img" aria-label="${this._t.dayChart}">
         ${gridLines.join("")}${hourTicks}${bars}
         ${path("pvForecast", c.pv, true)}${path("pvActual", c.pv, false)}
         ${path("consumptionForecast", c.house, true)}${path("consumptionActual", c.house, false)}
-        <line x1="${x(nowHour)}" x2="${x(nowHour)}" y1="${pad.top}" y2="${pad.top + plotH}" stroke="${c.muted}" stroke-dasharray="2 3"/>
-        <text x="${x(nowHour) + 4}" y="${pad.top + 10}" class="tick">${this._t.now}</text>
+        ${showNow ? `<line x1="${x(nowHour)}" x2="${x(nowHour)}" y1="${pad.top}" y2="${pad.top + plotH}" stroke="${c.muted}" stroke-dasharray="2 3"/>
+        <text x="${x(nowHour) + 4}" y="${pad.top + 10}" class="tick">${this._t.now}</text>` : ""}
         <line id="crosshair" x1="0" x2="0" y1="${pad.top}" y2="${pad.top + plotH}" stroke="${c.muted}" visibility="hidden"/>
         <rect class="hit" x="${pad.left}" y="${pad.top}" width="${plotW}" height="${plotH}" fill="transparent"/>
       </svg></div>`;
@@ -815,6 +956,13 @@ class SlemsPanel extends HTMLElement {
   }
 
   _onClick(event) {
+    const dayButton = event.target.closest("[data-action='day-today'], [data-action='day-tomorrow']");
+    if (dayButton) {
+      this._chartDay = dayButton.dataset.action === "day-today" ? "today" : "tomorrow";
+      this._sections.daychart = undefined;
+      this._render();
+      return;
+    }
     if (event.target.closest("[data-action='toggle-table']")) {
       this._showTable = !this._showTable;
       this._sections.daychart = undefined;
@@ -859,6 +1007,26 @@ function niceStep(raw) {
   return nice * magnitude;
 }
 
+function roundedPath(points, radius) {
+  // Orthogonal polyline with rounded corners.
+  let d = `M${points[0][0]},${points[0][1]}`;
+  for (let i = 1; i < points.length - 1; i++) {
+    const [px, py] = points[i - 1];
+    const [x, y] = points[i];
+    const [nx, ny] = points[i + 1];
+    const inLen = Math.hypot(x - px, y - py);
+    const outLen = Math.hypot(nx - x, ny - y);
+    const r = Math.min(radius, inLen / 2, outLen / 2);
+    const ax = x - ((x - px) / (inLen || 1)) * r;
+    const ay = y - ((y - py) / (inLen || 1)) * r;
+    const bx = x + ((nx - x) / (outLen || 1)) * r;
+    const by = y + ((ny - y) / (outLen || 1)) * r;
+    d += ` L${ax},${ay} Q${x},${y} ${bx},${by}`;
+  }
+  const last = points[points.length - 1];
+  return `${d} L${last[0]},${last[1]}`;
+}
+
 function roundedTopBar(x, y, width, height) {
   const r = Math.min(4, width / 2, height);
   return `M${x},${y + height} V${y + r} Q${x},${y} ${x + r},${y} H${x + width - r} Q${x + width},${y} ${x + width},${y + r} V${y + height} Z`;
@@ -881,35 +1049,60 @@ const STYLE = `
   .card { background: var(--card-background-color); border-radius: var(--ha-card-border-radius, 12px);
     border: 1px solid var(--divider-color); padding: 16px; box-sizing: border-box; min-width: 0; }
   h2 { font-size: 16px; font-weight: 500; margin: 0 0 12px; }
-  .hint, .tick, .node-label, .label, dt, .unit, .empty { color: var(--secondary-text-color); }
+  .hint, .tick, .label, dt, .unit, .empty { color: var(--secondary-text-color); }
   .hint { font-size: 12px; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
   .tile { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--divider-color); }
   .tile .label { font-size: 12px; }
   .tile .value { font-size: 18px; }
-  .flow-box { position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 420px; margin: 0 auto;
-    container-type: inline-size; }
-  .flow-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .flow-svg .base { stroke: var(--divider-color); stroke-width: 2; }
-  .flow-svg .flow { stroke-width: 3; stroke-dasharray: 3 12; stroke-linecap: round; animation: dash linear infinite; }
-  .flow-svg .hub { fill: var(--divider-color); }
-  @keyframes dash { to { stroke-dashoffset: -15; } }
-  @media (prefers-reduced-motion: reduce) { .flow-svg .flow { animation: none; stroke-dasharray: none; } }
-  .node { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center;
-    gap: 2px; background: var(--card-background-color); border: 2px solid var(--divider-color); border-radius: 50%;
-    width: min(88px, 23cqw); height: min(88px, 23cqw); justify-content: center; text-align: center;
-    box-sizing: border-box; overflow: hidden; }
-  .node.pv { border-color: var(--c-pv); } .node.grid { border-color: var(--c-grid); }
-  .node.house { border-color: var(--c-house); } .node.battery { border-color: var(--c-battery); }
-  .node ha-icon { --mdc-icon-size: min(22px, 5.5cqw); color: var(--secondary-text-color); }
-  .node-value { font-size: clamp(11px, 3.6cqw, 14px); font-weight: 500; }
-  .node-label { font-size: clamp(9px, 2.8cqw, 11px); line-height: 1.2; padding: 0 4px; }
-  .consumer-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-  .consumer-chip { display: flex; flex-direction: column; padding: 4px 10px; border-radius: 8px;
-    border: 2px solid var(--c-consumer); }
+  .flow-root { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-areas: ". top ." "left center right" "batteries batteries consumers";
+    row-gap: 44px; column-gap: 16px; align-items: center; padding: 4px 0 8px; }
+  .flow-root.no-consumers { grid-template-areas: ". top ." "left center right" "batteries batteries batteries"; }
+  .fcell { display: flex; justify-content: center; gap: 12px; position: relative; z-index: 1; }
+  .fcell.consumers { flex-direction: column; align-items: center; }
+  .fcell.top { grid-area: top; } .fcell.left { grid-area: left; } .fcell.center { grid-area: center; }
+  .fcell.right { grid-area: right; } .fcell.batteries { grid-area: batteries; align-items: flex-start; }
+  .fcell.consumers { grid-area: consumers; }
+  .flow-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; z-index: 0; }
+  .fline-base { fill: none; stroke: var(--divider-color); stroke-width: 2; }
+  .fline { fill: none; stroke-dasharray: 2 10; stroke-linecap: round; animation: fdash linear infinite; }
+  .fline.reverse { animation-direction: reverse; }
+  @keyframes fdash { to { stroke-dashoffset: -12; } }
+  @media (prefers-reduced-motion: reduce) { .fline { animation: none; stroke-dasharray: none; } }
+  .hub { width: 10px; height: 10px; border-radius: 50%; background: var(--divider-color); }
+  .fbox { --accent: var(--divider-color); background: var(--card-background-color); border: 1px solid var(--divider-color);
+    border-radius: 12px; padding: 10px 12px; min-width: 0; width: 100%; max-width: 170px; min-height: 104px;
+    flex: 1 1 0; box-sizing: border-box; box-shadow: inset 0 3px 0 var(--accent); transition: opacity 0.2s;
+    display: flex; flex-direction: column; }
+  .fbox.pv { --accent: var(--c-pv); } .fbox.grid { --accent: var(--c-grid); } .fbox.house { --accent: var(--c-house); }
+  .fbox.battery { --accent: var(--c-battery); } .fbox.consumer { --accent: var(--c-consumer); }
+  .fbox.disabled { opacity: 0.55; }
+  .fbox-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .fbox-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0;
+    border-radius: 8px; background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  .fbox-icon ha-icon { --mdc-icon-size: 18px; color: var(--accent); }
+  .fbox-title { font-size: 12px; color: var(--secondary-text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fbox-value { font-size: 20px; font-weight: 500; margin-top: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .fbox-detail { font-size: 12px; color: var(--secondary-text-color); min-height: 16px; margin-top: auto; }
+  .fbox-soc { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; }
+  .fbox-soc .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--divider-color); overflow: hidden; min-width: 40px; }
+  .fbox-soc .bar div { height: 100%; border-radius: 3px; background: var(--c-battery); transition: width 0.4s; }
+  @media (max-width: 600px) {
+    .flow-root { column-gap: 8px; row-gap: 36px; }
+    .fbox { padding: 8px; min-height: 96px; }
+    .fbox-value { font-size: 16px; }
+    .fbox-icon { width: 24px; height: 24px; }
+  }
   .chart-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
   .chart-head h2 { margin-bottom: 2px; }
   button.link { background: none; border: none; color: var(--primary-color); cursor: pointer; font: inherit; padding: 4px; }
+  .chart-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .segmented { display: inline-flex; border: 1px solid var(--divider-color); border-radius: 8px; overflow: hidden; }
+  .segmented button { background: none; border: none; font: inherit; font-size: 13px; padding: 4px 12px; cursor: pointer;
+    color: var(--secondary-text-color); }
+  .segmented button + button { border-left: 1px solid var(--divider-color); }
+  .segmented button.active { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 12%, transparent); }
   .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 12px 0 4px; font-size: 12px; color: var(--primary-text-color); }
   .legend-item { display: inline-flex; align-items: center; gap: 6px; }
   .chart-wrap { position: relative; }

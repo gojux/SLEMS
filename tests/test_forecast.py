@@ -140,3 +140,18 @@ def test_expected_surplus_with_consumption_forecast() -> None:
     consumption[day.replace(hour=12)] = 2500
     # 11:00 -> 1500 Wh surplus, 12:00 -> none; night consumption does not count.
     assert expected_surplus_wh(pv, day.replace(hour=6), 400, consumption) == pytest.approx(1500)
+
+
+def test_forecast_days_after_local_midnight() -> None:
+    """00:30 in Vienna is still the previous day in UTC."""
+    from datetime import timezone
+    from types import SimpleNamespace
+
+    from custom_components.slems.forecast import ConsumptionForecaster
+
+    now_utc = datetime(2026, 9, 23, 22, 0, tzinfo=timezone.utc)  # 00:00 local, Sep 24
+    history = {now_utc - timedelta(hours=h): 400.0 for h in range(1, 28 * 24)}
+    forecaster = ConsumptionForecaster(None, SimpleNamespace(heat_pumps=()))
+    result = forecaster._compute(now_utc, history, {}, {}, {}, False)
+    days = sorted({dt_util.as_local(start).date() for start in result.total})
+    assert days == [date(2026, 9, 24), date(2026, 9, 25)]

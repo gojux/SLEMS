@@ -291,8 +291,22 @@ entities. The panel is removed on unload and re-registered on every setup.
 - Rendering is split into sections whose markup is only replaced when it
   changed (`_setSection`), so inputs and the chart hover survive the frequent
   `hass` updates. Events are delegated on the content element.
+- Energy flow: rounded boxes in a CSS grid (PV on top; grid, hub, house in
+  the middle; one box per battery below the hub, consumers stacked below the
+  house). The DOM is built once per set of batteries/consumers
+  (`_flowSkeleton`), afterwards only texts, the SoC bars and classes are
+  updated (`_updateFlowNode`), so the animation runs smoothly. Connectors are
+  drawn in an SVG overlay from the measured box positions (`_layoutFlow`,
+  again on every resize): orthogonal paths with rounded corners
+  (`roundedPath`), each defined in the direction of positive power; negative
+  power reverses the dash animation. Speed and line width follow the power
+  (speed quantised so the animation does not restart). Battery flow uses the
+  AC power when the driver reports it.
 - Day chart: data from the attribute `day_plan` of the sensor *Feed-in limit*
-  (24 rows: corrected PV forecast, consumption forecast, planned charging) plus
+  (24 rows: corrected PV forecast, consumption forecast, planned charging;
+  `day_plan_tomorrow` for the *Tomorrow* view: uncorrected PV forecast and
+  consumption forecast, no planned charging because the state of charge in
+  the morning is unknown) plus
   the hourly means of today from the recorder
   (`recorder/statistics_during_period` for the SLEMS PV and house sensors,
   refreshed every 5 min). Drawn as SVG in real pixels (redrawn on resize),
@@ -412,8 +426,12 @@ limit the maximum gain.
 `forecast/` – horizon today and tomorrow, hourly. The forecast covers the
 consumption behind the smart meter that SLEMS does not control: base load plus
 heat pumps (controllable consumers are scheduled by the allocation). It is
-refitted every hour (minute 5), after a restart and when the vacation switch
-changes; fitting runs in the executor.
+refitted every hour (minute 5), right after midnight (so "tomorrow" is
+covered), after a restart and when the vacation switch changes; fitting runs
+in the executor. Days are always derived in local time
+(`start_of_local_day(as_local(...))`): `start_of_local_day` takes the date of
+the given datetime as is, so a UTC time between 00:00 and 02:00 local time
+would give the previous day.
 
 Training data are the hourly means of the recorder long-term statistics
 (`statistics_during_period`, up to 365 days):

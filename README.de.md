@@ -140,14 +140,16 @@ fließt in die Entscheidung ein, ob der PV-Überschuss die Batterien füllt.
 
 SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
 
-- **Übersicht**: Energiefluss zwischen Netz, PV, Haus und Batterien
-  (animiert, je schneller die Punkte, desto höher die Leistung), darunter die
-  Verbraucher, Kennzahlen (Betriebsmodus, Regelstatus, Strategie,
-  Ladezustand, Einspeisegrenze, Prognosen) und das Diagramm *Heute: Prognose
-  und Plan* mit PV- und Verbrauchsprognose (gestrichelt), den bisher
-  gemessenen Werten (durchgezogen) und dem geplanten Laden der Batterien
-  (Balken). Beim Überfahren erscheinen die Werte einer Stunde; *Tabelle
-  anzeigen* schaltet auf eine Tabelle um.
+- **Übersicht**: Energiefluss zwischen Netz, PV, Haus, jeder Batterie (mit
+  ihrem Ladezustand) und den Verbrauchern; die animierten Punkte laufen in
+  Flussrichtung, je höher die Leistung, desto schneller und auf einer
+  dickeren Linie. Kennzahlen (Betriebsmodus, Regelstatus, Strategie,
+  Ladezustand, Einspeisegrenze, Prognosen) und das Prognose-Diagramm:
+  *Heute* zeigt PV- und Verbrauchsprognose (gestrichelt), die bisher
+  gemessenen Werte (durchgezogen) und das geplante Laden der Batterien
+  (Balken); *Morgen* zeigt die Prognosen des nächsten Tages. Beim Überfahren
+  erscheinen die Werte einer Stunde; *Tabelle anzeigen* schaltet auf eine
+  Tabelle um.
 - **Batterien**: Ladezustand, Leistung, geplante Leistung, Wirkungsgrad,
   Status und der Schalter *Aktiviert* jeder Batterie (das Deaktivieren muss
   bestätigt werden).

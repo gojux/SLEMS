@@ -43,7 +43,7 @@ def pv_correction(
     """Ratio of the PV energy produced today to the forecast until now."""
     if produced_today_wh is None:
         return 1.0
-    day_start = dt_util.start_of_local_day(now)
+    day_start = dt_util.start_of_local_day(dt_util.as_local(now))
     expected = 0.0
     for start, wh in hourly(forecast).items():
         end = start + PERIOD
@@ -81,7 +81,7 @@ def remaining_surplus_by_hour(
     """Like ``remaining_surplus`` with the start of each hour."""
     pv = hourly(pv_forecast)
     consumption = hourly(consumption_forecast) if consumption_forecast is not None else {}
-    end_of_day = dt_util.start_of_local_day(now) + timedelta(days=1)
+    end_of_day = dt_util.start_of_local_day(dt_util.as_local(now)) + timedelta(days=1)
     result = []
     for start, pv_wh in pv.items():
         end = start + PERIOD

@@ -138,13 +138,14 @@ into account when deciding whether the PV surplus will fill the batteries.
 
 SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
 
-- **Overview**: energy flow between grid, PV, house and batteries (animated,
-  the faster the dots the higher the power), the consumers below it, key
-  figures (operating mode, control status, strategy, state of charge, feed-in
-  limit, forecasts), and the chart *Today: forecast and plan* with PV and
-  consumption forecast (dashed), the measured values so far (solid) and the
-  planned battery charging (bars). Hovering shows the values of an hour;
-  *Show table* switches to a table.
+- **Overview**: energy flow between grid, PV, house, every battery (with its
+  state of charge) and the consumers; the animated dots run in the direction
+  of the flow, faster and on a thicker line the higher the power. Key figures
+  (operating mode, control status, strategy, state of charge, feed-in limit,
+  forecasts), and the forecast chart: *Today* shows PV and consumption
+  forecast (dashed), the measured values so far (solid) and the planned
+  battery charging (bars); *Tomorrow* shows the forecasts of the next day.
+  Hovering shows the values of an hour; *Show table* switches to a table.
 - **Batteries**: state of charge, power, planned power, efficiency, state and
   the *Enabled* switch of every battery (disabling asks for confirmation).
 - **Consumers**: measured and planned power, blocked/saturated state and the

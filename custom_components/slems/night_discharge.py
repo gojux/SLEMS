@@ -73,7 +73,7 @@ def plan_night_discharge(
     if crossover is None or crossover <= period_start:
         return None
 
-    day_start = dt_util.start_of_local_day(crossover)
+    day_start = dt_util.start_of_local_day(dt_util.as_local(crossover))
     day_end = day_start + timedelta(days=1)
     daily_consumption = sum(
         wh for start, wh in consumption_forecast.items() if day_start <= start < day_end

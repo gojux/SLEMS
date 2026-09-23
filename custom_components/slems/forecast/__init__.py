@@ -60,10 +60,10 @@ class ConsumptionForecast:
     temperature: dict[date, float | None] = field(default_factory=dict)
     created: datetime | None = None
 
-    def energy_on_day(self, day: date) -> float:
-        return sum(
-            wh for start, wh in self.total.items() if dt_util.as_local(start).date() == day
-        )
+    def energy_on_day(self, day: date) -> float | None:
+        """Forecast energy of a local day, None if the day is not covered."""
+        values = [wh for start, wh in self.total.items() if dt_util.as_local(start).date() == day]
+        return sum(values) if values else None
 
 
 async def async_statistic_means(
@@ -183,7 +183,7 @@ class ConsumptionForecaster:
             else None
         )
 
-        today = dt_util.start_of_local_day(now)
+        today = dt_util.start_of_local_day(dt_util.as_local(now))
         result = ConsumptionForecast(created=now)
         for day_offset in (0, 1):
             day_start = today + timedelta(days=day_offset)

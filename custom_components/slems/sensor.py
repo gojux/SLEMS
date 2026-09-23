@@ -183,7 +183,10 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
     SystemSensorDescription(
         **_power("feed_in_limit"),
         value_fn=lambda s, _: s.feed_in_limit_w,
-        attributes_fn=lambda s: {"day_plan": s.day_plan},
+        attributes_fn=lambda s: {
+            "day_plan": s.day_plan,
+            "day_plan_tomorrow": s.day_plan_tomorrow,
+        },
     ),
     SystemSensorDescription(
         key="pv_correction",
@@ -337,7 +340,7 @@ class SystemSensor(SlemsSystemEntity, SensorEntity):
     """System level sensor."""
 
     entity_description: SystemSensorDescription
-    _unrecorded_attributes = frozenset({"day_plan"})
+    _unrecorded_attributes = frozenset({"day_plan", "day_plan_tomorrow"})
 
     def __init__(
         self, coordinator: SlemsCoordinator, description: SystemSensorDescription
@@ -449,7 +452,8 @@ class ConsumptionForecastSensor(SlemsSystemEntity, SensorEntity):
         forecast = self.coordinator.data.consumption_forecast
         if forecast is None:
             return None
-        return forecast.energy_on_day(self._day()) / 1000
+        energy = forecast.energy_on_day(self._day())
+        return None if energy is None else energy / 1000
 
     @property
     def extra_state_attributes(self) -> dict | None:

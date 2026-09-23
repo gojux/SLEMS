@@ -208,6 +208,9 @@ class SystemSnapshot:
     # Hours of today for the dashboard: start, corrected PV forecast (Wh),
     # consumption forecast (Wh), planned battery charging (W, remaining hours).
     day_plan: list[dict] = field(default_factory=list)
+    # Same for tomorrow, without planned charging (the state of charge in the
+    # morning is not known yet).
+    day_plan_tomorrow: list[dict] = field(default_factory=list)
     allocation: Allocation | None = None
     # Planned power per battery subentry id (+charge / -discharge, AC).
     distribution: Distribution | None = None
@@ -349,6 +352,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.config_entry.async_on_unload(
             async_track_time_change(
                 self.hass, self._on_forecast_time, minute=5, second=0
+            )
+        )
+        # Right after midnight "tomorrow" is a new day the forecast must cover.
+        self.config_entry.async_on_unload(
+            async_track_time_change(
+                self.hass, self._on_forecast_time, hour=0, minute=0, second=30
             )
         )
         self.config_entry.async_create_background_task(
@@ -528,7 +537,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         wall_now = dt_util.now()
         try:
             means = await async_statistic_means(
-                self.hass, [pv_entity], dt_util.start_of_local_day(wall_now), wall_now, "5minute"
+                self.hass,
+                [pv_entity],
+                dt_util.start_of_local_day(dt_util.as_local(wall_now)),
+                wall_now,
+                "5minute",
             )
         except Exception:  # noqa: BLE001
             _LOGGER.debug("PV statistics of today not available", exc_info=True)
@@ -640,6 +653,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 pv_forecast, consumption.total if consumption else None, load, wall_now,
                 battery, snapshot.feed_in_limit_w,
             )
+            snapshot.day_plan_tomorrow = self._day_plan(
+                snapshot.pv_forecast, consumption.total if consumption else None, load,
+                wall_now, None, None, day_offset=1,
+            )
 
         requests = [
             ConsumerRequest(
@@ -715,9 +732,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         wall_now: datetime,
         battery: BatteryGroup | None,
         limit_w: float | None,
+        day_offset: int = 0,
     ) -> list[dict]:
         planned: dict[datetime, float] = {}
-        if battery is not None:
+        if battery is not None and day_offset == 0:
             by_hour = remaining_surplus_by_hour(pv_forecast, consumption, load_w, wall_now)
             needed = battery.energy_to_full_wh + self.settings.charge_secured_buffer_kwh * 1000
             charges = planned_charging(
@@ -729,7 +747,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             planned = {start: charge for (start, _, _), charge in zip(by_hour, charges)}
         pv_hourly = hourly(pv_forecast)
         consumption_hourly = hourly(consumption) if consumption else {}
-        day_start = dt_util.start_of_local_day(wall_now)
+        day_start = dt_util.start_of_local_day(dt_util.as_local(wall_now))
+        day_start += timedelta(days=day_offset)
         rows = []
         for hour in range(24):
             start = day_start + timedelta(hours=hour)
