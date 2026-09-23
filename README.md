@@ -35,6 +35,8 @@ management system); the slug in the logo carries a battery instead of a shell.
 | Distribution of surplus between batteries and consumers (priorities, split, minimum runtime/pause) | ✅ computed and shown, execution follows |
 | Battery efficiency (battery counters, learned or manual) | ✅ |
 | Averaged grid surplus (0–300 s) | ✅ |
+| Grid surplus targets for charging/discharging, maximum export while discharging | ✅ |
+| Night discharge to a forecast based reserve | ✅ logic, active once the consumption forecast exists |
 | Consumer control (sending commands) | planned |
 | Dashboard with energy flow and daily forecast chart | planned |
 
@@ -127,12 +129,26 @@ The entity *SLEMS Operating mode* switches between:
 
 - *Vacation* (switch) – the household is away; switch manually or by an automation.
 - *Battery priority below state of charge* (default 30 %), *Charge secured
-  safety margin* (default 120 %) and *Battery share when charge is secured*
+  safety buffer* (default 1 kWh) and *Battery share when charge is secured*
   (default 75 %) – the batteries get all surplus until their charge is
   secured: the state of charge is above the threshold and the expected PV
-  surplus of the day covers the energy to fill them with the safety margin.
+  surplus of the day covers the energy to fill them plus the safety buffer.
   Afterwards the surplus is split, the consumers' share is distributed by
   priority. Power one side cannot use goes to the other.
+- *Grid surplus target while charging* (0–5000 W, default 100 W) – the
+  batteries only charge from the surplus above this value.
+- *Grid surplus target while discharging* (−1000…+1000 W, default 50 W;
+  positive = export, negative = import) – the grid power the discharging
+  batteries aim at. Between the two targets the batteries stay idle.
+- *Maximum grid export while discharging* (default 200 W) – discharging never
+  causes more export than this.
+- *Night discharge* (switch, off by default) and *Night discharge reserve*
+  (default 25 % of tomorrow's forecast consumption) – over night the batteries
+  discharge evenly down to the reserve until PV production exceeds the
+  consumption again, ignoring the discharge grid target (the maximum grid
+  export still applies). If tomorrow's PV forecast cannot refill the batteries
+  from the reserve, a higher reserve is kept. Requires the consumption
+  forecast.
 - *Surplus averaging window* (0–300 s, default 5 s, 0 = off) – the grid power
   is averaged; the less favourable of average and current value is used, so
   the control does not overshoot with fluctuating PV.

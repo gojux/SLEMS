@@ -4,19 +4,29 @@
 plus the power currently drawn by everything SLEMS controls (batteries and
 unblocked controllable consumers). Positive = surplus, negative = deficit.
 
-Surplus:
-1. Consumers that must keep running (minimum runtime) keep their power.
-2. As long as the battery charge is not *secured*, the battery has priority.
+Consumers that must keep running (minimum runtime) keep their power first.
+With the remaining power three cases exist:
+
+Surplus (remaining above the charge grid target): the power above the target
+is distributed, so the grid always keeps at least the target surplus.
+1. As long as the battery charge is not *secured*, the battery has priority.
    Charge is secured when the total SoC is at least the priority threshold and
    the expected PV surplus for the rest of the day covers the energy needed to
-   fill the batteries (including charge losses) with a safety margin.
-3. Once secured, the surplus is split: the battery share goes to the batteries,
+   fill the batteries (including charge losses) plus a safety buffer.
+2. Once secured, the surplus is split: the battery share goes to the batteries,
    the rest to the consumers in order of priority. Whatever one side cannot
    take is offered to the other.
 
-Deficit: the batteries cover it (self consumption). With import peak shaving
-enabled and the SoC at or below its threshold, they only cover the import
-above the grid limit.
+Deficit (remaining below the discharge grid target): the batteries discharge
+so that the grid reaches the discharge target, which is capped by the maximum
+grid export while discharging. With import peak shaving enabled and the SoC at
+or below its threshold, they only cover the import above the grid limit.
+
+In between the batteries stay idle.
+
+Night discharge (optional, see night_discharge): outside a surplus the
+batteries discharge at least with the planned night power, ignoring the
+discharge grid target but still respecting the maximum grid export.
 """
 
 from __future__ import annotations
@@ -42,6 +52,8 @@ class Strategy(StrEnum):
     SHARED = "shared"
     SELF_CONSUMPTION = "self_consumption"
     PEAK_SHAVING = "peak_shaving"
+    NIGHT_DISCHARGE = "night_discharge"
+    IDLE = "idle"
 
 
 @dataclass(frozen=True)
@@ -94,7 +106,12 @@ class AllocationSettings:
 
     battery_priority_soc_pct: float
     battery_share_when_secured_pct: float
-    charge_secured_margin_pct: float
+    charge_secured_buffer_wh: float
+    # Target grid surplus (+export / -import) while charging / discharging.
+    charge_grid_target_w: float
+    discharge_grid_target_w: float
+    # Upper limit of the grid export caused while discharging.
+    discharge_max_grid_export_w: float
     peak_shaving: bool
     peak_shaving_grid_limit_w: float
     peak_shaving_soc_threshold_pct: float
@@ -116,6 +133,7 @@ def allocate(
     consumers: Sequence[ConsumerRequest],
     settings: AllocationSettings,
     expected_surplus_wh: float | None,
+    night_discharge_w: float | None = None,
 ) -> Allocation:
     """Distribute ``available_w`` between batteries and consumers."""
     ordered = sorted(consumers, key=lambda c: (c.priority, c.subentry_id))
@@ -131,11 +149,39 @@ def allocate(
         battery, settings, expected_surplus_wh
     )
 
-    if remaining < 0:
-        allocation = _cover_deficit(-remaining, battery, settings)
+    discharge_target = min(
+        settings.discharge_grid_target_w, settings.discharge_max_grid_export_w
+    )
+    if (
+        night_discharge_w
+        and battery is not None
+        and remaining <= settings.charge_grid_target_w
+        and not _peak_shaving_active(battery, settings)
+    ):
+        normal = max(0.0, discharge_target - remaining)
+        discharge = min(
+            max(normal, night_discharge_w),
+            settings.discharge_max_grid_export_w - remaining,
+            battery.max_discharge_w,
+        )
+        return Allocation(
+            strategy=Strategy.NIGHT_DISCHARGE,
+            battery_power_w=-max(0.0, discharge),
+            consumer_power_w=consumer_power,
+            charge_secured=charge_secured,
+        )
+    if remaining < discharge_target:
+        allocation = _cover_deficit(remaining, discharge_target, battery, settings)
         allocation.consumer_power_w = consumer_power
         allocation.charge_secured = charge_secured
         return allocation
+    if remaining <= settings.charge_grid_target_w:
+        return Allocation(
+            strategy=Strategy.IDLE,
+            consumer_power_w=consumer_power,
+            charge_secured=charge_secured,
+        )
+    remaining -= settings.charge_grid_target_w
 
     max_charge = 0.0 if battery is None or battery.is_full else battery.max_charge_w
     if charge_secured:
@@ -170,20 +216,28 @@ def _charge_secured(
         return True
     if expected_surplus_wh is None:
         return False
-    required = battery.energy_to_full_wh * settings.charge_secured_margin_pct / 100
+    required = battery.energy_to_full_wh + settings.charge_secured_buffer_wh
     return expected_surplus_wh >= required
 
 
+def _peak_shaving_active(battery: BatteryGroup, settings: AllocationSettings) -> bool:
+    return settings.peak_shaving and battery.soc_pct <= settings.peak_shaving_soc_threshold_pct
+
+
 def _cover_deficit(
-    deficit_w: float, battery: BatteryGroup | None, settings: AllocationSettings
+    remaining_w: float,
+    grid_target_w: float,
+    battery: BatteryGroup | None,
+    settings: AllocationSettings,
 ) -> Allocation:
     if battery is None:
         return Allocation(strategy=Strategy.SELF_CONSUMPTION)
-    if settings.peak_shaving and battery.soc_pct <= settings.peak_shaving_soc_threshold_pct:
-        discharge = max(0.0, deficit_w - settings.peak_shaving_grid_limit_w)
+    if _peak_shaving_active(battery, settings):
+        grid_import = -remaining_w
+        discharge = max(0.0, grid_import - settings.peak_shaving_grid_limit_w)
         strategy = Strategy.PEAK_SHAVING
     else:
-        discharge = deficit_w
+        discharge = grid_target_w - remaining_w
         strategy = Strategy.SELF_CONSUMPTION
     return Allocation(
         strategy=strategy, battery_power_w=-min(discharge, battery.max_discharge_w)

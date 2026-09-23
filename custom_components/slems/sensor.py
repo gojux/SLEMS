@@ -122,6 +122,19 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         value_fn=lambda s, _: s.allocation.strategy.value if s.allocation else None,
     ),
     SystemSensorDescription(
+        key="night_discharge_target_soc",
+        translation_key="night_discharge_target_soc",
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=0,
+        value_fn=lambda s, _: (
+            s.night_discharge.target_soc_pct if s.night_discharge else None
+        ),
+    ),
+    SystemSensorDescription(
+        **_power("night_discharge_power"),
+        value_fn=lambda s, _: s.night_discharge.power_w if s.night_discharge else None,
+    ),
+    SystemSensorDescription(
         key="expected_surplus_energy",
         translation_key="expected_surplus_energy",
         device_class=SensorDeviceClass.ENERGY,

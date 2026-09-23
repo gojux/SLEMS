@@ -273,7 +273,9 @@
           "battery_priority": "Battery priority",
           "shared": "Shared",
           "self_consumption": "Self consumption",
-          "peak_shaving": "Peak shaving"
+          "peak_shaving": "Peak shaving",
+          "idle": "Idle",
+          "night_discharge": "Night discharge"
         }
       },
       "expected_surplus_energy": {
@@ -284,6 +286,12 @@
       },
       "planned_power": {
         "name": "Planned power"
+      },
+      "night_discharge_target_soc": {
+        "name": "Night discharge target state of charge"
+      },
+      "night_discharge_power": {
+        "name": "Night discharge power"
       }
     },
     "switch": {
@@ -292,6 +300,9 @@
       },
       "peak_shaving": {
         "name": "Import peak shaving"
+      },
+      "night_discharge": {
+        "name": "Night discharge"
       }
     },
     "number": {
@@ -310,8 +321,20 @@
       "battery_share_when_secured": {
         "name": "Battery share when charge is secured"
       },
-      "charge_secured_margin": {
-        "name": "Charge secured safety margin"
+      "charge_secured_buffer": {
+        "name": "Charge secured safety buffer"
+      },
+      "charge_grid_target": {
+        "name": "Grid surplus target while charging"
+      },
+      "discharge_grid_target": {
+        "name": "Grid surplus target while discharging"
+      },
+      "discharge_max_grid_export": {
+        "name": "Maximum grid export while discharging"
+      },
+      "night_reserve": {
+        "name": "Night discharge reserve"
       }
     },
     "binary_sensor": {

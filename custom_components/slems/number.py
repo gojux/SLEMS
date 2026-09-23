@@ -10,7 +10,13 @@ from homeassistant.components.number import (
     NumberMode,
     RestoreNumber,
 )
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfPower, UnitOfTime
+from homeassistant.const import (
+    PERCENTAGE,
+    EntityCategory,
+    UnitOfEnergy,
+    UnitOfPower,
+    UnitOfTime,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -39,6 +45,21 @@ def _percentage(key: str, attribute: str, minimum: float = 0, maximum: float = 1
     )
 
 
+def _watts(key: str, attribute: str, minimum: float, maximum: float):
+    return SettingNumberDescription(
+        key=key,
+        translation_key=key,
+        attribute=attribute,
+        device_class=NumberDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        native_min_value=minimum,
+        native_max_value=maximum,
+        native_step=10,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+    )
+
+
 SETTING_NUMBERS: tuple[SettingNumberDescription, ...] = (
     SettingNumberDescription(
         key="surplus_average_window",
@@ -54,7 +75,22 @@ SETTING_NUMBERS: tuple[SettingNumberDescription, ...] = (
     ),
     _percentage("battery_priority_soc", "battery_priority_soc_pct"),
     _percentage("battery_share_when_secured", "battery_share_when_secured_pct"),
-    _percentage("charge_secured_margin", "charge_secured_margin_pct", 100, 300),
+    SettingNumberDescription(
+        key="charge_secured_buffer",
+        translation_key="charge_secured_buffer",
+        attribute="charge_secured_buffer_kwh",
+        device_class=NumberDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        native_min_value=0,
+        native_max_value=50,
+        native_step=0.1,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    _percentage("night_reserve", "night_reserve_pct"),
+    _watts("charge_grid_target", "charge_grid_target_w", 0, 5000),
+    _watts("discharge_grid_target", "discharge_grid_target_w", -1000, 1000),
+    _watts("discharge_max_grid_export", "discharge_max_grid_export_w", 0, 5000),
     SettingNumberDescription(
         key="peak_shaving_grid_limit",
         translation_key="peak_shaving_grid_limit",

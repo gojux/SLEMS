@@ -13,10 +13,11 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .coordinator import SlemsConfigEntry, SlemsCoordinator
 from .entity import SlemsSystemEntity
 
-# Switch key -> attribute of ControlSettings. Both default to off.
+# Switch key -> attribute of ControlSettings. All default to off.
 SETTING_SWITCHES: dict[str, str] = {
     "vacation": "vacation",
     "peak_shaving": "peak_shaving",
+    "night_discharge": "night_discharge",
 }
 
 

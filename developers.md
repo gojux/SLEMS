@@ -91,10 +91,17 @@ sensors. Inputs:
   import (= smaller surplus) of average and current value is used, so PV drops
   are followed immediately and PV rises only after the window.
 - **Charge secured**: SoC ≥ *battery priority SoC* and expected PV surplus
-  today ≥ energy to full (divided by the charge efficiency) × *safety margin*.
+  today ≥ energy to full (divided by the charge efficiency) + *safety buffer* (kWh).
   The expected surplus is the remaining PV forecast today minus the current
   uncontrolled load until the end of PV production (persistence forecast; the
   consumption forecast will replace it).
+- **Grid targets** (surplus, +export / −import): charging only uses the power
+  above the *charge target* (0…5000 W), so at least that much is exported;
+  discharging aims at the *discharge target* (−1000…+1000 W), capped by the
+  *maximum grid export while discharging*. Between the two targets the
+  batteries stay idle. The real-time controller also uses the maximum export
+  as hard limit: if the measured export exceeds it while discharging, the
+  discharge power is reduced immediately.
 - **Order**: consumers within their minimum runtime keep their power; not
   secured → battery first; secured → *battery share* to the batteries, the
   rest to consumers by priority (1 first). Unused power of one side goes to
@@ -109,6 +116,25 @@ battery power (persisted in `.storage/slems.<entry_id>.efficiency`), *manual*
 uses the configured value, which is also the start value of the other modes
 until 3 full cycles of throughput exist. Charge and discharge efficiency are
 each √RTE.
+
+### Night discharge
+
+`night_discharge.py`, optional (switch, off by default). Without it the
+batteries only cover the house consumption at night.
+
+- **Until**: start of the first hour in which the PV forecast exceeds the
+  consumption forecast (batteries would start charging again).
+- **Target**: *reserve* = % of tomorrow's forecast daily consumption. If
+  tomorrow's PV surplus (from the crossover until the end of the day, minus the
+  safety buffer, times the charge efficiency) cannot refill the batteries from
+  there, the target is raised to the level from which it can.
+- **Power**: (stored energy − target) × discharge efficiency / hours until the
+  crossover, recomputed every cycle. The batteries deliver at least this power;
+  the discharge grid target is ignored, the maximum grid export while
+  discharging still applies. Larger house loads are still covered.
+- Not active during a surplus and while import peak shaving is active.
+- Needs the consumption forecast (`SystemSnapshot.consumption_forecast`,
+  hourly Wh of the whole house); without it no plan is made.
 
 Planned layers (not implemented yet):
 
@@ -280,3 +306,6 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-23 | Grid power averaging window 0–300 s, the less favourable of average and current value is used. |
 | 2026-09-23 | Minimum runtime and pause are optional per consumer; power set points only in W. |
 | 2026-09-23 | Heating rod has its own thermostat; SLEMS needs no tank temperature. |
+| 2026-09-23 | Charge secured uses a safety buffer in kWh instead of a percentage margin. |
+| 2026-09-23 | Grid surplus targets for charging (0…5 kW) and discharging (−1…+1 kW) plus a maximum grid export while discharging. |
+| 2026-09-23 | Night discharge: evenly spread until PV exceeds consumption, target = reserve raised to what tomorrow's PV can refill; grid target ignored, maximum export respected. |

@@ -20,7 +20,10 @@ from custom_components.slems.const import ControlMode
 SETTINGS = AllocationSettings(
     battery_priority_soc_pct=30,
     battery_share_when_secured_pct=75,
-    charge_secured_margin_pct=120,
+    charge_secured_buffer_wh=1000,
+    charge_grid_target_w=0,
+    discharge_grid_target_w=0,
+    discharge_max_grid_export_w=200,
     peak_shaving=False,
     peak_shaving_grid_limit_w=3000,
     peak_shaving_soc_threshold_pct=20,
@@ -50,7 +53,7 @@ def test_battery_has_priority_below_soc_threshold() -> None:
 
 
 def test_battery_priority_when_forecast_is_not_enough() -> None:
-    # 60 % missing of 10 kWh / 0.95 = 6.3 kWh, with margin 7.6 kWh needed.
+    # 60 % missing of 10 kWh / 0.95 = 6.3 kWh, with buffer 7.3 kWh needed.
     result = allocate(4000, battery(40), [ROD], SETTINGS, expected_surplus_wh=7000)
     assert not result.charge_secured
     assert result.battery_power_w == 4000
@@ -149,3 +152,48 @@ def test_expected_surplus_subtracts_load_until_pv_ends(vienna) -> None:
     assert expected_surplus_wh(_forecast(day), now, 400) == pytest.approx(2400)
     assert expected_surplus_wh(_forecast(day), day.replace(hour=20), 400) == 0
     assert expected_surplus_wh(None, now, 400) is None
+
+
+def _with(**changes) -> AllocationSettings:
+    return AllocationSettings(**{**SETTINGS.__dict__, **changes})
+
+
+def test_charge_keeps_grid_surplus_target() -> None:
+    result = allocate(1000, battery(50), [], _with(charge_grid_target_w=100), None)
+    assert result.battery_power_w == 900
+
+
+def test_idle_band_between_targets() -> None:
+    settings = _with(charge_grid_target_w=100, discharge_grid_target_w=-50)
+    assert allocate(60, battery(50), [], settings, None).strategy is Strategy.IDLE
+    assert allocate(-20, battery(50), [], settings, None).strategy is Strategy.IDLE
+    assert allocate(-80, battery(50), [], settings, None).battery_power_w == -30
+
+
+def test_discharge_target_with_export() -> None:
+    # Keep 50 W export while discharging: cover the 400 W deficit plus 50 W.
+    result = allocate(-400, battery(50), [], _with(discharge_grid_target_w=50), None)
+    assert result.battery_power_w == -450
+
+
+def test_discharge_target_is_capped_by_max_export() -> None:
+    settings = _with(discharge_grid_target_w=500, discharge_max_grid_export_w=100)
+    result = allocate(-400, battery(50), [], settings, None)
+    assert result.battery_power_w == -500
+
+
+def test_night_discharge_ignores_discharge_target() -> None:
+    # House needs 300 W, night plan wants 600 W, export limit 200 W allows 500 W.
+    result = allocate(-300, battery(80), [], SETTINGS, None, night_discharge_w=600)
+    assert result.strategy is Strategy.NIGHT_DISCHARGE
+    assert result.battery_power_w == -500
+
+
+def test_night_discharge_covers_larger_house_load() -> None:
+    result = allocate(-1500, battery(80), [], SETTINGS, None, night_discharge_w=600)
+    assert result.battery_power_w == -1500
+
+
+def test_night_discharge_not_during_surplus() -> None:
+    result = allocate(2000, battery(80), [], SETTINGS, None, night_discharge_w=600)
+    assert result.strategy is Strategy.BATTERY_PRIORITY

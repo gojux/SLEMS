@@ -37,6 +37,8 @@ statt eines Hauses.
 | Verteilung des Überschusses auf Batterien und Verbraucher (Priorität, Aufteilung, Mindestlaufzeit/-pause) | ✅ berechnet und angezeigt, Ausführung folgt |
 | Wirkungsgrad der Batterie (Batteriezähler, gelernt oder manuell) | ✅ |
 | Gemittelter Netzüberschuss (0–300 s) | ✅ |
+| Ziel-Netzüberschuss beim Laden/Entladen, maximale Einspeisung beim Entladen | ✅ |
+| Nachtentladung bis zu einer prognosebasierten Reserve | ✅ Logik, aktiv sobald die Verbrauchsprognose existiert |
 | Verbrauchersteuerung (Befehle senden) | geplant |
 | Dashboard mit Energiefluss und Tagesprognose | geplant |
 
@@ -131,13 +133,27 @@ Die Entity *SLEMS Betriebsmodus* schaltet zwischen:
 ### Weitere Einstellungen (Entities)
 
 - *Urlaub* (Schalter): Der Haushalt ist abwesend; manuell oder per Automation schalten.
-- *Batterievorrang unter Ladezustand* (Standard 30 %), *Sicherheitszuschlag
-  gesicherte Ladung* (Standard 120 %) und *Batterieanteil bei gesicherter
+- *Batterievorrang unter Ladezustand* (Standard 30 %), *Sicherheitspuffer
+  gesicherte Ladung* (Standard 1 kWh) und *Batterieanteil bei gesicherter
   Ladung* (Standard 75 %): Die Batterien bekommen den gesamten Überschuss, bis
   ihre Ladung gesichert ist, d. h. der Ladezustand über der Schwelle liegt und
-  der erwartete PV-Überschuss des Tages die Energie bis zur Vollladung samt
-  Zuschlag deckt. Danach wird aufgeteilt, der Anteil der Verbraucher geht nach
+  der erwartete PV-Überschuss des Tages die Energie bis zur Vollladung plus
+  Sicherheitspuffer deckt. Danach wird aufgeteilt, der Anteil der Verbraucher geht nach
   Priorität. Was eine Seite nicht nutzen kann, bekommt die andere.
+- *Ziel-Netzüberschuss beim Laden* (0–5000 W, Standard 100 W): Die Batterien
+  laden nur aus dem Überschuss oberhalb dieses Werts.
+- *Ziel-Netzüberschuss beim Entladen* (−1000…+1000 W, Standard 50 W;
+  positiv = Einspeisung, negativ = Bezug): der Netzwert, auf den die
+  entladenden Batterien regeln. Zwischen den beiden Zielwerten ruhen die Batterien.
+- *Maximale Einspeisung beim Entladen* (Standard 200 W): Das Entladen
+  verursacht nie mehr Einspeisung als diesen Wert.
+- *Nachtentladung* (Schalter, standardmäßig aus) und *Reserve Nachtentladung*
+  (Standard 25 % des prognostizierten Verbrauchs von morgen): Über Nacht
+  entladen die Batterien gleichmäßig bis zur Reserve, bis die PV-Erzeugung den
+  Verbrauch wieder übersteigt; der Ziel-Netzüberschuss beim Entladen wird dabei
+  ignoriert (die maximale Einspeisung gilt weiter). Reicht die PV-Prognose für
+  morgen nicht, um die Batterien von der Reserve aus wieder zu füllen, bleibt
+  eine höhere Reserve. Benötigt die Verbrauchsprognose.
 - *Mittelungsfenster Überschuss* (0–300 s, Standard 5 s, 0 = aus): Die
   Netzleistung wird gemittelt; es gilt der ungünstigere Wert aus Mittelwert
   und aktuellem Wert, damit die Regelung bei schwankender PV nicht überschießt.

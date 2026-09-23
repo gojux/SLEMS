@@ -29,7 +29,11 @@ from .const import (
     CONF_PV_POWER_ENTITY,
     DEFAULT_BATTERY_PRIORITY_SOC_PCT,
     DEFAULT_BATTERY_SHARE_WHEN_SECURED_PCT,
-    DEFAULT_CHARGE_SECURED_MARGIN_PCT,
+    DEFAULT_CHARGE_GRID_TARGET_W,
+    DEFAULT_CHARGE_SECURED_BUFFER_KWH,
+    DEFAULT_DISCHARGE_GRID_TARGET_W,
+    DEFAULT_DISCHARGE_MAX_GRID_EXPORT_W,
+    DEFAULT_NIGHT_RESERVE_PCT,
     DEFAULT_OPERATING_MODE,
     DEFAULT_PEAK_SHAVING_GRID_LIMIT_W,
     DEFAULT_PEAK_SHAVING_SOC_THRESHOLD_PCT,
@@ -42,6 +46,7 @@ from .consumers import ConsumerConfig, ConsumerState, RuntimeTracker, read_consu
 from .drivers import BatteryDriver, BatteryDriverError, BatteryTelemetry
 from .efficiency import EfficiencyTracker, EnergyIntegrator
 from .grid_filter import GridPowerFilter
+from .night_discharge import NightDischargePlan, plan_night_discharge
 from .pv_forecast import PvForecast, async_get_pv_forecast
 from .util import state_as_watts
 
@@ -77,13 +82,22 @@ class ControlSettings:
     surplus_average_window_s: float = DEFAULT_SURPLUS_AVERAGE_WINDOW_S
     battery_priority_soc_pct: float = DEFAULT_BATTERY_PRIORITY_SOC_PCT
     battery_share_when_secured_pct: float = DEFAULT_BATTERY_SHARE_WHEN_SECURED_PCT
-    charge_secured_margin_pct: float = DEFAULT_CHARGE_SECURED_MARGIN_PCT
+    charge_secured_buffer_kwh: float = DEFAULT_CHARGE_SECURED_BUFFER_KWH
+    charge_grid_target_w: float = DEFAULT_CHARGE_GRID_TARGET_W
+    discharge_grid_target_w: float = DEFAULT_DISCHARGE_GRID_TARGET_W
+    discharge_max_grid_export_w: float = DEFAULT_DISCHARGE_MAX_GRID_EXPORT_W
+    night_discharge: bool = False
+    # Night discharge reserve in % of tomorrow's forecast daily consumption.
+    night_reserve_pct: float = DEFAULT_NIGHT_RESERVE_PCT
 
     def allocation_settings(self) -> AllocationSettings:
         return AllocationSettings(
             battery_priority_soc_pct=self.battery_priority_soc_pct,
             battery_share_when_secured_pct=self.battery_share_when_secured_pct,
-            charge_secured_margin_pct=self.charge_secured_margin_pct,
+            charge_secured_buffer_wh=self.charge_secured_buffer_kwh * 1000,
+            charge_grid_target_w=self.charge_grid_target_w,
+            discharge_grid_target_w=self.discharge_grid_target_w,
+            discharge_max_grid_export_w=self.discharge_max_grid_export_w,
             peak_shaving=self.peak_shaving,
             peak_shaving_grid_limit_w=self.peak_shaving_grid_limit_w,
             peak_shaving_soc_threshold_pct=self.peak_shaving_soc_threshold_pct,
@@ -109,6 +123,9 @@ class SystemSnapshot:
     consumer_configs: dict[str, ConsumerConfig] = field(default_factory=dict)
     consumers: dict[str, ConsumerState] = field(default_factory=dict)
     pv_forecast: PvForecast | None = None
+    # Hourly consumption forecast (period start -> Wh) of the whole house.
+    consumption_forecast: dict[datetime, float] | None = None
+    night_discharge: NightDischargePlan | None = None
     # Power SLEMS can distribute, +surplus / -deficit.
     available_power_w: float | None = None
     expected_surplus_wh: float | None = None
@@ -341,12 +358,32 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             and consumer.included_in_meter
             and not snapshot.consumers[consumer.subentry_id].blocked
         ]
+        battery = self._battery_group(snapshot)
+        settings = self.settings
+        if (
+            settings.night_discharge
+            and battery is not None
+            and snapshot.pv_forecast is not None
+            and snapshot.consumption_forecast is not None
+        ):
+            snapshot.night_discharge = plan_night_discharge(
+                wall_now,
+                battery.soc_pct,
+                battery.capacity_wh,
+                battery.charge_efficiency,
+                battery.charge_efficiency,
+                snapshot.pv_forecast,
+                snapshot.consumption_forecast,
+                settings.night_reserve_pct,
+                settings.charge_secured_buffer_kwh * 1000,
+            )
         allocation = allocate(
             snapshot.available_power_w,
-            self._battery_group(snapshot),
+            battery,
             requests,
-            self.settings.allocation_settings(),
+            settings.allocation_settings(),
             snapshot.expected_surplus_wh,
+            snapshot.night_discharge.power_w if snapshot.night_discharge else None,
         )
         for subentry_id, power in allocation.consumer_power_w.items():
             self._runtime.update(subentry_id, power > 0, now)

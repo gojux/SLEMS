@@ -273,7 +273,9 @@
           "battery_priority": "Batterievorrang",
           "shared": "Aufgeteilt",
           "self_consumption": "Eigenverbrauch",
-          "peak_shaving": "Spitzenabfang"
+          "peak_shaving": "Spitzenabfang",
+          "idle": "Ruhe",
+          "night_discharge": "Nachtentladung"
         }
       },
       "expected_surplus_energy": {
@@ -284,6 +286,12 @@
       },
       "planned_power": {
         "name": "Geplante Leistung"
+      },
+      "night_discharge_target_soc": {
+        "name": "Ziel-Ladezustand Nachtentladung"
+      },
+      "night_discharge_power": {
+        "name": "Leistung Nachtentladung"
       }
     },
     "switch": {
@@ -292,6 +300,9 @@
       },
       "peak_shaving": {
         "name": "Bezugsspitzen abfangen"
+      },
+      "night_discharge": {
+        "name": "Nachtentladung"
       }
     },
     "number": {
@@ -310,8 +321,20 @@
       "battery_share_when_secured": {
         "name": "Batterieanteil bei gesicherter Ladung"
       },
-      "charge_secured_margin": {
-        "name": "Sicherheitszuschlag gesicherte Ladung"
+      "charge_secured_buffer": {
+        "name": "Sicherheitspuffer gesicherte Ladung"
+      },
+      "charge_grid_target": {
+        "name": "Ziel-Netzüberschuss beim Laden"
+      },
+      "discharge_grid_target": {
+        "name": "Ziel-Netzüberschuss beim Entladen"
+      },
+      "discharge_max_grid_export": {
+        "name": "Maximale Einspeisung beim Entladen"
+      },
+      "night_reserve": {
+        "name": "Reserve Nachtentladung"
       }
     },
     "binary_sensor": {
