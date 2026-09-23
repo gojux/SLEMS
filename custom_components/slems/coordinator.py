@@ -64,6 +64,9 @@ class BatteryRuntime:
     name: str
     driver: BatteryDriver
     efficiency: EfficiencyTracker
+    # Temporarily disabled batteries are still measured (their power is part of
+    # the energy balance) but neither planned with nor controlled.
+    enabled: bool = True
 
 
 @dataclass
@@ -309,7 +312,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         energy = capacity = max_charge = max_discharge = weighted_eff = 0.0
         for battery in self.batteries:
             telemetry = snapshot.batteries.get(battery.subentry_id)
-            if telemetry is None or telemetry.soc_pct is None:
+            if not battery.enabled or telemetry is None or telemetry.soc_pct is None:
                 continue
             caps = battery.driver.capabilities
             energy += telemetry.soc_pct * caps.capacity_wh
@@ -331,10 +334,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if snapshot.grid_power_filtered_w is None:
             return
         controlled_w = snapshot.controlled_consumer_power_w()
+        enabled_battery_w = sum(
+            power
+            for battery in self.batteries
+            if battery.enabled
+            and (telemetry := snapshot.batteries.get(battery.subentry_id)) is not None
+            and (power := telemetry.grid_side_power_w) is not None
+        )
         snapshot.available_power_w = (
-            -snapshot.grid_power_filtered_w
-            + (snapshot.battery_power_w or 0.0)
-            + controlled_w
+            -snapshot.grid_power_filtered_w + enabled_battery_w + controlled_w
         )
         house = snapshot.house_power_w
         load = None if house is None else house - controlled_w
@@ -392,8 +400,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     async def async_release_batteries(self) -> None:
         """Hand all controllable batteries back to their internal logic."""
         for battery in self.batteries:
-            if battery.driver.capabilities.controllable:
-                await battery.driver.release_control()
+            await self.async_release_battery(battery)
+
+    async def async_release_battery(self, battery: BatteryRuntime) -> None:
+        """Hand one battery back to its internal logic."""
+        if battery.driver.capabilities.controllable:
+            await battery.driver.release_control()
 
     async def async_shutdown(self) -> None:
         """Save learned data and close all battery connections."""

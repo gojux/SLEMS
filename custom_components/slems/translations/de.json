@@ -303,6 +303,9 @@
       },
       "night_discharge": {
         "name": "Nachtentladung"
+      },
+      "battery_enabled": {
+        "name": "Aktiviert"
       }
     },
     "number": {

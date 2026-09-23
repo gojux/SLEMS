@@ -303,6 +303,9 @@
       },
       "night_discharge": {
         "name": "Night discharge"
+      },
+      "battery_enabled": {
+        "name": "Enabled"
       }
     },
     "number": {

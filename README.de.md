@@ -10,9 +10,7 @@ z. B. durch Verschieben des Ladezeitpunkts, damit die tägliche
 Einspeisespitze abgefangen wird. Grundlage dafür sind Prognosen für Verbrauch
 und PV-Ertrag.
 
-Der Name setzt sich aus *Slug* (unserer Haustier-Nacktschnecke) und *EMS*
-(Energiemanagementsystem) zusammen; die Schnecke im Logo trägt einen Akku
-statt eines Hauses.
+Der Name setzt sich aus *Slug* und *EMS* (Energiemanagementsystem) zusammen.
 
 > **Status: frühe Entwicklung.** SLEMS liest aktuell Batterien und Messwerte
 > und stellt sie als Entities bereit. Prognose, Planung, Verbrauchersteuerung
@@ -121,6 +119,10 @@ fließt in die Entscheidung ein, ob der PV-Überschuss die Batterien füllt.
   an eine solche Batterie nie Befehle. So kann SLEMS im Simulationsmodus
   parallel zu einer bestehenden Batterie-Integration laufen.
 
+Jede Batterie hat einen Schalter *Aktiviert*. Eine deaktivierte Batterie wird
+weiter gemessen (ihre Leistung gehört zur Energiebilanz), aber weder
+eingeplant noch gesteuert und zählt nicht zum Gesamt-Ladezustand.
+
 ### Betriebsmodus
 
 Die Entity *SLEMS Betriebsmodus* schaltet zwischen:
@@ -145,8 +147,9 @@ Die Entity *SLEMS Betriebsmodus* schaltet zwischen:
 - *Ziel-Netzüberschuss beim Entladen* (−1000…+1000 W, Standard 50 W;
   positiv = Einspeisung, negativ = Bezug): der Netzwert, auf den die
   entladenden Batterien regeln. Zwischen den beiden Zielwerten ruhen die Batterien.
-- *Maximale Einspeisung beim Entladen* (Standard 200 W): Das Entladen
-  verursacht nie mehr Einspeisung als diesen Wert.
+- *Maximale Einspeisung beim Entladen* (0 bis Summe der maximalen
+  Entladeleistung aller Batterien, Standard 5000 W): Das Entladen verursacht
+  nie mehr Einspeisung als diesen Wert.
 - *Nachtentladung* (Schalter, standardmäßig aus) und *Reserve Nachtentladung*
   (Standard 25 % des prognostizierten Verbrauchs von morgen): Über Nacht
   entladen die Batterien gleichmäßig bis zur Reserve, bis die PV-Erzeugung den

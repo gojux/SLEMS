@@ -9,8 +9,8 @@ controllable consumers. Its goal is to operate the batteries in a grid friendly
 way, e.g. by shifting the charging time so that the daily feed-in peak is
 absorbed, based on forecasts of consumption and PV production.
 
-The name is a combination of *Slug* (our pet slug) and *EMS* (energy
-management system); the slug in the logo carries a battery instead of a shell.
+The name is a combination of *Slug* and *EMS* (energy
+management system).
 
 > **Status: early development.** SLEMS currently reads batteries and
 > measurements and exposes them as entities. Forecasts, planning, consumer
@@ -116,6 +116,10 @@ into account when deciding whether the PV surplus will fill the batteries.
   commands to such a battery. This allows running SLEMS in simulation mode side
   by side with an existing battery integration.
 
+Every battery has an *Enabled* switch. A disabled battery is still measured
+(its power is part of the energy balance), but it is neither planned with nor
+controlled, and it does not count towards the total state of charge.
+
 ### Operating mode
 
 The entity *SLEMS Operating mode* switches between:
@@ -140,8 +144,9 @@ The entity *SLEMS Operating mode* switches between:
 - *Grid surplus target while discharging* (−1000…+1000 W, default 50 W;
   positive = export, negative = import) – the grid power the discharging
   batteries aim at. Between the two targets the batteries stay idle.
-- *Maximum grid export while discharging* (default 200 W) – discharging never
-  causes more export than this.
+- *Maximum grid export while discharging* (0 up to the sum of the maximum
+  discharge power of all batteries, default 5000 W) – discharging never causes
+  more export than this.
 - *Night discharge* (switch, off by default) and *Night discharge reserve*
   (default 25 % of tomorrow's forecast consumption) – over night the batteries
   discharge evenly down to the reserve until PV production exceeds the

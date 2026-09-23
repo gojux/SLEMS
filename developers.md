@@ -98,7 +98,8 @@ sensors. Inputs:
 - **Grid targets** (surplus, +export / −import): charging only uses the power
   above the *charge target* (0…5000 W), so at least that much is exported;
   discharging aims at the *discharge target* (−1000…+1000 W), capped by the
-  *maximum grid export while discharging*. Between the two targets the
+  *maximum grid export while discharging* (range 0 … sum of the maximum
+  discharge power of all batteries, default 5000 W). Between the two targets the
   batteries stay idle. The real-time controller also uses the maximum export
   as hard limit: if the measured export exceeds it while discharging, the
   discharge power is reduced immediately.
@@ -107,6 +108,11 @@ sensors. Inputs:
   rest to consumers by priority (1 first). Unused power of one side goes to
   the other. Deficit → batteries discharge (self consumption), with import
   peak shaving only the import above the limit.
+- **Disabled batteries** (switch per battery): still read and part of the
+  energy balance (their power is treated like an uncontrolled load/source),
+  but excluded from the battery group, total SoC, available power, planning
+  and control. Disabling one in active mode hands it back to its internal
+  logic immediately.
 - **Minimum runtime / pause** are tracked on the state commanded by SLEMS
   (`RuntimeTracker`), in simulation mode on the virtual state.
 
@@ -308,4 +314,5 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-23 | Heating rod has its own thermostat; SLEMS needs no tank temperature. |
 | 2026-09-23 | Charge secured uses a safety buffer in kWh instead of a percentage margin. |
 | 2026-09-23 | Grid surplus targets for charging (0…5 kW) and discharging (−1…+1 kW) plus a maximum grid export while discharging. |
+| 2026-09-23 | Batteries can be disabled temporarily via a switch; they stay measured. |
 | 2026-09-23 | Night discharge: evenly spread until PV exceeds consumption, target = reserve raised to what tomorrow's PV can refill; grid target ignored, maximum export respected. |

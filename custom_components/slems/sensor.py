@@ -59,11 +59,11 @@ def _power(key: str, **kwargs) -> dict:
 
 
 def _average_soc(snapshot: SystemSnapshot, coordinator: SlemsCoordinator) -> float | None:
-    """Capacity weighted SoC over all readable batteries."""
+    """Capacity weighted SoC over all enabled, readable batteries."""
     energy = capacity = 0.0
     for battery in coordinator.batteries:
         telemetry = snapshot.batteries.get(battery.subentry_id)
-        if telemetry is None or telemetry.soc_pct is None:
+        if not battery.enabled or telemetry is None or telemetry.soc_pct is None:
             continue
         battery_capacity = battery.driver.capabilities.capacity_wh
         energy += telemetry.soc_pct * battery_capacity

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from homeassistant.components.number import (
@@ -29,6 +30,8 @@ class SettingNumberDescription(NumberEntityDescription):
     """Numeric setting stored in ControlSettings."""
 
     attribute: str
+    # Dynamic upper limit, overrides native_max_value.
+    max_fn: Callable[[SlemsCoordinator], float] | None = None
 
 
 def _percentage(key: str, attribute: str, minimum: float = 0, maximum: float = 100):
@@ -45,7 +48,7 @@ def _percentage(key: str, attribute: str, minimum: float = 0, maximum: float = 1
     )
 
 
-def _watts(key: str, attribute: str, minimum: float, maximum: float):
+def _watts(key: str, attribute: str, minimum: float, maximum: float, **kwargs):
     return SettingNumberDescription(
         key=key,
         translation_key=key,
@@ -57,7 +60,12 @@ def _watts(key: str, attribute: str, minimum: float, maximum: float):
         native_step=10,
         mode=NumberMode.BOX,
         entity_category=EntityCategory.CONFIG,
+        **kwargs,
     )
+
+
+def _total_max_discharge_w(coordinator: SlemsCoordinator) -> float:
+    return sum(b.driver.capabilities.max_discharge_power_w for b in coordinator.batteries)
 
 
 SETTING_NUMBERS: tuple[SettingNumberDescription, ...] = (
@@ -90,7 +98,13 @@ SETTING_NUMBERS: tuple[SettingNumberDescription, ...] = (
     _percentage("night_reserve", "night_reserve_pct"),
     _watts("charge_grid_target", "charge_grid_target_w", 0, 5000),
     _watts("discharge_grid_target", "discharge_grid_target_w", -1000, 1000),
-    _watts("discharge_max_grid_export", "discharge_max_grid_export_w", 0, 5000),
+    _watts(
+        "discharge_max_grid_export",
+        "discharge_max_grid_export_w",
+        0,
+        0,
+        max_fn=_total_max_discharge_w,
+    ),
     SettingNumberDescription(
         key="peak_shaving_grid_limit",
         translation_key="peak_shaving_grid_limit",
@@ -149,8 +163,15 @@ class SettingNumber(SlemsSystemEntity, RestoreNumber):
         setattr(self.coordinator.settings, self.entity_description.attribute, value)
 
     @property
+    def native_max_value(self) -> float:
+        if self.entity_description.max_fn is not None:
+            return self.entity_description.max_fn(self.coordinator)
+        return super().native_max_value
+
+    @property
     def native_value(self) -> float:
-        return getattr(self.coordinator.settings, self.entity_description.attribute)
+        value = getattr(self.coordinator.settings, self.entity_description.attribute)
+        return min(value, self.native_max_value)
 
     async def async_set_native_value(self, value: float) -> None:
         self._set(value)
