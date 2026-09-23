@@ -110,6 +110,18 @@ SETTING_NUMBERS: tuple[SettingNumberDescription, ...] = (
         entity_category=EntityCategory.CONFIG,
     ),
     SettingNumberDescription(
+        key="control_settle",
+        translation_key="control_settle",
+        attribute="control_settle_s",
+        device_class=NumberDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        native_min_value=1,
+        native_max_value=60,
+        native_step=1,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    SettingNumberDescription(
         key="rotation_ramp",
         translation_key="rotation_ramp",
         attribute="rotation_ramp_s",

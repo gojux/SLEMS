@@ -36,7 +36,10 @@ docker compose down
 | `tests` | pytest in an image based on the HA image, so Python and HA versions match production. |
 
 `dev/config/configuration.yaml` provides simulated measurements driven by
-`input_number` sliders: smart meter, PV, a heat pump (power + energy) and a
+`input_number` sliders. The smart meter is a closed loop: house load + heat
+pump + heating rod − PV + battery power of "Venus 1" and "Venus 2", updated
+every 2 s, so the controller sees the effect of its commands (set the settle
+time to ~9 s in the dev instance). Further: PV, a heat pump (power + energy) and a
 heating rod controlled via `input_number.sim_heating_rod_setpoint` that can be
 blocked via `input_boolean.sim_heating_rod_blocked`. For a PV forecast add the
 Forecast.Solar integration in the dev instance (no account needed).
@@ -64,6 +67,7 @@ custom_components/slems/
   forecast/          consumption forecast (history, models, forecaster)
   night_discharge.py night discharge planning
   battery_distribution.py  split of the battery power between batteries (rotation, ramps)
+  controller.py      real-time controller (active mode): commands to batteries and consumers
   allocation.py      distribution of available power between batteries and consumers
   grid_filter.py     conservative moving average of the grid power
   efficiency.py      round trip efficiency (battery counters / learned / manual)
@@ -172,21 +176,42 @@ batteries only cover the house consumption at night.
 - Needs the consumption forecast (`SystemSnapshot.consumption_forecast`,
   hourly Wh of the whole house); without it no plan is made.
 
-Planned layers (not implemented yet):
+### Real-time controller
 
-- **Forecast**: see [Consumption forecast](#consumption-forecast).
-- **Planner**: 15 minute slots, 24–48 h horizon; rule based first, interface
-  prepared for a later LP optimisation.
-- **Real-time controller**: follows the plan and corrects deviations from the
-  grid set point in seconds; the only component that sends commands, and only
-  in operating mode *active*. It must be triggered by grid meter state changes:
-  the coordinator cycle (5 s + battery reads) reacts only within ~5–10 s.
-  Consumers with their own thermostat (heating rod) may draw no power although
-  switched on; the controller has to detect this and release their share.
-- **Consumer manager**: switch and number entities, priorities, external block.
-- **Import peak shaving** (only when switched on): at or below the SoC
-  threshold the batteries stop regular discharging and only cover the grid
-  import above the limit.
+`controller.py`, only in operating mode *active*; the only component that
+sends commands.
+
+- **Trigger**: every grid meter state change and every coordinator update,
+  at most every 2 s. It plans with the current HA states and the last
+  commanded battery powers (`SlemsCoordinator.fast_snapshot`), without waiting
+  for the battery polling, and publishes the result to the entities without
+  rescheduling the polling.
+- **Settle time** (setting, default 5 s): after a command the next correction
+  waits until the meter can show the effect. Too short makes the loop
+  oscillate (the new command is assumed delivered while the meter still shows
+  the old state); too long makes it slow. Rule of thumb: meter update interval
+  + battery reaction (~1 s) + margin. The dev environment needs ~9 s because
+  its meter is composed of the 5 s battery polling.
+- **Batteries**: new set point only when it changes by ≥ 25 W or changes
+  direction; repeated every 60 s as keep-alive (also re-enables RS485 control).
+- **Consumers**: switch → `turn_on`/`turn_off`, power → `set_value` (clamped to
+  the entity's min/max/step, dead band 50 W); at most one command per consumer
+  every 10 s. Blocked consumers are left alone.
+- **Saturation**: a consumer drawing < 10 % of its command for 120 s (own
+  thermostat) counts as saturated for 15 min and is planned like an
+  uncontrolled load; its last command stays.
+- **Grid meter stale** (no update within 60 s, based on `last_reported`): all
+  batteries are handed back to their internal logic until the meter reports
+  again (status *grid meter stale*).
+- **Maximum export while discharging** is applied as hard limit on the
+  current, unfiltered grid power (`limit_discharge_export`).
+- Leaving *active* hands the batteries back immediately; consumers keep their
+  last state.
+
+Not implemented yet:
+
+- **Grid friendly charging**: shift charging into the PV feed-in peak instead
+  of charging as early as possible.
 - **Dashboard**: custom sidebar panel (web component served by the integration).
 
 ### Configuration model
@@ -367,6 +392,7 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-23 | Charge secured uses a safety buffer in kWh instead of a percentage margin. |
 | 2026-09-23 | Grid surplus targets for charging (0…5 kW) and discharging (−1…+1 kW) plus a maximum grid export while discharging. |
 | 2026-09-23 | Batteries can be disabled temporarily via a switch; they stay measured. |
+| 2026-09-23 | Real-time controller event driven on the grid meter with settle time after commands; batteries released when the meter is stale. |
 | 2026-09-23 | Distribution between batteries by minimal conversion losses (learned per battery), rotation by SoC threshold with minimum interval and ramped transition. |
 | 2026-09-23 | Consumption forecast from long-term statistics; optional history entity for the house consumption and optional outdoor temperature sensor, otherwise SLEMS records the weather temperature itself. |
 | 2026-09-23 | Night discharge: evenly spread until PV exceeds consumption, target = reserve raised to what tomorrow's PV can refill; grid target ignored, maximum export respected. |

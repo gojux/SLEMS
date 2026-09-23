@@ -269,6 +269,22 @@ def _distribute(
     return budget
 
 
+def limit_discharge_export(
+    planned_w: float, current_w: float, grid_w: float, max_export_w: float
+) -> float:
+    """Reduce a planned discharge so the grid export stays below the maximum.
+
+    Uses the current (unfiltered) grid power: changing the battery power from
+    ``current_w`` to ``planned_w`` changes the grid power by the difference.
+    Charging is not affected.
+    """
+    if planned_w >= 0:
+        return planned_w
+    # export' = -(grid + planned - current) <= max_export
+    lowest = current_w - grid_w - max_export_w
+    return min(0.0, max(planned_w, lowest))
+
+
 def remaining_pv_wh(forecast: PvForecast, now: datetime) -> float:
     """Forecast PV energy from ``now`` until the end of the local day."""
     end_of_day = dt_util.start_of_local_day(now) + timedelta(days=1)

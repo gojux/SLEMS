@@ -29,6 +29,7 @@ from .coordinator import SlemsConfigEntry, SlemsCoordinator, SystemSnapshot
 from .drivers import BatteryTelemetry
 from .allocation import Strategy
 from .battery_distribution import LossModel
+from .controller import ControlStatus
 from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 from .pv_forecast import energy_on_day
 
@@ -130,6 +131,13 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         device_class=SensorDeviceClass.ENUM,
         options=[strategy.value for strategy in Strategy],
         value_fn=lambda s, _: s.allocation.strategy.value if s.allocation else None,
+    ),
+    SystemSensorDescription(
+        key="control_status",
+        translation_key="control_status",
+        device_class=SensorDeviceClass.ENUM,
+        options=[status.value for status in ControlStatus],
+        value_fn=lambda _, c: c.controller.status.value,
     ),
     SystemSensorDescription(
         key="night_discharge_target_soc",
@@ -363,8 +371,12 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        state = self.coordinator.data.consumers.get(self.consumer.subentry_id)
-        return {"blocked": state.blocked if state else None}
+        data = self.coordinator.data
+        state = data.consumers.get(self.consumer.subentry_id)
+        return {
+            "blocked": state.blocked if state else None,
+            "saturated": self.consumer.subentry_id in data.saturated,
+        }
 
 
 class ConsumptionForecastSensor(SlemsSystemEntity, SensorEntity):

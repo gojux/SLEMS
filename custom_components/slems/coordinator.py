@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 import logging
 import time
@@ -27,6 +27,7 @@ from .allocation import (
     ConsumerRequest,
     allocate,
     expected_surplus_wh,
+    limit_discharge_export,
 )
 from .const import (
     CONF_GRID_POWER_ENTITY,
@@ -43,6 +44,7 @@ from .const import (
     DEFAULT_DISCHARGE_GRID_TARGET_W,
     DEFAULT_DISCHARGE_MAX_GRID_EXPORT_W,
     DEFAULT_NIGHT_RESERVE_PCT,
+    DEFAULT_CONTROL_SETTLE_S,
     DEFAULT_ROTATION_MIN_INTERVAL_MIN,
     DEFAULT_ROTATION_RAMP_S,
     DEFAULT_ROTATION_SOC_THRESHOLD_PCT,
@@ -55,6 +57,7 @@ from .const import (
     ConsumerType,
     OperatingMode,
 )
+from .controller import RealTimeController
 from .consumers import ConsumerConfig, ConsumerState, RuntimeTracker, read_consumer_state
 from .drivers import BatteryDriver, BatteryDriverError, BatteryTelemetry
 from .battery_distribution import (
@@ -115,6 +118,8 @@ class ControlSettings:
     rotation_soc_threshold_pct: float = DEFAULT_ROTATION_SOC_THRESHOLD_PCT
     rotation_min_interval_min: float = DEFAULT_ROTATION_MIN_INTERVAL_MIN
     rotation_ramp_s: float = DEFAULT_ROTATION_RAMP_S
+    # Wait time after a command until the grid meter shows its effect.
+    control_settle_s: float = DEFAULT_CONTROL_SETTLE_S
     night_discharge: bool = False
     # Night discharge reserve in % of tomorrow's forecast daily consumption.
     night_reserve_pct: float = DEFAULT_NIGHT_RESERVE_PCT
@@ -151,6 +156,9 @@ class SystemSnapshot:
     batteries: dict[str, BatteryTelemetry] = field(default_factory=dict)
     consumer_configs: dict[str, ConsumerConfig] = field(default_factory=dict)
     consumers: dict[str, ConsumerState] = field(default_factory=dict)
+    # Consumers that did not draw the commanded power (own thermostat); they
+    # are treated like uncontrolled loads for a while.
+    saturated: frozenset[str] = frozenset()
     pv_forecast: PvForecast | None = None
     consumption_forecast: ConsumptionForecast | None = None
     # Current outdoor temperature of the weather entity (°C).
@@ -180,14 +188,23 @@ class SystemSnapshot:
             if self.consumer_configs[subentry_id].included_in_meter == included_in_meter
         )
 
+    def is_controllable_now(self, subentry_id: str) -> bool:
+        """True if SLEMS may control the consumer right now."""
+        config = self.consumer_configs[subentry_id]
+        state = self.consumers[subentry_id]
+        return (
+            config.controllable
+            and config.included_in_meter
+            and not state.blocked
+            and subentry_id not in self.saturated
+        )
+
     def controlled_consumer_power_w(self) -> float:
         """Power of the consumers SLEMS may control right now (behind the meter)."""
         return sum(
             state.power_w or 0.0
             for subentry_id, state in self.consumers.items()
-            if (config := self.consumer_configs[subentry_id]).controllable
-            and config.included_in_meter
-            and not state.blocked
+            if self.is_controllable_now(subentry_id)
         )
 
     @property
@@ -253,10 +270,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.efficiency"
         )
         self.forecaster = ConsumptionForecaster(hass, self._forecast_sources())
+        self.controller = RealTimeController(self)
 
     @property
     def _config(self):
         return self.config_entry.options or self.config_entry.data
+
+    @property
+    def grid_entity_id(self) -> str:
+        return self._config[CONF_GRID_POWER_ENTITY]
 
     async def _async_setup(self) -> None:
         """Restore learned data and follow the grid meter."""
@@ -338,6 +360,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     @callback
     def _on_grid_change(self, event: Event[EventStateChangedData]) -> None:
         self._add_grid_sample(event.data["new_state"])
+        self.controller.request()
 
     def _add_grid_sample(self, state) -> None:
         grid = state_as_watts(state)
@@ -397,8 +420,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 battery.loss_curve.add(telemetry.ac_power_w, telemetry.power_w)
         self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
 
+        snapshot.saturated = self.controller.saturated
         if self.settings.operating_mode is not OperatingMode.OFF:
-            self._allocate(snapshot, dt_util.now(), now)
+            self.plan(snapshot, dt_util.now(), now)
+        # Runs after the new data has been stored.
+        self.hass.loop.call_soon(self.controller.request)
         return snapshot
 
     @staticmethod
@@ -436,7 +462,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             charge_efficiency=weighted_eff / capacity,
         )
 
-    def _allocate(self, snapshot: SystemSnapshot, wall_now: datetime, now: float) -> None:
+    def plan(self, snapshot: SystemSnapshot, wall_now: datetime, now: float) -> None:
+        """Compute allocation and distribution for ``snapshot`` (in place)."""
         if snapshot.grid_power_filtered_w is None:
             return
         controlled_w = snapshot.controlled_consumer_power_w()
@@ -469,9 +496,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 must_stay_off=self._runtime.must_stay_off(consumer, now),
             )
             for consumer in self.consumers
-            if consumer.controllable
-            and consumer.included_in_meter
-            and not snapshot.consumers[consumer.subentry_id].blocked
+            if snapshot.is_controllable_now(consumer.subentry_id)
         ]
         battery = self._battery_group(snapshot)
         settings = self.settings
@@ -500,6 +525,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             snapshot.expected_surplus_wh,
             snapshot.night_discharge.power_w if snapshot.night_discharge else None,
         )
+        if snapshot.grid_power_w is not None:
+            allocation.battery_power_w = limit_discharge_export(
+                allocation.battery_power_w,
+                enabled_battery_w,
+                snapshot.grid_power_w,
+                settings.discharge_max_grid_export_w,
+            )
         for subentry_id, power in allocation.consumer_power_w.items():
             self._runtime.update(subentry_id, power > 0, now)
         snapshot.allocation = allocation
@@ -513,6 +545,52 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             ),
             now,
         )
+
+    def fast_snapshot(
+        self, commanded_w: dict[str, float], saturated: frozenset[str]
+    ) -> SystemSnapshot | None:
+        """Snapshot for the real-time controller without polling the batteries.
+
+        Measurements come from the current HA states, battery powers are the
+        last commanded values (what the batteries deliver after a moment).
+        """
+        if self.data is None:
+            return None
+        config = self._config
+        now = time.monotonic()
+        grid = state_as_watts(self.hass.states.get(config[CONF_GRID_POWER_ENTITY]))
+        if grid is not None and config.get(CONF_GRID_POWER_INVERTED, False):
+            grid = -grid
+        batteries = {
+            battery_id: replace(
+                telemetry,
+                ac_power_w=commanded_w.get(battery_id, telemetry.grid_side_power_w),
+            )
+            for battery_id, telemetry in self.data.batteries.items()
+        }
+        snapshot = replace(
+            self.data,
+            grid_power_w=grid,
+            grid_power_filtered_w=self._grid_filter.conservative(now),
+            batteries=batteries,
+            consumers={
+                consumer.subentry_id: read_consumer_state(self.hass, consumer)
+                for consumer in self.consumers
+            },
+            saturated=saturated,
+            allocation=None,
+            distribution=None,
+        )
+        if pv_entity := config.get(CONF_PV_POWER_ENTITY):
+            snapshot.pv_power_w = state_as_watts(self.hass.states.get(pv_entity))
+        self.plan(snapshot, dt_util.now(), now)
+        return snapshot
+
+    @callback
+    def publish(self, snapshot: SystemSnapshot) -> None:
+        """Show a snapshot of the controller without rescheduling the polling."""
+        self.data = snapshot
+        self.async_update_listeners()
 
     def _battery_units(self, snapshot: SystemSnapshot) -> list[BatteryUnit]:
         units = []
@@ -544,6 +622,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
 
     async def async_shutdown(self) -> None:
         """Save learned data and close all battery connections."""
+        self.controller.shutdown()
         await super().async_shutdown()
         await self._store.async_save(self._data_to_store())
         if self.settings.operating_mode is OperatingMode.ACTIVE:

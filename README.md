@@ -12,33 +12,33 @@ absorbed, based on forecasts of consumption and PV production.
 The name is a combination of *Slug* and *EMS* (energy
 management system).
 
-> **Status: early development.** SLEMS currently reads batteries and
-> measurements and exposes them as entities. Forecasts, planning, consumer
-> control and the dashboard are not implemented yet (see [roadmap](#roadmap)).
+> **Status: early development.** Forecast, planning and control are
+> implemented, but not yet tested on a real battery. The dashboard is still
+> missing (see [roadmap](#roadmap)).
 
 ## Features
 
 | Feature | Status |
 |---|---|
 | Any number of batteries, added/edited/removed at any time | ✅ |
-| Marstek Venus E 3.0 via Modbus TCP | ✅ reading, control prepared |
+| Marstek Venus E 3.0 via Modbus TCP | ✅ (control not yet tested on a real device) |
 | Read-only battery from existing entities (e.g. while Omnibattery is in control) | ✅ |
 | Smart meter, PV power and weather entity freely selectable | ✅ |
 | PV forecast from any solar forecast integration (Forecast.Solar, Solcast, …) | ✅ |
 | Consumers with own power/energy sensors, inside or outside the smart meter | ✅ configuration |
 | Heat pump as consumer type (weather dependent forecast) | ✅ configuration |
-| Operating mode *Off / Simulation (read-only) / Active* | ✅ entity, logic follows |
-| Vacation switch | ✅ entity, logic follows |
-| Import peak shaving at low state of charge (manually enabled) | ✅ entities, logic follows |
+| Operating mode *Off / Simulation (read-only) / Active* | ✅ |
+| Vacation switch | ✅ |
+| Import peak shaving at low state of charge (manually enabled) | ✅ |
 | Consumption forecast today/tomorrow (history + weather, heat pump temperature dependent) | ✅ |
 | Grid friendly charging: absorb PV feed-in peaks | planned |
-| Distribution of surplus between batteries and consumers (priorities, split, minimum runtime/pause) | ✅ computed and shown, execution follows |
+| Distribution of surplus between batteries and consumers (priorities, split, minimum runtime/pause) | ✅ |
 | Battery efficiency (battery counters, learned or manual) | ✅ |
 | Averaged grid surplus (0–300 s) | ✅ |
 | Grid surplus targets for charging/discharging, maximum export while discharging | ✅ |
-| Night discharge to a forecast based reserve | ✅ computed and shown, execution follows |
-| Distribution between batteries by efficiency, rotation with smooth transition | ✅ computed and shown, execution follows |
-| Consumer control (sending commands) | planned |
+| Night discharge to a forecast based reserve | ✅ |
+| Distribution between batteries by efficiency, rotation with smooth transition | ✅ |
+| Real-time control of batteries and consumers (operating mode *active*) | ✅ |
 | Dashboard with energy flow and daily forecast chart | planned |
 
 ## Installation
@@ -166,7 +166,16 @@ The entity *SLEMS Operating mode* switches between:
 - **Off** – nothing is planned or sent.
 - **Simulation** – forecasts and plans are computed and shown, but no command
   is sent to batteries or consumers. This is the default.
-- **Active** – plans are executed.
+- **Active** – plans are executed: SLEMS sends set points to the batteries
+  and switches/sets the consumers. It reacts to every change of the smart
+  meter. The entity *Control status* shows whether the control is active or
+  paused because the smart meter did not report for 60 s (the batteries then
+  follow their own logic until the meter is back).
+
+Before switching to *active*, set *Control settle time* (default 5 s): the
+time between a command and the moment the smart meter shows its effect,
+roughly the meter's update interval plus about one second. If the grid power
+swings back and forth, increase it.
 
 ### Further settings (entities)
 
@@ -203,7 +212,7 @@ The entity *SLEMS Operating mode* switches between:
 
 ## Roadmap
 
-1. Real-time controller that executes the allocation
+1. Tests on the real system (see open points in developers.md)
 2. Dashboard: energy flow diagram, daily forecast and plan chart
 
 ## Development

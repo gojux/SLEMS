@@ -11,13 +11,13 @@ logger:
 
 # Simulated measurements. Adjust the sliders to play with the values.
 input_number:
-  sim_grid_power:
-    name: Simulated grid power
-    min: -10000
+  sim_house_load:
+    name: Simulated house load
+    min: 0
     max: 10000
     step: 50
     unit_of_measurement: W
-    initial: 400
+    initial: 600
   sim_pv_power:
     name: Simulated PV power
     min: 0
@@ -46,13 +46,26 @@ input_boolean:
     name: Heating rod externally blocked
 
 template:
-  - sensor:
+  # Closed loop: the grid power results from load, PV and the (simulated)
+  # batteries, so SLEMS sees the effect of its own commands. Updated every 2 s
+  # like a real meter. Assumes the batteries are named "Venus 1" / "Venus 2".
+  - trigger:
+      - trigger: time_pattern
+        seconds: "/2"
+    sensor:
       - name: Smart meter power
         unique_id: sim_smart_meter_power
         unit_of_measurement: W
         device_class: power
         state_class: measurement
-        state: "{{ states('input_number.sim_grid_power') | float(0) }}"
+        state: >-
+          {{ (states('input_number.sim_house_load') | float(0)
+              + states('sensor.heat_pump_power') | float(0)
+              + states('sensor.heating_rod_power') | float(0)
+              - states('input_number.sim_pv_power') | float(0)
+              + states('sensor.venus_1_battery_power') | float(0)
+              + states('sensor.venus_2_battery_power') | float(0)) | round(0) }}
+  - sensor:
       - name: PV power
         unique_id: sim_pv_power
         unit_of_measurement: W

@@ -309,6 +309,14 @@
       },
       "consumption_forecast_tomorrow": {
         "name": "Consumption forecast tomorrow"
+      },
+      "control_status": {
+        "name": "Control status",
+        "state": {
+          "inactive": "Inactive",
+          "active": "Active",
+          "grid_stale": "Grid meter stale"
+        }
       }
     },
     "switch": {
@@ -364,6 +372,9 @@
       },
       "rotation_ramp": {
         "name": "Battery rotation ramp time"
+      },
+      "control_settle": {
+        "name": "Control settle time"
       }
     },
     "binary_sensor": {

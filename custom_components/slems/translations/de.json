@@ -309,6 +309,14 @@
       },
       "consumption_forecast_tomorrow": {
         "name": "Verbrauchsprognose morgen"
+      },
+      "control_status": {
+        "name": "Regelstatus",
+        "state": {
+          "inactive": "Inaktiv",
+          "active": "Aktiv",
+          "grid_stale": "Smart Meter ohne aktuelle Werte"
+        }
       }
     },
     "switch": {
@@ -364,6 +372,9 @@
       },
       "rotation_ramp": {
         "name": "Übergangszeit Batteriewechsel"
+      },
+      "control_settle": {
+        "name": "Beruhigungszeit Regelung"
       }
     },
     "binary_sensor": {

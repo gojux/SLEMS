@@ -12,33 +12,33 @@ und PV-Ertrag.
 
 Der Name setzt sich aus *Slug* und *EMS* (Energiemanagementsystem) zusammen.
 
-> **Status: frühe Entwicklung.** SLEMS liest aktuell Batterien und Messwerte
-> und stellt sie als Entities bereit. Prognose, Planung, Verbrauchersteuerung
-> und Dashboard sind noch nicht umgesetzt (siehe [Roadmap](#roadmap)).
+> **Status: frühe Entwicklung.** Prognose, Planung und Regelung sind
+> umgesetzt, aber noch nicht an einer echten Batterie getestet. Das Dashboard
+> fehlt noch (siehe [Roadmap](#roadmap)).
 
 ## Funktionen
 
 | Funktion | Status |
 |---|---|
 | Beliebig viele Batterien, jederzeit hinzufügen, bearbeiten, entfernen | ✅ |
-| Marstek Venus E 3.0 über Modbus TCP | ✅ Lesen, Steuerung vorbereitet |
+| Marstek Venus E 3.0 über Modbus TCP | ✅ (Steuerung noch nicht am echten Gerät getestet) |
 | Nur lesende Batterie aus vorhandenen Entities (z. B. solange Omnibattery steuert) | ✅ |
 | Smart Meter, PV-Leistung und Wetter frei wählbar | ✅ |
 | PV-Prognose aus beliebiger Solarprognose-Integration (Forecast.Solar, Solcast, …) | ✅ |
 | Verbraucher mit eigenen Leistungs-/Energiesensoren, im oder außerhalb des Smart Meters | ✅ Konfiguration |
 | Wärmepumpe als Verbrauchertyp (wetterabhängige Prognose) | ✅ Konfiguration |
-| Betriebsmodus *Aus / Simulation (nur lesend) / Aktiv* | ✅ Entity, Logik folgt |
-| Urlaubsschalter | ✅ Entity, Logik folgt |
-| Bezugsspitzen abfangen bei niedrigem Ladezustand (manuell aktivierbar) | ✅ Entities, Logik folgt |
+| Betriebsmodus *Aus / Simulation (nur lesend) / Aktiv* | ✅ |
+| Urlaubsschalter | ✅ |
+| Bezugsspitzen abfangen bei niedrigem Ladezustand (manuell aktivierbar) | ✅ |
 | Verbrauchsprognose heute/morgen (Historie + Wetter, Wärmepumpe temperaturabhängig) | ✅ |
 | Netzdienliches Laden: PV-Einspeisespitzen abfangen | geplant |
-| Verteilung des Überschusses auf Batterien und Verbraucher (Priorität, Aufteilung, Mindestlaufzeit/-pause) | ✅ berechnet und angezeigt, Ausführung folgt |
+| Verteilung des Überschusses auf Batterien und Verbraucher (Priorität, Aufteilung, Mindestlaufzeit/-pause) | ✅ |
 | Wirkungsgrad der Batterie (Batteriezähler, gelernt oder manuell) | ✅ |
 | Gemittelter Netzüberschuss (0–300 s) | ✅ |
 | Ziel-Netzüberschuss beim Laden/Entladen, maximale Einspeisung beim Entladen | ✅ |
-| Nachtentladung bis zu einer prognosebasierten Reserve | ✅ berechnet und angezeigt, Ausführung folgt |
-| Aufteilung auf Batterien nach Wirkungsgrad, Wechsel mit sanftem Übergang | ✅ berechnet und angezeigt, Ausführung folgt |
-| Verbrauchersteuerung (Befehle senden) | geplant |
+| Nachtentladung bis zu einer prognosebasierten Reserve | ✅ |
+| Aufteilung auf Batterien nach Wirkungsgrad, Wechsel mit sanftem Übergang | ✅ |
+| Echtzeit-Regelung von Batterien und Verbrauchern (Betriebsmodus *Aktiv*) | ✅ |
 | Dashboard mit Energiefluss und Tagesprognose | geplant |
 
 ## Installation
@@ -168,7 +168,16 @@ Die Entity *SLEMS Betriebsmodus* schaltet zwischen:
 - **Aus**: Es wird nichts geplant oder gesendet.
 - **Simulation**: Prognosen und Pläne werden berechnet und angezeigt, aber
   keine Befehle an Batterien oder Verbraucher gesendet. Das ist die Voreinstellung.
-- **Aktiv**: Pläne werden ausgeführt.
+- **Aktiv**: Pläne werden ausgeführt: SLEMS sendet Sollwerte an die
+  Batterien und schaltet bzw. stellt die Verbraucher. Es reagiert auf jede
+  Änderung des Smart Meters. Die Entity *Regelstatus* zeigt, ob die Regelung
+  aktiv ist oder pausiert, weil der Smart Meter 60 s lang nichts gemeldet hat
+  (die Batterien folgen dann ihrer eigenen Logik, bis der Zähler wieder meldet).
+
+Vor dem Umschalten auf *Aktiv* die *Beruhigungszeit Regelung* einstellen
+(Standard 5 s): die Zeit zwischen einem Befehl und dem Moment, in dem der
+Smart Meter die Wirkung zeigt, etwa das Aktualisierungsintervall des Zählers
+plus rund eine Sekunde. Schwankt die Netzleistung hin und her, erhöhen.
 
 ### Weitere Einstellungen (Entities)
 
@@ -205,7 +214,7 @@ Die Entity *SLEMS Betriebsmodus* schaltet zwischen:
 
 ## Roadmap
 
-1. Echtzeit-Regler, der die Verteilung umsetzt
+1. Tests am echten System (siehe offene Punkte in developers.md)
 2. Dashboard: Energiefluss-Schema, Tagesdiagramm mit Prognose und Plan
 
 ## Entwicklung

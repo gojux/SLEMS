@@ -13,6 +13,7 @@ from custom_components.slems.allocation import (
     Strategy,
     allocate,
     expected_surplus_wh,
+    limit_discharge_export,
     remaining_pv_wh,
 )
 from custom_components.slems.const import ControlMode
@@ -197,3 +198,13 @@ def test_night_discharge_covers_larger_house_load() -> None:
 def test_night_discharge_not_during_surplus() -> None:
     result = allocate(2000, battery(80), [], SETTINGS, None, night_discharge_w=600)
     assert result.strategy is Strategy.BATTERY_PRIORITY
+
+
+def test_export_limit_reduces_discharge() -> None:
+    # Battery discharges 1000 W, grid exports 300 W, limit 100 W.
+    assert limit_discharge_export(-1000, -1000, -300, 100) == -800
+    # Within the limit nothing changes.
+    assert limit_discharge_export(-1000, -1000, 200, 100) == -1000
+    # Never turns a discharge into charging, charging is untouched.
+    assert limit_discharge_export(-200, 0, -900, 100) == 0
+    assert limit_discharge_export(500, 0, -900, 100) == 500
