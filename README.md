@@ -145,8 +145,13 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   (operating mode, control status, strategy, state of charge, feed-in limit,
   forecasts), and the forecast chart: *Today* shows PV and consumption
   forecast (dashed), the measured values so far (solid) and the planned
-  battery charging (bars); *Tomorrow* shows the forecasts of the next day.
-  Hovering shows the values of an hour; *Show table* switches to a table.
+  battery charging (bars), plus the projected total state of charge (dashed)
+  and the measured one (solid) with their scale in % on the right. *Tomorrow* shows the forecasts,
+  planned charging and state of charge of the next day, continued from
+  today's projection. The projection follows the planning: charging only
+  with the planned surplus, deficits covered by the batteries, import peak
+  shaving and night discharge if enabled. Hovering shows the values of an
+  hour; *Show table* switches to a table.
 - **Batteries**: state of charge, power, planned power, efficiency, state and
   the *Enabled* switch of every battery (disabling asks for confirmation),
   the cell delta with its balance status, a recommendation for active cell

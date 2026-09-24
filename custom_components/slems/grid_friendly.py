@@ -77,11 +77,12 @@ def remaining_surplus_by_hour(
     consumption_forecast: Mapping[datetime, float] | None,
     load_w: float | None,
     now: datetime,
+    until: datetime | None = None,
 ) -> list[tuple[datetime, float, float]]:
-    """Like ``remaining_surplus`` with the start of each hour."""
+    """Like ``remaining_surplus`` with the start of each hour (until the end of the day)."""
     pv = hourly(pv_forecast)
     consumption = hourly(consumption_forecast) if consumption_forecast is not None else {}
-    end_of_day = dt_util.start_of_local_day(dt_util.as_local(now)) + timedelta(days=1)
+    end_of_day = until or dt_util.start_of_local_day(dt_util.as_local(now)) + timedelta(days=1)
     result = []
     for start, pv_wh in pv.items():
         end = start + PERIOD

@@ -148,9 +148,13 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
   Ladezustand, Einspeisegrenze, Prognosen) und das Prognose-Diagramm:
   *Heute* zeigt PV- und Verbrauchsprognose (gestrichelt), die bisher
   gemessenen Werte (durchgezogen) und das geplante Laden der Batterien
-  (Balken); *Morgen* zeigt die Prognosen des nächsten Tages. Beim Überfahren
-  erscheinen die Werte einer Stunde; *Tabelle anzeigen* schaltet auf eine
-  Tabelle um.
+  (Balken), dazu den prognostizierten Gesamt-Ladezustand (gestrichelt) und
+  den gemessenen (durchgezogen) mit ihrer Skala in % rechts. *Morgen* zeigt Prognosen, geplantes
+  Laden und Ladezustand des nächsten Tages, fortgeführt aus der Prognose von
+  heute. Die Prognose folgt der Planung: Laden nur mit dem geplanten
+  Überschuss, Defizite aus den Batterien, Bezugsspitzen abfangen und
+  Nachtentladung, falls aktiviert. Beim Überfahren erscheinen die Werte einer
+  Stunde; *Tabelle anzeigen* schaltet auf eine Tabelle um.
 - **Batterien**: Ladezustand, Leistung, geplante Leistung, Wirkungsgrad,
   Status und der Schalter *Aktiviert* jeder Batterie (das Deaktivieren muss
   bestätigt werden), das Zell-Delta mit seinem Status, eine Empfehlung für

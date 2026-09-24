@@ -352,15 +352,28 @@ entities. The panel is removed on unload and re-registered on every setup.
   (speed quantised so the animation does not restart). Battery flow uses the
   AC power when the driver reports it.
 - Day chart: data from the attribute `day_plan` of the sensor *Feed-in limit*
-  (24 rows: corrected PV forecast, consumption forecast, planned charging;
-  `day_plan_tomorrow` for the *Tomorrow* view: uncorrected PV forecast and
-  consumption forecast, no planned charging because the state of charge in
-  the morning is unknown) plus
-  the hourly means of today from the recorder
-  (`recorder/statistics_during_period` for the SLEMS PV and house sensors,
-  refreshed every 5 min). Drawn as SVG in real pixels (redrawn on resize),
-  one axis in W, forecast dashed, measured solid, planned charging as bars;
-  crosshair tooltip per hour; table view as accessible alternative.
+  (24 rows: corrected PV forecast, consumption forecast, planned charging,
+  projected total SoC at the end of the hour; `day_plan_tomorrow` for the
+  *Tomorrow* view with the uncorrected PV forecast) plus the hourly means of
+  today from the recorder (`recorder/statistics_during_period` for the SLEMS
+  PV, house and total SoC sensors, refreshed every 5 min). Drawn as SVG in
+  real pixels (redrawn on resize): power on the left axis (W), the total SoC
+  drawn on top with its own scale on the right (0–100 %, labels only, the
+  grid lines belong to the W axis; the user's choice over a separate panel);
+  forecast dashed, measured solid, planned charging as bars;
+  the SoC forecast starts at the current total SoC (tomorrow: at today's last
+  projected value); crosshair tooltip per hour; table view
+  as accessible alternative.
+- SoC projection (`soc_projection.py`, run with every plan): hour by hour
+  until the end of tomorrow. Surplus hours charge the planned amount
+  (`planned_charging`; each day planned at its first surplus hour from the
+  projected SoC, today with the controller's feed-in limit, tomorrow with a
+  feed-in limit computed for tomorrow if grid friendly charging is on);
+  deficit hours discharge like the allocation (peak shaving below the
+  threshold only above the import limit; night discharge via
+  `plan_night_discharge` per hour, the extra part stops at its target).
+  One-way efficiency both ways, max charge/discharge power, 0–100 %.
+  Controllable consumers, grid targets and balancing batteries are ignored.
 - Colours: roles PV / battery / grid / consumer / house use categorical slots
   validated for colour vision deficiency in both modes (adjacent pairs, see
   the `COLORS` table); dark values when `hass.themes.darkMode`. Everything

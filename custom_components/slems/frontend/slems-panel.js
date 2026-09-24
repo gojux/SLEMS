@@ -56,14 +56,16 @@ const STRINGS = {
     energyFlow: "Energy flow",
     today: "Today",
     dayChart: "Today: forecast and plan",
-    dayChartTomorrow: "Tomorrow: forecast",
+    dayChartTomorrow: "Tomorrow: forecast and plan",
     tomorrow: "Tomorrow",
-    dayChartHint: "Hourly average power",
+    dayChartHint: "Hourly average power (left), total state of charge (right)",
     pvForecast: "PV forecast",
     pvActual: "PV measured",
     consumptionForecast: "Consumption forecast",
     consumptionActual: "Consumption measured",
     plannedCharge: "Planned charging",
+    socForecast: "State of charge forecast",
+    socActual: "State of charge measured",
     showTable: "Show table",
     showChart: "Show chart",
     hour: "Hour",
@@ -143,14 +145,16 @@ const STRINGS = {
     energyFlow: "Energiefluss",
     today: "Heute",
     dayChart: "Heute: Prognose und Plan",
-    dayChartTomorrow: "Morgen: Prognose",
+    dayChartTomorrow: "Morgen: Prognose und Plan",
     tomorrow: "Morgen",
-    dayChartHint: "Mittlere Leistung pro Stunde",
+    dayChartHint: "Mittlere Leistung pro Stunde (links), Gesamt-Ladezustand (rechts)",
     pvForecast: "PV-Prognose",
     pvActual: "PV gemessen",
     consumptionForecast: "Verbrauchsprognose",
     consumptionActual: "Verbrauch gemessen",
     plannedCharge: "Geplantes Laden",
+    socForecast: "Ladezustand-Prognose",
+    socActual: "Ladezustand gemessen",
     showTable: "Tabelle anzeigen",
     showChart: "Diagramm anzeigen",
     hour: "Stunde",
@@ -261,7 +265,7 @@ class SlemsPanel extends HTMLElement {
     this._tab = "overview";
     this._showTable = false;
     this._chartDay = "today";
-    this._stats = { pv: {}, house: {} };
+    this._stats = { pv: {}, house: {}, soc: {} };
     this._statsFetched = 0;
     this._sections = {};
     this._renderQueued = false;
@@ -339,6 +343,11 @@ class SlemsPanel extends HTMLElement {
     const prefix = device?.name_by_user || device?.name;
     if (prefix && name.startsWith(prefix + " ")) name = name.slice(prefix.length + 1);
     return name;
+  }
+
+  _percent(value) {
+    const language = this._hass?.locale?.language || "en";
+    return `${new Intl.NumberFormat(language, { maximumFractionDigits: 0 }).format(value)} %`;
   }
 
   _watts(value) {
@@ -683,7 +692,8 @@ class SlemsPanel extends HTMLElement {
     this._statsFetched = Date.now();
     const pvId = this._entityId("pv_power");
     const houseId = this._entityId("house_power");
-    const ids = [pvId, houseId].filter(Boolean);
+    const socId = this._entityId("battery_soc_total");
+    const ids = [pvId, houseId, socId].filter(Boolean);
     if (!ids.length) return;
     const start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -699,7 +709,7 @@ class SlemsPanel extends HTMLElement {
       });
       const byHour = (rows) =>
         Object.fromEntries((rows || []).map((row) => [new Date(row.start).getHours(), row.mean]));
-      this._stats = { pv: byHour(result[pvId]), house: byHour(result[houseId]) };
+      this._stats = { pv: byHour(result[pvId]), house: byHour(result[houseId]), soc: byHour(result[socId]) };
       this._sections.daychart = undefined;
       this._queueRender();
     } catch (err) {
@@ -717,10 +727,25 @@ class SlemsPanel extends HTMLElement {
       pvForecast: row.pv_wh,
       consumptionForecast: row.consumption_wh,
       plannedCharge: row.planned_charge_w,
+      // Projected total state of charge at the end of the hour.
+      socForecast: row.soc_pct,
       // Measured values exist for today only.
       pvActual: today ? this._stats.pv[hour] ?? null : null,
       consumptionActual: today ? this._stats.house[hour] ?? null : null,
+      socActual: today ? this._stats.soc[hour] ?? null : null,
     }));
+  }
+
+  /** Where the projected state of charge line starts: [hour of day, %]. */
+  _socStart() {
+    if (this._chartDay === "today") {
+      const now = new Date();
+      const soc = this._number(this._state("battery_soc_total"));
+      return soc === null ? null : [now.getHours() + now.getMinutes() / 60, soc];
+    }
+    const today = this._state("feed_in_limit")?.attributes?.day_plan || [];
+    const last = today[today.length - 1]?.soc_pct;
+    return last === null || last === undefined ? null : [0, last];
   }
 
   _renderDayChart() {
@@ -766,7 +791,8 @@ class SlemsPanel extends HTMLElement {
     return `<div class="legend">
       ${item(c.pv, t.pvForecast, "dash")}${has("pvActual") ? item(c.pv, t.pvActual, "solid") : ""}
       ${item(c.house, t.consumptionForecast, "dash")}${has("consumptionActual") ? item(c.house, t.consumptionActual, "solid") : ""}
-      ${has("plannedCharge") ? item(c.battery, t.plannedCharge, "bar") : ""}</div>`;
+      ${has("plannedCharge") ? item(c.battery, t.plannedCharge, "bar") : ""}
+      ${has("socForecast") ? item(c.battery, t.socForecast, "dash") : ""}${has("socActual") ? item(c.battery, t.socActual, "solid") : ""}</div>`;
   }
 
   _chartSvg(rows) {
@@ -775,9 +801,14 @@ class SlemsPanel extends HTMLElement {
     const available = this.shadowRoot.getElementById("daychart")?.clientWidth || 720;
     const width = Math.max(280, Math.round(available));
     const height = width < 500 ? 220 : 260;
-    const pad = { left: 52, right: 22, top: 10, bottom: 26 };
+    // The total state of charge is drawn on top with its own scale (0–100 %) on the right.
+    const hasSoc = rows.some((r) => r.socForecast !== null && r.socForecast !== undefined) ||
+      rows.some((r) => r.socActual !== null && r.socActual !== undefined);
+    const pad = { left: 52, right: hasSoc ? 46 : 22, top: 10, bottom: 26 };
     const plotW = width - pad.left - pad.right;
     const plotH = height - pad.top - pad.bottom;
+    const ys = (value) => pad.top + plotH - (Math.max(0, Math.min(100, value)) / 100) * plotH;
+    const plotBottom = pad.top + plotH;
     const values = rows.flatMap((r) => [r.pvForecast, r.consumptionForecast, r.plannedCharge, r.pvActual, r.consumptionActual]);
     const max = Math.max(100, ...values.filter((v) => v !== null && v !== undefined));
     const step = niceStep(max / 4);
@@ -785,6 +816,26 @@ class SlemsPanel extends HTMLElement {
     const x = (hour) => pad.left + (hour / 24) * plotW;
     const y = (value) => pad.top + plotH - (value / top) * plotH;
     this._chartGeometry = { pad, plotW, width };
+    const socLines = [];
+    if (hasSoc) {
+      for (const v of [0, 25, 50, 75, 100]) {
+        socLines.push(`<text x="${width - pad.right + 6}" y="${ys(v) + 4}" text-anchor="start" class="tick">${escapeHtml(this._percent(v))}</text>`);
+      }
+      const line = (points, dash) =>
+        points.length < 2
+          ? ""
+          : `<polyline points="${points.map((p) => p.join(",")).join(" ")}" fill="none" stroke="${c.battery}"
+            stroke-width="2" stroke-linejoin="round" stroke-linecap="round" ${dash ? 'stroke-dasharray="5 4"' : ""}/>`;
+      const start = this._socStart();
+      const forecast = rows
+        .filter((r) => r.socForecast !== null && r.socForecast !== undefined)
+        .map((r) => [x(r.hour + 1), ys(r.socForecast)]);
+      if (start && forecast.length) forecast.unshift([x(start[0]), ys(start[1])]);
+      const actual = rows
+        .filter((r) => r.socActual !== null && r.socActual !== undefined)
+        .map((r) => [x(r.hour + 0.5), ys(r.socActual)]);
+      socLines.push(line(forecast, true), line(actual, false));
+    }
 
     const gridLines = [];
     for (let v = 0; v <= top; v += step) {
@@ -817,23 +868,26 @@ class SlemsPanel extends HTMLElement {
         ${gridLines.join("")}${hourTicks}${bars}
         ${path("pvForecast", c.pv, true)}${path("pvActual", c.pv, false)}
         ${path("consumptionForecast", c.house, true)}${path("consumptionActual", c.house, false)}
-        ${showNow ? `<line x1="${x(nowHour)}" x2="${x(nowHour)}" y1="${pad.top}" y2="${pad.top + plotH}" stroke="${c.muted}" stroke-dasharray="2 3"/>
+        ${socLines.join("")}
+        ${showNow ? `<line x1="${x(nowHour)}" x2="${x(nowHour)}" y1="${pad.top}" y2="${plotBottom}" stroke="${c.muted}" stroke-dasharray="2 3"/>
         <text x="${x(nowHour) + 4}" y="${pad.top + 10}" class="tick">${this._t.now}</text>` : ""}
-        <line id="crosshair" x1="0" x2="0" y1="${pad.top}" y2="${pad.top + plotH}" stroke="${c.muted}" visibility="hidden"/>
-        <rect class="hit" x="${pad.left}" y="${pad.top}" width="${plotW}" height="${plotH}" fill="transparent"/>
+        <line id="crosshair" x1="0" x2="0" y1="${pad.top}" y2="${plotBottom}" stroke="${c.muted}" visibility="hidden"/>
+        <rect class="hit" x="${pad.left}" y="${pad.top}" width="${plotW}" height="${plotBottom - pad.top}" fill="transparent"/>
       </svg></div>`;
   }
 
   _chartTable(rows) {
     const t = this._t;
     const cell = (v) => (v === null || v === undefined ? "–" : escapeHtml(this._watts(v)));
+    const percent = (v) => (v === null || v === undefined ? "–" : escapeHtml(this._percent(v)));
     return `<div class="table-wrap"><table>
       <thead><tr><th>${t.hour}</th><th>${t.pvForecast}</th><th>${t.pvActual}</th><th>${t.consumptionForecast}</th>
-      <th>${t.consumptionActual}</th><th>${t.plannedCharge}</th></tr></thead>
+      <th>${t.consumptionActual}</th><th>${t.plannedCharge}</th><th>${t.socForecast}</th><th>${t.socActual}</th></tr></thead>
       <tbody>${rows
         .map(
           (r) => `<tr><td>${String(r.hour).padStart(2, "0")}:00</td><td>${cell(r.pvForecast)}</td><td>${cell(r.pvActual)}</td>
-          <td>${cell(r.consumptionForecast)}</td><td>${cell(r.consumptionActual)}</td><td>${cell(r.plannedCharge)}</td></tr>`
+          <td>${cell(r.consumptionForecast)}</td><td>${cell(r.consumptionActual)}</td><td>${cell(r.plannedCharge)}</td>
+          <td>${percent(r.socForecast)}</td><td>${percent(r.socActual)}</td></tr>`
         )
         .join("")}</tbody></table></div>`;
   }
@@ -862,10 +916,15 @@ class SlemsPanel extends HTMLElement {
       value === null || value === undefined
         ? ""
         : `<div><span class="swatch" style="background:${color}"></span>${label}<b>${escapeHtml(this._watts(value))}</b></div>`;
+    const percentEntry = (color, label, value) =>
+      value === null || value === undefined
+        ? ""
+        : `<div><span class="swatch" style="background:${color}"></span>${label}<b>${escapeHtml(this._percent(value))}</b></div>`;
     tooltip.innerHTML = `<div class="tt-title">${String(hour).padStart(2, "0")}:00–${String(hour + 1).padStart(2, "0")}:00</div>
       ${entry(c.pv, t.pvForecast, row.pvForecast)}${entry(c.pv, t.pvActual, row.pvActual)}
       ${entry(c.house, t.consumptionForecast, row.consumptionForecast)}${entry(c.house, t.consumptionActual, row.consumptionActual)}
-      ${entry(c.battery, t.plannedCharge, row.plannedCharge)}`;
+      ${entry(c.battery, t.plannedCharge, row.plannedCharge)}
+      ${percentEntry(c.battery, t.socForecast, row.socForecast)}${percentEntry(c.battery, t.socActual, row.socActual)}`;
     tooltip.hidden = false;
     // Position relative to the chart card, next to the cursor.
     const card = this.shadowRoot.getElementById("daychart").getBoundingClientRect();
