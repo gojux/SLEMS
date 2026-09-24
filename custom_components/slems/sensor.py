@@ -41,7 +41,7 @@ class SystemSensorDescription(SensorEntityDescription):
     """Describes a system level sensor."""
 
     value_fn: Callable[[SystemSnapshot, SlemsCoordinator], float | None]
-    attributes_fn: Callable[[SystemSnapshot], dict] | None = None
+    attributes_fn: Callable[[SystemSnapshot, SlemsCoordinator], dict] | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -74,6 +74,30 @@ def _average_soc(snapshot: SystemSnapshot, coordinator: SlemsCoordinator) -> flo
         energy += telemetry.soc_pct * battery_capacity
         capacity += battery_capacity
     return energy / capacity if capacity else None
+
+
+def _stored_energy_kwh(snapshot: SystemSnapshot, coordinator: SlemsCoordinator) -> float | None:
+    """Energy stored in all enabled, readable batteries (kWh)."""
+    energy = None
+    for battery in coordinator.batteries:
+        telemetry = snapshot.batteries.get(battery.subentry_id)
+        if not battery.plannable or telemetry is None or telemetry.soc_pct is None:
+            continue
+        stored = telemetry.soc_pct / 100 * battery.driver.capabilities.capacity_wh / 1000
+        energy = (energy or 0.0) + stored
+    return energy
+
+
+def _capacity_kwh(snapshot: SystemSnapshot, coordinator: SlemsCoordinator) -> float | None:
+    """Capacity of the batteries counted in the stored energy total (kWh)."""
+    capacities = [
+        battery.driver.capabilities.capacity_wh / 1000
+        for battery in coordinator.batteries
+        if battery.plannable
+        and (telemetry := snapshot.batteries.get(battery.subentry_id)) is not None
+        and telemetry.soc_pct is not None
+    ]
+    return round(sum(capacities), 2) if capacities else None
 
 
 def _pv_forecast_kwh(day_offset: int) -> Callable[[SystemSnapshot, SlemsCoordinator], float | None]:
@@ -184,7 +208,7 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
     SystemSensorDescription(
         **_power("feed_in_limit"),
         value_fn=lambda s, _: s.feed_in_limit_w,
-        attributes_fn=lambda s: {
+        attributes_fn=lambda s, _: {
             # disabled / no_forecast / not_enough_surplus; None with a limit
             "reason": s.feed_in_limit_reason,
             "day_plan": s.day_plan,
@@ -221,6 +245,16 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         suggested_display_precision=0,
         value_fn=_average_soc,
     ),
+    SystemSensorDescription(
+        key="battery_energy_total",
+        translation_key="battery_energy_total",
+        device_class=SensorDeviceClass.ENERGY_STORAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=2,
+        value_fn=_stored_energy_kwh,
+        attributes_fn=lambda s, c: {"capacity_kwh": _capacity_kwh(s, c)},
+    ),
 )
 
 BATTERY_SENSORS: tuple[BatterySensorDescription, ...] = (
@@ -240,7 +274,8 @@ BATTERY_SENSORS: tuple[BatterySensorDescription, ...] = (
 BATTERY_EXTRA_SENSORS: tuple[BatterySensorDescription, ...] = (
     BatterySensorDescription(
         **_power("ac_power"),
-        value_fn=lambda t: t.extra.get("ac_power"),
+        # Grid side power, +charge / -discharge like the battery power.
+        value_fn=lambda t: t.ac_power_w,
     ),
     BatterySensorDescription(
         key="battery_voltage",
@@ -348,6 +383,7 @@ async def async_setup_entry(
         async_add_entities(
             [
                 *(BatterySensor(coordinator, battery, d) for d in descriptions),
+                StoredEnergySensor(coordinator, battery),
                 EfficiencySensor(coordinator, battery),
                 PlannedBatteryPowerSensor(coordinator, battery),
                 *(
@@ -398,7 +434,7 @@ class SystemSensor(SlemsSystemEntity, SensorEntity):
     def extra_state_attributes(self) -> dict | None:
         if self.entity_description.attributes_fn is None:
             return None
-        return self.entity_description.attributes_fn(self.coordinator.data)
+        return self.entity_description.attributes_fn(self.coordinator.data, self.coordinator)
 
 
 class BatterySensor(SlemsBatteryEntity, SensorEntity):
@@ -416,6 +452,29 @@ class BatterySensor(SlemsBatteryEntity, SensorEntity):
         if telemetry is None:
             return None
         return self.entity_description.value_fn(telemetry)
+
+
+class StoredEnergySensor(SlemsBatteryEntity, SensorEntity):
+    """Energy stored in the battery (state of charge × capacity)."""
+
+    _attr_device_class = SensorDeviceClass.ENERGY_STORAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, coordinator: SlemsCoordinator, battery) -> None:
+        super().__init__(coordinator, battery, "stored_energy")
+
+    @property
+    def native_value(self) -> float | None:
+        telemetry = self.coordinator.data.batteries.get(self.battery.subentry_id)
+        if telemetry is None or telemetry.soc_pct is None:
+            return None
+        return telemetry.soc_pct / 100 * self.battery.driver.capabilities.capacity_wh / 1000
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"capacity_kwh": round(self.battery.driver.capabilities.capacity_wh / 1000, 2)}
 
 
 class EfficiencySensor(SlemsBatteryEntity, SensorEntity):

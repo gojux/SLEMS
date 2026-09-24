@@ -367,6 +367,12 @@
       },
       "allowed_discharge_power": {
         "name": "Erlaubte Entladeleistung"
+      },
+      "battery_energy_total": {
+        "name": "Gespeicherte Energie gesamt"
+      },
+      "stored_energy": {
+        "name": "Gespeicherte Energie"
       }
     },
     "switch": {

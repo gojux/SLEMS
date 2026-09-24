@@ -427,12 +427,15 @@ entities. The panel is removed on unload and re-registered on every setup.
   *Tomorrow* view with the uncorrected PV forecast) plus the hourly means of
   today from the recorder (`recorder/statistics_during_period` for the SLEMS
   PV, house and total SoC sensors, refreshed every 5 min). Drawn as SVG in
-  real pixels (redrawn on resize): power on the left axis (W), the total SoC
-  drawn on top with its own scale on the right (0–100 %, labels only, the
-  grid lines belong to the W axis; the user's choice over a separate panel);
+  real pixels (redrawn on resize): energy per hour on the left axis (kWh;
+  the hourly mean power in W equals the energy in Wh), the total SoC drawn on
+  top with its own scale on the right (0–100 %, labels only, the grid lines
+  belong to the kWh axis; the user's choice over a separate panel);
   forecast dashed, measured solid, planned charging as bars;
   the SoC forecast starts at the current total SoC (tomorrow: at today's last
-  projected value); crosshair tooltip per hour; table view
+  projected value); crosshair tooltip per hour (touch: `pointerdown` shows and
+  keeps it, also across redraws via `_tooltipAt`; a tap elsewhere hides it;
+  `touch-action: pan-y` keeps vertical scrolling); table view
   as accessible alternative.
 - SoC projection (`soc_projection.py`, run with every plan): hour by hour
   until the end of tomorrow. Surplus hours charge the planned amount
@@ -665,7 +668,7 @@ Source: Omnibattery `const/registers_v3.py`, `drivers/marstek.py`,
 |---|---|---|---|---|
 | 34002 | battery_soc | uint16 | 0.1 % | fallback 37005 (1 %) if it does not answer |
 | 30001 | battery_power | int16 | 1 W | + charge / − discharge |
-| 30006 | ac_power | int16 | 1 W | + discharge / − charge |
+| 30006 | ac_power | int16 | 1 W | + discharge / − charge (the SLEMS sensor *AC power* shows +charge / −discharge like the battery power) |
 | 30100 | battery_voltage | uint16 | 0.01 V | |
 | 35000 | internal_temperature | int16 | 0.1 °C | |
 | 35100 | inverter_state | uint16 | | 0 sleep, 1 standby, 2 charge, 3 discharge, 4 backup, 5 OTA, 6 bypass |

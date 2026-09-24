@@ -58,7 +58,7 @@ const STRINGS = {
     dayChart: "Today: forecast and plan",
     dayChartTomorrow: "Tomorrow: forecast and plan",
     tomorrow: "Tomorrow",
-    dayChartHint: "Hourly average power (left), total state of charge (right)",
+    dayChartHint: "Energy per hour (left), total state of charge (right)",
     pvForecast: "PV forecast",
     pvActual: "PV measured",
     consumptionForecast: "Consumption forecast",
@@ -72,9 +72,11 @@ const STRINGS = {
     now: "now",
     noData: "No forecast available yet",
     soc: "State of charge",
-    power: "Power",
-    acPower: "AC power",
     planned: "Planned",
+    storedEnergy: "Stored energy",
+    storedOf: "{stored} of {capacity} kWh",
+    powerGridSide: "Power (grid side)",
+    setPoint: "SLEMS set point",
     efficiency: "Round trip efficiency",
     state: "State",
     temperature: "Temperature",
@@ -179,7 +181,7 @@ const STRINGS = {
     dayChart: "Heute: Prognose und Plan",
     dayChartTomorrow: "Morgen: Prognose und Plan",
     tomorrow: "Morgen",
-    dayChartHint: "Mittlere Leistung pro Stunde (links), Gesamt-Ladezustand (rechts)",
+    dayChartHint: "Energie pro Stunde (links), Gesamt-Ladezustand (rechts)",
     pvForecast: "PV-Prognose",
     pvActual: "PV gemessen",
     consumptionForecast: "Verbrauchsprognose",
@@ -193,9 +195,11 @@ const STRINGS = {
     now: "jetzt",
     noData: "Noch keine Prognose verfügbar",
     soc: "Ladezustand",
-    power: "Leistung",
-    acPower: "AC-Leistung",
     planned: "Geplant",
+    storedEnergy: "Gespeichert",
+    storedOf: "{stored} von {capacity} kWh",
+    powerGridSide: "Leistung (netzseitig)",
+    setPoint: "Vorgabe SLEMS",
     efficiency: "Gesamtwirkungsgrad",
     state: "Status",
     temperature: "Temperatur",
@@ -350,6 +354,7 @@ const OVERVIEW_TILES = [
   "control_status",
   "allocation_strategy",
   "battery_soc_total",
+  "battery_energy_total",
   "feed_in_limit",
   "expected_surplus_energy",
   "pv_forecast_today",
@@ -434,12 +439,30 @@ class SlemsPanel extends HTMLElement {
 
   /** Value of an overview tile; the feed-in limit explains why it has none. */
   _tileValue(stateObj) {
+    const stored = this._storedOf(stateObj);
+    if (stored) return stored;
     const reason = stateObj.attributes?.reason;
     const noLimit = this._t.feedInLimitReasons;
     if (this._number(stateObj) === null && reason && noLimit[reason] && this._entityId("feed_in_limit") === stateObj.entity_id) {
       return noLimit[reason];
     }
     return this._format(stateObj);
+  }
+
+  /** "2,09 von 5,12 kWh" for a stored energy sensor with its capacity. */
+  _storedOf(stateObj) {
+    const stored = this._number(stateObj);
+    const capacity = stateObj?.attributes?.capacity_kwh;
+    if (stored === null || capacity === null || capacity === undefined) return null;
+    const format = (v) =>
+      new Intl.NumberFormat(this._hass?.locale?.language || "en", { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(v);
+    return this._t.storedOf.replace("{stored}", format(stored)).replace("{capacity}", format(capacity));
+  }
+
+  /** Battery power for the flow: grid side (AC) if reported, +charge / -discharge. */
+  _batteryPower(deviceId) {
+    const ac = this._number(this._state("ac_power", deviceId));
+    return ac !== null ? ac : this._number(this._state("battery_power", deviceId));
   }
 
   /** Power of a foreign entity in W (it may report W, kW or MW). */
@@ -465,6 +488,12 @@ class SlemsPanel extends HTMLElement {
     const prefix = device?.name_by_user || device?.name;
     if (prefix && name.startsWith(prefix + " ")) name = name.slice(prefix.length + 1);
     return name;
+  }
+
+  /** Energy of an hour (Wh, equal to the mean power in W) in kWh. */
+  _kwh(wh) {
+    const language = this._hass?.locale?.language || "en";
+    return `${new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(wh / 1000)} kWh`;
   }
 
   _percent(value) {
@@ -550,7 +579,20 @@ class SlemsPanel extends HTMLElement {
     content.addEventListener("click", (event) => this._onClick(event));
     content.addEventListener("change", (event) => this._onChange(event));
     content.addEventListener("pointermove", (event) => this._onChartHover(event));
-    content.addEventListener("pointerleave", () => this._hideTooltip(), true);
+    // Touch: a tap (or a horizontal drag) on the chart shows the hour and keeps
+    // it; a tap elsewhere hides it. The mouse hides it when leaving the chart.
+    content.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "mouse") return;
+      if (event.target.closest?.("svg.chart")) this._onChartHover(event);
+      else this._hideTooltip();
+    });
+    content.addEventListener(
+      "pointerleave",
+      (event) => {
+        if (event.pointerType === "mouse" && event.target.matches?.("svg.chart")) this._hideTooltip();
+      },
+      true
+    );
   }
 
   _render() {
@@ -647,9 +689,8 @@ class SlemsPanel extends HTMLElement {
       { id: "house", role: "house", icon: "mdi:home-lightning-bolt", title: t.house, power: num("house_power") },
     ];
     for (const battery of this._config.batteries || []) {
-      const ac = this._state("ac_power", battery.device_id);
-      // AC power is +discharge; the flow uses +charge.
-      const power = ac ? (this._number(ac) === null ? null : -this._number(ac)) : num("battery_power", battery.device_id);
+      // Grid side (AC) power if the driver reports it, +charge / -discharge.
+      const power = this._batteryPower(battery.device_id);
       const enabled = this._state("battery_enabled", battery.device_id)?.state !== "off";
       const balancing = this._state("cell_balancing", battery.device_id)?.state === "on";
       const notResponding = this._state("not_responding", battery.device_id)?.state === "on";
@@ -935,6 +976,7 @@ class SlemsPanel extends HTMLElement {
       "daychart",
       header + this._legend(rows) + this._chartSvg(rows) + `<div class="tooltip" id="tooltip" hidden></div>`
     );
+    this._showTooltip();
   }
 
   _legend(rows) {
@@ -990,7 +1032,7 @@ class SlemsPanel extends HTMLElement {
     const gridLines = [];
     for (let v = 0; v <= top; v += step) {
       gridLines.push(`<line x1="${pad.left}" x2="${width - pad.right}" y1="${y(v)}" y2="${y(v)}" stroke="${v === 0 ? c.axis : c.grid_line}" stroke-width="1"/>
-        <text x="${pad.left - 6}" y="${y(v) + 4}" text-anchor="end" class="tick">${escapeHtml(this._watts(v))}</text>`);
+        <text x="${pad.left - 6}" y="${y(v) + 4}" text-anchor="end" class="tick">${escapeHtml(this._kwh(v))}</text>`);
     }
     const hourTicks = (width < 500 ? [0, 6, 12, 18, 24] : [0, 3, 6, 9, 12, 15, 18, 21, 24])
       .map((h) => `<text x="${x(h)}" y="${height - 8}" text-anchor="middle" class="tick">${String(h).padStart(2, "0")}:00</text>`)
@@ -1024,7 +1066,7 @@ class SlemsPanel extends HTMLElement {
 
   _chartTable(rows) {
     const t = this._t;
-    const cell = (v) => (v === null || v === undefined ? "–" : escapeHtml(this._watts(v)));
+    const cell = (v) => (v === null || v === undefined ? "–" : escapeHtml(this._kwh(v)));
     const percent = (v) => (v === null || v === undefined ? "–" : escapeHtml(this._percent(v)));
     return `<div class="table-wrap"><table>
       <thead><tr><th>${t.hour}</th><th>${t.pvForecast}</th><th>${t.pvActual}</th><th>${t.consumptionForecast}</th>
@@ -1044,7 +1086,17 @@ class SlemsPanel extends HTMLElement {
     const { pad, plotW, width } = this._chartGeometry;
     const rect = svg.getBoundingClientRect();
     const viewX = ((event.clientX - rect.left) / rect.width) * width;
-    const hour = Math.floor(((viewX - pad.left) / plotW) * 24);
+    // Kept, so the tooltip survives a redraw of the chart with new data.
+    this._tooltipAt = { hour: Math.floor(((viewX - pad.left) / plotW) * 24), clientY: event.clientY };
+    this._showTooltip();
+  }
+
+  _showTooltip() {
+    const svg = this.shadowRoot.querySelector("svg.chart");
+    if (!svg || !this._tooltipAt || !this._chartData || !this._chartGeometry) return;
+    const { pad, plotW, width } = this._chartGeometry;
+    const rect = svg.getBoundingClientRect();
+    const { hour, clientY } = this._tooltipAt;
     const row = this._chartData[hour];
     const tooltip = this.shadowRoot.getElementById("tooltip");
     const crosshair = this.shadowRoot.getElementById("crosshair");
@@ -1061,7 +1113,7 @@ class SlemsPanel extends HTMLElement {
     const entry = (color, label, value) =>
       value === null || value === undefined
         ? ""
-        : `<div><span class="swatch" style="background:${color}"></span>${label}<b>${escapeHtml(this._watts(value))}</b></div>`;
+        : `<div><span class="swatch" style="background:${color}"></span>${label}<b>${escapeHtml(this._kwh(value))}</b></div>`;
     const percentEntry = (color, label, value) =>
       value === null || value === undefined
         ? ""
@@ -1076,12 +1128,13 @@ class SlemsPanel extends HTMLElement {
     const card = this.shadowRoot.getElementById("daychart").getBoundingClientRect();
     const left = (cx / width) * rect.width + (rect.left - card.left);
     const flip = left > card.width * 0.6;
-    const top = Math.min(event.clientY - card.top + 12, card.height - tooltip.offsetHeight - 8);
+    const top = Math.min(clientY - card.top + 12, card.height - tooltip.offsetHeight - 8);
     tooltip.style.left = `${flip ? left - tooltip.offsetWidth - 12 : left + 12}px`;
     tooltip.style.top = `${Math.max(0, top)}px`;
   }
 
   _hideTooltip() {
+    this._tooltipAt = null;
     const tooltip = this.shadowRoot?.getElementById("tooltip");
     if (tooltip) tooltip.hidden = true;
     this.shadowRoot?.getElementById("crosshair")?.setAttribute("visibility", "hidden");
@@ -1109,10 +1162,17 @@ class SlemsPanel extends HTMLElement {
             const reason = st?.attributes?.reason;
             return reason ? [`${label} (${t.limitReasons[reason] || reason})`, st] : [label, undefined];
           };
+          const direction = (stateObj) => {
+            const value = this._number(stateObj);
+            if (value === null) return undefined;
+            const text = value > 10 ? t.charging : value < -10 ? t.discharging : t.idle;
+            return { text: `${this._watts(Math.abs(value))} (${text})` };
+          };
+          const power = s("ac_power") || s("battery_power");
           const rows = [
-            [t.power, s("battery_power")],
-            [t.acPower, s("ac_power")],
-            [t.planned, s("planned_power")],
+            [t.storedEnergy, s("stored_energy") && { text: this._storedOf(s("stored_energy")) ?? this._format(s("stored_energy")) }],
+            [t.powerGridSide, direction(power)],
+            [t.setPoint, direction(s("planned_power"))],
             [t.efficiency, s("round_trip_efficiency")],
             [t.state, s("inverter_state")],
             [t.temperature, s("internal_temperature")],
@@ -1136,7 +1196,7 @@ class SlemsPanel extends HTMLElement {
             ${problem}
             <div class="soc"><div class="soc-bar"><div style="width:${soc ?? 0}%"></div></div>
               <span>${soc === null ? "–" : Math.round(soc) + " %"}</span></div>
-            <dl>${rows.map(([label, st]) => `<dt>${label}</dt><dd>${escapeHtml(this._format(st))}</dd>`).join("")}</dl>
+            <dl>${rows.map(([label, st]) => `<dt>${label}</dt><dd>${escapeHtml(st.text ?? this._format(st))}</dd>`).join("")}</dl>
             ${this._cellSection(b)}
           </section>`;
         })
@@ -1500,6 +1560,7 @@ const STYLE = `
   .chart { display: block; max-width: 100%; }
   .chart .tick { font-size: 11px; fill: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
   #daychart { position: relative; }
+  svg.chart { touch-action: pan-y; }
   .tooltip { position: absolute; z-index: 2; pointer-events: none; background: var(--card-background-color);
     border: 1px solid var(--divider-color); border-radius: 8px; padding: 8px 10px; font-size: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.15); min-width: 180px; }

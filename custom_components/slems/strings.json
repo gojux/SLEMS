@@ -367,6 +367,12 @@
       },
       "allowed_discharge_power": {
         "name": "Allowed discharge power"
+      },
+      "battery_energy_total": {
+        "name": "Stored energy total"
+      },
+      "stored_energy": {
+        "name": "Stored energy"
       }
     },
     "switch": {
