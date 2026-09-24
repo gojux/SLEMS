@@ -117,3 +117,17 @@ def test_soc_window_bounds_the_projection() -> None:
     pv, consumption = forecasts(load_w=0)
     result = project_soc(at(0), group, pv, consumption, None, settings(), None)
     assert max(result.soc_pct.values()) == pytest.approx(80)
+
+
+def test_no_planned_charging_when_full() -> None:
+    # The buffer lowers the feed-in limit but is not charged into full batteries.
+    pv, consumption = forecasts()
+    result = project_soc(
+        at(6), battery(95), pv, consumption, None, settings(charge_buffer_wh=5000), None
+    )
+    full_at = min(h for h, soc in result.soc_pct.items() if soc >= 100)
+    # Until the end of today's PV (no discharge in between) nothing more is charged.
+    assert all(
+        charge == 0 for h, charge in result.planned_charge_w.items() if full_at < h < at(16)
+    )
+    assert full_at < at(16)

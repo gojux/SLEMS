@@ -110,9 +110,12 @@ def project_soc(
             day = hour.date()
             if day not in plans:
                 plans[day] = charge_plan(hour, start)
-            charge = plans[day].get(hour, 0.0)
+            # The plan includes the buffer (it lowers the feed-in limit); only
+            # what still fits into the batteries is charged.
+            room = max(0.0, full - stored)
+            charge = min(plans[day].get(hour, 0.0), room / (share * efficiency))
             result.planned_charge_w[hour] = charge
-            stored = max(stored, min(full, stored + charge * share * efficiency))
+            stored = min(max(stored, full), stored + charge * share * efficiency)
         else:
             stored = _discharge(
                 stored, load - pv_w, share, start, battery, pv, consumption, settings

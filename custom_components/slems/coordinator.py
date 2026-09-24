@@ -976,7 +976,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     load,
                     ProjectionSettings(
                         grid_friendly_charging=settings.grid_friendly_charging,
-                        charge_buffer_wh=settings.grid_friendly_buffer_kwh * 1000,
+                        # Like the feed-in limit: only with grid friendly charging.
+                        charge_buffer_wh=(
+                            settings.grid_friendly_buffer_kwh * 1000
+                            if settings.grid_friendly_charging
+                            else 0.0
+                        ),
                         night_buffer_wh=settings.charge_secured_buffer_kwh * 1000,
                         peak_shaving=settings.peak_shaving,
                         peak_shaving_grid_limit_w=settings.peak_shaving_grid_limit_w,
