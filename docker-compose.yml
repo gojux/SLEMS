@@ -43,5 +43,8 @@ services:
     working_dir: /repo
     volumes:
       - .:/repo
-    entrypoint: ["python", "-m", "pytest"]
+    # The container runs as root: no bytecode or pytest cache in the repository.
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+    entrypoint: ["python", "-m", "pytest", "-p", "no:cacheprovider"]
     profiles: ["tests"]

@@ -145,8 +145,6 @@ async def _async_system_schema(
             ): _POWER_SENSOR,
             vol.Required(
                 CONF_GRID_POWER_INVERTED,
-    CONF_HOUSE_HISTORY_ENTITY,
-    CONF_OUTDOOR_TEMPERATURE_ENTITY,
                 default=defaults.get(CONF_GRID_POWER_INVERTED, False),
             ): selector.BooleanSelector(),
             optional(CONF_PV_POWER_ENTITY): _POWER_SENSOR,

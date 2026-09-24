@@ -33,7 +33,7 @@ docker compose down
 |---|---|
 | `homeassistant` | HA 2026.9.3 (same version as production) on <http://localhost:8123>. `custom_components/slems` is mounted read-only. |
 | `venus-sim-1`, `venus-sim-2` | Modbus TCP simulators of a Venus E 3.0 (`dev/venus_sim/simulator.py`), reachable as host `venus-sim-1` / `venus-sim-2`, port 502. |
-| `tests` | pytest in an image based on the HA image, so Python and HA versions match production. |
+| `tests` | pytest in an image based on the HA image, so Python and HA versions match production. It runs as root on the mounted repository, so it writes no bytecode and no pytest cache (they would be owned by root). |
 
 `dev/config/configuration.yaml` provides simulated measurements driven by
 `input_number` sliders. The smart meter is a closed loop: house load + heat
