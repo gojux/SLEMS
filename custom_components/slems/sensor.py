@@ -30,6 +30,7 @@ from .coordinator import SlemsConfigEntry, SlemsCoordinator, SystemSnapshot
 from .drivers import BatteryTelemetry
 from .allocation import Strategy
 from .battery_distribution import LossModel
+from .cell_balancing import REST_MEASUREMENT_V, BalancingPhase, balance_status
 from .controller import ControlStatus
 from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 from .pv_forecast import energy_on_day
@@ -67,7 +68,7 @@ def _average_soc(snapshot: SystemSnapshot, coordinator: SlemsCoordinator) -> flo
     energy = capacity = 0.0
     for battery in coordinator.batteries:
         telemetry = snapshot.batteries.get(battery.subentry_id)
-        if not battery.enabled or telemetry is None or telemetry.soc_pct is None:
+        if not battery.plannable or telemetry is None or telemetry.soc_pct is None:
             continue
         battery_capacity = battery.driver.capabilities.capacity_wh
         energy += telemetry.soc_pct * battery_capacity
@@ -260,6 +261,28 @@ BATTERY_EXTRA_SENSORS: tuple[BatterySensorDescription, ...] = (
         value_fn=lambda t: t.extra.get("internal_temperature"),
     ),
     BatterySensorDescription(
+        key="max_cell_voltage",
+        translation_key="max_cell_voltage",
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        suggested_display_precision=3,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda t: t.extra.get("max_cell_voltage"),
+    ),
+    BatterySensorDescription(
+        key="min_cell_voltage",
+        translation_key="min_cell_voltage",
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        suggested_display_precision=3,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda t: t.extra.get("min_cell_voltage"),
+    ),
+    BatterySensorDescription(
         key="inverter_state",
         translation_key="inverter_state",
         device_class=SensorDeviceClass.ENUM,
@@ -325,6 +348,15 @@ async def async_setup_entry(
                 *(BatterySensor(coordinator, battery, d) for d in descriptions),
                 EfficiencySensor(coordinator, battery),
                 PlannedBatteryPowerSensor(coordinator, battery),
+                *(
+                    [
+                        CellDeltaSensor(coordinator, battery),
+                        TopCellDeltaSensor(coordinator, battery),
+                        BalancingPhaseSensor(coordinator, battery),
+                    ]
+                    if battery.supports_balancing
+                    else []
+                ),
             ],
             config_subentry_id=battery.subentry_id,
         )
@@ -493,6 +525,9 @@ class PlannedBatteryPowerSensor(SlemsBatteryEntity, SensorEntity):
 
     @property
     def native_value(self) -> float | None:
+        if self.battery.balancing_requested and not self.battery.participating:
+            # Set point of the cell balancing run (None while it is paused).
+            return self.battery.balancing_power_w
         distribution = self.coordinator.data.distribution
         if distribution is None or not self.battery.participating:
             return None
@@ -509,4 +544,100 @@ class PlannedBatteryPowerSensor(SlemsBatteryEntity, SensorEntity):
             "loss_fixed_w": round(model.fixed_w, 1),
             "loss_linear": round(model.linear, 4),
             "loss_quadratic_per_w": model.quadratic_per_w,
+        }
+
+
+class CellDeltaSensor(SlemsBatteryEntity, SensorEntity):
+    """Current spread between highest and lowest cell voltage.
+
+    Only meaningful near the top of the charge; see TopCellDeltaSensor.
+    """
+
+    _attr_device_class = SensorDeviceClass.VOLTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfElectricPotential.MILLIVOLT
+    _attr_suggested_display_precision = 0
+
+    def __init__(self, coordinator: SlemsCoordinator, battery) -> None:
+        super().__init__(coordinator, battery, "cell_delta")
+
+    @property
+    def native_value(self) -> float | None:
+        telemetry = self.coordinator.data.batteries.get(self.battery.subentry_id)
+        if telemetry is None:
+            return None
+        high = telemetry.extra.get("max_cell_voltage")
+        low = telemetry.extra.get("min_cell_voltage")
+        if high is None or low is None:
+            return None
+        return round((high - low) * 1000, 1)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        telemetry = self.coordinator.data.batteries.get(self.battery.subentry_id)
+        high = telemetry.extra.get("max_cell_voltage") if telemetry else None
+        return {"in_top_window": high is not None and high >= REST_MEASUREMENT_V}
+
+
+class TopCellDeltaSensor(SlemsBatteryEntity, SensorEntity):
+    """Last settled cell delta measured near the top of the charge."""
+
+    _attr_device_class = SensorDeviceClass.VOLTAGE
+    _attr_native_unit_of_measurement = UnitOfElectricPotential.MILLIVOLT
+    _attr_suggested_display_precision = 0
+
+    def __init__(self, coordinator: SlemsCoordinator, battery) -> None:
+        super().__init__(coordinator, battery, "top_cell_delta")
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success
+
+    @property
+    def native_value(self) -> float | None:
+        last = self.battery.cell_monitor.last
+        return last.delta_mv if last else None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        monitor = self.battery.cell_monitor
+        last = monitor.last
+        return {
+            "status": balance_status(last.delta_mv) if last else None,
+            "measured_at": (
+                dt_util.utc_from_timestamp(last.timestamp).isoformat() if last else None
+            ),
+            "source": last.source if last else None,
+            "suggest_balancing": monitor.suggest_balancing,
+        }
+
+
+class BalancingPhaseSensor(SlemsBatteryEntity, SensorEntity):
+    """Phase of the active cell balancing run."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = [phase.value for phase in BalancingPhase]
+
+    def __init__(self, coordinator: SlemsCoordinator, battery) -> None:
+        super().__init__(coordinator, battery, "balancing_phase")
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success
+
+    @property
+    def native_value(self) -> str:
+        return self.battery.balancing_phase.value
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        balancer = self.battery.balancer
+        return {
+            "last_delta_mv": balancer.last_delta_mv if balancer else None,
+            "retry_voltage": balancer.retry_voltage if balancer else None,
+            "started_at": (
+                dt_util.utc_from_timestamp(balancer.started_at).isoformat() if balancer else None
+            ),
+            # done / cancelled / timeout / telemetry
+            "last_result": self.battery.balancing_result,
         }

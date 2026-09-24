@@ -333,6 +333,32 @@
       },
       "pv_correction": {
         "name": "PV forecast correction"
+      },
+      "cell_delta": {
+        "name": "Cell delta"
+      },
+      "top_cell_delta": {
+        "name": "Cell delta at top of charge"
+      },
+      "max_cell_voltage": {
+        "name": "Maximum cell voltage"
+      },
+      "min_cell_voltage": {
+        "name": "Minimum cell voltage"
+      },
+      "balancing_phase": {
+        "name": "Cell balancing phase",
+        "state": {
+          "off": "Off",
+          "waiting": "Waiting for active mode",
+          "pre_top_charge": "Charging to top zone",
+          "charge": "Top charge",
+          "wait_measure": "Resting for measurement",
+          "discharge": "Discharging for retry",
+          "final_discharge": "Final discharge",
+          "done": "Done",
+          "error": "Error"
+        }
       }
     },
     "switch": {
@@ -353,6 +379,9 @@
       },
       "grid_friendly_charging": {
         "name": "Grid friendly charging"
+      },
+      "cell_balancing": {
+        "name": "Active cell balancing"
       }
     },
     "number": {
@@ -409,6 +438,11 @@
       "charge_secured": {
         "name": "Battery charge secured"
       }
+    }
+  },
+  "exceptions": {
+    "balancing_requires_active": {
+      "message": "Active cell balancing can only be started in operating mode active."
     }
   }
 }

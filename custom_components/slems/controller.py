@@ -93,6 +93,8 @@ class RealTimeController:
         self._battery_history: dict[str, list[tuple[float, float]]] = {}
         # battery id -> monotonic time of the last complete write
         self._battery_refreshed: dict[str, float] = {}
+        # battery id -> (balancing power, monotonic time of the last full write)
+        self._balancing_commands: dict[str, tuple[float, float]] = {}
         # consumer id -> (commanded power, monotonic time of the command)
         self._consumer_commands: dict[str, tuple[float, float]] = {}
         # consumer id -> monotonic time until which it counts as saturated
@@ -155,6 +157,7 @@ class RealTimeController:
             # Batteries were released; the next activation must send again.
             self._battery_history.clear()
             self._battery_refreshed.clear()
+            self._balancing_commands.clear()
             self._consumer_commands.clear()
             return
         if self._lock.locked():
@@ -241,6 +244,13 @@ class RealTimeController:
             # Only the handover in this cycle; the meter first has to catch up.
             return
 
+        # Batteries outside the planning (disabled and released, or balancing)
+        # must not count in the commanded total.
+        for battery in coordinator.batteries:
+            if not battery.participating:
+                self._battery_history.pop(battery.subentry_id, None)
+                self._battery_refreshed.pop(battery.subentry_id, None)
+
         seen_before = start - self.battery_response.value
         seen = {
             battery_id: power
@@ -260,6 +270,9 @@ class RealTimeController:
         )
         if snapshot is None or snapshot.distribution is None or snapshot.allocation is None:
             return
+        # Before the normal set points: a battery whose balancing run ended is
+        # released first and then planned again.
+        await self._async_apply_balancing()
         new_total = await self._async_apply_batteries(snapshot, latest_total)
         if new_total is not None and coordinator.settings.auto_gain:
             self.gain_adapter.observe(start, new_total - latest_total)
@@ -311,11 +324,15 @@ class RealTimeController:
                 and now >= battery.leaving_until
                 and self._latest_command(battery.subentry_id) == 0
             ):
-                _LOGGER.debug("Battery %s: ramp-out finished, released", battery.name)
                 battery.leaving_until = None
                 self._battery_history.pop(battery.subentry_id, None)
                 self._battery_refreshed.pop(battery.subentry_id, None)
-                await battery.driver.release_control()
+                if battery.balancing_requested:
+                    # The balancing run takes over with its next step.
+                    _LOGGER.debug("Battery %s: ramp-out finished, cell balancing", battery.name)
+                else:
+                    _LOGGER.debug("Battery %s: ramp-out finished, released", battery.name)
+                    await battery.driver.release_control()
                 released = True
         return released
 
@@ -361,6 +378,39 @@ class RealTimeController:
         # The grid power moves by the change of the battery power.
         self.battery_response.command(now, self._last_grid_w, new_total - previous_total)
         return new_total
+
+    async def _async_apply_balancing(self) -> None:
+        """Send the powers of active cell balancing runs.
+
+        A balancing battery is not part of the planning; its power shows up in
+        the grid meter like an uncontrolled load or source (see ``plan``).
+        When a run ends, the battery is released (as in Omnibattery) and taken
+        over again by the normal operation if it can be read.
+        """
+        now = time.monotonic()
+        for battery in self._coordinator.batteries:
+            battery_id = battery.subentry_id
+            if not battery.balancing_requested:
+                if self._balancing_commands.pop(battery_id, None) is not None:
+                    _LOGGER.debug("Battery %s: cell balancing ended, released", battery.name)
+                    await battery.driver.release_control()
+                continue
+            target = battery.balancing_power_w
+            if target is None:
+                continue
+            target = round(target)
+            previous = self._balancing_commands.get(battery_id)
+            refresh = previous is None or now - previous[1] >= BATTERY_KEEPALIVE_S
+            if previous is not None and not refresh:
+                same_direction = (previous[0] > 0) == (target > 0) and (previous[0] < 0) == (target < 0)
+                if abs(previous[0] - target) < BATTERY_DEADBAND_W and same_direction:
+                    continue
+            _LOGGER.debug("Battery %s: cell balancing set point %d W", battery.name, target)
+            if await battery.driver.apply_power(target, refresh=refresh):
+                # The time of the last complete write is kept for the keep-alive.
+                self._balancing_commands[battery_id] = (
+                    target, now if refresh else previous[1]
+                )
 
     # --- consumers ------------------------------------------------------------
 

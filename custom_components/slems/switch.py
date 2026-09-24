@@ -1,4 +1,4 @@
-"""Switch platform: vacation mode and import peak shaving."""
+"""Switch platform: runtime settings, battery enabling and cell balancing."""
 
 from __future__ import annotations
 
@@ -7,10 +7,11 @@ from typing import Any
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import STATE_ON, EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import OperatingMode
+from .const import DOMAIN, OperatingMode
 from .coordinator import BatteryRuntime, SlemsConfigEntry, SlemsCoordinator
 from .entity import SlemsBatteryEntity, SlemsSystemEntity
 
@@ -36,10 +37,10 @@ async def async_setup_entry(
         for key, attribute in SETTING_SWITCHES.items()
     )
     for battery in coordinator.batteries:
-        async_add_entities(
-            [BatteryEnabledSwitch(coordinator, battery)],
-            config_subentry_id=battery.subentry_id,
-        )
+        entities: list[SwitchEntity] = [BatteryEnabledSwitch(coordinator, battery)]
+        if battery.supports_balancing:
+            entities.append(CellBalancingSwitch(coordinator, battery))
+        async_add_entities(entities, config_subentry_id=battery.subentry_id)
 
 
 class SettingSwitch(SlemsSystemEntity, SwitchEntity, RestoreEntity):
@@ -105,4 +106,40 @@ class BatteryEnabledSwitch(SlemsBatteryEntity, SwitchEntity, RestoreEntity):
             # A discharging battery ramps out first, the others are released at once.
             if not coordinator.controller.disable_battery(self.battery):
                 await coordinator.async_release_battery(self.battery)
+        self.async_write_ha_state()
+
+
+class CellBalancingSwitch(SlemsBatteryEntity, SwitchEntity):
+    """Start or cancel an active cell balancing run.
+
+    On: the battery leaves the normal operation and runs the balancing profile.
+    It can only be started in operating mode active; outside of it a running
+    one pauses. Off: the run is cancelled and the battery returns to normal
+    operation. It switches itself off when the run ends. The run survives a
+    restart (stored by the coordinator).
+    """
+
+    def __init__(self, coordinator: SlemsCoordinator, battery: BatteryRuntime) -> None:
+        super().__init__(coordinator, battery, "cell_balancing")
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success and self.battery.enabled
+
+    @property
+    def is_on(self) -> bool:
+        return self.battery.balancing_requested
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        if self.battery.balancing_requested:
+            return
+        if self.coordinator.settings.operating_mode is not OperatingMode.ACTIVE:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="balancing_requires_active"
+            )
+        self.coordinator.start_balancing(self.battery)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self.coordinator.end_balancing(self.battery, "cancelled")
         self.async_write_ha_state()

@@ -85,6 +85,32 @@ const STRINGS = {
     noBatteries: "No batteries configured.",
     noConsumers: "No consumers configured.",
     disabled: "disabled",
+    cellDelta: "Cell delta",
+    cellDeltaHint: "live, meaningful only near full charge",
+    topCellDelta: "Cell delta at top of charge",
+    noTopMeasurement: "no measurement yet",
+    statusGreen: "good",
+    statusYellow: "minor imbalance",
+    statusOrange: "moderate imbalance",
+    statusRed: "high imbalance",
+    balancingSuggested: "Cell balancing recommended",
+    balancingSuggestedText:
+      "The cells differed by {delta} mV at the top of the charge. Active cell balancing keeps the battery near full charge so the BMS can equalise the cells. It usually takes many hours.",
+    startBalancing: "Start cell balancing",
+    cancelBalancing: "Cancel cell balancing",
+    balancing: "cell balancing",
+    startBalancingTitle: "Start cell balancing for {name}?",
+    startBalancingText:
+      "The battery leaves the normal control: it charges into the top voltage range (from the PV surplus, at least 95 W; without surplus the other batteries cover it), stands by for a measurement, discharges a little and repeats until the cell delta is at most 30 mV (usually many hours, at most 24 h). Its discharge is fed into the grid unless the other batteries charge anyway.",
+    startBalancingConfirm: "Start",
+    balancingNeedsActive: "Cell balancing can only be started in operating mode active.",
+    lastBalancing: "Last cell balancing",
+    balancingResults: {
+      done: "completed",
+      cancelled: "cancelled",
+      timeout: "stopped after 24 h",
+      telemetry: "stopped: battery could not be read",
+    },
     cancel: "Cancel",
     disableBatteryTitle: "Disable {name}?",
     disableBatteryText:
@@ -113,7 +139,7 @@ const STRINGS = {
     export: "Einspeisung",
     charging: "Laden",
     discharging: "Entladen",
-    idle: "Ruhe",
+    idle: "Standby",
     energyFlow: "Energiefluss",
     today: "Heute",
     dayChart: "Heute: Prognose und Plan",
@@ -146,6 +172,32 @@ const STRINGS = {
     noBatteries: "Keine Batterien konfiguriert.",
     noConsumers: "Keine Verbraucher konfiguriert.",
     disabled: "deaktiviert",
+    cellDelta: "Zell-Delta",
+    cellDeltaHint: "live, nur nahe Vollladung aussagekräftig",
+    topCellDelta: "Zell-Delta am oberen Ladeende",
+    noTopMeasurement: "noch keine Messung",
+    statusGreen: "gut",
+    statusYellow: "leichtes Ungleichgewicht",
+    statusOrange: "mittleres Ungleichgewicht",
+    statusRed: "starkes Ungleichgewicht",
+    balancingSuggested: "Zellausgleich empfohlen",
+    balancingSuggestedText:
+      "Die Zellen wichen am oberen Ladeende um {delta} mV voneinander ab. Der aktive Zellausgleich hält die Batterie nahe der Vollladung, damit das BMS die Zellen angleichen kann. Das dauert meist viele Stunden.",
+    startBalancing: "Zellausgleich starten",
+    cancelBalancing: "Zellausgleich abbrechen",
+    balancing: "Zellausgleich",
+    startBalancingTitle: "Zellausgleich für {name} starten?",
+    startBalancingText:
+      "Die Batterie verlässt die normale Steuerung: Sie lädt bis in den oberen Spannungsbereich (aus dem PV-Überschuss, mindestens mit 95 W; ohne Überschuss gleichen die anderen Batterien aus), ist für eine Messung im Standby, entlädt etwas und wiederholt das, bis das Zell-Delta höchstens 30 mV beträgt (meist viele Stunden, höchstens 24 h). Ihre Entladung wird eingespeist, außer die anderen Batterien laden ohnehin.",
+    startBalancingConfirm: "Starten",
+    balancingNeedsActive: "Der Zellausgleich kann nur im Betriebsmodus „Aktiv“ gestartet werden.",
+    lastBalancing: "Letzter Zellausgleich",
+    balancingResults: {
+      done: "abgeschlossen",
+      cancelled: "abgebrochen",
+      timeout: "nach 24 h beendet",
+      telemetry: "beendet: Batterie nicht lesbar",
+    },
     cancel: "Abbrechen",
     disableBatteryTitle: "{name} deaktivieren?",
     disableBatteryText:
@@ -460,6 +512,7 @@ class SlemsPanel extends HTMLElement {
       // AC power is +discharge; the flow uses +charge.
       const power = ac ? (this._number(ac) === null ? null : -this._number(ac)) : num("battery_power", battery.device_id);
       const enabled = this._state("battery_enabled", battery.device_id)?.state !== "off";
+      const balancing = this._state("cell_balancing", battery.device_id)?.state === "on";
       nodes.push({
         id: `battery-${battery.id}`,
         role: "battery",
@@ -467,8 +520,12 @@ class SlemsPanel extends HTMLElement {
         title: battery.name,
         power,
         soc: num("battery_soc", battery.device_id),
-        disabled: !enabled,
-        detail: !enabled ? t.disabled : power === null ? "" : power > 10 ? t.charging : power < -10 ? t.discharging : t.idle,
+        disabled: !enabled || balancing,
+        detail: !enabled
+          ? t.disabled
+          : balancing
+            ? t.balancing
+            : power === null ? "" : power > 10 ? t.charging : power < -10 ? t.discharging : t.idle,
       });
     }
     for (const consumer of this._config.consumers || []) {
@@ -855,10 +912,57 @@ class SlemsPanel extends HTMLElement {
             <div class="soc"><div class="soc-bar"><div style="width:${soc ?? 0}%"></div></div>
               <span>${soc === null ? "–" : Math.round(soc) + " %"}</span></div>
             <dl>${rows.map(([label, st]) => `<dt>${label}</dt><dd>${escapeHtml(this._format(st))}</dd>`).join("")}</dl>
+            ${this._cellSection(b)}
           </section>`;
         })
         .join("")
     );
+  }
+
+  _cellSection(battery) {
+    const t = this._t;
+    const s = (key) => this._state(key, battery.device_id);
+    const live = s("cell_delta");
+    const top = s("top_cell_delta");
+    const phase = s("balancing_phase");
+    const switchState = s("cell_balancing");
+    if (!live && !top) return "";
+    const status = top?.attributes?.status;
+    const statusLabel = { green: t.statusGreen, yellow: t.statusYellow, orange: t.statusOrange, red: t.statusRed }[status];
+    const icon = { green: "mdi:check-circle", yellow: "mdi:alert-circle-outline", orange: "mdi:alert", red: "mdi:alert-octagon" }[status];
+    const topValue =
+      top && this._number(top) !== null
+        ? `${escapeHtml(this._format(top))}${status ? ` <span class="status ${status}"><ha-icon icon="${icon}"></ha-icon>${statusLabel}</span>` : ""}`
+        : `<span class="muted">${t.noTopMeasurement}</span>`;
+    const balancing = switchState?.state === "on";
+    const active = this._state("operating_mode")?.state === "active";
+    const disabled = active ? "" : ` disabled title="${escapeHtml(t.balancingNeedsActive)}"`;
+    const hint = active ? "" : `<span class="muted balancing-hint">${t.balancingNeedsActive}</span>`;
+    let action = "";
+    if (switchState && balancing) {
+      action = `<div class="balancing-run"><ha-icon icon="mdi:scale-balance"></ha-icon>
+          <span>${escapeHtml(this._format(phase))}</span>
+          <button class="link" data-action="balancing-off" data-entity="${switchState.entity_id}">${t.cancelBalancing}</button></div>`;
+    } else if (switchState && top?.attributes?.suggest_balancing) {
+      const text = t.balancingSuggestedText.replace("{delta}", Math.round(this._number(top)));
+      action = `<div class="suggestion" title="${escapeHtml(text)}">
+          <ha-icon icon="mdi:scale-unbalanced"></ha-icon>
+          <span class="suggestion-text"><b>${t.balancingSuggested}</b><span>${escapeHtml(text)}</span></span>
+          ${hint}<button class="primary" data-action="balancing-on" data-entity="${switchState.entity_id}" data-name="${escapeHtml(battery.name)}"${disabled}>${t.startBalancing}</button>
+        </div>`;
+    } else if (switchState && switchState.state !== "unavailable") {
+      action = `<button class="link start-balancing" data-action="balancing-on" data-entity="${switchState.entity_id}" data-name="${escapeHtml(battery.name)}"${disabled}>${t.startBalancing}</button>${hint}`;
+    }
+    const result = t.balancingResults[phase?.attributes?.last_result];
+    const lastRun = !balancing && result ? `<dt>${t.lastBalancing}</dt><dd>${escapeHtml(result)}</dd>` : "";
+    return `<div class="cells">
+        <dl>
+          <dt>${t.cellDelta}<span class="sub">${t.cellDeltaHint}</span></dt><dd>${escapeHtml(this._format(live))}</dd>
+          <dt>${t.topCellDelta}</dt><dd>${topValue}</dd>
+          ${lastRun}
+        </dl>
+        ${action}
+      </div>`;
   }
 
   _renderConsumers() {
@@ -943,12 +1047,14 @@ class SlemsPanel extends HTMLElement {
 
   // --- events ------------------------------------------------------------------
 
-  _confirm(title, text, confirmLabel, action) {
+  _confirm(title, text, confirmLabel, action, danger = true) {
     const dialog = this.shadowRoot.getElementById("confirm");
     this.shadowRoot.getElementById("confirm-title").textContent = title;
     this.shadowRoot.getElementById("confirm-text").textContent = text;
     dialog.querySelector('[data-answer="cancel"]').textContent = this._t.cancel;
-    dialog.querySelector('[data-answer="confirm"]').textContent = confirmLabel;
+    const confirmButton = dialog.querySelector('[data-answer="confirm"]');
+    confirmButton.textContent = confirmLabel;
+    confirmButton.className = danger ? "danger" : "primary";
     this._confirmAction = action;
     dialog.returnValue = "";
     dialog.showModal();
@@ -956,6 +1062,23 @@ class SlemsPanel extends HTMLElement {
   }
 
   _onClick(event) {
+    const balancingButton = event.target.closest("[data-action='balancing-on'], [data-action='balancing-off']");
+    if (balancingButton) {
+      const entityId = balancingButton.dataset.entity;
+      if (balancingButton.dataset.action === "balancing-off") {
+        this._hass.callService("switch", "turn_off", { entity_id: entityId });
+      } else {
+        const t = this._t;
+        this._confirm(
+          t.startBalancingTitle.replace("{name}", balancingButton.dataset.name),
+          t.startBalancingText,
+          t.startBalancingConfirm,
+          () => this._hass.callService("switch", "turn_on", { entity_id: entityId }),
+          false
+        );
+      }
+      return;
+    }
     const dayButton = event.target.closest("[data-action='day-today'], [data-action='day-tomorrow']");
     if (dayButton) {
       this._chartDay = dayButton.dataset.action === "day-today" ? "today" : "tomorrow";
@@ -1150,8 +1273,33 @@ const STYLE = `
   dialog::backdrop { background: rgba(0,0,0,0.4); }
   dialog p { color: var(--secondary-text-color); line-height: 1.4; margin: 0 0 20px; }
   .dialog-buttons { display: flex; justify-content: flex-end; gap: 8px; }
-  button.danger { background: var(--error-color, #d03b3b); color: #fff; border: none; border-radius: 8px;
+  button.danger, button.primary { background: var(--error-color, #d03b3b); color: #fff; border: none; border-radius: 8px;
     padding: 8px 16px; font: inherit; cursor: pointer; }
+  button.primary { background: var(--primary-color); }
+  .cells { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--divider-color); }
+  .cells dl { margin-top: 0; }
+  .cells dt .sub { display: block; font-size: 11px; }
+  .muted { color: var(--secondary-text-color); }
+  .status { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; margin-left: 6px; }
+  .status ha-icon { --mdc-icon-size: 16px; }
+  .status.green ha-icon { color: #0ca30c; } .status.yellow ha-icon { color: #fab219; }
+  .status.orange ha-icon { color: #ec835a; } .status.red ha-icon { color: #d03b3b; }
+  .suggestion { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; margin-top: 12px; padding: 10px;
+    border-radius: 8px; border: 1px solid #ec835a; background: color-mix(in srgb, #ec835a 10%, transparent); }
+  .suggestion ha-icon { color: #ec835a; }
+  .suggestion-text { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+  .suggestion-text span { color: var(--secondary-text-color); }
+  .suggestion button { grid-column: 1 / -1; justify-self: end; }
+  .balancing-run { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; flex-wrap: wrap; }
+  .balancing-run ha-icon { color: var(--c-battery); }
+  .balancing-run button { margin-left: auto; }
+  .start-balancing { margin-top: 8px; padding-left: 0; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .balancing-hint { display: block; grid-column: 1 / -1; font-size: 12px; }
 `;
 
-customElements.define("slems-panel", SlemsPanel);
+// An open browser tab loads a newer module after an update of SLEMS while the
+// element is already defined; the new version is used after a page reload.
+if (!customElements.get("slems-panel")) {
+  customElements.define("slems-panel", SlemsPanel);
+}

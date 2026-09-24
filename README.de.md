@@ -39,6 +39,7 @@ Der Name setzt sich aus *Slug* und *EMS* (Energiemanagementsystem) zusammen.
 | Nachtentladung bis zu einer prognosebasierten Reserve | ✅ |
 | Aufteilung auf Batterien nach Wirkungsgrad, Wechsel mit sanftem Übergang | ✅ |
 | Echtzeit-Regelung von Batterien und Verbrauchern (Betriebsmodus *Aktiv*) | ✅ |
+| Zell-Delta und aktiver Zellausgleich (Marstek Venus E 3.0) | ✅ (noch nicht am echten Gerät getestet) |
 | Dashboard (Seitenleiste): Energiefluss, Kennzahlen, Tagesdiagramm mit Prognose und Plan, Batterien, Verbraucher, Einstellungen | ✅ |
 
 ## Installation
@@ -152,7 +153,8 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
   Tabelle um.
 - **Batterien**: Ladezustand, Leistung, geplante Leistung, Wirkungsgrad,
   Status und der Schalter *Aktiviert* jeder Batterie (das Deaktivieren muss
-  bestätigt werden).
+  bestätigt werden), das Zell-Delta mit seinem Status, eine Empfehlung für
+  den aktiven Zellausgleich und die Phase eines laufenden Ausgleichs.
 - **Verbraucher**: gemessene und geplante Leistung, gesperrt/gesättigt und
   die gelernte Reaktionszeit.
 - **Einstellungen**: alle Einstellwerte gruppiert und direkt änderbar.
@@ -187,6 +189,45 @@ weiter gemessen (ihre Leistung gehört zur Energiebilanz), aber weder
 eingeplant noch gesteuert und zählt nicht zum Gesamt-Ladezustand. Entlädt sie
 im Modus *Aktiv* gerade, übernehmen die anderen Batterien innerhalb von
 5 Sekunden, bevor sie an ihre eigene Logik zurückgegeben wird.
+
+### Zell-Delta und aktiver Zellausgleich
+
+Für Batterien, die ihre Zellspannungen melden (Marstek Venus E 3.0), zeigt
+SLEMS das *Zell-Delta* (höchste minus niedrigste Zellspannung). Bei LFP-Zellen
+ist der Live-Wert nur nahe der Vollladung aussagekräftig: In der Mitte ist die
+Spannungskurve so flach, dass ungleiche Zellen fast dieselbe Spannung zeigen.
+SLEMS erfasst daher das *Zell-Delta am oberen Ladeende*, wenn die höchste
+Zelle mindestens 3,48 V hat und die Batterie 60 Sekunden im Standby war. Der
+Status folgt Omnibattery: unter 50 mV gut, unter 100 mV leichtes, unter 150 mV
+mittleres, sonst starkes Ungleichgewicht. Ab 100 mV empfiehlt das Dashboard
+den aktiven Zellausgleich.
+
+Der aktive Zellausgleich (Schalter *Aktiver Zellausgleich* oder die
+Schaltfläche im Dashboard) folgt dem Ausgleichs-Blueprint von Omnibattery. Er
+lässt sich nur im Betriebsmodus *Aktiv* starten:
+
+1. Entlädt die Batterie gerade, übergibt sie zuerst sanft (wie beim
+   Deaktivieren). Danach verlässt sie die normale Planung; die anderen
+   Batterien übernehmen.
+2. Sie lädt, bis die höchste Zelle 3,49 V erreicht, mit dem PV-Überschuss
+   (vor den anderen Batterien), mindestens mit 95 W. Reicht der Überschuss
+   nicht, entladen die anderen Batterien, um die 95 W auszugleichen.
+3. Sie lädt mit 95 W, bis die höchste Zelle 3,60 V erreicht, ist 60 Sekunden
+   im Standby und misst das Zell-Delta.
+4. Über 30 mV entlädt sie mit 200 W bis zur Wiederholspannung (3,49 V) und
+   wiederholt ab Schritt 3. Verweigert das BMS das Laden, sinkt die
+   Wiederholspannung in Schritten von 10 mV (bis 3,40 V).
+5. Bei höchstens 30 mV entlädt sie mit 200 W bis 3,48 V und endet.
+
+Die Entladung der ausgleichenden Batterie wird eingespeist; die anderen
+Batterien speichern sie nicht (sie laden nur weiter, wenn sie ohnehin laden).
+Ihre erwartete Ladung fließt in den erwarteten PV-Überschuss und das
+netzdienliche Laden ein. Der Lauf endet spätestens nach 24 Stunden und sofort,
+wenn die Batterie nicht gelesen werden kann; außerhalb des Betriebsmodus
+*Aktiv* pausiert er, und nach einem Neustart von Home Assistant läuft er
+weiter. Zum Ende wird die Batterie an ihre eigene Logik zurückgegeben und
+kehrt danach in die normale Planung zurück. Der Sensor *Phase Zellausgleich*
+zeigt die Phase und das Ergebnis des letzten Laufs.
 
 ### Betriebsmodus
 
@@ -296,7 +337,7 @@ ab, an Tagen mit weniger Überschuss einen deutlich größeren Anteil.
   laden nur aus dem Überschuss oberhalb dieses Werts.
 - *Ziel-Netzüberschuss beim Entladen* (−1000…+1000 W, Standard 50 W;
   positiv = Einspeisung, negativ = Bezug): der Netzwert, auf den die
-  entladenden Batterien regeln. Zwischen den beiden Zielwerten ruhen die Batterien.
+  entladenden Batterien regeln. Zwischen den beiden Zielwerten sind die Batterien im Standby.
 - *Maximale Einspeisung beim Entladen* (0 bis Summe der maximalen
   Entladeleistung aller Batterien, Standard 5000 W): Das Entladen verursacht
   nie mehr Einspeisung als diesen Wert.

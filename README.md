@@ -38,6 +38,7 @@ management system).
 | Night discharge to a forecast based reserve | ✅ |
 | Distribution between batteries by efficiency, rotation with smooth transition | ✅ |
 | Real-time control of batteries and consumers (operating mode *active*) | ✅ |
+| Cell delta and active cell balancing (Marstek Venus E 3.0) | ✅ (not yet tested on a real device) |
 | Dashboard (sidebar panel): energy flow, key figures, daily forecast and plan chart, batteries, consumers, settings | ✅ |
 
 ## Installation
@@ -147,7 +148,9 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   battery charging (bars); *Tomorrow* shows the forecasts of the next day.
   Hovering shows the values of an hour; *Show table* switches to a table.
 - **Batteries**: state of charge, power, planned power, efficiency, state and
-  the *Enabled* switch of every battery (disabling asks for confirmation).
+  the *Enabled* switch of every battery (disabling asks for confirmation),
+  the cell delta with its balance status, a recommendation for active cell
+  balancing and the phase of a running one.
 - **Consumers**: measured and planned power, blocked/saturated state and the
   learned response time.
 - **Settings**: all settings grouped and editable directly.
@@ -181,6 +184,45 @@ Every battery has an *Enabled* switch. A disabled battery is still measured
 controlled, and it does not count towards the total state of charge. If it is
 discharging in active mode, the other batteries take over within 5 seconds
 before it is handed back to its own logic.
+
+### Cell delta and active cell balancing
+
+For batteries that report their cell voltages (Marstek Venus E 3.0), SLEMS
+shows the *Cell delta* (highest minus lowest cell voltage). With LFP cells the
+live value is only meaningful near full charge: in the middle of the charge
+the voltage curve is so flat that unequal cells show almost the same voltage.
+SLEMS therefore records the *Cell delta at top of charge* when the highest
+cell is at 3.48 V or more and the battery rested for 60 seconds. Its status
+follows Omnibattery: below 50 mV good, below 100 mV minor, below 150 mV
+moderate, otherwise high imbalance. From 100 mV the dashboard recommends
+active cell balancing.
+
+Active cell balancing (switch *Active cell balancing*, or the button in the
+dashboard) follows the Omnibattery balancing blueprint. It can only be started
+in operating mode *active*:
+
+1. If the battery is discharging, it first hands over smoothly (as when it is
+   disabled). It then leaves the normal planning; the other batteries take
+   over.
+2. It charges until the highest cell reaches 3.49 V, with the PV surplus
+   (before the other batteries), at least 95 W. Without enough surplus the
+   other batteries discharge to cover the 95 W.
+3. It charges with 95 W until the highest cell reaches 3.60 V, stands by for
+   60 seconds and measures the cell delta.
+4. Above 30 mV it discharges with 200 W to the retry voltage (3.49 V) and
+   repeats from step 3. If the BMS refuses to charge, the retry voltage is
+   lowered in steps of 10 mV (down to 3.40 V).
+5. At 30 mV or less it discharges with 200 W to 3.48 V and ends.
+
+The discharge of the balancing battery is fed into the grid; the other
+batteries do not store it (they keep charging only if they charge anyway).
+Its expected charge is taken into account in the expected PV surplus and in
+grid friendly charging. The run ends after 24 hours at the latest, and at
+once if the battery cannot be read; it pauses outside operating mode
+*active* and continues after a restart of Home Assistant. When it ends, the
+battery is handed back to its own logic and then returns to the normal
+planning. The sensor *Cell balancing phase* shows the phase and the result of
+the last run.
 
 ### Operating mode
 

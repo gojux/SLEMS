@@ -282,7 +282,7 @@
           "shared": "Aufgeteilt",
           "self_consumption": "Eigenverbrauch",
           "peak_shaving": "Spitzenabfang",
-          "idle": "Ruhe",
+          "idle": "Standby",
           "night_discharge": "Nachtentladung",
           "grid_friendly": "Netzdienlich"
         }
@@ -333,6 +333,32 @@
       },
       "pv_correction": {
         "name": "Korrektur PV-Prognose"
+      },
+      "cell_delta": {
+        "name": "Zell-Delta"
+      },
+      "top_cell_delta": {
+        "name": "Zell-Delta am oberen Ladeende"
+      },
+      "max_cell_voltage": {
+        "name": "Maximale Zellspannung"
+      },
+      "min_cell_voltage": {
+        "name": "Minimale Zellspannung"
+      },
+      "balancing_phase": {
+        "name": "Phase Zellausgleich",
+        "state": {
+          "off": "Aus",
+          "waiting": "Wartet auf Modus Aktiv",
+          "pre_top_charge": "Laden bis Ausgleichsbereich",
+          "charge": "Laden im Ausgleichsbereich",
+          "wait_measure": "Standby für Messung",
+          "discharge": "Entladen für neuen Versuch",
+          "final_discharge": "Abschließendes Entladen",
+          "done": "Fertig",
+          "error": "Fehler"
+        }
       }
     },
     "switch": {
@@ -353,6 +379,9 @@
       },
       "grid_friendly_charging": {
         "name": "Netzdienliches Laden"
+      },
+      "cell_balancing": {
+        "name": "Aktiver Zellausgleich"
       }
     },
     "number": {
@@ -409,6 +438,11 @@
       "charge_secured": {
         "name": "Batterieladung gesichert"
       }
+    }
+  },
+  "exceptions": {
+    "balancing_requires_active": {
+      "message": "Der aktive Zellausgleich kann nur in der Betriebsmodus „Aktiv“ gestartet werden."
     }
   }
 }

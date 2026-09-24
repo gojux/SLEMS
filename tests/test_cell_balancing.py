@@ -1,0 +1,134 @@
+"""Tests for cell monitoring and active cell balancing."""
+
+from custom_components.slems.cell_balancing import (
+    MAX_RUN_S,
+    TOP_CHARGE_W,
+    BalancingPhase,
+    CellBalancer,
+    CellMonitor,
+    balance_status,
+)
+
+# Wall clock start of the runs in these tests (UNIX time).
+START = 1_800_000_000.0
+
+
+def test_balance_status_thresholds() -> None:
+    assert balance_status(None) is None
+    assert balance_status(49.9) == "green"
+    assert balance_status(50) == "yellow"
+    assert balance_status(120) == "orange"
+    assert balance_status(150) == "red"
+
+
+def test_monitor_records_after_rest_in_top_window() -> None:
+    monitor = CellMonitor()
+    monitor.update(0, 3.50, 3.38, 0, 1000)
+    monitor.update(30, 3.50, 3.38, 5, 1030)
+    assert monitor.last is None
+    monitor.update(61, 3.50, 3.38, 0, 1061)
+    assert monitor.last.delta_mv == 120.0
+    assert monitor.suggest_balancing
+
+
+def test_monitor_ignores_plateau_and_load() -> None:
+    monitor = CellMonitor()
+    for t in range(0, 200, 10):
+        monitor.update(t, 3.32, 3.30, 0, t)  # mid SoC: not meaningful
+    for t in range(200, 400, 10):
+        monitor.update(t, 3.55, 3.40, 800, t)  # charging
+    assert monitor.last is None
+
+
+class Battery:
+    """Very small battery: max cell voltage follows the power."""
+
+    def __init__(self, voltage: float, delta: float) -> None:
+        self.voltage = voltage
+        self.delta = delta
+
+    def apply(self, power: float, seconds: float) -> None:
+        self.voltage += power * seconds * 2e-6
+        # The BMS bleeds the high cell while in the top window.
+        if self.voltage >= 3.49:
+            self.delta = max(0.0, self.delta - seconds * 5e-6)
+
+
+def run(balancer: CellBalancer, battery: Battery, limit: int = 20000) -> list[BalancingPhase]:
+    phases = []
+    power = 0.0
+    t = 0.0
+    while not balancer.finished and t < limit * 5:
+        step = balancer.step(t, START + t, battery.voltage, battery.voltage - battery.delta, power)
+        power = step.power_w
+        battery.apply(power, 5)
+        if not phases or phases[-1] is not step.phase:
+            phases.append(step.phase)
+        t += 5
+    return phases
+
+
+def test_full_run_until_balanced() -> None:
+    balancer = CellBalancer(max_charge_w=2500, started_at=START)
+    battery = Battery(3.35, 0.06)
+    phases = run(balancer, battery)
+    assert phases[0] is BalancingPhase.PRE_TOP_CHARGE
+    assert BalancingPhase.DISCHARGE in phases  # at least one retry
+    assert phases[-1] is BalancingPhase.DONE
+    assert balancer.last_delta_mv <= 30
+    assert battery.voltage <= 3.48
+
+
+def test_rejected_charge_lowers_retry_voltage() -> None:
+    balancer = CellBalancer(max_charge_w=2500, started_at=START)
+    balancer.step(0, START, 3.50, 3.40, 0)  # enters CHARGE directly (above top zone)
+    assert balancer.phase is BalancingPhase.CHARGE
+    for t in range(15, 40, 5):  # BMS refuses: power stays 0
+        balancer.step(t, START + t, 3.55, 3.45, 0)
+    assert balancer.phase is BalancingPhase.WAIT_MEASURE
+    assert balancer.retry_voltage == 3.48
+
+
+def test_invalid_telemetry_stops_the_run() -> None:
+    balancer = CellBalancer(max_charge_w=2500, started_at=START)
+    step = balancer.step(0, START, None, 3.3, 0)
+    assert step.phase is BalancingPhase.ERROR and step.power_w == 0
+    assert balancer.error == "telemetry"
+
+
+def test_initial_climb_uses_surplus_with_minimum() -> None:
+    balancer = CellBalancer(max_charge_w=2500, started_at=START)
+    assert balancer.step(0, START, 3.35, 3.33, 0, surplus_w=-400).power_w == TOP_CHARGE_W
+    assert balancer.step(5, START + 5, 3.35, 3.33, 95, surplus_w=1200).power_w == 1200
+    assert balancer.step(10, START + 10, 3.36, 3.33, 1200, surplus_w=4000).power_w == 2500
+
+
+def test_run_stops_after_max_duration() -> None:
+    balancer = CellBalancer(max_charge_w=2500, started_at=START)
+    balancer.step(0, START, 3.35, 3.33, 0)
+    step = balancer.step(10, START + MAX_RUN_S, 3.40, 3.36, 95)
+    assert step.phase is BalancingPhase.ERROR and step.power_w == 0
+    assert balancer.error == "timeout"
+
+
+def test_restored_run_measures_again_after_restart() -> None:
+    balancer = CellBalancer(max_charge_w=2500, started_at=START)
+    balancer.step(0, START, 3.61, 3.50, 95)  # PRE_TOP -> CHARGE -> WAIT_MEASURE
+    assert balancer.phase is BalancingPhase.WAIT_MEASURE
+    balancer.step(50, START + 50, 3.58, 3.52, 0)
+    restored = CellBalancer.from_dict(balancer.as_dict(), 2500)
+    assert restored.phase is BalancingPhase.WAIT_MEASURE
+    assert restored.started_at == START
+    # New monotonic clock after the restart: the 60 s rest starts again.
+    assert restored.step(1, START + 60, 3.58, 3.52, 0).phase is BalancingPhase.WAIT_MEASURE
+    step = restored.step(62, START + 121, 3.58, 3.52, 0)
+    assert step.phase is BalancingPhase.DISCHARGE and restored.last_delta_mv == 60.0
+
+
+def test_pause_restarts_the_measurement_rest() -> None:
+    balancer = CellBalancer(max_charge_w=2500, started_at=START)
+    balancer.step(0, START, 3.61, 3.50, 95)
+    balancer.step(50, START + 50, 3.58, 3.57, 0)
+    balancer.pause()
+    assert balancer.step(70, START + 70, 3.58, 3.57, 0).phase is BalancingPhase.WAIT_MEASURE
+    assert balancer.step(131, START + 131, 3.58, 3.57, 0).phase is BalancingPhase.FINAL_DISCHARGE

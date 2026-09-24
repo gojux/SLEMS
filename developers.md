@@ -237,6 +237,55 @@ sends commands.
 - Leaving *active* hands the batteries back immediately; consumers keep their
   last state.
 
+### Cell balancing
+
+`cell_balancing.py` (monitor and state machine, no HA dependency),
+`coordinator.py` (`_update_cells`, `start_balancing`, `end_balancing`),
+`controller.py` (`_async_apply_balancing`). Based on the cell balance monitor
+and `blueprints/marstek_active_balance_blueprint.yaml` of Omnibattery.
+
+- **Top measurement** (`CellMonitor`): highest cell ≥ 3.48 V and |power| ≤
+  10 W for 60 s → one measurement per rest period (source `rest`); a balancing
+  run records its own measurements (source `balancing`) and pauses the
+  monitor meanwhile. Stored with the learned data.
+- **Run** (`CellBalancer`, one step per battery poll, 5 s): phases
+  `pre_top_charge → charge → wait_measure → discharge → charge … →
+  final_discharge → done`. Constants at the top of the module (Omnibattery
+  defaults). `charge` detects a BMS refusal (3 samples ≤ 10 W after 10 s
+  grace) and lowers the retry voltage by 10 mV (≥ 3.40 V).
+- **Membership**: `BatteryRuntime.balancer` is the run; `participating` is
+  false while it exists, except during the ramp-out of a discharging battery
+  (`controller.disable_battery`, as for disabling). After the ramp-out the
+  battery is not released; the run takes over.
+- **Energy balance**: the balancing battery's charge stays a load in
+  `available_power_w` (the other batteries cover it); its discharge
+  (`min(0, power)`) is removed from `available_power_w`, so it is fed in and
+  not charged into the other batteries. `pre_top_charge` takes the surplus
+  `_balancing_surplus_w` = −grid (filtered) + power of the batteries in normal
+  operation + controlled consumers + own power, i.e. before the other
+  batteries and consumers; clamped to 95 W … max charge power.
+- **Forecast**: `_balancing_charge_wh` (capacity × missing SoC / efficiency
+  while `pre_top_charge` or `charge`) is subtracted from the expected surplus
+  and added to the energy grid friendly charging must fill.
+- **Commands**: `_async_apply_balancing` runs before the normal set points;
+  dead band 25 W, keep-alive 60 s. When a run ends (done, cancelled, timeout,
+  telemetry), the battery is released (`release_control`, as the Omnibattery
+  blueprint releases manual mode) and planned again in the same cycle if it
+  can be read.
+- **Pause**: outside operating mode *active* and during the ramp-out the
+  run gets no steps (phase shown as `waiting`); the timers of the current leg
+  (engage grace, measurement rest) start again on resume. Starting requires
+  operating mode *active* (`ServiceValidationError`).
+- **Persistence**: phase, retry voltage, last delta and start time are
+  stored (key `balancer`, saved 5 s after start, phase change and end); a
+  restored run continues in its phase with fresh leg timers.
+- **Limits**: `MAX_RUN_S` 24 h (wall clock since the start, also across
+  restarts); unreadable battery or missing cell voltages end the run at once
+  (as in the blueprint).
+- **Simulator**: `SIM_CELL_OFFSET_PCT` (SoC lead of the high cell),
+  `SIM_BLEED_PCT_PER_MIN` (BMS balancing speed, much faster than reality);
+  a small `SIM_CAPACITY_WH` makes a run take minutes.
+
 ### Grid friendly charging
 
 `grid_friendly.py`, switch *Grid friendly charging* (default on). Every plan
@@ -539,6 +588,8 @@ Source: Omnibattery `const/registers_v3.py`, `drivers/marstek.py`,
 | 35100 | inverter_state | uint16 | | 0 sleep, 1 standby, 2 charge, 3 discharge, 4 backup, 5 OTA, 6 bypass |
 | 33000 | total_charging_energy | uint32 | 0.01 kWh | |
 | 33002 | total_discharging_energy | int32 | 0.01 kWh | |
+| 37007 | max_cell_voltage | int16 | 0.001 V | |
+| 37008 | min_cell_voltage | int16 | 0.001 V | |
 | 42000 | rs485_control | uint16 | | write 0x55AA = enable, 0x55BB = disable |
 | 42010 | force_mode | uint16 | | 0 none, 1 charge, 2 discharge |
 | 42020 | set_charge_power | uint16 | W | max 2500 |
@@ -615,3 +666,4 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-23 | Distribution between batteries by minimal conversion losses (learned per battery), rotation by SoC threshold with minimum interval and ramped transition. |
 | 2026-09-23 | Consumption forecast from long-term statistics; optional history entity for the house consumption and optional outdoor temperature sensor, otherwise SLEMS records the weather temperature itself. |
 | 2026-09-23 | Night discharge: evenly spread until PV exceeds consumption, target = reserve raised to what tomorrow's PV can refill; grid target ignored, maximum export respected. |
+| 2026-09-24 | Active cell balancing after the Omnibattery blueprint; the balancing battery takes the PV surplus first (≥ 95 W, other batteries cover the rest), its discharge is fed in, maximum 24 h, starts only in operating mode *active*, ends at once on unreadable telemetry, survives restarts. |

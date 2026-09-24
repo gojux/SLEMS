@@ -12,8 +12,16 @@ read-only port (``SIM_TAP_PORT``) serves the same registers to any number of
 clients; the dev instance reads the AC power there every second to build a
 realistic smart meter.
 
+Cell voltages follow an LFP curve. One cell is ahead by
+``SIM_CELL_OFFSET_PCT`` of SoC, so the cell delta is tiny in the middle and
+large near the top. Above 3.45 V the BMS bleeds the high cell
+(``SIM_BLEED_PCT_PER_MIN``, much faster than reality to test balancing) and
+refuses charging while the highest cell is at 3.65 V.
+
 Environment variables:
     SIM_PORT          TCP port (default 502)
+    SIM_CELL_OFFSET_PCT  SoC lead of the highest cell (default 2.0)
+    SIM_BLEED_PCT_PER_MIN  balancing speed of the BMS (default 0.2)
     SIM_TAP_PORT      read-only TCP port (default 5020)
     SIM_CAPACITY_WH   usable capacity (default 5120)
     SIM_INITIAL_SOC   initial state of charge in % (default 50)
@@ -36,6 +44,8 @@ REG_TOTAL_DISCHARGING_ENERGY = 33002
 REG_INTERNAL_TEMPERATURE = 35000
 REG_INVERTER_STATE = 35100
 REG_BATTERY_SOC = 37005
+REG_MAX_CELL_VOLTAGE = 37007
+REG_MIN_CELL_VOLTAGE = 37008
 REG_RS485_CONTROL = 42000
 REG_FORCE_MODE = 42010
 REG_SET_CHARGE_POWER = 42020
@@ -44,6 +54,16 @@ REG_SET_DISCHARGE_POWER = 42021
 RS485_ENABLE = 0x55AA
 MAX_POWER_W = 2500
 TICK_S = 1.0
+
+
+def lfp_cell_voltage(soc: float) -> float:
+    """Open circuit voltage of an LFP cell at a state of charge (%)."""
+    points = ((0, 2.90), (10, 3.20), (90, 3.30), (97, 3.45), (99, 3.55), (100, 3.65))
+    soc = max(0.0, min(100.0, soc))
+    for (s0, v0), (s1, v1) in zip(points, points[1:]):
+        if soc <= s1:
+            return v0 + (v1 - v0) * (soc - s0) / (s1 - s0)
+    return points[-1][1]
 
 
 def conversion_loss(ac_power: float) -> float:
@@ -59,6 +79,8 @@ class VenusModel:
 
     def __init__(self, capacity_wh: float, soc: float) -> None:
         self.registers: dict[int, int] = {}
+        self._cell_offset = float(os.environ.get("SIM_CELL_OFFSET_PCT", "2.0"))
+        self._bleed_per_tick = float(os.environ.get("SIM_BLEED_PCT_PER_MIN", "0.2")) * TICK_S / 60
         self._capacity_wh = capacity_wh
         self._energy_wh = capacity_wh * soc / 100
         self._charged_wh = 0.0
@@ -81,10 +103,15 @@ class VenusModel:
             elif force_mode == 2:
                 power = -min(self.registers.get(REG_SET_DISCHARGE_POWER, 0), MAX_POWER_W)
 
-        if (power > 0 and self._energy_wh >= self._capacity_wh) or (
+        soc_now = self._energy_wh / self._capacity_wh * 100
+        high_cell = lfp_cell_voltage(soc_now + self._cell_offset)
+        # BMS: no charging while the highest cell is at its limit.
+        if (power > 0 and (self._energy_wh >= self._capacity_wh or high_cell >= 3.65)) or (
             power < 0 and self._energy_wh <= 0
         ):
             power = 0
+        if high_cell > 3.45:
+            self._cell_offset = max(0.0, self._cell_offset - self._bleed_per_tick)
 
         # power is the AC power (+charge); the DC side gets the losses less
         # when charging and delivers them additionally when discharging.
@@ -103,6 +130,9 @@ class VenusModel:
         self.write(REG_INTERNAL_TEMPERATURE, [250 + abs(power) // 100])
         self.write(REG_INVERTER_STATE, [2 if power > 0 else 3 if power < 0 else 1])
         self.write(REG_BATTERY_SOC, [round(soc)])
+        charge_lift = 0.02 if power > 0 else (-0.02 if power < 0 else 0.0)
+        self.write(REG_MAX_CELL_VOLTAGE, [round((lfp_cell_voltage(soc + self._cell_offset) + charge_lift) * 1000)])
+        self.write(REG_MIN_CELL_VOLTAGE, [round((lfp_cell_voltage(soc) + charge_lift) * 1000)])
         self.write(REG_TOTAL_CHARGING_ENERGY, _split_32(int(self._charged_wh / 10)))
         self.write(REG_TOTAL_DISCHARGING_ENERGY, _split_32(int(self._discharged_wh / 10)))
 
