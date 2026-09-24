@@ -56,6 +56,7 @@ from .util import state_as_float
 
 if TYPE_CHECKING:
     from .coordinator import BatteryRuntime, SlemsCoordinator, SystemSnapshot
+    from .consumers import ConsumerConfig
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -522,6 +523,30 @@ class RealTimeController:
                 subentry_id, StepResponse(DEFAULT_CONSUMER_RESPONSE_S, CONSUMER_MIN_STEP_W)
             )
             learner.command(now, measured, target - (measured or 0.0))
+
+    async def async_release_consumer(self, consumer: ConsumerConfig) -> None:
+        """Set a consumer to 0 W / off once; SLEMS leaves it alone afterwards."""
+        subentry_id = consumer.subentry_id
+        self._consumer_commands.pop(subentry_id, None)
+        self._low_since.pop(subentry_id, None)
+        self._resting.discard(subentry_id)
+        if not self._active or not consumer.controllable:
+            return
+        state = self._hass.states.get(consumer.control_entity_id)
+        if state is None:
+            return
+        domain = consumer.control_entity_id.split(".", 1)[0]
+        if consumer.control_mode is ControlMode.SWITCH:
+            if state.state == STATE_ON:
+                await self._hass.services.async_call(
+                    domain, "turn_off", {ATTR_ENTITY_ID: consumer.control_entity_id}
+                )
+        else:
+            await self._hass.services.async_call(
+                domain,
+                "set_value",
+                {ATTR_ENTITY_ID: consumer.control_entity_id, "value": _clamp_to_entity(0, state)},
+            )
 
     def _check_resting(self, subentry_id: str, snapshot: SystemSnapshot, now: float) -> None:
         """Resting: a consumer with a cycling thermostat draws nothing for a while."""

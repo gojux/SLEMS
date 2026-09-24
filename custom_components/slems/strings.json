@@ -393,6 +393,9 @@
       },
       "temperature_limit": {
         "name": "Temperature charge limit"
+      },
+      "consumer_control": {
+        "name": "Control active"
       }
     },
     "number": {

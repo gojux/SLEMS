@@ -83,6 +83,8 @@ const STRINGS = {
     blocked: "blocked",
     saturated: "saturated",
     resting: "thermostat pause",
+    controlOff: "control off",
+    controlActive: "Control active",
     responseTime: "Response time",
     notControlled: "measured only",
     noBatteries: "No batteries configured.",
@@ -193,6 +195,8 @@ const STRINGS = {
     blocked: "gesperrt",
     saturated: "gesättigt",
     resting: "Thermostat-Pause",
+    controlOff: "Steuerung aus",
+    controlActive: "Steuerung aktiv",
     responseTime: "Reaktionszeit",
     notControlled: "nur gemessen",
     noBatteries: "Keine Batterien konfiguriert.",
@@ -1138,8 +1142,10 @@ class SlemsPanel extends HTMLElement {
           const measured = this._hass.states[c.power_entity];
           const planned = this._state("planned_power", c.device_id);
           const attrs = planned?.attributes || {};
+          const control = this._state("consumer_control", c.device_id);
           const chips = [
             !c.controllable ? t.notControlled : "",
+            control?.state === "off" ? t.controlOff : "",
             attrs.blocked ? t.blocked : "",
             attrs.saturated ? t.saturated : "",
             attrs.resting ? t.resting : "",
@@ -1152,7 +1158,7 @@ class SlemsPanel extends HTMLElement {
               ? `${Math.round(attrs.response_time_s)} s`
               : "–";
           return `<section class="card">
-            <div class="card-head"><h2>${escapeHtml(c.name)}</h2><div>${chips}</div></div>
+            <div class="card-head"><h2>${escapeHtml(c.name)}</h2><div class="chips">${chips}${control ? this._toggle(control, t.controlActive) : ""}</div></div>
             <dl>
               <dt>${t.measured}</dt><dd>${escapeHtml(this._format(measured))}</dd>
               ${planned ? `<dt>${t.planned}</dt><dd>${escapeHtml(this._format(planned))}</dd>` : ""}
@@ -1434,6 +1440,7 @@ const STYLE = `
   .soc { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
   .soc-bar { flex: 1; height: 8px; border-radius: 4px; background: var(--divider-color); overflow: hidden; }
   .soc-bar div { height: 100%; background: var(--c-battery); border-radius: 4px; }
+  .chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .chip { font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--divider-color);
     color: var(--secondary-text-color); margin-left: 4px; }
   .settings { display: flex; flex-direction: column; gap: 10px; }

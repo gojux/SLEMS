@@ -230,6 +230,11 @@ sends commands.
 - **Saturation**: a consumer drawing < 10 % of its command for longer than
   5 × its response time (30–300 s; own thermostat) counts as saturated for
   15 min and is planned like an uncontrolled load; its last command stays.
+- **Control active** (`ConsumerControlSwitch`, RestoreEntity): the ids of
+  switched-off consumers are in `SlemsCoordinator.consumer_control_disabled`
+  and `SystemSnapshot.control_disabled`; `is_controllable_now` is false for
+  them. Switching off calls `async_release_consumer` (0 W clamped to the
+  entity / `turn_off`, only in active mode).
 - **Resting** (consumers with `thermostat_cycles`, instead of saturation):
   < 10 % of the command for longer than 2 × response time (10–60 s) →
   `RealTimeController.resting`; the consumer stays in the allocation and keeps
@@ -765,3 +770,4 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-24 | The night discharge reserve counts on top of the minimum SoC (the energy below it cannot be used). |
 | 2026-09-24 | Ongoing problems as repair issues (they clear themselves), events (end of a balancing run) as persistent notifications. |
 | 2026-09-24 | Consumers with a cycling thermostat rest instead of being saturated; water heater entities can block consumers (mode `off`). |
+| 2026-09-24 | Consumer control can be switched off per consumer; switching off sets it to 0 W once, then SLEMS only measures it. |

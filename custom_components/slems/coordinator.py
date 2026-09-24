@@ -279,6 +279,8 @@ class SystemSnapshot:
     # Consumers with a cycling thermostat that draw nothing right now; they
     # keep their command, the batteries get their unused power.
     resting: frozenset[str] = frozenset()
+    # Consumers whose control the user switched off (measured only).
+    control_disabled: frozenset[str] = frozenset()
     pv_forecast: PvForecast | None = None
     consumption_forecast: ConsumptionForecast | None = None
     # Current outdoor temperature of the weather entity (°C).
@@ -327,6 +329,7 @@ class SystemSnapshot:
             and config.included_in_meter
             and not state.blocked
             and subentry_id not in self.saturated
+            and subentry_id not in self.control_disabled
         )
 
     def controlled_consumer_power_w(self) -> float:
@@ -390,6 +393,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
         self.batteries = batteries
         self.consumers = consumers
+        # Consumers whose control the user switched off (restored by their switch).
+        self.consumer_control_disabled: set[str] = set()
         # Device registry id of the central SLEMS device (parent of the batteries).
         self.system_device_id = system_device_id
         self.settings = ControlSettings()
@@ -550,7 +555,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         config = self._config
         now = time.monotonic()
         snapshot = SystemSnapshot(
-            consumer_configs={c.subentry_id: c for c in self.consumers}
+            consumer_configs={c.subentry_id: c for c in self.consumers},
+            control_disabled=frozenset(self.consumer_control_disabled),
         )
 
         grid = state_as_watts(self.hass.states.get(config[CONF_GRID_POWER_ENTITY]))
@@ -1144,6 +1150,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             },
             saturated=saturated,
             resting=self.controller.resting,
+            control_disabled=frozenset(self.consumer_control_disabled),
             allocation=None,
             distribution=None,
         )

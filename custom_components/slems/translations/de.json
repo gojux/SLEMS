@@ -393,6 +393,9 @@
       },
       "temperature_limit": {
         "name": "Ladebegrenzung nach Temperatur"
+      },
+      "consumer_control": {
+        "name": "Steuerung aktiv"
       }
     },
     "number": {

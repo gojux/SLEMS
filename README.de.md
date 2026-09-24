@@ -143,6 +143,11 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   für 2 Reaktionszeiten, 10–60 s) bekommen die Batterien seine nicht genutzte
   Leistung, und sobald er wieder abnimmt, bekommt er sie zurück (angezeigt als
   *Thermostat-Pause*).
+- **Steuerung aktiv** (Schalter je steuerbarem Verbraucher, auch auf seiner
+  Karte im Dashboard): aus bedeutet, SLEMS misst den Verbraucher nur. Beim
+  Ausschalten im Betriebsmodus *Aktiv* setzt SLEMS ihn einmal auf 0 W (bzw.
+  aus); danach lässt SLEMS ihn in Ruhe und plant ihn wie eine ungesteuerte
+  Last.
 
 Wirkungsgrad der Batterie: je Batterie aus den eigenen Lade-/Entladezählern
 der Batterie, aus der gemessenen Leistung gelernt oder manuell vorgegeben. Er
@@ -170,8 +175,8 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
   Status und der Schalter *Aktiviert* jeder Batterie (das Deaktivieren muss
   bestätigt werden), das Zell-Delta mit seinem Status, eine Empfehlung für
   den aktiven Zellausgleich und die Phase eines laufenden Ausgleichs.
-- **Verbraucher**: gemessene und geplante Leistung, gesperrt/gesättigt und
-  die gelernte Reaktionszeit.
+- **Verbraucher**: gemessene und geplante Leistung, gesperrt/gesättigt, die
+  gelernte Reaktionszeit und der Schalter *Steuerung aktiv*.
 - **Einstellungen**: alle Einstellwerte gruppiert und direkt änderbar.
 
 Das Dashboard folgt der Sprache und dem hellen/dunklen Design von Home

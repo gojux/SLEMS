@@ -140,6 +140,10 @@ Every consumer needs its own power **and** energy sensor.
   With this option SLEMS keeps controlling it: during a pause (no power for
   2 response times, 10–60 s) the batteries get its unused power, and as soon
   as it draws again it gets it back (shown as *thermostat pause*).
+- **Control active** (switch per controllable consumer, also on its card in
+  the dashboard): off means SLEMS only measures the consumer. Switching it
+  off in operating mode *active* sets it to 0 W (or off) once; afterwards
+  SLEMS leaves it alone and plans it like an uncontrolled load.
 
 Battery efficiency: per battery from the battery's own charge/discharge
 counters, learned from the measured power, or a manual value. It is taken
@@ -166,8 +170,8 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   the *Enabled* switch of every battery (disabling asks for confirmation),
   the cell delta with its balance status, a recommendation for active cell
   balancing and the phase of a running one.
-- **Consumers**: measured and planned power, blocked/saturated state and the
-  learned response time.
+- **Consumers**: measured and planned power, blocked/saturated state, the
+  learned response time and the *Control active* switch.
 - **Settings**: all settings grouped and editable directly.
 
 The dashboard follows the language and the light/dark theme of Home

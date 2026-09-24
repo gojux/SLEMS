@@ -12,8 +12,9 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, OperatingMode
+from .consumers import ConsumerConfig
 from .coordinator import BatteryRuntime, SlemsConfigEntry, SlemsCoordinator
-from .entity import SlemsBatteryEntity, SlemsSystemEntity
+from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 
 # Switch key -> attribute of ControlSettings (defaults in ControlSettings).
 SETTING_SWITCHES: dict[str, str] = {
@@ -42,6 +43,12 @@ async def async_setup_entry(
         if battery.supports_balancing:
             entities.append(CellBalancingSwitch(coordinator, battery))
         async_add_entities(entities, config_subentry_id=battery.subentry_id)
+    for consumer in coordinator.consumers:
+        if consumer.controllable:
+            async_add_entities(
+                [ConsumerControlSwitch(coordinator, consumer)],
+                config_subentry_id=consumer.subentry_id,
+            )
 
 
 class SettingSwitch(SlemsSystemEntity, SwitchEntity, RestoreEntity):
@@ -143,4 +150,38 @@ class CellBalancingSwitch(SlemsBatteryEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self.coordinator.end_balancing(self.battery, "cancelled")
+        self.async_write_ha_state()
+
+
+class ConsumerControlSwitch(SlemsConsumerEntity, SwitchEntity, RestoreEntity):
+    """Let SLEMS control the consumer; off: measured only.
+
+    Switching it off in operating mode active sets the consumer to 0 W (or
+    off) once; afterwards SLEMS leaves it alone and plans it like an
+    uncontrolled load.
+    """
+
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator: SlemsCoordinator, consumer: ConsumerConfig) -> None:
+        super().__init__(coordinator, consumer, "consumer_control")
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state != STATE_ON:
+            self.coordinator.consumer_control_disabled.add(self.consumer.subentry_id)
+
+    @property
+    def is_on(self) -> bool:
+        return self.consumer.subentry_id not in self.coordinator.consumer_control_disabled
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self.coordinator.consumer_control_disabled.discard(self.consumer.subentry_id)
+        self.coordinator.controller.request()
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self.coordinator.consumer_control_disabled.add(self.consumer.subentry_id)
+        await self.coordinator.controller.async_release_consumer(self.consumer)
         self.async_write_ha_state()
