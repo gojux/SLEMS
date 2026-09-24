@@ -610,6 +610,8 @@ Source: Omnibattery `const/registers_v3.py`, `drivers/marstek.py`,
 | 42010 | force_mode | uint16 | | 0 none, 1 charge, 2 discharge |
 | 42020 | set_charge_power | uint16 | W | max 2500 |
 | 42021 | set_discharge_power | uint16 | W | max 2500 |
+| 44002 | max_charge_power | uint16 | W | not read; 2500 on the real device |
+| 44003 | max_discharge_power | uint16 | W | not read; 2500 on the real device |
 
 Control sequence (`apply_power`): enable RS485 control → discharge set point →
 charge set point → force mode (last). `release_control` zeroes the set points,
@@ -630,9 +632,15 @@ of charge in whole percent (55), 34002 the same value in 0.1 % (554 = 55.4 %);
 34002 followed a change from 54.4 to 55.4 % together with the others. SLEMS
 reads 34002 for the finer resolution.
 
+Verified on the same device at rest (2026-09-24): 30100 = 5311 (53.11 V),
+35000 = 324 (32.4 °C), 35100 = 1 (standby), 42000 = 21947 (0x55BB, RS485
+control disabled), 42010 = 0 (force mode none), 44002/44003 = 2500 W.
+
 Open points to verify on the real device:
 
-- Omnibattery marks the v3 map as partly untested.
+- Omnibattery marks the v3 map as partly untested; still open: sign and
+  difference of 30001/30006 while charging and discharging, and the energy
+  counters 33000/33002.
 - The device holds only one connection: while Omnibattery is running, a Modbus
   battery in SLEMS cannot connect. Use the read-only *HA entities* battery
   during the transition.
