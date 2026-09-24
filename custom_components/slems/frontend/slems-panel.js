@@ -459,10 +459,14 @@ class SlemsPanel extends HTMLElement {
     return this._t.storedOf.replace("{stored}", format(stored)).replace("{capacity}", format(capacity));
   }
 
-  /** Battery power for the flow: grid side (AC) if reported, +charge / -discharge. */
+  /**
+   * Battery power, +charge / -discharge: grid side if reported (the AC power
+   * sensor uses +discharge like the Home Assistant energy dashboard), else
+   * the battery power.
+   */
   _batteryPower(deviceId) {
     const ac = this._number(this._state("ac_power", deviceId));
-    return ac !== null ? ac : this._number(this._state("battery_power", deviceId));
+    return ac !== null ? -ac : this._number(this._state("battery_power", deviceId));
   }
 
   /** Power of a foreign entity in W (it may report W, kW or MW). */
@@ -1162,17 +1166,15 @@ class SlemsPanel extends HTMLElement {
             const reason = st?.attributes?.reason;
             return reason ? [`${label} (${t.limitReasons[reason] || reason})`, st] : [label, undefined];
           };
-          const direction = (stateObj) => {
-            const value = this._number(stateObj);
-            if (value === null) return undefined;
+          const direction = (value) => {
+            if (value === null || value === undefined) return undefined;
             const text = value > 10 ? t.charging : value < -10 ? t.discharging : t.idle;
             return { text: `${this._watts(Math.abs(value))} (${text})` };
           };
-          const power = s("ac_power") || s("battery_power");
           const rows = [
             [t.storedEnergy, s("stored_energy") && { text: this._storedOf(s("stored_energy")) ?? this._format(s("stored_energy")) }],
-            [t.powerGridSide, direction(power)],
-            [t.setPoint, direction(s("planned_power"))],
+            [t.powerGridSide, direction(this._batteryPower(b.device_id))],
+            [t.setPoint, direction(this._number(s("planned_power")))],
             [t.efficiency, s("round_trip_efficiency")],
             [t.state, s("inverter_state")],
             [t.temperature, s("internal_temperature")],

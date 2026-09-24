@@ -274,8 +274,9 @@ BATTERY_SENSORS: tuple[BatterySensorDescription, ...] = (
 BATTERY_EXTRA_SENSORS: tuple[BatterySensorDescription, ...] = (
     BatterySensorDescription(
         **_power("ac_power"),
-        # Grid side power, +charge / -discharge like the battery power.
-        value_fn=lambda t: t.ac_power_w,
+        # Grid side power, +discharge / -charge: the convention of the Home
+        # Assistant energy dashboard for battery power.
+        value_fn=lambda t: -t.ac_power_w if t.ac_power_w is not None else None,
     ),
     BatterySensorDescription(
         key="battery_voltage",

@@ -186,6 +186,8 @@ flow are shown one below the other).
 - **Marstek Venus E 3.0**: host/IP, port (502) and Modbus unit ID. The battery
   accepts only **one** Modbus TCP connection. Never let two integrations
   (e.g. SLEMS and Omnibattery) talk to the same battery at the same time.
+  Its sensor *AC power* is positive when discharging and negative when
+  charging, as the Home Assistant energy dashboard expects for battery power.
 - **Existing Home Assistant entities (read-only)**: state of charge and power
   sensors of a battery that is controlled by something else. SLEMS never sends
   commands to such a battery. This allows running SLEMS in simulation mode side

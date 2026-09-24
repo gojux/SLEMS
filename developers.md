@@ -668,7 +668,7 @@ Source: Omnibattery `const/registers_v3.py`, `drivers/marstek.py`,
 |---|---|---|---|---|
 | 34002 | battery_soc | uint16 | 0.1 % | fallback 37005 (1 %) if it does not answer |
 | 30001 | battery_power | int16 | 1 W | + charge / − discharge |
-| 30006 | ac_power | int16 | 1 W | + discharge / − charge (the SLEMS sensor *AC power* shows +charge / −discharge like the battery power) |
+| 30006 | ac_power | int16 | 1 W | + discharge / − charge; the SLEMS sensor *AC power* keeps this sign (convention of the HA energy dashboard for battery power), internally `ac_power_w` is +charge |
 | 30100 | battery_voltage | uint16 | 0.01 V | |
 | 35000 | internal_temperature | int16 | 0.1 °C | |
 | 35100 | inverter_state | uint16 | | 0 sleep, 1 standby, 2 charge, 3 discharge, 4 backup, 5 OTA, 6 bypass |
@@ -779,3 +779,4 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-24 | Ongoing problems as repair issues (they clear themselves), events (end of a balancing run) as persistent notifications. |
 | 2026-09-24 | Consumers with a cycling thermostat rest instead of being saturated; water heater entities can block consumers (mode `off`). |
 | 2026-09-24 | Consumer control can be switched off per consumer; switching off sets it to 0 W once, then SLEMS only measures it. |
+| 2026-09-24 | The *AC power* sensor stays +discharge / −charge so it can be used as battery power in the Home Assistant energy dashboard; the SLEMS dashboard converts it. |

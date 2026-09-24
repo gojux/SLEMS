@@ -191,7 +191,9 @@ Batterien im Energiefluss untereinander).
 - **Marstek Venus E 3.0**: Host/IP, Port (502) und Modbus Unit-ID. Die
   Batterie akzeptiert nur **eine** Modbus-TCP-Verbindung. Lass nie zwei
   Integrationen (z. B. SLEMS und Omnibattery) gleichzeitig mit derselben
-  Batterie sprechen.
+  Batterie sprechen. Ihr Sensor *AC-Leistung* ist beim Entladen positiv und
+  beim Laden negativ, wie es das Energie-Dashboard von Home Assistant für die
+  Batterieleistung erwartet.
 - **Vorhandene Home-Assistant-Entities (nur lesend)**: Ladezustand und
   Leistung einer Batterie, die von etwas anderem gesteuert wird. SLEMS sendet
   an eine solche Batterie nie Befehle. So kann SLEMS im Simulationsmodus
