@@ -482,6 +482,38 @@
   "exceptions": {
     "balancing_requires_active": {
       "message": "Der aktive Zellausgleich kann nur in der Betriebsmodus „Aktiv“ gestartet werden."
+    },
+    "balancing_done_title": {
+      "message": "Zellausgleich von {name} abgeschlossen"
+    },
+    "balancing_done_message": {
+      "message": "Zell-Delta am oberen Ladeende: {before} mV → {after} mV. Dauer: {duration}. Die Batterie ist wieder im normalen Betrieb."
+    },
+    "balancing_stopped_title": {
+      "message": "Zellausgleich von {name} beendet"
+    },
+    "balancing_stopped_message": {
+      "message": "Der Zellausgleich wurde beendet: {reason}. Zell-Delta: {before} mV → {after} mV. Dauer: {duration}."
+    },
+    "balancing_reason_timeout": {
+      "message": "maximale Dauer von 24 Stunden erreicht"
+    },
+    "balancing_reason_telemetry": {
+      "message": "die Batterie konnte nicht gelesen werden"
+    }
+  },
+  "issues": {
+    "battery_not_responding": {
+      "title": "{name} reagiert nicht",
+      "description": "{name} liefert die von SLEMS vorgegebene Leistung nicht (oder bestätigt die Befehle nicht). Sie wurde an ihre eigene Logik übergeben und wird alle 5 Minuten wieder versucht; die anderen Batterien übernehmen. Prüfe die Verbindung und die Batterie (z. B. in der Marstek-App). Die Meldung verschwindet, sobald die Batterie wieder liefert."
+    },
+    "battery_unreadable": {
+      "title": "{name} kann nicht gelesen werden",
+      "description": "SLEMS kann {name} seit mehr als 5 Minuten nicht lesen. Die Batterie wird so lange weder eingeplant noch gesteuert. Prüfe die Netzwerkverbindung, die Modbus-Einstellungen und ob eine andere Integration (z. B. Omnibattery) die einzige Modbus-Verbindung der Batterie belegt."
+    },
+    "grid_meter_stale": {
+      "title": "Smart Meter meldet nicht",
+      "description": "Die Smart-Meter-Entity hat länger keinen Wert gemeldet. SLEMS hat die Batterien an ihre eigene Logik übergeben und regelt wieder, sobald der Zähler meldet. Prüfe den Smart Meter und seine Integration."
     }
   }
 }

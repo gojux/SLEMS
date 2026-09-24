@@ -270,6 +270,18 @@ every complete write (`refresh`, i.e. the first write and the keep-alive
 every 60 s; 0.2 s settle time, tolerance max(100 W, 10 %)) — not after every
 write, to keep the control cycle short.
 
+`problems.py`: `ProblemReporter.update` runs after every poll and keeps the
+repair issues (`issue_registry`, not fixable, warning) in line with the state:
+`battery_not_responding_<subentry>`, `battery_unreadable_<subentry>`
+(`BatteryRuntime.unreadable_since` ≥ 5 min) and `grid_meter_stale` (active
+mode and `ControlStatus.GRID_STALE`). It creates or deletes only on changes;
+the first update after a start deletes stored issues that no longer apply.
+`async_remove_entry` deletes all SLEMS issues. The end of a balancing run
+(not `cancelled`) creates a `persistent_notification` (one id per battery);
+its texts come from the `exceptions` translations
+(`async_get_translations`) in the server language, with the initial delta
+stored in the balancer at the start.
+
 Simulator: while `SIM_FAULT_FILE` (default `/tmp/venus_fault`) exists in the
 container, the simulated Venus accepts commands but delivers 0 W
 (`docker compose exec venus-sim-2 touch /tmp/venus_fault`).
@@ -743,3 +755,4 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-24 | Battery protection after Omnibattery: SoC window per battery (default 12–100 %, 2 % re-entry), power limits per battery (e.g. 800 W), optional temperature charge limit (high derate plus low-temperature stop), detection of non-delivering batteries (3 failures → wake, then 5 min exclusion) and read-back confirmation on complete writes. |
 | 2026-09-24 | Grid friendly charging has its own buffer (*Grid friendly charging buffer*), separate from the charge secured buffer (which also sets the night discharge target). |
 | 2026-09-24 | The night discharge reserve counts on top of the minimum SoC (the energy below it cannot be used). |
+| 2026-09-24 | Ongoing problems as repair issues (they clear themselves), events (end of a balancing run) as persistent notifications. |

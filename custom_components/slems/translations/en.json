@@ -482,6 +482,38 @@
   "exceptions": {
     "balancing_requires_active": {
       "message": "Active cell balancing can only be started in operating mode active."
+    },
+    "balancing_done_title": {
+      "message": "Cell balancing of {name} finished"
+    },
+    "balancing_done_message": {
+      "message": "Cell delta at the top of charge: {before} mV → {after} mV. Duration: {duration}. The battery is back in normal operation."
+    },
+    "balancing_stopped_title": {
+      "message": "Cell balancing of {name} stopped"
+    },
+    "balancing_stopped_message": {
+      "message": "The cell balancing was stopped: {reason}. Cell delta: {before} mV → {after} mV. Duration: {duration}."
+    },
+    "balancing_reason_timeout": {
+      "message": "maximum duration of 24 hours reached"
+    },
+    "balancing_reason_telemetry": {
+      "message": "the battery could not be read"
+    }
+  },
+  "issues": {
+    "battery_not_responding": {
+      "title": "{name} does not respond",
+      "description": "{name} does not deliver the power SLEMS commands (or does not confirm the commands). It was handed back to its own logic and is retried every 5 minutes; the other batteries take over. Check the connection and the battery (e.g. in the Marstek app). This message disappears when the battery delivers again."
+    },
+    "battery_unreadable": {
+      "title": "{name} cannot be read",
+      "description": "SLEMS has not been able to read {name} for more than 5 minutes. The battery is not planned with or controlled meanwhile. Check the network connection, the Modbus settings and whether another integration (e.g. Omnibattery) uses the only Modbus connection of the battery."
+    },
+    "grid_meter_stale": {
+      "title": "Smart meter does not report",
+      "description": "The smart meter entity has not reported for a while. SLEMS handed the batteries back to their own logic and controls again as soon as the meter reports. Check the smart meter and its integration."
     }
   }
 }

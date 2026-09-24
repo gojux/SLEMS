@@ -274,6 +274,22 @@ vollständigen Schreiben (erster Befehl und alle 60 s) ihre Steuerregister
 zurück; ein nicht bestätigter Befehl zählt ebenfalls. Der Binärsensor
 *Reagiert nicht* und das Dashboard zeigen eine ausgeschlossene Batterie.
 
+### Probleme und Benachrichtigungen
+
+Laufende Probleme erscheinen unter *Einstellungen → Reparaturen* und
+verschwinden von selbst, sobald sie behoben sind:
+
+- eine Batterie reagiert nicht (ausgeschlossen, siehe oben),
+- eine Batterie kann seit mehr als 5 Minuten nicht gelesen werden,
+- der Smart Meter meldet nicht, während SLEMS im Betriebsmodus *Aktiv* ist.
+
+Das Dashboard zeigt sie ebenfalls: ein roter Hinweis auf der Batteriekarte
+(*nicht lesbar*, *reagiert nicht*), im Energiefluss und für den Smart Meter
+oben in der Übersicht. Das Ende eines aktiven Zellausgleichs (abgeschlossen,
+nach 24 Stunden oder weil die Batterie nicht lesbar war) erzeugt eine
+Benachrichtigung mit dem Zell-Delta vorher und nachher und der Dauer; ein
+selbst abgebrochener Ausgleich nicht.
+
 ### Betriebsmodus
 
 Die Entity *SLEMS Betriebsmodus* schaltet zwischen:

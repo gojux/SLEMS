@@ -167,6 +167,8 @@ class CellBalancer:
         self.phase = BalancingPhase.PRE_TOP_CHARGE
         self.retry_voltage = TOP_ZONE_V
         self.last_delta_mv: float | None = None
+        # Top measurement before the start (for the final report).
+        self.initial_delta_mv: float | None = None
         self.error: str | None = None
         # Monotonic start of the current leg; None until the next step.
         self._leg_started: float | None = None
@@ -182,6 +184,7 @@ class CellBalancer:
             "phase": self.phase.value,
             "retry_voltage": self.retry_voltage,
             "last_delta_mv": self.last_delta_mv,
+            "initial_delta_mv": self.initial_delta_mv,
             "started_at": self.started_at,
         }
 
@@ -191,6 +194,7 @@ class CellBalancer:
         balancer.phase = BalancingPhase(data["phase"])
         balancer.retry_voltage = data["retry_voltage"]
         balancer.last_delta_mv = data["last_delta_mv"]
+        balancer.initial_delta_mv = data.get("initial_delta_mv")
         return balancer
 
     def pause(self) -> None:

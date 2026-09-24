@@ -41,6 +41,7 @@ from homeassistant.helpers.event import async_call_later
 from .adaptive_gain import AdaptiveGain
 from .battery_distribution import LEAVE_RAMP_S
 from .delivery_monitor import Action
+from .drivers import BatteryDriverError
 from .const import ControlMode, OperatingMode
 from .response import (
     DEFAULT_BATTERY_RESPONSE_S,
@@ -272,7 +273,7 @@ class RealTimeController:
                 self._direction_since.pop(battery.subentry_id, None)
                 if had_commands and battery.not_responding:
                     # Back to its own logic until it is retried.
-                    await battery.driver.release_control()
+                    await self._release(battery)
 
         seen_before = start - self.battery_response.value
         seen = {
@@ -321,6 +322,22 @@ class RealTimeController:
 
     # --- batteries ------------------------------------------------------------
 
+    @staticmethod
+    async def _apply(battery: BatteryRuntime, power: int, refresh: bool) -> bool:
+        """Send a set point; an unreachable battery counts as a failed write."""
+        try:
+            return await battery.driver.apply_power(power, refresh=refresh)
+        except BatteryDriverError as err:
+            _LOGGER.debug("Battery %s: set point not sent: %s", battery.name, err)
+            return False
+
+    @staticmethod
+    async def _release(battery: BatteryRuntime) -> None:
+        try:
+            await battery.driver.release_control()
+        except BatteryDriverError as err:
+            _LOGGER.debug("Battery %s: not released: %s", battery.name, err)
+
     def _latest_command(self, battery_id: str) -> float | None:
         history = self._battery_history.get(battery_id)
         return history[-1][1] if history else None
@@ -359,7 +376,7 @@ class RealTimeController:
                     _LOGGER.debug("Battery %s: ramp-out finished, cell balancing", battery.name)
                 else:
                     _LOGGER.debug("Battery %s: ramp-out finished, released", battery.name)
-                    await battery.driver.release_control()
+                    await self._release(battery)
                 released = True
         return released
 
@@ -392,7 +409,7 @@ class RealTimeController:
                     new_total += latest
                     continue
             _LOGGER.debug("Battery %s: set point %d W", battery.name, target)
-            if await battery.driver.apply_power(target, refresh=refresh):
+            if await self._apply(battery, target, refresh):
                 self._record_command(battery.subentry_id, target, now)
                 if refresh:
                     self._battery_refreshed[battery.subentry_id] = now
@@ -423,7 +440,7 @@ class RealTimeController:
             if not battery.balancing_requested:
                 if self._balancing_commands.pop(battery_id, None) is not None:
                     _LOGGER.debug("Battery %s: cell balancing ended, released", battery.name)
-                    await battery.driver.release_control()
+                    await self._release(battery)
                 continue
             target = battery.balancing_power_w
             if target is None:
@@ -436,7 +453,7 @@ class RealTimeController:
                 if abs(previous[0] - target) < BATTERY_DEADBAND_W and same_direction:
                     continue
             _LOGGER.debug("Battery %s: cell balancing set point %d W", battery.name, target)
-            if await battery.driver.apply_power(target, refresh=refresh):
+            if await self._apply(battery, target, refresh):
                 # The time of the last complete write is kept for the keep-alive.
                 self._balancing_commands[battery_id] = (
                     target, now if refresh else previous[1]

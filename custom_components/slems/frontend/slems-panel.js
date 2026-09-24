@@ -88,6 +88,10 @@ const STRINGS = {
     noConsumers: "No consumers configured.",
     disabled: "disabled",
     notResponding: "not responding",
+    unreadable: "cannot be read",
+    unreadableText: "SLEMS cannot read the battery; it is neither planned with nor controlled.",
+    gridStale: "Smart meter does not report",
+    gridStaleText: "The batteries follow their own logic until the smart meter reports again.",
     notRespondingText: "does not deliver the commanded power ({reason}); handed back to its own logic, retried at {time}",
     notRespondingReasons: {
       charge_not_delivered: "no charging",
@@ -193,6 +197,10 @@ const STRINGS = {
     noConsumers: "Keine Verbraucher konfiguriert.",
     disabled: "deaktiviert",
     notResponding: "reagiert nicht",
+    unreadable: "nicht lesbar",
+    unreadableText: "SLEMS kann die Batterie nicht lesen; sie wird weder eingeplant noch gesteuert.",
+    gridStale: "Smart Meter meldet nicht",
+    gridStaleText: "Die Batterien folgen ihrer eigenen Logik, bis der Smart Meter wieder meldet.",
     notRespondingText: "liefert die vorgegebene Leistung nicht ({reason}); an die eigene Logik übergeben, neuer Versuch um {time}",
     notRespondingReasons: {
       charge_not_delivered: "lädt nicht",
@@ -533,6 +541,7 @@ class SlemsPanel extends HTMLElement {
   _layout() {
     if (this._tab === "overview") {
       return `
+        <div id="banner"></div>
         <div class="grid two">
           <section class="card"><h2>${this._t.energyFlow}</h2><div id="flow"></div></section>
           <section class="card"><div id="tiles" class="tiles"></div></section>
@@ -545,6 +554,13 @@ class SlemsPanel extends HTMLElement {
   // --- overview ------------------------------------------------------------------
 
   _renderOverview() {
+    const t = this._t;
+    this._setSection(
+      "banner",
+      this._state("control_status")?.state === "grid_stale"
+        ? `<div class="problem"><ha-icon icon="mdi:alert-circle"></ha-icon><span><b>${t.gridStale}</b> – ${t.gridStaleText}</span></div>`
+        : ""
+    );
     this._renderFlow();
     this._setSection(
       "tiles",
@@ -592,6 +608,7 @@ class SlemsPanel extends HTMLElement {
       const enabled = this._state("battery_enabled", battery.device_id)?.state !== "off";
       const balancing = this._state("cell_balancing", battery.device_id)?.state === "on";
       const notResponding = this._state("not_responding", battery.device_id)?.state === "on";
+      const unreadable = this._state("battery_soc", battery.device_id)?.state === "unavailable";
       nodes.push({
         id: `battery-${battery.id}`,
         role: "battery",
@@ -599,8 +616,10 @@ class SlemsPanel extends HTMLElement {
         title: battery.name,
         power,
         soc: num("battery_soc", battery.device_id),
-        disabled: !enabled || balancing || notResponding,
-        detail: !enabled
+        disabled: !enabled || balancing || notResponding || unreadable,
+        detail: unreadable
+          ? t.unreadable
+          : !enabled
           ? t.disabled
           : notResponding
             ? t.notResponding
@@ -1033,7 +1052,9 @@ class SlemsPanel extends HTMLElement {
             limited("allowed_discharge_power", t.allowedDischarge),
           ].filter(([, st]) => st);
           let problem = "";
-          if (notResponding?.state === "on") {
+          if (s("battery_soc")?.state === "unavailable") {
+            problem = `<div class="problem"><ha-icon icon="mdi:alert-circle"></ha-icon><span><b>${t.unreadable}</b> – ${t.unreadableText}</span></div>`;
+          } else if (notResponding?.state === "on") {
             const attrs = notResponding.attributes;
             const retry = attrs.retry_at ? new Date(attrs.retry_at).toLocaleTimeString(this._hass.locale?.language, { hour: "2-digit", minute: "2-digit" }) : "–";
             const text = t.notRespondingText

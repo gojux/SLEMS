@@ -24,6 +24,7 @@ from .coordinator import BatteryRuntime, SlemsConfigEntry, SlemsCoordinator
 from .drivers import BatteryDriver, create_driver
 from .efficiency import EfficiencyTracker
 from .panel import async_register_panel, async_unregister_panel
+from .problems import async_remove_issues
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -81,6 +82,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> bo
         async_unregister_panel(hass)
         await entry.runtime_data.async_shutdown()
     return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> None:
+    """Remove the repair issues of a removed SLEMS entry."""
+    async_remove_issues(hass)
 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> None:

@@ -268,6 +268,22 @@ back after every complete write (first command and every 60 s); a write that
 is not confirmed counts as well. The binary sensor *Not responding* and the
 dashboard show an excluded battery.
 
+### Problems and notifications
+
+Ongoing problems appear under *Settings → Repairs* and disappear by
+themselves when they are solved:
+
+- a battery does not respond (excluded, see above),
+- a battery could not be read for more than 5 minutes,
+- the smart meter does not report while SLEMS is in operating mode *active*.
+
+The dashboard also shows them: a red note on the battery card (*cannot be
+read*, *not responding*), in the energy flow and, for the smart meter, at the
+top of the overview. The end of an active cell balancing run (finished, after
+24 hours or because the battery could not be read) creates a notification
+with the cell delta before and after and the duration; cancelling it
+yourself does not.
+
 ### Operating mode
 
 The entity *SLEMS Operating mode* switches between:

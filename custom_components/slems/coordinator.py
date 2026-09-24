@@ -81,6 +81,7 @@ from .battery_limits import (
 )
 from .cell_balancing import BalancingPhase, CellBalancer, CellMonitor
 from .delivery_monitor import Action, DeliveryMonitor
+from .problems import ProblemReporter
 from .efficiency import EfficiencyTracker, EnergyIntegrator, LossCurveLearner
 from .forecast import (
     ConsumptionForecast,
@@ -135,6 +136,8 @@ class BatteryRuntime:
     balancing_power_w: float | None = None
     # Outcome of the last run: "done", "cancelled", "timeout" or "telemetry".
     balancing_result: str | None = None
+    # Monotonic time of the first failed read since the last successful one.
+    unreadable_since: float | None = None
     limits: BatteryLimitSettings = field(default_factory=BatteryLimitSettings)
     soc_window: SocWindow = field(default_factory=SocWindow)
     # Allowed power right now (updated with every poll).
@@ -399,6 +402,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
         self.forecaster = ConsumptionForecaster(hass, self._forecast_sources())
         self.controller = RealTimeController(self)
+        self.problems = ProblemReporter(hass, self)
 
     @property
     def _config(self):
@@ -574,7 +578,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 telemetry = await battery.driver.read_telemetry()
             except BatteryDriverError as err:
                 _LOGGER.debug("Battery %s unavailable: %s", battery.name, err)
+                if battery.unreadable_since is None:
+                    battery.unreadable_since = now
                 continue
+            battery.unreadable_since = None
             snapshot.batteries[battery.subentry_id] = telemetry
             self._update_efficiency(battery, telemetry, now)
             if telemetry.ac_power_w is not None:
@@ -597,6 +604,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             for name in (
                 "available_power_w",
                 "expected_surplus_wh",
+                "feed_in_limit_w",
+                "pv_correction",
+                "day_plan",
+                "day_plan_tomorrow",
                 "allocation",
                 "distribution",
                 "night_discharge",
@@ -606,6 +617,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self.plan(snapshot, dt_util.now(), now)
         # Runs after the new data has been stored.
         self.hass.loop.call_soon(self.controller.request)
+        self.problems.update(now)
         return snapshot
 
     def _integrate_pv(self, pv_power_w: float | None, now: float) -> None:
@@ -769,6 +781,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         battery.balancer = CellBalancer(
             battery.driver.capabilities.max_charge_power_w, dt_util.utcnow().timestamp()
         )
+        if battery.cell_monitor.last is not None:
+            battery.balancer.initial_delta_mv = battery.cell_monitor.last.delta_mv
         battery.balancing_power_w = None
         battery.balancing_result = None
         # A discharging battery hands over smoothly, like when it is disabled.
@@ -788,6 +802,18 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             )
         elif result != "cancelled":
             _LOGGER.warning("Cell balancing of %s stopped: %s", battery.name, result)
+        if result != "cancelled":
+            self.config_entry.async_create_background_task(
+                self.hass,
+                self.problems.async_notify_balancing(
+                    battery,
+                    result,
+                    balancer.initial_delta_mv,
+                    balancer.last_delta_mv,
+                    dt_util.utcnow().timestamp() - balancer.started_at,
+                ),
+                "slems balancing notification",
+            )
         battery.balancer = None
         battery.balancing_power_w = None
         battery.balancing_result = result
@@ -1148,7 +1174,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     async def async_release_battery(self, battery: BatteryRuntime) -> None:
         """Hand one battery back to its internal logic."""
         if battery.driver.capabilities.controllable:
-            await battery.driver.release_control()
+            try:
+                await battery.driver.release_control()
+            except BatteryDriverError as err:
+                _LOGGER.debug("Battery %s not released: %s", battery.name, err)
 
     async def async_shutdown(self) -> None:
         """Save learned data and close all battery connections."""
