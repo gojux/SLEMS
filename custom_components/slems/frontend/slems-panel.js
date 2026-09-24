@@ -98,6 +98,10 @@ const STRINGS = {
     allowedDischarge: "Discharging limited",
     limitReasons: { soc: "state of charge limit", power: "power limit", temperature: "temperature" },
     batteryLimits: "Limits: {name}",
+    settingHints: {
+      night_reserve:
+        "Energy that should remain in the batteries above their minimum state of charge when the night discharge ends (in the morning, when PV production exceeds the consumption). In % of the forecast consumption of the coming day, not of the state of charge. Example: 14 kWh forecast, 25 % → 3.5 kWh stay. If the PV forecast cannot refill the batteries from there, more energy stays.",
+    },
     cellDelta: "Cell delta",
     cellDeltaHint: "live, meaningful only near full charge",
     topCellDelta: "Cell delta at top of charge",
@@ -199,6 +203,10 @@ const STRINGS = {
     allowedDischarge: "Entladen begrenzt",
     limitReasons: { soc: "Ladezustandsgrenze", power: "Leistungsgrenze", temperature: "Temperatur" },
     batteryLimits: "Grenzen: {name}",
+    settingHints: {
+      night_reserve:
+        "Energie, die am Ende der Nachtentladung (morgens, wenn die PV-Erzeugung den Verbrauch übersteigt) über dem minimalen Ladezustand in den Batterien bleiben soll. In % des prognostizierten Verbrauchs des kommenden Tages, nicht des Ladezustands. Beispiel: 14 kWh Prognose, 25 % → 3,5 kWh bleiben. Reicht die PV-Prognose nicht, um die Batterien von dort wieder zu füllen, bleibt mehr Energie.",
+    },
     cellDelta: "Zell-Delta",
     cellDeltaHint: "live, nur nahe Vollladung aussagekräftig",
     topCellDelta: "Zell-Delta am oberen Ladeende",
@@ -324,6 +332,8 @@ class SlemsPanel extends HTMLElement {
     this._tab = "overview";
     this._showTable = false;
     this._chartDay = "today";
+    // Settings whose explanation is shown (translation keys).
+    this._openHints = new Set();
     this._stats = { pv: {}, house: {}, soc: {} };
     this._statsFetched = 0;
     this._sections = {};
@@ -1161,7 +1171,14 @@ class SlemsPanel extends HTMLElement {
 
   _control(stateObj) {
     const domain = stateObj.entity_id.split(".")[0];
-    const name = escapeHtml(this._name(stateObj));
+    const key = this._hass.entities?.[stateObj.entity_id]?.translation_key;
+    const hint = this._t.settingHints[key];
+    // Title for the mouse, a click on the icon opens the text (touch screens).
+    const name = hint
+      ? `${escapeHtml(this._name(stateObj))}<button class="info" data-action="toggle-hint" data-key="${key}" title="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}"><ha-icon icon="mdi:information-outline"></ha-icon></button>${
+          this._openHints.has(key) ? `<span class="setting-hint">${escapeHtml(hint)}</span>` : ""
+        }`
+      : escapeHtml(this._name(stateObj));
     if (domain === "switch") {
       return `<div class="setting"><span>${name}</span>${this._toggle(stateObj, name)}</div>`;
     }
@@ -1217,6 +1234,13 @@ class SlemsPanel extends HTMLElement {
     if (dayButton) {
       this._chartDay = dayButton.dataset.action === "day-today" ? "today" : "tomorrow";
       this._sections.daychart = undefined;
+      this._render();
+      return;
+    }
+    const hintButton = event.target.closest("[data-action='toggle-hint']");
+    if (hintButton) {
+      const key = hintButton.dataset.key;
+      if (!this._openHints.delete(key)) this._openHints.add(key);
       this._render();
       return;
     }
@@ -1390,6 +1414,10 @@ const STYLE = `
     color: var(--secondary-text-color); margin-left: 4px; }
   .settings { display: flex; flex-direction: column; gap: 10px; }
   .setting { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .setting button.info { background: none; border: none; padding: 0 0 0 4px; cursor: pointer; color: var(--secondary-text-color);
+    vertical-align: middle; line-height: 0; }
+  .setting button.info ha-icon { --mdc-icon-size: 16px; }
+  .setting-hint { display: block; margin-top: 4px; font-size: 12px; color: var(--secondary-text-color); line-height: 1.35; }
   .setting input[type=number] { width: 90px; font: inherit; padding: 4px 6px; border-radius: 6px; text-align: right;
     border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); }
   .setting select { font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--divider-color);
