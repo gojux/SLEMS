@@ -403,7 +403,9 @@ a much larger share.
   batteries aim at. Between the two targets the batteries stay idle.
 - *Maximum grid export while discharging* (0 up to the sum of the maximum
   discharge power of all batteries, default 5000 W) – discharging never causes
-  more export than this.
+  more export than this. 0 W means never feeding battery energy into the grid,
+  the maximum switches the limit off. Below the *grid surplus target while
+  discharging* it wins (the dashboard shows a note).
 - *Night discharge* (switch, off by default) and *Night discharge reserve*
   (default 25 % of tomorrow's forecast consumption) – over night the batteries
   discharge evenly down to the reserve (usable energy above the minimum state

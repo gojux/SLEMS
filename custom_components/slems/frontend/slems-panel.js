@@ -105,7 +105,11 @@ const STRINGS = {
     allowedDischarge: "Discharging limited",
     limitReasons: { soc: "state of charge limit", power: "power limit", temperature: "temperature" },
     batteryLimits: "Limits: {name}",
+    exportBelowTarget:
+      "The maximum grid export while discharging ({limit}) is below the grid surplus target while discharging ({target}): the batteries control to {limit}.",
     settingHints: {
+      discharge_max_grid_export:
+        "Hard limit of the grid export while batteries discharge. 0 W: never feed battery energy into the grid. To switch the limit off, set it to the maximum.",
       night_reserve:
         "Energy that should remain in the batteries above their minimum state of charge when the night discharge ends (in the morning, when PV production exceeds the consumption). In % of the forecast consumption of the coming day, not of the state of charge. Example: 14 kWh forecast, 25 % → 3.5 kWh stay. If the PV forecast cannot refill the batteries from there, more energy stays.",
     },
@@ -217,7 +221,11 @@ const STRINGS = {
     allowedDischarge: "Entladen begrenzt",
     limitReasons: { soc: "Ladezustandsgrenze", power: "Leistungsgrenze", temperature: "Temperatur" },
     batteryLimits: "Grenzen: {name}",
+    exportBelowTarget:
+      "Die maximale Einspeisung beim Entladen ({limit}) liegt unter dem Ziel-Netzüberschuss beim Entladen ({target}): Die Batterien regeln auf {limit}.",
     settingHints: {
+      discharge_max_grid_export:
+        "Harte Grenze der Einspeisung, solange Batterien entladen. 0 W: nie Batterieenergie einspeisen. Zum Abschalten der Grenze auf das Maximum stellen.",
       night_reserve:
         "Energie, die am Ende der Nachtentladung (morgens, wenn die PV-Erzeugung den Verbrauch übersteigt) über dem minimalen Ladezustand in den Batterien bleiben soll. In % des prognostizierten Verbrauchs des kommenden Tages, nicht des Ladezustands. Beispiel: 14 kWh Prognose, 25 % → 3,5 kWh bleiben. Reicht die PV-Prognose nicht, um die Batterien von dort wieder zu füllen, bleibt mehr Energie.",
     },
@@ -1213,7 +1221,9 @@ class SlemsPanel extends HTMLElement {
         const rows = keys.map((key) => this._state(key)).filter(Boolean);
         if (!rows.length) return "";
         return `<section class="card"><h2>${t.groups[group]}</h2>
-          <div class="settings">${rows.map((s) => this._control(s)).join("")}</div></section>`;
+          <div class="settings">${rows.map((s) => this._control(s)).join("")}</div>${
+            group === "priority" ? this._exportNote() : ""
+          }</section>`;
       }).join("") +
         (this._config.batteries || [])
           .map((b) => {
@@ -1224,6 +1234,17 @@ class SlemsPanel extends HTMLElement {
           })
           .join("")
     );
+  }
+
+  /** Note when the export limit silently overrides the discharge target. */
+  _exportNote() {
+    const limit = this._number(this._state("discharge_max_grid_export"));
+    const target = this._number(this._state("discharge_grid_target"));
+    if (limit === null || target === null || limit >= target) return "";
+    const text = this._t.exportBelowTarget
+      .replaceAll("{limit}", this._watts(limit))
+      .replace("{target}", this._watts(target));
+    return `<p class="setting-note"><ha-icon icon="mdi:information-outline"></ha-icon>${escapeHtml(text)}</p>`;
   }
 
   _toggle(stateObj, label, confirmOffName = null) {
@@ -1255,8 +1276,12 @@ class SlemsPanel extends HTMLElement {
         </select></div>`;
     }
     const a = stateObj.attributes;
+    // As many decimals as the step has (7000, 12, 0.5).
+    const decimals = String(a.step ?? 1).split(".")[1]?.length ?? 0;
+    const numeric = parseFloat(stateObj.state);
+    const value = Number.isFinite(numeric) ? numeric.toFixed(decimals) : stateObj.state;
     return `<div class="setting"><span>${name}</span><span class="number">
-      <input type="number" data-entity="${stateObj.entity_id}" data-kind="number" value="${escapeHtml(stateObj.state)}"
+      <input type="number" data-entity="${stateObj.entity_id}" data-kind="number" value="${escapeHtml(value)}"
         min="${a.min}" max="${a.max}" step="${a.step}"><span class="unit">${escapeHtml(a.unit_of_measurement || "")}</span></span></div>`;
   }
 
@@ -1482,6 +1507,9 @@ const STYLE = `
   .setting button.info { background: none; border: none; padding: 0 0 0 4px; cursor: pointer; color: var(--secondary-text-color);
     vertical-align: middle; line-height: 0; }
   .setting button.info ha-icon { --mdc-icon-size: 16px; }
+  .setting-note { display: flex; gap: 6px; align-items: flex-start; margin: 12px 0 0; font-size: 12px; line-height: 1.35;
+    color: var(--secondary-text-color); }
+  .setting-note ha-icon { --mdc-icon-size: 16px; flex: none; color: var(--warning-color, #fab219); }
   .setting-hint { display: block; margin-top: 4px; font-size: 12px; color: var(--secondary-text-color); line-height: 1.35; }
   .setting input[type=number] { width: 90px; font: inherit; padding: 4px 6px; border-radius: 6px; text-align: right;
     border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); }

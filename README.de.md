@@ -418,7 +418,10 @@ ab, an Tagen mit weniger Überschuss einen deutlich größeren Anteil.
   entladenden Batterien regeln. Zwischen den beiden Zielwerten sind die Batterien im Standby.
 - *Maximale Einspeisung beim Entladen* (0 bis Summe der maximalen
   Entladeleistung aller Batterien, Standard 5000 W): Das Entladen verursacht
-  nie mehr Einspeisung als diesen Wert.
+  nie mehr Einspeisung als diesen Wert. 0 W heißt, nie Batterieenergie
+  einspeisen; das Maximum schaltet die Grenze ab. Liegt sie unter dem
+  *Ziel-Netzüberschuss beim Entladen*, gilt sie (das Dashboard zeigt einen
+  Hinweis).
 - *Nachtentladung* (Schalter, standardmäßig aus) und *Reserve Nachtentladung*
   (Standard 25 % des prognostizierten Verbrauchs von morgen): Über Nacht
   entladen die Batterien gleichmäßig bis zur Reserve (nutzbare Energie über dem
