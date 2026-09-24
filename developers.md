@@ -634,13 +634,19 @@ reads 34002 for the finer resolution.
 
 Verified on the same device at rest (2026-09-24): 30100 = 5311 (53.11 V),
 35000 = 324 (32.4 °C), 35100 = 1 (standby), 42000 = 21947 (0x55BB, RS485
-control disabled), 42010 = 0 (force mode none), 44002/44003 = 2500 W.
+control disabled), 42010 = 0 (force mode none), 44002/44003 = 2500 W,
+33000 = 6148 and 33002 = 4661. The Marstek app showed 12.64 / 6.35 kWh at the
+same time, without a common factor (it counts over another period). With
+0.01 kWh the counters give a round trip efficiency of 80 %, with 0.1 kWh 76 %,
+with 0.001 kWh more than 100 % (ruled out). Delta test: charging from 55 to
+65 % (0.51 kWh stored) raised 33000 from 6148 to 6206, i.e. 0.58 kWh with
+0.01 kWh (one way efficiency about 88 %); 33002 stayed unchanged. The scale
+0.01 kWh is confirmed.
 
 Open points to verify on the real device:
 
 - Omnibattery marks the v3 map as partly untested; still open: sign and
-  difference of 30001/30006 while charging and discharging, and the energy
-  counters 33000/33002.
+  difference of 30001/30006 while charging and discharging.
 - The device holds only one connection: while Omnibattery is running, a Modbus
   battery in SLEMS cannot connect. Use the read-only *HA entities* battery
   during the transition.
