@@ -4,7 +4,9 @@
   "after_dependencies": [
     "energy"
   ],
-  "codeowners": [],
+  "codeowners": [
+    "@gojux"
+  ],
   "config_flow": true,
   "dependencies": [
     "frontend",
@@ -12,9 +14,10 @@
     "panel_custom",
     "recorder"
   ],
-  "documentation": "https://example.invalid/slems",
+  "documentation": "https://github.com/gojux/SLEMS",
   "integration_type": "hub",
   "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/gojux/SLEMS/issues",
   "requirements": [
     "pymodbus>=3.8.0"
   ],

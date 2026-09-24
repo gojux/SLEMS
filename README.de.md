@@ -10,11 +10,54 @@ z. B. durch Verschieben des Ladezeitpunkts, damit die tägliche
 Einspeisespitze abgefangen wird. Grundlage dafür sind Prognosen für Verbrauch
 und PV-Ertrag.
 
-Der Name setzt sich aus *Slug* und *EMS* (Energiemanagementsystem) zusammen.
+Der Name setzt sich aus *Slug* (ein wunderbares Wort für ein sehr
+interessantes Tier) und *EMS* (Energiemanagementsystem) zusammen.
 
 > **Status: frühe Entwicklung.** Prognose, Planung, Regelung und Dashboard
 > sind umgesetzt, aber noch nicht an einer echten Batterie getestet (siehe
 > [Roadmap](#roadmap)).
+
+## Warum SLEMS?
+
+Die meisten Speichersteuerungen reagieren auf den Moment: Sie halten die
+Netzleistung bei null und laden, sobald Überschuss da ist. Die Batterie ist dann
+am späten Vormittag voll, und die Mittagsspitze geht trotzdem ins Netz. SLEMS
+plant voraus und regelt genau:
+
+- **Netzdienlich statt um 10 Uhr voll.** Aus PV- und Verbrauchsprognose
+  berechnet SLEMS eine Einspeisegrenze und lädt die Batterien mit dem
+  Überschuss darüber. So fangen sie die Einspeisespitze ab und sind am Abend
+  trotzdem voll. Die Grenze wird laufend neu berechnet und sinkt von selbst,
+  wenn der Tag schlechter wird als vorhergesagt.
+- **Eigene Verbrauchsprognose.** Gelernt aus den Langzeitstatistiken deines
+  Hauses, mit Wetter und eigenem Wärmepumpen-Modell; Urlaubsmodus,
+  Nachtentladung bis zu einer prognosebasierten Reserve und eine Prognose des
+  Ladezustands für heute und morgen.
+- **Batterien und Verbraucher in einem Plan.** Der Überschuss wird auf
+  Batterien und steuerbare Verbraucher (Heizstab, Wärmepumpe, …) verteilt, mit
+  Prioritäten, Batterievorrang bis zur gesicherten Ladung, Mindestlaufzeiten,
+  externer Sperre und Thermostat-Pausen.
+- **Mehrere Batterien im effizienten Arbeitspunkt.** SLEMS lernt die
+  Umwandlungsverluste jeder Batterie, betreibt nur so viele Batterien wie
+  sinnvoll und wechselt zwischen ihnen mit sanftem Übergang.
+- **Genaue Regelung ohne Schwingen.** Ereignisgesteuert bei jeder Meldung des
+  Smart Meters; die gelernte Reaktionszeit der Batterien wird ausgeglichen, die
+  Regelverstärkung passt sich selbst an.
+- **Batterieschonung und Sicherheit.** Ladezustandsfenster, Leistungsgrenzen
+  (z. B. 800 W), Ladebegrenzung nach Temperatur, Überwachung des Zell-Deltas mit
+  aktivem Zellausgleich, Erkennung nicht reagierender Batterien,
+  Reparatur-Einträge und Benachrichtigungen.
+- **Transparent und lokal.** Ein Dashboard mit Energiefluss,
+  Prognose-Diagramm und allen Einstellungen; alles läuft lokal in Home
+  Assistant, ohne Cloud. Im Simulationsmodus siehst du, was SLEMS tun würde,
+  bevor es etwas steuert, auch neben einer bestehenden Batterie-Integration.
+
+**Wann (heute) eine andere Lösung besser passt:** viele verschiedene
+Batteriemarken (SLEMS unterstützt derzeit die Marstek Venus E 3.0 und nur
+lesende Batterien aus vorhandenen Entities), Laden aus dem Netz nach
+dynamischen Tarifen oder das Laden von Elektroautos. Omnibattery deckt viele
+Batteriemodelle ab, evcc ist auf das Laden von E-Autos spezialisiert; evcc
+ergänzt SLEMS gut (siehe [Roadmap](#roadmap)).
 
 ## Funktionen
 
@@ -48,7 +91,7 @@ Der Name setzt sich aus *Slug* und *EMS* (Energiemanagementsystem) zusammen.
 
 ### HACS (benutzerdefiniertes Repository)
 
-1. HACS → ⋮ → *Benutzerdefinierte Repositories* → URL dieses Repositories eintragen, Typ *Integration*.
+1. HACS → ⋮ → *Benutzerdefinierte Repositories* → `https://github.com/gojux/SLEMS` eintragen, Typ *Integration*.
 2. *SLEMS* installieren und Home Assistant neu starten.
 
 ### Manuell

@@ -9,11 +9,52 @@ controllable consumers. Its goal is to operate the batteries in a grid friendly
 way, e.g. by shifting the charging time so that the daily feed-in peak is
 absorbed, based on forecasts of consumption and PV production.
 
-The name is a combination of *Slug* and *EMS* (energy
-management system).
+The name is a combination of *Slug* (a wonderful word for a very interesting
+animal) and *EMS* (energy management system).
 
 > **Status: early development.** Forecast, planning, control and dashboard
 > are implemented, but not yet tested on a real battery (see [roadmap](#roadmap)).
+
+## Why SLEMS?
+
+Most home battery controls react to the moment: they keep the grid power
+at zero and charge whenever there is surplus. The battery is then full by
+late morning, and the midday peak goes into the grid anyway. SLEMS plans
+ahead and controls precisely:
+
+- **Grid friendly instead of full by 10 o'clock.** From the PV and consumption
+  forecasts SLEMS calculates a feed-in limit and charges the batteries with the
+  surplus above it, so they absorb the feed-in peak and are still full in the
+  evening. The limit is recalculated continuously and drops by itself when the
+  day turns out worse than forecast.
+- **Its own consumption forecast.** Learned from the long-term statistics of
+  your house, with the weather and a separate heat pump model; vacation mode,
+  night discharge to a forecast based reserve and a projection of the state of
+  charge for today and tomorrow.
+- **Batteries and consumers in one plan.** The surplus is distributed between
+  batteries and controllable consumers (heating rod, heat pump, …) with
+  priorities, battery priority until the charge is secured, minimum runtimes,
+  external blocking and thermostat pauses.
+- **Several batteries at their efficient point.** SLEMS learns the conversion
+  losses of every battery, runs as few batteries as useful and switches
+  between them with a smooth transition.
+- **Precise control without oscillation.** Event driven on every report of the
+  smart meter; the learned response time of the batteries is compensated and
+  the control gain adapts itself.
+- **Battery care and safety.** State of charge window, power limits (e.g.
+  800 W), temperature charge limit, cell delta monitoring with active cell
+  balancing, detection of batteries that do not respond, repair issues and
+  notifications.
+- **Transparent and local.** A dashboard with energy flow, forecast chart and
+  all settings; everything runs locally in Home Assistant without a cloud. The
+  simulation mode shows what SLEMS would do before it controls anything, also
+  next to an existing battery integration.
+
+**When another solution fits better (today):** many different battery brands
+(SLEMS currently supports the Marstek Venus E 3.0 and read-only batteries from
+existing entities), charging from the grid by dynamic tariffs or electric
+vehicle charging. Omnibattery covers many battery models, evcc specialises in
+EV charging; evcc complements SLEMS well (see [roadmap](#roadmap)).
 
 ## Features
 
@@ -47,7 +88,7 @@ management system).
 
 ### HACS (custom repository)
 
-1. HACS → ⋮ → *Custom repositories* → add the URL of this repository, type *Integration*.
+1. HACS → ⋮ → *Custom repositories* → add `https://github.com/gojux/SLEMS`, type *Integration*.
 2. Install *SLEMS* and restart Home Assistant.
 
 ### Manual
