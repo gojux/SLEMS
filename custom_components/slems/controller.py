@@ -40,6 +40,7 @@ from homeassistant.helpers.event import async_call_later
 
 from .adaptive_gain import AdaptiveGain
 from .battery_distribution import LEAVE_RAMP_S
+from .delivery_monitor import Action
 from .const import ControlMode, OperatingMode
 from .response import (
     DEFAULT_BATTERY_RESPONSE_S,
@@ -93,6 +94,8 @@ class RealTimeController:
         self._battery_history: dict[str, list[tuple[float, float]]] = {}
         # battery id -> monotonic time of the last complete write
         self._battery_refreshed: dict[str, float] = {}
+        # battery id -> monotonic time since the commands have their direction
+        self._direction_since: dict[str, float] = {}
         # battery id -> (balancing power, monotonic time of the last full write)
         self._balancing_commands: dict[str, tuple[float, float]] = {}
         # consumer id -> (commanded power, monotonic time of the command)
@@ -157,6 +160,7 @@ class RealTimeController:
             # Batteries were released; the next activation must send again.
             self._battery_history.clear()
             self._battery_refreshed.clear()
+            self._direction_since.clear()
             self._balancing_commands.clear()
             self._consumer_commands.clear()
             return
@@ -202,6 +206,20 @@ class RealTimeController:
         self.request()
         return True
 
+    def command_state(self, battery_id: str) -> tuple[float, float] | None:
+        """Latest command of a battery and since when it has this direction."""
+        latest = self._latest_command(battery_id)
+        since = self._direction_since.get(battery_id)
+        if latest is None or since is None:
+            return None
+        return latest, since
+
+    @callback
+    def force_refresh(self, battery_id: str) -> None:
+        """Write all control registers of a battery again with the next command."""
+        self._battery_refreshed.pop(battery_id, None)
+        self.request()
+
     @callback
     def _on_ramp_timer(self, _now) -> None:
         self.request()
@@ -236,6 +254,7 @@ class RealTimeController:
                 await coordinator.async_release_batteries()
                 self._battery_history.clear()
                 self._battery_refreshed.clear()
+                self._direction_since.clear()
             self.status = ControlStatus.GRID_STALE
             return
         self.status = ControlStatus.ACTIVE
@@ -244,12 +263,16 @@ class RealTimeController:
             # Only the handover in this cycle; the meter first has to catch up.
             return
 
-        # Batteries outside the planning (disabled and released, or balancing)
-        # must not count in the commanded total.
+        # Batteries outside the planning (disabled and released, balancing or
+        # not responding) must not count in the commanded total.
         for battery in coordinator.batteries:
             if not battery.participating:
-                self._battery_history.pop(battery.subentry_id, None)
+                had_commands = self._battery_history.pop(battery.subentry_id, None)
                 self._battery_refreshed.pop(battery.subentry_id, None)
+                self._direction_since.pop(battery.subentry_id, None)
+                if had_commands and battery.not_responding:
+                    # Back to its own logic until it is retried.
+                    await battery.driver.release_control()
 
         seen_before = start - self.battery_response.value
         seen = {
@@ -310,6 +333,9 @@ class RealTimeController:
         return None
 
     def _record_command(self, battery_id: str, power: float, now: float) -> None:
+        latest = self._latest_command(battery_id)
+        if latest is None or (latest > 0) != (power > 0) or (latest < 0) != (power < 0):
+            self._direction_since[battery_id] = now
         history = self._battery_history.setdefault(battery_id, [])
         history.append((now, power))
         del history[:-BATTERY_HISTORY]
@@ -327,6 +353,7 @@ class RealTimeController:
                 battery.leaving_until = None
                 self._battery_history.pop(battery.subentry_id, None)
                 self._battery_refreshed.pop(battery.subentry_id, None)
+                self._direction_since.pop(battery.subentry_id, None)
                 if battery.balancing_requested:
                     # The balancing run takes over with its next step.
                     _LOGGER.debug("Battery %s: ramp-out finished, cell balancing", battery.name)
@@ -371,8 +398,11 @@ class RealTimeController:
                     self._battery_refreshed[battery.subentry_id] = now
                 new_total += target
                 changed = True
-            elif latest is not None:
-                new_total += latest
+            else:
+                if battery.delivery.record_comm_failure(now) is not Action.NONE:
+                    self.request()
+                if latest is not None:
+                    new_total += latest
         if not changed:
             return None
         # The grid power moves by the change of the battery power.

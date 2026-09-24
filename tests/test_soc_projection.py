@@ -42,7 +42,8 @@ def battery(soc: float) -> BatteryGroup:
 def settings(**changes) -> ProjectionSettings:
     values = {
         "grid_friendly_charging": False,
-        "buffer_wh": 0.0,
+        "charge_buffer_wh": 0.0,
+        "night_buffer_wh": 0.0,
         "peak_shaving": False,
         "peak_shaving_grid_limit_w": 1000.0,
         "peak_shaving_soc_threshold_pct": 20.0,
@@ -103,3 +104,16 @@ def test_empty_battery_stays_at_zero() -> None:
     pv, consumption = forecasts(load_w=2000)
     result = project_soc(at(0), battery(5), pv, consumption, None, settings(), None)
     assert result.soc_pct[at(7)] == 0
+
+
+def test_soc_window_bounds_the_projection() -> None:
+    pv, consumption = forecasts(load_w=2000)
+    group = BatteryGroup(
+        soc_pct=30, capacity_wh=10000, max_charge_w=5000, max_discharge_w=5000,
+        charge_efficiency=1.0, min_soc_pct=20, full_soc_pct=80,
+    )
+    result = project_soc(at(0), group, pv, consumption, None, settings(), None)
+    assert result.soc_pct[at(7)] == pytest.approx(20)
+    pv, consumption = forecasts(load_w=0)
+    result = project_soc(at(0), group, pv, consumption, None, settings(), None)
+    assert max(result.soc_pct.values()) == pytest.approx(80)

@@ -54,10 +54,12 @@ def plan_night_discharge(
     consumption_forecast: Mapping[datetime, float],
     reserve_pct_of_consumption: float,
     buffer_wh: float,
+    min_wh: float = 0.0,
 ) -> NightDischargePlan | None:
     """Plan the night discharge; None if not applicable right now.
 
-    Both forecasts map period starts to Wh. Not applicable while PV already
+    Both forecasts map period starts to Wh. ``min_wh`` (minimum SoC of the
+    batteries) is the lowest target. Not applicable while PV already
     exceeds consumption, or if no crossover is found within the lookahead.
     """
     pv_forecast = hourly(pv_forecast)
@@ -86,7 +88,7 @@ def plan_night_discharge(
 
     reserve = reserve_pct_of_consumption / 100 * daily_consumption
     rechargeable = max(0.0, surplus - buffer_wh) * charge_efficiency
-    target = min(capacity_wh, max(reserve, capacity_wh - rechargeable, 0.0))
+    target = min(capacity_wh, max(reserve, capacity_wh - rechargeable, min_wh, 0.0))
 
     stored = soc_pct / 100 * capacity_wh
     hours = (crossover - now).total_seconds() / 3600

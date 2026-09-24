@@ -138,3 +138,20 @@ async def test_soc_falls_back_to_whole_percent_register() -> None:
     link = FakeLink({37005: 64, 30001: 0})
     telemetry = await make_driver(link).read_telemetry()
     assert telemetry.soc_pct == 64
+
+
+async def test_complete_write_is_confirmed_by_read_back() -> None:
+    link = FakeLink({})
+    driver = make_driver(link)
+    assert await driver.apply_power(-900, refresh=True)
+    # The battery dropped RS485 control: the next complete write is not confirmed.
+    original_write = link.write
+
+    async def ignore_rs485(address: int, value: int) -> bool:
+        if address == 42000:
+            link.registers[address] = 0x55BB
+            return True
+        return await original_write(address, value)
+
+    link.write = ignore_rs485
+    assert not await driver.apply_power(-900, refresh=True)

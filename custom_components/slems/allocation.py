@@ -70,16 +70,19 @@ class BatteryGroup:
     max_discharge_w: float
     # One way efficiency (charging), 0..1.
     charge_efficiency: float
+    # SoC window of the batteries (capacity weighted): "full" is the maximum SoC.
+    min_soc_pct: float = 0.0
+    full_soc_pct: float = 100.0
 
     @property
     def energy_to_full_wh(self) -> float:
         """Energy that must be charged to fill the batteries, losses included."""
-        missing = max(0.0, 100.0 - self.soc_pct) / 100 * self.capacity_wh
+        missing = max(0.0, self.full_soc_pct - self.soc_pct) / 100 * self.capacity_wh
         return missing / self.charge_efficiency
 
     @property
     def is_full(self) -> bool:
-        return self.soc_pct >= FULL_SOC_PCT
+        return self.soc_pct >= min(FULL_SOC_PCT, self.full_soc_pct - (100.0 - FULL_SOC_PCT))
 
 
 @dataclass(frozen=True)

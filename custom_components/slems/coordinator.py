@@ -42,6 +42,7 @@ from .const import (
     DEFAULT_BATTERY_SHARE_WHEN_SECURED_PCT,
     DEFAULT_CHARGE_GRID_TARGET_W,
     DEFAULT_CHARGE_SECURED_BUFFER_KWH,
+    DEFAULT_GRID_FRIENDLY_BUFFER_KWH,
     DEFAULT_DISCHARGE_GRID_TARGET_W,
     DEFAULT_DISCHARGE_MAX_GRID_EXPORT_W,
     DEFAULT_NIGHT_RESERVE_PCT,
@@ -71,7 +72,15 @@ from .battery_distribution import (
     LossModel,
     RotationSettings,
 )
+from .battery_limits import (
+    BatteryLimitSettings,
+    PowerLimits,
+    SocWindow,
+    TemperatureLimit,
+    power_limits,
+)
 from .cell_balancing import BalancingPhase, CellBalancer, CellMonitor
+from .delivery_monitor import Action, DeliveryMonitor
 from .efficiency import EfficiencyTracker, EnergyIntegrator, LossCurveLearner
 from .forecast import (
     ConsumptionForecast,
@@ -126,20 +135,35 @@ class BatteryRuntime:
     balancing_power_w: float | None = None
     # Outcome of the last run: "done", "cancelled", "timeout" or "telemetry".
     balancing_result: str | None = None
+    limits: BatteryLimitSettings = field(default_factory=BatteryLimitSettings)
+    soc_window: SocWindow = field(default_factory=SocWindow)
+    # Allowed power right now (updated with every poll).
+    power_limits: PowerLimits | None = None
+    delivery: DeliveryMonitor = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.delivery = DeliveryMonitor(self.name)
 
     @property
     def balancing_requested(self) -> bool:
         return self.balancer is not None
 
     @property
+    def not_responding(self) -> bool:
+        """Excluded for a while because it did not deliver the commanded power."""
+        return self.delivery.excluded(time.monotonic())
+
+    @property
     def participating(self) -> bool:
         """Planned and controlled (or still ramping out) by the normal operation."""
-        return (self.enabled and not self.balancing_requested) or self.leaving_until is not None
+        return (
+            (self.enabled and not self.balancing_requested) or self.leaving_until is not None
+        ) and not self.not_responding
 
     @property
     def plannable(self) -> bool:
         """Takes part in planning, total SoC and distribution."""
-        return self.enabled and not self.balancing_requested
+        return self.enabled and not self.balancing_requested and not self.not_responding
 
     @property
     def supports_balancing(self) -> bool:
@@ -192,9 +216,27 @@ class ControlSettings:
     auto_gain: bool = True
     # Charge into the PV feed-in peak instead of as early as possible.
     grid_friendly_charging: bool = True
+    # Energy grid friendly charging plans in addition to filling the
+    # batteries (reserve against a too optimistic forecast).
+    grid_friendly_buffer_kwh: float = DEFAULT_GRID_FRIENDLY_BUFFER_KWH
     night_discharge: bool = False
     # Night discharge reserve in % of tomorrow's forecast daily consumption.
     night_reserve_pct: float = DEFAULT_NIGHT_RESERVE_PCT
+    # Charge power limited by the battery temperature (see battery_limits).
+    temperature_limit: bool = False
+    temperature_high_c: float = 40.0
+    temperature_band_c: float = 10.0
+    temperature_floor_pct: float = 40.0
+    temperature_low_c: float = 0.0
+
+    def temperature(self) -> TemperatureLimit:
+        return TemperatureLimit(
+            enabled=self.temperature_limit,
+            high_c=self.temperature_high_c,
+            band_c=self.temperature_band_c,
+            floor_pct=self.temperature_floor_pct,
+            low_c=self.temperature_low_c,
+        )
 
     def allocation_settings(self) -> AllocationSettings:
         return AllocationSettings(
@@ -537,6 +579,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self._update_efficiency(battery, telemetry, now)
             if telemetry.ac_power_w is not None:
                 battery.loss_curve.add(telemetry.ac_power_w, telemetry.power_w)
+            battery.soc_window.update(telemetry.soc_pct, battery.limits)
+            battery.power_limits = self._power_limits(battery, telemetry)
+            self._check_delivery(battery, telemetry, now)
         # After all batteries were read: the balancing share of the surplus
         # depends on the other batteries.
         for battery in self.batteries:
@@ -647,13 +692,55 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
         if balancer.last_delta_mv is not None and balancer.last_delta_mv != previous_delta:
             battery.cell_monitor.record(balancer.last_delta_mv, wall, "balancing")
-        battery.balancing_power_w = step.power_w
+        # Power and temperature limits apply, the SoC window does not (the run
+        # needs the top of the charge).
+        limits = self._power_limits(battery, telemetry, use_soc_window=False)
+        battery.balancing_power_w = max(-limits.discharge_w, min(limits.charge_w, step.power_w))
         if step.phase is BalancingPhase.DONE:
             self.end_balancing(battery, "done")
         elif step.phase is BalancingPhase.ERROR:
             self.end_balancing(battery, balancer.error or "error")
         elif step.phase is not previous_phase:
             self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+
+    def _power_limits(
+        self, battery: BatteryRuntime, telemetry: BatteryTelemetry, *, use_soc_window: bool = True
+    ) -> PowerLimits:
+        caps = battery.driver.capabilities
+        return power_limits(
+            caps.max_charge_power_w,
+            caps.max_discharge_power_w,
+            battery.limits,
+            battery.soc_window,
+            telemetry.extra.get("internal_temperature"),
+            self.settings.temperature(),
+            # Read-only batteries follow their own logic.
+            use_soc_window=use_soc_window and caps.controllable,
+        )
+
+    def _check_delivery(
+        self, battery: BatteryRuntime, telemetry: BatteryTelemetry, now: float
+    ) -> None:
+        """Judge whether the battery delivers the commanded power (see delivery_monitor)."""
+        battery.delivery.tick(now)
+        if (
+            self.settings.operating_mode is not OperatingMode.ACTIVE
+            or not battery.driver.capabilities.controllable
+            or not battery.participating
+            or battery.leaving_until is not None
+        ):
+            return
+        command = self.controller.command_state(battery.subentry_id)
+        if command is None:
+            return
+        commanded, since = command
+        action = battery.delivery.observe(
+            now, commanded, since, telemetry.grid_side_power_w, telemetry.soc_pct
+        )
+        if action is Action.WAKE:
+            self.controller.force_refresh(battery.subentry_id)
+        elif action is Action.EXCLUDE:
+            self.controller.request()
 
     def _balancing_surplus_w(self, battery: BatteryRuntime, snapshot: SystemSnapshot) -> float:
         """PV surplus a balancing battery may take (before the other batteries).
@@ -740,16 +827,23 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
 
     def _battery_group(self, snapshot: SystemSnapshot) -> BatteryGroup | None:
         energy = capacity = max_charge = max_discharge = weighted_eff = 0.0
+        min_soc = full_soc = 0.0
         for battery in self.batteries:
             telemetry = snapshot.batteries.get(battery.subentry_id)
             if not battery.plannable or telemetry is None or telemetry.soc_pct is None:
                 continue
             caps = battery.driver.capabilities
+            limits = battery.power_limits or self._power_limits(battery, telemetry)
             energy += telemetry.soc_pct * caps.capacity_wh
             capacity += caps.capacity_wh
-            max_charge += caps.max_charge_power_w
-            max_discharge += caps.max_discharge_power_w
+            max_charge += limits.charge_w
+            max_discharge += limits.discharge_w
             weighted_eff += battery.efficiency.one_way * caps.capacity_wh
+            if caps.controllable:
+                min_soc += battery.limits.min_soc_pct * caps.capacity_wh
+                full_soc += battery.limits.max_soc_pct * caps.capacity_wh
+            else:
+                full_soc += 100.0 * caps.capacity_wh
         if not capacity:
             return None
         return BatteryGroup(
@@ -758,6 +852,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             max_charge_w=max_charge,
             max_discharge_w=max_discharge,
             charge_efficiency=weighted_eff / capacity,
+            min_soc_pct=min_soc / capacity,
+            full_soc_pct=full_soc / capacity,
         )
 
     def plan(
@@ -824,7 +920,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             )
             snapshot.feed_in_limit_w = feed_in_limit(
                 surplus,
-                battery.energy_to_full_wh + settings.charge_secured_buffer_kwh * 1000 + balancing_wh,
+                battery.energy_to_full_wh + settings.grid_friendly_buffer_kwh * 1000 + balancing_wh,
                 battery.max_charge_w,
             )
         if pv_forecast is not None:
@@ -844,7 +940,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     load,
                     ProjectionSettings(
                         grid_friendly_charging=settings.grid_friendly_charging,
-                        buffer_wh=settings.charge_secured_buffer_kwh * 1000,
+                        charge_buffer_wh=settings.grid_friendly_buffer_kwh * 1000,
+                        night_buffer_wh=settings.charge_secured_buffer_kwh * 1000,
                         peak_shaving=settings.peak_shaving,
                         peak_shaving_grid_limit_w=settings.peak_shaving_grid_limit_w,
                         peak_shaving_soc_threshold_pct=settings.peak_shaving_soc_threshold_pct,
@@ -894,6 +991,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 snapshot.consumption_forecast.total,
                 settings.night_reserve_pct,
                 settings.charge_secured_buffer_kwh * 1000,
+                battery.min_soc_pct / 100 * battery.capacity_wh,
             )
         allocation = allocate(
             snapshot.available_power_w,
@@ -1024,13 +1122,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             telemetry = snapshot.batteries.get(battery.subentry_id)
             if not battery.participating or telemetry is None or telemetry.soc_pct is None:
                 continue
-            caps = battery.driver.capabilities
+            limits = battery.power_limits or self._power_limits(battery, telemetry)
             units.append(
                 BatteryUnit(
                     battery_id=battery.subentry_id,
                     soc_pct=telemetry.soc_pct,
-                    max_charge_w=caps.max_charge_power_w,
-                    max_discharge_w=caps.max_discharge_power_w,
+                    max_charge_w=limits.charge_w,
+                    max_discharge_w=limits.discharge_w,
                     loss_model=battery.loss_curve.model(LossModel()),
                     leaving_fraction=(
                         None

@@ -87,6 +87,17 @@ const STRINGS = {
     noBatteries: "No batteries configured.",
     noConsumers: "No consumers configured.",
     disabled: "disabled",
+    notResponding: "not responding",
+    notRespondingText: "does not deliver the commanded power ({reason}); handed back to its own logic, retried at {time}",
+    notRespondingReasons: {
+      charge_not_delivered: "no charging",
+      discharge_not_delivered: "no discharging",
+      write_failed: "command not confirmed",
+    },
+    allowedCharge: "Charging limited",
+    allowedDischarge: "Discharging limited",
+    limitReasons: { soc: "state of charge limit", power: "power limit", temperature: "temperature" },
+    batteryLimits: "Limits: {name}",
     cellDelta: "Cell delta",
     cellDeltaHint: "live, meaningful only near full charge",
     topCellDelta: "Cell delta at top of charge",
@@ -122,6 +133,7 @@ const STRINGS = {
       mode: "Operation",
       control: "Control",
       priority: "Battery priority and grid targets",
+      temperature: "Temperature charge limit",
       gridFriendly: "Grid friendly charging",
       night: "Night discharge",
       peak: "Import peak shaving",
@@ -176,6 +188,17 @@ const STRINGS = {
     noBatteries: "Keine Batterien konfiguriert.",
     noConsumers: "Keine Verbraucher konfiguriert.",
     disabled: "deaktiviert",
+    notResponding: "reagiert nicht",
+    notRespondingText: "liefert die vorgegebene Leistung nicht ({reason}); an die eigene Logik übergeben, neuer Versuch um {time}",
+    notRespondingReasons: {
+      charge_not_delivered: "lädt nicht",
+      discharge_not_delivered: "entlädt nicht",
+      write_failed: "Befehl nicht bestätigt",
+    },
+    allowedCharge: "Laden begrenzt",
+    allowedDischarge: "Entladen begrenzt",
+    limitReasons: { soc: "Ladezustandsgrenze", power: "Leistungsgrenze", temperature: "Temperatur" },
+    batteryLimits: "Grenzen: {name}",
     cellDelta: "Zell-Delta",
     cellDeltaHint: "live, nur nahe Vollladung aussagekräftig",
     topCellDelta: "Zell-Delta am oberen Ladeende",
@@ -211,6 +234,7 @@ const STRINGS = {
       mode: "Betrieb",
       control: "Regelung",
       priority: "Batterievorrang und Netz-Zielwerte",
+      temperature: "Ladebegrenzung nach Temperatur",
       gridFriendly: "Netzdienliches Laden",
       night: "Nachtentladung",
       peak: "Bezugsspitzen abfangen",
@@ -218,6 +242,9 @@ const STRINGS = {
     },
   },
 };
+
+// Settings tab: limits of every battery (translation keys of its entities).
+const BATTERY_SETTINGS = ["min_soc", "max_soc", "max_charge_limit", "max_discharge_limit"];
 
 // Settings tab: translation keys of the system entities per group.
 const SETTING_GROUPS = [
@@ -234,9 +261,10 @@ const SETTING_GROUPS = [
       "discharge_max_grid_export",
     ],
   ],
-  ["gridFriendly", ["grid_friendly_charging"]],
+  ["gridFriendly", ["grid_friendly_charging", "grid_friendly_buffer"]],
   ["night", ["night_discharge", "night_reserve"]],
   ["peak", ["peak_shaving", "peak_shaving_grid_limit", "peak_shaving_soc_threshold"]],
+  ["temperature", ["temperature_limit", "temperature_high", "temperature_band", "temperature_floor", "temperature_low"]],
   [
     "rotation",
     ["rotation_soc_threshold", "rotation_min_interval", "rotation_ramp_rate", "rotation_ramp_max"],
@@ -553,6 +581,7 @@ class SlemsPanel extends HTMLElement {
       const power = ac ? (this._number(ac) === null ? null : -this._number(ac)) : num("battery_power", battery.device_id);
       const enabled = this._state("battery_enabled", battery.device_id)?.state !== "off";
       const balancing = this._state("cell_balancing", battery.device_id)?.state === "on";
+      const notResponding = this._state("not_responding", battery.device_id)?.state === "on";
       nodes.push({
         id: `battery-${battery.id}`,
         role: "battery",
@@ -560,10 +589,12 @@ class SlemsPanel extends HTMLElement {
         title: battery.name,
         power,
         soc: num("battery_soc", battery.device_id),
-        disabled: !enabled || balancing,
+        disabled: !enabled || balancing || notResponding,
         detail: !enabled
           ? t.disabled
-          : balancing
+          : notResponding
+            ? t.notResponding
+            : balancing
             ? t.balancing
             : power === null ? "" : power > 10 ? t.charging : power < -10 ? t.discharging : t.idle,
       });
@@ -975,6 +1006,12 @@ class SlemsPanel extends HTMLElement {
           const s = (key) => this._state(key, b.device_id);
           const soc = this._number(s("battery_soc"));
           const enabled = s("battery_enabled");
+          const notResponding = s("not_responding");
+          const limited = (key, label) => {
+            const st = s(key);
+            const reason = st?.attributes?.reason;
+            return reason ? [`${label} (${t.limitReasons[reason] || reason})`, st] : [label, undefined];
+          };
           const rows = [
             [t.power, s("battery_power")],
             [t.acPower, s("ac_power")],
@@ -982,10 +1019,22 @@ class SlemsPanel extends HTMLElement {
             [t.efficiency, s("round_trip_efficiency")],
             [t.state, s("inverter_state")],
             [t.temperature, s("internal_temperature")],
+            limited("allowed_charge_power", t.allowedCharge),
+            limited("allowed_discharge_power", t.allowedDischarge),
           ].filter(([, st]) => st);
+          let problem = "";
+          if (notResponding?.state === "on") {
+            const attrs = notResponding.attributes;
+            const retry = attrs.retry_at ? new Date(attrs.retry_at).toLocaleTimeString(this._hass.locale?.language, { hour: "2-digit", minute: "2-digit" }) : "–";
+            const text = t.notRespondingText
+              .replace("{reason}", t.notRespondingReasons[attrs.reason] || attrs.reason || "–")
+              .replace("{time}", retry);
+            problem = `<div class="problem"><ha-icon icon="mdi:alert-circle"></ha-icon><span><b>${t.notResponding}</b> – ${escapeHtml(text)}</span></div>`;
+          }
           return `<section class="card">
             <div class="card-head"><h2>${escapeHtml(b.name)}</h2>
               ${enabled ? this._toggle(enabled, t.enabled, b.name) : ""}</div>
+            ${problem}
             <div class="soc"><div class="soc-bar"><div style="width:${soc ?? 0}%"></div></div>
               <span>${soc === null ? "–" : Math.round(soc) + " %"}</span></div>
             <dl>${rows.map(([label, st]) => `<dt>${label}</dt><dd>${escapeHtml(this._format(st))}</dd>`).join("")}</dl>
@@ -1091,7 +1140,15 @@ class SlemsPanel extends HTMLElement {
         if (!rows.length) return "";
         return `<section class="card"><h2>${t.groups[group]}</h2>
           <div class="settings">${rows.map((s) => this._control(s)).join("")}</div></section>`;
-      }).join("")
+      }).join("") +
+        (this._config.batteries || [])
+          .map((b) => {
+            const rows = BATTERY_SETTINGS.map((key) => this._state(key, b.device_id)).filter(Boolean);
+            if (!rows.length) return "";
+            return `<section class="card"><h2>${escapeHtml(t.batteryLimits.replace("{name}", b.name))}</h2>
+              <div class="settings">${rows.map((s) => this._control(s)).join("")}</div></section>`;
+          })
+          .join("")
     );
   }
 
@@ -1372,6 +1429,9 @@ const STYLE = `
   .balancing-run ha-icon { color: var(--c-battery); }
   .balancing-run button { margin-left: auto; }
   .start-balancing { margin-top: 8px; padding-left: 0; }
+  .problem { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 12px; padding: 8px 10px; border-radius: 8px;
+    font-size: 13px; border: 1px solid var(--error-color, #d03b3b); background: color-mix(in srgb, var(--error-color, #d03b3b) 10%, transparent); }
+  .problem ha-icon { color: var(--error-color, #d03b3b); --mdc-icon-size: 18px; flex: none; }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
   .balancing-hint { display: block; grid-column: 1 / -1; font-size: 12px; }
 `;

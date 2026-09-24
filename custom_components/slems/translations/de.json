@@ -359,6 +359,12 @@
           "done": "Fertig",
           "error": "Fehler"
         }
+      },
+      "allowed_charge_power": {
+        "name": "Erlaubte Ladeleistung"
+      },
+      "allowed_discharge_power": {
+        "name": "Erlaubte Entladeleistung"
       }
     },
     "switch": {
@@ -382,6 +388,9 @@
       },
       "cell_balancing": {
         "name": "Aktiver Zellausgleich"
+      },
+      "temperature_limit": {
+        "name": "Ladebegrenzung nach Temperatur"
       }
     },
     "number": {
@@ -432,11 +441,41 @@
       },
       "control_gain": {
         "name": "Regelverstärkung"
+      },
+      "min_soc": {
+        "name": "Minimaler Ladezustand"
+      },
+      "max_soc": {
+        "name": "Maximaler Ladezustand"
+      },
+      "max_charge_limit": {
+        "name": "Grenze Ladeleistung"
+      },
+      "max_discharge_limit": {
+        "name": "Grenze Entladeleistung"
+      },
+      "temperature_high": {
+        "name": "Temperatur für Ladeabregelung"
+      },
+      "temperature_band": {
+        "name": "Bereich der Ladeabregelung"
+      },
+      "temperature_floor": {
+        "name": "Ladeleistung bei hoher Temperatur"
+      },
+      "temperature_low": {
+        "name": "Mindesttemperatur zum Laden"
+      },
+      "grid_friendly_buffer": {
+        "name": "Puffer netzdienliches Laden"
       }
     },
     "binary_sensor": {
       "charge_secured": {
         "name": "Batterieladung gesichert"
+      },
+      "not_responding": {
+        "name": "Reagiert nicht"
       }
     }
   },

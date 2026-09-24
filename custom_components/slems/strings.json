@@ -359,6 +359,12 @@
           "done": "Done",
           "error": "Error"
         }
+      },
+      "allowed_charge_power": {
+        "name": "Allowed charge power"
+      },
+      "allowed_discharge_power": {
+        "name": "Allowed discharge power"
       }
     },
     "switch": {
@@ -382,6 +388,9 @@
       },
       "cell_balancing": {
         "name": "Active cell balancing"
+      },
+      "temperature_limit": {
+        "name": "Temperature charge limit"
       }
     },
     "number": {
@@ -432,11 +441,41 @@
       },
       "control_gain": {
         "name": "Control gain"
+      },
+      "min_soc": {
+        "name": "Minimum state of charge"
+      },
+      "max_soc": {
+        "name": "Maximum state of charge"
+      },
+      "max_charge_limit": {
+        "name": "Charge power limit"
+      },
+      "max_discharge_limit": {
+        "name": "Discharge power limit"
+      },
+      "temperature_high": {
+        "name": "Charge derating temperature"
+      },
+      "temperature_band": {
+        "name": "Charge derating range"
+      },
+      "temperature_floor": {
+        "name": "Charge power at high temperature"
+      },
+      "temperature_low": {
+        "name": "Minimum charging temperature"
+      },
+      "grid_friendly_buffer": {
+        "name": "Grid friendly charging buffer"
       }
     },
     "binary_sensor": {
       "charge_secured": {
         "name": "Battery charge secured"
+      },
+      "not_responding": {
+        "name": "Not responding"
       }
     }
   },

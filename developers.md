@@ -237,6 +237,42 @@ sends commands.
 - Leaving *active* hands the batteries back immediately; consumers keep their
   last state.
 
+### Battery limits and delivery monitoring
+
+`battery_limits.py` (pure): `SocWindow` (block discharge at ≤ min SoC and
+charge at ≥ max SoC below 100 %, release 2 % away), `temperature_factor`
+(high limit after Omnibattery's `TemperatureChargeLimitManager`, plus a low
+limit with a 5 °C ramp) and `power_limits` (capability → user power limit →
+temperature → SoC window, with the limiting reason). The coordinator updates
+the window and `BatteryRuntime.power_limits` with every poll; the limits
+replace the capabilities in `BatteryUnit` (distribution) and `BatteryGroup`
+(allocation). `BatteryGroup` carries the capacity weighted `min_soc_pct` and
+`full_soc_pct`: `energy_to_full_wh` and `is_full` use the maximum SoC, the
+night discharge target (`min_wh`) and the SoC projection the minimum.
+Balancing runs use `power_limits(..., use_soc_window=False)`. Read-only
+batteries ignore the SoC window. Settings: per battery `BatteryNumber`
+(RestoreNumber; a power limit at the capability is stored as `None`),
+temperature in `ControlSettings`.
+
+`delivery_monitor.py` (pure, after Omnibattery's `NonResponsiveTracker` and
+`_check_non_delivery`): judged in `_check_delivery` with every poll in
+operating mode *active* for participating, controllable batteries that do not
+ramp out. The controller provides the latest command and since when it has
+its direction (`command_state`, set in `_record_command`). Three failures →
+first `force_refresh` (the next write is complete, RS485 control included),
+then exclusion for 5 min: `participating`/`plannable` are false, the
+controller releases the battery at the start of the next cycle and it is
+retried after the cooldown (`tick`). Failed or unconfirmed writes
+(`apply_power` returns False) are recorded by the controller without a wake
+attempt. The Venus driver reads 42000, 42010 and 42020/42021 back after
+every complete write (`refresh`, i.e. the first write and the keep-alive
+every 60 s; 0.2 s settle time, tolerance max(100 W, 10 %)) — not after every
+write, to keep the control cycle short.
+
+Simulator: while `SIM_FAULT_FILE` (default `/tmp/venus_fault`) exists in the
+container, the simulated Venus accepts commands but delivers 0 W
+(`docker compose exec venus-sim-2 touch /tmp/venus_fault`).
+
 ### Cell balancing
 
 `cell_balancing.py` (monitor and state machine, no HA dependency),
@@ -293,7 +329,7 @@ computes the feed-in limit `T` (sensor *Feed-in limit*):
 
 ```
 surplus_h = corrected PV forecast_h − consumption forecast_h   (remaining hours today, > 0)
-needed    = energy to full / charge efficiency + safety buffer
+needed    = energy to full / charge efficiency + grid friendly buffer
 T = max { T : Σ min(max(0, surplus_h − T), max_charge) · hours_h ≥ needed }
 ```
 
@@ -703,3 +739,5 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-23 | Night discharge: evenly spread until PV exceeds consumption, target = reserve raised to what tomorrow's PV can refill; grid target ignored, maximum export respected. |
 | 2026-09-24 | Active cell balancing after the Omnibattery blueprint; the balancing battery takes the PV surplus first (≥ 95 W, other batteries cover the rest), its discharge is fed in, maximum 24 h, starts only in operating mode *active*, ends at once on unreadable telemetry, survives restarts. |
 | 2026-09-24 | Venus SoC from register 34002 (0.1 %), fallback 37005 (1 %); both verified identical on a real device. |
+| 2026-09-24 | Battery protection after Omnibattery: SoC window per battery (default 12–100 %, 2 % re-entry), power limits per battery (e.g. 800 W), optional temperature charge limit (high derate plus low-temperature stop), detection of non-delivering batteries (3 failures → wake, then 5 min exclusion) and read-back confirmation on complete writes. |
+| 2026-09-24 | Grid friendly charging has its own buffer (*Grid friendly charging buffer*), separate from the charge secured buffer (which also sets the night discharge target). |

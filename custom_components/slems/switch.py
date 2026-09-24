@@ -22,6 +22,7 @@ SETTING_SWITCHES: dict[str, str] = {
     "night_discharge": "night_discharge",
     "auto_gain": "auto_gain",
     "grid_friendly_charging": "grid_friendly_charging",
+    "temperature_limit": "temperature_limit",
 }
 
 

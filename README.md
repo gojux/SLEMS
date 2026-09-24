@@ -39,6 +39,8 @@ management system).
 | Distribution between batteries by efficiency, rotation with smooth transition | ✅ |
 | Real-time control of batteries and consumers (operating mode *active*) | ✅ |
 | Cell delta and active cell balancing (Marstek Venus E 3.0) | ✅ (not yet tested on a real device) |
+| Battery limits: minimum/maximum SoC, charge/discharge power limit (e.g. 800 W), temperature charge limit | ✅ |
+| Detection of batteries that do not deliver the commanded power, confirmation of set points | ✅ |
 | Dashboard (sidebar panel): energy flow, key figures, daily forecast and plan chart, batteries, consumers, settings | ✅ |
 
 ## Installation
@@ -229,6 +231,43 @@ battery is handed back to its own logic and then returns to the normal
 planning. The sensor *Cell balancing phase* shows the phase and the result of
 the last run.
 
+### Battery limits and protection
+
+Every controllable battery has these settings (dashboard: *Settings*):
+
+- *Minimum state of charge* (default 12 %) and *Maximum state of charge*
+  (default 100 %): SLEMS does not discharge at or below the minimum and does
+  not charge at or above the maximum (with 100 % the BMS ends the charge).
+  After reaching a limit the battery is used again 2 % away from it, because
+  the resting SoC rebounds after a load. The maximum counts as "full" for
+  grid friendly charging, the charge secured check and the projection; the
+  minimum is the lowest target of the night discharge. Active cell balancing
+  ignores the SoC window (it needs the top of the charge).
+- *Charge power limit* and *Discharge power limit* (default: the maximum of
+  the battery), e.g. 800 W for a plug-in system.
+
+*Temperature charge limit* (off by default, after Omnibattery) limits the
+charge power by the battery temperature: above *Charge derating
+temperature* (40 °C) it decreases linearly across *Charge derating range*
+(10 °C) down to *Charge power at high temperature* (40 %); at or below
+*Minimum charging temperature* (0 °C) there is no charging, and within 5 °C
+above it the power rises to full again. The Venus reports its internal
+temperature, not the cell temperature; the BMS keeps its own protection.
+The sensors *Allowed charge power* and *Allowed discharge power* show the
+current limit and its reason.
+
+In operating mode *active* SLEMS checks, like Omnibattery, whether every
+battery delivers the commanded power. A battery that delivers less than
+10 % of a command of at least 100 W (after 30 s in that direction) three
+polls in a row first gets all control registers written again; if that does
+not help, it is excluded for 5 minutes (like a disabled battery, handed back
+to its own logic, the others take over) and then retried. A full battery
+that stops charging or a battery at 20 % or less that stops discharging does
+not count (the BMS protects it). The Venus also reads its control registers
+back after every complete write (first command and every 60 s); a write that
+is not confirmed counts as well. The binary sensor *Not responding* and the
+dashboard show an excluded battery.
+
 ### Operating mode
 
 The entity *SLEMS Operating mode* switches between:
@@ -296,8 +335,10 @@ peak:
 
 - From the PV and consumption forecasts it calculates a *Feed-in limit*: the
   highest grid export at which the surplus above it still fills the batteries
-  by the end of the day (charge losses, maximum charge power and *Charge
-  secured safety buffer* included).
+  by the end of the day (charge losses, maximum charge power and *Grid
+  friendly charging buffer* included; default 1 kWh, a larger buffer lowers
+  the limit and makes the batteries full earlier and more reliably when the
+  forecast is too optimistic).
 - The batteries only charge with the surplus above this limit; below it the
   power goes to the consumers or to the grid. The highest hours of the day
   are cut, wherever the clouds put them.
@@ -369,6 +410,16 @@ language of their creation; only the displayed names change.
 ## Roadmap
 
 1. Tests on the real system (see open points in developers.md)
+
+Possible extensions later:
+
+- Load exclusion and evcc connection: large loads such as a wallbox are not
+  covered by the batteries; an evcc load point as controllable or excluded
+  consumer, so both do not control the same surplus.
+- Regular full charge (e.g. weekly) for the SoC calibration of LFP cells,
+  coordinated with grid friendly charging.
+- Dynamic electricity tariffs (charging from the grid at low or negative
+  prices) and further battery models via the driver interface.
 
 ## Development
 

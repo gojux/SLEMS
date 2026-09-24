@@ -10,6 +10,7 @@ discharge set point.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 import logging
 
@@ -35,6 +36,10 @@ REG_RS485_CONTROL = 42000
 REG_FORCE_MODE = 42010
 REG_SET_CHARGE_POWER = 42020
 REG_SET_DISCHARGE_POWER = 42021
+# Read-back after a complete write: settle time and allowed deviation.
+CONFIRM_DELAY_S = 0.2
+CONFIRM_TOLERANCE_W = 100
+CONFIRM_TOLERANCE_RATIO = 0.1
 
 RS485_ENABLE = 0x55AA
 RS485_DISABLE = 0x55BB
@@ -218,7 +223,36 @@ class MarstekVenusE3Driver(BatteryDriver):
                 ok = False
         if not ok:
             _LOGGER.warning("Setting battery power to %d W failed", net_power_w)
-        return ok
+            return False
+        if refresh and not await self._confirm(force_mode, charge, discharge):
+            # Written again completely with the next command.
+            self._written.clear()
+            return False
+        return True
+
+    async def _confirm(self, force_mode: int, charge: int, discharge: int) -> bool:
+        """Read the control registers back after a complete write (as in Omnibattery)."""
+        await asyncio.sleep(CONFIRM_DELAY_S)
+        control = await self._link.read(REG_RS485_CONTROL, 1)
+        mode = await self._link.read(REG_FORCE_MODE, 1)
+        powers = await self._link.read(REG_SET_CHARGE_POWER, 2)
+        if control is None or mode is None or powers is None:
+            _LOGGER.warning("Battery set point could not be read back")
+            return False
+        tolerance = max(CONFIRM_TOLERANCE_W, CONFIRM_TOLERANCE_RATIO * max(charge, discharge))
+        confirmed = (
+            control[0] == RS485_ENABLE
+            and mode[0] == force_mode
+            and abs(powers[0] - charge) <= tolerance
+            and abs(powers[1] - discharge) <= tolerance
+        )
+        if not confirmed:
+            _LOGGER.warning(
+                "Battery set point not confirmed: RS485 %#x, force mode %d, charge %d W, "
+                "discharge %d W (written: force mode %d, charge %d W, discharge %d W)",
+                control[0], mode[0], powers[0], powers[1], force_mode, charge, discharge,
+            )
+        return confirmed
 
     async def release_control(self) -> None:
         self._written.clear()

@@ -23,6 +23,10 @@ Environment variables:
     SIM_CELL_OFFSET_PCT  SoC lead of the highest cell (default 2.0)
     SIM_BLEED_PCT_PER_MIN  balancing speed of the BMS (default 0.2)
     SIM_TAP_PORT      read-only TCP port (default 5020)
+    SIM_FAULT_FILE    while this file exists, commands are accepted but no power
+                      flows (test of the non-responding detection; default
+                      /tmp/venus_fault, e.g. ``docker compose exec venus-sim-1
+                      touch /tmp/venus_fault``)
     SIM_CAPACITY_WH   usable capacity (default 5120)
     SIM_INITIAL_SOC   initial state of charge in % (default 50)
 """
@@ -43,6 +47,7 @@ REG_TOTAL_CHARGING_ENERGY = 33000
 REG_TOTAL_DISCHARGING_ENERGY = 33002
 REG_INTERNAL_TEMPERATURE = 35000
 REG_INVERTER_STATE = 35100
+FAULT_FILE = os.environ.get("SIM_FAULT_FILE", "/tmp/venus_fault")
 REG_BATTERY_SOC = 37005
 REG_BATTERY_SOC_FINE = 34002
 REG_MAX_CELL_VOLTAGE = 37007
@@ -103,6 +108,8 @@ class VenusModel:
                 power = min(self.registers.get(REG_SET_CHARGE_POWER, 0), MAX_POWER_W)
             elif force_mode == 2:
                 power = -min(self.registers.get(REG_SET_DISCHARGE_POWER, 0), MAX_POWER_W)
+        if os.path.exists(FAULT_FILE):
+            power = 0
 
         soc_now = self._energy_wh / self._capacity_wh * 100
         high_cell = lfp_cell_voltage(soc_now + self._cell_offset)

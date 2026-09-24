@@ -40,6 +40,8 @@ Der Name setzt sich aus *Slug* und *EMS* (Energiemanagementsystem) zusammen.
 | Aufteilung auf Batterien nach Wirkungsgrad, Wechsel mit sanftem Übergang | ✅ |
 | Echtzeit-Regelung von Batterien und Verbrauchern (Betriebsmodus *Aktiv*) | ✅ |
 | Zell-Delta und aktiver Zellausgleich (Marstek Venus E 3.0) | ✅ (noch nicht am echten Gerät getestet) |
+| Grenzen je Batterie: minimaler/maximaler Ladezustand, Grenze Lade-/Entladeleistung (z. B. 800 W), Ladebegrenzung nach Temperatur | ✅ |
+| Erkennung von Batterien, die die vorgegebene Leistung nicht liefern, Bestätigung der Sollwerte | ✅ |
 | Dashboard (Seitenleiste): Energiefluss, Kennzahlen, Tagesdiagramm mit Prognose und Plan, Batterien, Verbraucher, Einstellungen | ✅ |
 
 ## Installation
@@ -233,6 +235,45 @@ weiter. Zum Ende wird die Batterie an ihre eigene Logik zurückgegeben und
 kehrt danach in die normale Planung zurück. Der Sensor *Phase Zellausgleich*
 zeigt die Phase und das Ergebnis des letzten Laufs.
 
+### Grenzen und Schutz der Batterien
+
+Jede steuerbare Batterie hat diese Einstellungen (Dashboard: *Einstellungen*):
+
+- *Minimaler Ladezustand* (Standard 12 %) und *Maximaler Ladezustand*
+  (Standard 100 %): SLEMS entlädt nicht bei oder unter dem Minimum und lädt
+  nicht bei oder über dem Maximum (bei 100 % beendet das BMS die Ladung).
+  Nach Erreichen einer Grenze wird die Batterie erst 2 % davon entfernt
+  wieder genutzt, weil der Ladezustand nach einer Last wieder etwas steigt.
+  Das Maximum gilt als „voll“ für das netzdienliche Laden, die gesicherte
+  Ladung und die Prognose; das Minimum ist das niedrigste Ziel der
+  Nachtentladung. Der aktive Zellausgleich ignoriert diese Grenzen (er
+  braucht das obere Ladeende).
+- *Grenze Ladeleistung* und *Grenze Entladeleistung* (Standard: das Maximum
+  der Batterie), z. B. 800 W für ein Steckergerät.
+
+Die *Ladebegrenzung nach Temperatur* (standardmäßig aus, nach Omnibattery)
+begrenzt die Ladeleistung nach der Batterietemperatur: Über der *Temperatur
+für Ladeabregelung* (40 °C) sinkt sie linear über den *Bereich der
+Ladeabregelung* (10 °C) bis auf die *Ladeleistung bei hoher Temperatur*
+(40 %); bei oder unter der *Mindesttemperatur zum Laden* (0 °C) wird nicht
+geladen, innerhalb von 5 °C darüber steigt die Leistung wieder auf voll. Die
+Venus meldet ihre Innentemperatur, nicht die Zelltemperatur; das BMS behält
+seinen eigenen Schutz. Die Sensoren *Erlaubte Ladeleistung* und *Erlaubte
+Entladeleistung* zeigen die aktuelle Grenze und ihren Grund.
+
+Im Betriebsmodus *Aktiv* prüft SLEMS wie Omnibattery, ob jede Batterie die
+vorgegebene Leistung liefert. Liefert eine Batterie bei einer Vorgabe von
+mindestens 100 W (nach 30 s in dieser Richtung) dreimal hintereinander
+weniger als 10 % davon, werden zuerst alle Steuerregister neu geschrieben;
+hilft das nicht, wird sie für 5 Minuten ausgeschlossen (wie eine
+deaktivierte Batterie, an ihre eigene Logik übergeben, die anderen
+übernehmen) und danach wieder versucht. Eine volle Batterie, die nicht mehr
+lädt, oder eine Batterie bei höchstens 20 %, die nicht mehr entlädt, zählt
+nicht (das BMS schützt sie). Die Venus liest außerdem nach jedem
+vollständigen Schreiben (erster Befehl und alle 60 s) ihre Steuerregister
+zurück; ein nicht bestätigter Befehl zählt ebenfalls. Der Binärsensor
+*Reagiert nicht* und das Dashboard zeigen eine ausgeschlossene Batterie.
+
 ### Betriebsmodus
 
 Die Entity *SLEMS Betriebsmodus* schaltet zwischen:
@@ -307,7 +348,9 @@ Laden in die Spitze:
 - Aus PV- und Verbrauchsprognose berechnet es eine *Einspeisegrenze*: die
   höchste Einspeisung, bei der der Überschuss darüber die Batterien bis
   Tagesende trotzdem füllt (Ladeverluste, maximale Ladeleistung und
-  *Sicherheitspuffer gesicherte Ladung* eingerechnet).
+  *Puffer netzdienliches Laden* eingerechnet; Standard 1 kWh, ein größerer
+  Puffer senkt die Grenze und macht die Batterien früher und zuverlässiger
+  voll, wenn die Prognose zu optimistisch ist).
 - Die Batterien laden nur mit dem Überschuss oberhalb dieser Grenze;
   darunter geht die Leistung an die Verbraucher oder ins Netz. Gekappt werden
   die höchsten Stunden des Tages, egal wohin die Wolken sie schieben.
@@ -381,6 +424,17 @@ behalten die Sprache, in der sie angelegt wurden; nur die angezeigten Namen
 ## Roadmap
 
 1. Tests am echten System (siehe offene Punkte in developers.md)
+
+Mögliche spätere Erweiterungen:
+
+- Lastausschluss und evcc-Anbindung: große Verbraucher wie eine Wallbox
+  werden nicht aus den Batterien versorgt; ein evcc-Ladepunkt als steuerbarer
+  oder ausgeschlossener Verbraucher, damit beide nicht um denselben
+  Überschuss regeln.
+- Regelmäßige Vollladung (z. B. wöchentlich) zur SoC-Kalibrierung der
+  LFP-Zellen, abgestimmt mit dem netzdienlichen Laden.
+- Dynamische Stromtarife (Laden aus dem Netz bei niedrigen oder negativen
+  Preisen) und weitere Batteriemodelle über die Treiber-Schnittstelle.
 
 ## Entwicklung
 

@@ -357,6 +357,14 @@ async def async_setup_entry(
                     if battery.supports_balancing
                     else []
                 ),
+                *(
+                    [
+                        AllowedPowerSensor(coordinator, battery, charging=True),
+                        AllowedPowerSensor(coordinator, battery, charging=False),
+                    ]
+                    if battery.driver.capabilities.controllable
+                    else []
+                ),
             ],
             config_subentry_id=battery.subentry_id,
         )
@@ -610,6 +618,37 @@ class TopCellDeltaSensor(SlemsBatteryEntity, SensorEntity):
             "source": last.source if last else None,
             "suggest_balancing": monitor.suggest_balancing,
         }
+
+
+class AllowedPowerSensor(SlemsBatteryEntity, SensorEntity):
+    """Charge or discharge power SLEMS may use right now, with the limiting reason."""
+
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_suggested_display_precision = 0
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: SlemsCoordinator, battery, *, charging: bool) -> None:
+        super().__init__(
+            coordinator, battery, "allowed_charge_power" if charging else "allowed_discharge_power"
+        )
+        self._charging = charging
+
+    @property
+    def native_value(self) -> float | None:
+        limits = self.battery.power_limits
+        if limits is None:
+            return None
+        return limits.charge_w if self._charging else limits.discharge_w
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        limits = self.battery.power_limits
+        if limits is None:
+            return {"reason": None}
+        # soc / power / temperature, None when not limited
+        return {"reason": limits.charge_reason if self._charging else limits.discharge_reason}
 
 
 class BalancingPhaseSensor(SlemsBatteryEntity, SensorEntity):

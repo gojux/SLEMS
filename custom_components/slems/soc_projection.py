@@ -13,7 +13,7 @@ simplified way:
   low state of charge only the import above the limit; with night discharge
   at least the planned night discharge, the extra part not below its target.
 * Charge and discharge losses with the one-way efficiency; maximum charge and
-  discharge power; 0–100 %.
+  discharge power; the SoC window of the batteries (minimum and maximum SoC).
 
 Controllable consumers (they run on surplus), grid targets and batteries in
 active cell balancing are left out.
@@ -37,7 +37,10 @@ PERIOD = timedelta(hours=1)
 @dataclass(frozen=True)
 class ProjectionSettings:
     grid_friendly_charging: bool
-    buffer_wh: float
+    # Reserve of the charge planning (grid friendly charging).
+    charge_buffer_wh: float
+    # Safety buffer of the night discharge target.
+    night_buffer_wh: float
     peak_shaving: bool
     peak_shaving_grid_limit_w: float
     peak_shaving_soc_threshold_pct: float
@@ -79,12 +82,13 @@ def project_soc(
     today = local_now.date()
     end = dt_util.start_of_local_day(local_now) + timedelta(days=2)
     stored = battery.soc_pct / 100 * capacity
+    full = battery.full_soc_pct / 100 * capacity
     plans: dict[date, dict[datetime, float]] = {}
 
     def charge_plan(hour: datetime, start: datetime) -> dict[datetime, float]:
         day_end = dt_util.start_of_local_day(hour) + timedelta(days=1)
         by_hour = remaining_surplus_by_hour(pv, consumption, load_w, start, day_end)
-        needed = (capacity - stored) / efficiency + settings.buffer_wh
+        needed = max(0.0, full - stored) / efficiency + settings.charge_buffer_wh
         surplus = [(power, hours) for _, power, hours in by_hour]
         if hour.date() == today:
             needed += today_extra_wh
@@ -108,7 +112,7 @@ def project_soc(
                 plans[day] = charge_plan(hour, start)
             charge = plans[day].get(hour, 0.0)
             result.planned_charge_w[hour] = charge
-            stored = min(capacity, stored + charge * share * efficiency)
+            stored = max(stored, min(full, stored + charge * share * efficiency))
         else:
             stored = _discharge(
                 stored, load - pv_w, share, start, battery, pv, consumption, settings
@@ -131,12 +135,13 @@ def _discharge(
     """Stored energy after covering ``deficit_w`` for ``share`` of an hour."""
     capacity = battery.capacity_wh
     efficiency = battery.charge_efficiency or 1.0
+    floor = battery.min_soc_pct / 100 * capacity
     soc = stored / capacity * 100
     if settings.peak_shaving and soc <= settings.peak_shaving_soc_threshold_pct:
         power = min(max(0.0, deficit_w - settings.peak_shaving_grid_limit_w), battery.max_discharge_w)
-        return max(0.0, stored - power * share / efficiency)
+        return min(stored, max(floor, stored - power * share / efficiency))
     power = min(deficit_w, battery.max_discharge_w)
-    after = max(0.0, stored - power * share / efficiency)
+    after = min(stored, max(floor, stored - power * share / efficiency))
     if not settings.night_discharge or consumption is None:
         return after
     plan = plan_night_discharge(
@@ -148,7 +153,8 @@ def _discharge(
         pv,
         consumption,
         settings.night_reserve_pct,
-        settings.buffer_wh,
+        settings.night_buffer_wh,
+        floor,
     )
     if plan is None:
         return after
