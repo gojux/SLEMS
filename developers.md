@@ -596,7 +596,7 @@ Source: Omnibattery `const/registers_v3.py`, `drivers/marstek.py`,
 
 | Register | Key | Type | Scale | Notes |
 |---|---|---|---|---|
-| 37005 | battery_soc | uint16 | 1 % | see open point below |
+| 34002 | battery_soc | uint16 | 0.1 % | fallback 37005 (1 %) if it does not answer |
 | 30001 | battery_power | int16 | 1 W | + charge / − discharge |
 | 30006 | ac_power | int16 | 1 W | + discharge / − charge |
 | 30100 | battery_voltage | uint16 | 0.01 V | |
@@ -623,11 +623,14 @@ Firmware quirks handled in `modbus_client.py`:
   never reconnect per request,
 - retries inside pymodbus (same transaction id) so late replies still match.
 
+SoC register: Omnibattery's code uses 37005 for v3, its register table
+(`site-docs/reference/registers.md`) lists 34002 for `e_v3`. On a real Venus
+E 3.0 (2026-09-24, `tools/read_registers.py`) both show the same state of
+charge, 37005 in whole percent (54) and 34002 in 0.1 % (544 = 54.4 %). SLEMS
+reads 34002 for the finer resolution.
+
 Open points to verify on the real device:
 
-- **SoC register**: Omnibattery's code uses 37005 for v3, its register table
-  (`site-docs/reference/registers.md`) lists 34002 for `e_v3`. SLEMS uses 37005.
-  Compare both with `tools/read_registers.py` (see below).
 - Omnibattery marks the v3 map as partly untested.
 - The device holds only one connection: while Omnibattery is running, a Modbus
   battery in SLEMS cannot connect. Use the read-only *HA entities* battery
@@ -683,3 +686,4 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-23 | Consumption forecast from long-term statistics; optional history entity for the house consumption and optional outdoor temperature sensor, otherwise SLEMS records the weather temperature itself. |
 | 2026-09-23 | Night discharge: evenly spread until PV exceeds consumption, target = reserve raised to what tomorrow's PV can refill; grid target ignored, maximum export respected. |
 | 2026-09-24 | Active cell balancing after the Omnibattery blueprint; the balancing battery takes the PV surplus first (≥ 95 W, other batteries cover the rest), its discharge is fed in, maximum 24 h, starts only in operating mode *active*, ends at once on unreadable telemetry, survives restarts. |
+| 2026-09-24 | Venus SoC from register 34002 (0.1 %), fallback 37005 (1 %); both verified identical on a real device. |

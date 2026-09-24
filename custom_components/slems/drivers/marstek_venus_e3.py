@@ -54,8 +54,12 @@ class RegisterSpec:
     scale: float = 1.0
 
 
+# Read when 34002 does not answer.
+SOC_FALLBACK = RegisterSpec("battery_soc", 37005, "uint16")
+
 TELEMETRY_REGISTERS: tuple[RegisterSpec, ...] = (
-    RegisterSpec("battery_soc", 37005, "uint16"),
+    # 0.1 % resolution; 37005 has the same value in whole percent.
+    RegisterSpec("battery_soc", 34002, "uint16", 0.1),
     # +charge / -discharge.
     RegisterSpec("battery_power", 30001, "int16"),
     # AC side power, opposite sign: +discharge / -charge.
@@ -149,7 +153,12 @@ class MarstekVenusE3Driver(BatteryDriver):
             words = await self._link.read(spec.address, register_count(spec.data_type))
             raw = decode_registers(words, spec.data_type) if words else None
             if raw is not None:
-                values[spec.key] = raw * spec.scale if spec.scale != 1.0 else raw
+                values[spec.key] = round(raw * spec.scale, 3) if spec.scale != 1.0 else raw
+        if "battery_soc" not in values and values:
+            words = await self._link.read(SOC_FALLBACK.address, register_count(SOC_FALLBACK.data_type))
+            raw = decode_registers(words, SOC_FALLBACK.data_type) if words else None
+            if raw is not None:
+                values["battery_soc"] = raw
         if not values:
             # Nothing answered: drop the socket so the next poll reconnects.
             await self._link.close()

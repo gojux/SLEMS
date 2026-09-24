@@ -58,6 +58,7 @@ def make_driver(link: FakeLink, max_power: int = 2500) -> MarstekVenusE3Driver:
 async def test_read_telemetry_decodes_values() -> None:
     link = FakeLink(
         {
+            34002: 644,
             37005: 64,
             30001: 0x10000 - 700,  # -700 W: discharging
             30006: 700,
@@ -67,7 +68,7 @@ async def test_read_telemetry_decodes_values() -> None:
         }
     )
     telemetry = await make_driver(link).read_telemetry()
-    assert telemetry.soc_pct == 64
+    assert telemetry.soc_pct == pytest.approx(64.4)
     assert telemetry.power_w == -700
     assert telemetry.extra["battery_voltage"] == pytest.approx(52.3)
     assert telemetry.extra["inverter_state"] == "discharge"
@@ -131,3 +132,9 @@ async def test_unchanged_registers_are_not_written_again() -> None:
     link.writes.clear()
     await driver.apply_power(-900, refresh=True)
     assert len(link.writes) == 4
+
+
+async def test_soc_falls_back_to_whole_percent_register() -> None:
+    link = FakeLink({37005: 64, 30001: 0})
+    telemetry = await make_driver(link).read_telemetry()
+    assert telemetry.soc_pct == 64
