@@ -243,6 +243,37 @@ const SETTING_GROUPS = [
   ],
 ];
 
+/** Consecutive rows with a value for ``key``; a missing hour starts a new run. */
+function runs(rows, key) {
+  const result = [];
+  let current = [];
+  for (const row of rows) {
+    if (row[key] === null || row[key] === undefined) {
+      if (current.length) result.push(current);
+      current = [];
+    } else {
+      current.push(row);
+    }
+  }
+  if (current.length) result.push(current);
+  return result;
+}
+
+/** One polyline per run of points; a single point becomes a dot. */
+function polylines(pointRuns, color, dash) {
+  return pointRuns
+    .map((points) =>
+      points.length === 1
+        ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="2.5" fill="${color}"/>`
+        : `<polyline points="${points.map((p) => p.join(",")).join(" ")}" fill="none" stroke="${color}"
+          stroke-width="2" stroke-linejoin="round" stroke-linecap="round" ${dash ? 'stroke-dasharray="5 4"' : ""}/>`
+    )
+    .join("");
+}
+
+// SLEMS icon (copy of assets/icon.svg) in the crossing of the energy flow lines.
+const ICON_URL = new URL("slems-icon.svg", import.meta.url).href;
+
 const OVERVIEW_TILES = [
   "operating_mode",
   "control_status",
@@ -584,7 +615,7 @@ class SlemsPanel extends HTMLElement {
         <svg class="flow-lines" aria-hidden="true"></svg>
         <div class="fcell top">${byRole("pv")}</div>
         <div class="fcell left">${byRole("grid")}</div>
-        <div class="fcell center"><span class="hub" data-node="hub"></span></div>
+        <div class="fcell center"><img class="hub" data-node="hub" src="${ICON_URL}" alt="SLEMS"></div>
         <div class="fcell right">${byRole("house")}</div>
         <div class="fcell batteries">${byRole("battery")}</div>
         ${hasConsumers ? `<div class="fcell consumers">${byRole("consumer")}</div>` : ""}
@@ -821,20 +852,11 @@ class SlemsPanel extends HTMLElement {
       for (const v of [0, 25, 50, 75, 100]) {
         socLines.push(`<text x="${width - pad.right + 6}" y="${ys(v) + 4}" text-anchor="start" class="tick">${escapeHtml(this._percent(v))}</text>`);
       }
-      const line = (points, dash) =>
-        points.length < 2
-          ? ""
-          : `<polyline points="${points.map((p) => p.join(",")).join(" ")}" fill="none" stroke="${c.battery}"
-            stroke-width="2" stroke-linejoin="round" stroke-linecap="round" ${dash ? 'stroke-dasharray="5 4"' : ""}/>`;
       const start = this._socStart();
-      const forecast = rows
-        .filter((r) => r.socForecast !== null && r.socForecast !== undefined)
-        .map((r) => [x(r.hour + 1), ys(r.socForecast)]);
-      if (start && forecast.length) forecast.unshift([x(start[0]), ys(start[1])]);
-      const actual = rows
-        .filter((r) => r.socActual !== null && r.socActual !== undefined)
-        .map((r) => [x(r.hour + 0.5), ys(r.socActual)]);
-      socLines.push(line(forecast, true), line(actual, false));
+      const forecast = runs(rows, "socForecast").map((run) => run.map((r) => [x(r.hour + 1), ys(r.socForecast)]));
+      if (start && forecast.length) forecast[0].unshift([x(start[0]), ys(start[1])]);
+      const actual = runs(rows, "socActual").map((run) => run.map((r) => [x(r.hour + 0.5), ys(r.socActual)]));
+      socLines.push(polylines(forecast, c.battery, true), polylines(actual, c.battery, false));
     }
 
     const gridLines = [];
@@ -854,12 +876,8 @@ class SlemsPanel extends HTMLElement {
         return `<path d="${roundedTopBar(x(r.hour) + 3, y(r.plannedCharge), barW, h)}" fill="${c.battery}"/>`;
       })
       .join("");
-    const path = (key, color, dash) => {
-      const points = rows.filter((r) => r[key] !== null && r[key] !== undefined).map((r) => [x(r.hour + 0.5), y(r[key])]);
-      if (points.length < 2) return "";
-      return `<polyline points="${points.map((p) => p.join(",")).join(" ")}" fill="none" stroke="${color}"
-        stroke-width="2" stroke-linejoin="round" stroke-linecap="round" ${dash ? 'stroke-dasharray="5 4"' : ""}/>`;
-    };
+    const path = (key, color, dash) =>
+      polylines(runs(rows, key).map((run) => run.map((r) => [x(r.hour + 0.5), y(r[key])])), color, dash);
     const now = new Date();
     const nowHour = now.getHours() + now.getMinutes() / 60;
     const showNow = this._chartDay === "today";
@@ -1252,7 +1270,8 @@ const STYLE = `
   .fline.reverse { animation-direction: reverse; }
   @keyframes fdash { to { stroke-dashoffset: -12; } }
   @media (prefers-reduced-motion: reduce) { .fline { animation: none; stroke-dasharray: none; } }
-  .hub { width: 10px; height: 10px; border-radius: 50%; background: var(--divider-color); }
+  .hub { width: 60px; height: 60px; display: block; }
+  @media (max-width: 500px) { .hub { width: 45px; height: 45px; } }
   .fbox { --accent: var(--divider-color); background: var(--card-background-color); border: 1px solid var(--divider-color);
     border-radius: 12px; padding: 10px 12px; min-width: 0; width: 100%; max-width: 170px; min-height: 104px;
     flex: 1 1 0; box-sizing: border-box; box-shadow: inset 0 3px 0 var(--accent); transition: opacity 0.2s;

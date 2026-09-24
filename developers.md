@@ -351,6 +351,9 @@ entities. The panel is removed on unload and re-registered on every setup.
   power reverses the dash animation. Speed and line width follow the power
   (speed quantised so the animation does not restart). Battery flow uses the
   AC power when the driver reports it.
+- The crossing of the flow lines shows the SLEMS icon:
+  `frontend/slems-icon.svg` is a copy of `assets/icon.svg` (HACS installs only
+  `custom_components/slems`); update both together.
 - Day chart: data from the attribute `day_plan` of the sensor *Feed-in limit*
   (24 rows: corrected PV forecast, consumption forecast, planned charging,
   projected total SoC at the end of the hour; `day_plan_tomorrow` for the
