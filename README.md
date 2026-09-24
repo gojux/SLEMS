@@ -197,7 +197,8 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
 - **Overview**: energy flow between grid, PV, house, every battery (with its
   state of charge) and the consumers; the animated dots run in the direction
   of the flow, faster and on a thicker line the higher the power. Key figures
-  (operating mode, control status, strategy, state of charge, feed-in limit,
+  (status: problems first – smart meter without values, battery unreadable or
+  not responding – otherwise the operating mode; strategy, state of charge, feed-in limit,
   stored energy and capacity, forecasts), and the forecast chart (energy per hour in
   kWh): *Today* shows PV and consumption
   forecast (dashed), the measured values so far (solid) and the planned
@@ -216,7 +217,9 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   balancing and the phase of a running one.
 - **Consumers**: measured and planned power, blocked/saturated state, the
   learned response time and the *Control active* switch.
-- **Settings**: all settings grouped and editable directly.
+- **Settings**: all settings grouped and editable directly; the *Control*
+  card also shows the learned values (current control gain, smart meter
+  update interval, battery response time).
 
 The dashboard follows the language and the light/dark theme of Home
 Assistant and works on phones (with little space the batteries in the energy

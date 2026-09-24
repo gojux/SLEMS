@@ -203,7 +203,9 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
 - **Übersicht**: Energiefluss zwischen Netz, PV, Haus, jeder Batterie (mit
   ihrem Ladezustand) und den Verbrauchern; die animierten Punkte laufen in
   Flussrichtung, je höher die Leistung, desto schneller und auf einer
-  dickeren Linie. Kennzahlen (Betriebsmodus, Regelstatus, Strategie,
+  dickeren Linie. Kennzahlen (Status: zuerst Probleme – Smart Meter ohne
+  Werte, Batterie nicht lesbar oder reagiert nicht –, sonst der Betriebsmodus;
+  Strategie,
   Ladezustand, gespeicherte Energie und Kapazität, Einspeisegrenze, Prognosen) und das Prognose-Diagramm:
   *Heute* zeigt PV- und Verbrauchsprognose (gestrichelt), die bisher
   gemessenen Werte (durchgezogen) und das geplante Laden der Batterien
@@ -223,7 +225,9 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
   den aktiven Zellausgleich und die Phase eines laufenden Ausgleichs.
 - **Verbraucher**: gemessene und geplante Leistung, gesperrt/gesättigt, die
   gelernte Reaktionszeit und der Schalter *Steuerung aktiv*.
-- **Einstellungen**: alle Einstellwerte gruppiert und direkt änderbar.
+- **Einstellungen**: alle Einstellwerte gruppiert und direkt änderbar; die
+  Karte *Regelung* zeigt auch die gelernten Werte (aktuelle Regelverstärkung,
+  Aktualisierungsintervall des Smart Meters, Reaktionszeit der Batterie).
 
 Das Dashboard folgt der Sprache und dem hellen/dunklen Design von Home
 Assistant und funktioniert auch am Handy (bei wenig Platz stehen die

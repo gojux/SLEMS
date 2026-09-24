@@ -114,6 +114,11 @@ const STRINGS = {
     },
     exportBelowTarget:
       "The maximum grid export while discharging ({limit}) is below the grid surplus target while discharging ({target}): the batteries control to {limit}.",
+    status: "Status",
+    tileHints: {
+      feed_in_limit:
+        "With grid friendly charging the batteries only charge with the surplus above this grid export. SLEMS recalculates it continuously from the PV and consumption forecasts so that the batteries are still full by the evening (buffer included): they absorb the midday peak instead of being full in the morning. \"off\": grid friendly charging is switched off. \"none – charge at once\": the expected surplus is not enough, the batteries charge at once.",
+    },
     settingHints: {
       discharge_max_grid_export:
         "Hard limit of the grid export while batteries discharge. 0 W: never feed battery energy into the grid. To switch the limit off, set it to the maximum.",
@@ -237,6 +242,11 @@ const STRINGS = {
     },
     exportBelowTarget:
       "Die maximale Einspeisung beim Entladen ({limit}) liegt unter dem Ziel-Netzüberschuss beim Entladen ({target}): Die Batterien regeln auf {limit}.",
+    status: "Status",
+    tileHints: {
+      feed_in_limit:
+        "Beim netzdienlichen Laden laden die Batterien nur mit dem Überschuss oberhalb dieser Einspeisung. SLEMS berechnet sie laufend aus PV- und Verbrauchsprognose so, dass die Batterien bis zum Abend trotzdem voll werden (Puffer eingerechnet): Sie fangen die Mittagsspitze ab, statt schon am Vormittag voll zu sein. „aus“: netzdienliches Laden ist ausgeschaltet. „keine – sofort laden“: Der erwartete Überschuss reicht nicht, die Batterien laden sofort.",
+    },
     settingHints: {
       discharge_max_grid_export:
         "Harte Grenze der Einspeisung, solange Batterien entladen. 0 W: nie Batterieenergie einspeisen. Zum Abschalten der Grenze auf das Maximum stellen.",
@@ -293,7 +303,19 @@ const BATTERY_SETTINGS = ["min_soc", "max_soc", "max_charge_limit", "max_dischar
 // Settings tab: translation keys of the system entities per group.
 const SETTING_GROUPS = [
   ["mode", ["operating_mode", "vacation"]],
-  ["control", ["auto_gain", "control_gain", "control_interval", "surplus_average_window"]],
+  [
+    "control",
+    [
+      "auto_gain",
+      "control_gain",
+      "control_interval",
+      "surplus_average_window",
+      // Learned values (read only).
+      "control_gain_current",
+      "meter_interval",
+      "battery_response_time",
+    ],
+  ],
   [
     "priority",
     [
@@ -349,9 +371,8 @@ const MIN_FLOW_BOX_W = 130;
 // SLEMS icon (copy of assets/icon.svg) in the crossing of the energy flow lines.
 const ICON_URL = new URL("slems-icon.svg", import.meta.url).href;
 
+// The first tile is the combined status (see _statusTile).
 const OVERVIEW_TILES = [
-  "operating_mode",
-  "control_status",
   "allocation_strategy",
   "battery_soc_total",
   "battery_energy_total",
@@ -435,6 +456,30 @@ class SlemsPanel extends HTMLElement {
   _number(stateObj) {
     const value = parseFloat(stateObj?.state);
     return Number.isFinite(value) ? value : null;
+  }
+
+  /**
+   * Operating mode and problems in one tile: problems first (the most
+   * important one, "+n" for further ones), otherwise the operating mode.
+   */
+  _statusTile() {
+    const t = this._t;
+    const problems = [];
+    if (this._state("control_status")?.state === "grid_stale") problems.push(t.gridStale);
+    for (const battery of this._config.batteries || []) {
+      if (this._state("battery_soc", battery.device_id)?.state === "unavailable") {
+        problems.push(`${battery.name}: ${t.unreadable}`);
+      } else if (this._state("not_responding", battery.device_id)?.state === "on") {
+        problems.push(`${battery.name}: ${t.notResponding}`);
+      }
+    }
+    const mode = this._state("operating_mode");
+    const value = problems.length
+      ? `<span class="value problem-value"><ha-icon icon="mdi:alert-circle"></ha-icon>${escapeHtml(problems[0])}${
+          problems.length > 1 ? ` (+${problems.length - 1})` : ""
+        }</span>`
+      : `<span class="value">${escapeHtml(mode ? this._format(mode) : "–")}</span>`;
+    return `<div class="tile"><span class="label">${t.status}</span>${value}</div>`;
   }
 
   /** Value of an overview tile; the feed-in limit explains why it has none. */
@@ -655,12 +700,18 @@ class SlemsPanel extends HTMLElement {
     this._renderFlow();
     this._setSection(
       "tiles",
-      OVERVIEW_TILES.map((key) => this._state(key))
-        .filter(Boolean)
-        .map(
-          (s) => `<div class="tile"><span class="label">${escapeHtml(this._name(s))}</span>
-                  <span class="value">${escapeHtml(this._tileValue(s))}</span></div>`
-        )
+      this._statusTile() +
+      OVERVIEW_TILES.map((key) => [key, this._state(key)])
+        .filter(([, s]) => s)
+        .map(([key, s]) => {
+          const hint = t.tileHints[key];
+          const info = hint
+            ? `<button class="info" data-action="toggle-hint" data-key="${key}" title="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}"><ha-icon icon="mdi:information-outline"></ha-icon></button>`
+            : "";
+          const open = hint && this._openHints.has(key) ? `<span class="setting-hint">${escapeHtml(hint)}</span>` : "";
+          return `<div class="tile"><span class="label">${escapeHtml(this._name(s))}${info}</span>
+                  <span class="value">${escapeHtml(this._tileValue(s))}</span>${open}</div>`;
+        })
         .join("")
     );
     this._fetchStats(false);
@@ -1349,6 +1400,9 @@ class SlemsPanel extends HTMLElement {
     if (domain === "switch") {
       return `<div class="setting"><span>${name}</span>${this._toggle(stateObj, name)}</div>`;
     }
+    if (domain === "sensor") {
+      return `<div class="setting"><span>${name}</span><span class="readonly">${escapeHtml(this._format(stateObj))}</span></div>`;
+    }
     if (domain === "select") {
       const options = stateObj.attributes.options || [];
       const label = (option) =>
@@ -1506,6 +1560,9 @@ const STYLE = `
   .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
   .tile { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--divider-color); }
   .tile .label { font-size: 12px; }
+  .tile .problem-value { display: flex; align-items: center; gap: 6px; color: var(--error-color, #d03b3b); }
+  .tile .problem-value ha-icon { --mdc-icon-size: 20px; flex: none; }
+  .setting .readonly { font-variant-numeric: tabular-nums; color: var(--secondary-text-color); }
   .tile .value { font-size: 18px; }
   .flow-root { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-areas: ". top ." "left center right" "batteries batteries consumers";
@@ -1587,9 +1644,9 @@ const STYLE = `
     color: var(--secondary-text-color); margin-left: 4px; }
   .settings { display: flex; flex-direction: column; gap: 10px; }
   .setting { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-  .setting button.info { background: none; border: none; padding: 0 0 0 4px; cursor: pointer; color: var(--secondary-text-color);
+  .tile button.info, .setting button.info { background: none; border: none; padding: 0 0 0 4px; cursor: pointer; color: var(--secondary-text-color);
     vertical-align: middle; line-height: 0; }
-  .setting button.info ha-icon { --mdc-icon-size: 16px; }
+  .tile button.info ha-icon, .setting button.info ha-icon { --mdc-icon-size: 16px; }
   .setting-note { display: flex; gap: 6px; align-items: flex-start; margin: 12px 0 0; font-size: 12px; line-height: 1.35;
     color: var(--secondary-text-color); }
   .setting-note ha-icon { --mdc-icon-size: 16px; flex: none; color: var(--warning-color, #fab219); }
