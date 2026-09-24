@@ -216,6 +216,24 @@ eingeplant noch gesteuert und zählt nicht zum Gesamt-Ladezustand. Entlädt sie
 im Modus *Aktiv* gerade, übernehmen die anderen Batterien innerhalb von
 5 Sekunden, bevor sie an ihre eigene Logik zurückgegeben wird.
 
+### Umstieg von einer anderen Batterie-Integration
+
+Übernimmt SLEMS eine Batterie von einer anderen Integration (z. B.
+Omnibattery), lässt sich der Verlauf der alten Sensoren (z. B. geladene und
+entladene Energie im Energie-Dashboard) mit
+[HA Merge Sensor History](https://github.com/mayerwin/HA-Merge-Sensor-History)
+auf die SLEMS-Sensoren übertragen. Das Werkzeug kopiert Zustände und
+Langzeitstatistiken, sodass die Summen im Energie-Dashboard weiterlaufen.
+
+- Vorher ein vollständiges Backup von Home Assistant machen; das Werkzeug
+  schreibt direkt in die Datenbank.
+- Die Vorschau prüfen: Die Zähler der Venus (Register 33000/33002) haben in
+  beiden Integrationen denselben Wert, die Summe läuft also ohne Sprung weiter.
+- Das Vorzeichen von Leistungssensoren vergleichen: Die *AC-Leistung* von
+  SLEMS ist beim Entladen positiv.
+- Danach im Energie-Dashboard die alten Sensoren durch die SLEMS-Sensoren
+  ersetzen und die alten Entities löschen, wenn alles stimmt.
+
 ### Zell-Delta und aktiver Zellausgleich
 
 Für Batterien, die ihre Zellspannungen melden (Marstek Venus E 3.0), zeigt

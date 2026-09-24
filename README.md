@@ -210,6 +210,24 @@ controlled, and it does not count towards the total state of charge. If it is
 discharging in active mode, the other batteries take over within 5 seconds
 before it is handed back to its own logic.
 
+### Switching from another battery integration
+
+When SLEMS takes over a battery from another integration (e.g. Omnibattery),
+the history of the old sensors (e.g. the charged and discharged energy used in
+the energy dashboard) can be carried over to the SLEMS sensors with
+[HA Merge Sensor History](https://github.com/mayerwin/HA-Merge-Sensor-History).
+It copies states and long-term statistics, so the running totals of the energy
+dashboard continue.
+
+- Make a full backup of Home Assistant first; the tool writes directly into
+  the database.
+- Check the preview: the counters of the Venus (registers 33000/33002) have the
+  same value in both integrations, so the total continues without a jump.
+- Compare the sign of power sensors: the SLEMS *AC power* is positive when
+  discharging.
+- Afterwards replace the old sensors in the energy dashboard with the SLEMS
+  sensors and delete the old entities once everything looks right.
+
 ### Cell delta and active cell balancing
 
 For batteries that report their cell voltages (Marstek Venus E 3.0), SLEMS
