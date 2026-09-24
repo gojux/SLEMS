@@ -129,9 +129,17 @@ Every consumer needs its own power **and** energy sensor.
   rod may run at the same time.
 - **Control**: none (measurement only), on/off via a switch, or a power set
   point via a number entity in W. For controlled consumers an entity can be
-  selected that blocks them externally (while it is on, SLEMS leaves the
-  consumer alone), a priority (1 = highest) and optionally a minimum runtime
+  selected that blocks them externally (SLEMS leaves the consumer alone while
+  a switch or binary sensor is on, or while a water heater is in operation
+  mode *off*), a priority (1 = highest) and optionally a minimum runtime
   and a minimum pause.
+- **Thermostat cycles by itself**: for consumers whose own thermostat
+  switches them on and off while they are commanded (e.g. a heating rod that
+  measures at the element). Normally a consumer that draws nothing although
+  commanded counts as saturated for 15 minutes and keeps its last command.
+  With this option SLEMS keeps controlling it: during a pause (no power for
+  2 response times, 10–60 s) the batteries get its unused power, and as soon
+  as it draws again it gets it back (shown as *thermostat pause*).
 
 Battery efficiency: per battery from the battery's own charge/discharge
 counters, learned from the measured power, or a manual value. It is taken

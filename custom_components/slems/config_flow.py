@@ -27,6 +27,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_BLOCK_ENTITY,
+    CONF_THERMOSTAT_CYCLES,
     CONF_CAPACITY_WH,
     CONF_CONSUMER_TYPE,
     CONF_CONTROL_ENTITY,
@@ -464,7 +465,13 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
         # Control entity and power fields are only reused if the mode is unchanged.
         mode = ControlMode(self._data[CONF_CONTROL_MODE])
         if defaults.get(CONF_CONTROL_MODE) != mode.value:
-            keep = (CONF_BLOCK_ENTITY, CONF_PRIORITY, CONF_MIN_ON_MINUTES, CONF_MIN_OFF_MINUTES)
+            keep = (
+                CONF_BLOCK_ENTITY,
+                CONF_PRIORITY,
+                CONF_MIN_ON_MINUTES,
+                CONF_MIN_OFF_MINUTES,
+                CONF_THERMOSTAT_CYCLES,
+            )
             defaults = {k: v for k, v in defaults.items() if k in keep}
 
         fields: dict = {}
@@ -498,8 +505,13 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
         fields[_optional(CONF_MIN_ON_MINUTES, defaults)] = minutes
         fields[_optional(CONF_MIN_OFF_MINUTES, defaults)] = minutes
         fields[_optional(CONF_BLOCK_ENTITY, defaults)] = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch"])
+            selector.EntitySelectorConfig(
+                domain=["binary_sensor", "input_boolean", "switch", "water_heater"]
+            )
         )
+        fields[
+            vol.Required(CONF_THERMOSTAT_CYCLES, default=defaults.get(CONF_THERMOSTAT_CYCLES, False))
+        ] = selector.BooleanSelector()
         fields[
             vol.Required(CONF_PRIORITY, default=defaults.get(CONF_PRIORITY, DEFAULT_PRIORITY))
         ] = selector.NumberSelector(

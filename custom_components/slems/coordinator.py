@@ -276,6 +276,9 @@ class SystemSnapshot:
     # Consumers that did not draw the commanded power (own thermostat); they
     # are treated like uncontrolled loads for a while.
     saturated: frozenset[str] = frozenset()
+    # Consumers with a cycling thermostat that draw nothing right now; they
+    # keep their command, the batteries get their unused power.
+    resting: frozenset[str] = frozenset()
     pv_forecast: PvForecast | None = None
     consumption_forecast: ConsumptionForecast | None = None
     # Current outdoor temperature of the weather entity (°C).
@@ -596,6 +599,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
 
         snapshot.saturated = self.controller.saturated
+        snapshot.resting = self.controller.resting
         self.controller.observe_consumers(snapshot)
         mode = self.settings.operating_mode
         if mode is OperatingMode.ACTIVE and self.data is not None:
@@ -1028,6 +1032,17 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             snapshot.night_discharge.power_w if snapshot.night_discharge else None,
             snapshot.feed_in_limit_w,
         )
+        unused_w = sum(
+            max(0.0, power - (snapshot.consumers[subentry_id].power_w or 0.0))
+            for subentry_id, power in allocation.consumer_power_w.items()
+            if subentry_id in snapshot.resting
+        )
+        if unused_w and battery is not None:
+            max_charge = 0.0 if battery.is_full else battery.max_charge_w
+            allocation.battery_power_w = max(
+                allocation.battery_power_w,
+                min(max_charge, allocation.battery_power_w + unused_w),
+            )
         if previous_total_w is not None:
             allocation.battery_power_w = previous_total_w + gain * (
                 allocation.battery_power_w - previous_total_w
@@ -1128,6 +1143,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 for consumer in self.consumers
             },
             saturated=saturated,
+            resting=self.controller.resting,
             allocation=None,
             distribution=None,
         )

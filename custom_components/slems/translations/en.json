@@ -148,14 +148,16 @@
             "block_entity": "External block",
             "priority": "Priority",
             "min_on_minutes": "Minimum runtime",
-            "min_off_minutes": "Minimum pause"
+            "min_off_minutes": "Minimum pause",
+            "thermostat_cycles": "Thermostat cycles by itself"
           },
           "data_description": {
             "control_entity": "Switch for on/off consumers, number entity in W for power controlled consumers.",
-            "block_entity": "While this entity is on, SLEMS does not control the consumer (e.g. blocked by the device or an automation).",
+            "block_entity": "SLEMS does not control the consumer while it is blocked (e.g. by the device or an automation): a water heater while its operation mode is \"off\", other entities while they are \"on\".",
             "priority": "1 = highest priority when distributing surplus power.",
             "min_on_minutes": "Optional. Once switched on by SLEMS, the consumer keeps running at least this long.",
-            "min_off_minutes": "Optional. Once switched off by SLEMS, the consumer stays off at least this long."
+            "min_off_minutes": "Optional. Once switched off by SLEMS, the consumer stays off at least this long.",
+            "thermostat_cycles": "On if the consumer's own thermostat switches it on and off while it is commanded (e.g. a heating rod that measures the temperature at the element). SLEMS then keeps its command during the pauses and gives the unused power to the batteries instead of treating the consumer as saturated."
           }
         }
       },

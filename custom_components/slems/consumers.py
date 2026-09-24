@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from homeassistant.const import STATE_ON
+from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant
 
 from .const import (
@@ -23,6 +23,7 @@ from .const import (
     CONF_NOMINAL_POWER_W,
     CONF_POWER_ENTITY,
     CONF_PRIORITY,
+    CONF_THERMOSTAT_CYCLES,
     DEFAULT_PRIORITY,
     ConsumerType,
     ControlMode,
@@ -48,13 +49,17 @@ class ConsumerConfig:
     nominal_power_w: int | None
     min_power_w: int | None
     max_power_w: int | None
-    # Entity whose "on" state means the consumer must not be controlled.
+    # The consumer must not be controlled while this entity is "on" (a
+    # water heater: while its operation mode is "off").
     block_entity_id: str | None
     # 1 = highest priority.
     priority: int
     # Optional minimum runtime and minimum pause in seconds (0 = none).
     min_on_s: float = 0.0
     min_off_s: float = 0.0
+    # Its own thermostat switches it on and off while it is commanded (e.g. a
+    # heating rod that measures at the element): pauses are no saturation.
+    thermostat_cycles: bool = False
 
     @property
     def controllable(self) -> bool:
@@ -80,6 +85,7 @@ class ConsumerConfig:
             priority=data.get(CONF_PRIORITY, DEFAULT_PRIORITY),
             min_on_s=(data.get(CONF_MIN_ON_MINUTES) or 0) * 60,
             min_off_s=(data.get(CONF_MIN_OFF_MINUTES) or 0) * 60,
+            thermostat_cycles=data.get(CONF_THERMOSTAT_CYCLES, False),
         )
 
 
@@ -97,7 +103,12 @@ def read_consumer_state(hass: HomeAssistant, consumer: ConsumerConfig) -> Consum
     blocked = False
     if consumer.block_entity_id:
         block_state = hass.states.get(consumer.block_entity_id)
-        blocked = block_state is not None and block_state.state == STATE_ON
+        if block_state is None:
+            blocked = False
+        elif consumer.block_entity_id.startswith("water_heater."):
+            blocked = block_state.state == STATE_OFF
+        else:
+            blocked = block_state.state == STATE_ON
     return ConsumerState(
         power_w=state_as_watts(hass.states.get(consumer.power_entity_id)),
         energy_kwh=state_as_kwh(hass.states.get(consumer.energy_entity_id)),

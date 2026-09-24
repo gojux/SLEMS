@@ -24,6 +24,9 @@ Safety:
 * A consumer that draws (almost) nothing although commanded, e.g. because its
   own thermostat switched off, is treated as saturated for
   ``SATURATION_HOLD_S`` and planned like an uncontrolled load meanwhile.
+  A consumer whose thermostat cycles by itself (option) is never saturated:
+  it keeps its command and is only *resting* while it draws nothing; the
+  batteries get its unused power meanwhile.
 """
 
 from __future__ import annotations
@@ -69,6 +72,9 @@ SATURATION_HOLD_S = 900.0
 # Saturation is assumed after this many consumer response times (bounded).
 SATURATION_RESPONSE_FACTOR = 5
 SATURATION_DELAY_RANGE_S = (30.0, 300.0)
+# Resting after this many consumer response times without power (bounded).
+RESTING_RESPONSE_FACTOR = 2
+RESTING_DELAY_RANGE_S = (10.0, 60.0)
 RAMP_STEP_S = 1.0
 
 
@@ -103,6 +109,10 @@ class RealTimeController:
         self._consumer_commands: dict[str, tuple[float, float]] = {}
         # consumer id -> monotonic time until which it counts as saturated
         self._saturated_until: dict[str, float] = {}
+        # Consumers with a cycling thermostat: since when they draw nothing,
+        # and the ones resting right now.
+        self._low_since: dict[str, float] = {}
+        self._resting: set[str] = set()
         self._last_grid_w: float | None = None
         self.meter = MeterCadence()
         self.battery_response = StepResponse(DEFAULT_BATTERY_RESPONSE_S)
@@ -143,6 +153,10 @@ class RealTimeController:
         return learner.response_s if learner else None
 
     # --- scheduling -----------------------------------------------------------
+
+    @property
+    def resting(self) -> frozenset[str]:
+        return frozenset(self._resting)
 
     @property
     def saturated(self) -> frozenset[str]:
@@ -467,8 +481,13 @@ class RealTimeController:
             subentry_id = consumer.subentry_id
             target = snapshot.allocation.consumer_power_w.get(subentry_id)
             if target is None or not snapshot.is_controllable_now(subentry_id):
+                self._low_since.pop(subentry_id, None)
+                self._resting.discard(subentry_id)
                 continue
-            self._check_saturation(subentry_id, snapshot, now)
+            if consumer.thermostat_cycles:
+                self._check_resting(subentry_id, snapshot, now)
+            else:
+                self._check_saturation(subentry_id, snapshot, now)
             previous = self._consumer_commands.get(subentry_id)
             if previous is not None and now - previous[1] < CONSUMER_COMMAND_INTERVAL_S:
                 continue
@@ -503,6 +522,30 @@ class RealTimeController:
                 subentry_id, StepResponse(DEFAULT_CONSUMER_RESPONSE_S, CONSUMER_MIN_STEP_W)
             )
             learner.command(now, measured, target - (measured or 0.0))
+
+    def _check_resting(self, subentry_id: str, snapshot: SystemSnapshot, now: float) -> None:
+        """Resting: a consumer with a cycling thermostat draws nothing for a while."""
+        previous = self._consumer_commands.get(subentry_id)
+        measured = snapshot.consumers[subentry_id].power_w
+        if (
+            previous is None
+            or measured is None
+            or previous[0] <= 0
+            or measured >= previous[0] * SATURATION_RATIO
+        ):
+            self._low_since.pop(subentry_id, None)
+            if subentry_id in self._resting:
+                _LOGGER.debug("Consumer %s draws power again", subentry_id)
+                self._resting.discard(subentry_id)
+            return
+        since = self._low_since.setdefault(subentry_id, now)
+        learner = self.consumer_response.get(subentry_id)
+        response = learner.value if learner else DEFAULT_CONSUMER_RESPONSE_S
+        low, high = RESTING_DELAY_RANGE_S
+        if now - since > min(high, max(low, RESTING_RESPONSE_FACTOR * response)):
+            if subentry_id not in self._resting:
+                _LOGGER.debug("Consumer %s rests (thermostat)", subentry_id)
+            self._resting.add(subentry_id)
 
     def _check_saturation(self, subentry_id: str, snapshot: SystemSnapshot, now: float) -> None:
         """Mark a consumer saturated if it ignores its command for a while."""

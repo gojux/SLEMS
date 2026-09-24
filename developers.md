@@ -230,6 +230,14 @@ sends commands.
 - **Saturation**: a consumer drawing < 10 % of its command for longer than
   5 × its response time (30–300 s; own thermostat) counts as saturated for
   15 min and is planned like an uncontrolled load; its last command stays.
+- **Resting** (consumers with `thermostat_cycles`, instead of saturation):
+  < 10 % of the command for longer than 2 × response time (10–60 s) →
+  `RealTimeController.resting`; the consumer stays in the allocation and keeps
+  its command, `plan` adds its unused power (allocated − measured) to the
+  battery power (up to the maximum charge power). Ends with the first sample
+  with power. A water heater as block entity blocks in operation mode `off`;
+  its temperatures are not used (e.g. my-PV measures at the element and
+  cycles).
 - **Grid meter stale** (no report within max(60 s, 10 × meter interval),
   based on `last_reported`): all batteries are handed back to their internal logic until the meter reports
   again (status *grid meter stale*).
@@ -756,3 +764,4 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-24 | Grid friendly charging has its own buffer (*Grid friendly charging buffer*), separate from the charge secured buffer (which also sets the night discharge target). |
 | 2026-09-24 | The night discharge reserve counts on top of the minimum SoC (the energy below it cannot be used). |
 | 2026-09-24 | Ongoing problems as repair issues (they clear themselves), events (end of a balancing run) as persistent notifications. |
+| 2026-09-24 | Consumers with a cycling thermostat rest instead of being saturated; water heater entities can block consumers (mode `off`). |

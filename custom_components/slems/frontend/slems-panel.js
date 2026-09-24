@@ -82,6 +82,7 @@ const STRINGS = {
     measured: "Measured",
     blocked: "blocked",
     saturated: "saturated",
+    resting: "thermostat pause",
     responseTime: "Response time",
     notControlled: "measured only",
     noBatteries: "No batteries configured.",
@@ -191,6 +192,7 @@ const STRINGS = {
     measured: "Gemessen",
     blocked: "gesperrt",
     saturated: "gesättigt",
+    resting: "Thermostat-Pause",
     responseTime: "Reaktionszeit",
     notControlled: "nur gemessen",
     noBatteries: "Keine Batterien konfiguriert.",
@@ -1140,6 +1142,7 @@ class SlemsPanel extends HTMLElement {
             !c.controllable ? t.notControlled : "",
             attrs.blocked ? t.blocked : "",
             attrs.saturated ? t.saturated : "",
+            attrs.resting ? t.resting : "",
           ]
             .filter(Boolean)
             .map((chip) => `<span class="chip">${chip}</span>`)

@@ -466,6 +466,7 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
         return {
             "blocked": state.blocked if state else None,
             "saturated": self.consumer.subentry_id in data.saturated,
+            "resting": self.consumer.subentry_id in data.resting,
             "response_time_s": self.coordinator.controller.consumer_response_s(
                 self.consumer.subentry_id
             ),

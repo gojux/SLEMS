@@ -131,9 +131,18 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   Heizpatrone dürfen gleichzeitig laufen.
 - **Steuerung**: keine (nur Messung), Ein/Aus über einen Schalter oder eine
   Leistungsvorgabe über eine Number-Entity in W. Für gesteuerte Verbraucher
-  kann eine Entity für eine externe Sperre gewählt werden (solange sie
-  eingeschaltet ist, steuert SLEMS den Verbraucher nicht), dazu eine
+  kann eine Entity für eine externe Sperre gewählt werden (SLEMS steuert den
+  Verbraucher nicht, solange ein Schalter oder Binärsensor eingeschaltet ist
+  oder ein Water Heater in der Betriebsart *off* steht), dazu eine
   Priorität (1 = höchste) und optional eine Mindestlaufzeit und Mindestpause.
+- **Thermostat taktet selbst**: für Verbraucher, die ihr eigener Thermostat
+  während der Ansteuerung ein- und ausschaltet (z. B. ein Heizstab, der am
+  Heizelement misst). Normalerweise gilt ein Verbraucher, der trotz Vorgabe
+  nichts abnimmt, 15 Minuten als gesättigt und behält seine letzte Vorgabe.
+  Mit dieser Option steuert SLEMS ihn weiter: In einer Pause (keine Leistung
+  für 2 Reaktionszeiten, 10–60 s) bekommen die Batterien seine nicht genutzte
+  Leistung, und sobald er wieder abnimmt, bekommt er sie zurück (angezeigt als
+  *Thermostat-Pause*).
 
 Wirkungsgrad der Batterie: je Batterie aus den eigenen Lade-/Entladezählern
 der Batterie, aus der gemessenen Leistung gelernt oder manuell vorgegeben. Er
