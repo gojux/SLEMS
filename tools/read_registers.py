@@ -6,7 +6,8 @@ the battery. The battery accepts a single Modbus TCP connection, so any other
 integration talking to it must be stopped while this script runs.
 
 Registers are given as ADDRESS or ADDRESS:TYPE with TYPE one of u16 (default),
-i16, u32, i32. Every value is shown raw and scaled by 0.1 and 0.01.
+i16, u32, i32. Every value is shown raw and scaled by 0.1 and 0.01. With more
+than one register the raw values are compared (the scale is not known).
 
 Examples:
     python3 read_registers.py 192.168.1.50
@@ -116,7 +117,8 @@ def main() -> None:
             valid = [v for v in values if v is not None]
             if len(values) > 1:
                 identical = len(valid) == len(values) and len(set(valid)) == 1
-                print(f"  identical: {'yes' if identical else 'no'}")
+                # Raw values only: registers with a different scale never match.
+                print(f"  raw values identical: {'yes' if identical else 'no'}")
             if sample < args.samples - 1:
                 time.sleep(args.interval)
 

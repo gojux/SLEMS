@@ -625,8 +625,9 @@ Firmware quirks handled in `modbus_client.py`:
 
 SoC register: Omnibattery's code uses 37005 for v3, its register table
 (`site-docs/reference/registers.md`) lists 34002 for `e_v3`. On a real Venus
-E 3.0 (2026-09-24, `tools/read_registers.py`) both show the same state of
-charge, 37005 in whole percent (54) and 34002 in 0.1 % (544 = 54.4 %). SLEMS
+E 3.0 (2026-09-24, `tools/read_registers.py`) 37005 and 32104 show the state
+of charge in whole percent (55), 34002 the same value in 0.1 % (554 = 55.4 %);
+34002 followed a change from 54.4 to 55.4 % together with the others. SLEMS
 reads 34002 for the finer resolution.
 
 Open points to verify on the real device:
@@ -639,10 +640,11 @@ Open points to verify on the real device:
 ## Tools
 
 `tools/read_registers.py` reads holding registers of a Venus repeatedly and
-shows whether they are identical (standard library only, Python ≥ 3.10):
+shows whether their raw values are identical (standard library only,
+Python ≥ 3.10):
 
 ```bash
-python3 tools/read_registers.py <battery-ip>                       # 37005 vs 34002
+python3 tools/read_registers.py <battery-ip>                       # 37005 and 34002
 python3 tools/read_registers.py <battery-ip> --registers 37005 34002 32104 --samples 20 --interval 5
 ```
 
