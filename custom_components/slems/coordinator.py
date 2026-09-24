@@ -291,6 +291,9 @@ class SystemSnapshot:
     expected_surplus_wh: float | None = None
     # Grid friendly charging: batteries charge only the surplus above this.
     feed_in_limit_w: float | None = None
+    # Why there is no feed-in limit: "disabled", "no_forecast" (no battery or
+    # PV forecast) or "not_enough_surplus" (charge at once).
+    feed_in_limit_reason: str | None = None
     # Ratio of today's PV production to the forecast until now.
     pv_correction: float = 1.0
     # Hours of today for the dashboard: start, corrected PV forecast (Wh),
@@ -615,6 +618,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 "available_power_w",
                 "expected_surplus_wh",
                 "feed_in_limit_w",
+                "feed_in_limit_reason",
                 "pv_correction",
                 "day_plan",
                 "day_plan_tomorrow",
@@ -950,7 +954,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         battery = self._battery_group(snapshot)
         settings = self.settings
         snapshot.feed_in_limit_w = None
-        if settings.grid_friendly_charging and battery is not None and pv_forecast is not None:
+        if not settings.grid_friendly_charging:
+            snapshot.feed_in_limit_reason = "disabled"
+        elif battery is None or pv_forecast is None:
+            snapshot.feed_in_limit_reason = "no_forecast"
+        else:
             surplus = remaining_surplus(
                 pv_forecast, consumption.total if consumption else None, load, wall_now
             )
@@ -958,6 +966,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 surplus,
                 battery.energy_to_full_wh + settings.grid_friendly_buffer_kwh * 1000 + balancing_wh,
                 battery.max_charge_w,
+            )
+            snapshot.feed_in_limit_reason = (
+                "not_enough_surplus" if snapshot.feed_in_limit_w is None else None
             )
         if pv_forecast is not None:
             # The correction factor describes today; tomorrow uses the raw forecast.

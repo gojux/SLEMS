@@ -360,7 +360,9 @@ T = max { T : Σ min(max(0, surplus_h − T), max_charge) · hours_h ≥ needed 
 ```
 
 found by bisection (10 W resolution). `None` if even `T = 0` is not enough
-(charge at once); with a full battery `T` is the highest surplus. Without a
+(charge at once, `feed_in_limit_reason` "not_enough_surplus"; also
+"disabled" and "no_forecast", attribute `reason` of the sensor, shown as text
+in the overview tile); with a full battery `T` is the highest surplus. Without a
 consumption forecast the current uncontrolled load is assumed per hour.
 
 In the allocation, only when the charge is secured: the battery charge is

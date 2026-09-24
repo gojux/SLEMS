@@ -367,7 +367,10 @@ peak:
   by the end of the day (charge losses, maximum charge power and *Grid
   friendly charging buffer* included; default 1 kWh, a larger buffer lowers
   the limit and makes the batteries full earlier and more reliably when the
-  forecast is too optimistic).
+  forecast is too optimistic). Without a limit the overview tile shows the
+  reason: *off* (grid friendly charging switched off), *none – charge at
+  once* (the surplus is not enough) or *no forecast*; the sensor then has no
+  value and the reason in its attribute `reason`.
 - The batteries only charge with the surplus above this limit; below it the
   power goes to the consumers or to the grid. The highest hours of the day
   are cut, wherever the clouds put them.

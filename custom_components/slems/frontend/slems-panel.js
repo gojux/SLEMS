@@ -105,6 +105,11 @@ const STRINGS = {
     allowedDischarge: "Discharging limited",
     limitReasons: { soc: "state of charge limit", power: "power limit", temperature: "temperature" },
     batteryLimits: "Limits: {name}",
+    feedInLimitReasons: {
+      disabled: "off",
+      no_forecast: "no forecast",
+      not_enough_surplus: "none – charge at once",
+    },
     exportBelowTarget:
       "The maximum grid export while discharging ({limit}) is below the grid surplus target while discharging ({target}): the batteries control to {limit}.",
     settingHints: {
@@ -221,6 +226,11 @@ const STRINGS = {
     allowedDischarge: "Entladen begrenzt",
     limitReasons: { soc: "Ladezustandsgrenze", power: "Leistungsgrenze", temperature: "Temperatur" },
     batteryLimits: "Grenzen: {name}",
+    feedInLimitReasons: {
+      disabled: "aus",
+      no_forecast: "keine Prognose",
+      not_enough_surplus: "keine – sofort laden",
+    },
     exportBelowTarget:
       "Die maximale Einspeisung beim Entladen ({limit}) liegt unter dem Ziel-Netzüberschuss beim Entladen ({target}): Die Batterien regeln auf {limit}.",
     settingHints: {
@@ -422,6 +432,16 @@ class SlemsPanel extends HTMLElement {
     return Number.isFinite(value) ? value : null;
   }
 
+  /** Value of an overview tile; the feed-in limit explains why it has none. */
+  _tileValue(stateObj) {
+    const reason = stateObj.attributes?.reason;
+    const noLimit = this._t.feedInLimitReasons;
+    if (this._number(stateObj) === null && reason && noLimit[reason] && this._entityId("feed_in_limit") === stateObj.entity_id) {
+      return noLimit[reason];
+    }
+    return this._format(stateObj);
+  }
+
   /** Power of a foreign entity in W (it may report W, kW or MW). */
   _powerW(stateObj) {
     const value = this._number(stateObj);
@@ -593,7 +613,7 @@ class SlemsPanel extends HTMLElement {
         .filter(Boolean)
         .map(
           (s) => `<div class="tile"><span class="label">${escapeHtml(this._name(s))}</span>
-                  <span class="value">${escapeHtml(this._format(s))}</span></div>`
+                  <span class="value">${escapeHtml(this._tileValue(s))}</span></div>`
         )
         .join("")
     );

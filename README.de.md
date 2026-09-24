@@ -381,7 +381,10 @@ Laden in die Spitze:
   Tagesende trotzdem füllt (Ladeverluste, maximale Ladeleistung und
   *Puffer netzdienliches Laden* eingerechnet; Standard 1 kWh, ein größerer
   Puffer senkt die Grenze und macht die Batterien früher und zuverlässiger
-  voll, wenn die Prognose zu optimistisch ist).
+  voll, wenn die Prognose zu optimistisch ist). Ohne Grenze zeigt die Kachel
+  in der Übersicht den Grund: *aus* (netzdienliches Laden ausgeschaltet),
+  *keine – sofort laden* (der Überschuss reicht nicht) oder *keine Prognose*;
+  der Sensor hat dann keinen Wert und den Grund im Attribut `reason`.
 - Die Batterien laden nur mit dem Überschuss oberhalb dieser Grenze;
   darunter geht die Leistung an die Verbraucher oder ins Netz. Gekappt werden
   die höchsten Stunden des Tages, egal wohin die Wolken sie schieben.

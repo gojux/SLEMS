@@ -185,6 +185,8 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         **_power("feed_in_limit"),
         value_fn=lambda s, _: s.feed_in_limit_w,
         attributes_fn=lambda s: {
+            # disabled / no_forecast / not_enough_surplus; None with a limit
+            "reason": s.feed_in_limit_reason,
             "day_plan": s.day_plan,
             "day_plan_tomorrow": s.day_plan_tomorrow,
         },
