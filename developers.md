@@ -412,7 +412,10 @@ entities. The panel is removed on unload and re-registered on every setup.
   (`roundedPath`), each defined in the direction of positive power; negative
   power reverses the dash animation. Speed and line width follow the power
   (speed quantised so the animation does not restart). Battery flow uses the
-  AC power when the driver reports it.
+  AC power when the driver reports it. If the batteries do not fit side by
+  side with at least `MIN_FLOW_BOX_W` (130 px) each, `_layoutFlow` stacks them
+  (class `stacked`); their connectors then run down a trunk left of the boxes
+  (the consumers' trunk is on the right).
 - The crossing of the flow lines shows the SLEMS icon:
   `frontend/slems-icon.svg` is a copy of `assets/icon.svg` (HACS installs only
   `custom_components/slems`); update both together.

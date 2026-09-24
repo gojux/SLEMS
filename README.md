@@ -175,7 +175,8 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
 - **Settings**: all settings grouped and editable directly.
 
 The dashboard follows the language and the light/dark theme of Home
-Assistant and works on phones.
+Assistant and works on phones (with little space the batteries in the energy
+flow are shown one below the other).
 
 ### Batteries
 

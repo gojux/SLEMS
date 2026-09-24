@@ -321,6 +321,9 @@ function polylines(pointRuns, color, dash) {
     .join("");
 }
 
+// Smallest width of a battery box in the energy flow before they are stacked.
+const MIN_FLOW_BOX_W = 130;
+
 // SLEMS icon (copy of assets/icon.svg) in the crossing of the energy flow lines.
 const ICON_URL = new URL("slems-icon.svg", import.meta.url).href;
 
@@ -409,6 +412,14 @@ class SlemsPanel extends HTMLElement {
   _number(stateObj) {
     const value = parseFloat(stateObj?.state);
     return Number.isFinite(value) ? value : null;
+  }
+
+  /** Power of a foreign entity in W (it may report W, kW or MW). */
+  _powerW(stateObj) {
+    const value = this._number(stateObj);
+    if (value === null) return null;
+    const factor = { kW: 1000, MW: 1000000 }[stateObj.attributes?.unit_of_measurement] ?? 1;
+    return value * factor;
   }
 
   _format(stateObj) {
@@ -640,7 +651,7 @@ class SlemsPanel extends HTMLElement {
         role: "consumer",
         icon: consumer.type === "heat_pump" ? "mdi:heat-pump" : consumer.type === "heating_rod" ? "mdi:water-boiler" : "mdi:power-plug",
         title: consumer.name,
-        power: this._number(this._hass.states[consumer.power_entity]),
+        power: this._powerW(this._hass.states[consumer.power_entity]),
       });
     }
     return nodes;
@@ -712,6 +723,15 @@ class SlemsPanel extends HTMLElement {
   _layoutFlow() {
     const root = this._flowRoot;
     if (!root || !root.isConnected) return;
+    // Batteries side by side only if every box keeps a readable width,
+    // otherwise one below the other (phones, many batteries).
+    const batteryCell = root.querySelector(".fcell.batteries");
+    if (batteryCell) {
+      const count = batteryCell.querySelectorAll("[data-node]").length;
+      const gap = parseFloat(getComputedStyle(batteryCell).columnGap) || 0;
+      const fits = count * MIN_FLOW_BOX_W + (count - 1) * gap <= batteryCell.clientWidth;
+      batteryCell.classList.toggle("stacked", !fits);
+    }
     const base = root.getBoundingClientRect();
     if (!base.width) return;
     const rect = (id) => {
@@ -738,7 +758,21 @@ class SlemsPanel extends HTMLElement {
     if (house) connectors.push({ id: "house", color: c.house, points: [[hx, hy], [house.x, level(house)]] });
     const batteries = [...root.querySelectorAll(".fcell.batteries [data-node]")].map((e) => e.dataset.node);
     const batteryRects = batteries.map(rect);
-    if (batteryRects.length) {
+    if (batteryRects.length && batteryCell?.classList.contains("stacked")) {
+      // Stacked: a trunk runs down left of the boxes (the consumers' trunk
+      // is on the right) and branches into the left edge of every box.
+      const trunkX = Math.min(...batteryRects.map((r) => r.x)) - 10;
+      const bendY = (hub.y + hub.h + batteryRects[0].y) / 2;
+      batteries.forEach((id, i) => {
+        const r = batteryRects[i];
+        const y = r.y + r.h / 2;
+        connectors.push({
+          id,
+          color: c.battery,
+          points: [[hx, hy], [hx, bendY], [trunkX, bendY], [trunkX, y], [r.x, y]],
+        });
+      });
+    } else if (batteryRects.length) {
       const busY = (hy + Math.min(...batteryRects.map((r) => r.y))) / 2;
       batteries.forEach((id, i) => {
         const r = batteryRects[i];
@@ -1371,7 +1405,7 @@ const STYLE = `
     row-gap: 44px; column-gap: 16px; align-items: center; padding: 4px 0 8px; }
   .flow-root.no-consumers { grid-template-areas: ". top ." "left center right" "batteries batteries batteries"; }
   .fcell { display: flex; justify-content: center; gap: 12px; position: relative; z-index: 1; }
-  .fcell.consumers { flex-direction: column; align-items: center; }
+  .fcell.consumers, .fcell.batteries.stacked { flex-direction: column; align-items: center; }
   .fcell.top { grid-area: top; } .fcell.left { grid-area: left; } .fcell.center { grid-area: center; }
   .fcell.right { grid-area: right; } .fcell.batteries { grid-area: batteries; align-items: flex-start; }
   .fcell.consumers { grid-area: consumers; }

@@ -180,7 +180,8 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
 - **Einstellungen**: alle Einstellwerte gruppiert und direkt änderbar.
 
 Das Dashboard folgt der Sprache und dem hellen/dunklen Design von Home
-Assistant und funktioniert auch am Handy.
+Assistant und funktioniert auch am Handy (bei wenig Platz stehen die
+Batterien im Energiefluss untereinander).
 
 ### Batterien
 
