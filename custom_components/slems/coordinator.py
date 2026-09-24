@@ -1012,6 +1012,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             snapshot.day_plan_tomorrow = self._day_plan(
                 pv_hourly, consumption_hourly, projection, wall_now, day_offset=1
             )
+        else:
+            snapshot.day_plan = []
+            snapshot.day_plan_tomorrow = []
 
         requests = [
             ConsumerRequest(
@@ -1027,6 +1030,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             for consumer in self.consumers
             if snapshot.is_controllable_now(consumer.subentry_id)
         ]
+        # Always set: in active mode the snapshot is a copy of the previous one.
+        snapshot.night_discharge = None
         if (
             settings.night_discharge
             and battery is not None
