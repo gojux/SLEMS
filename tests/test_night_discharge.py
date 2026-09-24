@@ -31,7 +31,7 @@ def _forecasts(pv_per_hour: float) -> tuple[dict, dict]:
     return pv, consumption
 
 
-def plan(soc: float, pv_per_hour: float, now: datetime | None = None):
+def plan(soc: float, pv_per_hour: float, now: datetime | None = None, min_wh: float = 0.0):
     pv, consumption = _forecasts(pv_per_hour)
     return plan_night_discharge(
         now or _day().replace(hour=22),
@@ -43,6 +43,7 @@ def plan(soc: float, pv_per_hour: float, now: datetime | None = None):
         consumption_forecast=consumption,
         reserve_pct_of_consumption=25,
         buffer_wh=1000,
+        min_wh=min_wh,
     )
 
 
@@ -60,6 +61,13 @@ def test_higher_reserve_when_pv_is_not_enough() -> None:
     result = plan(soc=80, pv_per_hour=1000)
     assert result.target_wh == pytest.approx(6200)
     assert result.power_w == pytest.approx(180)
+
+
+def test_reserve_comes_on_top_of_the_minimum_soc() -> None:
+    # 12 % of 10 kWh cannot be used: reserve 2.4 kWh above 1.2 kWh.
+    result = plan(soc=80, pv_per_hour=2400, min_wh=1200)
+    assert result.target_wh == pytest.approx(3600)
+    assert result.power_w == pytest.approx(440)
 
 
 def test_no_discharge_below_target() -> None:

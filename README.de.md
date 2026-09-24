@@ -390,7 +390,8 @@ ab, an Tagen mit weniger Überschuss einen deutlich größeren Anteil.
   nie mehr Einspeisung als diesen Wert.
 - *Nachtentladung* (Schalter, standardmäßig aus) und *Reserve Nachtentladung*
   (Standard 25 % des prognostizierten Verbrauchs von morgen): Über Nacht
-  entladen die Batterien gleichmäßig bis zur Reserve, bis die PV-Erzeugung den
+  entladen die Batterien gleichmäßig bis zur Reserve (nutzbare Energie über dem
+  minimalen Ladezustand der Batterien), bis die PV-Erzeugung den
   Verbrauch wieder übersteigt; der Ziel-Netzüberschuss beim Entladen wird dabei
   ignoriert (die maximale Einspeisung gilt weiter). Reicht die PV-Prognose für
   morgen nicht, um die Batterien von der Reserve aus wieder zu füllen, bleibt

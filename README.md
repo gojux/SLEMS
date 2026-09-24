@@ -377,7 +377,8 @@ a much larger share.
   more export than this.
 - *Night discharge* (switch, off by default) and *Night discharge reserve*
   (default 25 % of tomorrow's forecast consumption) – over night the batteries
-  discharge evenly down to the reserve until PV production exceeds the
+  discharge evenly down to the reserve (usable energy above the minimum state
+  of charge of the batteries) until PV production exceeds the
   consumption again, ignoring the discharge grid target (the maximum grid
   export still applies). If tomorrow's PV forecast cannot refill the batteries
   from the reserve, a higher reserve is kept. Requires the consumption

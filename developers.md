@@ -182,7 +182,8 @@ batteries only cover the house consumption at night.
 
 - **Until**: start of the first hour in which the PV forecast exceeds the
   consumption forecast (batteries would start charging again).
-- **Target**: *reserve* = % of tomorrow's forecast daily consumption. If
+- **Target**: *reserve* = % of tomorrow's forecast daily consumption, on top
+  of the energy below the minimum SoC of the batteries (not usable). If
   tomorrow's PV surplus (from the crossover until the end of the day, minus the
   safety buffer, times the charge efficiency) cannot refill the batteries from
   there, the target is raised to the level from which it can.
@@ -741,3 +742,4 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-24 | Venus SoC from register 34002 (0.1 %), fallback 37005 (1 %); both verified identical on a real device. |
 | 2026-09-24 | Battery protection after Omnibattery: SoC window per battery (default 12–100 %, 2 % re-entry), power limits per battery (e.g. 800 W), optional temperature charge limit (high derate plus low-temperature stop), detection of non-delivering batteries (3 failures → wake, then 5 min exclusion) and read-back confirmation on complete writes. |
 | 2026-09-24 | Grid friendly charging has its own buffer (*Grid friendly charging buffer*), separate from the charge secured buffer (which also sets the night discharge target). |
+| 2026-09-24 | The night discharge reserve counts on top of the minimum SoC (the energy below it cannot be used). |

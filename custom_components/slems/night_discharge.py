@@ -3,7 +3,8 @@
 Over night the batteries may discharge more than the house needs (the grid
 target is ignored), spread evenly until the forecast PV production exceeds the
 forecast consumption again (the batteries start charging). The target is the
-reserve (a percentage of tomorrow's forecast daily consumption), raised to the
+reserve (a percentage of tomorrow's forecast daily consumption) above the
+minimum SoC of the batteries, raised to the
 level from which tomorrow's forecast PV surplus (minus a safety buffer,
 including charge losses) can still fill the batteries.
 
@@ -58,8 +59,9 @@ def plan_night_discharge(
 ) -> NightDischargePlan | None:
     """Plan the night discharge; None if not applicable right now.
 
-    Both forecasts map period starts to Wh. ``min_wh`` (minimum SoC of the
-    batteries) is the lowest target. Not applicable while PV already
+    Both forecasts map period starts to Wh. ``min_wh`` is the energy below
+    the minimum SoC of the batteries: it cannot be used, so the reserve comes
+    on top of it. Not applicable while PV already
     exceeds consumption, or if no crossover is found within the lookahead.
     """
     pv_forecast = hourly(pv_forecast)
@@ -88,7 +90,7 @@ def plan_night_discharge(
 
     reserve = reserve_pct_of_consumption / 100 * daily_consumption
     rechargeable = max(0.0, surplus - buffer_wh) * charge_efficiency
-    target = min(capacity_wh, max(reserve, capacity_wh - rechargeable, min_wh, 0.0))
+    target = min(capacity_wh, max(min_wh + reserve, capacity_wh - rechargeable, 0.0))
 
     stored = soc_pct / 100 * capacity_wh
     hours = (crossover - now).total_seconds() / 3600
