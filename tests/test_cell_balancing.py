@@ -15,28 +15,41 @@ START = 1_800_000_000.0
 
 def test_balance_status_thresholds() -> None:
     assert balance_status(None) is None
-    assert balance_status(49.9) == "green"
-    assert balance_status(50) == "yellow"
-    assert balance_status(120) == "orange"
-    assert balance_status(150) == "red"
+    assert balance_status(180) == "green"  # usual factory spread of Marstek cells
+    assert balance_status(200) == "yellow"
+    assert balance_status(240) == "orange"
+    assert balance_status(250) == "red"
 
 
-def test_monitor_records_after_rest_in_top_window() -> None:
+def test_monitor_records_after_the_top_and_a_rest() -> None:
     monitor = CellMonitor()
-    monitor.update(0, 3.50, 3.38, 0, 1000)
-    monitor.update(30, 3.50, 3.38, 5, 1030)
+    monitor.update(0, 3.605, 3.40, 95, 1000)  # charging reaches the top
+    monitor.update(10, 3.58, 3.40, 0, 1010)  # rests, the voltage relaxes
+    monitor.update(40, 3.56, 3.40, 5, 1040)
     assert monitor.last is None
-    monitor.update(61, 3.50, 3.38, 0, 1061)
-    assert monitor.last.delta_mv == 120.0
+    monitor.update(71, 3.55, 3.36, 0, 1071)
+    assert monitor.last.delta_mv == 190.0
+    assert not monitor.suggest_balancing
+    monitor.update(200, 3.55, 3.30, 0, 1200)
+    assert monitor.last.timestamp == 1071  # one measurement per top
+
+
+def test_monitor_records_after_the_bms_ended_the_charge() -> None:
+    monitor = CellMonitor()
+    monitor.update(0, 3.52, 3.30, 0, 1000, soc_pct=100)
+    monitor.update(61, 3.52, 3.28, 0, 1061, soc_pct=100)
+    assert monitor.last.delta_mv == 240.0
     assert monitor.suggest_balancing
 
 
-def test_monitor_ignores_plateau_and_load() -> None:
+def test_monitor_ignores_plateau_knee_and_load() -> None:
     monitor = CellMonitor()
     for t in range(0, 200, 10):
         monitor.update(t, 3.32, 3.30, 0, t)  # mid SoC: not meaningful
     for t in range(200, 400, 10):
-        monitor.update(t, 3.55, 3.40, 800, t)  # charging
+        monitor.update(t, 3.50, 3.38, 0, t, soc_pct=95)  # knee, not the top
+    for t in range(400, 600, 10):
+        monitor.update(t, 3.61, 3.40, 800, t)  # at the top, but charging
     assert monitor.last is None
 
 

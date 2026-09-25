@@ -283,11 +283,12 @@ For batteries that report their cell voltages (Marstek Venus E 3.0), SLEMS
 shows the *Cell delta* (highest minus lowest cell voltage). With LFP cells the
 live value is only meaningful near full charge: in the middle of the charge
 the voltage curve is so flat that unequal cells show almost the same voltage.
-SLEMS therefore records the *Cell delta at top of charge* when the highest
-cell is at 3.48 V or more and the battery rested for 60 seconds. Its status
-follows Omnibattery: below 50 mV good, below 100 mV minor, below 150 mV
-moderate, otherwise high imbalance. From 100 mV the dashboard recommends
-active cell balancing.
+SLEMS therefore records the *Cell delta at top of charge*: after the highest
+cell reached 3.60 V or the BMS ended the charge at 100 %, and the battery then
+rested for 60 seconds. The curve is steep there; Marstek cells typically show
+about 180 mV from the factory, which is normal. Status: below 200 mV good,
+below 230 mV minor, below 250 mV moderate, otherwise high imbalance. From 230 mV the dashboard
+recommends active cell balancing.
 
 Active cell balancing (switch *Active cell balancing*, or the button in the
 dashboard) follows the Omnibattery balancing blueprint. It can only be started

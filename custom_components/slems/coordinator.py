@@ -738,7 +738,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         balancer = battery.balancer
         if balancer is None:
             if telemetry is not None:
-                battery.cell_monitor.update(now, max_cell, min_cell, power, wall)
+                battery.cell_monitor.update(
+                    now, max_cell, min_cell, power, wall, telemetry.soc_pct
+                )
             return
         # The run measures itself.
         battery.cell_monitor.pause()

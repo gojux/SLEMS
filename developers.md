@@ -309,8 +309,13 @@ container, the simulated Venus accepts commands but delivers 0 W
 `controller.py` (`_async_apply_balancing`). Based on the cell balance monitor
 and `blueprints/marstek_active_balance_blueprint.yaml` of Omnibattery.
 
-- **Top measurement** (`CellMonitor`): highest cell ≥ 3.48 V and |power| ≤
-  10 W for 60 s → one measurement per rest period (source `rest`); a balancing
+- **Top measurement** (`CellMonitor`): after the highest cell reached 3.60 V
+  or the SoC 99.5 % (BMS cut-off), |power| ≤ 10 W for 60 s → one measurement
+  per top (source `rest`); leaving the top window (< 3.49 V) cancels it. As
+  in Omnibattery (`async_record_top_balance_measurement`); status limits
+  200/230/250 mV and the balancing suggestion from 230 mV follow its code
+  (Marstek factory spread about 180 mV at the top; the 50/100/150 mV of its
+  documentation are outdated). A balancing
   run records its own measurements (source `balancing`) and pauses the
   monitor meanwhile. Stored with the learned data.
 - **Run** (`CellBalancer`, one step per battery poll, 5 s): phases
@@ -785,3 +790,4 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-24 | Consumers with a cycling thermostat rest instead of being saturated; water heater entities can block consumers (mode `off`). |
 | 2026-09-24 | Consumer control can be switched off per consumer; switching off sets it to 0 W once, then SLEMS only measures it. |
 | 2026-09-24 | The *AC power* sensor stays +discharge / −charge so it can be used as battery power in the Home Assistant energy dashboard; the SLEMS dashboard converts it. |
+| 2026-09-25 | Top cell delta measured like Omnibattery at 3.60 V / BMS cut-off after 60 s rest; status limits 200/230/250 mV, balancing suggested from 230 mV; balancing target stays 30 mV. |

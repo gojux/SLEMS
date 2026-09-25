@@ -30,7 +30,7 @@ from .coordinator import SlemsConfigEntry, SlemsCoordinator, SystemSnapshot
 from .drivers import BatteryTelemetry
 from .allocation import Strategy
 from .battery_distribution import LossModel
-from .cell_balancing import REST_MEASUREMENT_V, BalancingPhase, balance_status
+from .cell_balancing import TOP_ZONE_V, BalancingPhase, balance_status
 from .controller import ControlStatus
 from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 from .pv_forecast import energy_on_day
@@ -647,7 +647,7 @@ class CellDeltaSensor(SlemsBatteryEntity, SensorEntity):
     def extra_state_attributes(self) -> dict:
         telemetry = self.coordinator.data.batteries.get(self.battery.subentry_id)
         high = telemetry.extra.get("max_cell_voltage") if telemetry else None
-        return {"in_top_window": high is not None and high >= REST_MEASUREMENT_V}
+        return {"in_top_window": high is not None and high >= TOP_ZONE_V}
 
 
 class TopCellDeltaSensor(SlemsBatteryEntity, SensorEntity):

@@ -5,10 +5,13 @@ Omnibattery project (https://github.com/ffunes/Omnibattery, GPL-3.0).
 
 LFP cells have an almost flat voltage curve between about 10 and 97 % SoC;
 cells with clearly different SoC show nearly the same voltage there. The cell
-delta (highest minus lowest cell voltage) is therefore only meaningful near
-the top of the charge (above about 3.45 V) and after the battery rested for a
-while. The monitor records such *top measurements*; the live delta is shown
-but not judged.
+delta (highest minus lowest cell voltage) is therefore only meaningful at the
+top of the charge. As in Omnibattery, the monitor records a *top measurement*
+after the highest cell reached ``CHARGE_STOP_V`` or the BMS ended the charge
+(SoC ``BMS_FULL_SOC_PCT``) and the battery then rested for
+``MEASUREMENT_WAIT_S``; the live delta is shown but not judged. The curve is
+steep there: Marstek cells typically show 170–180 mV from the factory, which
+is normal, so the status limits are far above that.
 
 Active balancing keeps the battery in the top window long enough for the BMS
 to bleed the highest cells (it takes hours: roughly 5 mV per 24 h in the
@@ -50,14 +53,14 @@ REJECTION_SAMPLES = 3
 IDLE_POWER_W = 10.0
 MAX_RUN_S = 24 * 3600.0
 
-# Top measurements outside a balancing run: resting at least this long with
-# the highest cell at or above this voltage.
-REST_MEASUREMENT_V = 3.48
+# The BMS ended the charge (top measurement without reaching CHARGE_STOP_V).
+BMS_FULL_SOC_PCT = 99.5
 
-# Balance status of a top measurement (mV), as in Omnibattery.
-STATUS_LIMITS_MV = ((50, "green"), (100, "yellow"), (150, "orange"))
+# Balance status of a top measurement (mV), as in Omnibattery (measured at
+# 3.60 V or at the BMS cut-off; about 180 mV is normal for Marstek cells).
+STATUS_LIMITS_MV = ((200, "green"), (230, "yellow"), (250, "orange"))
 # From this top measurement on, active balancing is suggested.
-SUGGEST_BALANCING_MV = 100
+SUGGEST_BALANCING_MV = 230
 
 
 class BalancingPhase(StrEnum):
@@ -96,11 +99,13 @@ class TopMeasurement:
 
 
 class CellMonitor:
-    """Records top measurements while the battery rests in the top window."""
+    """Records a top measurement after the top of the charge and a rest."""
 
     def __init__(self) -> None:
         self.last: TopMeasurement | None = None
         self._rest_since: float | None = None
+        # The top of the charge was reached and not yet measured.
+        self._top_reached = False
 
     def update(
         self,
@@ -109,20 +114,28 @@ class CellMonitor:
         min_cell_v: float | None,
         power_w: float | None,
         wall_timestamp: float,
+        soc_pct: float | None = None,
     ) -> None:
         if max_cell_v is None or min_cell_v is None or power_w is None:
             self._rest_since = None
             return
-        resting = abs(power_w) <= IDLE_POWER_W and max_cell_v >= REST_MEASUREMENT_V
-        if not resting:
+        if max_cell_v >= CHARGE_STOP_V or (soc_pct is not None and soc_pct >= BMS_FULL_SOC_PCT):
+            self._top_reached = True
+        elif max_cell_v < TOP_ZONE_V:
+            # Discharged out of the top window: no longer a top measurement.
+            self._top_reached = False
+            self._rest_since = None
+            return
+        if not self._top_reached or abs(power_w) > IDLE_POWER_W:
             self._rest_since = None
             return
         if self._rest_since is None:
             self._rest_since = now
         elif now - self._rest_since >= MEASUREMENT_WAIT_S:
             self.record((max_cell_v - min_cell_v) * 1000, wall_timestamp, "rest")
-            # One measurement per rest period.
-            self._rest_since = float("inf")
+            # One measurement each time the top is reached.
+            self._top_reached = False
+            self._rest_since = None
 
     def record(self, delta_mv: float, wall_timestamp: float, source: str) -> None:
         self.last = TopMeasurement(round(delta_mv, 1), wall_timestamp, source)
@@ -147,6 +160,7 @@ class CellMonitor:
     def pause(self) -> None:
         """No rest measurement (e.g. during a balancing run, which measures itself)."""
         self._rest_since = None
+        self._top_reached = False
 
 
 @dataclass

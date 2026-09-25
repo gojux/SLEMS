@@ -293,11 +293,13 @@ Für Batterien, die ihre Zellspannungen melden (Marstek Venus E 3.0), zeigt
 SLEMS das *Zell-Delta* (höchste minus niedrigste Zellspannung). Bei LFP-Zellen
 ist der Live-Wert nur nahe der Vollladung aussagekräftig: In der Mitte ist die
 Spannungskurve so flach, dass ungleiche Zellen fast dieselbe Spannung zeigen.
-SLEMS erfasst daher das *Zell-Delta am oberen Ladeende*, wenn die höchste
-Zelle mindestens 3,48 V hat und die Batterie 60 Sekunden im Standby war. Der
-Status folgt Omnibattery: unter 50 mV gut, unter 100 mV leichtes, unter 150 mV
-mittleres, sonst starkes Ungleichgewicht. Ab 100 mV empfiehlt das Dashboard
-den aktiven Zellausgleich.
+SLEMS erfasst daher das *Zell-Delta am oberen Ladeende*: nachdem die höchste
+Zelle 3,60 V erreicht oder das BMS die Ladung bei 100 % beendet hat und die
+Batterie danach 60 Sekunden im Standby war. Die Kurve ist dort steil;
+Marstek-Zellen zeigen ab Werk typischerweise etwa 180 mV, das ist normal.
+Status: unter 200 mV gut, unter 230 mV leichtes, unter 250 mV mittleres, sonst
+starkes Ungleichgewicht. Ab
+230 mV empfiehlt das Dashboard den aktiven Zellausgleich.
 
 Der aktive Zellausgleich (Schalter *Aktiver Zellausgleich* oder die
 Schaltfläche im Dashboard) folgt dem Ausgleichs-Blueprint von Omnibattery. Er
