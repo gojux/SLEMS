@@ -158,6 +158,23 @@ Recommended setup when switching from another battery integration:
    recorded about a week of temperatures.
 3. Holidays are currently treated like workdays.
 
+**Forecast accuracy** (card in the overview, sensors *Consumption forecast
+accuracy* and *PV forecast accuracy*):
+
+- Consumption: SLEMS recalculates the forecast of each of the last 14 days as
+  it would have been made at midnight, with the history up to then, and
+  compares it with the measured consumption. Shown are the accuracy of the
+  daily energy (100 % minus the mean deviation), the tendency (too high or too
+  low), the deviation per hour (how well the course of the day is hit), the
+  data basis (days of consumption, days of heat pump data with temperature)
+  and tomorrow's forecast with its expected deviation. The heat pump is
+  recalculated with the measured temperature of the day, so its share looks
+  somewhat better than it was.
+- PV: past forecasts are not available from the solar forecast integration,
+  so SLEMS records the forecast of each day at its start and compares it with
+  the production in the evening; the values become meaningful after about a
+  week.
+
 The sensor *House consumption* (used for the forecast and shown in the energy
 flow) is calculated as grid + PV − batteries. The smart meter often reports a
 change later than PV and batteries; a momentarily negative result is therefore

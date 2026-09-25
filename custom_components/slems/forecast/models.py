@@ -130,6 +130,8 @@ class HeatPumpModel:
     # True if the temperature model could be fitted; otherwise the mean of the
     # last days is used for every day.
     temperature_based: bool = True
+    # Days with energy and temperature the model was fitted with.
+    days_used: int = 0
 
     def daily(self, mean_temperature: float | None) -> float:
         if not self.temperature_based or mean_temperature is None:
@@ -186,7 +188,13 @@ class HeatPumpModel:
             if best is None or error < best[0]:
                 best = (error, base, slope, limit)
         _, base, slope, limit = best
-        model = cls(base_wh=base, slope_wh_per_k=slope, heating_limit_c=limit, shape=shape)
+        model = cls(
+            base_wh=base,
+            slope_wh_per_k=slope,
+            heating_limit_c=limit,
+            shape=shape,
+            days_used=len(days),
+        )
 
         recent_days = [d for d in days if (today - d).days <= 3]
         if recent_days:

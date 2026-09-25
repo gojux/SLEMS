@@ -89,6 +89,7 @@ from .forecast import (
     ForecastSources,
     async_statistic_means,
 )
+from .forecast.accuracy import PvAccuracyTracker
 from .grid_filter import GridPowerFilter
 from .grid_friendly import (
     energy_from_means,
@@ -97,7 +98,7 @@ from .grid_friendly import (
     remaining_surplus,
 )
 from .night_discharge import NightDischargePlan, plan_night_discharge
-from .pv_forecast import PvForecast, async_get_pv_forecast, hourly
+from .pv_forecast import PvForecast, async_get_pv_forecast, energy_on_day, hourly
 from .soc_projection import ProjectionSettings, SocProjection, project_soc
 from .util import state_as_watts
 
@@ -109,6 +110,7 @@ STORAGE_SAVE_DELAY_S = 600
 BALANCING_SAVE_DELAY_S = 5
 # Store key of the controller data (next to the per battery subentry ids).
 CONTROL_STORE_KEY = "control"
+PV_ACCURACY_STORE_KEY = "pv_accuracy"
 
 
 @dataclass
@@ -456,6 +458,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.forecaster = ConsumptionForecaster(hass, self._forecast_sources())
         self.controller = RealTimeController(self)
         self.problems = ProblemReporter(hass, self)
+        self.pv_accuracy = PvAccuracyTracker()
 
     @property
     def _config(self):
@@ -468,6 +471,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     async def _async_setup(self) -> None:
         """Restore learned data and follow the grid meter."""
         stored = await self._store.async_load() or {}
+        self.pv_accuracy.restore(stored.get(PV_ACCURACY_STORE_KEY))
         if gain := (stored.get(CONTROL_STORE_KEY) or {}).get("gain"):
             self.controller.gain_adapter.reset(gain)
         for battery in self.batteries:
@@ -594,6 +598,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             for b in self.batteries
         }
         data[CONTROL_STORE_KEY] = {"gain": self.controller.gain_adapter.gain}
+        data[PV_ACCURACY_STORE_KEY] = self.pv_accuracy.as_dict()
         return data
 
     async def _async_update_data(self) -> SystemSnapshot:
@@ -621,6 +626,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
 
         if forecast_entries := config.get(CONF_PV_FORECAST_ENTRIES):
             snapshot.pv_forecast = await async_get_pv_forecast(self.hass, forecast_entries)
+            if snapshot.pv_forecast is not None:
+                wall_now = dt_util.now()
+                self.pv_accuracy.record_forecast(
+                    wall_now.date(), energy_on_day(snapshot.pv_forecast, wall_now.date()), wall_now
+                )
         snapshot.consumption_forecast = self.forecaster.forecast
         if weather := config.get(CONF_WEATHER_ENTITY):
             snapshot.outdoor_temperature_c = _weather_temperature(self.hass.states.get(weather))
@@ -682,6 +692,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         today = dt_util.now().date()
         day, energy, last_time, last_power = self._pv_day or (today, 0.0, None, None)
         if day != today:
+            if self._pv_complete:
+                self.pv_accuracy.record_actual(day, energy)
             day, energy, last_time, last_power = today, 0.0, None, None
             self._pv_complete = True
         if last_time is not None and last_power is not None and now - last_time < 300:

@@ -20,6 +20,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 
+from .accuracy import ConsumptionAccuracy, backtest_consumption
 from .models import (
     HEAT_PUMP_LOOKBACK_DAYS,
     BaseLoadProfile,
@@ -130,6 +131,7 @@ class ConsumptionForecaster:
         self._hass = hass
         self.sources = sources
         self.forecast: ConsumptionForecast | None = None
+        self.accuracy: ConsumptionAccuracy | None = None
 
     async def async_refresh(self, vacation: bool) -> ConsumptionForecast | None:
         """Refit all models from the statistics and update the forecast."""
@@ -161,6 +163,13 @@ class ConsumptionForecaster:
 
         self.forecast = await self._hass.async_add_executor_job(
             self._compute, now, base, heat_pump, temperatures, forecast_temperatures, vacation
+        )
+        self.accuracy = await self._hass.async_add_executor_job(
+            backtest_consumption,
+            base,
+            heat_pump if sources.heat_pumps else None,
+            daily_mean_temperature(temperatures),
+            now,
         )
         return self.forecast
 

@@ -373,6 +373,12 @@
       },
       "stored_energy": {
         "name": "Gespeicherte Energie"
+      },
+      "consumption_forecast_accuracy": {
+        "name": "Treffsicherheit Verbrauchsprognose"
+      },
+      "pv_forecast_accuracy": {
+        "name": "Treffsicherheit PV-Prognose"
       }
     },
     "switch": {

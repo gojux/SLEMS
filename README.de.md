@@ -162,6 +162,22 @@ Empfohlene Einrichtung beim Umstieg von einer anderen Batterie-Integration:
    etwa eine Woche Temperaturen aufgezeichnet hat.
 3. Feiertage werden derzeit wie Werktage behandelt.
 
+**Prognosegüte** (Karte in der Übersicht, Sensoren *Treffsicherheit
+Verbrauchsprognose* und *Treffsicherheit PV-Prognose*):
+
+- Verbrauch: SLEMS rechnet die Prognose jedes der letzten 14 Tage so nach,
+  wie sie um Mitternacht mit der Historie bis dahin entstanden wäre, und
+  vergleicht sie mit dem gemessenen Verbrauch. Angezeigt werden die
+  Treffsicherheit der Tagesenergie (100 % minus mittlere Abweichung), die
+  Tendenz (zu hoch oder zu niedrig), die Abweichung pro Stunde (wie gut der
+  Tagesverlauf getroffen wird), die Datenbasis (Tage mit Verbrauch, Tage mit
+  Wärmepumpe und Temperatur) und die Prognose für morgen mit ihrer erwarteten
+  Abweichung. Die Wärmepumpe wird mit der gemessenen Temperatur des Tages
+  nachgerechnet; ihr Anteil wirkt dadurch etwas besser, als er war.
+- PV: Vergangene Prognosen liefert die Solarprognose-Integration nicht mehr,
+  daher speichert SLEMS die Prognose jedes Tages zu Tagesbeginn und vergleicht
+  sie abends mit der Erzeugung; aussagekräftig wird das nach etwa einer Woche.
+
 Der Sensor *Hausverbrauch* (Grundlage der Prognose und Anzeige im
 Energiefluss) wird als Netz + PV − Batterien berechnet. Der Smart Meter meldet
 eine Änderung oft später als PV und Batterien; ein kurzzeitig negatives

@@ -373,6 +373,12 @@
       },
       "stored_energy": {
         "name": "Stored energy"
+      },
+      "consumption_forecast_accuracy": {
+        "name": "Consumption forecast accuracy"
+      },
+      "pv_forecast_accuracy": {
+        "name": "PV forecast accuracy"
       }
     },
     "switch": {

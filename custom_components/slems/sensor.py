@@ -33,6 +33,7 @@ from .battery_distribution import LossModel
 from .cell_balancing import TOP_ZONE_V, BalancingPhase, balance_status
 from .controller import ControlStatus
 from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
+from .forecast.accuracy import Accuracy
 from .pv_forecast import energy_on_day
 
 
@@ -98,6 +99,62 @@ def _capacity_kwh(snapshot: SystemSnapshot, coordinator: SlemsCoordinator) -> fl
         and telemetry.soc_pct is not None
     ]
     return round(sum(capacities), 2) if capacities else None
+
+
+def _accuracy_value(accuracy: Accuracy | None) -> float | None:
+    """Accuracy in %: 100 − mean daily error."""
+    if accuracy is None or accuracy.daily_error is None:
+        return None
+    return round(max(0.0, 100 * (1 - accuracy.daily_error)), 1)
+
+
+def _accuracy_attributes(accuracy: Accuracy | None, tomorrow_wh: float | None) -> dict:
+    def pct(value: float | None) -> float | None:
+        return None if value is None else round(100 * value, 1)
+
+    tomorrow = dt_util.now().date() + timedelta(days=1)
+    expected = accuracy.expected_error(tomorrow) if accuracy else None
+    return {
+        "evaluated_days": len(accuracy.days) if accuracy else 0,
+        # Mean |error| of the daily energy and its signed mean (+: too high).
+        "daily_error_pct": pct(accuracy.daily_error) if accuracy else None,
+        "bias_pct": pct(accuracy.bias) if accuracy else None,
+        "hourly_error_pct": pct(accuracy.hourly_error) if accuracy else None,
+        "tomorrow_forecast_kwh": None if tomorrow_wh is None else round(tomorrow_wh / 1000, 2),
+        "tomorrow_expected_error_kwh": (
+            None
+            if tomorrow_wh is None or expected is None
+            else round(tomorrow_wh * expected / 1000, 2)
+        ),
+        "days": [
+            {
+                "date": d.day.isoformat(),
+                "forecast_kwh": round(d.forecast_wh / 1000, 2),
+                "actual_kwh": round(d.actual_wh / 1000, 2),
+            }
+            for d in (accuracy.days if accuracy else [])
+        ],
+    }
+
+
+def _consumption_accuracy_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
+    accuracy = c.forecaster.accuracy
+    tomorrow = dt_util.now().date() + timedelta(days=1)
+    forecast = s.consumption_forecast
+    attributes = _accuracy_attributes(
+        accuracy, forecast.energy_on_day(tomorrow) if forecast else None
+    )
+    attributes["history_days"] = accuracy.history_days if accuracy else 0
+    attributes["heat_pump_days"] = accuracy.heat_pump_days if accuracy else 0
+    return attributes
+
+
+def _pv_accuracy_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
+    tomorrow = dt_util.now().date() + timedelta(days=1)
+    tomorrow_wh = energy_on_day(s.pv_forecast, tomorrow) if s.pv_forecast else None
+    attributes = _accuracy_attributes(c.pv_accuracy.accuracy(), tomorrow_wh)
+    attributes["recorded_days"] = len(c.pv_accuracy.days)
+    return attributes
 
 
 def _pv_forecast_kwh(day_offset: int) -> Callable[[SystemSnapshot, SlemsCoordinator], float | None]:
@@ -244,6 +301,24 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         suggested_display_precision=0,
         value_fn=_average_soc,
+    ),
+    SystemSensorDescription(
+        key="consumption_forecast_accuracy",
+        translation_key="consumption_forecast_accuracy",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        value_fn=lambda _, c: _accuracy_value(c.forecaster.accuracy),
+        attributes_fn=_consumption_accuracy_attributes,
+    ),
+    SystemSensorDescription(
+        key="pv_forecast_accuracy",
+        translation_key="pv_forecast_accuracy",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        value_fn=lambda _, c: _accuracy_value(c.pv_accuracy.accuracy()),
+        attributes_fn=_pv_accuracy_attributes,
     ),
     SystemSensorDescription(
         key="battery_energy_total",
@@ -419,7 +494,7 @@ class SystemSensor(SlemsSystemEntity, SensorEntity):
     """System level sensor."""
 
     entity_description: SystemSensorDescription
-    _unrecorded_attributes = frozenset({"day_plan", "day_plan_tomorrow"})
+    _unrecorded_attributes = frozenset({"day_plan", "day_plan_tomorrow", "days"})
 
     def __init__(
         self, coordinator: SlemsCoordinator, description: SystemSensorDescription

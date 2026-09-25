@@ -74,6 +74,24 @@ const STRINGS = {
     soc: "State of charge",
     planned: "Planned",
     storedEnergy: "Stored energy",
+    forecastAccuracy: "Forecast accuracy",
+    forecastAccuracyHint: "Consumption: recalculated for the last 14 days; PV: recorded forecasts compared with the production",
+    consumptionForecastTitle: "Consumption",
+    pvForecastTitle: "PV",
+    accuracy: "Accuracy",
+    lastDays: "last {n} days",
+    notEnoughData: "not enough data yet",
+    tendency: "Tendency",
+    tooHigh: "too high",
+    tooLow: "too low",
+    balanced: "balanced",
+    hourlyCourse: "Course of the day",
+    hourlyDeviation: "{pct} deviation per hour",
+    dataBasis: "Data basis",
+    consumptionBasis: "{days} days of consumption",
+    heatPumpBasis: ", {days} days heat pump with temperature",
+    pvBasis: "{days} days recorded",
+    tomorrow: "Tomorrow (expected)",
     storedOf: "{stored} of {capacity} kWh",
     powerGridSide: "Power (grid side)",
     setPoint: "SLEMS set point",
@@ -202,6 +220,24 @@ const STRINGS = {
     soc: "Ladezustand",
     planned: "Geplant",
     storedEnergy: "Gespeichert",
+    forecastAccuracy: "Prognosegüte",
+    forecastAccuracyHint: "Verbrauch: für die letzten 14 Tage nachgerechnet; PV: gespeicherte Prognosen mit der Erzeugung verglichen",
+    consumptionForecastTitle: "Verbrauch",
+    pvForecastTitle: "PV",
+    accuracy: "Treffsicherheit",
+    lastDays: "letzte {n} Tage",
+    notEnoughData: "noch zu wenig Daten",
+    tendency: "Tendenz",
+    tooHigh: "zu hoch",
+    tooLow: "zu niedrig",
+    balanced: "ausgeglichen",
+    hourlyCourse: "Tagesverlauf",
+    hourlyDeviation: "{pct} Abweichung pro Stunde",
+    dataBasis: "Datenbasis",
+    consumptionBasis: "{days} Tage Verbrauch",
+    heatPumpBasis: ", {days} Tage Wärmepumpe mit Temperatur",
+    pvBasis: "{days} Tage aufgezeichnet",
+    tomorrow: "Morgen (erwartet)",
     storedOf: "{stored} von {capacity} kWh",
     powerGridSide: "Leistung (netzseitig)",
     setPoint: "Vorgabe SLEMS",
@@ -458,6 +494,54 @@ class SlemsPanel extends HTMLElement {
     return Number.isFinite(value) ? value : null;
   }
 
+  /** How well the consumption and PV forecasts matched (backtest / recorded days). */
+  _renderAccuracy() {
+    const t = this._t;
+    const kwh = (v) =>
+      `${new Intl.NumberFormat(this._hass?.locale?.language || "en", { maximumFractionDigits: 1 }).format(v)} kWh`;
+    const block = (key, title, basis) => {
+      const st = this._state(key);
+      if (!st) return "";
+      const a = st.attributes;
+      const accuracy = this._number(st);
+      const rows = [];
+      if (accuracy === null) {
+        rows.push([t.accuracy, `<span class="muted">${t.notEnoughData}</span>`]);
+      } else {
+        rows.push([t.accuracy, `${this._percent(accuracy)} <span class="muted">(${t.lastDays.replace("{n}", a.evaluated_days)})</span>`]);
+        if (a.bias_pct !== null && a.bias_pct !== undefined) {
+          const direction = a.bias_pct > 0 ? t.tooHigh : t.tooLow;
+          rows.push([t.tendency, Math.abs(a.bias_pct) < 1 ? t.balanced : `${direction} (${this._percent(Math.abs(a.bias_pct))})`]);
+        }
+        if (a.hourly_error_pct !== null && a.hourly_error_pct !== undefined) {
+          rows.push([t.hourlyCourse, t.hourlyDeviation.replace("{pct}", this._percent(a.hourly_error_pct))]);
+        }
+      }
+      rows.push([t.dataBasis, basis(a)]);
+      if (a.tomorrow_forecast_kwh !== null && a.tomorrow_forecast_kwh !== undefined) {
+        const error = a.tomorrow_expected_error_kwh;
+        rows.push([
+          t.tomorrow,
+          `${kwh(a.tomorrow_forecast_kwh)}${error !== null && error !== undefined ? ` ± ${kwh(error)}` : ""}`,
+        ]);
+      }
+      return `<div><h3>${title}</h3><dl>${rows.map(([l, v]) => `<dt>${l}</dt><dd>${v}</dd>`).join("")}</dl></div>`;
+    };
+    const consumption = block("consumption_forecast_accuracy", t.consumptionForecastTitle, (a) =>
+      t.consumptionBasis.replace("{days}", a.history_days) +
+      (a.heat_pump_days ? t.heatPumpBasis.replace("{days}", a.heat_pump_days) : "")
+    );
+    const pv = block("pv_forecast_accuracy", t.pvForecastTitle, (a) =>
+      t.pvBasis.replace("{days}", a.recorded_days)
+    );
+    this._setSection(
+      "accuracy",
+      consumption || pv
+        ? `<h2>${t.forecastAccuracy}</h2><span class="hint">${t.forecastAccuracyHint}</span><div class="accuracy">${consumption}${pv}</div>`
+        : ""
+    );
+  }
+
   /**
    * Operating mode and problems in one tile: problems first (the most
    * important one, "+n" for further ones), otherwise the operating mode.
@@ -682,7 +766,8 @@ class SlemsPanel extends HTMLElement {
           <section class="card"><h2>${this._t.energyFlow}</h2><div id="flow"></div></section>
           <section class="card"><div id="tiles" class="tiles"></div></section>
         </div>
-        <section class="card"><div id="daychart"></div></section>`;
+        <section class="card"><div id="daychart"></div></section>
+        <section class="card"><div id="accuracy"></div></section>`;
     }
     return `<div id="${this._tab}-list" class="grid cards"></div>`;
   }
@@ -716,6 +801,7 @@ class SlemsPanel extends HTMLElement {
     );
     this._fetchStats(false);
     this._renderDayChart();
+    this._renderAccuracy();
   }
 
   // --- energy flow ---------------------------------------------------------------
@@ -1560,6 +1646,8 @@ const STYLE = `
   .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
   .tile { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--divider-color); }
   .tile .label { font-size: 12px; }
+  .accuracy { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 32px; margin-top: 12px; }
+  .accuracy h3 { margin: 0 0 4px; font-size: 14px; font-weight: 500; }
   .tile .problem-value { display: flex; align-items: center; gap: 6px; color: var(--error-color, #d03b3b); }
   .tile .problem-value ha-icon { --mdc-icon-size: 20px; flex: none; }
   .setting .readonly { font-variant-numeric: tabular-nums; color: var(--secondary-text-color); }

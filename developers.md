@@ -669,6 +669,23 @@ country/subdivision taken from the HA configuration and overridable in the
 options; holidays then use the weekend profile. School holidays or other
 special days could later come from a calendar entity (option 3).
 
+### Forecast accuracy
+
+`forecast/accuracy.py` (pure). `backtest_consumption` runs with every forecast
+refresh (hourly, executor): for each of the last 14 complete days the base
+load profile and the heat pump model are fitted with `now` = that day's
+midnight and compared hour by hour with base + heat pump history (days with
+≥ 22 hours only). Daily error = |forecast − actual| / actual, bias = signed
+mean, hourly error = Σ|error| / Σ actual. The heat pump uses the measured
+daily mean temperature (no historical weather forecast). Expected error of
+tomorrow = mean |daily error| of the same day type (≥ 2 days, else all) ×
+tomorrow's forecast. `PvAccuracyTracker` stores per day the raw PV forecast
+of the day (first poll before 06:00) and, at the midnight rollover of the PV
+integration, the produced energy if the day was complete; kept 60 days in the
+coordinator store (key `pv_accuracy`). Sensors `consumption_forecast_accuracy`
+and `pv_forecast_accuracy` (100 % − mean daily error; details as attributes,
+the day list is not recorded); dashboard card below the day chart.
+
 ## Marstek Venus E 3.0
 
 Source: Omnibattery `const/registers_v3.py`, `drivers/marstek.py`,
@@ -791,3 +808,4 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-24 | Consumer control can be switched off per consumer; switching off sets it to 0 W once, then SLEMS only measures it. |
 | 2026-09-24 | The *AC power* sensor stays +discharge / −charge so it can be used as battery power in the Home Assistant energy dashboard; the SLEMS dashboard converts it. |
 | 2026-09-25 | Top cell delta measured like Omnibattery at 3.60 V / BMS cut-off after 60 s rest; status limits 200/230/250 mV, balancing suggested from 230 mV; balancing target stays 30 mV. |
+| 2026-09-25 | Forecast accuracy: consumption by backtest over 14 days (immediately available), PV by recording the forecast of each day (past forecasts are not available). |
