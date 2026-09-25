@@ -281,6 +281,8 @@ class SystemSnapshot:
     resting: frozenset[str] = frozenset()
     # Consumers whose control the user switched off (measured only).
     control_disabled: frozenset[str] = frozenset()
+    # Replacement for a negative house power (last valid value, None: unknown).
+    house_power_hold_w: float | None = None
     pv_forecast: PvForecast | None = None
     consumption_forecast: ConsumptionForecast | None = None
     # Current outdoor temperature of the weather entity (°C).
@@ -344,8 +346,12 @@ class SystemSnapshot:
         )
 
     @property
-    def house_power_w(self) -> float | None:
-        """Consumption behind the smart meter, derived from the energy balance."""
+    def raw_house_power_w(self) -> float | None:
+        """Consumption behind the smart meter from the energy balance, unchecked.
+
+        Negative for a moment when the smart meter reports a change later than
+        the PV and battery measurements.
+        """
         if self.grid_power_w is None:
             return None
         return (
@@ -353,6 +359,14 @@ class SystemSnapshot:
             + (self.pv_power_w or 0.0)
             - (self.battery_power_w or 0.0)
         )
+
+    @property
+    def house_power_w(self) -> float | None:
+        """Consumption behind the smart meter; negative values replaced (see HousePowerHold)."""
+        raw = self.raw_house_power_w
+        if raw is None or raw >= 0:
+            return raw
+        return self.house_power_hold_w
 
     @property
     def base_load_w(self) -> float | None:
@@ -369,6 +383,33 @@ class SystemSnapshot:
         if house is None:
             return None
         return house + self._consumer_power_w(included_in_meter=False)
+
+
+class HousePowerHold:
+    """Replacement for a negative house power from the energy balance.
+
+    The smart meter often reports a change later than the PV and battery
+    measurements; for a moment the balance then gives a negative consumption.
+    The consumption itself has usually not changed, so the last valid value
+    is kept, for at most ``HOLD_S``; afterwards the value is unknown (a
+    persistent negative balance points to a wrong sensor).
+    """
+
+    HOLD_S = 30.0
+
+    def __init__(self) -> None:
+        self._last: tuple[float, float] | None = None
+
+    def check(self, snapshot: SystemSnapshot, now: float) -> None:
+        """Remember a valid value or set the replacement in ``snapshot``."""
+        raw = snapshot.raw_house_power_w
+        snapshot.house_power_hold_w = None
+        if raw is None:
+            return
+        if raw >= 0:
+            self._last = (raw, now)
+        elif self._last is not None and now - self._last[1] <= self.HOLD_S:
+            snapshot.house_power_hold_w = self._last[0]
 
 
 type SlemsConfigEntry = ConfigEntry[SlemsCoordinator]
@@ -402,6 +443,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.system_device_id = system_device_id
         self.settings = ControlSettings()
         self._grid_filter = GridPowerFilter(self.settings.surplus_average_window_s)
+        self._house_hold = HousePowerHold()
         self._runtime = RuntimeTracker()
         self._distributor = BatteryDistributor()
         # PV energy produced today (in memory): (local date, Wh, last sample).
@@ -607,6 +649,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self._update_cells(battery, snapshot, now)
         self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
 
+        self._house_hold.check(snapshot, now)
         snapshot.saturated = self.controller.saturated
         snapshot.resting = self.controller.resting
         self.controller.observe_consumers(snapshot)
@@ -1177,6 +1220,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
         if pv_entity := config.get(CONF_PV_POWER_ENTITY):
             snapshot.pv_power_w = state_as_watts(self.hass.states.get(pv_entity))
+        self._house_hold.check(snapshot, now)
         self.plan(snapshot, dt_util.now(), now, previous_total_w=previous_total_w, gain=gain)
         return snapshot
 

@@ -158,6 +158,11 @@ Recommended setup when switching from another battery integration:
    recorded about a week of temperatures.
 3. Holidays are currently treated like workdays.
 
+The sensor *House consumption* (used for the forecast and shown in the energy
+flow) is calculated as grid + PV − batteries. The smart meter often reports a
+change later than PV and batteries; a momentarily negative result is therefore
+replaced by the last valid value (for at most 30 seconds, then unknown).
+
 ### Consumers
 
 Every consumer needs its own power **and** energy sensor.

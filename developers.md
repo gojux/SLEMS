@@ -11,7 +11,10 @@
 - Sign conventions used everywhere:
   - grid power: **+ import / − export**
   - battery power: **+ charge / − discharge**
-  - house power = grid + PV − battery (everything behind the smart meter)
+  - house power = grid + PV − battery (everything behind the smart meter);
+    the smart meter often reports a change later than PV and batteries, so
+    a negative result is replaced by the last valid value for at most 30 s,
+    then unknown (`HousePowerHold`; the control does not use it)
   - base load = house power − consumers inside the smart meter
   - total consumption = house power + consumers outside the smart meter
 - License: GPL-3.0 (compatible with Omnibattery, from which the Marstek
@@ -371,7 +374,9 @@ the rest goes to the consumers by priority, then to the grid. Not secured →
 battery priority as before, no cap.
 
 PV correction: ratio of today's measured PV energy to the forecast until now,
-limited to 0.5–1.2, used once the forecast until now exceeds 1 kWh. The
+limited to 0.5–1.2, used once the forecast until now exceeds 1 kWh. Idea for
+later: a higher upper limit (e.g. 1.5); on a morning where the forecast is far
+too low the plan and the feed-in limit are otherwise too cautious. The
 energy of today is read at startup from the 5 minute statistics of the PV
 power sensor (`energy_from_means`; the minutes since the last statistics
 period are bridged with the current PV power) and then integrated from the

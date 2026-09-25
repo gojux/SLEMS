@@ -58,3 +58,27 @@ def test_consumers_inside_and_outside_meter() -> None:
     assert snapshot.house_power_w == 2500
     assert snapshot.base_load_w == 700
     assert snapshot.total_consumption_w == 2900
+
+
+def test_negative_house_power_keeps_the_last_valid_value() -> None:
+    from custom_components.slems.coordinator import HousePowerHold
+
+    hold = HousePowerHold()
+
+    def snapshot(grid: float) -> SystemSnapshot:
+        return SystemSnapshot(
+            grid_power_w=grid,
+            pv_power_w=3000,
+            batteries={"a": BatteryTelemetry(soc_pct=50, power_w=1000)},
+        )
+
+    ok = snapshot(-1500)  # house 500 W
+    hold.check(ok, 0)
+    assert ok.house_power_w == 500
+    late_meter = snapshot(-2500)  # PV rose, the meter has not caught up: -500 W
+    hold.check(late_meter, 5)
+    assert late_meter.raw_house_power_w == -500
+    assert late_meter.house_power_w == 500
+    stale = snapshot(-2500)
+    hold.check(stale, 5 + HousePowerHold.HOLD_S)
+    assert stale.house_power_w is None  # unknown

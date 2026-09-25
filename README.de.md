@@ -162,6 +162,12 @@ Empfohlene Einrichtung beim Umstieg von einer anderen Batterie-Integration:
    etwa eine Woche Temperaturen aufgezeichnet hat.
 3. Feiertage werden derzeit wie Werktage behandelt.
 
+Der Sensor *Hausverbrauch* (Grundlage der Prognose und Anzeige im
+Energiefluss) wird als Netz + PV − Batterien berechnet. Der Smart Meter meldet
+eine Änderung oft später als PV und Batterien; ein kurzzeitig negatives
+Ergebnis wird daher durch den letzten gültigen Wert ersetzt (höchstens
+30 Sekunden, danach unbekannt).
+
 ### Verbraucher
 
 Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
