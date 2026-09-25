@@ -382,6 +382,9 @@
       },
       "cycle_count": {
         "name": "Ladezyklen"
+      },
+      "peak_shaving_limit": {
+        "name": "Wirksame Bezugsgrenze Spitzenabfang"
       }
     },
     "switch": {
@@ -411,6 +414,9 @@
       },
       "consumer_control": {
         "name": "Steuerung aktiv"
+      },
+      "peak_shaving_auto": {
+        "name": "Automatische Bezugsgrenze"
       }
     },
     "number": {
@@ -488,6 +494,9 @@
       },
       "grid_friendly_buffer": {
         "name": "Puffer netzdienliches Laden"
+      },
+      "peak_shaving_reserve": {
+        "name": "Sicherheitsreserve Spitzenabfang"
       }
     },
     "binary_sensor": {

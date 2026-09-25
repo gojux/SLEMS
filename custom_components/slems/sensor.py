@@ -303,6 +303,18 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         value_fn=_average_soc,
     ),
     SystemSensorDescription(
+        **_power("peak_shaving_limit"),
+        value_fn=lambda s, _: s.peak_shaving_limit_w,
+        attributes_fn=lambda s, c: {
+            "automatic": c.settings.peak_shaving_auto,
+            # For the note on the energy left above the minimum SoC.
+            "min_soc_pct": round(c.min_soc_pct, 1),
+            "capacity_kwh": round(
+                sum(b.driver.capabilities.capacity_wh for b in c.batteries if b.plannable) / 1000, 2
+            ),
+        },
+    ),
+    SystemSensorDescription(
         key="consumption_forecast_accuracy",
         translation_key="consumption_forecast_accuracy",
         native_unit_of_measurement=PERCENTAGE,

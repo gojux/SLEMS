@@ -669,6 +669,23 @@ country/subdivision taken from the HA configuration and overridable in the
 options; holidays then use the weekend profile. School holidays or other
 special days could later come from a calendar entity (option 3).
 
+### Automatic peak shaving limit
+
+`peak_shaving.py` (pure). `PeakProfile` holds the 5 minute means of the first
+house source with data of the last 10 days (built with every forecast
+refresh), sorted per local hour with prefix sums, so the mean energy above a
+limit per hour is a binary search. `hours_until_refill` runs from now until
+the first hour whose PV forecast exceeds the consumption forecast (only the
+current hour during a surplus, at most 36 h). `auto_limit` bisects the lowest
+limit (50 W) whose expected energy above it fits into the usable energy × (1 −
+reserve); the usable energy uses min(SoC, threshold), so above the threshold
+the limit shows what applies once it is reached. The dashboard shows it read
+only in place of the fixed limit. `SlemsCoordinator._peak_shaving` returns the threshold (never below
+the capacity weighted minimum SoC) and the limit in effect; both replace the
+settings in the allocation and the SoC projection. Sensor
+`peak_shaving_limit` (W; attributes for the note on the energy above the
+minimum SoC).
+
 ### Forecast accuracy
 
 `forecast/accuracy.py` (pure). `backtest_consumption` runs with every forecast
@@ -811,3 +828,4 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-25 | Top cell delta measured like Omnibattery at 3.60 V / BMS cut-off after 60 s rest; status limits 200/230/250 mV, balancing suggested from 230 mV; balancing target stays 30 mV. |
 | 2026-09-25 | Forecast accuracy: consumption by backtest over 14 days (immediately available), PV by recording the forecast of each day (past forecasts are not available). |
 | 2026-09-25 | Efficiency source: battery counters recommended for the Venus (accurate at once over the whole operating time), learned for read-only batteries; the distribution between batteries uses the separate AC/DC loss curve, not the efficiency. |
+| 2026-09-25 | Peak shaving: threshold stays absolute but not below the minimum SoC; optional automatic import limit from the 5 minute consumption peaks until PV refills, with a safety reserve. Number fields lose the focus on the mouse wheel (it changed and saved values while scrolling). |

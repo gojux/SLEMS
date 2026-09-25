@@ -561,7 +561,20 @@ ab, an Tagen mit weniger Überschuss einen deutlich größeren Anteil.
 - *Bezugsspitzen abfangen* (Schalter): standardmäßig aus. Wenn aktiviert und
   der Gesamt-Ladezustand auf oder unter der *Ladezustand-Schwelle für
   Spitzenabfang* liegt, entladen die Batterien nur noch, um den Netzbezug
-  unter der *Bezugsgrenze für Spitzenabfang* zu halten.
+  unter der *Bezugsgrenze für Spitzenabfang* zu halten. Die Schwelle ist ein
+  absoluter Ladezustand, lässt sich aber nicht unter den minimalen Ladezustand
+  der Batterien setzen; unter 20 % zeigen die Einstellungen, wie viel über dem
+  Minimum noch übrig ist. Mit *Automatische Bezugsgrenze* berechnet SLEMS die
+  Grenze selbst: die niedrigste, bei der die erwartete Energie oberhalb davon
+  bis zum Nachladen durch PV in die nutzbare Energie über dem minimalen
+  Ladezustand abzüglich *Sicherheitsreserve Spitzenabfang* (Standard 20 %)
+  passt. Die erwartete Energie stammt aus der 5-Minuten-Statistik des
+  Hausverbrauchs der letzten Tage, kurze Spitzen wie ein Backofen sind also
+  enthalten; die Grenze wird laufend neu berechnet und steigt, wenn mehr
+  verbraucht wird als erwartet. Über der Schwelle wird sie so berechnet, als
+  wäre die Schwelle erreicht, und zeigt damit die Grenze, die dann gilt. In den
+  Einstellungen zeigt die Bezugsgrenze dann den berechneten Wert (nur Anzeige);
+  der Sensor *Wirksame Bezugsgrenze Spitzenabfang* zeigt die verwendete Grenze.
 
 ## Sprache
 

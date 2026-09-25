@@ -20,6 +20,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 
+from ..peak_shaving import PROFILE_DAYS, PeakProfile
 from .accuracy import ConsumptionAccuracy, backtest_consumption
 from .models import (
     HEAT_PUMP_LOOKBACK_DAYS,
@@ -132,6 +133,8 @@ class ConsumptionForecaster:
         self.sources = sources
         self.forecast: ConsumptionForecast | None = None
         self.accuracy: ConsumptionAccuracy | None = None
+        # Consumption peaks per hour of the day (automatic peak shaving limit).
+        self.peak_profile: PeakProfile | None = None
 
     async def async_refresh(self, vacation: bool) -> ConsumptionForecast | None:
         """Refit all models from the statistics and update the forecast."""
@@ -171,7 +174,19 @@ class ConsumptionForecaster:
             daily_mean_temperature(temperatures),
             now,
         )
+        self.peak_profile = await self._async_peak_profile()
         return self.forecast
+
+    async def _async_peak_profile(self) -> PeakProfile | None:
+        """Profile from the 5 minute statistics of the first house source with data."""
+        end = dt_util.utcnow()
+        for statistic_id in self.sources.house:
+            means = await async_statistic_means(
+                self._hass, [statistic_id], end - timedelta(days=PROFILE_DAYS), end, "5minute"
+            )
+            if values := means.get(statistic_id):
+                return await self._hass.async_add_executor_job(PeakProfile.from_means, values)
+        return None
 
     def _compute(
         self,

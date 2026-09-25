@@ -98,6 +98,7 @@ from .grid_friendly import (
     remaining_surplus,
 )
 from .night_discharge import NightDischargePlan, plan_night_discharge
+from .peak_shaving import auto_limit, hours_until_refill
 from .pv_forecast import PvForecast, async_get_pv_forecast, energy_on_day, hourly
 from .soc_projection import ProjectionSettings, SocProjection, project_soc
 from .util import state_as_watts
@@ -200,6 +201,9 @@ class ControlSettings:
     peak_shaving: bool = False
     peak_shaving_grid_limit_w: float = DEFAULT_PEAK_SHAVING_GRID_LIMIT_W
     peak_shaving_soc_threshold_pct: float = DEFAULT_PEAK_SHAVING_SOC_THRESHOLD_PCT
+    # Import limit calculated from the consumption peaks (see peak_shaving).
+    peak_shaving_auto: bool = False
+    peak_shaving_reserve_pct: float = 20.0
     # Averaging window of the grid power; 0 disables averaging.
     surplus_average_window_s: float = DEFAULT_SURPLUS_AVERAGE_WINDOW_S
     battery_priority_soc_pct: float = DEFAULT_BATTERY_PRIORITY_SOC_PCT
@@ -283,6 +287,8 @@ class SystemSnapshot:
     resting: frozenset[str] = frozenset()
     # Consumers whose control the user switched off (measured only).
     control_disabled: frozenset[str] = frozenset()
+    # Import limit of peak shaving in effect (fixed or automatic), None when off.
+    peak_shaving_limit_w: float | None = None
     # Replacement for a negative house power (last valid value, None: unknown).
     house_power_hold_w: float | None = None
     pv_forecast: PvForecast | None = None
@@ -672,6 +678,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 "expected_surplus_wh",
                 "feed_in_limit_w",
                 "feed_in_limit_reason",
+                "peak_shaving_limit_w",
                 "pv_correction",
                 "day_plan",
                 "day_plan_tomorrow",
@@ -1027,14 +1034,22 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             snapshot.feed_in_limit_reason = (
                 "not_enough_surplus" if snapshot.feed_in_limit_w is None else None
             )
-        if pv_forecast is not None:
-            # The correction factor describes today; tomorrow uses the raw forecast.
-            today = dt_util.as_local(wall_now).date()
-            pv_hourly = {
+        # The correction factor describes today; tomorrow uses the raw forecast.
+        today = dt_util.as_local(wall_now).date()
+        pv_hourly = (
+            {
                 start: wh * (snapshot.pv_correction if start.date() == today else 1.0)
                 for start, wh in hourly(snapshot.pv_forecast).items()
             }
-            consumption_hourly = hourly(consumption.total) if consumption else None
+            if snapshot.pv_forecast is not None
+            else None
+        )
+        consumption_hourly = hourly(consumption.total) if consumption else None
+        peak_threshold_pct, peak_limit_w = self._peak_shaving(
+            battery, wall_now, pv_hourly, consumption_hourly
+        )
+        snapshot.peak_shaving_limit_w = peak_limit_w if settings.peak_shaving else None
+        if pv_forecast is not None:
             projection = (
                 project_soc(
                     wall_now,
@@ -1052,8 +1067,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                         ),
                         night_buffer_wh=settings.charge_secured_buffer_kwh * 1000,
                         peak_shaving=settings.peak_shaving,
-                        peak_shaving_grid_limit_w=settings.peak_shaving_grid_limit_w,
-                        peak_shaving_soc_threshold_pct=settings.peak_shaving_soc_threshold_pct,
+                        peak_shaving_grid_limit_w=peak_limit_w,
+                        peak_shaving_soc_threshold_pct=peak_threshold_pct,
                         night_discharge=settings.night_discharge,
                         night_reserve_pct=settings.night_reserve_pct,
                     ),
@@ -1111,7 +1126,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             snapshot.available_power_w,
             battery,
             requests,
-            settings.allocation_settings(),
+            replace(
+                settings.allocation_settings(),
+                peak_shaving_grid_limit_w=peak_limit_w,
+                peak_shaving_soc_threshold_pct=peak_threshold_pct,
+            ),
             snapshot.expected_surplus_wh,
             snapshot.night_discharge.power_w if snapshot.night_discharge else None,
             snapshot.feed_in_limit_w,
@@ -1152,6 +1171,60 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             ),
             now,
         )
+
+    @property
+    def min_soc_pct(self) -> float:
+        """Capacity weighted minimum SoC of the controllable batteries."""
+        weighted = capacity = 0.0
+        for battery in self.batteries:
+            caps = battery.driver.capabilities
+            if caps.controllable:
+                weighted += battery.limits.min_soc_pct * caps.capacity_wh
+                capacity += caps.capacity_wh
+        return weighted / capacity if capacity else 0.0
+
+    def _peak_shaving(
+        self,
+        battery: BatteryGroup | None,
+        wall_now: datetime,
+        pv_hourly: dict[datetime, float] | None,
+        consumption_hourly: dict[datetime, float] | None,
+    ) -> tuple[float, float]:
+        """SoC threshold and import limit of peak shaving in effect.
+
+        The threshold never lies below the minimum SoC of the batteries. With
+        the automatic limit (see peak_shaving) the usable energy above the
+        minimum SoC has to last until PV refills the batteries. It is
+        calculated from the SoC capped at the threshold: above it peak shaving
+        is not active, and the limit shows what applies once it is reached.
+        """
+        settings = self.settings
+        threshold = settings.peak_shaving_soc_threshold_pct
+        limit = settings.peak_shaving_grid_limit_w
+        if battery is None:
+            return threshold, limit
+        threshold = max(threshold, battery.min_soc_pct)
+        profile = self.forecaster.peak_profile
+        if (
+            settings.peak_shaving_auto
+            and profile is not None
+            and not profile.is_empty
+            and pv_hourly is not None
+            and consumption_hourly is not None
+        ):
+            usable_wh = (
+                max(0.0, min(battery.soc_pct, threshold) - battery.min_soc_pct)
+                / 100
+                * battery.capacity_wh
+                * battery.charge_efficiency
+            )
+            limit = auto_limit(
+                profile,
+                hours_until_refill(wall_now, pv_hourly, consumption_hourly),
+                usable_wh,
+                settings.peak_shaving_reserve_pct / 100,
+            )
+        return threshold, limit
 
     @staticmethod
     def _day_plan(

@@ -74,6 +74,7 @@ const STRINGS = {
     soc: "State of charge",
     planned: "Planned",
     storedEnergy: "Stored energy",
+    automatic: "automatic",
     cycles: "Charge cycles",
     forecastAccuracy: "Forecast accuracy",
     forecastAccuracyHint: "Consumption: recalculated for the last 14 days; PV: recorded forecasts compared with the production",
@@ -138,9 +139,13 @@ const STRINGS = {
       feed_in_limit:
         "With grid friendly charging the batteries only charge with the surplus above this grid export. SLEMS recalculates it continuously from the PV and consumption forecasts so that the batteries are still full by the evening (buffer included): they absorb the midday peak instead of being full in the morning. \"off\": grid friendly charging is switched off. \"none – charge at once\": the expected surplus is not enough, the batteries charge at once.",
     },
+    peakShavingNote:
+      "Below the threshold only {usable} above the minimum state of charge ({min}) are left for peaks, about {kwh} kWh.",
     settingHints: {
       peak_shaving_grid_limit:
         "Below the state of charge threshold, consumption up to this power comes from the grid; the batteries only cover what exceeds it.",
+      peak_shaving_auto:
+        "Calculates the import limit so that the usable energy (above the minimum state of charge, minus the safety reserve) lasts until PV refills the batteries. Based on the consumption peaks of the last days; the fixed limit is then not used.",
       discharge_max_grid_export:
         "Hard limit of the grid export while batteries discharge. 0 W: never feed battery energy into the grid. To switch the limit off, set it to the maximum.",
       night_reserve:
@@ -223,6 +228,7 @@ const STRINGS = {
     soc: "Ladezustand",
     planned: "Geplant",
     storedEnergy: "Gespeichert",
+    automatic: "automatisch",
     cycles: "Ladezyklen",
     forecastAccuracy: "Prognosegüte",
     forecastAccuracyHint: "Verbrauch: für die letzten 14 Tage nachgerechnet; PV: gespeicherte Prognosen mit der Erzeugung verglichen",
@@ -287,9 +293,13 @@ const STRINGS = {
       feed_in_limit:
         "Beim netzdienlichen Laden laden die Batterien nur mit dem Überschuss oberhalb dieser Einspeisung. SLEMS berechnet sie laufend aus PV- und Verbrauchsprognose so, dass die Batterien bis zum Abend trotzdem voll werden (Puffer eingerechnet): Sie fangen die Mittagsspitze ab, statt schon am Vormittag voll zu sein. „aus“: netzdienliches Laden ist ausgeschaltet. „keine – sofort laden“: Der erwartete Überschuss reicht nicht, die Batterien laden sofort.",
     },
+    peakShavingNote:
+      "Unter der Schwelle bleiben nur {usable} über dem minimalen Ladezustand ({min}) für Spitzen, etwa {kwh} kWh.",
     settingHints: {
       peak_shaving_grid_limit:
         "Unterhalb der Ladezustand-Schwelle kommt Verbrauch bis zu dieser Leistung aus dem Netz; die Batterien decken nur, was darüber hinausgeht.",
+      peak_shaving_auto:
+        "Berechnet die Bezugsgrenze so, dass die nutzbare Energie (über dem minimalen Ladezustand, abzüglich Sicherheitsreserve) reicht, bis PV die Batterien wieder füllt. Grundlage sind die Verbrauchsspitzen der letzten Tage; die feste Grenze wird dann nicht verwendet.",
       discharge_max_grid_export:
         "Harte Grenze der Einspeisung, solange Batterien entladen. 0 W: nie Batterieenergie einspeisen. Zum Abschalten der Grenze auf das Maximum stellen.",
       night_reserve:
@@ -371,7 +381,17 @@ const SETTING_GROUPS = [
   ],
   ["gridFriendly", ["grid_friendly_charging", "grid_friendly_buffer"]],
   ["night", ["night_discharge", "night_reserve"]],
-  ["peak", ["peak_shaving", "peak_shaving_grid_limit", "peak_shaving_soc_threshold"]],
+  [
+    "peak",
+    [
+      "peak_shaving",
+      // Read only with the automatic limit (shows the calculated value).
+      "peak_shaving_grid_limit",
+      "peak_shaving_soc_threshold",
+      "peak_shaving_auto",
+      "peak_shaving_reserve",
+    ],
+  ],
   ["temperature", ["temperature_limit", "temperature_high", "temperature_band", "temperature_floor", "temperature_low"]],
   [
     "rotation",
@@ -406,6 +426,9 @@ function polylines(pointRuns, color, dash) {
     )
     .join("");
 }
+
+// Below this SoC threshold the peak shaving card warns about the little energy left.
+const PEAK_SHAVING_NOTE_PCT = 20;
 
 // Smallest width of a battery box in the energy flow before they are stacked.
 const MIN_FLOW_BOX_W = 130;
@@ -724,6 +747,17 @@ class SlemsPanel extends HTMLElement {
     this._resizeObserver.observe(content);
     content.addEventListener("click", (event) => this._onClick(event));
     content.addEventListener("change", (event) => this._onChange(event));
+    // The mouse wheel over a focused number field would change and save its
+    // value while scrolling the page; the field loses the focus instead.
+    content.addEventListener(
+      "wheel",
+      (event) => {
+        if (event.target.matches?.('input[type="number"]') && event.target === this.shadowRoot.activeElement) {
+          event.target.blur();
+        }
+      },
+      { passive: true }
+    );
     content.addEventListener("pointermove", (event) => this._onChartHover(event));
     // Touch: a tap (or a horizontal drag) on the chart shows the hour and keeps
     // it; a tap elsewhere hides it. The mouse hides it when leaving the chart.
@@ -1459,7 +1493,7 @@ class SlemsPanel extends HTMLElement {
         if (!rows.length) return "";
         return `<section class="card"><h2>${t.groups[group]}</h2>
           <div class="settings">${rows.map((s) => this._control(s)).join("")}</div>${
-            group === "priority" ? this._exportNote() : ""
+            group === "priority" ? this._exportNote() : group === "peak" ? this._peakNote() : ""
           }</section>`;
       }).join("") +
         (this._config.batteries || [])
@@ -1471,6 +1505,23 @@ class SlemsPanel extends HTMLElement {
           })
           .join("")
     );
+  }
+
+  /** Warning when little energy is left above the minimum SoC for peak shaving. */
+  _peakNote() {
+    const threshold = this._number(this._state("peak_shaving_soc_threshold"));
+    const limit = this._state("peak_shaving_limit");
+    const minSoc = limit?.attributes?.min_soc_pct;
+    const capacity = limit?.attributes?.capacity_kwh;
+    if (threshold === null || minSoc === undefined || threshold >= PEAK_SHAVING_NOTE_PCT) return "";
+    const usable = Math.max(0, threshold - minSoc);
+    const language = this._hass?.locale?.language || "en";
+    const kwh = capacity ? new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format((usable / 100) * capacity) : "–";
+    const text = this._t.peakShavingNote
+      .replace("{usable}", this._percent(usable))
+      .replace("{min}", this._percent(minSoc))
+      .replace("{kwh}", kwh);
+    return `<p class="setting-note"><ha-icon icon="mdi:information-outline"></ha-icon>${escapeHtml(text)}</p>`;
   }
 
   /** Note when the export limit silently overrides the discharge target. */
@@ -1503,6 +1554,12 @@ class SlemsPanel extends HTMLElement {
       : escapeHtml(this._name(stateObj));
     if (domain === "switch") {
       return `<div class="setting"><span>${name}</span>${this._toggle(stateObj, name)}</div>`;
+    }
+    if (key === "peak_shaving_grid_limit" && this._state("peak_shaving_auto")?.state === "on") {
+      const effective = this._state("peak_shaving_limit");
+      return `<div class="setting"><span>${name}</span><span class="readonly">${escapeHtml(
+        effective ? this._format(effective) : "–"
+      )} (${this._t.automatic})</span></div>`;
     }
     if (domain === "sensor") {
       return `<div class="setting"><span>${name}</span><span class="readonly">${escapeHtml(this._format(stateObj))}</span></div>`;
@@ -1683,7 +1740,7 @@ const STYLE = `
   .accuracy h3 { margin: 0 0 4px; font-size: 14px; font-weight: 500; }
   .tile .problem-value { display: flex; align-items: center; gap: 6px; color: var(--error-color, #d03b3b); }
   .tile .problem-value ha-icon { --mdc-icon-size: 20px; flex: none; }
-  .setting .readonly { font-variant-numeric: tabular-nums; color: var(--secondary-text-color); }
+  .setting .readonly { font-variant-numeric: tabular-nums; color: var(--secondary-text-color); white-space: nowrap; }
   .tile .value { font-size: 18px; }
   .flow-root { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-areas: ". top ." "left center right" "batteries batteries consumers";

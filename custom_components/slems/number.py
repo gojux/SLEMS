@@ -31,7 +31,8 @@ class SettingNumberDescription(NumberEntityDescription):
     """Numeric setting stored in ControlSettings."""
 
     attribute: str
-    # Dynamic upper limit, overrides native_max_value.
+    # Dynamic limits, override native_min_value / native_max_value.
+    min_fn: Callable[[SlemsCoordinator], float] | None = None
     max_fn: Callable[[SlemsCoordinator], float] | None = None
 
 
@@ -207,6 +208,8 @@ SETTING_NUMBERS: tuple[SettingNumberDescription, ...] = (
         key="peak_shaving_soc_threshold",
         translation_key="peak_shaving_soc_threshold",
         attribute="peak_shaving_soc_threshold_pct",
+        # Below the minimum SoC there is nothing left to shave with.
+        min_fn=lambda coordinator: round(coordinator.min_soc_pct),
         native_unit_of_measurement=PERCENTAGE,
         native_min_value=0,
         native_max_value=100,
@@ -214,6 +217,7 @@ SETTING_NUMBERS: tuple[SettingNumberDescription, ...] = (
         mode=NumberMode.SLIDER,
         entity_category=EntityCategory.CONFIG,
     ),
+    _percentage("peak_shaving_reserve", "peak_shaving_reserve_pct", 0, 80),
     _celsius("temperature_high", "temperature_high_c", 20, 70),
     _celsius("temperature_band", "temperature_band_c", 1, 30),
     _percentage("temperature_floor", "temperature_floor_pct"),
@@ -312,6 +316,12 @@ class SettingNumber(SlemsSystemEntity, RestoreNumber):
         setattr(self.coordinator.settings, self.entity_description.attribute, value)
 
     @property
+    def native_min_value(self) -> float:
+        if self.entity_description.min_fn is not None:
+            return self.entity_description.min_fn(self.coordinator)
+        return super().native_min_value
+
+    @property
     def native_max_value(self) -> float:
         if self.entity_description.max_fn is not None:
             return self.entity_description.max_fn(self.coordinator)
@@ -320,7 +330,7 @@ class SettingNumber(SlemsSystemEntity, RestoreNumber):
     @property
     def native_value(self) -> float:
         value = getattr(self.coordinator.settings, self.entity_description.attribute)
-        return min(value, self.native_max_value)
+        return max(self.native_min_value, min(value, self.native_max_value))
 
     async def async_set_native_value(self, value: float) -> None:
         self._set(value)

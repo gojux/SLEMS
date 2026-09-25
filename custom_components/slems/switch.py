@@ -24,6 +24,7 @@ SETTING_SWITCHES: dict[str, str] = {
     "auto_gain": "auto_gain",
     "grid_friendly_charging": "grid_friendly_charging",
     "temperature_limit": "temperature_limit",
+    "peak_shaving_auto": "peak_shaving_auto",
 }
 
 

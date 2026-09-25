@@ -382,6 +382,9 @@
       },
       "cycle_count": {
         "name": "Charge cycles"
+      },
+      "peak_shaving_limit": {
+        "name": "Peak shaving import limit in effect"
       }
     },
     "switch": {
@@ -411,6 +414,9 @@
       },
       "consumer_control": {
         "name": "Control active"
+      },
+      "peak_shaving_auto": {
+        "name": "Automatic peak shaving limit"
       }
     },
     "number": {
@@ -488,6 +494,9 @@
       },
       "grid_friendly_buffer": {
         "name": "Grid friendly charging buffer"
+      },
+      "peak_shaving_reserve": {
+        "name": "Peak shaving safety reserve"
       }
     },
     "binary_sensor": {
