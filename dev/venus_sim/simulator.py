@@ -50,6 +50,7 @@ REG_INVERTER_STATE = 35100
 FAULT_FILE = os.environ.get("SIM_FAULT_FILE", "/tmp/venus_fault")
 REG_BATTERY_SOC = 37005
 REG_BATTERY_SOC_FINE = 34002
+REG_CYCLE_COUNT = 34003
 REG_MAX_CELL_VOLTAGE = 37007
 REG_MIN_CELL_VOLTAGE = 37008
 REG_RS485_CONTROL = 42000
@@ -139,6 +140,7 @@ class VenusModel:
         self.write(REG_INVERTER_STATE, [2 if power > 0 else 3 if power < 0 else 1])
         self.write(REG_BATTERY_SOC, [round(soc)])
         self.write(REG_BATTERY_SOC_FINE, [round(soc * 10)])
+        self.write(REG_CYCLE_COUNT, [int(self._charged_wh / self._capacity_wh)])
         charge_lift = 0.02 if power > 0 else (-0.02 if power < 0 else 0.0)
         self.write(REG_MAX_CELL_VOLTAGE, [round((lfp_cell_voltage(soc + self._cell_offset) + charge_lift) * 1000)])
         self.write(REG_MIN_CELL_VOLTAGE, [round((lfp_cell_voltage(soc) + charge_lift) * 1000)])

@@ -83,7 +83,7 @@
           },
           "data_description": {
             "skip_connection_test": "Save without testing the connection, e.g. while another integration still holds the Modbus connection.",
-            "efficiency_mode": "Battery counters: from the lifetime charge/discharge counters of the battery. Learned: from the measured battery power. Manual: fixed value.",
+            "efficiency_mode": "Battery counters (recommended): from the lifetime charge and discharge counters of the battery; accurate at once, because the battery counts its whole operating time. Learned: from the battery power measured by SLEMS; needs about three full charge cycles first. Manual: fixed value.",
             "round_trip_efficiency_pct": "Energy out / energy in (AC). Fixed value in manual mode, otherwise used until enough data has been measured."
           }
         },
@@ -103,7 +103,7 @@
           },
           "data_description": {
             "power_inverted": "SLEMS expects positive = charging. Enable if the sensor reports discharging as positive.",
-            "efficiency_mode": "Battery counters: from the lifetime charge/discharge counters of the battery. Learned: from the measured battery power. Manual: fixed value.",
+            "efficiency_mode": "Learned (recommended): from the measured battery power; needs about three full charge cycles, until then the start value is used. Manual: fixed value.",
             "round_trip_efficiency_pct": "Energy out / energy in (AC). Fixed value in manual mode, otherwise used until enough data has been measured."
           }
         }
@@ -189,7 +189,7 @@
     },
     "efficiency_mode": {
       "options": {
-        "battery_counters": "Battery counters",
+        "battery_counters": "Battery counters (recommended)",
         "learned": "Learned",
         "manual": "Manual"
       }
@@ -379,6 +379,9 @@
       },
       "pv_forecast_accuracy": {
         "name": "PV forecast accuracy"
+      },
+      "cycle_count": {
+        "name": "Charge cycles"
       }
     },
     "switch": {

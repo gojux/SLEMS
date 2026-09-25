@@ -214,9 +214,33 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   aus); danach lässt SLEMS ihn in Ruhe und plant ihn wie eine ungesteuerte
   Last.
 
-Wirkungsgrad der Batterie: je Batterie aus den eigenen Lade-/Entladezählern
-der Batterie, aus der gemessenen Leistung gelernt oder manuell vorgegeben. Er
-fließt in die Entscheidung ein, ob der PV-Überschuss die Batterien füllt.
+**Wirkungsgrad der Batterie** (Gesamtwirkungsgrad, AC zu AC), je Batterie
+aus einer von drei Quellen:
+
+- *Batteriezähler* (empfohlen für die Marstek Venus E 3.0): aus den
+  Gesamtzählern der Batterie für Laden und Entladen und ihrem Ladezustand:
+  (entladen + gespeichert) / geladen. Die Batterie zählt selbst, schnell und
+  über ihre ganze Betriebszeit; der Wert ist daher sofort genau und stabil.
+  Einzige Annahme ist eine leere Batterie zu Beginn der Zähler; ihr Einfluss
+  verschwindet nach wenigen Zyklen.
+- *Gelernt*: SLEMS summiert die gemessene Batterieleistung selbst (alle
+  5 Sekunden) ab dem Start von SLEMS. Das zählt erst nach etwa drei vollen
+  Ladezyklen (bis dahin gilt der Startwert), und kurze Leistungsspitzen
+  zwischen zwei Abfragen gehen verloren. Empfohlen für Batterien ohne eigene
+  Zähler (nur lesende Batterien aus vorhandenen Entities).
+- *Manuell*: ein fester Wert, z. B. aus dem Datenblatt.
+
+Der Wirkungsgrad wird überall dort verwendet, wo Energie umgerechnet wird: ob
+der PV-Überschuss die Batterien füllt (gesicherte Ladung), beim netzdienlichen
+Laden, bei der Nachtentladung und in der Ladezustands-Prognose. Er entscheidet
+**nicht**, wie viele Batterien laufen: Dafür lernt SLEMS je Batterie eine
+eigene Verlustkurve aus dem Unterschied von AC- und DC-Leistung bei jeder
+Leistung (fester Verlust eines laufenden Wechselrichters plus mit der Leistung
+steigende Verluste). Daraus berechnet die Aufteilung die Anzahl Batterien mit
+dem geringsten Gesamtverlust: bei kleiner Leistung eine Batterie, oberhalb des
+Break-even-Punkts mehrere (siehe *Batterien* unten). Das funktioniert
+mit jeder Wirkungsgrad-Quelle, aber nur für Batterien, die AC- und DC-Leistung
+melden (Marstek Venus E 3.0).
 
 ### Dashboard
 
@@ -240,7 +264,7 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
   Stunde (am Handy durch Antippen, Tippen daneben schließt sie); *Tabelle
   anzeigen* schaltet auf eine Tabelle um. Das Diagramm zeigt die Energie pro
   Stunde in kWh.
-- **Batterien**: Ladezustand, gespeicherte Energie und Kapazität (kWh), netzseitige
+- **Batterien**: Ladezustand, gespeicherte Energie und Kapazität (kWh), Ladezyklen, netzseitige
   Leistung (AC) mit Richtung, die Vorgabe von SLEMS, Wirkungsgrad,
   Status und der Schalter *Aktiviert* jeder Batterie (das Deaktivieren muss
   bestätigt werden), das Zell-Delta mit seinem Status, eine Empfehlung für

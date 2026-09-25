@@ -699,6 +699,7 @@ Source: Omnibattery `const/registers_v3.py`, `drivers/marstek.py`,
 | 30100 | battery_voltage | uint16 | 0.01 V | |
 | 35000 | internal_temperature | int16 | 0.1 °C | |
 | 35100 | inverter_state | uint16 | | 0 sleep, 1 standby, 2 charge, 3 discharge, 4 backup, 5 OTA, 6 bypass |
+| 34003 | cycle_count | uint16 | 1 | charge cycles counted by the battery (as in Omnibattery; not yet verified on the device) |
 | 33000 | total_charging_energy | uint32 | 0.01 kWh | |
 | 33002 | total_discharging_energy | int32 | 0.01 kWh | |
 | 37007 | max_cell_voltage | int16 | 0.001 V | |
@@ -809,3 +810,4 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-24 | The *AC power* sensor stays +discharge / −charge so it can be used as battery power in the Home Assistant energy dashboard; the SLEMS dashboard converts it. |
 | 2026-09-25 | Top cell delta measured like Omnibattery at 3.60 V / BMS cut-off after 60 s rest; status limits 200/230/250 mV, balancing suggested from 230 mV; balancing target stays 30 mV. |
 | 2026-09-25 | Forecast accuracy: consumption by backtest over 14 days (immediately available), PV by recording the forecast of each day (past forecasts are not available). |
+| 2026-09-25 | Efficiency source: battery counters recommended for the Venus (accurate at once over the whole operating time), learned for read-only batteries; the distribution between batteries uses the separate AC/DC loss curve, not the efficiency. |

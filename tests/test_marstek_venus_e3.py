@@ -59,6 +59,7 @@ async def test_read_telemetry_decodes_values() -> None:
     link = FakeLink(
         {
             34002: 644,
+            34003: 12,
             37005: 64,
             30001: 0x10000 - 700,  # -700 W: discharging
             30006: 700,
@@ -72,6 +73,7 @@ async def test_read_telemetry_decodes_values() -> None:
     assert telemetry.power_w == -700
     assert telemetry.extra["battery_voltage"] == pytest.approx(52.3)
     assert telemetry.extra["inverter_state"] == "discharge"
+    assert telemetry.extra["cycle_count"] == 12
     assert telemetry.extra["rs485_control"] is True
 
 

@@ -83,7 +83,7 @@
           },
           "data_description": {
             "skip_connection_test": "Ohne Verbindungstest speichern, z. B. solange eine andere Integration die Modbus-Verbindung belegt.",
-            "efficiency_mode": "Batteriezähler: aus den Gesamtzählern für Laden/Entladen der Batterie. Gelernt: aus der gemessenen Batterieleistung. Manuell: fester Wert.",
+            "efficiency_mode": "Batteriezähler (empfohlen): aus den Gesamtzählern der Batterie für Laden und Entladen; sofort genau, weil die Batterie ihre ganze Betriebszeit mitzählt. Gelernt: aus der von SLEMS gemessenen Leistung; braucht erst etwa drei volle Ladezyklen. Manuell: fester Wert.",
             "round_trip_efficiency_pct": "Entnommene / eingespeicherte Energie (AC). Im manuellen Modus fester Wert, sonst Startwert, bis genug Messdaten vorliegen."
           }
         },
@@ -103,7 +103,7 @@
           },
           "data_description": {
             "power_inverted": "SLEMS erwartet positiv = Laden. Aktivieren, wenn der Sensor Entladen positiv meldet.",
-            "efficiency_mode": "Batteriezähler: aus den Gesamtzählern für Laden/Entladen der Batterie. Gelernt: aus der gemessenen Batterieleistung. Manuell: fester Wert.",
+            "efficiency_mode": "Gelernt (empfohlen): aus der gemessenen Batterieleistung; braucht etwa drei volle Ladezyklen, bis dahin gilt der Startwert. Manuell: fester Wert.",
             "round_trip_efficiency_pct": "Entnommene / eingespeicherte Energie (AC). Im manuellen Modus fester Wert, sonst Startwert, bis genug Messdaten vorliegen."
           }
         }
@@ -189,7 +189,7 @@
     },
     "efficiency_mode": {
       "options": {
-        "battery_counters": "Batteriezähler",
+        "battery_counters": "Batteriezähler (empfohlen)",
         "learned": "Gelernt",
         "manual": "Manuell"
       }
@@ -379,6 +379,9 @@
       },
       "pv_forecast_accuracy": {
         "name": "Treffsicherheit PV-Prognose"
+      },
+      "cycle_count": {
+        "name": "Ladezyklen"
       }
     },
     "switch": {

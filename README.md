@@ -208,9 +208,32 @@ Every consumer needs its own power **and** energy sensor.
   off in operating mode *active* sets it to 0 W (or off) once; afterwards
   SLEMS leaves it alone and plans it like an uncontrolled load.
 
-Battery efficiency: per battery from the battery's own charge/discharge
-counters, learned from the measured power, or a manual value. It is taken
-into account when deciding whether the PV surplus will fill the batteries.
+**Battery efficiency** (round trip, AC to AC), one of three sources per
+battery:
+
+- *Battery counters* (recommended for the Marstek Venus E 3.0): from the
+  lifetime charge and discharge counters of the battery and its state of
+  charge: (discharged + stored) / charged. The battery counts itself, fast and
+  over its whole operating time, so the value is accurate at once and stable.
+  The only assumption is an empty battery at the start of the counters; its
+  influence disappears after a few cycles.
+- *Learned*: SLEMS adds up the measured battery power itself (every 5
+  seconds) from the start of SLEMS. It only counts after about three full
+  charge cycles (until then the start value applies), and short power peaks
+  between two polls are missed. Recommended for batteries without their own
+  counters (read-only batteries from existing entities).
+- *Manual*: a fixed value, e.g. from the data sheet.
+
+The efficiency is used where energy is converted: whether the PV surplus will
+fill the batteries (charge secured), grid friendly charging, the night
+discharge and the state of charge projection. It is **not** used to decide
+how many batteries run: for that SLEMS learns a separate loss curve per
+battery from the difference of AC and DC power at every power level (fixed
+loss of a running inverter plus losses rising with the power). From it the
+distribution calculates the number of batteries with the lowest total loss:
+at low power one battery, above the break-even point several (see *Batteries*
+below). This works with every efficiency source, but only for
+batteries that report AC and DC power (Marstek Venus E 3.0).
 
 ### Dashboard
 
@@ -232,7 +255,7 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   shaving and night discharge if enabled. Hovering (on a phone: tapping, a
   tap elsewhere closes it) shows the values of an hour; *Show table*
   switches to a table.
-- **Batteries**: state of charge, stored energy and capacity (kWh), power on the grid side
+- **Batteries**: state of charge, stored energy and capacity (kWh), charge cycles, power on the grid side
   (AC) with its direction, the SLEMS set point, efficiency, state and
   the *Enabled* switch of every battery (disabling asks for confirmation),
   the cell delta with its balance status, a recommendation for active cell

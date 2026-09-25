@@ -413,6 +413,13 @@ BATTERY_EXTRA_SENSORS: tuple[BatterySensorDescription, ...] = (
         value_fn=lambda t: t.extra.get("inverter_state"),
     ),
     BatterySensorDescription(
+        key="cycle_count",
+        translation_key="cycle_count",
+        icon="mdi:counter",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        value_fn=lambda t: t.extra.get("cycle_count"),
+    ),
+    BatterySensorDescription(
         key="total_charging_energy",
         translation_key="total_charging_energy",
         device_class=SensorDeviceClass.ENERGY,

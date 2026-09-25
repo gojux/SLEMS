@@ -74,6 +74,7 @@ TELEMETRY_REGISTERS: tuple[RegisterSpec, ...] = (
     RegisterSpec("max_cell_voltage", 37007, "int16", 0.001),
     RegisterSpec("min_cell_voltage", 37008, "int16", 0.001),
     RegisterSpec("inverter_state", 35100, "uint16"),
+    RegisterSpec("cycle_count", 34003, "uint16"),
     RegisterSpec("total_charging_energy", 33000, "uint32", 0.01),
     RegisterSpec("total_discharging_energy", 33002, "int32", 0.01),
     RegisterSpec("rs485_control", REG_RS485_CONTROL, "uint16"),
