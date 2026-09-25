@@ -525,7 +525,7 @@ class SlemsPanel extends HTMLElement {
           `${kwh(a.tomorrow_forecast_kwh)}${error !== null && error !== undefined ? ` ± ${kwh(error)}` : ""}`,
         ]);
       }
-      return `<div><h3>${title}</h3><dl>${rows.map(([l, v]) => `<dt>${l}</dt><dd>${v}</dd>`).join("")}</dl></div>`;
+      return `<div><h3>${title}</h3><dl>${rows.map(([l, v]) => this._row(l, v, st.entity_id)).join("")}</dl></div>`;
     };
     const consumption = block("consumption_forecast_accuracy", t.consumptionForecastTitle, (a) =>
       t.consumptionBasis.replace("{days}", a.history_days) +
@@ -563,7 +563,8 @@ class SlemsPanel extends HTMLElement {
           problems.length > 1 ? ` (+${problems.length - 1})` : ""
         }</span>`
       : `<span class="value">${escapeHtml(mode ? this._format(mode) : "–")}</span>`;
-    return `<div class="tile"><span class="label">${t.status}</span>${value}</div>`;
+    const moreInfo = mode ? ` data-more-info="${mode.entity_id}"` : "";
+    return `<div class="tile"${moreInfo}><span class="label">${t.status}</span>${value}</div>`;
   }
 
   /** Value of an overview tile; the feed-in limit explains why it has none. */
@@ -576,6 +577,12 @@ class SlemsPanel extends HTMLElement {
       return noLimit[reason];
     }
     return this._format(stateObj);
+  }
+
+  /** A dt/dd pair; with an entity both open its more-info dialog on click. */
+  _row(label, valueHtml, entityId) {
+    const moreInfo = entityId ? ` data-more-info="${entityId}"` : "";
+    return `<dt${moreInfo}>${label}</dt><dd${moreInfo}>${valueHtml}</dd>`;
   }
 
   /** "2,09 von 5,12 kWh" for a stored energy sensor with its capacity. */
@@ -794,7 +801,7 @@ class SlemsPanel extends HTMLElement {
             ? `<button class="info" data-action="toggle-hint" data-key="${key}" title="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}"><ha-icon icon="mdi:information-outline"></ha-icon></button>`
             : "";
           const open = hint && this._openHints.has(key) ? `<span class="setting-hint">${escapeHtml(hint)}</span>` : "";
-          return `<div class="tile"><span class="label">${escapeHtml(this._name(s))}${info}</span>
+          return `<div class="tile" data-more-info="${s.entity_id}"><span class="label">${escapeHtml(this._name(s))}${info}</span>
                   <span class="value">${escapeHtml(this._tileValue(s))}</span>${open}</div>`;
         })
         .join("")
@@ -818,7 +825,7 @@ class SlemsPanel extends HTMLElement {
     const num = (key, device) => this._number(this._state(key, device));
     const grid = num("grid_power");
     const nodes = [
-      { id: "pv", role: "pv", icon: "mdi:solar-power-variant", title: t.pv, power: num("pv_power") },
+      { id: "pv", role: "pv", icon: "mdi:solar-power-variant", title: t.pv, power: num("pv_power"), entity: this._entityId("pv_power") },
       {
         id: "grid",
         role: "grid",
@@ -826,8 +833,9 @@ class SlemsPanel extends HTMLElement {
         title: t.grid,
         power: grid,
         detail: grid === null ? "" : grid > 10 ? t.import : grid < -10 ? t.export : "",
+        entity: this._entityId("grid_power"),
       },
-      { id: "house", role: "house", icon: "mdi:home-lightning-bolt", title: t.house, power: num("house_power") },
+      { id: "house", role: "house", icon: "mdi:home-lightning-bolt", title: t.house, power: num("house_power"), entity: this._entityId("house_power") },
     ];
     for (const battery of this._config.batteries || []) {
       // Grid side (AC) power if the driver reports it, +charge / -discharge.
@@ -843,6 +851,7 @@ class SlemsPanel extends HTMLElement {
         title: battery.name,
         power,
         soc: num("battery_soc", battery.device_id),
+        entity: this._entityId("ac_power", battery.device_id) || this._entityId("battery_power", battery.device_id),
         disabled: !enabled || balancing || notResponding || unreadable,
         detail: unreadable
           ? t.unreadable
@@ -862,6 +871,7 @@ class SlemsPanel extends HTMLElement {
         icon: consumer.type === "heat_pump" ? "mdi:heat-pump" : consumer.type === "heating_rod" ? "mdi:water-boiler" : "mdi:power-plug",
         title: consumer.name,
         power: this._powerW(this._hass.states[consumer.power_entity]),
+        entity: consumer.power_entity,
       });
     }
     return nodes;
@@ -871,7 +881,7 @@ class SlemsPanel extends HTMLElement {
     const container = this.shadowRoot.getElementById("flow");
     if (!container) return;
     const nodes = this._flowNodes();
-    const key = nodes.map((n) => `${n.id}:${n.title}`).join("|") + this._t.pv;
+    const key = nodes.map((n) => `${n.id}:${n.title}:${n.entity}`).join("|") + this._t.pv;
     if (container.dataset.key !== key) {
       container.dataset.key = key;
       container.innerHTML = this._flowSkeleton(nodes);
@@ -885,8 +895,9 @@ class SlemsPanel extends HTMLElement {
   }
 
   _flowSkeleton(nodes) {
+    const moreInfo = (entityId) => (entityId ? ` data-more-info="${entityId}"` : "");
     const box = (n) => `
-      <div class="fbox ${n.role}" data-node="${n.id}">
+      <div class="fbox ${n.role}" data-node="${n.id}"${moreInfo(n.entity)}>
         <div class="fbox-head">
           <span class="fbox-icon"><ha-icon icon="${n.icon}"></ha-icon></span>
           <span class="fbox-title">${escapeHtml(n.title)}</span>
@@ -1301,7 +1312,7 @@ class SlemsPanel extends HTMLElement {
           const limited = (key, label) => {
             const st = s(key);
             const reason = st?.attributes?.reason;
-            return reason ? [`${label} (${t.limitReasons[reason] || reason})`, st] : [label, undefined];
+            return reason ? [`${label} (${t.limitReasons[reason] || reason})`, st, st.entity_id] : [label, undefined];
           };
           const direction = (value) => {
             if (value === null || value === undefined) return undefined;
@@ -1309,12 +1320,12 @@ class SlemsPanel extends HTMLElement {
             return { text: `${this._watts(Math.abs(value))} (${text})` };
           };
           const rows = [
-            [t.storedEnergy, s("stored_energy") && { text: this._storedOf(s("stored_energy")) ?? this._format(s("stored_energy")) }],
-            [t.powerGridSide, direction(this._batteryPower(b.device_id))],
-            [t.setPoint, direction(this._number(s("planned_power")))],
-            [t.efficiency, s("round_trip_efficiency")],
-            [t.state, s("inverter_state")],
-            [t.temperature, s("internal_temperature")],
+            [t.storedEnergy, s("stored_energy") && { text: this._storedOf(s("stored_energy")) ?? this._format(s("stored_energy")) }, s("stored_energy")?.entity_id],
+            [t.powerGridSide, direction(this._batteryPower(b.device_id)), (s("ac_power") || s("battery_power"))?.entity_id],
+            [t.setPoint, direction(this._number(s("planned_power"))), s("planned_power")?.entity_id],
+            [t.efficiency, s("round_trip_efficiency"), s("round_trip_efficiency")?.entity_id],
+            [t.state, s("inverter_state"), s("inverter_state")?.entity_id],
+            [t.temperature, s("internal_temperature"), s("internal_temperature")?.entity_id],
             limited("allowed_charge_power", t.allowedCharge),
             limited("allowed_discharge_power", t.allowedDischarge),
           ].filter(([, st]) => st);
@@ -1335,7 +1346,7 @@ class SlemsPanel extends HTMLElement {
             ${problem}
             <div class="soc"><div class="soc-bar"><div style="width:${soc ?? 0}%"></div></div>
               <span>${soc === null ? "–" : Math.round(soc) + " %"}</span></div>
-            <dl>${rows.map(([label, st]) => `<dt>${label}</dt><dd>${escapeHtml(st.text ?? this._format(st))}</dd>`).join("")}</dl>
+            <dl>${rows.map(([label, st, entityId]) => this._row(label, escapeHtml(st.text ?? this._format(st)), entityId)).join("")}</dl>
             ${this._cellSection(b)}
           </section>`;
         })
@@ -1381,8 +1392,8 @@ class SlemsPanel extends HTMLElement {
     const lastRun = !balancing && result ? `<dt>${t.lastBalancing}</dt><dd>${escapeHtml(result)}</dd>` : "";
     return `<div class="cells">
         <dl>
-          <dt>${t.cellDelta}<span class="sub">${t.cellDeltaHint}</span></dt><dd>${escapeHtml(this._format(live))}</dd>
-          <dt>${t.topCellDelta}</dt><dd>${topValue}</dd>
+          ${this._row(`${t.cellDelta}<span class="sub">${t.cellDeltaHint}</span>`, escapeHtml(this._format(live)), live?.entity_id)}
+          ${this._row(t.topCellDelta, topValue, top?.entity_id)}
           ${lastRun}
         </dl>
         ${action}
@@ -1421,9 +1432,9 @@ class SlemsPanel extends HTMLElement {
           return `<section class="card">
             <div class="card-head"><h2>${escapeHtml(c.name)}</h2><div class="chips">${chips}${control ? this._toggle(control, t.controlActive) : ""}</div></div>
             <dl>
-              <dt>${t.measured}</dt><dd>${escapeHtml(this._format(measured))}</dd>
-              ${planned ? `<dt>${t.planned}</dt><dd>${escapeHtml(this._format(planned))}</dd>` : ""}
-              ${c.controllable ? `<dt>${t.responseTime}</dt><dd>${response}</dd>` : ""}
+              ${this._row(t.measured, escapeHtml(this._format(measured)), c.power_entity)}
+              ${planned ? this._row(t.planned, escapeHtml(this._format(planned)), planned.entity_id) : ""}
+              ${c.controllable ? this._row(t.responseTime, response, planned?.entity_id) : ""}
             </dl></section>`;
         })
         .join("")
@@ -1524,6 +1535,18 @@ class SlemsPanel extends HTMLElement {
   }
 
   _onClick(event) {
+    // Values open the more-info dialog of their entity (not inside controls).
+    const moreInfo = event.target.closest("[data-more-info]");
+    if (moreInfo && !event.target.closest("button, input, select, label.switch, a")) {
+      this.dispatchEvent(
+        new CustomEvent("hass-more-info", {
+          detail: { entityId: moreInfo.dataset.moreInfo },
+          bubbles: true,
+          composed: true,
+        })
+      );
+      return;
+    }
     const balancingButton = event.target.closest("[data-action='balancing-on'], [data-action='balancing-off']");
     if (balancingButton) {
       const entityId = balancingButton.dataset.entity;
@@ -1646,6 +1669,9 @@ const STYLE = `
   .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
   .tile { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--divider-color); }
   .tile .label { font-size: 12px; }
+  [data-more-info] { cursor: pointer; }
+  .tile[data-more-info]:hover .value, dd[data-more-info]:hover, dt[data-more-info]:hover + dd { color: var(--primary-color); }
+  .fbox[data-more-info]:hover { border-color: var(--accent); }
   .accuracy { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 32px; margin-top: 12px; }
   .accuracy h3 { margin: 0 0 4px; font-size: 14px; font-weight: 500; }
   .tile .problem-value { display: flex; align-items: center; gap: 6px; color: var(--error-color, #d03b3b); }

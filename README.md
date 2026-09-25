@@ -243,6 +243,9 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   card also shows the learned values (current control gain, smart meter
   update interval, battery response time).
 
+A click on a value (tile, box in the energy flow, row of a card) opens the
+Home Assistant dialog of its entity with history and settings.
+
 The dashboard follows the language and the light/dark theme of Home
 Assistant and works on phones (with little space the batteries in the energy
 flow are shown one below the other).

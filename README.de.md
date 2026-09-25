@@ -251,6 +251,10 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
   Karte *Regelung* zeigt auch die gelernten Werte (aktuelle Regelverstärkung,
   Aktualisierungsintervall des Smart Meters, Reaktionszeit der Batterie).
 
+Ein Klick auf einen Wert (Kachel, Kasten im Energiefluss, Zeile einer Karte)
+öffnet den Home-Assistant-Dialog der zugehörigen Entity mit Verlauf und
+Einstellungen.
+
 Das Dashboard folgt der Sprache und dem hellen/dunklen Design von Home
 Assistant und funktioniert auch am Handy (bei wenig Platz stehen die
 Batterien im Energiefluss untereinander).
