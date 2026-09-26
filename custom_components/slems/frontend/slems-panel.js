@@ -1657,9 +1657,17 @@ class SlemsPanel extends HTMLElement {
       gridLines.push(`<line x1="${pad.left}" x2="${width - pad.right}" y1="${y(v)}" y2="${y(v)}" stroke="${v === 0 ? c.axis : c.grid_line}" stroke-width="1"/>
         <text x="${pad.left - 6}" y="${y(v) + 4}" text-anchor="end" class="tick">${escapeHtml(this._watts(v))}</text>`);
     }
-    const hourTicks = (width < 500 ? [0, 6, 12, 18, 24] : [0, 3, 6, 9, 12, 15, 18, 21, 24])
+    const labelled = width < 500 ? [0, 6, 12, 18, 24] : [0, 3, 6, 9, 12, 15, 18, 21, 24];
+    const hourTicks = labelled
       .map((h) => `<text x="${x(h)}" y="${height - 8}" text-anchor="middle" class="tick">${String(h).padStart(2, "0")}:00</text>`)
       .join("");
+    // A faint vertical line per hour (solid where labelled) and a mark on the time axis.
+    const hourLines = Array.from({ length: 25 }, (_, h) => {
+      const solid = labelled.includes(h);
+      return `<line x1="${x(h)}" x2="${x(h)}" y1="${pad.top}" y2="${plotBottom}" stroke="${c.grid_line}" stroke-width="1"${
+        solid ? "" : ' stroke-dasharray="2 4"'
+      }/><line x1="${x(h)}" x2="${x(h)}" y1="${plotBottom}" y2="${plotBottom + 4}" stroke="${c.axis}" stroke-width="1"/>`;
+    }).join("");
     const slot = plotW / 48;
     // Per half hour the planned charging (light) on the left, the measured one on the right.
     const gap = slot > 8 ? 1 : 0.5;
@@ -1714,7 +1722,7 @@ class SlemsPanel extends HTMLElement {
     const showNow = this._chartDay === "today";
     return `
       <div class="chart-wrap"><svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="chart" role="img" aria-label="${this._t.dayChart}">
-        ${gridLines.join("")}${hourTicks}${bars}${capBars}${capLine}
+        ${hourLines}${gridLines.join("")}${hourTicks}${bars}${capBars}${capLine}
         ${path("pvForecast", c.pv, true)}${path("pvActual", c.pv, false)}
         ${path("consumptionForecast", c.house, true)}${path("consumptionActual", c.house, false)}
         ${socLines.join("")}
