@@ -181,7 +181,6 @@ const STRINGS = {
     capLine: "Feed-in cap (PV level)",
     capExcess: "Above the limit",
     capCurtailed: "Curtailed",
-    capModes: { count: "feed-in cap: counted", emergency: "feed-in cap: emergency only", never: "feed-in cap: never" },
     status: "Status",
     tileHints: {
       feed_in_limit:
@@ -198,6 +197,8 @@ const STRINGS = {
         "Extra space on top of the forecast energy above the limit, in % of it, against a too low PV forecast. Negative values plan with less.",
       feed_in_cap_min_buffer:
         "Space kept free per peak in any case, in % of the PV peak power as energy of one hour (10 kWp, 5 % → 0.5 kWh). Covers small peaks for which the percentage buffer is tiny.",
+      cap_mode:
+        "Count and use: takes the surplus above the feed-in limit before the batteries, so they need less free space. Only in an emergency: only what the batteries cannot absorb. Never: not used for the feed-in cap.",
       feed_in_cap_auto_buffer:
         "Uses the recorded PV forecast errors instead of the fixed buffer: of the days with more PV than forecast, the underestimation not exceeded on 80 % of them raises the PV forecast. Needs 14 recorded days; until then the fixed buffer applies.",
       peak_shaving_grid_limit:
@@ -396,7 +397,6 @@ const STRINGS = {
     capLine: "Einspeisebegrenzung (PV-Niveau)",
     capExcess: "Über der Grenze",
     capCurtailed: "Abgeregelt",
-    capModes: { count: "Einspeisebegrenzung: eingerechnet", emergency: "Einspeisebegrenzung: nur notfalls", never: "Einspeisebegrenzung: nie" },
     status: "Status",
     tileHints: {
       feed_in_limit:
@@ -413,6 +413,8 @@ const STRINGS = {
         "Zusätzlicher Platz zur prognostizierten Energie über der Grenze, in % davon, gegen eine zu niedrige PV-Prognose. Negative Werte planen mit weniger.",
       feed_in_cap_min_buffer:
         "Platz, der je Spitze auf jeden Fall frei bleibt, in % der PV-Spitzenleistung als Energie einer Stunde (10 kWp, 5 % → 0,5 kWh). Deckt kleine Spitzen ab, bei denen der prozentuale Puffer winzig ist.",
+      cap_mode:
+        "Einrechnen und nutzen: nimmt den Überschuss über der Einspeisegrenze vor den Batterien auf, sie brauchen dann weniger freien Platz. Nur notfalls: nur, was die Batterien nicht aufnehmen können. Nie: wird für die Einspeisebegrenzung nicht genutzt.",
       feed_in_cap_auto_buffer:
         "Verwendet statt des festen Puffers die aufgezeichneten Abweichungen der PV-Prognose: Von den Tagen mit mehr PV als prognostiziert hebt die Unterschätzung, die an 80 % davon nicht überschritten wurde, die PV-Prognose an. Braucht 14 aufgezeichnete Tage; bis dahin gilt der feste Puffer.",
       peak_shaving_grid_limit:
@@ -1877,13 +1879,14 @@ class SlemsPanel extends HTMLElement {
           const planned = this._state("planned_power", c.device_id);
           const attrs = planned?.attributes || {};
           const control = this._state("consumer_control", c.device_id);
+          // Only while the feed-in cap is on.
+          const capMode = this._state("cap_mode", c.device_id);
           const chips = [
             !c.controllable ? t.notControlled : "",
             control?.state === "off" ? t.controlOff : "",
             attrs.blocked ? t.blocked : "",
             attrs.saturated ? t.saturated : "",
             attrs.resting ? t.resting : "",
-            c.controllable && this._capState() ? t.capModes[c.cap_mode] || "" : "",
           ]
             .filter(Boolean)
             .map((chip) => `<span class="chip">${chip}</span>`)
@@ -1898,7 +1901,7 @@ class SlemsPanel extends HTMLElement {
               ${this._row(t.measured, escapeHtml(this._format(measured)), c.power_entity)}
               ${planned ? this._row(t.planned, escapeHtml(this._format(planned)), planned.entity_id) : ""}
               ${c.controllable ? this._row(t.responseTime, response, planned?.entity_id) : ""}
-            </dl></section>`;
+            </dl>${capMode && this._capState() ? `<div class="settings card-setting">${this._control(capMode)}</div>` : ""}</section>`;
         })
         .join("")
     );
@@ -2163,6 +2166,7 @@ const STYLE = `
   .tile { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--divider-color); }
   .tile { min-width: 0; overflow-wrap: break-word; hyphens: auto; }
   .tile.wide { grid-column: 1 / -1; }
+  .card-setting { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--divider-color); }
   .tile .label { font-size: 12px; }
   .menu-wrap { position: relative; }
   .menu-button { background: none; border: none; cursor: pointer; color: var(--secondary-text-color); padding: 4px; line-height: 0;
@@ -2279,6 +2283,8 @@ const STYLE = `
     border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); }
   .setting select { font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--divider-color);
     background: var(--card-background-color); color: var(--primary-text-color); max-width: 60%; }
+  .card-setting .setting > span:first-child { min-width: 0; }
+  .card-setting select { min-width: 0; max-width: 55%; font-size: 14px; padding: 3px 4px; }
   .number { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
   .switch { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
   .switch input { opacity: 0; width: 0; height: 0; }

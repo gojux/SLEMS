@@ -298,7 +298,11 @@ the first update after a start deletes stored issues that no longer apply.
 (not `cancelled`) creates a `persistent_notification` (one id per battery);
 its texts come from the `exceptions` translations
 (`async_get_translations`) in the server language, with the initial delta
-stored in the balancer at the start.
+stored in the balancer at the start. The feed-in cap problems
+(`CapPlan.problems` and the export above the limit) are notifications too,
+one id per problem, created when a problem appears and dismissed when it is
+gone; they come from the forecast and are not repairs the user can make.
+Issues with their ids are deleted on the first update.
 
 Simulator: while `SIM_FAULT_FILE` (default `/tmp/venus_fault`) exists in the
 container, the simulated Venus accepts commands but delivers 0 W
@@ -446,7 +450,9 @@ collects 70 % of it backwards from one hour before the block; after the start
 the export power is needed / remaining time. Problems: `battery_too_small`,
 `too_late` (needed > possible + 100 Wh), `charge_power_too_low` (curtailed >
 100 Wh); the coordinator tracks `cap_exceeded_since` (export > limit) for
-the runtime issue after 5 minutes.
+the runtime problem after 5 minutes. These problems are persistent
+notifications (see *Battery limits and delivery monitoring*), not repair
+issues.
 
 Automatic buffer (`auto_buffer`): the recorded days of `PvAccuracyTracker`
 with forecast and production; with ≥ 14 of them the 80 % quantile of
@@ -470,8 +476,9 @@ Integration:
 - Day plan rows get `cap_line_wh` (consumption + limit), `cap_excess_wh`,
   `cap_curtailed_wh` from the fine steps.
 
-Consumer option `cap_mode` (`CONF_CAP_MODE`, default `emergency`) in the
-control step of the consumer subentry.
+Part of each consumer: select *With feed-in cap* per controllable consumer
+(`ConsumerCapModeSelect`, restored; `coordinator.consumer_cap_modes`, default
+`emergency`), shown on the consumer card while the cap is on.
 
 ### Dashboard
 
@@ -932,3 +939,4 @@ python3 tools/set_power.py <battery-ip> --release
 | 2026-09-25 | Peak shaving: threshold stays absolute but not below the minimum SoC; optional automatic import limit from the 5 minute consumption peaks until PV refills, with a safety reserve. Number fields lose the focus on the mouse wheel (it changed and saved values while scrolling). |
 | 2026-09-26 | Communication pause per battery for firmware updates (manual, 20 min default, automatic on a reported OTA update); battery card actions in a ⋮ menu with a details dialog (firmware, counters). |
 | 2026-09-26 | Feed-in cap at the grid connection point (kWp × %): space for the energy above the limit planned backwards over all peaks until the end of tomorrow with the native PV periods, percentage buffer plus minimum buffer (% of kWp), optional automatic buffer from the recorded PV errors; making room by holding charging, a lower night discharge target and feeding in as late as possible (1 h before, 70 % power, may exceed the maximum export while discharging, never the limit); consumers per option counted / emergency / never; precedence over grid friendly charging, night discharge and battery priority. |
+| 2026-09-26 | Feed-in cap warnings as notifications (created on appearance, dismissed when gone) instead of repair issues: they come from the forecast. The part of each consumer in the cap is a select on the consumer card instead of a config flow field. |

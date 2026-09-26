@@ -214,7 +214,8 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   Ausschalten im Betriebsmodus *Aktiv* setzt SLEMS ihn einmal auf 0 W (bzw.
   aus); danach lässt SLEMS ihn in Ruhe und plant ihn wie eine ungesteuerte
   Last.
-- **Bei Einspeisebegrenzung** (gesteuerte Verbraucher): *Einrechnen und
+- **Bei Einspeisebegrenzung** (Auswahl je gesteuertem Verbraucher, auf
+  seiner Karte im Dashboard, solange die Einspeisebegrenzung an ist): *Einrechnen und
   nutzen* – der Verbraucher nimmt den Überschuss über der Einspeisegrenze vor
   den Batterien auf, sie brauchen dann weniger freien Platz; *Nur notfalls*
   (Standard) – nur, was die Batterien nicht aufnehmen können; *Nie*. Siehe
@@ -443,17 +444,18 @@ verschwinden von selbst, sobald sie behoben sind:
 
 - eine Batterie reagiert nicht (ausgeschlossen, siehe oben),
 - eine Batterie kann seit mehr als 5 Minuten nicht gelesen werden,
-- der Smart Meter meldet nicht, während SLEMS im Betriebsmodus *Aktiv* ist,
-- Einspeisebegrenzung: Batterien zu klein, zu wenig Zeit für Platz,
-  Ladeleistung zu gering, Einspeisung über der Grenze (siehe
-  *Einspeisebegrenzung*).
+- der Smart Meter meldet nicht, während SLEMS im Betriebsmodus *Aktiv* ist.
 
 Das Dashboard zeigt sie ebenfalls: ein roter Hinweis auf der Batteriekarte
 (*nicht lesbar*, *reagiert nicht*), im Energiefluss und für den Smart Meter
 oben in der Übersicht. Das Ende eines aktiven Zellausgleichs (abgeschlossen,
 nach 24 Stunden oder weil die Batterie nicht lesbar war) erzeugt eine
 Benachrichtigung mit dem Zell-Delta vorher und nachher und der Dauer; ein
-selbst abgebrochener Ausgleich nicht.
+selbst abgebrochener Ausgleich nicht. Die Warnungen der Einspeisebegrenzung
+(Batterien zu klein, zu wenig Zeit für Platz, Ladeleistung zu gering,
+Einspeisung über der Grenze, siehe *Einspeisebegrenzung*) sind ebenfalls
+Benachrichtigungen; sie verschwinden von selbst, sobald das Problem behoben
+ist.
 
 ### Betriebsmodus
 
@@ -601,7 +603,7 @@ Netzanschlusspunkt (Einspeisung, nach dem Hausverbrauch).
   gestrichelte Linie bei Verbrauch + Grenze (das PV-Niveau, ab dem gekappt
   wird), die Energie darüber als Balken auf dieser Linie und den Teil, der
   abgeregelt würde, in Rot.
-- **Warnungen** (Übersicht und *Einstellungen → Reparaturen*): Batterien zu
+- **Warnungen** (Übersicht und Benachrichtigungen): Batterien zu
   klein für den nötigen Platz, zu wenig Zeit oder Leistung, um vor der Spitze
   einzuspeisen, Ladeleistung zu gering für den Überschuss über der Grenze, und
   Einspeisung seit mehr als 5 Minuten über der Grenze.

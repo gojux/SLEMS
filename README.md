@@ -209,7 +209,8 @@ Every consumer needs its own power **and** energy sensor.
   the dashboard): off means SLEMS only measures the consumer. Switching it
   off in operating mode *active* sets it to 0 W (or off) once; afterwards
   SLEMS leaves it alone and plans it like an uncontrolled load.
-- **With feed-in cap** (controlled consumers): *Count and use* – the consumer
+- **With feed-in cap** (select per controlled consumer, on its card in the
+  dashboard while the feed-in cap is on): *Count and use* – the consumer
   takes the surplus above the feed-in limit before the batteries, so they need
   less free space; *Only in an emergency* (default) – only what the batteries
   cannot absorb; *Never*. See *Feed-in cap*.
@@ -428,16 +429,17 @@ themselves when they are solved:
 
 - a battery does not respond (excluded, see above),
 - a battery could not be read for more than 5 minutes,
-- the smart meter does not report while SLEMS is in operating mode *active*,
-- feed-in cap: batteries too small, not enough time to make room, charge
-  power too low, feed-in above the limit (see *Feed-in cap*).
+- the smart meter does not report while SLEMS is in operating mode *active*.
 
 The dashboard also shows them: a red note on the battery card (*cannot be
 read*, *not responding*), in the energy flow and, for the smart meter, at the
 top of the overview. The end of an active cell balancing run (finished, after
 24 hours or because the battery could not be read) creates a notification
 with the cell delta before and after and the duration; cancelling it
-yourself does not.
+yourself does not. The warnings of the feed-in cap (batteries too small, not
+enough time to make room, charge power too low, feed-in above the limit, see
+*Feed-in cap*) are notifications too; they disappear by themselves when the
+problem is gone.
 
 ### Operating mode
 
@@ -574,7 +576,7 @@ house consumption).
   and by when. The day chart shows a dashed line at consumption + limit (the
   PV level above which is capped), the energy above it as a bar on that line
   and the part that would be curtailed in red.
-- **Warnings** (overview and *Settings → Repairs*): batteries too small for
+- **Warnings** (overview and notifications): batteries too small for
   the space needed, not enough time or power left to feed in before the peak,
   charge power too low for the surplus above the limit, and feed-in above the
   limit for more than 5 minutes.

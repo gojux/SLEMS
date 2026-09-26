@@ -149,8 +149,7 @@
             "priority": "Priorität",
             "min_on_minutes": "Mindestlaufzeit",
             "min_off_minutes": "Mindestpause",
-            "thermostat_cycles": "Thermostat taktet selbst",
-            "cap_mode": "Bei Einspeisebegrenzung"
+            "thermostat_cycles": "Thermostat taktet selbst"
           },
           "data_description": {
             "control_entity": "Schalter für Ein/Aus-Verbraucher, Number-Entity in W für leistungsgeregelte Verbraucher.",
@@ -158,8 +157,7 @@
             "priority": "1 = höchste Priorität bei der Verteilung von Überschuss.",
             "min_on_minutes": "Optional. Nach dem Einschalten durch SLEMS läuft der Verbraucher mindestens so lange.",
             "min_off_minutes": "Optional. Nach dem Ausschalten durch SLEMS bleibt der Verbraucher mindestens so lange aus.",
-            "thermostat_cycles": "Ein, wenn der eigene Thermostat den Verbraucher während der Ansteuerung ein- und ausschaltet (z. B. ein Heizstab, der die Temperatur am Heizelement misst). SLEMS behält dann in den Pausen die Vorgabe bei und gibt die nicht genutzte Leistung den Batterien, statt den Verbraucher als gesättigt zu behandeln.",
-            "cap_mode": "Einrechnen und nutzen: Der Verbraucher nimmt den Überschuss über der Einspeisegrenze vor den Batterien auf, sie brauchen dann weniger freien Platz. Nur notfalls: nur, was die Batterien nicht aufnehmen können. Nie: wird für die Einspeisebegrenzung nicht genutzt."
+            "thermostat_cycles": "Ein, wenn der eigene Thermostat den Verbraucher während der Ansteuerung ein- und ausschaltet (z. B. ein Heizstab, der die Temperatur am Heizelement misst). SLEMS behält dann in den Pausen die Vorgabe bei und gibt die nicht genutzte Leistung den Batterien, statt den Verbraucher als gesättigt zu behandeln."
           }
         }
       },
@@ -195,13 +193,6 @@
         "learned": "Gelernt",
         "manual": "Manuell"
       }
-    },
-    "cap_mode": {
-      "options": {
-        "count": "Einrechnen und nutzen",
-        "emergency": "Nur notfalls",
-        "never": "Nie"
-      }
     }
   },
   "entity": {
@@ -212,6 +203,14 @@
           "off": "Aus",
           "simulation": "Simulation (nur lesend)",
           "active": "Aktiv"
+        }
+      },
+      "cap_mode": {
+        "name": "Bei Einspeisebegrenzung",
+        "state": {
+          "count": "Einrechnen und nutzen",
+          "emergency": "Nur notfalls",
+          "never": "Nie"
         }
       }
     },
@@ -575,6 +574,30 @@
     },
     "balancing_communication_paused": {
       "message": "Der Zellausgleich kann nicht gestartet werden, solange die Kommunikation mit der Batterie pausiert ist."
+    },
+    "feed_in_cap_battery_too_small_title": {
+      "message": "Batterien zu klein für die Einspeisebegrenzung"
+    },
+    "feed_in_cap_battery_too_small_message": {
+      "message": "Um den prognostizierten Überschuss über der Einspeisegrenze von {limit} W aufzunehmen, bräuchten die Batterien um {peak} {required} kWh freien Platz, mehr als sie über dem minimalen Ladestand haben. Der Rest wird abgeregelt. Stelle einen Verbraucher bei der Einspeisebegrenzung auf „Einrechnen und nutzen“ oder verringere den Puffer."
+    },
+    "feed_in_cap_too_late_title": {
+      "message": "Einspeisebegrenzung: zu wenig Zeit, um Platz zu schaffen"
+    },
+    "feed_in_cap_too_late_message": {
+      "message": "Vor der Spitze um {peak} müssten die Batterien {needed} kWh einspeisen, um genug freien Platz zu haben, bis dahin sind aber nur {possible} kWh möglich (Entladeleistung und Einspeisegrenze von {limit} W). Ein Teil des Überschusses wird abgeregelt."
+    },
+    "feed_in_cap_charge_power_title": {
+      "message": "Einspeisebegrenzung: Ladeleistung zu gering"
+    },
+    "feed_in_cap_charge_power_message": {
+      "message": "Der Überschuss über der Einspeisegrenze von {limit} W ist laut Prognose höher, als die Batterien laden können; etwa {curtailed} kWh würden abgeregelt. Stelle einen Verbraucher bei der Einspeisebegrenzung auf „Einrechnen und nutzen“ oder „Nur notfalls“, um ihn zu nutzen."
+    },
+    "feed_in_cap_exceeded_title": {
+      "message": "Einspeisung über der Grenze"
+    },
+    "feed_in_cap_exceeded_message": {
+      "message": "Die Einspeisung liegt seit mehr als 5 Minuten über der Einspeisegrenze von {limit} W; der Wechselrichter regelt die PV-Leistung vermutlich ab. Die Batterien sind voll oder können nicht schnell genug laden, und kein Verbraucher kann den Überschuss aufnehmen."
     }
   },
   "issues": {
@@ -589,22 +612,6 @@
     "grid_meter_stale": {
       "title": "Smart Meter meldet nicht",
       "description": "Die Smart-Meter-Entity hat länger keinen Wert gemeldet. SLEMS hat die Batterien an ihre eigene Logik übergeben und regelt wieder, sobald der Zähler meldet. Prüfe den Smart Meter und seine Integration."
-    },
-    "feed_in_cap_battery_too_small": {
-      "title": "Batterien zu klein für die Einspeisebegrenzung",
-      "description": "Um den prognostizierten Überschuss über der Einspeisegrenze von {limit} W aufzunehmen, bräuchten die Batterien um {peak} {required} kWh freien Platz, mehr als sie über dem minimalen Ladestand haben. Der Rest wird abgeregelt. Stelle einen Verbraucher bei der Einspeisebegrenzung auf „Einrechnen und nutzen“ oder verringere den Puffer."
-    },
-    "feed_in_cap_too_late": {
-      "title": "Einspeisebegrenzung: zu wenig Zeit, um Platz zu schaffen",
-      "description": "Vor der Spitze um {peak} müssten die Batterien {needed} kWh einspeisen, um genug freien Platz zu haben, bis dahin sind aber nur {possible} kWh möglich (Entladeleistung und Einspeisegrenze von {limit} W). Ein Teil des Überschusses wird abgeregelt."
-    },
-    "feed_in_cap_charge_power": {
-      "title": "Einspeisebegrenzung: Ladeleistung zu gering",
-      "description": "Der Überschuss über der Einspeisegrenze von {limit} W ist laut Prognose höher, als die Batterien laden können; etwa {curtailed} kWh würden abgeregelt. Stelle einen Verbraucher bei der Einspeisebegrenzung auf „Einrechnen und nutzen“ oder „Nur notfalls“, um ihn zu nutzen."
-    },
-    "feed_in_cap_exceeded": {
-      "title": "Einspeisung über der Grenze",
-      "description": "Die Einspeisung liegt seit mehr als 5 Minuten über der Einspeisegrenze von {limit} W; der Wechselrichter regelt die PV-Leistung vermutlich ab. Die Batterien sind voll oder können nicht schnell genug laden, und kein Verbraucher kann den Überschuss aufnehmen."
     }
   }
 }

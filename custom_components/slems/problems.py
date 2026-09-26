@@ -7,14 +7,15 @@ themselves when the problem is gone:
   (``delivery_monitor``),
 * a battery could not be read for ``UNREADABLE_AFTER_S``,
 * the grid meter is stale in operating mode active (the batteries follow their
-  own logic meanwhile),
-* feed-in cap: the batteries are too small for the space needed, there is not
-  enough time or power left to feed in before the peak, their charge power is
-  too low (energy would be curtailed), or the export has been above the limit
-  for ``CAP_EXCEEDED_AFTER_S``.
+  own logic meanwhile).
 
 Notifications (bell) for events: the end of an active cell balancing run,
-except when the user cancelled it.
+except when the user cancelled it. The problems of the feed-in cap come from
+the forecast and are notifications as well; each one is created when the
+problem appears and dismissed when it is gone: the batteries are too small for
+the space needed, there is not enough time or power left to feed in before
+the peak, their charge power is too low (energy would be curtailed), or the
+export has been above the limit for ``CAP_EXCEEDED_AFTER_S``.
 
 Issues are stored by Home Assistant across restarts; the first update after a
 start removes the ones that no longer apply.
@@ -40,12 +41,13 @@ if TYPE_CHECKING:
 UNREADABLE_AFTER_S = 300.0
 CAP_EXCEEDED_AFTER_S = 300.0
 GRID_STALE_ISSUE = "grid_meter_stale"
-CAP_ISSUES = {
+# Feed-in cap problem -> translation key of its notification.
+CAP_NOTIFICATIONS = {
     "battery_too_small": "feed_in_cap_battery_too_small",
     "too_late": "feed_in_cap_too_late",
     "charge_power_too_low": "feed_in_cap_charge_power",
+    "limit_exceeded": "feed_in_cap_exceeded",
 }
-CAP_EXCEEDED_ISSUE = "feed_in_cap_exceeded"
 
 
 @callback
@@ -73,13 +75,16 @@ class ProblemReporter:
         self._coordinator = coordinator
         # Issue ids created by this instance; None until the first update.
         self._active: set[str] | None = None
+        # Feed-in cap problems with a notification shown.
+        self._cap_notified: set[str] = set()
 
     @callback
     def update(self, now: float, snapshot: SystemSnapshot | None = None) -> None:
         """Create or delete the repair issues (``now``: monotonic time)."""
         coordinator = self._coordinator
         wanted: dict[str, tuple[str, dict[str, str]]] = {}
-        possible = {GRID_STALE_ISSUE, CAP_EXCEEDED_ISSUE, *CAP_ISSUES.values()}
+        # Feed-in cap problems are notifications; issues with their ids are removed.
+        possible = {GRID_STALE_ISSUE, *CAP_NOTIFICATIONS.values()}
         for battery in coordinator.batteries:
             possible |= {_not_responding_issue(battery), _unreadable_issue(battery)}
             placeholders = {"name": battery.name}
@@ -93,25 +98,6 @@ class ProblemReporter:
             and coordinator.controller.status is ControlStatus.GRID_STALE
         ):
             wanted[GRID_STALE_ISSUE] = ("grid_meter_stale", {})
-        cap = snapshot.feed_in_cap if snapshot is not None else None
-        if cap is not None:
-            block = cap.next_block
-            placeholders = {
-                "limit": f"{cap.limit_w:.0f}",
-                "peak": _clock(block.start) if block else "–",
-                "required": f"{cap.required_space_wh / 1000:.1f}",
-                "needed": f"{cap.export_needed_wh / 1000:.1f}",
-                "possible": f"{cap.export_possible_wh / 1000:.1f}",
-                "curtailed": f"{cap.curtailed_wh / 1000:.1f}",
-            }
-            for problem in cap.problems:
-                wanted[CAP_ISSUES[problem]] = (CAP_ISSUES[problem], placeholders)
-        since = coordinator.cap_exceeded_since
-        if since is not None and now - since >= CAP_EXCEEDED_AFTER_S:
-            wanted[CAP_EXCEEDED_ISSUE] = (
-                CAP_EXCEEDED_ISSUE,
-                {"limit": f"{coordinator.settings.feed_in_cap_limit_w:.0f}"},
-            )
 
         for issue_id, (translation_key, placeholders) in wanted.items():
             if self._active is None or issue_id not in self._active:
@@ -128,6 +114,60 @@ class ProblemReporter:
             if self._active is None or issue_id in self._active:
                 ir.async_delete_issue(self._hass, DOMAIN, issue_id)
         self._active = set(wanted)
+        self._update_cap_notifications(now, snapshot)
+
+    @callback
+    def _update_cap_notifications(self, now: float, snapshot: SystemSnapshot | None) -> None:
+        coordinator = self._coordinator
+        cap = snapshot.feed_in_cap if snapshot is not None else None
+        # Decimal comma in the languages that use it (the texts are German or English).
+        comma = self._hass.config.language.startswith("de")
+
+        def kwh(wh: float) -> str:
+            text = f"{wh / 1000:.1f}"
+            return text.replace(".", ",") if comma else text
+
+        placeholders = {"limit": f"{coordinator.settings.feed_in_cap_limit_w:.0f}"}
+        problems = set(cap.problems) if cap is not None else set()
+        if cap is not None:
+            block = cap.next_block
+            placeholders |= {
+                "peak": _clock(block.start) if block else "–",
+                "required": kwh(cap.required_space_wh),
+                "needed": kwh(cap.export_needed_wh),
+                "possible": kwh(cap.export_possible_wh),
+                "curtailed": kwh(cap.curtailed_wh),
+            }
+        since = coordinator.cap_exceeded_since
+        if since is not None and now - since >= CAP_EXCEEDED_AFTER_S:
+            problems.add("limit_exceeded")
+        for problem in problems - self._cap_notified:
+            self._hass.async_create_task(self._async_notify_cap(problem, placeholders))
+        for problem in self._cap_notified - problems:
+            persistent_notification.async_dismiss(self._hass, _cap_notification_id(problem))
+        self._cap_notified = problems
+
+    async def _async_notify_cap(self, problem: str, placeholders: dict[str, str]) -> None:
+        key = CAP_NOTIFICATIONS[problem]
+        text = await self._texts()
+        persistent_notification.async_create(
+            self._hass,
+            text(f"{key}_message", **placeholders),
+            title=text(f"{key}_title", **placeholders),
+            notification_id=_cap_notification_id(problem),
+        )
+
+    async def _texts(self):
+        """Formatter for the translated exception strings (used as notification texts)."""
+        strings = await async_get_translations(
+            self._hass, self._hass.config.language, "exceptions", {DOMAIN}
+        )
+
+        def text(key: str, **placeholders: str) -> str:
+            template = strings.get(f"component.{DOMAIN}.exceptions.{key}.message", key)
+            return template.format(**placeholders)
+
+        return text
 
     async def async_notify_balancing(
         self,
@@ -138,13 +178,7 @@ class ProblemReporter:
         duration_s: float,
     ) -> None:
         """Notification about the end of a cell balancing run."""
-        strings = await async_get_translations(
-            self._hass, self._hass.config.language, "exceptions", {DOMAIN}
-        )
-
-        def text(key: str, **placeholders: str) -> str:
-            template = strings.get(f"component.{DOMAIN}.exceptions.{key}.message", key)
-            return template.format(**placeholders)
+        text = await self._texts()
 
         def delta(value: float | None) -> str:
             return "–" if value is None else f"{value:.0f}"
@@ -172,3 +206,7 @@ class ProblemReporter:
 
 def _clock(moment: datetime) -> str:
     return dt_util.as_local(moment).strftime("%H:%M")
+
+
+def _cap_notification_id(problem: str) -> str:
+    return f"{DOMAIN}_{CAP_NOTIFICATIONS[problem]}"

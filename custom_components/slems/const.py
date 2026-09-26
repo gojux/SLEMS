@@ -62,7 +62,6 @@ CONF_THERMOSTAT_CYCLES: Final = "thermostat_cycles"
 CONF_PRIORITY: Final = "priority"
 CONF_MIN_ON_MINUTES: Final = "min_on_minutes"
 CONF_MIN_OFF_MINUTES: Final = "min_off_minutes"
-CONF_CAP_MODE: Final = "cap_mode"
 
 DEFAULT_PRIORITY: Final = 5
 

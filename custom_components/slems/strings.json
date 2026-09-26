@@ -149,8 +149,7 @@
             "priority": "Priority",
             "min_on_minutes": "Minimum runtime",
             "min_off_minutes": "Minimum pause",
-            "thermostat_cycles": "Thermostat cycles by itself",
-            "cap_mode": "With feed-in cap"
+            "thermostat_cycles": "Thermostat cycles by itself"
           },
           "data_description": {
             "control_entity": "Switch for on/off consumers, number entity in W for power controlled consumers.",
@@ -158,8 +157,7 @@
             "priority": "1 = highest priority when distributing surplus power.",
             "min_on_minutes": "Optional. Once switched on by SLEMS, the consumer keeps running at least this long.",
             "min_off_minutes": "Optional. Once switched off by SLEMS, the consumer stays off at least this long.",
-            "thermostat_cycles": "On if the consumer's own thermostat switches it on and off while it is commanded (e.g. a heating rod that measures the temperature at the element). SLEMS then keeps its command during the pauses and gives the unused power to the batteries instead of treating the consumer as saturated.",
-            "cap_mode": "Count and use: the consumer takes the surplus above the feed-in limit before the batteries, so they need less free space. Only in an emergency: only what the batteries cannot absorb. Never: not used for the feed-in cap."
+            "thermostat_cycles": "On if the consumer's own thermostat switches it on and off while it is commanded (e.g. a heating rod that measures the temperature at the element). SLEMS then keeps its command during the pauses and gives the unused power to the batteries instead of treating the consumer as saturated."
           }
         }
       },
@@ -195,13 +193,6 @@
         "learned": "Learned",
         "manual": "Manual"
       }
-    },
-    "cap_mode": {
-      "options": {
-        "count": "Count and use",
-        "emergency": "Only in an emergency",
-        "never": "Never"
-      }
     }
   },
   "entity": {
@@ -212,6 +203,14 @@
           "off": "Off",
           "simulation": "Simulation (read-only)",
           "active": "Active"
+        }
+      },
+      "cap_mode": {
+        "name": "With feed-in cap",
+        "state": {
+          "count": "Count and use",
+          "emergency": "Only in an emergency",
+          "never": "Never"
         }
       }
     },
@@ -575,6 +574,30 @@
     },
     "balancing_communication_paused": {
       "message": "Cell balancing cannot be started while the communication with the battery is paused."
+    },
+    "feed_in_cap_battery_too_small_title": {
+      "message": "Batteries too small for the feed-in cap"
+    },
+    "feed_in_cap_battery_too_small_message": {
+      "message": "To absorb the forecast surplus above the feed-in limit of {limit} W, the batteries would need {required} kWh of free space at {peak}, more than they have above the minimum state of charge. The rest is curtailed. Set a consumer to \"Count and use\" for the feed-in cap, or lower the buffer."
+    },
+    "feed_in_cap_too_late_title": {
+      "message": "Feed-in cap: not enough time to make room"
+    },
+    "feed_in_cap_too_late_message": {
+      "message": "Before the peak at {peak} the batteries would have to feed in {needed} kWh to have enough free space, but only {possible} kWh are possible until then (discharge power and feed-in limit of {limit} W). Part of the surplus will be curtailed."
+    },
+    "feed_in_cap_charge_power_title": {
+      "message": "Feed-in cap: charge power too low"
+    },
+    "feed_in_cap_charge_power_message": {
+      "message": "The surplus above the feed-in limit of {limit} W is forecast to be higher than the batteries can charge; about {curtailed} kWh would be curtailed. Set a consumer to \"Count and use\" or \"Only in an emergency\" for the feed-in cap to use it."
+    },
+    "feed_in_cap_exceeded_title": {
+      "message": "Feed-in above the limit"
+    },
+    "feed_in_cap_exceeded_message": {
+      "message": "The grid export has been above the feed-in limit of {limit} W for more than 5 minutes; the inverter probably curtails the PV power. The batteries are full or cannot charge fast enough, and no consumer can take the surplus."
     }
   },
   "issues": {
@@ -589,22 +612,6 @@
     "grid_meter_stale": {
       "title": "Smart meter does not report",
       "description": "The smart meter entity has not reported for a while. SLEMS handed the batteries back to their own logic and controls again as soon as the meter reports. Check the smart meter and its integration."
-    },
-    "feed_in_cap_battery_too_small": {
-      "title": "Batteries too small for the feed-in cap",
-      "description": "To absorb the forecast surplus above the feed-in limit of {limit} W, the batteries would need {required} kWh of free space at {peak}, more than they have above the minimum state of charge. The rest is curtailed. Set a consumer to \"Count and use\" for the feed-in cap, or lower the buffer."
-    },
-    "feed_in_cap_too_late": {
-      "title": "Feed-in cap: not enough time to make room",
-      "description": "Before the peak at {peak} the batteries would have to feed in {needed} kWh to have enough free space, but only {possible} kWh are possible until then (discharge power and feed-in limit of {limit} W). Part of the surplus will be curtailed."
-    },
-    "feed_in_cap_charge_power": {
-      "title": "Feed-in cap: charge power too low",
-      "description": "The surplus above the feed-in limit of {limit} W is forecast to be higher than the batteries can charge; about {curtailed} kWh would be curtailed. Set a consumer to \"Count and use\" or \"Only in an emergency\" for the feed-in cap to use it."
-    },
-    "feed_in_cap_exceeded": {
-      "title": "Feed-in above the limit",
-      "description": "The grid export has been above the feed-in limit of {limit} W for more than 5 minutes; the inverter probably curtails the PV power. The batteries are full or cannot charge fast enough, and no consumer can take the surplus."
     }
   }
 }

@@ -496,6 +496,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.consumers = consumers
         # Consumers whose control the user switched off (restored by their switch).
         self.consumer_control_disabled: set[str] = set()
+        # Part of each consumer in the feed-in cap (restored by its select).
+        self.consumer_cap_modes: dict[str, CapMode] = {}
         # Device registry id of the central SLEMS device (parent of the batteries).
         self.system_device_id = system_device_id
         self.settings = ControlSettings()
@@ -1234,7 +1236,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 max_power_w=consumer.max_power_w or 0,
                 must_stay_on=self._runtime.must_stay_on(consumer, now),
                 must_stay_off=self._runtime.must_stay_off(consumer, now),
-                cap_mode=consumer.cap_mode,
+                cap_mode=self.cap_mode(consumer.subentry_id),
             )
             for consumer in self.consumers
             if snapshot.is_controllable_now(consumer.subentry_id)
@@ -1376,9 +1378,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 if consumer.control_mode is ControlMode.SWITCH
                 else consumer.max_power_w
             ) or 0
-            if consumer.cap_mode is CapMode.COUNT:
+            mode = self.cap_mode(consumer.subentry_id)
+            if mode is CapMode.COUNT:
                 counted_w += power
-            elif consumer.cap_mode is CapMode.EMERGENCY:
+            elif mode is CapMode.EMERGENCY:
                 emergency_w += power
         return plan_cap(
             wall_now,
@@ -1398,6 +1401,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             counted_w,
             emergency_w,
         )
+
+    def cap_mode(self, subentry_id: str) -> CapMode:
+        return self.consumer_cap_modes.get(subentry_id, CapMode.EMERGENCY)
 
     @property
     def min_soc_pct(self) -> float:
