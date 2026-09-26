@@ -525,6 +525,68 @@ Switch the automatic adjustment off only if the gain keeps changing
 noticeably, e.g. because the smart meter reports very irregularly; then set a
 fixed value (0.3–0.5 is a good start).
 
+### Which option when?
+
+All options are optional and can be combined. The charts show the same
+example with and without each option: 8 kWp PV on a sunny day, a household
+with morning and evening peaks, a 10 kWh battery, from 18:00 until midnight
+of the next day. They are calculated with the SLEMS state of charge
+projection (hourly means), so they show how SLEMS plans; the real curves
+depend on your forecasts. Top: total state of charge; bottom: grid power
+(+ import / − export); grey dashed without, coloured with the option.
+
+**Grid friendly charging** (on by default)
+
+![Grid friendly charging](docs/images/grid_friendly_en.svg)
+
+Without it the batteries are full before noon and the whole midday peak goes
+to the grid (here 5.7 kW). With it they charge with the surplus above a
+feed-in limit and are still full in the afternoon; the peak drops to about
+4.4 kW. Useful whenever many PV systems feed in at the same time (grid,
+energy community). Switch it off if the batteries should be full as early as
+possible, e.g. for backup power.
+
+**Night discharge**
+
+![Night discharge](docs/images/night_discharge_en.svg)
+
+Energy still in the batteries in the morning is fed in over night, down to a
+reserve that the PV forecast can refill the next day. Useful if the batteries
+are still well charged in the morning (large battery, low night consumption,
+summer):
+
+- In an **energy community** your energy is more likely to find a buyer at
+  night: during the day most members produce themselves, at night they
+  consume. Night discharge shifts part of your surplus from noon to the night.
+- It works well together with the **feed-in cap**: the batteries start the
+  day with room for the energy above the limit, so SLEMS rarely has to feed in
+  shortly before the peak.
+- The energy passes the battery twice (charge and discharge losses, about
+  10 %), and less energy is left for a power outage until the next charge.
+
+**Import peak shaving** (useful on days with little PV, e.g. in winter)
+
+![Import peak shaving](docs/images/peak_shaving_en.svg)
+
+Without it the battery covers everything until it is empty in the evening;
+the morning peak then comes from the grid in full (here 2.1 kW). With it,
+below the state of charge threshold the battery only covers the power above
+the import limit: the base load comes from the grid, the battery keeps its
+energy for the peaks (here 1.5 kW at most). Useful with a power based tariff
+or grid fee, or if the grid connection is weak. Somewhat more energy comes
+from the grid (here 1 kWh), but it is still in the battery at the end: the
+peaks are lower, the energy balance stays about the same.
+
+**Feed-in cap** (if the feed-in is limited, e.g. to 60 % of the peak power)
+
+![Feed-in cap](docs/images/feed_in_cap_en.svg)
+
+Without it the batteries are full at noon and the inverter curtails
+everything above the limit (red, here 1.7 kWh). With it SLEMS keeps enough
+room free; here the night discharge makes the room and the batteries absorb
+the energy above the limit. Needed whenever your grid operator limits the
+feed-in; it takes precedence over the other options.
+
 ### Grid friendly charging
 
 Charging as soon as there is surplus fills the batteries in the morning, and

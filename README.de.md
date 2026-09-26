@@ -547,6 +547,72 @@ Die Automatik nur ausschalten, wenn sich die Verstärkung ständig deutlich
 ändert, z. B. weil der Smart Meter sehr unregelmäßig meldet; dann einen festen
 Wert setzen (0,3–0,5 ist ein guter Start).
 
+### Welche Option wann?
+
+Alle Optionen sind optional und lassen sich kombinieren. Die Diagramme zeigen
+dasselbe Beispiel ohne und mit der jeweiligen Option: 8 kWp PV an einem
+sonnigen Tag, ein Haushalt mit Morgen- und Abendspitze, eine 10-kWh-Batterie,
+von 18:00 bis Mitternacht des nächsten Tages. Berechnet sind sie mit der
+SoC-Projektion von SLEMS (Stundenmittel); sie zeigen also, wie SLEMS plant, die
+echten Kurven hängen von deinen Prognosen ab. Oben: Gesamt-Ladezustand; unten:
+Netzleistung (+ Bezug / − Einspeisung); grau gestrichelt ohne, farbig mit der
+Option.
+
+**Netzdienliches Laden** (standardmäßig an)
+
+![Netzdienliches Laden](docs/images/grid_friendly_de.svg)
+
+Ohne sind die Batterien schon vor Mittag voll, und die ganze Mittagsspitze
+geht ins Netz (hier 5,7 kW). Mit laden sie mit dem Überschuss über einer
+Einspeisegrenze und sind am Nachmittag trotzdem voll; die Spitze sinkt auf
+etwa 4,4 kW. Sinnvoll, wann immer viele PV-Anlagen gleichzeitig einspeisen
+(Netz, Energiegemeinschaft). Ausschalten, wenn die Batterien möglichst früh
+voll sein sollen, z. B. für die Notstromversorgung.
+
+**Nachtentladung**
+
+![Nachtentladung](docs/images/night_discharge_de.svg)
+
+Energie, die morgens noch in den Batterien ist, wird über Nacht eingespeist,
+bis auf eine Reserve, die die PV-Prognose am nächsten Tag wieder auffüllen
+kann. Sinnvoll, wenn die Batterien morgens noch gut geladen sind (große
+Batterie, wenig Verbrauch in der Nacht, Sommer):
+
+- In einer **Energiegemeinschaft** findet deine Energie nachts eher einen
+  Abnehmer: tagsüber erzeugen die meisten Mitglieder selbst, nachts
+  verbrauchen sie. Die Nachtentladung verschiebt einen Teil deines Überschusses
+  von Mittag in die Nacht.
+- Sie wirkt gut mit der **Einspeisebegrenzung** zusammen: Die Batterien
+  starten mit Platz für die Energie über der Grenze in den Tag, SLEMS muss
+  dann selten kurz vor der Spitze einspeisen.
+- Die Energie geht zweimal durch die Batterie (Lade- und Entladeverluste, etwa
+  10 %), und bis zur nächsten Ladung bleibt weniger Energie für einen
+  Stromausfall.
+
+**Bezugsspitzen abfangen** (sinnvoll an Tagen mit wenig PV, z. B. im Winter)
+
+![Bezugsspitzen abfangen](docs/images/peak_shaving_de.svg)
+
+Ohne deckt die Batterie alles, bis sie am Abend leer ist; die Morgenspitze
+kommt dann voll aus dem Netz (hier 2,1 kW). Mit deckt sie unter der
+Ladezustand-Schwelle nur die Leistung über der Bezugsgrenze: Die Grundlast kommt
+aus dem Netz, die Batterie hält ihre Energie für die Spitzen (hier höchstens
+1,5 kW). Sinnvoll bei einem leistungsabhängigen Tarif oder Netzentgelt oder
+bei einem schwachen Netzanschluss. Etwas mehr Energie kommt aus dem Netz (hier
+1 kWh), sie ist am Ende aber noch in der Batterie: Die Spitzen sinken, die
+Energiebilanz bleibt etwa gleich.
+
+**Einspeisebegrenzung** (wenn die Einspeisung begrenzt ist, z. B. auf 60 % der
+Spitzenleistung)
+
+![Einspeisebegrenzung](docs/images/feed_in_cap_de.svg)
+
+Ohne sind die Batterien mittags voll, und der Wechselrichter regelt alles
+über der Grenze ab (rot, hier 1,7 kWh). Mit hält SLEMS genug Platz frei; hier
+schafft die Nachtentladung den Platz, und die Batterien nehmen die Energie
+über der Grenze auf. Nötig, sobald dein Netzbetreiber die Einspeisung begrenzt;
+sie hat Vorrang vor den anderen Optionen.
+
 ### Netzdienliches Laden
 
 Wird geladen, sobald Überschuss da ist, sind die Batterien schon am Vormittag

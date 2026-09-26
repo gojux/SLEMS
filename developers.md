@@ -947,6 +947,12 @@ python3 tools/set_power.py <battery-ip> --discharge 800
 python3 tools/set_power.py <battery-ip> --release
 ```
 
+`dev/readme_charts.py` creates the charts of the README section *Which option
+when?* (`docs/images/<scenario>_<language>.svg`) from the SLEMS state of charge
+projection with example data; after changes to the planning run it again
+(two steps: simulate in the tests container, render on the host; see its
+docstring).
+
 ## Decision log
 
 | Date | Decision |
