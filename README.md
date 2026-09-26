@@ -58,7 +58,7 @@ EV charging; evcc complements SLEMS well (see [roadmap](#roadmap)).
 | Feature | Status |
 |---|---|
 | Any number of batteries, added/edited/removed at any time | ✅ |
-| Marstek Venus E 3.0 via Modbus TCP | ✅ (control not yet tested on a real device) |
+| Marstek Venus E 3.0 via Modbus TCP | ✅ |
 | Read-only battery from existing entities (e.g. while Omnibattery is in control) | ✅ |
 | Smart meter, PV power and weather entity freely selectable | ✅ |
 | PV forecast from any solar forecast integration (Forecast.Solar, Solcast, …) | ✅ |
@@ -532,7 +532,8 @@ example with and without each option: 8 kWp PV on a sunny day, a household
 with morning and evening peaks, a 10 kWh battery, from 18:00 until midnight
 of the next day. They are calculated with the SLEMS state of charge
 projection (hourly means), so they show how SLEMS plans; the real curves
-depend on your forecasts. Top: total state of charge; bottom: grid power
+depend on your forecasts. Top: PV production and consumption (the same with
+and without the option); middle: total state of charge; bottom: grid power
 (+ import / − export); grey dashed without, coloured with the option.
 
 **Grid friendly charging** (on by default)
@@ -551,7 +552,9 @@ possible, e.g. for backup power.
 ![Night discharge](docs/images/night_discharge_en.svg)
 
 Energy still in the batteries in the morning is fed in over night, down to a
-reserve that the PV forecast can refill the next day. Useful if the batteries
+reserve that the PV forecast can refill the next day (here *Night discharge
+reserve* 10 %: about 2.9 kWh are fed in over night, and 3.2 kWh less at noon,
+because the batteries have more room for the PV). Useful if the batteries
 are still well charged in the morning (large battery, low night consumption,
 summer):
 
@@ -572,7 +575,10 @@ Without it the battery covers everything until it is empty in the evening;
 the morning peak then comes from the grid in full (here 2.1 kW). With it,
 below the state of charge threshold the battery only covers the power above
 the import limit: the base load comes from the grid, the battery keeps its
-energy for the peaks (here 1.5 kW at most). Useful with a power based tariff
+energy for the peaks (here 1.5 kW at most). Some peaks become higher than
+without (here at 19:00, 1.5 instead of 0.4 kW, because the battery no longer
+covers everything), but none goes above the import limit, so the highest peak
+drops. Useful with a power based tariff
 or grid fee, or if the grid connection is weak. Somewhat more energy comes
 from the grid (here 1 kWh), but it is still in the battery at the end: the
 peaks are lower, the energy balance stays about the same.

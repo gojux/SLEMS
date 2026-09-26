@@ -60,7 +60,7 @@ ergänzt SLEMS gut (siehe [Roadmap](#roadmap)).
 | Funktion | Status |
 |---|---|
 | Beliebig viele Batterien, jederzeit hinzufügen, bearbeiten, entfernen | ✅ |
-| Marstek Venus E 3.0 über Modbus TCP | ✅ (Steuerung noch nicht am echten Gerät getestet) |
+| Marstek Venus E 3.0 über Modbus TCP | ✅ |
 | Nur lesende Batterie aus vorhandenen Entities (z. B. solange Omnibattery steuert) | ✅ |
 | Smart Meter, PV-Leistung und Wetter frei wählbar | ✅ |
 | PV-Prognose aus beliebiger Solarprognose-Integration (Forecast.Solar, Solcast, …) | ✅ |
@@ -554,7 +554,8 @@ dasselbe Beispiel ohne und mit der jeweiligen Option: 8 kWp PV an einem
 sonnigen Tag, ein Haushalt mit Morgen- und Abendspitze, eine 10-kWh-Batterie,
 von 18:00 bis Mitternacht des nächsten Tages. Berechnet sind sie mit der
 SoC-Projektion von SLEMS (Stundenmittel); sie zeigen also, wie SLEMS plant, die
-echten Kurven hängen von deinen Prognosen ab. Oben: Gesamt-Ladezustand; unten:
+echten Kurven hängen von deinen Prognosen ab. Oben: PV-Erzeugung und
+Verbrauch (ohne und mit der Option gleich); Mitte: Gesamt-Ladezustand; unten:
 Netzleistung (+ Bezug / − Einspeisung); grau gestrichelt ohne, farbig mit der
 Option.
 
@@ -575,7 +576,9 @@ voll sein sollen, z. B. für die Notstromversorgung.
 
 Energie, die morgens noch in den Batterien ist, wird über Nacht eingespeist,
 bis auf eine Reserve, die die PV-Prognose am nächsten Tag wieder auffüllen
-kann. Sinnvoll, wenn die Batterien morgens noch gut geladen sind (große
+kann (hier *Reserve Nachtentladung* 10 %: etwa 2,9 kWh werden über Nacht
+eingespeist und mittags 3,2 kWh weniger, weil die Batterien mehr Platz für die
+PV haben). Sinnvoll, wenn die Batterien morgens noch gut geladen sind (große
 Batterie, wenig Verbrauch in der Nacht, Sommer):
 
 - In einer **Energiegemeinschaft** findet deine Energie nachts eher einen
@@ -597,7 +600,10 @@ Ohne deckt die Batterie alles, bis sie am Abend leer ist; die Morgenspitze
 kommt dann voll aus dem Netz (hier 2,1 kW). Mit deckt sie unter der
 Ladezustand-Schwelle nur die Leistung über der Bezugsgrenze: Die Grundlast kommt
 aus dem Netz, die Batterie hält ihre Energie für die Spitzen (hier höchstens
-1,5 kW). Sinnvoll bei einem leistungsabhängigen Tarif oder Netzentgelt oder
+1,5 kW). Manche Spitzen werden höher als ohne (hier um 19:00 1,5 statt 0,4 kW,
+weil die Batterie nicht mehr alles deckt), aber keine geht über die
+Bezugsgrenze, die höchste Spitze sinkt also. Sinnvoll bei einem
+leistungsabhängigen Tarif oder Netzentgelt oder
 bei einem schwachen Netzanschluss. Etwas mehr Energie kommt aus dem Netz (hier
 1 kWh), sie ist am Ende aber noch in der Batterie: Die Spitzen sinken, die
 Energiebilanz bleibt etwa gleich.

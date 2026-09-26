@@ -1533,6 +1533,8 @@ class SlemsPanel extends HTMLElement {
           slot,
           hour: hour + half / 2,
           pvForecast: row.pv_half_w?.[half] ?? row.pv_wh,
+          // Forecasts with one value per hour are drawn at the middle of the hour.
+          pvHourly: !row.pv_half_w || row.pv_half_w[0] === row.pv_half_w[1],
           consumptionForecast: row.consumption_wh,
           plannedCharge: row.planned_charge_w,
           // Projected total state of charge at the end of the hour.
@@ -1672,8 +1674,18 @@ class SlemsPanel extends HTMLElement {
         (r.actualCharge > 0 ? bar(r, "actualCharge", slot / 2 + gap / 2, c.battery) : "")
       )
       .join("");
-    const path = (key, color, dash) =>
-      polylines(runs(rows, key).map((run) => run.map((r) => [x(r.hour + 0.25), y(r[key])])), color, dash);
+    // Hourly values (both halves equal) get one point in the middle of the hour
+    // instead of two, so the line has no steps.
+    const hourlyKeys = { consumptionForecast: () => true, capLine: () => true, pvForecast: (r) => r.pvHourly };
+    const path = (key, color, dash) => {
+      const hourly = hourlyKeys[key] || (() => false);
+      const points = rows.filter((r) => !hourly(r) || r.slot % 2 === 0);
+      return polylines(
+        runs(points, key).map((run) => run.map((r) => [x(r.hour + (hourly(r) ? 0.5 : 0.25)), y(r[key])])),
+        color,
+        dash
+      );
+    };
     // Energy above the feed-in limit as a bar on the limit line, the curtailed part on top.
     const capBars = rows
       .filter((r) => r.capExcess > 0)
@@ -1688,8 +1700,12 @@ class SlemsPanel extends HTMLElement {
       })
       .join("");
     const capLine = polylines(
-      runs(rows.map((r) => ({ ...r, capLine: r.capLine !== null && r.capLine <= top ? r.capLine : null })), "capLine")
-        .map((run) => run.map((r) => [x(r.hour + 0.25), y(r.capLine)])),
+      runs(
+        rows
+          .filter((r) => r.slot % 2 === 0)
+          .map((r) => ({ ...r, capLine: r.capLine !== null && r.capLine <= top ? r.capLine : null })),
+        "capLine"
+      ).map((run) => run.map((r) => [x(r.hour + 0.5), y(r.capLine)])),
       c.grid,
       true
     );

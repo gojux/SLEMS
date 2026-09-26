@@ -103,14 +103,19 @@ def simulate() -> dict:
 
     sunny, load, peaks = series(PV_SUNNY), series(LOAD), series(LOAD_PEAKS)
     cloudy = series(PV_SUNNY, 0.2)
-    return {
+
+    def profile(pv, consumption) -> dict:
+        hours = [now + timedelta(hours=i) for i in range(HOURS)]
+        return {"pv": [pv[h] for h in hours], "load": [consumption[h] for h in hours]}
+
+    result = {
         "grid_friendly": {
             "without": run(100, sunny, load, settings()),
             "with": run(100, sunny, load, settings(grid_friendly_charging=True, charge_buffer_wh=1000)),
         },
         "night_discharge": {
             "without": run(100, sunny, load, settings()),
-            "with": run(100, sunny, load, settings(night_discharge=True)),
+            "with": run(100, sunny, load, settings(night_discharge=True, night_reserve_pct=10.0)),
         },
         "peak_shaving": {
             "without": run(50, cloudy, peaks, settings()),
@@ -124,15 +129,20 @@ def simulate() -> dict:
             ),
         },
     }
+    for scenario, scenario_data in result.items():
+        scenario_data |= profile(cloudy if scenario == "peak_shaving" else sunny,
+                                 peaks if scenario == "peak_shaving" else load)
+    return result
 
 
 # --- rendering (standard library only) -----------------------------------------
 
-COLORS = {"soc": "#1baf7a", "grid": "#2a78d6", "without": "#898781", "curtailed": "#d03b3b",
+COLORS = {"pv": "#eda100", "load": "#4a3aa7", "soc": "#1baf7a", "grid": "#2a78d6", "without": "#898781", "curtailed": "#d03b3b",
           "axis": "#c3c2b7", "grid_line": "#e1e0d9", "text": "#3d3d3a", "muted": "#6f6e69",
           "limit": "#eda100"}
 TEXT = {
     "en": {
+        "power": "PV and consumption", "pv": "PV", "load": "consumption",
         "soc": "State of charge", "grid": "Grid (+ import / − export)",
         "without": "without", "with": "with", "curtailed": "curtailed", "limit": "feed-in limit",
         "titles": {
@@ -144,6 +154,7 @@ TEXT = {
         "note": "Example: 8 kWp, 10 kWh battery; SLEMS state of charge projection, hourly means",
     },
     "de": {
+        "power": "PV und Verbrauch", "pv": "PV", "load": "Verbrauch",
         "soc": "Ladezustand", "grid": "Netz (+ Bezug / − Einspeisung)",
         "without": "ohne", "with": "mit", "curtailed": "abgeregelt", "limit": "Einspeisegrenze",
         "titles": {
@@ -155,7 +166,7 @@ TEXT = {
         "note": "Beispiel: 8 kWp, 10-kWh-Batterie; SoC-Projektion von SLEMS, Stundenmittel",
     },
 }
-W, PANEL_H, PAD_L, PAD_R, TOP = 760, 150, 56, 16, 80
+W, PANEL_H, POWER_H, PAD_L, PAD_R, TOP = 760, 150, 110, 56, 16, 80
 
 
 def _polyline(points, color, dash=False, width=2):
@@ -168,7 +179,10 @@ def _polyline(points, color, dash=False, width=2):
 def render_svg(scenario: str, data: dict, lang: str) -> str:
     t = TEXT[lang]
     plot_w = W - PAD_L - PAD_R
-    height = TOP + 2 * PANEL_H + 70
+    top0 = TOP
+    top1 = top0 + POWER_H + 40
+    top2 = top1 + PANEL_H + 40
+    height = top2 + PANEL_H + 70
     x_hour = lambda i: PAD_L + i / HOURS * plot_w  # noqa: E731
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {height}" width="{W}" '
@@ -186,7 +200,11 @@ def render_svg(scenario: str, data: dict, lang: str) -> str:
     parts.append(_polyline([(lx, 37), (lx + 24, 37)], COLORS["soc"]))
     parts.append(_polyline([(lx, 43), (lx + 24, 43)], COLORS["grid"]))
     parts.append(f'<text x="{lx + 30}" y="44" fill="{COLORS["text"]}">{t["with"]}</text>')
-    lx += 90
+    lx += 70
+    for key in ("pv", "load"):
+        parts.append(_polyline([(lx, 40), (lx + 24, 40)], COLORS[key]))
+        parts.append(f'<text x="{lx + 30}" y="44" fill="{COLORS["text"]}">{t[key]}</text>')
+        lx += 70 if key == "pv" else 110
     if scenario == "feed_in_cap":
         parts.append(f'<rect x="{lx}" y="34" width="14" height="12" fill="{COLORS["curtailed"]}" opacity="0.5"/>')
         parts.append(f'<text x="{lx + 20}" y="44" fill="{COLORS["text"]}">{t["curtailed"]}</text>')
@@ -194,8 +212,25 @@ def render_svg(scenario: str, data: dict, lang: str) -> str:
         parts.append(_polyline([(lx, 40), (lx + 24, 40)], COLORS["limit"], True, 1.5))
         parts.append(f'<text x="{lx + 30}" y="44" fill="{COLORS["text"]}">{t["limit"]}</text>')
 
+    # Panel 0: PV and consumption (the same with and without the option).
+    power_top = max(max(data["pv"]), max(data["load"])) / 1000
+    power_top = 2 * -(-power_top // 2)
+    y_power = lambda w: top0 + POWER_H - w / 1000 / power_top * POWER_H  # noqa: E731
+    parts.append(f'<text x="{PAD_L}" y="{top0 - 4}" fill="{COLORS["muted"]}">{t["power"]}</text>')
+    value = 0
+    while value <= power_top + 1e-9:
+        parts.append(f'<line x1="{PAD_L}" x2="{W - PAD_R}" y1="{y_power(value * 1000)}" '
+                     f'y2="{y_power(value * 1000)}" stroke="{COLORS["axis"] if value == 0 else COLORS["grid_line"]}"/>')
+        parts.append(f'<text x="{PAD_L - 6}" y="{y_power(value * 1000) + 4}" text-anchor="end" '
+                     f'fill="{COLORS["muted"]}">{value:g} kW</text>')
+        value += 2 if power_top > 4 else 1
+    for key in ("pv", "load"):
+        points = []
+        for i, w in enumerate(data[key]):
+            points += [(x_hour(i), y_power(w)), (x_hour(i + 1), y_power(w))]
+        parts.append(_polyline(points, COLORS[key]))
+
     # Panel 1: state of charge.
-    top1 = TOP
     y_soc = lambda v: top1 + PANEL_H - v / 100 * PANEL_H  # noqa: E731
     parts.append(f'<text x="{PAD_L}" y="{top1 - 4}" fill="{COLORS["muted"]}">{t["soc"]}</text>')
     for v in (0, 50, 100):
@@ -208,7 +243,6 @@ def render_svg(scenario: str, data: dict, lang: str) -> str:
         parts.append(_polyline([(x_hour(i), y_soc(v)) for i, v in enumerate(soc)], color, dash))
 
     # Panel 2: grid power.
-    top2 = TOP + PANEL_H + 40
     grids = data["without"]["grid"] + data["with"]["grid"]
     peaks = [g - c for g, c in zip(data["without"]["grid"], data["without"]["curtailed"], strict=True)]
     high = max(1000, max(grids)) / 1000
