@@ -674,9 +674,12 @@ special days could later come from a calendar entity (option 3).
 `peak_shaving.py` (pure). `PeakProfile` holds the 5 minute means of the first
 house source with data of the last 10 days (built with every forecast
 refresh), sorted per local hour with prefix sums, so the mean energy above a
-limit per hour is a binary search. `hours_until_refill` runs from now until
-the first hour whose PV forecast exceeds the consumption forecast (only the
-current hour during a surplus, at most 36 h). `auto_limit` bisects the lowest
+limit per hour is a binary search. `hours_until_refill` collects the hours
+without PV surplus from now until the forecast surplus adds up to the AC
+energy that charges the batteries from the minimum SoC back to the threshold
+(surplus hours themselves are skipped, so a small surplus on a rainy day does
+not end the period); during a surplus right now it starts with the following
+period without surplus (evening and night); at most 36 h ahead. `auto_limit` bisects the lowest
 limit (50 W) whose expected energy above it fits into the usable energy × (1 −
 reserve); the usable energy uses min(SoC, threshold), so above the threshold
 the limit shows what applies once it is reached. The dashboard shows it read

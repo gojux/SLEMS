@@ -1218,9 +1218,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 * battery.capacity_wh
                 * battery.charge_efficiency
             )
+            # AC energy that charges the batteries from the minimum back to the threshold.
+            refill_wh = (
+                max(0.0, threshold - battery.min_soc_pct)
+                / 100
+                * battery.capacity_wh
+                / battery.charge_efficiency
+            )
             limit = auto_limit(
                 profile,
-                hours_until_refill(wall_now, pv_hourly, consumption_hourly),
+                hours_until_refill(wall_now, pv_hourly, consumption_hourly, refill_wh),
                 usable_wh,
                 settings.peak_shaving_reserve_pct / 100,
             )

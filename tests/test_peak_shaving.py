@@ -54,16 +54,33 @@ def test_auto_limit_fits_the_usable_energy() -> None:
     assert auto_limit(profile, hours, 500, 0.5) > auto_limit(profile, hours, 500, 0.0)
 
 
-def test_hours_until_refill() -> None:
+def forecasts(pv_by_hour) -> tuple[dict, dict]:
     pv, consumption = {}, {}
     for day in (1, 2):
         for hour in range(24):
             start = at(day, hour)
-            pv[start] = 2000.0 if 8 <= hour < 17 else 0.0
+            pv[start] = pv_by_hour(hour)
             consumption[start] = 500.0
-    hours = hours_until_refill(at(1, 20, 30), pv, consumption)
+    return pv, consumption
+
+
+def test_hours_until_refill() -> None:
+    pv, consumption = forecasts(lambda hour: 2000.0 if 8 <= hour < 17 else 0.0)
+    hours = hours_until_refill(at(1, 20, 30), pv, consumption, 1000)
     assert hours[0] == (20, 0.5)
-    assert hours[-1] == (7, 1.0)  # until PV exceeds the consumption at 08:00
+    assert hours[-1] == (7, 1.0)  # the 1.5 kWh surplus at 08:00 refills
     assert len(hours) == 12
-    # During a surplus only the current hour counts.
-    assert hours_until_refill(at(1, 12, 0), pv, consumption) == [(12, 1.0)]
+    # During a surplus the following evening and night count.
+    during_surplus = hours_until_refill(at(1, 12, 0), pv, consumption, 1000)
+    assert during_surplus[0] == (17, 1.0)
+    assert during_surplus[-1] == (7, 1.0)
+
+
+def test_small_surplus_on_a_rainy_day_does_not_refill() -> None:
+    # Only 12:00-14:00 slightly above the consumption: 2 x 100 Wh.
+    pv, consumption = forecasts(lambda hour: 600.0 if 12 <= hour < 14 else 100.0)
+    hours = hours_until_refill(at(1, 8, 0), pv, consumption, 1000)
+    covered = {h for h, _ in hours}
+    assert 11 in covered and 15 in covered  # continues after the small surplus
+    assert 12 not in covered  # the batteries charge a little then
+    assert len(hours) == 36 - 4  # never refilled: the whole horizon without surplus hours

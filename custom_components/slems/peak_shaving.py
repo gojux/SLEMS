@@ -12,8 +12,11 @@ day, how much energy was above a power level on average. The limit is
 recalculated with every plan, so it rises by itself when more is used than
 expected.
 
-"Refilled" is the first hour in which the PV forecast exceeds the consumption
-forecast (as for the night discharge), at most ``MAX_HORIZON`` ahead.
+"Refilled" is the moment the forecast PV surplus adds up to the energy that
+charges the batteries back to the threshold, at most ``MAX_HORIZON`` ahead; a
+short, small surplus on a rainy day does not count. During a PV surplus the
+limit is calculated for the following period without surplus (evening and
+night), because peak shaving only acts then.
 """
 
 from __future__ import annotations
@@ -81,25 +84,39 @@ def hours_until_refill(
     now: datetime,
     pv: Mapping[datetime, float],
     consumption: Mapping[datetime, float],
+    refill_wh: float,
 ) -> list[tuple[int, float]]:
-    """(local hour of the day, share of the hour) from now until PV exceeds consumption.
+    """(local hour of the day, share of the hour) without PV surplus until the refill.
 
-    ``pv`` and ``consumption`` are hourly local buckets (Wh). The hour in which
-    the surplus starts is not included; if there is a surplus right now, only
-    the current hour counts.
+    ``pv`` and ``consumption`` are hourly local buckets (Wh). The batteries
+    count as refilled once the forecast surplus adds up to ``refill_wh`` (AC
+    energy to charge them back to the threshold): a short, small surplus on a
+    rainy day does not end the period. Hours with surplus are not included
+    (the batteries charge then). During a surplus right now the period starts
+    when it ends, e.g. in the evening, because peak shaving only acts then.
     """
     local_now = dt_util.as_local(now)
+    end = local_now + MAX_HORIZON
     hour = local_now.replace(minute=0, second=0, microsecond=0)
 
     def share(start: datetime) -> float:
         return (start + PERIOD - max(start, local_now)) / PERIOD
 
-    result = [(hour.hour, share(hour))]
-    if pv.get(hour, 0.0) > consumption.get(hour, 0.0):
-        return result
-    hour += PERIOD
-    while hour < local_now + MAX_HORIZON and pv.get(hour, 0.0) <= consumption.get(hour, 0.0):
-        result.append((hour.hour, 1.0))
+    def surplus_wh(start: datetime) -> float:
+        return pv.get(start, 0.0) - consumption.get(start, 0.0)
+
+    while hour < end and surplus_wh(hour) > 0:
+        hour += PERIOD
+    result: list[tuple[int, float]] = []
+    charged = 0.0
+    while hour < end:
+        surplus = surplus_wh(hour)
+        if surplus > 0:
+            charged += surplus * share(hour)
+            if charged >= refill_wh:
+                break
+        else:
+            result.append((hour.hour, share(hour)))
         hour += PERIOD
     return result
 
