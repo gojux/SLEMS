@@ -56,10 +56,13 @@ class ProjectionSettings:
 
 @dataclass
 class SocProjection:
-    """Per local hour start: SoC at the end of the hour and planned charge power."""
+    """Per local hour start: SoC at the end of the hour, planned charge power and
+    the expected grid power (+ import / − export, mean W over the projected part
+    of the hour)."""
 
     soc_pct: dict[datetime, float] = field(default_factory=dict)
     planned_charge_w: dict[datetime, float] = field(default_factory=dict)
+    grid_w: dict[datetime, float] = field(default_factory=dict)
 
 
 def project_soc(
@@ -114,6 +117,7 @@ def project_soc(
         pv_w = pv.get(hour, 0.0)
         load = consumption.get(hour, load_w or 0.0) if consumption is not None else load_w or 0.0
         hour_end = hour + PERIOD
+        stored_before = stored
         # Highest stored energy that leaves the space the feed-in cap needs.
         allowed = full - cap.space_needed_at(hour_end) if cap is not None else full
         if pv_w > load:
@@ -145,6 +149,10 @@ def project_soc(
             floor = battery.min_soc_pct / 100 * capacity
             stored = max(floor, allowed, stored - export_w * share / efficiency)
         result.soc_pct[hour] = stored / capacity * 100
+        # Battery AC power from the change of the stored energy (losses on the AC side).
+        change = (stored - stored_before) / share
+        battery_ac = change / efficiency if change > 0 else change * efficiency
+        result.grid_w[hour] = load - pv_w + battery_ac
         hour += PERIOD
     return result
 

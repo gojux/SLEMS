@@ -1497,8 +1497,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     ) -> list[dict]:
         """Hours of a day for the dashboard.
 
-        Forecasts in Wh; planned charge power (W) and projected total SoC at
-        the end of the hour (%) for the hours from now on. With the feed-in
+        Forecasts in Wh; planned charge power (W), expected grid power (W)
+        and projected total SoC at the end of the hour (%) for the hours from
+        now on. With the feed-in
         cap: PV level above which is capped (consumption + limit) and the
         energy above it, of which the curtailed part, from the fine periods.
         Per half hour: mean PV power from the native forecast periods
@@ -1509,6 +1510,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         consumption_hourly = consumption_hourly or {}
         planned = projection.planned_charge_w if projection else {}
         soc = projection.soc_pct if projection else {}
+        grid = projection.grid_w if projection else {}
         rows = []
         for hour in range(24):
             start = day_start + timedelta(hours=hour)
@@ -1521,6 +1523,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     ),
                     "planned_charge_w": round(planned[start]) if start in planned else None,
                     "soc_pct": round(soc[start], 1) if start in soc else None,
+                    # Expected grid power (+ import / − export) from the projection.
+                    "grid_w": round(grid[start]) if start in grid else None,
                 }
             )
             if pv_power is not None:

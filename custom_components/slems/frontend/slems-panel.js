@@ -65,6 +65,8 @@ const STRINGS = {
     consumptionActual: "Consumption measured",
     plannedCharge: "Planned charging",
     actualCharge: "Charging measured",
+    exportForecast: "Feed-in forecast",
+    exportActual: "Feed-in measured",
     socForecast: "State of charge forecast",
     socActual: "State of charge measured",
     showTable: "Show table",
@@ -173,7 +175,7 @@ const STRINGS = {
     capProblemTexts: {
       battery_too_small: "The batteries cannot hold the forecast energy above the limit ({space} needed); the rest is curtailed.",
       too_late: "Not enough time or power left to feed in {export} before the peak; part of the surplus will be curtailed.",
-      charge_power_too_low: "The batteries cannot charge fast enough; about {curtailed} would be curtailed. A consumer set to \"Count and use\" or \"Only in an emergency\" for the feed-in cap can take it.",
+      charge_power_too_low: "The batteries cannot charge fast enough; about {curtailed} would be curtailed. A consumer set to \"Plan with\" or \"Instead of curtailing\" for the feed-in cap can take it.",
       limit_exceeded: "The grid export has been above the limit for more than 5 minutes.",
     },
     capNote: "Limit {limit}. Buffer in use: {buffer}{source}.",
@@ -199,7 +201,7 @@ const STRINGS = {
       feed_in_cap_min_buffer:
         "Space kept free per peak in any case, in % of the PV peak power as energy of one hour (10 kWp, 5 % → 0.5 kWh). Covers small peaks for which the percentage buffer is tiny.",
       cap_mode:
-        "Count and use: takes the surplus above the feed-in limit before the batteries, so they need less free space. Only in an emergency: only what the batteries cannot absorb. Never: not used for the feed-in cap.",
+        "Plan with: takes the surplus above the feed-in limit before the batteries, so they need less free space. Instead of curtailing: only what the batteries cannot absorb. Never: not used for the feed-in cap.",
       feed_in_cap_auto_buffer:
         "Uses the recorded PV forecast errors instead of the fixed buffer: of the days with more PV than forecast, the underestimation not exceeded on 80 % of them raises the PV forecast. Needs 14 recorded days; until then the fixed buffer applies.",
       peak_shaving_grid_limit:
@@ -282,6 +284,8 @@ const STRINGS = {
     consumptionActual: "Verbrauch gemessen",
     plannedCharge: "Geplantes Laden",
     actualCharge: "Laden gemessen",
+    exportForecast: "Einspeisung (Prognose)",
+    exportActual: "Einspeisung gemessen",
     socForecast: "Ladezustand-Prognose",
     socActual: "Ladezustand gemessen",
     showTable: "Tabelle anzeigen",
@@ -390,7 +394,7 @@ const STRINGS = {
     capProblemTexts: {
       battery_too_small: "Die Batterien können die prognostizierte Energie über der Grenze nicht aufnehmen ({space} nötig); der Rest wird abgeregelt.",
       too_late: "Es bleibt nicht genug Zeit oder Leistung, um vor der Spitze {export} einzuspeisen; ein Teil des Überschusses wird abgeregelt.",
-      charge_power_too_low: "Die Batterien können nicht schnell genug laden; etwa {curtailed} würden abgeregelt. Ein Verbraucher mit „Einrechnen und nutzen“ oder „Nur notfalls“ bei der Einspeisebegrenzung kann ihn aufnehmen.",
+      charge_power_too_low: "Die Batterien können nicht schnell genug laden; etwa {curtailed} würden abgeregelt. Ein Verbraucher mit „Einkalkulieren“ oder „Statt Abregeln“ bei der Einspeisebegrenzung kann ihn aufnehmen.",
       limit_exceeded: "Die Einspeisung liegt seit mehr als 5 Minuten über der Grenze.",
     },
     capNote: "Grenze {limit}. Puffer in Verwendung: {buffer}{source}.",
@@ -416,7 +420,7 @@ const STRINGS = {
       feed_in_cap_min_buffer:
         "Platz, der je Spitze auf jeden Fall frei bleibt, in % der PV-Spitzenleistung als Energie einer Stunde (10 kWp, 5 % → 0,5 kWh). Deckt kleine Spitzen ab, bei denen der prozentuale Puffer winzig ist.",
       cap_mode:
-        "Einrechnen und nutzen: nimmt den Überschuss über der Einspeisegrenze vor den Batterien auf, sie brauchen dann weniger freien Platz. Nur notfalls: nur, was die Batterien nicht aufnehmen können. Nie: wird für die Einspeisebegrenzung nicht genutzt.",
+        "Einkalkulieren: nimmt den Überschuss über der Einspeisegrenze vor den Batterien auf, sie brauchen dann weniger freien Platz. Statt Abregeln: nur, was die Batterien nicht aufnehmen können. Nie: wird für die Einspeisebegrenzung nicht genutzt.",
       feed_in_cap_auto_buffer:
         "Verwendet statt des festen Puffers die aufgezeichneten Abweichungen der PV-Prognose: Von den Tagen mit mehr PV als prognostiziert hebt die Unterschätzung, die an 80 % davon nicht überschritten wurde, die PV-Prognose an. Braucht 14 aufgezeichnete Tage; bis dahin gilt der feste Puffer.",
       peak_shaving_grid_limit:
@@ -603,7 +607,7 @@ class SlemsPanel extends HTMLElement {
     this._chartDay = "today";
     // Settings whose explanation is shown (translation keys).
     this._openHints = new Set();
-    this._stats = { pv: {}, house: {}, soc: {}, charge: {} };
+    this._stats = { pv: {}, house: {}, soc: {}, charge: {}, export: {} };
     this._statsFetched = 0;
     this._sections = {};
     this._renderQueued = false;
@@ -1477,7 +1481,8 @@ class SlemsPanel extends HTMLElement {
     const houseId = this._entityId("house_power");
     const socId = this._entityId("battery_soc_total");
     const batteryId = this._entityId("battery_power_total");
-    const ids = [pvId, houseId, socId, batteryId].filter(Boolean);
+    const gridId = this._entityId("grid_power");
+    const ids = [pvId, houseId, socId, batteryId, gridId].filter(Boolean);
     if (!ids.length) return;
     const start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -1510,6 +1515,8 @@ class SlemsPanel extends HTMLElement {
         soc: bySlot(result[socId]),
         // Battery power is +charge / -discharge; only the charging part.
         charge: bySlot(result[batteryId], (v) => Math.max(0, v)),
+        // Grid power is +import / -export; only the export.
+        export: bySlot(result[gridId], (v) => Math.max(0, -v)),
       };
       this._sections.daychart = undefined;
       this._queueRender();
@@ -1537,6 +1544,14 @@ class SlemsPanel extends HTMLElement {
           pvHourly: !row.pv_half_w || row.pv_half_w[0] === row.pv_half_w[1],
           consumptionForecast: row.consumption_wh,
           plannedCharge: row.planned_charge_w,
+          // With the feed-in cap the inverter curtails the export above the limit.
+          exportForecast:
+            row.grid_w === null || row.grid_w === undefined
+              ? null
+              : Math.min(
+                  Math.max(0, -row.grid_w),
+                  row.cap_line_wh === undefined ? Infinity : row.cap_line_wh - (row.consumption_wh ?? 0)
+                ),
           // Projected total state of charge at the end of the hour.
           socForecast: half ? row.soc_pct : null,
           // Feed-in cap: PV level above which is capped, power above it and the curtailed part.
@@ -1548,6 +1563,7 @@ class SlemsPanel extends HTMLElement {
           consumptionActual: today ? this._stats.house[slot] ?? null : null,
           socActual: today ? this._stats.soc[slot] ?? null : null,
           actualCharge: today ? this._stats.charge[slot] ?? null : null,
+          exportActual: today ? this._stats.export[slot] ?? null : null,
         };
       })
     );
@@ -1609,9 +1625,10 @@ class SlemsPanel extends HTMLElement {
     return `<div class="legend">
       ${item(c.pv, t.pvForecast, "dash")}${has("pvActual") ? item(c.pv, t.pvActual, "solid") : ""}
       ${item(c.house, t.consumptionForecast, "dash")}${has("consumptionActual") ? item(c.house, t.consumptionActual, "solid") : ""}
+      ${has("exportForecast") ? item(c.grid, t.exportForecast, "dash") : ""}${has("exportActual") ? item(c.grid, t.exportActual, "solid") : ""}
       ${has("plannedCharge") ? item(`${c.battery}66`, t.plannedCharge, "bar") : ""}${has("actualCharge") ? item(c.battery, t.actualCharge, "bar") : ""}
       ${has("socForecast") ? item(c.battery, t.socForecast, "dash") : ""}${has("socActual") ? item(c.battery, t.socActual, "solid") : ""}
-      ${has("capLine") ? item(c.grid, t.capLine, "dash") : ""}${has("capExcess") ? item(`${c.pv}73`, t.capExcess, "bar") : ""}
+      ${has("capLine") ? item(c.muted, t.capLine, "dash") : ""}${has("capExcess") ? item(`${c.pv}73`, t.capExcess, "bar") : ""}
       ${has("capCurtailed") ? item(CURTAILED_COLOR, t.capCurtailed, "bar") : ""}</div>`;
   }
 
@@ -1629,7 +1646,10 @@ class SlemsPanel extends HTMLElement {
     const plotH = height - pad.top - pad.bottom;
     const ys = (value) => pad.top + plotH - (Math.max(0, Math.min(100, value)) / 100) * plotH;
     const plotBottom = pad.top + plotH;
-    const values = rows.flatMap((r) => [r.pvForecast, r.consumptionForecast, r.plannedCharge, r.actualCharge, r.pvActual, r.consumptionActual]);
+    const values = rows.flatMap((r) => [
+      r.pvForecast, r.consumptionForecast, r.plannedCharge, r.actualCharge, r.pvActual, r.consumptionActual,
+      r.exportForecast, r.exportActual,
+    ]);
     // The feed-in limit only widens the scale where energy lies above it.
     for (const r of rows) if (r.capExcess > 0) values.push(r.capLine + r.capExcess);
     const max = Math.max(100, ...values.filter((v) => v !== null && v !== undefined));
@@ -1684,7 +1704,12 @@ class SlemsPanel extends HTMLElement {
       .join("");
     // Hourly values (both halves equal) get one point in the middle of the hour
     // instead of two, so the line has no steps.
-    const hourlyKeys = { consumptionForecast: () => true, capLine: () => true, pvForecast: (r) => r.pvHourly };
+    const hourlyKeys = {
+      consumptionForecast: () => true,
+      capLine: () => true,
+      exportForecast: () => true,
+      pvForecast: (r) => r.pvHourly,
+    };
     const path = (key, color, dash) => {
       const hourly = hourlyKeys[key] || (() => false);
       const points = rows.filter((r) => !hourly(r) || r.slot % 2 === 0);
@@ -1714,7 +1739,7 @@ class SlemsPanel extends HTMLElement {
           .map((r) => ({ ...r, capLine: r.capLine !== null && r.capLine <= top ? r.capLine : null })),
         "capLine"
       ).map((run) => run.map((r) => [x(r.hour + 0.5), y(r.capLine)])),
-      c.grid,
+      c.muted,
       true
     );
     const now = new Date();
@@ -1725,6 +1750,7 @@ class SlemsPanel extends HTMLElement {
         ${hourLines}${gridLines.join("")}${hourTicks}${bars}${capBars}${capLine}
         ${path("pvForecast", c.pv, true)}${path("pvActual", c.pv, false)}
         ${path("consumptionForecast", c.house, true)}${path("consumptionActual", c.house, false)}
+        ${path("exportForecast", c.grid, true)}${path("exportActual", c.grid, false)}
         ${socLines.join("")}
         ${showNow ? `<line x1="${x(nowHour)}" x2="${x(nowHour)}" y1="${pad.top}" y2="${plotBottom}" stroke="${c.muted}" stroke-dasharray="2 3"/>
         <text x="${x(nowHour) + 4}" y="${pad.top + 10}" class="tick">${this._t.now}</text>` : ""}
@@ -1740,12 +1766,12 @@ class SlemsPanel extends HTMLElement {
     const cap = rows.some((r) => r.capLine !== null && r.capLine !== undefined);
     return `<div class="table-wrap"><table>
       <thead><tr><th>${t.hour}</th><th>${t.pvForecast}</th><th>${t.pvActual}</th><th>${t.consumptionForecast}</th>
-      <th>${t.consumptionActual}</th><th>${t.plannedCharge}</th><th>${t.actualCharge}</th><th>${t.socForecast}</th><th>${t.socActual}</th>
+      <th>${t.consumptionActual}</th><th>${t.exportForecast}</th><th>${t.exportActual}</th><th>${t.plannedCharge}</th><th>${t.actualCharge}</th><th>${t.socForecast}</th><th>${t.socActual}</th>
       ${cap ? `<th>${t.capLine}</th><th>${t.capExcess}</th><th>${t.capCurtailed}</th>` : ""}</tr></thead>
       <tbody>${rows
         .map(
           (r) => `<tr><td>${slotTime(r.slot)}</td><td>${cell(r.pvForecast)}</td><td>${cell(r.pvActual)}</td>
-          <td>${cell(r.consumptionForecast)}</td><td>${cell(r.consumptionActual)}</td><td>${cell(r.plannedCharge)}</td><td>${cell(r.actualCharge)}</td>
+          <td>${cell(r.consumptionForecast)}</td><td>${cell(r.consumptionActual)}</td><td>${cell(r.exportForecast)}</td><td>${cell(r.exportActual)}</td><td>${cell(r.plannedCharge)}</td><td>${cell(r.actualCharge)}</td>
           <td>${percent(r.socForecast)}</td><td>${percent(r.socActual)}</td>${
             cap ? `<td>${cell(r.capLine)}</td><td>${cell(r.capExcess)}</td><td>${cell(r.capCurtailed)}</td>` : ""
           }</tr>`
@@ -1794,6 +1820,7 @@ class SlemsPanel extends HTMLElement {
     tooltip.innerHTML = `<div class="tt-title">${slotTime(slot)}–${slotTime(slot + 1)}</div>
       ${entry(c.pv, t.pvForecast, row.pvForecast)}${entry(c.pv, t.pvActual, row.pvActual)}
       ${entry(c.house, t.consumptionForecast, row.consumptionForecast)}${entry(c.house, t.consumptionActual, row.consumptionActual)}
+      ${entry(c.grid, t.exportForecast, row.exportForecast)}${entry(c.grid, t.exportActual, row.exportActual)}
       ${entry(c.battery, t.plannedCharge, row.plannedCharge)}${entry(c.battery, t.actualCharge, row.actualCharge)}
       ${percentEntry(c.battery, t.socForecast, row.socForecast)}${percentEntry(c.battery, t.socActual, row.socActual)}
       ${row.capExcess > 0 ? entry(c.pv, t.capExcess, row.capExcess) : ""}${row.capCurtailed > 0 ? entry(CURTAILED_COLOR, t.capCurtailed, row.capCurtailed) : ""}`;

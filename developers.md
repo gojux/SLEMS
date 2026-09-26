@@ -536,9 +536,12 @@ entities. The panel is removed on unload and re-registered on every setup.
   energies; `day_plan_tomorrow` for the *Tomorrow* view with the uncorrected
   PV forecast) plus today's 5 minute means from the recorder
   (`recorder/statistics_during_period`, period `5minute`, for the SLEMS PV,
-  house, total SoC and total battery power sensors, refreshed every 5 min),
-  averaged per half hour; the measured charging is the mean of the positive
-  battery power. 48 half hour slots, all series as mean power (W; hourly
+  house, total SoC, total battery power and grid power sensors, refreshed
+  every 5 min), averaged per half hour; the measured charging is the mean of
+  the positive battery power, the measured feed-in the mean of the negative
+  grid power. The expected feed-in comes from `grid_w` of the day plan (the
+  SoC projection: consumption − PV + battery AC power, the battery power from
+  the change of the stored energy), limited to the feed-in cap if it is on. 48 half hour slots, all series as mean power (W; hourly
   values fill both halves: consumption forecast and planned charging come
   from the hourly models). Drawn as SVG in real pixels (redrawn on resize):
   mean power on the left axis, the total SoC drawn on top with its own scale

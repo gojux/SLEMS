@@ -12,7 +12,7 @@ peaks are not averaged away) and the hourly consumption forecast:
 
 * Per step the surplus above the limit (``excess``) is taken by the consumers
   counted for the cap first, then by the batteries up to their charge power;
-  what is left is curtailed unless consumers used only in an emergency take it.
+  what is left is curtailed unless consumers set to take it instead of curtailing do.
 * The free space the batteries need at each moment is calculated backwards
   over all steps, so several peaks per day and peaks on both days are covered:
   ``need(t) = max(0, need(t + 1) + absorbed(t) · (1 + buffer) − drained(t))``.

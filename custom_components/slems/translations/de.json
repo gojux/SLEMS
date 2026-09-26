@@ -221,8 +221,8 @@
       "cap_mode": {
         "name": "Bei Einspeisebegrenzung",
         "state": {
-          "count": "Einrechnen und nutzen",
-          "emergency": "Nur notfalls",
+          "count": "Einkalkulieren",
+          "emergency": "Statt Abregeln",
           "never": "Nie"
         }
       }
@@ -592,7 +592,7 @@
       "message": "Batterien zu klein für die Einspeisebegrenzung"
     },
     "feed_in_cap_battery_too_small_message": {
-      "message": "Um den prognostizierten Überschuss über der Einspeisegrenze von {limit} W aufzunehmen, bräuchten die Batterien um {peak} {required} kWh freien Platz, mehr als sie über dem minimalen Ladestand haben. Der Rest wird abgeregelt. Stelle einen Verbraucher bei der Einspeisebegrenzung auf „Einrechnen und nutzen“ oder verringere den Puffer."
+      "message": "Um den prognostizierten Überschuss über der Einspeisegrenze von {limit} W aufzunehmen, bräuchten die Batterien um {peak} {required} kWh freien Platz, mehr als sie über dem minimalen Ladestand haben. Der Rest wird abgeregelt. Stelle einen Verbraucher bei der Einspeisebegrenzung auf „Einkalkulieren“ oder verringere den Puffer."
     },
     "feed_in_cap_too_late_title": {
       "message": "Einspeisebegrenzung: zu wenig Zeit, um Platz zu schaffen"
@@ -604,7 +604,7 @@
       "message": "Einspeisebegrenzung: Ladeleistung zu gering"
     },
     "feed_in_cap_charge_power_message": {
-      "message": "Der Überschuss über der Einspeisegrenze von {limit} W ist laut Prognose höher, als die Batterien laden können; etwa {curtailed} kWh würden abgeregelt. Stelle einen Verbraucher bei der Einspeisebegrenzung auf „Einrechnen und nutzen“ oder „Nur notfalls“, um ihn zu nutzen."
+      "message": "Der Überschuss über der Einspeisegrenze von {limit} W ist laut Prognose höher, als die Batterien laden können; etwa {curtailed} kWh würden abgeregelt. Stelle einen Verbraucher bei der Einspeisebegrenzung auf „Einkalkulieren“ oder „Statt Abregeln“, um ihn zu nutzen."
     },
     "feed_in_cap_exceeded_title": {
       "message": "Einspeisung über der Grenze"

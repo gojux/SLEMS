@@ -135,7 +135,7 @@ class CapMode(StrEnum):
 
     # Planned with: takes the surplus above the limit before the batteries.
     COUNT = "count"
-    # Only takes what the batteries cannot absorb.
+    # Only takes what the batteries cannot absorb, instead of curtailing it.
     EMERGENCY = "emergency"
     NEVER = "never"
 

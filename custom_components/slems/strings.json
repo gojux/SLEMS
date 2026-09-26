@@ -221,8 +221,8 @@
       "cap_mode": {
         "name": "With feed-in cap",
         "state": {
-          "count": "Count and use",
-          "emergency": "Only in an emergency",
+          "count": "Plan with",
+          "emergency": "Instead of curtailing",
           "never": "Never"
         }
       }
@@ -592,7 +592,7 @@
       "message": "Batteries too small for the feed-in cap"
     },
     "feed_in_cap_battery_too_small_message": {
-      "message": "To absorb the forecast surplus above the feed-in limit of {limit} W, the batteries would need {required} kWh of free space at {peak}, more than they have above the minimum state of charge. The rest is curtailed. Set a consumer to \"Count and use\" for the feed-in cap, or lower the buffer."
+      "message": "To absorb the forecast surplus above the feed-in limit of {limit} W, the batteries would need {required} kWh of free space at {peak}, more than they have above the minimum state of charge. The rest is curtailed. Set a consumer to \"Plan with\" for the feed-in cap, or lower the buffer."
     },
     "feed_in_cap_too_late_title": {
       "message": "Feed-in cap: not enough time to make room"
@@ -604,7 +604,7 @@
       "message": "Feed-in cap: charge power too low"
     },
     "feed_in_cap_charge_power_message": {
-      "message": "The surplus above the feed-in limit of {limit} W is forecast to be higher than the batteries can charge; about {curtailed} kWh would be curtailed. Set a consumer to \"Count and use\" or \"Only in an emergency\" for the feed-in cap to use it."
+      "message": "The surplus above the feed-in limit of {limit} W is forecast to be higher than the batteries can charge; about {curtailed} kWh would be curtailed. Set a consumer to \"Plan with\" or \"Instead of curtailing\" for the feed-in cap to use it."
     },
     "feed_in_cap_exceeded_title": {
       "message": "Feed-in above the limit"

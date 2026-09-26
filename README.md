@@ -212,9 +212,9 @@ Every consumer needs its own power **and** energy sensor.
   off in operating mode *active* sets it to 0 W (or off) once; afterwards
   SLEMS leaves it alone and plans it like an uncontrolled load.
 - **With feed-in cap** (select per controlled consumer, on its card in the
-  dashboard while the feed-in cap is on): *Count and use* – the consumer
+  dashboard while the feed-in cap is on): *Plan with* – the consumer
   takes the surplus above the feed-in limit before the batteries, so they need
-  less free space; *Only in an emergency* (default) – only what the batteries
+  less free space; *Instead of curtailing* (default) – only what the batteries
   cannot absorb; *Never*. See *Feed-in cap*.
 
 **Battery efficiency** (round trip, AC to AC), one of three sources per
@@ -255,7 +255,9 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   not responding – otherwise the operating mode; strategy, state of charge, feed-in limit,
   stored energy and capacity, forecasts), and the forecast chart (mean power per half
   hour in kW): *Today* shows PV and consumption
-  forecast (dashed), the measured values so far (solid), the planned
+  forecast (dashed), the measured values so far (solid), the expected and the
+  measured feed-in into the grid (blue; the expected one from the plan,
+  including night discharge, at most the feed-in cap), the planned
   battery charging (light bars) and the measured charging (solid bars), plus the projected total state of charge (dashed)
   and the measured one (solid) with their scale in % on the right. *Tomorrow* shows the forecasts,
   planned charging and state of charge of the next day, continued from
@@ -660,9 +662,9 @@ house consumption).
   of the possible power, never above the limit. For this it may exceed
   *Maximum grid export while discharging*.
 - **Order during the peak**: the surplus above the limit goes to consumers set
-  to *Count and use*, then to the batteries (regardless of battery priority,
-  battery share and grid friendly charging), then to consumers set to *Only in
-  an emergency*. The feed-in cap takes precedence over grid friendly charging
+  to *Plan with*, then to the batteries (regardless of battery priority,
+  battery share and grid friendly charging), then to consumers set to *Instead of
+  curtailing*. The feed-in cap takes precedence over grid friendly charging
   (its feed-in limit never lies above the cap), night discharge and battery
   priority; the peak shaving threshold stays a floor for feeding in.
 - **Overview**: the tile *Feed-in cap* shows the next peak, the energy the

@@ -217,9 +217,9 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   aus); danach lässt SLEMS ihn in Ruhe und plant ihn wie eine ungesteuerte
   Last.
 - **Bei Einspeisebegrenzung** (Auswahl je gesteuertem Verbraucher, auf
-  seiner Karte im Dashboard, solange die Einspeisebegrenzung an ist): *Einrechnen und
-  nutzen* – der Verbraucher nimmt den Überschuss über der Einspeisegrenze vor
-  den Batterien auf, sie brauchen dann weniger freien Platz; *Nur notfalls*
+  seiner Karte im Dashboard, solange die Einspeisebegrenzung an ist):
+  *Einkalkulieren* – der Verbraucher nimmt den Überschuss über der
+  Einspeisegrenze vor den Batterien auf, sie brauchen dann weniger freien Platz; *Statt Abregeln*
   (Standard) – nur, was die Batterien nicht aufnehmen können; *Nie*. Siehe
   *Einspeisebegrenzung*.
 
@@ -263,8 +263,10 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
   Strategie,
   Ladezustand, gespeicherte Energie und Kapazität, Einspeisegrenze, Prognosen) und das Prognose-Diagramm:
   *Heute* zeigt PV- und Verbrauchsprognose (gestrichelt), die bisher
-  gemessenen Werte (durchgezogen), das geplante Laden der Batterien (helle
-  Balken) und das gemessene Laden (kräftige Balken), dazu den prognostizierten Gesamt-Ladezustand (gestrichelt) und
+  gemessenen Werte (durchgezogen), die erwartete und die gemessene
+  Einspeisung ins Netz (blau; die erwartete aus dem Plan, einschließlich
+  Nachtentladung, höchstens bis zur Einspeisebegrenzung), das geplante Laden
+  der Batterien (helle Balken) und das gemessene Laden (kräftige Balken), dazu den prognostizierten Gesamt-Ladezustand (gestrichelt) und
   den gemessenen (durchgezogen) mit ihrer Skala in % rechts. *Morgen* zeigt Prognosen, geplantes
   Laden und Ladezustand des nächsten Tages, fortgeführt aus der Prognose von
   heute. Die Prognose folgt der Planung: Laden nur mit dem geplanten
@@ -689,9 +691,9 @@ Netzanschlusspunkt (Einspeisung, nach dem Hausverbrauch).
   ist, nie über der Grenze. Dafür darf es *Maximale Einspeisung beim Entladen*
   überschreiten.
 - **Reihenfolge in der Spitze**: Der Überschuss über der Grenze geht an
-  Verbraucher mit *Einrechnen und nutzen*, dann an die Batterien (unabhängig
+  Verbraucher mit *Einkalkulieren*, dann an die Batterien (unabhängig
   von Batterievorrang, Batterieanteil und netzdienlichem Laden), dann an
-  Verbraucher mit *Nur notfalls*. Die Einspeisebegrenzung hat Vorrang vor
+  Verbraucher mit *Statt Abregeln*. Die Einspeisebegrenzung hat Vorrang vor
   netzdienlichem Laden (dessen Einspeisegrenze liegt nie über der Begrenzung),
   Nachtentladung und Batterievorrang; die Schwelle des Spitzenabfangs bleibt
   beim Einspeisen eine Untergrenze.

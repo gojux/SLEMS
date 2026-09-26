@@ -34,7 +34,7 @@ discharge grid target but still respecting the maximum grid export.
 Feed-in cap (optional, see feed_in_cap) takes precedence over all of the
 above: the surplus above the limit goes to the consumers counted for the cap,
 then to the batteries (regardless of battery priority, share or grid friendly
-charging), then to the consumers used only in an emergency. The surplus below
+charging), then to the consumers set to take it instead of curtailing. The surplus below
 the limit is distributed as usual, except that the batteries do not charge
 with it while the space is needed later (``hold_charging``). Before a peak the
 batteries feed in the planned export power; the export never exceeds the
