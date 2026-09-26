@@ -13,10 +13,6 @@ und PV-Ertrag.
 Der Name setzt sich aus *Slug* (ein wunderbares Wort für ein sehr
 interessantes Tier) und *EMS* (Energiemanagementsystem) zusammen.
 
-> **Status: frühe Entwicklung.** Prognose, Planung, Regelung und Dashboard
-> sind umgesetzt, aber noch nicht an einer echten Batterie getestet (siehe
-> [Roadmap](#roadmap)).
-
 ## Warum SLEMS?
 
 Die meisten Speichersteuerungen reagieren auf den Moment: Sie halten die
@@ -683,9 +679,7 @@ behalten die Sprache, in der sie angelegt wurden; nur die angezeigten Namen
 
 ## Roadmap
 
-1. Tests am echten System (siehe offene Punkte in developers.md)
-
-Mögliche spätere Erweiterungen:
+Mögliche Erweiterungen:
 
 - Lastausschluss und evcc-Anbindung: große Verbraucher wie eine Wallbox
   werden nicht aus den Batterien versorgt; ein evcc-Ladepunkt als steuerbarer

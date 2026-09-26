@@ -12,9 +12,6 @@ absorbed, based on forecasts of consumption and PV production.
 The name is a combination of *Slug* (a wonderful word for a very interesting
 animal) and *EMS* (energy management system).
 
-> **Status: early development.** Forecast, planning, control and dashboard
-> are implemented, but not yet tested on a real battery (see [roadmap](#roadmap)).
-
 ## Why SLEMS?
 
 Most home battery controls react to the moment: they keep the grid power
@@ -652,9 +649,7 @@ language of their creation; only the displayed names change.
 
 ## Roadmap
 
-1. Tests on the real system (see open points in developers.md)
-
-Possible extensions later:
+Possible extensions:
 
 - Load exclusion and evcc connection: large loads such as a wallbox are not
   covered by the batteries; an evcc load point as controllable or excluded

@@ -151,7 +151,8 @@ enabled batteries; result per battery in the sensor *Planned power*.
   moving average, quadratic fit once 3 bins have 20 samples); until then the
   default 15 W + 4 % + 1e-5·P² applies (sharing pays off above ~1.7 kW). It
   requires that the driver reports both AC and DC power; the Venus registers
-  30006 (AC) and 30001 (DC) are assumed to be exactly that, to be verified.
+  30006 (AC) and 30001 (DC) are exactly that (verified, see *Marstek Venus E
+  3.0*).
 - **Which**: discharging highest SoC first, charging lowest first. An active
   battery is replaced when it is more than the *rotation threshold* (default
   5 %) worse than the best inactive one, at most once per *minimum interval*
@@ -794,7 +795,7 @@ Source: Omnibattery `const/registers_v3.py`, `drivers/marstek.py`,
 | 30100 | battery_voltage | uint16 | 0.01 V | |
 | 35000 | internal_temperature | int16 | 0.1 °C | |
 | 35100 | inverter_state | uint16 | | 0 sleep, 1 standby, 2 charge, 3 discharge, 4 backup, 5 OTA, 6 bypass |
-| 34003 | cycle_count | uint16 | 1 | charge cycles counted by the battery (as in Omnibattery; not yet verified on the device) |
+| 34003 | cycle_count | uint16 | 1 | charge cycles counted by the battery (as in Omnibattery; plausible on the device, the app no longer shows the count) |
 | 31000 | device_name | char × 10 | | device information, read after connecting and every 6 h |
 | 30200 / 30202 / 30204 | ems / vms / bms_version | uint16 | | |
 | 30350 | comm_module_firmware | char × 6 | | |
@@ -840,10 +841,16 @@ with 0.001 kWh more than 100 % (ruled out). Delta test: charging from 55 to
 0.01 kWh (one way efficiency about 88 %); 33002 stayed unchanged. The scale
 0.01 kWh is confirmed.
 
-Open points to verify on the real device:
+Verified with `tools/set_power.py` (2026-09-26, SoC 55 %): charging with a
+set point of 1000 W gave 30006 = −996 W (AC) and 30001 = +940…+971 W (DC),
+about 3 % loss; discharging with 800 W gave 30006 = +797 W and 30001 =
+−862…−877 W, about 8–9 % loss. The Marstek app showed the AC value (−996 W
+charging, 797 W discharging). The set points are delivered within a few watts;
+34003 reported 13 charge cycles; the app no longer shows the cycle count
+(nor the DC power), so it cannot be compared.
 
-- Omnibattery marks the v3 map as partly untested; still open: sign and
-  difference of 30001/30006 while charging and discharging.
+Note:
+
 - The device holds only one connection: while Omnibattery is running, a Modbus
   battery in SLEMS cannot connect. Use the read-only *HA entities* battery
   during the transition.
@@ -861,6 +868,18 @@ python3 tools/read_registers.py <battery-ip> --registers 37005 34002 32104 --sam
 
 The battery allows one Modbus connection only: disable other integrations
 using it (e.g. Omnibattery) while the script runs.
+
+`tools/set_power.py` charges or discharges a Venus with a fixed power (same
+control registers as the driver: RS485 control, set points, force mode, set
+point written again every 30 s) and shows DC/AC power, SoC, inverter state and
+the set point registers meanwhile; at the end or on Ctrl+C it hands the
+battery back. Pause the battery in SLEMS first (battery menu ⋮).
+
+```bash
+python3 tools/set_power.py <battery-ip> --charge 1000 --duration 180
+python3 tools/set_power.py <battery-ip> --discharge 800
+python3 tools/set_power.py <battery-ip> --release
+```
 
 ## Decision log
 
