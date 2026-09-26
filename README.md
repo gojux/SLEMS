@@ -264,8 +264,10 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   today's projection. The projection follows the planning: charging only
   with the planned surplus, deficits covered by the batteries, import peak
   shaving and night discharge if enabled. Hovering (on a phone: tapping, a
-  tap elsewhere closes it) shows the values of an hour; *Show table*
-  switches to a table.
+  tap elsewhere closes it) shows the values of a half hour; a click on an
+  entry of the legend hides or shows that series (the scale follows the
+  series shown; the browser keeps the choice); *Show table* switches to a
+  table.
 - **Batteries**: state of charge, stored energy and capacity (kWh), power on the grid side
   (AC) with its direction, the SLEMS set point, efficiency, state and
   the *Enabled* switch of every battery (disabling asks for confirmation),
@@ -669,9 +671,12 @@ house consumption).
   priority; the peak shaving threshold stays a floor for feeding in.
 - **Overview**: the tile *Feed-in cap* shows the next peak, the energy the
   batteries have to absorb and, if needed, the energy to feed in before it
-  and by when. The day chart shows a dashed line at consumption + limit (the
-  PV level above which is capped), the energy above it as a bar on that line
-  and the part that would be curtailed in red.
+  and by when. The day chart shows the *PV limit of the feed-in cap* as a grey
+  dashed line: expected consumption + limit, the PV power above which the
+  export would exceed the limit (the limit applies after the house
+  consumption, so the line follows the consumption forecast). The energy
+  above it is shown as a bar on that line, the part that would be curtailed
+  in red.
 - **Warnings** (overview and notifications): batteries too small for
   the space needed, not enough time or power left to feed in before the peak,
   charge power too low for the surplus above the limit, and feed-in above the

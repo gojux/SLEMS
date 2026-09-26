@@ -181,7 +181,7 @@ const STRINGS = {
     capNote: "Limit {limit}. Buffer in use: {buffer}{source}.",
     capBufferAuto: " (learned from {days} days)",
     capBufferWaiting: " (fixed; automatic from 14 recorded days, {days} so far)",
-    capLine: "Feed-in cap (PV level)",
+    capLine: "PV limit of the feed-in cap",
     capExcess: "Above the limit",
     capCurtailed: "Curtailed",
     status: "Status",
@@ -400,7 +400,7 @@ const STRINGS = {
     capNote: "Grenze {limit}. Puffer in Verwendung: {buffer}{source}.",
     capBufferAuto: " (gelernt aus {days} Tagen)",
     capBufferWaiting: " (fest; automatisch ab 14 aufgezeichneten Tagen, bisher {days})",
-    capLine: "Einspeisebegrenzung (PV-Niveau)",
+    capLine: "PV-Grenze der Einspeisebegrenzung",
     capExcess: "Über der Grenze",
     capCurtailed: "Abgeregelt",
     status: "Status",
@@ -571,6 +571,9 @@ function polylines(pointRuns, color, dash) {
     .join("");
 }
 
+// localStorage key of the day chart series hidden via the legend.
+const HIDDEN_SERIES_KEY = "slems-hidden-series";
+
 // Energy the feed-in cap forecasts to be curtailed (status colour "critical", not a series colour).
 const CURTAILED_COLOR = "#d03b3b";
 
@@ -604,6 +607,13 @@ class SlemsPanel extends HTMLElement {
     super();
     this._tab = "overview";
     this._showTable = false;
+    // Series of the day chart switched off in its legend (kept in the browser).
+    this._hiddenSeries = new Set();
+    try {
+      this._hiddenSeries = new Set(JSON.parse(localStorage.getItem(HIDDEN_SERIES_KEY) || "[]"));
+    } catch (err) {
+      // Storage not available: all series shown.
+    }
     this._chartDay = "today";
     // Settings whose explanation is shown (translation keys).
     this._openHints = new Set();
@@ -1615,21 +1625,25 @@ class SlemsPanel extends HTMLElement {
   _legend(rows) {
     const t = this._t;
     const has = (key) => rows.some((r) => r[key] !== null && r[key] !== undefined && r[key] !== 0);
-    const item = (color, label, style) =>
-      `<span class="legend-item"><svg width="22" height="10">${
+    // A click on an entry shows or hides the series.
+    const item = (key, color, label, style) => {
+      if (!has(key)) return "";
+      const hidden = this._hiddenSeries.has(key);
+      return `<button class="legend-item${hidden ? " off" : ""}" data-action="toggle-series" data-series="${key}" aria-pressed="${!hidden}"><svg width="22" height="10">${
         style === "bar"
           ? `<rect x="4" y="0" width="14" height="10" rx="2" fill="${color}"/>`
           : `<line x1="1" y1="5" x2="21" y2="5" stroke="${color}" stroke-width="2" ${style === "dash" ? 'stroke-dasharray="4 3"' : ""}/>`
-      }</svg>${label}</span>`;
+      }</svg>${label}</button>`;
+    };
     const c = this._colors;
     return `<div class="legend">
-      ${item(c.pv, t.pvForecast, "dash")}${has("pvActual") ? item(c.pv, t.pvActual, "solid") : ""}
-      ${item(c.house, t.consumptionForecast, "dash")}${has("consumptionActual") ? item(c.house, t.consumptionActual, "solid") : ""}
-      ${has("exportForecast") ? item(c.grid, t.exportForecast, "dash") : ""}${has("exportActual") ? item(c.grid, t.exportActual, "solid") : ""}
-      ${has("plannedCharge") ? item(`${c.battery}66`, t.plannedCharge, "bar") : ""}${has("actualCharge") ? item(c.battery, t.actualCharge, "bar") : ""}
-      ${has("socForecast") ? item(c.battery, t.socForecast, "dash") : ""}${has("socActual") ? item(c.battery, t.socActual, "solid") : ""}
-      ${has("capLine") ? item(c.muted, t.capLine, "dash") : ""}${has("capExcess") ? item(`${c.pv}73`, t.capExcess, "bar") : ""}
-      ${has("capCurtailed") ? item(CURTAILED_COLOR, t.capCurtailed, "bar") : ""}</div>`;
+      ${item("pvForecast", c.pv, t.pvForecast, "dash")}${item("pvActual", c.pv, t.pvActual, "solid")}
+      ${item("consumptionForecast", c.house, t.consumptionForecast, "dash")}${item("consumptionActual", c.house, t.consumptionActual, "solid")}
+      ${item("exportForecast", c.grid, t.exportForecast, "dash")}${item("exportActual", c.grid, t.exportActual, "solid")}
+      ${item("plannedCharge", `${c.battery}66`, t.plannedCharge, "bar")}${item("actualCharge", c.battery, t.actualCharge, "bar")}
+      ${item("socForecast", c.battery, t.socForecast, "dash")}${item("socActual", c.battery, t.socActual, "solid")}
+      ${item("capLine", c.muted, t.capLine, "dash")}${item("capExcess", `${c.pv}73`, t.capExcess, "bar")}
+      ${item("capCurtailed", CURTAILED_COLOR, t.capCurtailed, "bar")}</div>`;
   }
 
   _chartSvg(rows) {
@@ -1646,12 +1660,15 @@ class SlemsPanel extends HTMLElement {
     const plotH = height - pad.top - pad.bottom;
     const ys = (value) => pad.top + plotH - (Math.max(0, Math.min(100, value)) / 100) * plotH;
     const plotBottom = pad.top + plotH;
-    const values = rows.flatMap((r) => [
-      r.pvForecast, r.consumptionForecast, r.plannedCharge, r.actualCharge, r.pvActual, r.consumptionActual,
-      r.exportForecast, r.exportActual,
-    ]);
+    const shown = (key) => !this._hiddenSeries.has(key);
+    // The scale follows the series shown.
+    const scaled = [
+      "pvForecast", "consumptionForecast", "plannedCharge", "actualCharge", "pvActual", "consumptionActual",
+      "exportForecast", "exportActual",
+    ].filter(shown);
+    const values = rows.flatMap((r) => scaled.map((key) => r[key]));
     // The feed-in limit only widens the scale where energy lies above it.
-    for (const r of rows) if (r.capExcess > 0) values.push(r.capLine + r.capExcess);
+    if (shown("capExcess")) for (const r of rows) if (r.capExcess > 0) values.push(r.capLine + r.capExcess);
     const max = Math.max(100, ...values.filter((v) => v !== null && v !== undefined));
     const step = niceStep(max / 4);
     const top = Math.ceil(max / step) * step;
@@ -1669,7 +1686,8 @@ class SlemsPanel extends HTMLElement {
       const forecast = runs(hourEnds, "socForecast").map((run) => run.map((r) => [x(r.hour + 0.5), ys(r.socForecast)]));
       if (start && forecast.length) forecast[0].unshift([x(start[0]), ys(start[1])]);
       const actual = runs(rows, "socActual").map((run) => run.map((r) => [x(r.hour + 0.25), ys(r.socActual)]));
-      socLines.push(polylines(forecast, c.battery, true), polylines(actual, c.battery, false));
+      if (shown("socForecast")) socLines.push(polylines(forecast, c.battery, true));
+      if (shown("socActual")) socLines.push(polylines(actual, c.battery, false));
     }
 
     const gridLines = [];
@@ -1698,8 +1716,8 @@ class SlemsPanel extends HTMLElement {
     };
     const bars = rows
       .map((r) =>
-        (r.plannedCharge > 0 ? bar(r, "plannedCharge", gap / 2, `${c.battery}66`) : "") +
-        (r.actualCharge > 0 ? bar(r, "actualCharge", slot / 2 + gap / 2, c.battery) : "")
+        (r.plannedCharge > 0 && shown("plannedCharge") ? bar(r, "plannedCharge", gap / 2, `${c.battery}66`) : "") +
+        (r.actualCharge > 0 && shown("actualCharge") ? bar(r, "actualCharge", slot / 2 + gap / 2, c.battery) : "")
       )
       .join("");
     // Hourly values (both halves equal) get one point in the middle of the hour
@@ -1711,6 +1729,7 @@ class SlemsPanel extends HTMLElement {
       pvForecast: (r) => r.pvHourly,
     };
     const path = (key, color, dash) => {
+      if (!shown(key)) return "";
       const hourly = hourlyKeys[key] || (() => false);
       const points = rows.filter((r) => !hourly(r) || r.slot % 2 === 0);
       return polylines(
@@ -1721,18 +1740,18 @@ class SlemsPanel extends HTMLElement {
     };
     // Energy above the feed-in limit as a bar on the limit line, the curtailed part on top.
     const capBars = rows
-      .filter((r) => r.capExcess > 0)
+      .filter((r) => r.capExcess > 0 && (shown("capExcess") || shown("capCurtailed")))
       .map((r) => {
         const capW = Math.max(1, slot - 2 * gap);
         const base = y(r.capLine);
         const top = y(r.capLine + r.capExcess);
         const curtailed = r.capCurtailed > 0 ? y(r.capLine + r.capExcess - r.capCurtailed) : top;
-        return `<rect x="${x(r.hour) + gap}" y="${top}" width="${capW}" height="${Math.max(1, base - top)}" fill="${c.pv}" fill-opacity="0.45"/>${
-          curtailed > top ? `<rect x="${x(r.hour) + gap}" y="${top}" width="${capW}" height="${curtailed - top}" fill="${CURTAILED_COLOR}"/>` : ""
+        return `${shown("capExcess") ? `<rect x="${x(r.hour) + gap}" y="${top}" width="${capW}" height="${Math.max(1, base - top)}" fill="${c.pv}" fill-opacity="0.45"/>` : ""}${
+          curtailed > top && shown("capCurtailed") ? `<rect x="${x(r.hour) + gap}" y="${top}" width="${capW}" height="${curtailed - top}" fill="${CURTAILED_COLOR}"/>` : ""
         }`;
       })
       .join("");
-    const capLine = polylines(
+    const capLine = !shown("capLine") ? "" : polylines(
       runs(
         rows
           .filter((r) => r.slot % 2 === 0)
@@ -1817,13 +1836,15 @@ class SlemsPanel extends HTMLElement {
       value === null || value === undefined
         ? ""
         : `<div><span class="swatch" style="background:${color}"></span>${label}<b>${escapeHtml(this._percent(value))}</b></div>`;
+    // Series hidden in the legend are left out.
+    const v = (key) => (this._hiddenSeries.has(key) ? null : row[key]);
     tooltip.innerHTML = `<div class="tt-title">${slotTime(slot)}–${slotTime(slot + 1)}</div>
-      ${entry(c.pv, t.pvForecast, row.pvForecast)}${entry(c.pv, t.pvActual, row.pvActual)}
-      ${entry(c.house, t.consumptionForecast, row.consumptionForecast)}${entry(c.house, t.consumptionActual, row.consumptionActual)}
-      ${entry(c.grid, t.exportForecast, row.exportForecast)}${entry(c.grid, t.exportActual, row.exportActual)}
-      ${entry(c.battery, t.plannedCharge, row.plannedCharge)}${entry(c.battery, t.actualCharge, row.actualCharge)}
-      ${percentEntry(c.battery, t.socForecast, row.socForecast)}${percentEntry(c.battery, t.socActual, row.socActual)}
-      ${row.capExcess > 0 ? entry(c.pv, t.capExcess, row.capExcess) : ""}${row.capCurtailed > 0 ? entry(CURTAILED_COLOR, t.capCurtailed, row.capCurtailed) : ""}`;
+      ${entry(c.pv, t.pvForecast, v("pvForecast"))}${entry(c.pv, t.pvActual, v("pvActual"))}
+      ${entry(c.house, t.consumptionForecast, v("consumptionForecast"))}${entry(c.house, t.consumptionActual, v("consumptionActual"))}
+      ${entry(c.grid, t.exportForecast, v("exportForecast"))}${entry(c.grid, t.exportActual, v("exportActual"))}
+      ${entry(c.battery, t.plannedCharge, v("plannedCharge"))}${entry(c.battery, t.actualCharge, v("actualCharge"))}
+      ${percentEntry(c.battery, t.socForecast, v("socForecast"))}${percentEntry(c.battery, t.socActual, v("socActual"))}
+      ${v("capExcess") > 0 ? entry(c.pv, t.capExcess, v("capExcess")) : ""}${v("capCurtailed") > 0 ? entry(CURTAILED_COLOR, t.capCurtailed, v("capCurtailed")) : ""}`;
     tooltip.hidden = false;
     // Position relative to the chart card, next to the cursor.
     const card = this.shadowRoot.getElementById("daychart").getBoundingClientRect();
@@ -2165,6 +2186,19 @@ class SlemsPanel extends HTMLElement {
       this._render();
       return;
     }
+    const seriesButton = event.target.closest("[data-action='toggle-series']");
+    if (seriesButton) {
+      const key = seriesButton.dataset.series;
+      if (!this._hiddenSeries.delete(key)) this._hiddenSeries.add(key);
+      try {
+        localStorage.setItem(HIDDEN_SERIES_KEY, JSON.stringify([...this._hiddenSeries]));
+      } catch (err) {
+        // Not stored: the choice lasts until the page is reloaded.
+      }
+      this._sections.daychart = undefined;
+      this._render();
+      return;
+    }
     if (event.target.closest("[data-action='toggle-table']")) {
       this._showTable = !this._showTable;
       this._sections.daychart = undefined;
@@ -2333,7 +2367,9 @@ const STYLE = `
   .segmented button + button { border-left: 1px solid var(--divider-color); }
   .segmented button.active { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 12%, transparent); }
   .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 12px 0 4px; font-size: 12px; color: var(--primary-text-color); }
-  .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+  .legend-item { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; padding: 2px 0;
+    font: inherit; color: inherit; cursor: pointer; }
+  .legend-item.off { opacity: 0.4; text-decoration: line-through; }
   .chart-wrap { position: relative; }
   .chart { display: block; max-width: 100%; }
   .chart .tick { font-size: 11px; fill: var(--secondary-text-color); font-variant-numeric: tabular-nums; }

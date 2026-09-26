@@ -272,7 +272,9 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
   heute. Die Prognose folgt der Planung: Laden nur mit dem geplanten
   Überschuss, Defizite aus den Batterien, Bezugsspitzen abfangen und
   Nachtentladung, falls aktiviert. Beim Überfahren erscheinen die Werte einer
-  halben Stunde (am Handy durch Antippen, Tippen daneben schließt sie);
+  halben Stunde (am Handy durch Antippen, Tippen daneben schließt sie); ein
+  Klick auf einen Eintrag der Legende blendet diese Kurve aus oder ein (die
+  Skala folgt den angezeigten Kurven; der Browser merkt sich die Auswahl);
   *Tabelle anzeigen* schaltet auf eine Tabelle um. Das Diagramm zeigt die
   mittlere Leistung je halbe Stunde in kW.
 - **Batterien**: Ladezustand, gespeicherte Energie und Kapazität (kWh), netzseitige
@@ -699,10 +701,12 @@ Netzanschlusspunkt (Einspeisung, nach dem Hausverbrauch).
   beim Einspeisen eine Untergrenze.
 - **Übersicht**: Die Kachel *Einspeisebegrenzung* zeigt die nächste Spitze,
   die Energie, die die Batterien aufnehmen müssen, und falls nötig die Energie,
-  die davor einzuspeisen ist, und bis wann. Das Tagesdiagramm zeigt eine
-  gestrichelte Linie bei Verbrauch + Grenze (das PV-Niveau, ab dem gekappt
-  wird), die Energie darüber als Balken auf dieser Linie und den Teil, der
-  abgeregelt würde, in Rot.
+  die davor einzuspeisen ist, und bis wann. Das Tagesdiagramm zeigt die
+  *PV-Grenze der Einspeisebegrenzung* als grau gestrichelte Linie: erwarteter
+  Verbrauch + Grenze, also die PV-Leistung, ab der die Einspeisung über der
+  Grenze läge (die Grenze gilt nach dem Hausverbrauch, deshalb folgt die
+  Linie der Verbrauchsprognose). Die Energie darüber steht als Balken auf
+  dieser Linie, der Teil, der abgeregelt würde, in Rot.
 - **Warnungen** (Übersicht und Benachrichtigungen): Batterien zu
   klein für den nötigen Platz, zu wenig Zeit oder Leistung, um vor der Spitze
   einzuspeisen, Ladeleistung zu gering für den Überschuss über der Grenze, und
