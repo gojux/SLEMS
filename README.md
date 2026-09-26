@@ -289,6 +289,30 @@ flow are shown one below the other).
   (e.g. SLEMS and Omnibattery) talk to the same battery at the same time.
   Its sensor *AC power* is positive when discharging and negative when
   charging, as the Home Assistant energy dashboard expects for battery power.
+
+  **Search**: when adding a Venus, SLEMS first searches the network of Home
+  Assistant for batteries (TCP port 502, then a test read of the state of
+  charge; a few seconds) and offers the ones found; batteries already added
+  are left out. A battery whose single Modbus connection is held by another
+  integration cannot be found.
+
+  **Finding the IP address**: Modbus TCP is only available on the **LAN
+  port** of the battery (connect it with a network cable), not over Wi‑Fi. The
+  Marstek app does not show the LAN IP address; look it up in your router /
+  internet gateway / DHCP server (list of connected devices). Give the battery
+  a fixed address there (DHCP reservation), so it does not change later.
+  Alternatively scan your network for devices with the Modbus port open, e.g.
+  with [nmap](https://nmap.org) (adjust the network to yours):
+
+  ```bash
+  nmap -p 502 --open 192.168.0.0/24
+  ```
+
+  Every address listed with `502/tcp open` is a Modbus TCP device (nmap shows
+  the MAC address when run with `sudo` in the same network, which helps to
+  tell several batteries apart). When adding the battery, SLEMS checks the
+  connection by reading its state of charge; stop other integrations using
+  the battery first.
 - **Existing Home Assistant entities (read-only)**: state of charge and power
   sensors of a battery that is controlled by something else. SLEMS never sends
   commands to such a battery. This allows running SLEMS in simulation mode side

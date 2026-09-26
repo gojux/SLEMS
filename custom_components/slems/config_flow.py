@@ -3,10 +3,14 @@
 The main entry holds the system level measurements (grid, PV, weather). Every
 battery is a config subentry, so batteries can be added, edited and removed at
 any time without touching the rest of the configuration.
+
+A Marstek Venus can be searched in the network when adding a battery (see
+discovery).
 """
 
 from __future__ import annotations
 
+import socket
 from typing import Any
 
 import voluptuous as vol
@@ -71,6 +75,7 @@ from .const import (
     ControlMode,
     EfficiencyMode,
 )
+from .discovery import async_find_batteries
 from .drivers.marstek_venus_e3 import HARDWARE_MAX_POWER_W, MarstekVenusE3Driver
 from .pv_forecast import async_forecast_provider_entries
 
@@ -214,6 +219,8 @@ class BatterySubentryFlow(ConfigSubentryFlow):
 
     def __init__(self) -> None:
         self._model: BatteryModel | None = None
+        self._found: list[tuple[str, float]] = []
+        self._host: str | None = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -249,14 +256,46 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         self, user_input: dict[str, Any] | None
     ) -> SubentryFlowResult:
         if self._model is BatteryModel.MARSTEK_VENUS_E3:
-            return await self.async_step_marstek_venus_e3(user_input)
+            if self.source == SOURCE_RECONFIGURE:
+                return await self.async_step_marstek_venus_e3(user_input)
+            return await self.async_step_search()
         return await self.async_step_ha_entities(user_input)
 
-    async def async_step_marstek_venus_e3(
+    async def async_step_search(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
+        """Search the network for batteries and pick one (or enter it by hand)."""
+        if user_input is not None:
+            choice = user_input[CONF_HOST]
+            self._host = None if choice == MANUAL else choice
+            return await self.async_step_marstek_venus_e3()
+        self._found = await async_find_batteries(
+            self.hass, await _async_battery_hosts(self.hass, self._get_entry())
+        )
+        if not self._found:
+            return await self.async_step_marstek_venus_e3(None, errors={"base": "none_found"})
+        options = [
+            selector.SelectOptionDict(value=host, label=f"{host} ({soc:.0f} %)")
+            for host, soc in self._found
+        ]
+        options.append(selector.SelectOptionDict(value=MANUAL, label=MANUAL))
+        return self.async_show_form(
+            step_id="search",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_HOST, default=self._found[0][0]): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=options, translation_key="search")
+                    )
+                }
+            ),
+            description_placeholders={"count": str(len(self._found))},
+        )
+
+    async def async_step_marstek_venus_e3(
+        self, user_input: dict[str, Any] | None = None, errors: dict[str, str] | None = None
+    ) -> SubentryFlowResult:
         """Connection and limits of a Marstek Venus E 3.0."""
-        errors: dict[str, str] = {}
+        errors = dict(errors or {})
         if user_input is not None:
             user_input[CONF_PORT] = int(user_input[CONF_PORT])
             user_input[CONF_UNIT_ID] = int(user_input[CONF_UNIT_ID])
@@ -268,6 +307,8 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             errors["base"] = "cannot_connect"
 
         defaults = self._defaults(user_input)
+        if self._host and CONF_HOST not in defaults:
+            defaults = {**defaults, CONF_HOST: self._host}
         schema = vol.Schema(
             {
                 vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "Venus E 3.0")): str,
@@ -369,21 +410,49 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         return {}
 
     def _async_finish(self, user_input: dict[str, Any]) -> SubentryFlowResult:
-        data = dict(user_input)
+        data = _battery_data(user_input, self._model)
         title = data.pop(CONF_NAME)
-        data[CONF_MODEL] = self._model.value
-        for key in (
-            CONF_CAPACITY_WH,
-            CONF_MAX_CHARGE_POWER_W,
-            CONF_MAX_DISCHARGE_POWER_W,
-            CONF_ROUND_TRIP_EFFICIENCY_PCT,
-        ):
-            data[key] = int(data[key])
         if self.source == SOURCE_RECONFIGURE:
             return self.async_update_and_abort(
                 self._get_entry(), self._get_reconfigure_subentry(), title=title, data=data
             )
         return self.async_create_entry(title=title, data=data)
+
+
+# Choice in the search step for entering the address by hand.
+MANUAL = "manual"
+
+
+async def _async_battery_hosts(hass: HomeAssistant, entry: ConfigEntry) -> set[str]:
+    """Hosts of the Modbus batteries configured in ``entry`` and their IPv4 addresses."""
+    hosts = {
+        host
+        for subentry in entry.subentries.values()
+        if subentry.subentry_type == SUBENTRY_TYPE_BATTERY
+        and (host := subentry.data.get(CONF_HOST))
+    }
+    result = set(hosts)
+    for host in hosts:
+        try:
+            infos = await hass.loop.getaddrinfo(host, None, family=socket.AF_INET)
+        except OSError:
+            continue
+        result |= {info[4][0] for info in infos}
+    return result
+
+
+def _battery_data(user_input: dict[str, Any], model: BatteryModel) -> dict[str, Any]:
+    """Subentry data of a battery (name still included) from the form input."""
+    data = dict(user_input)
+    data[CONF_MODEL] = model.value
+    for key in (
+        CONF_CAPACITY_WH,
+        CONF_MAX_CHARGE_POWER_W,
+        CONF_MAX_DISCHARGE_POWER_W,
+        CONF_ROUND_TRIP_EFFICIENCY_PCT,
+    ):
+        data[key] = int(data[key])
+    return data
 
 
 class ConsumerSubentryFlow(ConfigSubentryFlow):

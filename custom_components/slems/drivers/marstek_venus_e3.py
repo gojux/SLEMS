@@ -291,6 +291,12 @@ class MarstekVenusE3Driver(BatteryDriver):
     @classmethod
     async def probe(cls, host: str, port: int, unit_id: int) -> bool:
         """Return True if a battery answers the SoC register at host:port."""
+        return await cls.read_soc(host, port, unit_id) is not None
+
+    @classmethod
+    async def read_soc(cls, host: str, port: int, unit_id: int) -> float | None:
+        """State of charge (%) read once from host:port, None without an answer."""
+        spec = TELEMETRY_REGISTERS[0]
         link = ModbusTcpLink(
             host,
             port,
@@ -301,7 +307,8 @@ class MarstekVenusE3Driver(BatteryDriver):
         )
         try:
             if not await link.connect():
-                return False
-            return await link.read(TELEMETRY_REGISTERS[0].address, 1) is not None
+                return None
+            words = await link.read(spec.address, 1)
+            return None if words is None else words[0] * spec.scale
         finally:
             await link.close()

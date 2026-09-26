@@ -659,6 +659,44 @@ limit the maximum gain.
   providers (`async_get_solar_forecast` of their `energy` platform, as used by
   the energy dashboard). Any provider works; several entries are summed.
 
+### Finding batteries
+
+`discovery.py`: `async_find_batteries` takes the IPv4 networks of the enabled
+network adapters of Home Assistant (`network.async_get_adapters`; networks
+larger than 1022 hosts are reduced to the /24 around the address), opens TCP
+port 502 on every host (0.6 s timeout, 64 in parallel) and reads the SoC
+register once where it is open (`MarstekVenusE3Driver.read_soc`, also used by
+the connection test). The battery subentry flow runs it as step `search`
+before the Venus form (not when reconfiguring); configured batteries are
+excluded by host and by the IPv4 addresses their host names resolve to.
+
+Idea for later – automatic discovery. The Venus LAN port gets its address
+by DHCP with the host name `CH395` (the WCH CH395 Ethernet chip, seen on three
+devices; their MAC prefixes differ, so they are no criterion, and the chip is
+used in other devices too, so a device must be checked by reading the SoC).
+Subentry flows do not support discovery, and a `dhcp` matcher in the manifest
+starts a config flow that Home Assistant aborts at once for a
+`single_config_entry` integration with an entry (checked in HA 2026.9;
+removing `single_config_entry` would work but is not wanted). The way without
+that side effect, after the core integration `mitsubishi_comfort`:
+
+- read the DHCP sightings with the public
+  `homeassistant.components.dhcp.async_discovered_service_info(hass)` (IP,
+  host name, MAC) at startup and periodically, no manifest matcher;
+- for an unknown `ch395*` device that answers the SoC register, create a
+  fixable repair issue ("Marstek Venus found at …"); its `RepairsFlow` asks
+  for name, capacity and limits and adds the battery with
+  `hass.config_entries.async_add_subentry`;
+- store the MAC of a battery (device registry connection) and update its host
+  when its MAC shows up with another IP;
+- use the sightings in the search step first (instant), the port scan as
+  fallback.
+
+Drawbacks: the battery appears under *Repairs* instead of *Discovered*, and
+only after Home Assistant saw a DHCP request (at the latest with the next
+lease renewal after a restart of Home Assistant). A DHCPREQUEST with host name
+CH395 can be sent from the simulator container to test it.
+
 ### Adding a battery model
 
 1. Implement `BatteryDriver` in `drivers/<model>.py`.
@@ -962,3 +1000,4 @@ python3 tools/set_power.py <battery-ip> --release
 | 2026-09-26 | Feed-in cap at the grid connection point (kWp × %): space for the energy above the limit planned backwards over all peaks until the end of tomorrow with the native PV periods, percentage buffer plus minimum buffer (% of kWp), optional automatic buffer from the recorded PV errors; making room by holding charging, a lower night discharge target and feeding in as late as possible (1 h before, 70 % power, may exceed the maximum export while discharging, never the limit); consumers per option counted / emergency / never; precedence over grid friendly charging, night discharge and battery priority. |
 | 2026-09-26 | Feed-in cap warnings as notifications (created on appearance, dismissed when gone) instead of repair issues: they come from the forecast. The part of each consumer in the cap is a select on the consumer card instead of a config flow field. |
 | 2026-09-26 | Forecast.Solar periods are re-keyed from their end to their start when read (before, its forecast was used one hour late everywhere). Day chart in half hours with mean power, measured charging from the 5 minute statistics next to the planned one. |
+| 2026-09-26 | Batteries can be searched in the network when adding a Venus (port 502 + SoC read). No automatic discovery for now; the way that keeps `single_config_entry` is noted under *Finding batteries*. |

@@ -300,6 +300,30 @@ Batterien im Energiefluss untereinander).
   Batterie sprechen. Ihr Sensor *AC-Leistung* ist beim Entladen positiv und
   beim Laden negativ, wie es das Energie-Dashboard von Home Assistant für die
   Batterieleistung erwartet.
+
+  **Suche**: Beim Hinzufügen einer Venus sucht SLEMS zuerst im Netz von Home
+  Assistant nach Batterien (TCP-Port 502, dann ein Probe-Lesen des
+  Ladezustands; wenige Sekunden) und bietet die gefundenen an; bereits
+  hinzugefügte fehlen in der Liste. Eine Batterie, deren einzige
+  Modbus-Verbindung eine andere Integration hält, kann nicht gefunden werden.
+
+  **IP-Adresse finden**: Modbus TCP gibt es nur am **LAN-Anschluss** der
+  Batterie (mit Netzwerkkabel verbinden), nicht über WLAN. Die Marstek-App
+  zeigt die LAN-IP-Adresse nicht an; sie steht im Router / Internet-Gateway /
+  DHCP-Server (Liste der verbundenen Geräte). Vergib der Batterie dort eine
+  feste Adresse (DHCP-Reservierung), damit sie sich später nicht ändert.
+  Alternativ lässt sich das Netz nach Geräten mit offenem Modbus-Port
+  durchsuchen, z. B. mit [nmap](https://nmap.org) (Netz an deines anpassen):
+
+  ```bash
+  nmap -p 502 --open 192.168.0.0/24
+  ```
+
+  Jede Adresse mit `502/tcp open` ist ein Modbus-TCP-Gerät (mit `sudo` im
+  selben Netz zeigt nmap auch die MAC-Adresse, das hilft bei mehreren
+  Batterien). Beim Hinzufügen prüft SLEMS die Verbindung, indem es den
+  Ladezustand liest; andere Integrationen, die die Batterie verwenden, vorher
+  stoppen.
 - **Vorhandene Home-Assistant-Entities (nur lesend)**: Ladezustand und
   Leistung einer Batterie, die von etwas anderem gesteuert wird. SLEMS sendet
   an eine solche Batterie nie Befehle. So kann SLEMS im Simulationsmodus

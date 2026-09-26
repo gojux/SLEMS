@@ -106,10 +106,18 @@
             "efficiency_mode": "Gelernt (empfohlen): aus der gemessenen Batterieleistung; braucht etwa drei volle Ladezyklen, bis dahin gilt der Startwert. Manuell: fester Wert.",
             "round_trip_efficiency_pct": "Entnommene / eingespeicherte Energie (AC). Im manuellen Modus fester Wert, sonst Startwert, bis genug Messdaten vorliegen."
           }
+        },
+        "search": {
+          "title": "Marstek Venus im Netz",
+          "description": "{count} Batterie(n) gefunden (Ladezustand in Klammern). Bereits hinzugefügte Batterien und solche, deren Modbus-Verbindung eine andere Integration hält, fehlen in der Liste.",
+          "data": {
+            "host": "Batterie"
+          }
         }
       },
       "error": {
-        "cannot_connect": "Keine Verbindung zur Batterie möglich."
+        "cannot_connect": "Keine Verbindung zur Batterie möglich.",
+        "none_found": "Im Netz wurde keine Marstek Venus gefunden. Adresse von Hand eingeben (siehe README: IP-Adresse finden); andere Integrationen, die die Batterie verwenden, vorher stoppen."
       },
       "abort": {
         "reconfigure_successful": "Batterie aktualisiert."
@@ -192,6 +200,11 @@
         "battery_counters": "Batteriezähler (empfohlen)",
         "learned": "Gelernt",
         "manual": "Manuell"
+      }
+    },
+    "search": {
+      "options": {
+        "manual": "Adresse von Hand eingeben"
       }
     }
   },
