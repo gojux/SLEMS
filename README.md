@@ -113,7 +113,9 @@ Requires Home Assistant 2026.9 or newer.
 
 Every integration that provides a solar forecast for the Home Assistant energy
 dashboard can be selected, e.g. Forecast.Solar or Solcast. Several entries
-(e.g. one Forecast.Solar entry per roof plane) are summed up.
+(e.g. one Forecast.Solar entry per roof plane) are summed up. SLEMS uses the
+finest resolution the provider delivers (e.g. 15 or 30 minutes). Forecast.Solar
+marks each period by its end; SLEMS takes this into account.
 
 ### Weather (optional)
 
@@ -251,10 +253,10 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   of the flow, faster and on a thicker line the higher the power. Key figures
   (status: problems first – smart meter without values, battery unreadable or
   not responding – otherwise the operating mode; strategy, state of charge, feed-in limit,
-  stored energy and capacity, forecasts), and the forecast chart (energy per hour in
-  kWh): *Today* shows PV and consumption
-  forecast (dashed), the measured values so far (solid) and the planned
-  battery charging (bars), plus the projected total state of charge (dashed)
+  stored energy and capacity, forecasts), and the forecast chart (mean power per half
+  hour in kW): *Today* shows PV and consumption
+  forecast (dashed), the measured values so far (solid), the planned
+  battery charging (light bars) and the measured charging (solid bars), plus the projected total state of charge (dashed)
   and the measured one (solid) with their scale in % on the right. *Tomorrow* shows the forecasts,
   planned charging and state of charge of the next day, continued from
   today's projection. The projection follows the planning: charging only

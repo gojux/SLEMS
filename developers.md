@@ -377,6 +377,21 @@ and `blueprints/marstek_active_balance_blueprint.yaml` of Omnibattery.
   `SIM_BLEED_PCT_PER_MIN` (BMS balancing speed, much faster than reality);
   a small `SIM_CAPACITY_WH` makes a run take minutes.
 
+### PV forecast periods
+
+`pv_forecast.py`: SLEMS keys every forecast period by its start. Forecast.Solar
+keys it by its end (API documentation: "the value is always for the period
+from last timestamp to the timestamp in the key"; in the data the first energy
+of a day comes at the first full hour after sunrise, and the last hour before
+sunset ends a few minutes before the sunset timestamp). `keyed_by_start`
+re-keys the providers in `PERIOD_END_DOMAINS` when the forecast is read: a
+period starts at the previous timestamp if that is at most one hour earlier,
+otherwise one hour before its end. Other providers are taken as period starts
+(not verified for Solcast). `power_lookup` gives the mean power of the period
+a moment falls in (period length = gap to the next timestamp, at most 1 h; the
+last one gets the median gap); `mean_power` averages it over any interval
+(5 minute samples).
+
 ### Grid friendly charging
 
 `grid_friendly.py`, switch *Grid friendly charging* (default on). Every plan
@@ -516,17 +531,23 @@ entities. The panel is removed on unload and re-registered on every setup.
   `custom_components/slems`); update both together.
 - Day chart: data from the attribute `day_plan` of the sensor *Feed-in limit*
   (24 rows: corrected PV forecast, consumption forecast, planned charging,
-  projected total SoC at the end of the hour; `day_plan_tomorrow` for the
-  *Tomorrow* view with the uncorrected PV forecast) plus the hourly means of
-  today from the recorder (`recorder/statistics_during_period` for the SLEMS
-  PV, house and total SoC sensors, refreshed every 5 min). Drawn as SVG in
-  real pixels (redrawn on resize): energy per hour on the left axis (kWh;
-  the hourly mean power in W equals the energy in Wh), the total SoC drawn on
-  top with its own scale on the right (0–100 %, labels only, the grid lines
-  belong to the kWh axis; the user's choice over a separate panel);
-  forecast dashed, measured solid, planned charging as bars;
+  projected total SoC at the end of the hour, plus per half hour the mean PV
+  power from the native forecast periods `pv_half_w` and the feed-in cap
+  energies; `day_plan_tomorrow` for the *Tomorrow* view with the uncorrected
+  PV forecast) plus today's 5 minute means from the recorder
+  (`recorder/statistics_during_period`, period `5minute`, for the SLEMS PV,
+  house, total SoC and total battery power sensors, refreshed every 5 min),
+  averaged per half hour; the measured charging is the mean of the positive
+  battery power. 48 half hour slots, all series as mean power (W; hourly
+  values fill both halves: consumption forecast and planned charging come
+  from the hourly models). Drawn as SVG in real pixels (redrawn on resize):
+  mean power on the left axis, the total SoC drawn on top with its own scale
+  on the right (0–100 %, labels only, the grid lines belong to the power axis;
+  the user's choice over a separate panel); forecast dashed, measured solid,
+  planned charging as light bars on the left half of a slot, measured
+  charging as solid bars on the right half;
   the SoC forecast starts at the current total SoC (tomorrow: at today's last
-  projected value); crosshair tooltip per hour (touch: `pointerdown` shows and
+  projected value); crosshair tooltip per half hour (touch: `pointerdown` shows and
   keeps it, also across redraws via `_tooltipAt`; a tap elsewhere hides it;
   `touch-action: pan-y` keeps vertical scrolling); table view
   as accessible alternative.
@@ -940,3 +961,4 @@ python3 tools/set_power.py <battery-ip> --release
 | 2026-09-26 | Communication pause per battery for firmware updates (manual, 20 min default, automatic on a reported OTA update); battery card actions in a ⋮ menu with a details dialog (firmware, counters). |
 | 2026-09-26 | Feed-in cap at the grid connection point (kWp × %): space for the energy above the limit planned backwards over all peaks until the end of tomorrow with the native PV periods, percentage buffer plus minimum buffer (% of kWp), optional automatic buffer from the recorded PV errors; making room by holding charging, a lower night discharge target and feeding in as late as possible (1 h before, 70 % power, may exceed the maximum export while discharging, never the limit); consumers per option counted / emergency / never; precedence over grid friendly charging, night discharge and battery priority. |
 | 2026-09-26 | Feed-in cap warnings as notifications (created on appearance, dismissed when gone) instead of repair issues: they come from the forecast. The part of each consumer in the cap is a select on the consumer card instead of a config flow field. |
+| 2026-09-26 | Forecast.Solar periods are re-keyed from their end to their start when read (before, its forecast was used one hour late everywhere). Day chart in half hours with mean power, measured charging from the 5 minute statistics next to the planned one. |

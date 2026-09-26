@@ -58,17 +58,18 @@ const STRINGS = {
     dayChart: "Today: forecast and plan",
     dayChartTomorrow: "Tomorrow: forecast and plan",
     tomorrow: "Tomorrow",
-    dayChartHint: "Energy per hour (left), total state of charge (right)",
+    dayChartHint: "Mean power per half hour (left), total state of charge (right)",
     pvForecast: "PV forecast",
     pvActual: "PV measured",
     consumptionForecast: "Consumption forecast",
     consumptionActual: "Consumption measured",
     plannedCharge: "Planned charging",
+    actualCharge: "Charging measured",
     socForecast: "State of charge forecast",
     socActual: "State of charge measured",
     showTable: "Show table",
     showChart: "Show chart",
-    hour: "Hour",
+    hour: "Time",
     now: "now",
     noData: "No forecast available yet",
     soc: "State of charge",
@@ -274,12 +275,13 @@ const STRINGS = {
     dayChart: "Heute: Prognose und Plan",
     dayChartTomorrow: "Morgen: Prognose und Plan",
     tomorrow: "Morgen",
-    dayChartHint: "Energie pro Stunde (links), Gesamt-Ladezustand (rechts)",
+    dayChartHint: "Mittlere Leistung je halbe Stunde (links), Gesamt-Ladezustand (rechts)",
     pvForecast: "PV-Prognose",
     pvActual: "PV gemessen",
     consumptionForecast: "Verbrauchsprognose",
     consumptionActual: "Verbrauch gemessen",
     plannedCharge: "Geplantes Laden",
+    actualCharge: "Laden gemessen",
     socForecast: "Ladezustand-Prognose",
     socActual: "Ladezustand gemessen",
     showTable: "Tabelle anzeigen",
@@ -534,7 +536,10 @@ const SETTING_GROUPS = [
   ],
 ];
 
-/** Consecutive rows with a value for ``key``; a missing hour starts a new run. */
+/** "HH:MM" of the start of a half hour slot (0 = 00:00, 48 = 24:00). */
+const slotTime = (slot) => `${String(Math.floor(slot / 2)).padStart(2, "0")}:${slot % 2 ? "30" : "00"}`;
+
+/** Consecutive rows with a value for ``key``; a missing value starts a new run. */
 function runs(rows, key) {
   const result = [];
   let current = [];
@@ -598,7 +603,7 @@ class SlemsPanel extends HTMLElement {
     this._chartDay = "today";
     // Settings whose explanation is shown (translation keys).
     this._openHints = new Set();
-    this._stats = { pv: {}, house: {}, soc: {} };
+    this._stats = { pv: {}, house: {}, soc: {}, charge: {} };
     this._statsFetched = 0;
     this._sections = {};
     this._renderQueued = false;
@@ -1471,7 +1476,8 @@ class SlemsPanel extends HTMLElement {
     const pvId = this._entityId("pv_power");
     const houseId = this._entityId("house_power");
     const socId = this._entityId("battery_soc_total");
-    const ids = [pvId, houseId, socId].filter(Boolean);
+    const batteryId = this._entityId("battery_power_total");
+    const ids = [pvId, houseId, socId, batteryId].filter(Boolean);
     if (!ids.length) return;
     const start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -1481,13 +1487,30 @@ class SlemsPanel extends HTMLElement {
         start_time: start.toISOString(),
         end_time: new Date().toISOString(),
         statistic_ids: ids,
-        period: "hour",
+        period: "5minute",
         types: ["mean"],
         units: { power: "W" },
       });
-      const byHour = (rows) =>
-        Object.fromEntries((rows || []).map((row) => [new Date(row.start).getHours(), row.mean]));
-      this._stats = { pv: byHour(result[pvId]), house: byHour(result[houseId]), soc: byHour(result[socId]) };
+      // 5 minute means into half hours (slot 0 = 00:00–00:30); ``map`` per sample.
+      const bySlot = (rows, map = (v) => v) => {
+        const sums = {};
+        for (const row of rows || []) {
+          if (row.mean === null || row.mean === undefined) continue;
+          const start = new Date(row.start);
+          const slot = start.getHours() * 2 + Math.floor(start.getMinutes() / 30);
+          const entry = (sums[slot] ||= [0, 0]);
+          entry[0] += map(row.mean);
+          entry[1] += 1;
+        }
+        return Object.fromEntries(Object.entries(sums).map(([slot, [sum, n]]) => [slot, sum / n]));
+      };
+      this._stats = {
+        pv: bySlot(result[pvId]),
+        house: bySlot(result[houseId]),
+        soc: bySlot(result[socId]),
+        // Battery power is +charge / -discharge; only the charging part.
+        charge: bySlot(result[batteryId], (v) => Math.max(0, v)),
+      };
       this._sections.daychart = undefined;
       this._queueRender();
     } catch (err) {
@@ -1500,22 +1523,32 @@ class SlemsPanel extends HTMLElement {
     const attributes = this._state("feed_in_limit")?.attributes || {};
     const today = this._chartDay === "today";
     const plan = (today ? attributes.day_plan : attributes.day_plan_tomorrow) || [];
-    return plan.map((row, hour) => ({
-      hour,
-      pvForecast: row.pv_wh,
-      consumptionForecast: row.consumption_wh,
-      plannedCharge: row.planned_charge_w,
-      // Projected total state of charge at the end of the hour.
-      socForecast: row.soc_pct,
-      // Feed-in cap: PV level above which is capped, energy above it and the curtailed part.
-      capLine: row.cap_line_wh ?? null,
-      capExcess: row.cap_excess_wh ?? null,
-      capCurtailed: row.cap_curtailed_wh ?? null,
-      // Measured values exist for today only.
-      pvActual: today ? this._stats.pv[hour] ?? null : null,
-      consumptionActual: today ? this._stats.house[hour] ?? null : null,
-      socActual: today ? this._stats.soc[hour] ?? null : null,
-    }));
+    // Half hours; all values are mean powers (W). The plan rows are hourly
+    // (Wh per hour = mean W); PV and the feed-in cap also come per half hour.
+    const perHalf = (wh) => (wh === null || wh === undefined ? null : wh * 2);
+    return plan.flatMap((row, hour) =>
+      [0, 1].map((half) => {
+        const slot = hour * 2 + half;
+        return {
+          slot,
+          hour: hour + half / 2,
+          pvForecast: row.pv_half_w?.[half] ?? row.pv_wh,
+          consumptionForecast: row.consumption_wh,
+          plannedCharge: row.planned_charge_w,
+          // Projected total state of charge at the end of the hour.
+          socForecast: half ? row.soc_pct : null,
+          // Feed-in cap: PV level above which is capped, power above it and the curtailed part.
+          capLine: row.cap_line_wh ?? null,
+          capExcess: row.cap_excess_half_wh ? perHalf(row.cap_excess_half_wh[half]) : null,
+          capCurtailed: row.cap_curtailed_half_wh ? perHalf(row.cap_curtailed_half_wh[half]) : null,
+          // Measured values exist for today only.
+          pvActual: today ? this._stats.pv[slot] ?? null : null,
+          consumptionActual: today ? this._stats.house[slot] ?? null : null,
+          socActual: today ? this._stats.soc[slot] ?? null : null,
+          actualCharge: today ? this._stats.charge[slot] ?? null : null,
+        };
+      })
+    );
   }
 
   /** Where the projected state of charge line starts: [hour of day, %]. */
@@ -1574,7 +1607,7 @@ class SlemsPanel extends HTMLElement {
     return `<div class="legend">
       ${item(c.pv, t.pvForecast, "dash")}${has("pvActual") ? item(c.pv, t.pvActual, "solid") : ""}
       ${item(c.house, t.consumptionForecast, "dash")}${has("consumptionActual") ? item(c.house, t.consumptionActual, "solid") : ""}
-      ${has("plannedCharge") ? item(c.battery, t.plannedCharge, "bar") : ""}
+      ${has("plannedCharge") ? item(`${c.battery}66`, t.plannedCharge, "bar") : ""}${has("actualCharge") ? item(c.battery, t.actualCharge, "bar") : ""}
       ${has("socForecast") ? item(c.battery, t.socForecast, "dash") : ""}${has("socActual") ? item(c.battery, t.socActual, "solid") : ""}
       ${has("capLine") ? item(c.grid, t.capLine, "dash") : ""}${has("capExcess") ? item(`${c.pv}73`, t.capExcess, "bar") : ""}
       ${has("capCurtailed") ? item(CURTAILED_COLOR, t.capCurtailed, "bar") : ""}</div>`;
@@ -1594,7 +1627,7 @@ class SlemsPanel extends HTMLElement {
     const plotH = height - pad.top - pad.bottom;
     const ys = (value) => pad.top + plotH - (Math.max(0, Math.min(100, value)) / 100) * plotH;
     const plotBottom = pad.top + plotH;
-    const values = rows.flatMap((r) => [r.pvForecast, r.consumptionForecast, r.plannedCharge, r.pvActual, r.consumptionActual]);
+    const values = rows.flatMap((r) => [r.pvForecast, r.consumptionForecast, r.plannedCharge, r.actualCharge, r.pvActual, r.consumptionActual]);
     // The feed-in limit only widens the scale where energy lies above it.
     for (const r of rows) if (r.capExcess > 0) values.push(r.capLine + r.capExcess);
     const max = Math.max(100, ...values.filter((v) => v !== null && v !== undefined));
@@ -1609,47 +1642,54 @@ class SlemsPanel extends HTMLElement {
         socLines.push(`<text x="${width - pad.right + 6}" y="${ys(v) + 4}" text-anchor="start" class="tick">${escapeHtml(this._percent(v))}</text>`);
       }
       const start = this._socStart();
-      const forecast = runs(rows, "socForecast").map((run) => run.map((r) => [x(r.hour + 1), ys(r.socForecast)]));
+      // Forecast points at the end of each hour (second half hour rows).
+      const hourEnds = rows.filter((r) => r.slot % 2 === 1);
+      const forecast = runs(hourEnds, "socForecast").map((run) => run.map((r) => [x(r.hour + 0.5), ys(r.socForecast)]));
       if (start && forecast.length) forecast[0].unshift([x(start[0]), ys(start[1])]);
-      const actual = runs(rows, "socActual").map((run) => run.map((r) => [x(r.hour + 0.5), ys(r.socActual)]));
+      const actual = runs(rows, "socActual").map((run) => run.map((r) => [x(r.hour + 0.25), ys(r.socActual)]));
       socLines.push(polylines(forecast, c.battery, true), polylines(actual, c.battery, false));
     }
 
     const gridLines = [];
     for (let v = 0; v <= top; v += step) {
       gridLines.push(`<line x1="${pad.left}" x2="${width - pad.right}" y1="${y(v)}" y2="${y(v)}" stroke="${v === 0 ? c.axis : c.grid_line}" stroke-width="1"/>
-        <text x="${pad.left - 6}" y="${y(v) + 4}" text-anchor="end" class="tick">${escapeHtml(this._kwh(v))}</text>`);
+        <text x="${pad.left - 6}" y="${y(v) + 4}" text-anchor="end" class="tick">${escapeHtml(this._watts(v))}</text>`);
     }
     const hourTicks = (width < 500 ? [0, 6, 12, 18, 24] : [0, 3, 6, 9, 12, 15, 18, 21, 24])
       .map((h) => `<text x="${x(h)}" y="${height - 8}" text-anchor="middle" class="tick">${String(h).padStart(2, "0")}:00</text>`)
       .join("");
-    const slot = plotW / 24;
+    const slot = plotW / 48;
+    // Per half hour the planned charging (light) on the left, the measured one on the right.
+    const gap = slot > 8 ? 1 : 0.5;
+    const barW = Math.max(1, slot / 2 - gap);
+    const bar = (r, key, offset, color) => {
+      const h = Math.max(1, plotH - (y(r[key]) - pad.top));
+      return `<path d="${roundedTopBar(x(r.hour) + offset, y(r[key]), barW, h)}" fill="${color}"/>`;
+    };
     const bars = rows
-      .filter((r) => r.plannedCharge > 0)
-      .map((r) => {
-        const barW = Math.max(2, slot - 6);
-        const h = Math.max(1, plotH - (y(r.plannedCharge) - pad.top));
-        return `<path d="${roundedTopBar(x(r.hour) + 3, y(r.plannedCharge), barW, h)}" fill="${c.battery}"/>`;
-      })
+      .map((r) =>
+        (r.plannedCharge > 0 ? bar(r, "plannedCharge", gap / 2, `${c.battery}66`) : "") +
+        (r.actualCharge > 0 ? bar(r, "actualCharge", slot / 2 + gap / 2, c.battery) : "")
+      )
       .join("");
     const path = (key, color, dash) =>
-      polylines(runs(rows, key).map((run) => run.map((r) => [x(r.hour + 0.5), y(r[key])])), color, dash);
+      polylines(runs(rows, key).map((run) => run.map((r) => [x(r.hour + 0.25), y(r[key])])), color, dash);
     // Energy above the feed-in limit as a bar on the limit line, the curtailed part on top.
     const capBars = rows
       .filter((r) => r.capExcess > 0)
       .map((r) => {
-        const barW = Math.max(2, slot - 6);
+        const capW = Math.max(1, slot - 2 * gap);
         const base = y(r.capLine);
         const top = y(r.capLine + r.capExcess);
         const curtailed = r.capCurtailed > 0 ? y(r.capLine + r.capExcess - r.capCurtailed) : top;
-        return `<rect x="${x(r.hour) + 3}" y="${top}" width="${barW}" height="${Math.max(1, base - top)}" fill="${c.pv}" fill-opacity="0.45"/>${
-          curtailed > top ? `<rect x="${x(r.hour) + 3}" y="${top}" width="${barW}" height="${curtailed - top}" fill="${CURTAILED_COLOR}"/>` : ""
+        return `<rect x="${x(r.hour) + gap}" y="${top}" width="${capW}" height="${Math.max(1, base - top)}" fill="${c.pv}" fill-opacity="0.45"/>${
+          curtailed > top ? `<rect x="${x(r.hour) + gap}" y="${top}" width="${capW}" height="${curtailed - top}" fill="${CURTAILED_COLOR}"/>` : ""
         }`;
       })
       .join("");
     const capLine = polylines(
       runs(rows.map((r) => ({ ...r, capLine: r.capLine !== null && r.capLine <= top ? r.capLine : null })), "capLine")
-        .map((run) => run.map((r) => [x(r.hour + 0.5), y(r.capLine)])),
+        .map((run) => run.map((r) => [x(r.hour + 0.25), y(r.capLine)])),
       c.grid,
       true
     );
@@ -1671,17 +1711,17 @@ class SlemsPanel extends HTMLElement {
 
   _chartTable(rows) {
     const t = this._t;
-    const cell = (v) => (v === null || v === undefined ? "–" : escapeHtml(this._kwh(v)));
+    const cell = (v) => (v === null || v === undefined ? "–" : escapeHtml(this._watts(v)));
     const percent = (v) => (v === null || v === undefined ? "–" : escapeHtml(this._percent(v)));
     const cap = rows.some((r) => r.capLine !== null && r.capLine !== undefined);
     return `<div class="table-wrap"><table>
       <thead><tr><th>${t.hour}</th><th>${t.pvForecast}</th><th>${t.pvActual}</th><th>${t.consumptionForecast}</th>
-      <th>${t.consumptionActual}</th><th>${t.plannedCharge}</th><th>${t.socForecast}</th><th>${t.socActual}</th>
+      <th>${t.consumptionActual}</th><th>${t.plannedCharge}</th><th>${t.actualCharge}</th><th>${t.socForecast}</th><th>${t.socActual}</th>
       ${cap ? `<th>${t.capLine}</th><th>${t.capExcess}</th><th>${t.capCurtailed}</th>` : ""}</tr></thead>
       <tbody>${rows
         .map(
-          (r) => `<tr><td>${String(r.hour).padStart(2, "0")}:00</td><td>${cell(r.pvForecast)}</td><td>${cell(r.pvActual)}</td>
-          <td>${cell(r.consumptionForecast)}</td><td>${cell(r.consumptionActual)}</td><td>${cell(r.plannedCharge)}</td>
+          (r) => `<tr><td>${slotTime(r.slot)}</td><td>${cell(r.pvForecast)}</td><td>${cell(r.pvActual)}</td>
+          <td>${cell(r.consumptionForecast)}</td><td>${cell(r.consumptionActual)}</td><td>${cell(r.plannedCharge)}</td><td>${cell(r.actualCharge)}</td>
           <td>${percent(r.socForecast)}</td><td>${percent(r.socActual)}</td>${
             cap ? `<td>${cell(r.capLine)}</td><td>${cell(r.capExcess)}</td><td>${cell(r.capCurtailed)}</td>` : ""
           }</tr>`
@@ -1696,7 +1736,7 @@ class SlemsPanel extends HTMLElement {
     const rect = svg.getBoundingClientRect();
     const viewX = ((event.clientX - rect.left) / rect.width) * width;
     // Kept, so the tooltip survives a redraw of the chart with new data.
-    this._tooltipAt = { hour: Math.floor(((viewX - pad.left) / plotW) * 24), clientY: event.clientY };
+    this._tooltipAt = { slot: Math.floor(((viewX - pad.left) / plotW) * 48), clientY: event.clientY };
     this._showTooltip();
   }
 
@@ -1705,15 +1745,15 @@ class SlemsPanel extends HTMLElement {
     if (!svg || !this._tooltipAt || !this._chartData || !this._chartGeometry) return;
     const { pad, plotW, width } = this._chartGeometry;
     const rect = svg.getBoundingClientRect();
-    const { hour, clientY } = this._tooltipAt;
-    const row = this._chartData[hour];
+    const { slot, clientY } = this._tooltipAt;
+    const row = this._chartData[slot];
     const tooltip = this.shadowRoot.getElementById("tooltip");
     const crosshair = this.shadowRoot.getElementById("crosshair");
     if (!row || !tooltip) {
       this._hideTooltip();
       return;
     }
-    const cx = pad.left + ((hour + 0.5) / 24) * plotW;
+    const cx = pad.left + ((slot + 0.5) / 48) * plotW;
     crosshair.setAttribute("x1", cx);
     crosshair.setAttribute("x2", cx);
     crosshair.setAttribute("visibility", "visible");
@@ -1722,15 +1762,15 @@ class SlemsPanel extends HTMLElement {
     const entry = (color, label, value) =>
       value === null || value === undefined
         ? ""
-        : `<div><span class="swatch" style="background:${color}"></span>${label}<b>${escapeHtml(this._kwh(value))}</b></div>`;
+        : `<div><span class="swatch" style="background:${color}"></span>${label}<b>${escapeHtml(this._watts(value))}</b></div>`;
     const percentEntry = (color, label, value) =>
       value === null || value === undefined
         ? ""
         : `<div><span class="swatch" style="background:${color}"></span>${label}<b>${escapeHtml(this._percent(value))}</b></div>`;
-    tooltip.innerHTML = `<div class="tt-title">${String(hour).padStart(2, "0")}:00–${String(hour + 1).padStart(2, "0")}:00</div>
+    tooltip.innerHTML = `<div class="tt-title">${slotTime(slot)}–${slotTime(slot + 1)}</div>
       ${entry(c.pv, t.pvForecast, row.pvForecast)}${entry(c.pv, t.pvActual, row.pvActual)}
       ${entry(c.house, t.consumptionForecast, row.consumptionForecast)}${entry(c.house, t.consumptionActual, row.consumptionActual)}
-      ${entry(c.battery, t.plannedCharge, row.plannedCharge)}
+      ${entry(c.battery, t.plannedCharge, row.plannedCharge)}${entry(c.battery, t.actualCharge, row.actualCharge)}
       ${percentEntry(c.battery, t.socForecast, row.socForecast)}${percentEntry(c.battery, t.socActual, row.socActual)}
       ${row.capExcess > 0 ? entry(c.pv, t.capExcess, row.capExcess) : ""}${row.capCurtailed > 0 ? entry(CURTAILED_COLOR, t.capCurtailed, row.capCurtailed) : ""}`;
     tooltip.hidden = false;

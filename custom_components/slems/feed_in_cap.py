@@ -43,6 +43,7 @@ import math
 from homeassistant.util import dt as dt_util
 
 from .allocation import BatteryGroup
+from .pv_forecast import power_lookup
 
 STEP = timedelta(minutes=15)
 STEP_H = STEP / timedelta(hours=1)
@@ -120,6 +121,8 @@ class CapPlan:
     battery_too_small: bool = False
     # Local hour start -> Wh from now on (day chart, SoC projection).
     hourly: dict[datetime, HourCap] = field(default_factory=dict)
+    # Same per half hour (day chart).
+    half_hourly: dict[datetime, HourCap] = field(default_factory=dict)
 
     @property
     def next_block(self) -> PeakBlock | None:
@@ -182,30 +185,6 @@ def auto_buffer(days: Mapping[str, Mapping[str, float]]) -> tuple[float | None, 
     return under[index], len(complete)
 
 
-def _pv_power(pv: Mapping[datetime, float]):
-    """Lookup of the mean PV power (W) of the native forecast period at a moment."""
-    starts = sorted(pv)
-    # Providers add irregular timestamps (sunrise, sunset); the last period
-    # gets the typical length.
-    gaps = sorted(b - a for a, b in zip(starts, starts[1:], strict=False))
-    default = min(gaps[len(gaps) // 2], HOUR) if gaps else HOUR
-    durations = [
-        min(starts[i + 1] - start, HOUR) if i + 1 < len(starts) else default
-        for i, start in enumerate(starts)
-    ]
-
-    def power(moment: datetime) -> float:
-        index = bisect_right(starts, moment) - 1
-        if index < 0:
-            return 0.0
-        start, duration = starts[index], durations[index]
-        if moment >= start + duration:
-            return 0.0
-        return pv[start] / (duration / HOUR)
-
-    return power
-
-
 @dataclass
 class _Step:
     start: datetime
@@ -241,7 +220,7 @@ def plan_cap(
     efficiency = battery.charge_efficiency or 1.0
     local_now = dt_util.as_local(now)
     end = dt_util.start_of_local_day(local_now) + timedelta(days=2)
-    pv_power = _pv_power(pv)
+    pv_power = power_lookup(pv)
     limit = settings.limit_w
 
     steps: list[_Step] = []
@@ -265,12 +244,14 @@ def plan_cap(
 
     for step in steps:
         hour = step.start.replace(minute=0)
-        previous = plan.hourly.get(hour, HourCap())
-        plan.hourly[hour] = HourCap(
-            previous.excess_wh + step.excess_w * step.hours,
-            previous.absorbed_wh + step.absorbed_w * step.hours,
-            previous.curtailed_wh + step.curtailed_w * step.hours,
-        )
+        half = step.start.replace(minute=step.start.minute // 30 * 30)
+        for buckets, key in ((plan.hourly, hour), (plan.half_hourly, half)):
+            previous = buckets.get(key, HourCap())
+            buckets[key] = HourCap(
+                previous.excess_wh + step.excess_w * step.hours,
+                previous.absorbed_wh + step.absorbed_w * step.hours,
+                previous.curtailed_wh + step.curtailed_w * step.hours,
+            )
     plan.blocks = _blocks(steps)
     block_ends = {block.end for block in plan.blocks}
 

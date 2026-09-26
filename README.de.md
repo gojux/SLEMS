@@ -117,7 +117,9 @@ Voraussetzung: Home Assistant 2026.9 oder neuer.
 Auswählbar ist jede Integration, die eine Solarprognose für das
 Energie-Dashboard von Home Assistant liefert, z. B. Forecast.Solar oder
 Solcast. Mehrere Einträge (z. B. ein Forecast.Solar-Eintrag je Dachfläche)
-werden addiert.
+werden addiert. SLEMS verwendet die feinste Auflösung, die der Anbieter
+liefert (z. B. 15 oder 30 Minuten). Forecast.Solar kennzeichnet jede Periode
+mit ihrem Ende; SLEMS berücksichtigt das.
 
 ### Wetter (optional)
 
@@ -261,16 +263,16 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
   Strategie,
   Ladezustand, gespeicherte Energie und Kapazität, Einspeisegrenze, Prognosen) und das Prognose-Diagramm:
   *Heute* zeigt PV- und Verbrauchsprognose (gestrichelt), die bisher
-  gemessenen Werte (durchgezogen) und das geplante Laden der Batterien
-  (Balken), dazu den prognostizierten Gesamt-Ladezustand (gestrichelt) und
+  gemessenen Werte (durchgezogen), das geplante Laden der Batterien (helle
+  Balken) und das gemessene Laden (kräftige Balken), dazu den prognostizierten Gesamt-Ladezustand (gestrichelt) und
   den gemessenen (durchgezogen) mit ihrer Skala in % rechts. *Morgen* zeigt Prognosen, geplantes
   Laden und Ladezustand des nächsten Tages, fortgeführt aus der Prognose von
   heute. Die Prognose folgt der Planung: Laden nur mit dem geplanten
   Überschuss, Defizite aus den Batterien, Bezugsspitzen abfangen und
   Nachtentladung, falls aktiviert. Beim Überfahren erscheinen die Werte einer
-  Stunde (am Handy durch Antippen, Tippen daneben schließt sie); *Tabelle
-  anzeigen* schaltet auf eine Tabelle um. Das Diagramm zeigt die Energie pro
-  Stunde in kWh.
+  halben Stunde (am Handy durch Antippen, Tippen daneben schließt sie);
+  *Tabelle anzeigen* schaltet auf eine Tabelle um. Das Diagramm zeigt die
+  mittlere Leistung je halbe Stunde in kW.
 - **Batterien**: Ladezustand, gespeicherte Energie und Kapazität (kWh), netzseitige
   Leistung (AC) mit Richtung, die Vorgabe von SLEMS, Wirkungsgrad,
   Status und der Schalter *Aktiviert* jeder Batterie (das Deaktivieren muss

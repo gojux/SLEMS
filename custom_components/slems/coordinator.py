@@ -108,7 +108,14 @@ from .grid_friendly import (
 )
 from .night_discharge import NightDischargePlan, plan_night_discharge
 from .peak_shaving import auto_limit, hours_until_refill
-from .pv_forecast import PvForecast, async_get_pv_forecast, energy_on_day, hourly
+from .pv_forecast import (
+    PvForecast,
+    async_get_pv_forecast,
+    energy_on_day,
+    hourly,
+    mean_power,
+    power_lookup,
+)
 from .soc_projection import ProjectionSettings, SocProjection, project_soc
 from .util import state_as_watts
 
@@ -122,6 +129,7 @@ DEVICE_INFO_INTERVAL_S = 6 * 3600
 # Store key of the controller data (next to the per battery subentry ids).
 CONTROL_STORE_KEY = "control"
 PV_ACCURACY_STORE_KEY = "pv_accuracy"
+HALF_HOUR = timedelta(minutes=30)
 
 
 @dataclass
@@ -1216,11 +1224,18 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 if battery is not None
                 else None
             )
+            pv_power = power_lookup(self._pv_native(snapshot, wall_now))
             snapshot.day_plan = self._day_plan(
-                pv_hourly, consumption_hourly, projection, wall_now, cap=cap
+                pv_hourly, consumption_hourly, projection, wall_now, cap=cap, pv_power=pv_power
             )
             snapshot.day_plan_tomorrow = self._day_plan(
-                pv_hourly, consumption_hourly, projection, wall_now, day_offset=1, cap=cap
+                pv_hourly,
+                consumption_hourly,
+                projection,
+                wall_now,
+                day_offset=1,
+                cap=cap,
+                pv_power=pv_power,
             )
         else:
             snapshot.day_plan = []
@@ -1328,6 +1343,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             now,
         )
 
+    @staticmethod
+    def _pv_native(snapshot: SystemSnapshot, wall_now: datetime) -> PvForecast:
+        """PV forecast in its own periods; today corrected, tomorrow raw."""
+        today = dt_util.as_local(wall_now).date()
+        return {
+            start: wh * (snapshot.pv_correction if dt_util.as_local(start).date() == today else 1.0)
+            for start, wh in (snapshot.pv_forecast or {}).items()
+        }
+
     def _feed_in_cap(
         self, snapshot: SystemSnapshot, battery: BatteryGroup | None, wall_now: datetime
     ) -> CapPlan | None:
@@ -1355,12 +1379,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 pv_factor, buffer_pct, source = 1 + learned, learned * 100, "auto"
         snapshot.feed_in_cap_buffer_pct = buffer_pct
         snapshot.feed_in_cap_buffer_source = source
-        # The correction factor describes today; tomorrow uses the raw forecast.
-        today = dt_util.as_local(wall_now).date()
-        pv = {
-            start: wh * (snapshot.pv_correction if dt_util.as_local(start).date() == today else 1.0)
-            for start, wh in snapshot.pv_forecast.items()
-        }
+        pv = self._pv_native(snapshot, wall_now)
         charge_w = discharge_w = 0.0
         for runtime in self.batteries:
             telemetry = snapshot.batteries.get(runtime.subentry_id)
@@ -1474,6 +1493,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         wall_now: datetime,
         day_offset: int = 0,
         cap: CapPlan | None = None,
+        pv_power=None,
     ) -> list[dict]:
         """Hours of a day for the dashboard.
 
@@ -1481,6 +1501,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         the end of the hour (%) for the hours from now on. With the feed-in
         cap: PV level above which is capped (consumption + limit) and the
         energy above it, of which the curtailed part, from the fine periods.
+        Per half hour: mean PV power from the native forecast periods
+        (``pv_half_w``) and the feed-in cap energies (``cap_*_half_wh``).
         """
         day_start = dt_util.start_of_local_day(dt_util.as_local(wall_now))
         day_start += timedelta(days=day_offset)
@@ -1501,7 +1523,17 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     "soc_pct": round(soc[start], 1) if start in soc else None,
                 }
             )
+            if pv_power is not None:
+                rows[-1]["pv_half_w"] = [
+                    round(mean_power(pv_power, start + HALF_HOUR * i, HALF_HOUR))
+                    for i in range(2)
+                ]
             if cap is not None:
+                halves = [cap.half_hourly.get(start + HALF_HOUR * i) for i in range(2)]
+                rows[-1]["cap_excess_half_wh"] = [round(h.excess_wh) if h else None for h in halves]
+                rows[-1]["cap_curtailed_half_wh"] = [
+                    round(h.curtailed_wh) if h else None for h in halves
+                ]
                 hour_cap = cap.hourly.get(start)
                 rows[-1].update(
                     {
