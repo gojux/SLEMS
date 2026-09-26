@@ -385,6 +385,9 @@
       },
       "peak_shaving_limit": {
         "name": "Peak shaving import limit in effect"
+      },
+      "firmware": {
+        "name": "Firmware"
       }
     },
     "switch": {
@@ -417,6 +420,9 @@
       },
       "peak_shaving_auto": {
         "name": "Automatic peak shaving limit"
+      },
+      "communication_paused": {
+        "name": "Communication paused"
       }
     },
     "number": {
@@ -497,6 +503,9 @@
       },
       "peak_shaving_reserve": {
         "name": "Peak shaving safety reserve"
+      },
+      "communication_pause": {
+        "name": "Communication pause duration"
       }
     },
     "binary_sensor": {

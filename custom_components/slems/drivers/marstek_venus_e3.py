@@ -59,6 +59,16 @@ class RegisterSpec:
     scale: float = 1.0
 
 
+# Static device information: key -> (register, data type, register count).
+DEVICE_INFO_REGISTERS: dict[str, tuple[int, str, int]] = {
+    "device_name": (31000, "char", 10),
+    "ems_version": (30200, "uint16", 1),
+    "vms_version": (30202, "uint16", 1),
+    "bms_version": (30204, "uint16", 1),
+    "comm_module_firmware": (30350, "char", 6),
+    "mac_address": (30304, "char", 6),
+}
+
 # Read when 34002 does not answer.
 SOC_FALLBACK = RegisterSpec("battery_soc", 37005, "uint16")
 
@@ -139,6 +149,20 @@ class MarstekVenusE3Driver(BatteryDriver):
             for spec in TELEMETRY_REGISTERS
             if spec.key not in ("battery_soc", "battery_power")
         )
+
+    @property
+    def has_connection(self) -> bool:
+        return True
+
+    async def read_device_info(self) -> dict[str, str]:
+        await self._ensure_connected()
+        info: dict[str, str] = {}
+        for key, (address, data_type, count) in DEVICE_INFO_REGISTERS.items():
+            words = await self._link.read(address, count)
+            value = decode_registers(words, data_type) if words else None
+            if value not in (None, ""):
+                info[key] = str(value)
+        return info
 
     async def connect(self) -> None:
         self._written.clear()

@@ -479,6 +479,7 @@ async def async_setup_entry(
             [
                 *(BatterySensor(coordinator, battery, d) for d in descriptions),
                 StoredEnergySensor(coordinator, battery),
+                *([FirmwareSensor(coordinator, battery)] if battery.driver.has_connection else []),
                 EfficiencySensor(coordinator, battery),
                 PlannedBatteryPowerSensor(coordinator, battery),
                 *(
@@ -547,6 +548,29 @@ class BatterySensor(SlemsBatteryEntity, SensorEntity):
         if telemetry is None:
             return None
         return self.entity_description.value_fn(telemetry)
+
+
+class FirmwareSensor(SlemsBatteryEntity, SensorEntity):
+    """EMS firmware version; all versions and device data as attributes."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:chip"
+
+    def __init__(self, coordinator: SlemsCoordinator, battery) -> None:
+        super().__init__(coordinator, battery, "firmware")
+
+    @property
+    def available(self) -> bool:
+        # Kept from the last read, also while the communication is paused.
+        return self.coordinator.last_update_success and bool(self.battery.device_info)
+
+    @property
+    def native_value(self) -> str | None:
+        return self.battery.device_info.get("ems_version")
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return dict(self.battery.device_info)
 
 
 class StoredEnergySensor(SlemsBatteryEntity, SensorEntity):

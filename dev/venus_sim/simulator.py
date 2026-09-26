@@ -23,6 +23,8 @@ Environment variables:
     SIM_CELL_OFFSET_PCT  SoC lead of the highest cell (default 2.0)
     SIM_BLEED_PCT_PER_MIN  balancing speed of the BMS (default 0.2)
     SIM_TAP_PORT      read-only TCP port (default 5020)
+    SIM_OTA_FILE      while this file exists, the battery reports a firmware
+                      update (state 5; default /tmp/venus_ota)
     SIM_FAULT_FILE    while this file exists, commands are accepted but no power
                       flows (test of the non-responding detection; default
                       /tmp/venus_fault, e.g. ``docker compose exec venus-sim-1
@@ -48,6 +50,14 @@ REG_TOTAL_DISCHARGING_ENERGY = 33002
 REG_INTERNAL_TEMPERATURE = 35000
 REG_INVERTER_STATE = 35100
 FAULT_FILE = os.environ.get("SIM_FAULT_FILE", "/tmp/venus_fault")
+OTA_FILE = os.environ.get("SIM_OTA_FILE", "/tmp/venus_ota")
+# Static device information (register -> words), as a Venus E 3.0 reports it.
+DEVICE_INFO = {
+    31000: "VNSE3-SIM",  # device name, 10 registers
+    30350: "V1.0.9",  # communication module firmware, 6 registers
+    30304: "AABBCCDDEEFF",  # MAC address, 6 registers
+}
+DEVICE_VERSIONS = {30200: 148, 30202: 125, 30204: 214}  # EMS, VMS, BMS
 REG_BATTERY_SOC = 37005
 REG_BATTERY_SOC_FINE = 34002
 REG_CYCLE_COUNT = 34003
@@ -137,7 +147,12 @@ class VenusModel:
         self.write(REG_AC_POWER, [-power])
         self.write(REG_BATTERY_VOLTAGE, [int((48 + soc * 0.06) * 100)])
         self.write(REG_INTERNAL_TEMPERATURE, [250 + abs(power) // 100])
-        self.write(REG_INVERTER_STATE, [2 if power > 0 else 3 if power < 0 else 1])
+        state = 5 if os.path.exists(OTA_FILE) else 2 if power > 0 else 3 if power < 0 else 1
+        self.write(REG_INVERTER_STATE, [state])
+        for address, text in DEVICE_INFO.items():
+            self.write(address, _chars(text, 10 if address == 31000 else 6))
+        for address, version in DEVICE_VERSIONS.items():
+            self.write(address, [version])
         self.write(REG_BATTERY_SOC, [round(soc)])
         self.write(REG_BATTERY_SOC_FINE, [round(soc * 10)])
         self.write(REG_CYCLE_COUNT, [int(self._charged_wh / self._capacity_wh)])
@@ -146,6 +161,11 @@ class VenusModel:
         self.write(REG_MIN_CELL_VOLTAGE, [round((lfp_cell_voltage(soc) + charge_lift) * 1000)])
         self.write(REG_TOTAL_CHARGING_ENERGY, _split_32(int(self._charged_wh / 10)))
         self.write(REG_TOTAL_DISCHARGING_ENERGY, _split_32(int(self._discharged_wh / 10)))
+
+
+def _chars(text: str, registers: int) -> list[int]:
+    raw = text.encode("ascii").ljust(registers * 2, b"\x00")
+    return [(raw[i] << 8) | raw[i + 1] for i in range(0, registers * 2, 2)]
 
 
 def _split_32(value: int) -> list[int]:

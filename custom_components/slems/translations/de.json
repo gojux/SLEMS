@@ -385,6 +385,9 @@
       },
       "peak_shaving_limit": {
         "name": "Wirksame Bezugsgrenze Spitzenabfang"
+      },
+      "firmware": {
+        "name": "Firmware"
       }
     },
     "switch": {
@@ -417,6 +420,9 @@
       },
       "peak_shaving_auto": {
         "name": "Automatische Bezugsgrenze"
+      },
+      "communication_paused": {
+        "name": "Kommunikation pausiert"
       }
     },
     "number": {
@@ -497,6 +503,9 @@
       },
       "peak_shaving_reserve": {
         "name": "Sicherheitsreserve Spitzenabfang"
+      },
+      "communication_pause": {
+        "name": "Dauer Kommunikationspause"
       }
     },
     "binary_sensor": {

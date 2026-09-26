@@ -69,6 +69,15 @@ class BatteryDriver(ABC):
         """Keys this driver may report in BatteryTelemetry.extra."""
         return frozenset()
 
+    @property
+    def has_connection(self) -> bool:
+        """True if the driver talks to the battery itself (the communication can be paused)."""
+        return False
+
+    async def read_device_info(self) -> dict[str, str]:
+        """Firmware versions and other static device information (may be empty)."""
+        return {}
+
     @abstractmethod
     async def connect(self) -> None:
         """Open the link to the battery. Raise BatteryDriverError on failure."""

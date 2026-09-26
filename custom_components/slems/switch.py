@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, OperatingMode
 from .consumers import ConsumerConfig
@@ -43,6 +44,8 @@ async def async_setup_entry(
         entities: list[SwitchEntity] = [BatteryEnabledSwitch(coordinator, battery)]
         if battery.supports_balancing:
             entities.append(CellBalancingSwitch(coordinator, battery))
+        if battery.driver.has_connection:
+            entities.append(CommunicationPauseSwitch(coordinator, battery))
         async_add_entities(entities, config_subentry_id=battery.subentry_id)
     for consumer in coordinator.consumers:
         if consumer.controllable:
@@ -115,6 +118,44 @@ class BatteryEnabledSwitch(SlemsBatteryEntity, SwitchEntity, RestoreEntity):
             # A discharging battery ramps out first, the others are released at once.
             if not coordinator.controller.disable_battery(self.battery):
                 await coordinator.async_release_battery(self.battery)
+        self.async_write_ha_state()
+
+
+class CommunicationPauseSwitch(SlemsBatteryEntity, SwitchEntity):
+    """Pause all communication with the battery, e.g. for a firmware update.
+
+    On: the battery is handed back to its own logic and the connection is
+    closed for the configured time, then SLEMS reconnects by itself. Also
+    switched on automatically when the battery reports a firmware update.
+    """
+
+    def __init__(self, coordinator: SlemsCoordinator, battery: BatteryRuntime) -> None:
+        super().__init__(coordinator, battery, "communication_paused")
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success
+
+    @property
+    def is_on(self) -> bool:
+        return self.battery.communication_paused
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        until = self.battery.paused_until if self.battery.communication_paused else None
+        return {
+            "paused_until": dt_util.utc_from_timestamp(until).isoformat() if until else None,
+            # manual / firmware_update
+            "reason": self.battery.pause_reason if until else None,
+        }
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self.coordinator.async_pause_communication(self.battery, "manual")
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self.coordinator.resume_communication(self.battery)
+        await self.coordinator.async_request_refresh()
         self.async_write_ha_state()
 
 

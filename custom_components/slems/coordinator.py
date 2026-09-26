@@ -109,6 +109,7 @@ STORAGE_VERSION = 1
 STORAGE_SAVE_DELAY_S = 600
 # Start, phase changes and end of a balancing run are saved sooner.
 BALANCING_SAVE_DELAY_S = 5
+DEVICE_INFO_INTERVAL_S = 6 * 3600
 # Store key of the controller data (next to the per battery subentry ids).
 CONTROL_STORE_KEY = "control"
 PV_ACCURACY_STORE_KEY = "pv_accuracy"
@@ -141,6 +142,14 @@ class BatteryRuntime:
     balancing_result: str | None = None
     # Monotonic time of the first failed read since the last successful one.
     unreadable_since: float | None = None
+    # Communication paused (e.g. for a firmware update) until this wall clock
+    # time (UNIX timestamp); nothing is read or sent meanwhile.
+    paused_until: float | None = None
+    # "manual" or "firmware_update" (detected by the battery state).
+    pause_reason: str | None = None
+    # Firmware versions and other static information from the driver.
+    device_info: dict[str, str] = field(default_factory=dict)
+    device_info_read: float | None = None
     limits: BatteryLimitSettings = field(default_factory=BatteryLimitSettings)
     soc_window: SocWindow = field(default_factory=SocWindow)
     # Allowed power right now (updated with every poll).
@@ -160,16 +169,25 @@ class BatteryRuntime:
         return self.delivery.excluded(time.monotonic())
 
     @property
+    def communication_paused(self) -> bool:
+        return self.paused_until is not None and dt_util.utcnow().timestamp() < self.paused_until
+
+    @property
     def participating(self) -> bool:
         """Planned and controlled (or still ramping out) by the normal operation."""
         return (
             (self.enabled and not self.balancing_requested) or self.leaving_until is not None
-        ) and not self.not_responding
+        ) and not self.not_responding and not self.communication_paused
 
     @property
     def plannable(self) -> bool:
         """Takes part in planning, total SoC and distribution."""
-        return self.enabled and not self.balancing_requested and not self.not_responding
+        return (
+            self.enabled
+            and not self.balancing_requested
+            and not self.not_responding
+            and not self.communication_paused
+        )
 
     @property
     def supports_balancing(self) -> bool:
@@ -231,6 +249,8 @@ class ControlSettings:
     night_discharge: bool = False
     # Night discharge reserve in % of tomorrow's forecast daily consumption.
     night_reserve_pct: float = DEFAULT_NIGHT_RESERVE_PCT
+    # Duration of a communication pause (firmware update), minutes.
+    communication_pause_min: float = 20.0
     # Charge power limited by the battery temperature (see battery_limits).
     temperature_limit: bool = False
     temperature_high_c: float = 40.0
@@ -487,6 +507,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if loss_curve := data.get("loss_curve"):
                 battery.loss_curve = LossCurveLearner.from_dict(loss_curve)
             battery.cell_monitor.restore(data.get("cell_monitor"))
+            battery.paused_until = data.get("paused_until")
+            battery.pause_reason = data.get("pause_reason")
             if balancer := data.get("balancer"):
                 battery.balancer = CellBalancer.from_dict(
                     balancer, battery.driver.capabilities.max_charge_power_w
@@ -600,6 +622,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 "loss_curve": b.loss_curve.as_dict(),
                 "cell_monitor": b.cell_monitor.as_dict(),
                 "balancer": b.balancer.as_dict() if b.balancer else None,
+                "paused_until": b.paused_until,
+                "pause_reason": b.pause_reason,
             }
             for b in self.batteries
         }
@@ -644,6 +668,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # A failing battery must not take the whole system down: it is simply
         # missing from the snapshot and its entities become unavailable.
         for battery in self.batteries:
+            if battery.paused_until is not None:
+                if battery.communication_paused:
+                    continue
+                self.resume_communication(battery)
             try:
                 telemetry = await battery.driver.read_telemetry()
             except BatteryDriverError as err:
@@ -652,6 +680,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     battery.unreadable_since = now
                 continue
             battery.unreadable_since = None
+            if telemetry.extra.get("inverter_state") == "ota_upgrade":
+                # A firmware update is running: no further Modbus traffic.
+                await self.async_pause_communication(battery, "firmware_update")
+                continue
+            await self._async_read_device_info(battery, now)
             snapshot.batteries[battery.subentry_id] = telemetry
             self._update_efficiency(battery, telemetry, now)
             if telemetry.ac_power_w is not None:
@@ -766,8 +799,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if not battery.enabled:
             self.end_balancing(battery, "cancelled")
             return
-        if self.settings.operating_mode is not OperatingMode.ACTIVE or battery.leaving_until is not None:
-            # Commands are only sent in active mode, and only after the ramp-out.
+        if (
+            self.settings.operating_mode is not OperatingMode.ACTIVE
+            or battery.leaving_until is not None
+            or battery.communication_paused
+        ):
+            # Commands are only sent in active mode, after the ramp-out and
+            # while the communication is not paused.
             balancer.pause()
             battery.balancing_power_w = None
             return
@@ -852,6 +890,49 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             + batteries_w
             + snapshot.controlled_consumer_power_w()
         )
+
+    async def async_pause_communication(self, battery: BatteryRuntime, reason: str) -> None:
+        """Stop all communication with a battery for the configured time.
+
+        A manual pause first hands the battery back to its own logic; during a
+        detected firmware update nothing is sent any more.
+        """
+        if reason == "manual" and battery.driver.capabilities.controllable:
+            await self.async_release_battery(battery)
+        await battery.driver.close()
+        battery.paused_until = (
+            dt_util.utcnow().timestamp() + self.settings.communication_pause_min * 60
+        )
+        battery.pause_reason = reason
+        battery.unreadable_since = None
+        if reason == "firmware_update":
+            _LOGGER.warning(
+                "Battery %s reports a firmware update, communication paused for %d minutes",
+                battery.name,
+                self.settings.communication_pause_min,
+            )
+        self.controller.request()
+        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self.async_update_listeners()
+
+    @callback
+    def resume_communication(self, battery: BatteryRuntime) -> None:
+        """Communicate again (reconnects with the next poll)."""
+        if battery.paused_until is not None:
+            _LOGGER.info("Battery %s: communication resumed", battery.name)
+        battery.paused_until = None
+        battery.pause_reason = None
+        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+
+    async def _async_read_device_info(self, battery: BatteryRuntime, now: float) -> None:
+        """Read the device information once after connecting and then every few hours."""
+        if battery.device_info_read is not None and now - battery.device_info_read < DEVICE_INFO_INTERVAL_S:
+            return
+        battery.device_info_read = now
+        try:
+            battery.device_info = await battery.driver.read_device_info() or battery.device_info
+        except BatteryDriverError as err:
+            _LOGGER.debug("Battery %s: device information not read: %s", battery.name, err)
 
     @callback
     def start_balancing(self, battery: BatteryRuntime) -> None:

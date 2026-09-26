@@ -264,7 +264,7 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
   Stunde (am Handy durch Antippen, Tippen daneben schließt sie); *Tabelle
   anzeigen* schaltet auf eine Tabelle um. Das Diagramm zeigt die Energie pro
   Stunde in kWh.
-- **Batterien**: Ladezustand, gespeicherte Energie und Kapazität (kWh), Ladezyklen, netzseitige
+- **Batterien**: Ladezustand, gespeicherte Energie und Kapazität (kWh), netzseitige
   Leistung (AC) mit Richtung, die Vorgabe von SLEMS, Wirkungsgrad,
   Status und der Schalter *Aktiviert* jeder Batterie (das Deaktivieren muss
   bestätigt werden), das Zell-Delta mit seinem Status, eine Empfehlung für
@@ -371,6 +371,25 @@ wenn die Batterie nicht gelesen werden kann; außerhalb des Betriebsmodus
 weiter. Zum Ende wird die Batterie an ihre eigene Logik zurückgegeben und
 kehrt danach in die normale Planung zurück. Der Sensor *Phase Zellausgleich*
 zeigt die Phase und das Ergebnis des letzten Laufs.
+
+### Firmware-Updates und Batterie-Menü
+
+Während eines Firmware-Updates einer Marstek-Batterie darf keinerlei
+Modbus-Kommunikation laufen. Das Menü (⋮) einer Batteriekarte bietet
+*Kommunikation pausieren (Firmware-Update)*: SLEMS gibt die Batterie an ihre
+eigene Logik zurück, trennt die Verbindung und liest und sendet für die
+*Dauer Kommunikationspause* (Standard 20 Minuten; Schalter *Kommunikation
+pausiert*) nichts. Danach verbindet es sich von selbst wieder; *Fortsetzen*
+beendet die Pause früher. Solange wird die Batterie wie eine deaktivierte
+behandelt. Meldet die Batterie selbst ein laufendes Firmware-Update (Zustand
+*OTA-Update*), pausiert SLEMS automatisch; das fällt erst bei der nächsten
+Abfrage auf, daher vor einem Update besser manuell pausieren.
+
+Im selben Menü lässt sich die Batterie aktivieren oder deaktivieren, der
+Zellausgleich starten oder abbrechen, und *Details* zeigt Modell, Gerätename,
+Firmware-Versionen (EMS, VMS, BMS, Kommunikationsmodul; Sensor *Firmware*),
+MAC-Adresse, Kapazität, Ladezyklen sowie die insgesamt geladene und entladene
+Energie.
 
 ### Grenzen und Schutz der Batterien
 

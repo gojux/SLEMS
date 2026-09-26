@@ -74,6 +74,31 @@ const STRINGS = {
     soc: "State of charge",
     planned: "Planned",
     storedEnergy: "Stored energy",
+    menu: "Menu",
+    enableBattery: "Enable",
+    disableBattery: "Disable",
+    pauseCommunication: "Pause communication (firmware update)",
+    resumeCommunication: "Resume communication",
+    resume: "Resume",
+    paused: "communication paused",
+    pausedManual: "Communication paused until {time} (e.g. for a firmware update).",
+    pausedFirmware: "Firmware update detected: communication paused until {time}.",
+    pauseTitle: "Pause communication with {name}?",
+    pauseText: "SLEMS hands the battery back to its own logic and does not read or send anything for {min} minutes, e.g. during a firmware update. Afterwards it reconnects by itself; you can also resume earlier.",
+    pauseConfirm: "Pause",
+    details: "Details",
+    close: "Close",
+    noDetails: "No details available.",
+    model: "Model",
+    deviceName: "Device name",
+    emsVersion: "EMS firmware",
+    vmsVersion: "VMS firmware",
+    bmsVersion: "BMS firmware",
+    commFirmware: "Communication module",
+    macAddress: "MAC address",
+    capacity: "Capacity",
+    totalCharged: "Charged in total",
+    totalDischarged: "Discharged in total",
     automatic: "automatic",
     cycles: "Charge cycles",
     forecastAccuracy: "Forecast accuracy",
@@ -228,6 +253,31 @@ const STRINGS = {
     soc: "Ladezustand",
     planned: "Geplant",
     storedEnergy: "Gespeichert",
+    menu: "Menü",
+    enableBattery: "Aktivieren",
+    disableBattery: "Deaktivieren",
+    pauseCommunication: "Kommunikation pausieren (Firmware-Update)",
+    resumeCommunication: "Kommunikation fortsetzen",
+    resume: "Fortsetzen",
+    paused: "Kommunikation pausiert",
+    pausedManual: "Kommunikation pausiert bis {time} (z. B. für ein Firmware-Update).",
+    pausedFirmware: "Firmware-Update erkannt: Kommunikation pausiert bis {time}.",
+    pauseTitle: "Kommunikation mit {name} pausieren?",
+    pauseText: "SLEMS gibt die Batterie an ihre eigene Logik zurück und liest und sendet {min} Minuten lang nichts, z. B. während eines Firmware-Updates. Danach verbindet es sich von selbst wieder; du kannst auch früher fortsetzen.",
+    pauseConfirm: "Pausieren",
+    details: "Details",
+    close: "Schließen",
+    noDetails: "Keine Details verfügbar.",
+    model: "Modell",
+    deviceName: "Gerätename",
+    emsVersion: "EMS-Firmware",
+    vmsVersion: "VMS-Firmware",
+    bmsVersion: "BMS-Firmware",
+    commFirmware: "Kommunikationsmodul",
+    macAddress: "MAC-Adresse",
+    capacity: "Kapazität",
+    totalCharged: "Gesamt geladen",
+    totalDischarged: "Gesamt entladen",
     automatic: "automatisch",
     cycles: "Ladezyklen",
     forecastAccuracy: "Prognosegüte",
@@ -608,6 +658,139 @@ class SlemsPanel extends HTMLElement {
     return this._format(stateObj);
   }
 
+  /** ⋮ menu of a battery card: enable, pause communication, cell balancing, details. */
+  _batteryMenu(battery) {
+    const t = this._t;
+    const s = (key) => this._state(key, battery.device_id);
+    const open = this._openMenu === battery.device_id;
+    const button = `<button class="menu-button" data-action="battery-menu" data-device="${battery.device_id}" aria-label="${t.menu}" aria-expanded="${open}"><ha-icon icon="mdi:dots-vertical"></ha-icon></button>`;
+    if (!open) return `<div class="menu-wrap">${button}</div>`;
+    const name = escapeHtml(battery.name);
+    const item = (action, label, attrs = "") => `<button class="menu-item" data-action="${action}"${attrs}>${label}</button>`;
+    const items = [];
+    const enabled = s("battery_enabled");
+    if (enabled) {
+      items.push(
+        enabled.state === "off"
+          ? item("menu-enable", t.enableBattery, ` data-entity="${enabled.entity_id}"`)
+          : item("menu-disable", t.disableBattery, ` data-entity="${enabled.entity_id}" data-name="${name}"`)
+      );
+    }
+    const pause = s("communication_paused");
+    if (pause) {
+      items.push(
+        pause.state === "on"
+          ? item("menu-resume", t.resumeCommunication, ` data-entity="${pause.entity_id}"`)
+          : item("menu-pause", t.pauseCommunication, ` data-entity="${pause.entity_id}" data-name="${name}"`)
+      );
+    }
+    const balancing = s("cell_balancing");
+    if (balancing) {
+      const active = this._state("operating_mode")?.state === "active";
+      items.push(
+        balancing.state === "on"
+          ? item("balancing-off", t.cancelBalancing, ` data-entity="${balancing.entity_id}"`)
+          : item("balancing-on", t.startBalancing, ` data-entity="${balancing.entity_id}" data-name="${name}"${active ? "" : ` disabled title="${escapeHtml(t.balancingNeedsActive)}"`}`)
+      );
+    }
+    items.push(item("menu-details", t.details, ` data-device="${battery.device_id}"`));
+    return `<div class="menu-wrap">${button}<div class="menu" role="menu">${items.join("")}</div></div>`;
+  }
+
+  /** Handles the ⋮ menu; returns true if the click was consumed. */
+  _onMenuClick(event) {
+    const t = this._t;
+    const toggle = event.target.closest("[data-action='battery-menu']");
+    if (toggle) {
+      this._openMenu = this._openMenu === toggle.dataset.device ? null : toggle.dataset.device;
+      this._render();
+      return true;
+    }
+    const item = event.target.closest(".menu-item, [data-action='menu-resume']");
+    const wasOpen = this._openMenu;
+    if (wasOpen && !event.target.closest(".menu-wrap")) {
+      this._openMenu = null;
+      this._render();
+    }
+    if (!item) return false;
+    this._openMenu = null;
+    const entityId = item.dataset.entity;
+    switch (item.dataset.action) {
+      case "menu-enable":
+        this._hass.callService("switch", "turn_on", { entity_id: entityId });
+        break;
+      case "menu-disable":
+        this._confirm(
+          t.disableBatteryTitle.replace("{name}", item.dataset.name),
+          t.disableBatteryText,
+          t.disableBatteryConfirm,
+          () => this._hass.callService("switch", "turn_off", { entity_id: entityId })
+        );
+        break;
+      case "menu-pause":
+        this._confirm(
+          t.pauseTitle.replace("{name}", item.dataset.name),
+          t.pauseText.replace("{min}", this._number(this._state("communication_pause")) ?? 20),
+          t.pauseConfirm,
+          () => this._hass.callService("switch", "turn_on", { entity_id: entityId }),
+          false
+        );
+        break;
+      case "menu-resume":
+        this._hass.callService("switch", "turn_off", { entity_id: entityId });
+        break;
+      case "menu-details":
+        this._detailsDevice = item.dataset.device;
+        this._renderDetails();
+        this.shadowRoot.getElementById("details").showModal();
+        break;
+      default:
+        // balancing-on / balancing-off: handled by the caller.
+        this._render();
+        return false;
+    }
+    this._render();
+    return true;
+  }
+
+  /** Details dialog of a battery: firmware, device data, counters. */
+  _renderDetails() {
+    const deviceId = this._detailsDevice;
+    const dialog = this.shadowRoot?.getElementById("details");
+    if (!deviceId || !dialog) return;
+    const t = this._t;
+    const battery = (this._config.batteries || []).find((b) => b.device_id === deviceId);
+    const s = (key) => this._state(key, deviceId);
+    const firmware = s("firmware");
+    const info = firmware?.attributes || {};
+    const device = this._hass.devices?.[deviceId];
+    const stored = s("stored_energy");
+    const rows = [
+      [t.model, device?.model],
+      [t.deviceName, info.device_name],
+      [t.emsVersion, info.ems_version, firmware?.entity_id],
+      [t.vmsVersion, info.vms_version, firmware?.entity_id],
+      [t.bmsVersion, info.bms_version, firmware?.entity_id],
+      [t.commFirmware, info.comm_module_firmware, firmware?.entity_id],
+      [t.macAddress, info.mac_address],
+      [
+        t.capacity,
+        stored?.attributes?.capacity_kwh !== undefined
+          ? `${new Intl.NumberFormat(this._hass.locale?.language || "en", { maximumFractionDigits: 2 }).format(stored.attributes.capacity_kwh)} kWh`
+          : undefined,
+        stored?.entity_id,
+      ],
+      [t.cycles, s("cycle_count") && this._format(s("cycle_count")), s("cycle_count")?.entity_id],
+      [t.totalCharged, s("total_charging_energy") && this._format(s("total_charging_energy")), s("total_charging_energy")?.entity_id],
+      [t.totalDischarged, s("total_discharging_energy") && this._format(s("total_discharging_energy")), s("total_discharging_energy")?.entity_id],
+    ].filter(([, value]) => value !== undefined && value !== null && value !== "");
+    this.shadowRoot.getElementById("details-title").textContent = `${t.details}: ${battery?.name ?? ""}`;
+    this.shadowRoot.getElementById("details-close").textContent = t.close;
+    this.shadowRoot.getElementById("details-body").innerHTML = rows.length
+      ? rows.map(([label, value, entityId]) => this._row(label, escapeHtml(String(value)), entityId)).join("")
+      : `<dd class="muted">${t.noDetails}</dd>`;
+  }
+
   /** A dt/dd pair; with an entity both open its more-info dialog on click. */
   _row(label, valueHtml, entityId) {
     const moreInfo = entityId ? ` data-more-info="${entityId}"` : "";
@@ -716,6 +899,11 @@ class SlemsPanel extends HTMLElement {
           <button class="link" data-answer="cancel"></button>
           <button class="danger" data-answer="confirm"></button>
         </div>
+      </dialog>
+      <dialog id="details">
+        <h2 id="details-title"></h2>
+        <dl id="details-body"></dl>
+        <div class="dialog-buttons"><button class="link" data-answer="close" id="details-close"></button></div>
       </dialog>`;
     const dialog = this.shadowRoot.getElementById("confirm");
     dialog.addEventListener("click", (event) => {
@@ -726,6 +914,18 @@ class SlemsPanel extends HTMLElement {
     dialog.addEventListener("close", () => {
       if (dialog.returnValue === "confirm") this._confirmAction?.();
       this._confirmAction = null;
+    });
+    const details = this.shadowRoot.getElementById("details");
+    details.addEventListener("click", (event) => {
+      if (event.target.closest("[data-answer]") || event.target === details) {
+        details.close();
+        return;
+      }
+      const moreInfo = event.target.closest("[data-more-info]");
+      if (moreInfo) this._moreInfo(moreInfo.dataset.moreInfo);
+    });
+    details.addEventListener("close", () => {
+      this._detailsDevice = null;
     });
     this.shadowRoot.getElementById("tabs").addEventListener("click", (event) => {
       const tab = event.target.closest("button")?.dataset.tab;
@@ -777,6 +977,7 @@ class SlemsPanel extends HTMLElement {
 
   _render() {
     if (!this._hass || !this.shadowRoot) return;
+    this._renderDetails();
     const menu = this.shadowRoot.getElementById("menu");
     menu.hass = this._hass;
     menu.narrow = this._narrow;
@@ -883,7 +1084,8 @@ class SlemsPanel extends HTMLElement {
       const enabled = this._state("battery_enabled", battery.device_id)?.state !== "off";
       const balancing = this._state("cell_balancing", battery.device_id)?.state === "on";
       const notResponding = this._state("not_responding", battery.device_id)?.state === "on";
-      const unreadable = this._state("battery_soc", battery.device_id)?.state === "unavailable";
+      const paused = this._state("communication_paused", battery.device_id)?.state === "on";
+      const unreadable = !paused && this._state("battery_soc", battery.device_id)?.state === "unavailable";
       nodes.push({
         id: `battery-${battery.id}`,
         role: "battery",
@@ -892,8 +1094,10 @@ class SlemsPanel extends HTMLElement {
         power,
         soc: num("battery_soc", battery.device_id),
         entity: this._entityId("ac_power", battery.device_id) || this._entityId("battery_power", battery.device_id),
-        disabled: !enabled || balancing || notResponding || unreadable,
-        detail: unreadable
+        disabled: !enabled || balancing || notResponding || unreadable || paused,
+        detail: paused
+          ? t.paused
+          : unreadable
           ? t.unreadable
           : !enabled
           ? t.disabled
@@ -1364,14 +1568,21 @@ class SlemsPanel extends HTMLElement {
             [t.powerGridSide, direction(this._batteryPower(b.device_id)), (s("ac_power") || s("battery_power"))?.entity_id],
             [t.setPoint, direction(this._number(s("planned_power"))), s("planned_power")?.entity_id],
             [t.efficiency, s("round_trip_efficiency"), s("round_trip_efficiency")?.entity_id],
-            [t.cycles, s("cycle_count"), s("cycle_count")?.entity_id],
             [t.state, s("inverter_state"), s("inverter_state")?.entity_id],
             [t.temperature, s("internal_temperature"), s("internal_temperature")?.entity_id],
             limited("allowed_charge_power", t.allowedCharge),
             limited("allowed_discharge_power", t.allowedDischarge),
           ].filter(([, st]) => st);
           let problem = "";
-          if (s("battery_soc")?.state === "unavailable") {
+          const pause = s("communication_paused");
+          if (pause?.state === "on") {
+            const until = pause.attributes.paused_until
+              ? new Date(pause.attributes.paused_until).toLocaleTimeString(this._hass.locale?.language, { hour: "2-digit", minute: "2-digit" })
+              : "–";
+            const text = (pause.attributes.reason === "firmware_update" ? t.pausedFirmware : t.pausedManual).replace("{time}", until);
+            problem = `<div class="info-box"><ha-icon icon="mdi:pause-circle-outline"></ha-icon><span>${escapeHtml(text)}</span>
+              <button class="link" data-action="menu-resume" data-entity="${pause.entity_id}">${t.resume}</button></div>`;
+          } else if (s("battery_soc")?.state === "unavailable") {
             problem = `<div class="problem"><ha-icon icon="mdi:alert-circle"></ha-icon><span><b>${t.unreadable}</b> – ${t.unreadableText}</span></div>`;
           } else if (notResponding?.state === "on") {
             const attrs = notResponding.attributes;
@@ -1383,7 +1594,7 @@ class SlemsPanel extends HTMLElement {
           }
           return `<section class="card">
             <div class="card-head"><h2>${escapeHtml(b.name)}</h2>
-              ${enabled ? this._toggle(enabled, t.enabled, b.name) : ""}</div>
+              <div class="chips">${enabled?.state === "off" ? `<span class="chip">${t.disabled}</span>` : ""}${this._batteryMenu(b)}</div></div>
             ${problem}
             <div class="soc"><div class="soc-bar"><div style="width:${soc ?? 0}%"></div></div>
               <span>${soc === null ? "–" : Math.round(soc) + " %"}</span></div>
@@ -1426,8 +1637,6 @@ class SlemsPanel extends HTMLElement {
           <span class="suggestion-text"><b>${t.balancingSuggested}</b><span>${escapeHtml(text)}</span></span>
           ${hint}<button class="primary" data-action="balancing-on" data-entity="${switchState.entity_id}" data-name="${escapeHtml(battery.name)}"${disabled}>${t.startBalancing}</button>
         </div>`;
-    } else if (switchState && switchState.state !== "unavailable") {
-      action = `<button class="link start-balancing" data-action="balancing-on" data-entity="${switchState.entity_id}" data-name="${escapeHtml(battery.name)}"${disabled}>${t.startBalancing}</button>${hint}`;
     }
     const result = t.balancingResults[phase?.attributes?.last_result];
     const lastRun = !balancing && result ? `<dt>${t.lastBalancing}</dt><dd>${escapeHtml(result)}</dd>` : "";
@@ -1598,17 +1807,18 @@ class SlemsPanel extends HTMLElement {
     dialog.querySelector('[data-answer="cancel"]').focus();
   }
 
+  _moreInfo(entityId) {
+    this.dispatchEvent(
+      new CustomEvent("hass-more-info", { detail: { entityId }, bubbles: true, composed: true })
+    );
+  }
+
   _onClick(event) {
+    if (this._onMenuClick(event)) return;
     // Values open the more-info dialog of their entity (not inside controls).
     const moreInfo = event.target.closest("[data-more-info]");
     if (moreInfo && !event.target.closest("button, input, select, label.switch, a")) {
-      this.dispatchEvent(
-        new CustomEvent("hass-more-info", {
-          detail: { entityId: moreInfo.dataset.moreInfo },
-          bubbles: true,
-          composed: true,
-        })
-      );
+      this._moreInfo(moreInfo.dataset.moreInfo);
       return;
     }
     const balancingButton = event.target.closest("[data-action='balancing-on'], [data-action='balancing-off']");
@@ -1733,6 +1943,21 @@ const STYLE = `
   .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
   .tile { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--divider-color); }
   .tile .label { font-size: 12px; }
+  .menu-wrap { position: relative; }
+  .menu-button { background: none; border: none; cursor: pointer; color: var(--secondary-text-color); padding: 4px; line-height: 0;
+    border-radius: 50%; }
+  .menu-button:hover { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
+  .menu { position: absolute; right: 0; top: 100%; z-index: 5; min-width: 240px; padding: 4px 0; border-radius: 8px;
+    background: var(--card-background-color); box-shadow: 0 4px 16px rgba(0,0,0,0.3); border: 1px solid var(--divider-color); }
+  .menu-item { display: block; width: 100%; text-align: left; background: none; border: none; font: inherit; font-size: 14px;
+    color: var(--primary-text-color); padding: 10px 16px; cursor: pointer; }
+  .menu-item:hover:not(:disabled) { background: color-mix(in srgb, var(--primary-color) 10%, transparent); }
+  .menu-item:disabled { color: var(--secondary-text-color); cursor: not-allowed; }
+  .info-box { display: flex; gap: 8px; align-items: center; margin: 4px 0 12px; padding: 8px 10px; border-radius: 8px; font-size: 13px;
+    border: 1px solid var(--divider-color); background: color-mix(in srgb, var(--primary-color) 8%, transparent); }
+  .info-box ha-icon { color: var(--primary-color); --mdc-icon-size: 18px; flex: none; }
+  .info-box button { margin-left: auto; }
+  #details dl { margin: 0 0 16px; min-width: 300px; }
   [data-more-info] { cursor: pointer; }
   .tile[data-more-info]:hover .value, dd[data-more-info]:hover, dt[data-more-info]:hover + dd { color: var(--primary-color); }
   .fbox[data-more-info]:hover { border-color: var(--accent); }

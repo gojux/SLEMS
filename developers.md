@@ -302,6 +302,21 @@ Simulator: while `SIM_FAULT_FILE` (default `/tmp/venus_fault`) exists in the
 container, the simulated Venus accepts commands but delivers 0 W
 (`docker compose exec venus-sim-2 touch /tmp/venus_fault`).
 
+### Communication pause (firmware update)
+
+`BatteryRuntime.paused_until` (wall clock, stored) and `pause_reason`
+(`manual` / `firmware_update`). `async_pause_communication` releases the
+battery first for a manual pause (not for a detected update: no more traffic),
+closes the driver connection and sets the time from
+`communication_pause_min`. The poll skips paused batteries (no read, no
+`unreadable_since`) and resumes them when the time is over;
+`participating`/`plannable` are false meanwhile and a balancing run pauses. The
+automatic pause triggers when the telemetry reports `inverter_state`
+`ota_upgrade` (register 35100 = 5). Only drivers with `has_connection` get the
+switch. Simulator: `SIM_OTA_FILE` (default `/tmp/venus_ota`) makes it report
+the update. Device information (`read_device_info`) is read after connecting
+and every 6 h and shown in the dashboard's details dialog.
+
 ### Cell balancing
 
 `cell_balancing.py` (monitor and state machine, no HA dependency),
@@ -720,6 +735,10 @@ Source: Omnibattery `const/registers_v3.py`, `drivers/marstek.py`,
 | 35000 | internal_temperature | int16 | 0.1 °C | |
 | 35100 | inverter_state | uint16 | | 0 sleep, 1 standby, 2 charge, 3 discharge, 4 backup, 5 OTA, 6 bypass |
 | 34003 | cycle_count | uint16 | 1 | charge cycles counted by the battery (as in Omnibattery; not yet verified on the device) |
+| 31000 | device_name | char × 10 | | device information, read after connecting and every 6 h |
+| 30200 / 30202 / 30204 | ems / vms / bms_version | uint16 | | |
+| 30350 | comm_module_firmware | char × 6 | | |
+| 30304 | mac_address | char × 6 | | |
 | 33000 | total_charging_energy | uint32 | 0.01 kWh | |
 | 33002 | total_discharging_energy | int32 | 0.01 kWh | |
 | 37007 | max_cell_voltage | int16 | 0.001 V | |
@@ -832,3 +851,4 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-25 | Forecast accuracy: consumption by backtest over 14 days (immediately available), PV by recording the forecast of each day (past forecasts are not available). |
 | 2026-09-25 | Efficiency source: battery counters recommended for the Venus (accurate at once over the whole operating time), learned for read-only batteries; the distribution between batteries uses the separate AC/DC loss curve, not the efficiency. |
 | 2026-09-25 | Peak shaving: threshold stays absolute but not below the minimum SoC; optional automatic import limit from the 5 minute consumption peaks until PV refills, with a safety reserve. Number fields lose the focus on the mouse wheel (it changed and saved values while scrolling). |
+| 2026-09-26 | Communication pause per battery for firmware updates (manual, 20 min default, automatic on a reported OTA update); battery card actions in a ⋮ menu with a details dialog (firmware, counters). |

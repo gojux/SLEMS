@@ -255,7 +255,7 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   shaving and night discharge if enabled. Hovering (on a phone: tapping, a
   tap elsewhere closes it) shows the values of an hour; *Show table*
   switches to a table.
-- **Batteries**: state of charge, stored energy and capacity (kWh), charge cycles, power on the grid side
+- **Batteries**: state of charge, stored energy and capacity (kWh), power on the grid side
   (AC) with its direction, the SLEMS set point, efficiency, state and
   the *Enabled* switch of every battery (disabling asks for confirmation),
   the cell delta with its balance status, a recommendation for active cell
@@ -359,6 +359,24 @@ once if the battery cannot be read; it pauses outside operating mode
 battery is handed back to its own logic and then returns to the normal
 planning. The sensor *Cell balancing phase* shows the phase and the result of
 the last run.
+
+### Firmware updates and battery menu
+
+During a firmware update of a Marstek battery there must be no Modbus
+communication at all. The menu (⋮) of a battery card offers *Pause
+communication (firmware update)*: SLEMS hands the battery back to its own
+logic, closes the connection and does not read or send anything for the
+*Communication pause duration* (default 20 minutes; switch *Communication
+paused*). Afterwards it reconnects by itself; *Resume* ends the pause earlier.
+Meanwhile the battery is treated like a disabled one. If the battery itself
+reports a running firmware update (state *OTA update*), SLEMS pauses
+automatically; as this is only noticed with the next poll, pause manually
+before an update.
+
+The same menu enables or disables the battery, starts or cancels the cell
+balancing and opens *Details*: model, device name, firmware versions (EMS,
+VMS, BMS, communication module; sensor *Firmware*), MAC address, capacity,
+charge cycles and the total charged and discharged energy.
 
 ### Battery limits and protection
 
