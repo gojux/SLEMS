@@ -7,7 +7,11 @@ themselves when the problem is gone:
   (``delivery_monitor``),
 * a battery could not be read for ``UNREADABLE_AFTER_S``,
 * the grid meter is stale in operating mode active (the batteries follow their
-  own logic meanwhile).
+  own logic meanwhile),
+* feed-in cap: the batteries are too small for the space needed, there is not
+  enough time or power left to feed in before the peak, their charge power is
+  too low (energy would be curtailed), or the export has been above the limit
+  for ``CAP_EXCEEDED_AFTER_S``.
 
 Notifications (bell) for events: the end of an active cell balancing run,
 except when the user cancelled it.
@@ -18,21 +22,30 @@ start removes the ones that no longer apply.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.translation import async_get_translations
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, OperatingMode
 from .controller import ControlStatus
 
 if TYPE_CHECKING:
-    from .coordinator import BatteryRuntime, SlemsCoordinator
+    from .coordinator import BatteryRuntime, SlemsCoordinator, SystemSnapshot
 
 UNREADABLE_AFTER_S = 300.0
+CAP_EXCEEDED_AFTER_S = 300.0
 GRID_STALE_ISSUE = "grid_meter_stale"
+CAP_ISSUES = {
+    "battery_too_small": "feed_in_cap_battery_too_small",
+    "too_late": "feed_in_cap_too_late",
+    "charge_power_too_low": "feed_in_cap_charge_power",
+}
+CAP_EXCEEDED_ISSUE = "feed_in_cap_exceeded"
 
 
 @callback
@@ -62,11 +75,11 @@ class ProblemReporter:
         self._active: set[str] | None = None
 
     @callback
-    def update(self, now: float) -> None:
+    def update(self, now: float, snapshot: SystemSnapshot | None = None) -> None:
         """Create or delete the repair issues (``now``: monotonic time)."""
         coordinator = self._coordinator
         wanted: dict[str, tuple[str, dict[str, str]]] = {}
-        possible = {GRID_STALE_ISSUE}
+        possible = {GRID_STALE_ISSUE, CAP_EXCEEDED_ISSUE, *CAP_ISSUES.values()}
         for battery in coordinator.batteries:
             possible |= {_not_responding_issue(battery), _unreadable_issue(battery)}
             placeholders = {"name": battery.name}
@@ -80,6 +93,25 @@ class ProblemReporter:
             and coordinator.controller.status is ControlStatus.GRID_STALE
         ):
             wanted[GRID_STALE_ISSUE] = ("grid_meter_stale", {})
+        cap = snapshot.feed_in_cap if snapshot is not None else None
+        if cap is not None:
+            block = cap.next_block
+            placeholders = {
+                "limit": f"{cap.limit_w:.0f}",
+                "peak": _clock(block.start) if block else "–",
+                "required": f"{cap.required_space_wh / 1000:.1f}",
+                "needed": f"{cap.export_needed_wh / 1000:.1f}",
+                "possible": f"{cap.export_possible_wh / 1000:.1f}",
+                "curtailed": f"{cap.curtailed_wh / 1000:.1f}",
+            }
+            for problem in cap.problems:
+                wanted[CAP_ISSUES[problem]] = (CAP_ISSUES[problem], placeholders)
+        since = coordinator.cap_exceeded_since
+        if since is not None and now - since >= CAP_EXCEEDED_AFTER_S:
+            wanted[CAP_EXCEEDED_ISSUE] = (
+                CAP_EXCEEDED_ISSUE,
+                {"limit": f"{coordinator.settings.feed_in_cap_limit_w:.0f}"},
+            )
 
         for issue_id, (translation_key, placeholders) in wanted.items():
             if self._active is None or issue_id not in self._active:
@@ -136,3 +168,7 @@ class ProblemReporter:
             title=title,
             notification_id=f"{DOMAIN}_balancing_{battery.subentry_id}",
         )
+
+
+def _clock(moment: datetime) -> str:
+    return dt_util.as_local(moment).strftime("%H:%M")

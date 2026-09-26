@@ -72,6 +72,7 @@ EV charging; evcc complements SLEMS well (see [roadmap](#roadmap)).
 | Import peak shaving at low state of charge (manually enabled) | ✅ |
 | Consumption forecast today/tomorrow (history + weather, heat pump temperature dependent) | ✅ |
 | Grid friendly charging: absorb PV feed-in peaks | ✅ |
+| Feed-in cap: store the PV energy above a feed-in limit, make room in time | ✅ |
 | Distribution of surplus between batteries and consumers (priorities, split, minimum runtime/pause) | ✅ |
 | Battery efficiency (battery counters, learned or manual) | ✅ |
 | Averaged grid surplus (0–300 s) | ✅ |
@@ -207,6 +208,10 @@ Every consumer needs its own power **and** energy sensor.
   the dashboard): off means SLEMS only measures the consumer. Switching it
   off in operating mode *active* sets it to 0 W (or off) once; afterwards
   SLEMS leaves it alone and plans it like an uncontrolled load.
+- **With feed-in cap** (controlled consumers): *Count and use* – the consumer
+  takes the surplus above the feed-in limit before the batteries, so they need
+  less free space; *Only in an emergency* (default) – only what the batteries
+  cannot absorb; *Never*. See *Feed-in cap*.
 
 **Battery efficiency** (round trip, AC to AC), one of three sources per
 battery:
@@ -422,7 +427,9 @@ themselves when they are solved:
 
 - a battery does not respond (excluded, see above),
 - a battery could not be read for more than 5 minutes,
-- the smart meter does not report while SLEMS is in operating mode *active*.
+- the smart meter does not report while SLEMS is in operating mode *active*,
+- feed-in cap: batteries too small, not enough time to make room, charge
+  power too low, feed-in above the limit (see *Feed-in cap*).
 
 The dashboard also shows them: a red note on the battery card (*cannot be
 read*, *not responding*), in the energy flow and, for the smart meter, at the
@@ -522,6 +529,58 @@ How much of the peak can be absorbed depends on the battery size compared to
 the day's surplus: on a clear summer day with a large surplus a 10 kWh
 battery takes about the top kilowatt of the peak, on days with less surplus
 a much larger share.
+
+### Feed-in cap
+
+Some grid operators or regulations only allow a PV system to feed in a share
+of its peak power (e.g. 60 %); the inverter curtails everything above it.
+With *Feed-in cap* (switch, off by default) SLEMS stores that energy in the
+batteries instead of losing it. The limit is *PV peak power* (kWp) × *Feed-in
+cap limit* (%), measured at the grid connection point (grid export, after the
+house consumption).
+
+- **Planning**: from the PV forecast in its finest resolution (15/30/60 min, so
+  short peaks are not averaged away) and the consumption forecast, SLEMS
+  calculates until the end of tomorrow how much energy lies above the limit
+  and how much free space the batteries need for it. Several peaks per day
+  (clouds in between) and peaks today and tomorrow are covered: a cloud dip or
+  the night in between, in which the batteries supply the house, makes room
+  again; a surplus below the limit does not.
+- **Buffer**: *Feed-in cap buffer* (default +20 %, negative values plan with
+  less) is added to the energy to absorb, and *Feed-in cap minimum buffer*
+  (default 5 % of the PV peak power as energy of one hour, e.g. 0.5 kWh at
+  10 kWp) per peak in any case. With *Automatic feed-in cap buffer* SLEMS uses
+  the recorded PV forecast errors instead (see *Forecast accuracy*): of the
+  days with more PV than forecast, the underestimation not exceeded on 80 % of
+  them raises the PV forecast. This needs 14 recorded days; until then the
+  fixed buffer applies. The settings show the limit and the buffer in use.
+- **Making room**: charging with surplus below the limit only happens as long
+  as the space needed later stays free; above the limit the batteries always
+  charge. The night discharge (if enabled) stops early enough to leave the
+  space. If the house consumption and the night discharge are not enough,
+  SLEMS feeds battery energy into the grid before the peak, as late as
+  possible: it is planned to be finished one hour before the peak with 70 %
+  of the possible power, never above the limit. For this it may exceed
+  *Maximum grid export while discharging*.
+- **Order during the peak**: the surplus above the limit goes to consumers set
+  to *Count and use*, then to the batteries (regardless of battery priority,
+  battery share and grid friendly charging), then to consumers set to *Only in
+  an emergency*. The feed-in cap takes precedence over grid friendly charging
+  (its feed-in limit never lies above the cap), night discharge and battery
+  priority; the peak shaving threshold stays a floor for feeding in.
+- **Overview**: the tile *Feed-in cap* shows the next peak, the energy the
+  batteries have to absorb and, if needed, the energy to feed in before it
+  and by when. The day chart shows a dashed line at consumption + limit (the
+  PV level above which is capped), the energy above it as a bar on that line
+  and the part that would be curtailed in red.
+- **Warnings** (overview and *Settings → Repairs*): batteries too small for
+  the space needed, not enough time or power left to feed in before the peak,
+  charge power too low for the surplus above the limit, and feed-in above the
+  limit for more than 5 minutes.
+
+Sensors: *Feed-in cap energy to absorb* (on the day of the next peak, with the
+peaks, the space needed, the export plan and the buffer as attributes) and
+*Feed-in cap export before the peak*.
 
 ### Further settings (entities)
 

@@ -159,6 +159,29 @@ const STRINGS = {
     },
     exportBelowTarget:
       "The maximum grid export while discharging ({limit}) is below the grid surplus target while discharging ({target}): the batteries control to {limit}.",
+    feedInCap: "Feed-in cap",
+    capAbsorb: "absorb {absorb}",
+    capExport: "feed in {export} before (until {time})",
+    capNoPeak: "no peak above {limit}",
+    capProblems: {
+      battery_too_small: "Feed-in cap: batteries too small",
+      too_late: "Feed-in cap: not enough time to make room",
+      charge_power_too_low: "Feed-in cap: charge power too low",
+      limit_exceeded: "Feed-in above the limit",
+    },
+    capProblemTexts: {
+      battery_too_small: "The batteries cannot hold the forecast energy above the limit ({space} needed); the rest is curtailed.",
+      too_late: "Not enough time or power left to feed in {export} before the peak; part of the surplus will be curtailed.",
+      charge_power_too_low: "The batteries cannot charge fast enough; about {curtailed} would be curtailed. A consumer set to \"Count and use\" or \"Only in an emergency\" for the feed-in cap can take it.",
+      limit_exceeded: "The grid export has been above the limit for more than 5 minutes.",
+    },
+    capNote: "Limit {limit}. Buffer in use: {buffer}{source}.",
+    capBufferAuto: " (learned from {days} days)",
+    capBufferWaiting: " (fixed; automatic from 14 recorded days, {days} so far)",
+    capLine: "Feed-in cap (PV level)",
+    capExcess: "Above the limit",
+    capCurtailed: "Curtailed",
+    capModes: { count: "feed-in cap: counted", emergency: "feed-in cap: emergency only", never: "feed-in cap: never" },
     status: "Status",
     tileHints: {
       feed_in_limit:
@@ -167,6 +190,16 @@ const STRINGS = {
     peakShavingNote:
       "Below the threshold only {usable} above the minimum state of charge ({min}) are left for peaks, about {kwh} kWh.",
     settingHints: {
+      feed_in_cap:
+        "Keeps the export at the grid connection point below PV peak power × limit. From the PV and consumption forecasts SLEMS plans how much energy above the limit the batteries must absorb, keeps that space free (night discharge, otherwise feeding in battery energy before the peak, as late as possible and never above the limit) and warns if it does not work out. Takes precedence over grid friendly charging, night discharge and battery priority.",
+      pv_peak_power: "Peak power of the PV system the limit refers to.",
+      feed_in_cap_limit: "Share of the PV peak power that may be fed in at most, e.g. 60 %.",
+      feed_in_cap_buffer:
+        "Extra space on top of the forecast energy above the limit, in % of it, against a too low PV forecast. Negative values plan with less.",
+      feed_in_cap_min_buffer:
+        "Space kept free per peak in any case, in % of the PV peak power as energy of one hour (10 kWp, 5 % → 0.5 kWh). Covers small peaks for which the percentage buffer is tiny.",
+      feed_in_cap_auto_buffer:
+        "Uses the recorded PV forecast errors instead of the fixed buffer: of the days with more PV than forecast, the underestimation not exceeded on 80 % of them raises the PV forecast. Needs 14 recorded days; until then the fixed buffer applies.",
       peak_shaving_grid_limit:
         "Below the state of charge threshold, consumption up to this power comes from the grid; the batteries only cover what exceeds it.",
       peak_shaving_auto:
@@ -214,6 +247,7 @@ const STRINGS = {
       control: "Control",
       priority: "Battery priority and grid targets",
       temperature: "Temperature charge limit",
+      feedInCap: "Feed-in cap",
       gridFriendly: "Grid friendly charging",
       night: "Night discharge",
       peak: "Import peak shaving",
@@ -340,6 +374,29 @@ const STRINGS = {
     },
     exportBelowTarget:
       "Die maximale Einspeisung beim Entladen ({limit}) liegt unter dem Ziel-Netzüberschuss beim Entladen ({target}): Die Batterien regeln auf {limit}.",
+    feedInCap: "Einspeisebegrenzung",
+    capAbsorb: "{absorb} aufnehmen",
+    capExport: "davor {export} einspeisen (bis {time})",
+    capNoPeak: "keine Spitze über {limit}",
+    capProblems: {
+      battery_too_small: "Einspeisebegrenzung: Batterien zu klein",
+      too_late: "Einspeisebegrenzung: zu wenig Zeit für Platz",
+      charge_power_too_low: "Einspeisebegrenzung: Ladeleistung zu gering",
+      limit_exceeded: "Einspeisung über der Grenze",
+    },
+    capProblemTexts: {
+      battery_too_small: "Die Batterien können die prognostizierte Energie über der Grenze nicht aufnehmen ({space} nötig); der Rest wird abgeregelt.",
+      too_late: "Es bleibt nicht genug Zeit oder Leistung, um vor der Spitze {export} einzuspeisen; ein Teil des Überschusses wird abgeregelt.",
+      charge_power_too_low: "Die Batterien können nicht schnell genug laden; etwa {curtailed} würden abgeregelt. Ein Verbraucher mit „Einrechnen und nutzen“ oder „Nur notfalls“ bei der Einspeisebegrenzung kann ihn aufnehmen.",
+      limit_exceeded: "Die Einspeisung liegt seit mehr als 5 Minuten über der Grenze.",
+    },
+    capNote: "Grenze {limit}. Puffer in Verwendung: {buffer}{source}.",
+    capBufferAuto: " (gelernt aus {days} Tagen)",
+    capBufferWaiting: " (fest; automatisch ab 14 aufgezeichneten Tagen, bisher {days})",
+    capLine: "Einspeisebegrenzung (PV-Niveau)",
+    capExcess: "Über der Grenze",
+    capCurtailed: "Abgeregelt",
+    capModes: { count: "Einspeisebegrenzung: eingerechnet", emergency: "Einspeisebegrenzung: nur notfalls", never: "Einspeisebegrenzung: nie" },
     status: "Status",
     tileHints: {
       feed_in_limit:
@@ -348,6 +405,16 @@ const STRINGS = {
     peakShavingNote:
       "Unter der Schwelle bleiben nur {usable} über dem minimalen Ladezustand ({min}) für Spitzen, etwa {kwh} kWh.",
     settingHints: {
+      feed_in_cap:
+        "Hält die Einspeisung am Netzanschlusspunkt unter PV-Leistung × Grenze. Aus PV- und Verbrauchsprognose plant SLEMS, wie viel Energie über der Grenze die Batterien aufnehmen müssen, hält dafür Platz frei (Nachtentladung, sonst Einspeisen von Batterieenergie vor der Spitze, möglichst spät und nie über der Grenze) und warnt, wenn es sich nicht ausgeht. Hat Vorrang vor netzdienlichem Laden, Nachtentladung und Batterievorrang.",
+      pv_peak_power: "Spitzenleistung der PV-Anlage, auf die sich die Grenze bezieht.",
+      feed_in_cap_limit: "Anteil der PV-Spitzenleistung, der höchstens eingespeist werden darf, z. B. 60 %.",
+      feed_in_cap_buffer:
+        "Zusätzlicher Platz zur prognostizierten Energie über der Grenze, in % davon, gegen eine zu niedrige PV-Prognose. Negative Werte planen mit weniger.",
+      feed_in_cap_min_buffer:
+        "Platz, der je Spitze auf jeden Fall frei bleibt, in % der PV-Spitzenleistung als Energie einer Stunde (10 kWp, 5 % → 0,5 kWh). Deckt kleine Spitzen ab, bei denen der prozentuale Puffer winzig ist.",
+      feed_in_cap_auto_buffer:
+        "Verwendet statt des festen Puffers die aufgezeichneten Abweichungen der PV-Prognose: Von den Tagen mit mehr PV als prognostiziert hebt die Unterschätzung, die an 80 % davon nicht überschritten wurde, die PV-Prognose an. Braucht 14 aufgezeichnete Tage; bis dahin gilt der feste Puffer.",
       peak_shaving_grid_limit:
         "Unterhalb der Ladezustand-Schwelle kommt Verbrauch bis zu dieser Leistung aus dem Netz; die Batterien decken nur, was darüber hinausgeht.",
       peak_shaving_auto:
@@ -395,6 +462,7 @@ const STRINGS = {
       control: "Regelung",
       priority: "Batterievorrang und Netz-Zielwerte",
       temperature: "Ladebegrenzung nach Temperatur",
+      feedInCap: "Einspeisebegrenzung",
       gridFriendly: "Netzdienliches Laden",
       night: "Nachtentladung",
       peak: "Bezugsspitzen abfangen",
@@ -431,6 +499,17 @@ const SETTING_GROUPS = [
       "charge_grid_target",
       "discharge_grid_target",
       "discharge_max_grid_export",
+    ],
+  ],
+  [
+    "feedInCap",
+    [
+      "feed_in_cap",
+      "pv_peak_power",
+      "feed_in_cap_limit",
+      "feed_in_cap_buffer",
+      "feed_in_cap_auto_buffer",
+      "feed_in_cap_min_buffer",
     ],
   ],
   ["gridFriendly", ["grid_friendly_charging", "grid_friendly_buffer"]],
@@ -481,6 +560,9 @@ function polylines(pointRuns, color, dash) {
     .join("");
 }
 
+// Energy the feed-in cap forecasts to be curtailed (status colour "critical", not a series colour).
+const CURTAILED_COLOR = "#d03b3b";
+
 // Below this SoC threshold the peak shaving card warns about the little energy left.
 const PEAK_SHAVING_NOTE_PCT = 20;
 
@@ -522,6 +604,8 @@ class SlemsPanel extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    // Hyphenation of long words in narrow tiles follows the language.
+    this.lang = hass?.locale?.language || hass?.language || "en";
     this._queueRender();
   }
 
@@ -634,12 +718,14 @@ class SlemsPanel extends HTMLElement {
     const problems = [];
     if (this._state("control_status")?.state === "grid_stale") problems.push(t.gridStale);
     for (const battery of this._config.batteries || []) {
+      if (this._state("communication_paused", battery.device_id)?.state === "on") continue;
       if (this._state("battery_soc", battery.device_id)?.state === "unavailable") {
         problems.push(`${battery.name}: ${t.unreadable}`);
       } else if (this._state("not_responding", battery.device_id)?.state === "on") {
         problems.push(`${battery.name}: ${t.notResponding}`);
       }
     }
+    for (const key of this._capProblems()) problems.push(t.capProblems[key]);
     const mode = this._state("operating_mode");
     const value = problems.length
       ? `<span class="value problem-value"><ha-icon icon="mdi:alert-circle"></ha-icon>${escapeHtml(problems[0])}${
@@ -647,7 +733,87 @@ class SlemsPanel extends HTMLElement {
         }</span>`
       : `<span class="value">${escapeHtml(mode ? this._format(mode) : "–")}</span>`;
     const moreInfo = mode ? ` data-more-info="${mode.entity_id}"` : "";
-    return `<div class="tile"${moreInfo}><span class="label">${t.status}</span>${value}</div>`;
+    return `<div class="tile${problems.length ? " wide" : ""}"${moreInfo}><span class="label">${t.status}</span>${value}</div>`;
+  }
+
+  /** Sensor of the feed-in cap while it is switched on, otherwise null. */
+  _capState() {
+    if (this._state("feed_in_cap")?.state !== "on") return null;
+    return this._state("feed_in_cap_energy") || null;
+  }
+
+  _capProblems() {
+    const a = this._capState()?.attributes || {};
+    return [...(a.problems || []), ...(a.limit_exceeded ? ["limit_exceeded"] : [])];
+  }
+
+  /** Time of an ISO timestamp; with the weekday when it is not today. */
+  _clock(iso) {
+    if (!iso) return "–";
+    const date = new Date(iso);
+    const language = this._hass?.locale?.language;
+    const time = date.toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" });
+    if (date.toDateString() === new Date().toDateString()) return time;
+    return `${date.toLocaleDateString(language, { weekday: "short" })} ${time}`;
+  }
+
+  /** Overview tile of the feed-in cap: energy to absorb and export before the peak. */
+  _capTile() {
+    const t = this._t;
+    const energy = this._capState();
+    if (!energy) return "";
+    const a = energy.attributes || {};
+    let label = t.feedInCap;
+    let value;
+    if (!a.peak_start) {
+      value = t.capNoPeak.replace("{limit}", this._watts(a.limit_w));
+    } else {
+      label += ` ${this._clock(a.peak_start)}–${this._clock(a.peak_end).split(" ").pop()}`;
+      const parts = [t.capAbsorb.replace("{absorb}", this._kwh((this._number(energy) || 0) * 1000))];
+      if (a.export_needed_kwh >= 0.05) {
+        parts.push(
+          t.capExport
+            .replace("{export}", this._kwh(a.export_needed_kwh * 1000))
+            .replace("{time}", this._clock(a.export_until))
+        );
+      }
+      value = parts.join(" · ");
+    }
+    return `<div class="tile wide" data-more-info="${energy.entity_id}"><span class="label">${escapeHtml(label)}</span>
+      <span class="value">${escapeHtml(value)}</span></div>`;
+  }
+
+  /** Problem notes of the feed-in cap for the overview. */
+  _capNotes() {
+    const t = this._t;
+    const a = this._capState()?.attributes || {};
+    return this._capProblems()
+      .map((key) => {
+        const text = t.capProblemTexts[key]
+          .replace("{space}", this._kwh((a.required_space_kwh || 0) * 1000))
+          .replace("{export}", this._kwh((a.export_needed_kwh || 0) * 1000))
+          .replace("{curtailed}", this._kwh((a.curtailed_kwh || 0) * 1000));
+        return `<div class="problem"><ha-icon icon="mdi:alert-circle"></ha-icon><span><b>${escapeHtml(t.capProblems[key])}</b> – ${escapeHtml(text)}</span></div>`;
+      })
+      .join("");
+  }
+
+  /** Limit and buffer in use below the feed-in cap settings. */
+  _capNote() {
+    const t = this._t;
+    const energy = this._state("feed_in_cap_energy");
+    if (!energy) return "";
+    const a = energy.attributes || {};
+    const pct = a.buffer_pct ?? this._number(this._state("feed_in_cap_buffer"));
+    const buffer = pct === null || pct === undefined ? "–" : `${pct > 0 ? "+" : ""}${this._percent(pct)}`;
+    let source = "";
+    if (a.buffer_source === "auto") source = t.capBufferAuto.replace("{days}", a.buffer_days);
+    else if (this._state("feed_in_cap_auto_buffer")?.state === "on") source = t.capBufferWaiting.replace("{days}", a.buffer_days ?? 0);
+    const text = t.capNote
+      .replace("{limit}", this._watts(a.limit_w))
+      .replace("{buffer}", buffer)
+      .replace("{source}", source);
+    return `<p class="setting-note"><ha-icon icon="mdi:information-outline"></ha-icon>${escapeHtml(text)}</p>`;
   }
 
   /** Value of an overview tile; the feed-in limit explains why it has none. */
@@ -1039,14 +1205,15 @@ class SlemsPanel extends HTMLElement {
     const t = this._t;
     this._setSection(
       "banner",
-      this._state("control_status")?.state === "grid_stale"
+      (this._state("control_status")?.state === "grid_stale"
         ? `<div class="problem"><ha-icon icon="mdi:alert-circle"></ha-icon><span><b>${t.gridStale}</b> – ${t.gridStaleText}</span></div>`
-        : ""
+        : "") + this._capNotes()
     );
     this._renderFlow();
     this._setSection(
       "tiles",
       this._statusTile() +
+      this._capTile() +
       OVERVIEW_TILES.map((key) => [key, this._state(key)])
         .filter(([, s]) => s)
         .map(([key, s]) => {
@@ -1338,6 +1505,10 @@ class SlemsPanel extends HTMLElement {
       plannedCharge: row.planned_charge_w,
       // Projected total state of charge at the end of the hour.
       socForecast: row.soc_pct,
+      // Feed-in cap: PV level above which is capped, energy above it and the curtailed part.
+      capLine: row.cap_line_wh ?? null,
+      capExcess: row.cap_excess_wh ?? null,
+      capCurtailed: row.cap_curtailed_wh ?? null,
       // Measured values exist for today only.
       pvActual: today ? this._stats.pv[hour] ?? null : null,
       consumptionActual: today ? this._stats.house[hour] ?? null : null,
@@ -1402,7 +1573,9 @@ class SlemsPanel extends HTMLElement {
       ${item(c.pv, t.pvForecast, "dash")}${has("pvActual") ? item(c.pv, t.pvActual, "solid") : ""}
       ${item(c.house, t.consumptionForecast, "dash")}${has("consumptionActual") ? item(c.house, t.consumptionActual, "solid") : ""}
       ${has("plannedCharge") ? item(c.battery, t.plannedCharge, "bar") : ""}
-      ${has("socForecast") ? item(c.battery, t.socForecast, "dash") : ""}${has("socActual") ? item(c.battery, t.socActual, "solid") : ""}</div>`;
+      ${has("socForecast") ? item(c.battery, t.socForecast, "dash") : ""}${has("socActual") ? item(c.battery, t.socActual, "solid") : ""}
+      ${has("capLine") ? item(c.grid, t.capLine, "dash") : ""}${has("capExcess") ? item(`${c.pv}73`, t.capExcess, "bar") : ""}
+      ${has("capCurtailed") ? item(CURTAILED_COLOR, t.capCurtailed, "bar") : ""}</div>`;
   }
 
   _chartSvg(rows) {
@@ -1420,6 +1593,8 @@ class SlemsPanel extends HTMLElement {
     const ys = (value) => pad.top + plotH - (Math.max(0, Math.min(100, value)) / 100) * plotH;
     const plotBottom = pad.top + plotH;
     const values = rows.flatMap((r) => [r.pvForecast, r.consumptionForecast, r.plannedCharge, r.pvActual, r.consumptionActual]);
+    // The feed-in limit only widens the scale where energy lies above it.
+    for (const r of rows) if (r.capExcess > 0) values.push(r.capLine + r.capExcess);
     const max = Math.max(100, ...values.filter((v) => v !== null && v !== undefined));
     const step = niceStep(max / 4);
     const top = Math.ceil(max / step) * step;
@@ -1457,12 +1632,31 @@ class SlemsPanel extends HTMLElement {
       .join("");
     const path = (key, color, dash) =>
       polylines(runs(rows, key).map((run) => run.map((r) => [x(r.hour + 0.5), y(r[key])])), color, dash);
+    // Energy above the feed-in limit as a bar on the limit line, the curtailed part on top.
+    const capBars = rows
+      .filter((r) => r.capExcess > 0)
+      .map((r) => {
+        const barW = Math.max(2, slot - 6);
+        const base = y(r.capLine);
+        const top = y(r.capLine + r.capExcess);
+        const curtailed = r.capCurtailed > 0 ? y(r.capLine + r.capExcess - r.capCurtailed) : top;
+        return `<rect x="${x(r.hour) + 3}" y="${top}" width="${barW}" height="${Math.max(1, base - top)}" fill="${c.pv}" fill-opacity="0.45"/>${
+          curtailed > top ? `<rect x="${x(r.hour) + 3}" y="${top}" width="${barW}" height="${curtailed - top}" fill="${CURTAILED_COLOR}"/>` : ""
+        }`;
+      })
+      .join("");
+    const capLine = polylines(
+      runs(rows.map((r) => ({ ...r, capLine: r.capLine !== null && r.capLine <= top ? r.capLine : null })), "capLine")
+        .map((run) => run.map((r) => [x(r.hour + 0.5), y(r.capLine)])),
+      c.grid,
+      true
+    );
     const now = new Date();
     const nowHour = now.getHours() + now.getMinutes() / 60;
     const showNow = this._chartDay === "today";
     return `
       <div class="chart-wrap"><svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="chart" role="img" aria-label="${this._t.dayChart}">
-        ${gridLines.join("")}${hourTicks}${bars}
+        ${gridLines.join("")}${hourTicks}${bars}${capBars}${capLine}
         ${path("pvForecast", c.pv, true)}${path("pvActual", c.pv, false)}
         ${path("consumptionForecast", c.house, true)}${path("consumptionActual", c.house, false)}
         ${socLines.join("")}
@@ -1477,14 +1671,18 @@ class SlemsPanel extends HTMLElement {
     const t = this._t;
     const cell = (v) => (v === null || v === undefined ? "–" : escapeHtml(this._kwh(v)));
     const percent = (v) => (v === null || v === undefined ? "–" : escapeHtml(this._percent(v)));
+    const cap = rows.some((r) => r.capLine !== null && r.capLine !== undefined);
     return `<div class="table-wrap"><table>
       <thead><tr><th>${t.hour}</th><th>${t.pvForecast}</th><th>${t.pvActual}</th><th>${t.consumptionForecast}</th>
-      <th>${t.consumptionActual}</th><th>${t.plannedCharge}</th><th>${t.socForecast}</th><th>${t.socActual}</th></tr></thead>
+      <th>${t.consumptionActual}</th><th>${t.plannedCharge}</th><th>${t.socForecast}</th><th>${t.socActual}</th>
+      ${cap ? `<th>${t.capLine}</th><th>${t.capExcess}</th><th>${t.capCurtailed}</th>` : ""}</tr></thead>
       <tbody>${rows
         .map(
           (r) => `<tr><td>${String(r.hour).padStart(2, "0")}:00</td><td>${cell(r.pvForecast)}</td><td>${cell(r.pvActual)}</td>
           <td>${cell(r.consumptionForecast)}</td><td>${cell(r.consumptionActual)}</td><td>${cell(r.plannedCharge)}</td>
-          <td>${percent(r.socForecast)}</td><td>${percent(r.socActual)}</td></tr>`
+          <td>${percent(r.socForecast)}</td><td>${percent(r.socActual)}</td>${
+            cap ? `<td>${cell(r.capLine)}</td><td>${cell(r.capExcess)}</td><td>${cell(r.capCurtailed)}</td>` : ""
+          }</tr>`
         )
         .join("")}</tbody></table></div>`;
   }
@@ -1531,7 +1729,8 @@ class SlemsPanel extends HTMLElement {
       ${entry(c.pv, t.pvForecast, row.pvForecast)}${entry(c.pv, t.pvActual, row.pvActual)}
       ${entry(c.house, t.consumptionForecast, row.consumptionForecast)}${entry(c.house, t.consumptionActual, row.consumptionActual)}
       ${entry(c.battery, t.plannedCharge, row.plannedCharge)}
-      ${percentEntry(c.battery, t.socForecast, row.socForecast)}${percentEntry(c.battery, t.socActual, row.socActual)}`;
+      ${percentEntry(c.battery, t.socForecast, row.socForecast)}${percentEntry(c.battery, t.socActual, row.socActual)}
+      ${row.capExcess > 0 ? entry(c.pv, t.capExcess, row.capExcess) : ""}${row.capCurtailed > 0 ? entry(CURTAILED_COLOR, t.capCurtailed, row.capCurtailed) : ""}`;
     tooltip.hidden = false;
     // Position relative to the chart card, next to the cursor.
     const card = this.shadowRoot.getElementById("daychart").getBoundingClientRect();
@@ -1684,6 +1883,7 @@ class SlemsPanel extends HTMLElement {
             attrs.blocked ? t.blocked : "",
             attrs.saturated ? t.saturated : "",
             attrs.resting ? t.resting : "",
+            c.controllable && this._capState() ? t.capModes[c.cap_mode] || "" : "",
           ]
             .filter(Boolean)
             .map((chip) => `<span class="chip">${chip}</span>`)
@@ -1715,7 +1915,13 @@ class SlemsPanel extends HTMLElement {
         if (!rows.length) return "";
         return `<section class="card"><h2>${t.groups[group]}</h2>
           <div class="settings">${rows.map((s) => this._control(s)).join("")}</div>${
-            group === "priority" ? this._exportNote() : group === "peak" ? this._peakNote() : ""
+            group === "priority"
+              ? this._exportNote()
+              : group === "peak"
+                ? this._peakNote()
+                : group === "feedInCap"
+                  ? this._capNote()
+                  : ""
           }</section>`;
       }).join("") +
         (this._config.batteries || [])
@@ -1955,6 +2161,8 @@ const STYLE = `
   .hint { font-size: 12px; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
   .tile { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--divider-color); }
+  .tile { min-width: 0; overflow-wrap: break-word; hyphens: auto; }
+  .tile.wide { grid-column: 1 / -1; }
   .tile .label { font-size: 12px; }
   .menu-wrap { position: relative; }
   .menu-button { background: none; border: none; cursor: pointer; color: var(--secondary-text-color); padding: 4px; line-height: 0;

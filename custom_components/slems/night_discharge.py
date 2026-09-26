@@ -8,13 +8,16 @@ minimum SoC of the batteries, raised to the
 level from which tomorrow's forecast PV surplus (minus a safety buffer,
 including charge losses) can still fill the batteries.
 
+With the feed-in cap the target is lowered so that the batteries have the
+free space the cap needs when PV takes over (``max_target``).
+
 The discharge power is recomputed every cycle from the remaining energy and
 time, so deviations correct themselves.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -43,8 +46,6 @@ def _energy(forecast: Mapping[datetime, float], start: datetime) -> float:
     return forecast.get(start, 0.0)
 
 
-
-
 def plan_night_discharge(
     now: datetime,
     soc_pct: float,
@@ -56,12 +57,14 @@ def plan_night_discharge(
     reserve_pct_of_consumption: float,
     buffer_wh: float,
     min_wh: float = 0.0,
+    max_target: Callable[[datetime], float] | None = None,
 ) -> NightDischargePlan | None:
     """Plan the night discharge; None if not applicable right now.
 
     Both forecasts map period starts to Wh. ``min_wh`` is the energy below
     the minimum SoC of the batteries: it cannot be used, so the reserve comes
-    on top of it. Not applicable while PV already
+    on top of it. ``max_target`` gives the highest stored energy allowed at
+    a moment (feed-in cap). Not applicable while PV already
     exceeds consumption, or if no crossover is found within the lookahead.
     """
     pv_forecast = hourly(pv_forecast)
@@ -91,6 +94,8 @@ def plan_night_discharge(
     reserve = reserve_pct_of_consumption / 100 * daily_consumption
     rechargeable = max(0.0, surplus - buffer_wh) * charge_efficiency
     target = min(capacity_wh, max(min_wh + reserve, capacity_wh - rechargeable, 0.0))
+    if max_target is not None:
+        target = max(min_wh, min(target, max_target(crossover)))
 
     stored = soc_pct / 100 * capacity_wh
     hours = (crossover - now).total_seconds() / 3600

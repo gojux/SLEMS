@@ -75,6 +75,7 @@ ergänzt SLEMS gut (siehe [Roadmap](#roadmap)).
 | Bezugsspitzen abfangen bei niedrigem Ladezustand (manuell aktivierbar) | ✅ |
 | Verbrauchsprognose heute/morgen (Historie + Wetter, Wärmepumpe temperaturabhängig) | ✅ |
 | Netzdienliches Laden: PV-Einspeisespitzen abfangen | ✅ |
+| Einspeisebegrenzung: PV-Energie über einer Einspeisegrenze speichern, rechtzeitig Platz schaffen | ✅ |
 | Verteilung des Überschusses auf Batterien und Verbraucher (Priorität, Aufteilung, Mindestlaufzeit/-pause) | ✅ |
 | Wirkungsgrad der Batterie (Batteriezähler, gelernt oder manuell) | ✅ |
 | Gemittelter Netzüberschuss (0–300 s) | ✅ |
@@ -213,6 +214,11 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   Ausschalten im Betriebsmodus *Aktiv* setzt SLEMS ihn einmal auf 0 W (bzw.
   aus); danach lässt SLEMS ihn in Ruhe und plant ihn wie eine ungesteuerte
   Last.
+- **Bei Einspeisebegrenzung** (gesteuerte Verbraucher): *Einrechnen und
+  nutzen* – der Verbraucher nimmt den Überschuss über der Einspeisegrenze vor
+  den Batterien auf, sie brauchen dann weniger freien Platz; *Nur notfalls*
+  (Standard) – nur, was die Batterien nicht aufnehmen können; *Nie*. Siehe
+  *Einspeisebegrenzung*.
 
 **Wirkungsgrad der Batterie** (Gesamtwirkungsgrad, AC zu AC), je Batterie
 aus einer von drei Quellen:
@@ -437,7 +443,10 @@ verschwinden von selbst, sobald sie behoben sind:
 
 - eine Batterie reagiert nicht (ausgeschlossen, siehe oben),
 - eine Batterie kann seit mehr als 5 Minuten nicht gelesen werden,
-- der Smart Meter meldet nicht, während SLEMS im Betriebsmodus *Aktiv* ist.
+- der Smart Meter meldet nicht, während SLEMS im Betriebsmodus *Aktiv* ist,
+- Einspeisebegrenzung: Batterien zu klein, zu wenig Zeit für Platz,
+  Ladeleistung zu gering, Einspeisung über der Grenze (siehe
+  *Einspeisebegrenzung*).
 
 Das Dashboard zeigt sie ebenfalls: ein roter Hinweis auf der Batteriekarte
 (*nicht lesbar*, *reagiert nicht*), im Energiefluss und für den Smart Meter
@@ -544,6 +553,62 @@ Wie viel der Spitze abgefangen werden kann, hängt von der Batteriegröße im
 Verhältnis zum Tagesüberschuss ab: An einem klaren Sommertag mit großem
 Überschuss nimmt eine 10-kWh-Batterie etwa das oberste Kilowatt der Spitze
 ab, an Tagen mit weniger Überschuss einen deutlich größeren Anteil.
+
+### Einspeisebegrenzung
+
+Manche Netzbetreiber oder Vorschriften erlauben einer PV-Anlage nur, einen
+Teil ihrer Spitzenleistung einzuspeisen (z. B. 60 %); der Wechselrichter regelt
+alles darüber ab. Mit *Einspeisebegrenzung* (Schalter, standardmäßig aus)
+speichert SLEMS diese Energie stattdessen in den Batterien. Die Grenze ist
+*PV-Spitzenleistung* (kWp) × *Grenze der Einspeisebegrenzung* (%), gemessen am
+Netzanschlusspunkt (Einspeisung, nach dem Hausverbrauch).
+
+- **Planung**: Aus der PV-Prognose in ihrer feinsten Auflösung (15/30/60 min,
+  damit kurze Spitzen nicht weggemittelt werden) und der Verbrauchsprognose
+  berechnet SLEMS bis Ende morgen, wie viel Energie über der Grenze liegt und
+  wie viel freien Platz die Batterien dafür brauchen. Mehrere Spitzen am Tag
+  (Wolken dazwischen) und Spitzen heute und morgen werden berücksichtigt: Eine
+  Wolkenlücke oder die Nacht dazwischen, in der die Batterien das Haus
+  versorgen, schafft wieder Platz; ein Überschuss unter der Grenze nicht.
+- **Puffer**: *Puffer der Einspeisebegrenzung* (Standard +20 %, negative Werte
+  planen mit weniger) kommt auf die aufzunehmende Energie, *Mindestpuffer der
+  Einspeisebegrenzung* (Standard 5 % der PV-Spitzenleistung als Energie einer
+  Stunde, z. B. 0,5 kWh bei 10 kWp) je Spitze auf jeden Fall. Mit *Puffer der
+  Einspeisebegrenzung automatisch* verwendet SLEMS stattdessen die
+  aufgezeichneten Abweichungen der PV-Prognose (siehe *Prognosegüte*): Von den
+  Tagen mit mehr PV als prognostiziert hebt die Unterschätzung, die an 80 %
+  davon nicht überschritten wurde, die PV-Prognose an. Das braucht 14
+  aufgezeichnete Tage; bis dahin gilt der feste Puffer. Die Einstellungen
+  zeigen die Grenze und den verwendeten Puffer.
+- **Platz schaffen**: Mit Überschuss unter der Grenze wird nur geladen,
+  solange der später nötige Platz frei bleibt; über der Grenze laden die
+  Batterien immer. Die Nachtentladung (falls eingeschaltet) entlädt so weit,
+  dass der Platz frei ist. Reichen Hausverbrauch und Nachtentladung nicht,
+  speist SLEMS vor der Spitze Batterieenergie ein, möglichst spät: geplant so,
+  dass es eine Stunde vor der Spitze mit 70 % der möglichen Leistung fertig
+  ist, nie über der Grenze. Dafür darf es *Maximale Einspeisung beim Entladen*
+  überschreiten.
+- **Reihenfolge in der Spitze**: Der Überschuss über der Grenze geht an
+  Verbraucher mit *Einrechnen und nutzen*, dann an die Batterien (unabhängig
+  von Batterievorrang, Batterieanteil und netzdienlichem Laden), dann an
+  Verbraucher mit *Nur notfalls*. Die Einspeisebegrenzung hat Vorrang vor
+  netzdienlichem Laden (dessen Einspeisegrenze liegt nie über der Begrenzung),
+  Nachtentladung und Batterievorrang; die Schwelle des Spitzenabfangs bleibt
+  beim Einspeisen eine Untergrenze.
+- **Übersicht**: Die Kachel *Einspeisebegrenzung* zeigt die nächste Spitze,
+  die Energie, die die Batterien aufnehmen müssen, und falls nötig die Energie,
+  die davor einzuspeisen ist, und bis wann. Das Tagesdiagramm zeigt eine
+  gestrichelte Linie bei Verbrauch + Grenze (das PV-Niveau, ab dem gekappt
+  wird), die Energie darüber als Balken auf dieser Linie und den Teil, der
+  abgeregelt würde, in Rot.
+- **Warnungen** (Übersicht und *Einstellungen → Reparaturen*): Batterien zu
+  klein für den nötigen Platz, zu wenig Zeit oder Leistung, um vor der Spitze
+  einzuspeisen, Ladeleistung zu gering für den Überschuss über der Grenze, und
+  Einspeisung seit mehr als 5 Minuten über der Grenze.
+
+Sensoren: *Einspeisebegrenzung: aufzunehmende Energie* (am Tag der nächsten
+Spitze, mit den Spitzen, dem nötigen Platz, dem Einspeiseplan und dem Puffer
+als Attribute) und *Einspeisebegrenzung: vor der Spitze einzuspeisen*.
 
 ### Weitere Einstellungen (Entities)
 

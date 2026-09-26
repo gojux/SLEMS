@@ -15,6 +15,11 @@ simplified way:
 * Charge and discharge losses with the one-way efficiency; maximum charge and
   discharge power; the SoC window of the batteries (minimum and maximum SoC).
 
+* Feed-in cap (see feed_in_cap): the surplus above the limit is charged in
+  any case; charging below it only as long as the space the cap needs later
+  stays free. From the planned export start the batteries feed in until they
+  have that space; the night discharge target leaves it free.
+
 Controllable consumers (they run on surplus), grid targets and batteries in
 active cell balancing are left out.
 """
@@ -28,6 +33,7 @@ from datetime import date, datetime, timedelta
 from homeassistant.util import dt as dt_util
 
 from .allocation import BatteryGroup
+from .feed_in_cap import CapPlan
 from .grid_friendly import feed_in_limit, planned_charging, remaining_surplus_by_hour
 from .night_discharge import plan_night_discharge
 
@@ -65,13 +71,14 @@ def project_soc(
     settings: ProjectionSettings,
     today_limit_w: float | None,
     today_extra_wh: float = 0.0,
+    cap: CapPlan | None = None,
 ) -> SocProjection:
     """Project until the end of tomorrow.
 
     ``pv`` and ``consumption`` are hourly local buckets (Wh). Without a
     consumption forecast ``load_w`` is assumed to stay. ``today_extra_wh`` is
     charged today by batteries outside the group (it lowers the surplus left
-    for the group).
+    for the group). ``cap`` is the plan of the feed-in cap, None when off.
     """
     result = SocProjection()
     capacity = battery.capacity_wh
@@ -106,20 +113,37 @@ def project_soc(
         share = (hour + PERIOD - start) / PERIOD
         pv_w = pv.get(hour, 0.0)
         load = consumption.get(hour, load_w or 0.0) if consumption is not None else load_w or 0.0
+        hour_end = hour + PERIOD
+        # Highest stored energy that leaves the space the feed-in cap needs.
+        allowed = full - cap.space_needed_at(hour_end) if cap is not None else full
         if pv_w > load:
             day = hour.date()
             if day not in plans:
                 plans[day] = charge_plan(hour, start)
             # The plan includes the buffer (it lowers the feed-in limit); only
             # what still fits into the batteries is charged.
-            room = max(0.0, full - stored)
+            room = max(0.0, min(full, allowed) - stored)
             charge = min(plans[day].get(hour, 0.0), room / (share * efficiency))
+            if cap is not None and hour in cap.hourly:
+                charge = max(charge, cap.hourly[hour].absorbed_wh / share)
+                charge = min(charge, max(0.0, full - stored) / (share * efficiency))
             result.planned_charge_w[hour] = charge
             stored = min(max(stored, full), stored + charge * share * efficiency)
         else:
             stored = _discharge(
-                stored, load - pv_w, share, start, battery, pv, consumption, settings
+                stored, load - pv_w, share, start, battery, pv, consumption, settings, cap
             )
+        if (
+            cap is not None
+            and cap.export_start is not None
+            and cap.next_block is not None
+            and hour_end > cap.export_start
+            and hour < cap.next_block.start
+            and stored > allowed
+        ):
+            export_w = max(0.0, min(battery.max_discharge_w, cap.limit_w - max(0.0, pv_w - load)))
+            floor = battery.min_soc_pct / 100 * capacity
+            stored = max(floor, allowed, stored - export_w * share / efficiency)
         result.soc_pct[hour] = stored / capacity * 100
         hour += PERIOD
     return result
@@ -134,6 +158,7 @@ def _discharge(
     pv: Mapping[datetime, float],
     consumption: Mapping[datetime, float] | None,
     settings: ProjectionSettings,
+    cap: CapPlan | None = None,
 ) -> float:
     """Stored energy after covering ``deficit_w`` for ``share`` of an hour."""
     capacity = battery.capacity_wh
@@ -158,6 +183,9 @@ def _discharge(
         settings.night_reserve_pct,
         settings.night_buffer_wh,
         floor,
+        (lambda moment: battery.full_soc_pct / 100 * capacity - cap.space_needed_at(moment))
+        if cap is not None
+        else None,
     )
     if plan is None:
         return after

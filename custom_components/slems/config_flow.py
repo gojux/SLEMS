@@ -27,6 +27,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_BLOCK_ENTITY,
+    CONF_CAP_MODE,
     CONF_THERMOSTAT_CYCLES,
     CONF_CAPACITY_WH,
     CONF_CONSUMER_TYPE,
@@ -67,6 +68,7 @@ from .const import (
     SUBENTRY_TYPE_BATTERY,
     SUBENTRY_TYPE_CONSUMER,
     BatteryModel,
+    CapMode,
     ConsumerType,
     ControlMode,
     EfficiencyMode,
@@ -467,6 +469,7 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
         if defaults.get(CONF_CONTROL_MODE) != mode.value:
             keep = (
                 CONF_BLOCK_ENTITY,
+                CONF_CAP_MODE,
                 CONF_PRIORITY,
                 CONF_MIN_ON_MINUTES,
                 CONF_MIN_OFF_MINUTES,
@@ -516,6 +519,13 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
             vol.Required(CONF_PRIORITY, default=defaults.get(CONF_PRIORITY, DEFAULT_PRIORITY))
         ] = selector.NumberSelector(
             selector.NumberSelectorConfig(min=1, max=10, step=1, mode=selector.NumberSelectorMode.SLIDER)
+        )
+        fields[
+            vol.Required(CONF_CAP_MODE, default=defaults.get(CONF_CAP_MODE, CapMode.EMERGENCY.value))
+        ] = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[m.value for m in CapMode], translation_key=CONF_CAP_MODE
+            )
         )
         return self.async_show_form(step_id="control", data_schema=vol.Schema(fields))
 

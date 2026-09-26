@@ -62,6 +62,7 @@ CONF_THERMOSTAT_CYCLES: Final = "thermostat_cycles"
 CONF_PRIORITY: Final = "priority"
 CONF_MIN_ON_MINUTES: Final = "min_on_minutes"
 CONF_MIN_OFF_MINUTES: Final = "min_off_minutes"
+CONF_CAP_MODE: Final = "cap_mode"
 
 DEFAULT_PRIORITY: Final = 5
 
@@ -78,6 +79,10 @@ DEFAULT_CHARGE_GRID_TARGET_W: Final = 100
 DEFAULT_DISCHARGE_GRID_TARGET_W: Final = 50
 DEFAULT_DISCHARGE_MAX_GRID_EXPORT_W: Final = 5000
 DEFAULT_NIGHT_RESERVE_PCT: Final = 25
+DEFAULT_PV_PEAK_POWER_KWP: Final = 10.0
+DEFAULT_FEED_IN_CAP_LIMIT_PCT: Final = 60
+DEFAULT_FEED_IN_CAP_BUFFER_PCT: Final = 20
+DEFAULT_FEED_IN_CAP_MIN_BUFFER_PCT: Final = 5
 DEFAULT_ROTATION_SOC_THRESHOLD_PCT: Final = 5
 DEFAULT_ROTATION_MIN_INTERVAL_MIN: Final = 15
 DEFAULT_ROTATION_RAMP_RATE_W_PER_S: Final = 100
@@ -124,6 +129,16 @@ class ControlMode(StrEnum):
     SWITCH = "switch"
     # Continuous power set point via a number entity (W).
     POWER = "power"
+
+
+class CapMode(StrEnum):
+    """How a consumer takes part in the feed-in cap (see feed_in_cap)."""
+
+    # Planned with: takes the surplus above the limit before the batteries.
+    COUNT = "count"
+    # Only takes what the batteries cannot absorb.
+    EMERGENCY = "emergency"
+    NEVER = "never"
 
 
 class OperatingMode(StrEnum):

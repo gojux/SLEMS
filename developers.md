@@ -73,6 +73,7 @@ custom_components/slems/
   forecast/          consumption forecast (history, models, forecaster)
   night_discharge.py night discharge planning
   grid_friendly.py   feed-in limit for grid friendly charging, PV forecast correction
+  feed_in_cap.py     feed-in cap planning (space needed, export before the peak)
   battery_distribution.py  split of the battery power between batteries (rotation, ramps)
   controller.py      real-time controller (active mode): commands to batteries and consumers
   panel.py           registration of the sidebar dashboard
@@ -411,6 +412,65 @@ battery, the smaller the cut.
 
 Possible extensions: take the planned consumers into account in the
 surplus; use 15 minute forecast periods.
+
+### Feed-in cap
+
+`feed_in_cap.py` (pure), switch *Feed-in cap* (default off), limit =
+*PV peak power* × *Feed-in cap limit* at the grid connection point. Every plan
+calls `plan_cap` (coordinator `_feed_in_cap`), stored in
+`SystemSnapshot.feed_in_cap`.
+
+Steps of 15 min from now until the end of tomorrow. The PV power of a step is
+the mean power of the native forecast period it falls in (period length =
+gap to the next timestamp, at most 1 h; the last period gets the median gap,
+because providers add irregular sunrise/sunset timestamps); today's periods
+are multiplied by the PV correction. Consumption is the hourly forecast.
+
+```
+excess     = max(0, PV − consumption − limit)
+over       = max(0, excess − counted consumers (max power))
+absorbed   = min(over, charge power without SoC window)
+curtailed  = max(0, over − absorbed − emergency consumers (max power))
+drained    = min(max(0, consumption − PV), discharge power)
+need(t)    = min(usable, max(0, need(t+1) + absorbed·eff·(1+buffer) [+ min buffer at a block end] − drained/eff))
+```
+
+Blocks are runs of steps with excess, gaps ≤ 1 h merged. `need` is the free
+stored space required at each step; `battery_too_small` if it exceeds the
+usable space (max − min SoC). `hold_charging` = free space now − need(now) ≤
+50 Wh. `export_needed = max(0, need(now) − free now) · eff`. Export capacity
+per step before the next block = min(discharge power − deficit, limit − 100 W
+− PV surplus); `export_possible` sums it at full power; the latest start
+collects 70 % of it backwards from one hour before the block; after the start
+the export power is needed / remaining time. Problems: `battery_too_small`,
+`too_late` (needed > possible + 100 Wh), `charge_power_too_low` (curtailed >
+100 Wh); the coordinator tracks `cap_exceeded_since` (export > limit) for
+the runtime issue after 5 minutes.
+
+Automatic buffer (`auto_buffer`): the recorded days of `PvAccuracyTracker`
+with forecast and production; with ≥ 14 of them the 80 % quantile of
+actual/forecast − 1 over the days with actual > forecast is applied as a PV
+factor instead of the percentage buffer.
+
+Integration:
+
+- Allocation (`CapControl`): surplus above `limit − margin` → consumers with
+  `CapMode.COUNT` → batteries (charge power) → `CapMode.EMERGENCY`; the rest
+  below the limit as usual, batteries without charging while
+  `hold_charging`. The export branch discharges max(normal, night, cap
+  export), bounded by `max_discharge_export_w` (cap export: limit − margin,
+  otherwise min(max export setting, limit − margin)); also used for
+  `limit_discharge_export` in the coordinator. Peak shaving active → no export.
+- Grid friendly feed-in limit capped at the cap limit.
+- Night discharge: `max_target(crossover) = full − need(crossover)`.
+- SoC projection: charging below the limit only up to full − need(hour end),
+  at least the absorbed energy of the hour; from the export start stored
+  energy is reduced to full − need.
+- Day plan rows get `cap_line_wh` (consumption + limit), `cap_excess_wh`,
+  `cap_curtailed_wh` from the fine steps.
+
+Consumer option `cap_mode` (`CONF_CAP_MODE`, default `emergency`) in the
+control step of the consumer subentry.
 
 ### Dashboard
 
@@ -852,3 +912,4 @@ using it (e.g. Omnibattery) while the script runs.
 | 2026-09-25 | Efficiency source: battery counters recommended for the Venus (accurate at once over the whole operating time), learned for read-only batteries; the distribution between batteries uses the separate AC/DC loss curve, not the efficiency. |
 | 2026-09-25 | Peak shaving: threshold stays absolute but not below the minimum SoC; optional automatic import limit from the 5 minute consumption peaks until PV refills, with a safety reserve. Number fields lose the focus on the mouse wheel (it changed and saved values while scrolling). |
 | 2026-09-26 | Communication pause per battery for firmware updates (manual, 20 min default, automatic on a reported OTA update); battery card actions in a ⋮ menu with a details dialog (firmware, counters). |
+| 2026-09-26 | Feed-in cap at the grid connection point (kWp × %): space for the energy above the limit planned backwards over all peaks until the end of tomorrow with the native PV periods, percentage buffer plus minimum buffer (% of kWp), optional automatic buffer from the recorded PV errors; making room by holding charging, a lower night discharge target and feeding in as late as possible (1 h before, 70 % power, may exceed the maximum export while discharging, never the limit); consumers per option counted / emergency / never; precedence over grid friendly charging, night discharge and battery priority. |

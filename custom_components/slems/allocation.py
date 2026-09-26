@@ -30,6 +30,16 @@ secured, the batteries only charge with the surplus above the feed-in limit.
 Night discharge (optional, see night_discharge): outside a surplus the
 batteries discharge at least with the planned night power, ignoring the
 discharge grid target but still respecting the maximum grid export.
+
+Feed-in cap (optional, see feed_in_cap) takes precedence over all of the
+above: the surplus above the limit goes to the consumers counted for the cap,
+then to the batteries (regardless of battery priority, share or grid friendly
+charging), then to the consumers used only in an emergency. The surplus below
+the limit is distributed as usual, except that the batteries do not charge
+with it while the space is needed later (``hold_charging``). Before a peak the
+batteries feed in the planned export power; the export never exceeds the
+limit, and the cap export may exceed the maximum grid export while
+discharging.
 """
 
 from __future__ import annotations
@@ -41,7 +51,7 @@ from enum import StrEnum
 
 from homeassistant.util import dt as dt_util
 
-from .const import ControlMode
+from .const import CapMode, ControlMode
 from .pv_forecast import PvForecast, hourly
 
 FULL_SOC_PCT = 99.5
@@ -57,6 +67,7 @@ class Strategy(StrEnum):
     PEAK_SHAVING = "peak_shaving"
     NIGHT_DISCHARGE = "night_discharge"
     GRID_FRIENDLY = "grid_friendly"
+    FEED_IN_CAP = "feed_in_cap"
     IDLE = "idle"
 
 
@@ -99,6 +110,7 @@ class ConsumerRequest:
     must_stay_on: bool = False
     # Minimum pause not yet elapsed: must stay off.
     must_stay_off: bool = False
+    cap_mode: CapMode = CapMode.EMERGENCY
 
     @property
     def minimum_running_power_w(self) -> float:
@@ -124,6 +136,32 @@ class AllocationSettings:
     peak_shaving_soc_threshold_pct: float
 
 
+@dataclass(frozen=True)
+class CapControl:
+    """Feed-in cap in effect right now (see feed_in_cap)."""
+
+    limit_w: float
+    # Do not charge with surplus below the limit.
+    hold_charging: bool = False
+    # Battery energy to feed in right now (AC).
+    export_w: float = 0.0
+    # Kept between the export and the limit.
+    margin_w: float = 100.0
+
+    @property
+    def max_export_w(self) -> float:
+        return max(0.0, self.limit_w - self.margin_w)
+
+
+def max_discharge_export_w(settings: AllocationSettings, cap: CapControl | None) -> float:
+    """Upper limit of the grid export caused while discharging."""
+    if cap is None:
+        return settings.discharge_max_grid_export_w
+    if cap.export_w > 0:
+        return cap.max_export_w
+    return min(settings.discharge_max_grid_export_w, cap.max_export_w)
+
+
 @dataclass
 class Allocation:
     """Result: battery power (+charge / -discharge) and consumer powers."""
@@ -142,6 +180,7 @@ def allocate(
     expected_surplus_wh: float | None,
     night_discharge_w: float | None = None,
     feed_in_limit_w: float | None = None,
+    cap: CapControl | None = None,
 ) -> Allocation:
     """Distribute ``available_w`` between batteries and consumers."""
     ordered = sorted(consumers, key=lambda c: (c.priority, c.subentry_id))
@@ -157,27 +196,31 @@ def allocate(
         battery, settings, expected_surplus_wh
     )
 
-    discharge_target = min(
-        settings.discharge_grid_target_w, settings.discharge_max_grid_export_w
-    )
+    max_export = max_discharge_export_w(settings, cap)
+    discharge_target = min(settings.discharge_grid_target_w, max_export)
+    cap_export = cap.export_w if cap is not None else 0.0
     if (
-        night_discharge_w
-        and battery is not None
-        and remaining <= settings.charge_grid_target_w
+        battery is not None
+        and (cap_export > 0 or (night_discharge_w and remaining <= settings.charge_grid_target_w))
         and not _peak_shaving_active(battery, settings)
     ):
         normal = max(0.0, discharge_target - remaining)
         discharge = min(
-            max(normal, night_discharge_w),
-            settings.discharge_max_grid_export_w - remaining,
+            max(normal, night_discharge_w or 0.0, cap_export),
+            max_export - remaining,
             battery.max_discharge_w,
         )
-        return Allocation(
-            strategy=Strategy.NIGHT_DISCHARGE,
-            battery_power_w=-max(0.0, discharge),
-            consumer_power_w=consumer_power,
-            charge_secured=charge_secured,
-        )
+        if discharge > 0 or not cap_export:
+            return Allocation(
+                strategy=(
+                    Strategy.FEED_IN_CAP
+                    if cap_export > (night_discharge_w or 0.0)
+                    else Strategy.NIGHT_DISCHARGE
+                ),
+                battery_power_w=-max(0.0, discharge),
+                consumer_power_w=consumer_power,
+                charge_secured=charge_secured,
+            )
     if remaining < discharge_target:
         allocation = _cover_deficit(remaining, discharge_target, battery, settings)
         allocation.consumer_power_w = consumer_power
@@ -189,17 +232,34 @@ def allocate(
             consumer_power_w=consumer_power,
             charge_secured=charge_secured,
         )
-    remaining -= settings.charge_grid_target_w
-
     max_charge = 0.0 if battery is None or battery.is_full else battery.max_charge_w
+    cap_charge = 0.0
+    capped = False
+    if cap is not None:
+        # Surplus above the limit: counted consumers, batteries, emergency consumers.
+        over = max(0.0, remaining - cap.max_export_w)
+        capped = over > 0
+        left = _distribute(
+            over, [c for c in ordered if c.cap_mode is CapMode.COUNT], consumer_power
+        )
+        cap_charge = min(max_charge, left)
+        left = _distribute(
+            left - cap_charge,
+            [c for c in ordered if c.cap_mode is CapMode.EMERGENCY],
+            consumer_power,
+        )
+        remaining -= over
+        max_charge = 0.0 if cap.hold_charging else max_charge - cap_charge
+    remaining = max(0.0, remaining - settings.charge_grid_target_w)
+
     if charge_secured:
         strategy = Strategy.SHARED
         battery_budget = remaining * settings.battery_share_when_secured_pct / 100
         if feed_in_limit_w is not None:
-            cap = max(0.0, remaining - feed_in_limit_w)
-            if cap < min(max_charge, battery_budget):
+            room = max(0.0, remaining - feed_in_limit_w)
+            if room < min(max_charge, battery_budget):
                 strategy = Strategy.GRID_FRIENDLY
-            max_charge = min(max_charge, cap)
+            max_charge = min(max_charge, room)
     else:
         strategy = Strategy.BATTERY_PRIORITY
         battery_budget = remaining
@@ -208,7 +268,9 @@ def allocate(
 
     unused = _distribute(consumer_budget, ordered, consumer_power)
     # What the consumers cannot take goes back to the batteries.
-    battery_power = min(battery_power + unused, max_charge)
+    battery_power = min(battery_power + unused, max_charge) + cap_charge
+    if capped:
+        strategy = Strategy.FEED_IN_CAP
 
     return Allocation(
         strategy=strategy,

@@ -25,10 +25,12 @@ from .allocation import (
     Allocation,
     AllocationSettings,
     BatteryGroup,
+    CapControl,
     ConsumerRequest,
     allocate,
     expected_surplus_wh,
     limit_discharge_export,
+    max_discharge_export_w,
 )
 from .const import (
     CONF_GRID_POWER_ENTITY,
@@ -45,6 +47,10 @@ from .const import (
     DEFAULT_GRID_FRIENDLY_BUFFER_KWH,
     DEFAULT_DISCHARGE_GRID_TARGET_W,
     DEFAULT_DISCHARGE_MAX_GRID_EXPORT_W,
+    DEFAULT_FEED_IN_CAP_BUFFER_PCT,
+    DEFAULT_FEED_IN_CAP_LIMIT_PCT,
+    DEFAULT_FEED_IN_CAP_MIN_BUFFER_PCT,
+    DEFAULT_PV_PEAK_POWER_KWP,
     DEFAULT_NIGHT_RESERVE_PCT,
     DEFAULT_CONTROL_GAIN,
     DEFAULT_CONTROL_INTERVAL_S,
@@ -58,7 +64,9 @@ from .const import (
     DEFAULT_SURPLUS_AVERAGE_WINDOW_S,
     DOMAIN,
     SCAN_INTERVAL,
+    CapMode,
     ConsumerType,
+    ControlMode,
     OperatingMode,
 )
 from .controller import RealTimeController
@@ -81,6 +89,7 @@ from .battery_limits import (
 )
 from .cell_balancing import BalancingPhase, CellBalancer, CellMonitor
 from .delivery_monitor import Action, DeliveryMonitor
+from .feed_in_cap import CAP_MARGIN_W, CapPlan, CapSettings, auto_buffer, plan_cap
 from .problems import ProblemReporter
 from .efficiency import EfficiencyTracker, EnergyIntegrator, LossCurveLearner
 from .forecast import (
@@ -249,6 +258,16 @@ class ControlSettings:
     night_discharge: bool = False
     # Night discharge reserve in % of tomorrow's forecast daily consumption.
     night_reserve_pct: float = DEFAULT_NIGHT_RESERVE_PCT
+    # Feed-in cap at the grid connection point (see feed_in_cap).
+    feed_in_cap: bool = False
+    pv_peak_power_kwp: float = DEFAULT_PV_PEAK_POWER_KWP
+    feed_in_cap_limit_pct: float = DEFAULT_FEED_IN_CAP_LIMIT_PCT
+    # Buffer on the energy to absorb (may be negative) and the minimum buffer
+    # per peak in % of the peak power (as energy of one hour).
+    feed_in_cap_buffer_pct: float = DEFAULT_FEED_IN_CAP_BUFFER_PCT
+    feed_in_cap_min_buffer_pct: float = DEFAULT_FEED_IN_CAP_MIN_BUFFER_PCT
+    # Buffer from the recorded PV forecast errors instead of the fixed one.
+    feed_in_cap_auto_buffer: bool = False
     # Duration of a communication pause (firmware update), minutes.
     communication_pause_min: float = 20.0
     # Charge power limited by the battery temperature (see battery_limits).
@@ -257,6 +276,10 @@ class ControlSettings:
     temperature_band_c: float = 10.0
     temperature_floor_pct: float = 40.0
     temperature_low_c: float = 0.0
+
+    @property
+    def feed_in_cap_limit_w(self) -> float:
+        return self.pv_peak_power_kwp * 1000 * self.feed_in_cap_limit_pct / 100
 
     def temperature(self) -> TemperatureLimit:
         return TemperatureLimit(
@@ -316,6 +339,12 @@ class SystemSnapshot:
     # Current outdoor temperature of the weather entity (°C).
     outdoor_temperature_c: float | None = None
     night_discharge: NightDischargePlan | None = None
+    # Feed-in cap plan, None when off or without forecasts.
+    feed_in_cap: CapPlan | None = None
+    # Buffer of the feed-in cap in effect: % and "manual" or "auto" (+ days).
+    feed_in_cap_buffer_pct: float | None = None
+    feed_in_cap_buffer_source: str | None = None
+    feed_in_cap_buffer_days: int = 0
     # Power SLEMS can distribute, +surplus / -deficit.
     available_power_w: float | None = None
     expected_surplus_wh: float | None = None
@@ -485,6 +514,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.controller = RealTimeController(self)
         self.problems = ProblemReporter(hass, self)
         self.pv_accuracy = PvAccuracyTracker()
+        # Monotonic time since the export is above the feed-in cap.
+        self.cap_exceeded_since: float | None = None
 
     @property
     def _config(self):
@@ -718,14 +749,33 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 "allocation",
                 "distribution",
                 "night_discharge",
+                "feed_in_cap",
+                "feed_in_cap_buffer_pct",
+                "feed_in_cap_buffer_source",
+                "feed_in_cap_buffer_days",
             ):
                 setattr(snapshot, name, getattr(self.data, name))
         elif mode is not OperatingMode.OFF:
             self.plan(snapshot, dt_util.now(), now)
+        self._check_cap_exceeded(snapshot, now)
         # Runs after the new data has been stored.
         self.hass.loop.call_soon(self.controller.request)
-        self.problems.update(now)
+        self.problems.update(now, snapshot)
         return snapshot
+
+    def _check_cap_exceeded(self, snapshot: SystemSnapshot, now: float) -> None:
+        settings = self.settings
+        grid = snapshot.grid_power_w
+        if (
+            settings.feed_in_cap
+            and settings.operating_mode is not OperatingMode.OFF
+            and grid is not None
+            and -grid > settings.feed_in_cap_limit_w
+        ):
+            if self.cap_exceeded_since is None:
+                self.cap_exceeded_since = now
+        else:
+            self.cap_exceeded_since = None
 
     def _integrate_pv(self, pv_power_w: float | None, now: float) -> None:
         """Add up today's PV energy from the live values (restarts at midnight)."""
@@ -1098,6 +1148,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             snapshot.expected_surplus_wh = max(0.0, snapshot.expected_surplus_wh - balancing_wh)
         battery = self._battery_group(snapshot)
         settings = self.settings
+        cap = self._feed_in_cap(snapshot, battery, wall_now)
+        snapshot.feed_in_cap = cap
         snapshot.feed_in_limit_w = None
         if not settings.grid_friendly_charging:
             snapshot.feed_in_limit_reason = "disabled"
@@ -1115,6 +1167,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             snapshot.feed_in_limit_reason = (
                 "not_enough_surplus" if snapshot.feed_in_limit_w is None else None
             )
+            if cap is not None and snapshot.feed_in_limit_w is not None:
+                snapshot.feed_in_limit_w = min(snapshot.feed_in_limit_w, cap.limit_w)
         # The correction factor describes today; tomorrow uses the raw forecast.
         today = dt_util.as_local(wall_now).date()
         pv_hourly = (
@@ -1155,15 +1209,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     ),
                     snapshot.feed_in_limit_w,
                     balancing_wh,
+                    cap,
                 )
                 if battery is not None
                 else None
             )
             snapshot.day_plan = self._day_plan(
-                pv_hourly, consumption_hourly, projection, wall_now
+                pv_hourly, consumption_hourly, projection, wall_now, cap=cap
             )
             snapshot.day_plan_tomorrow = self._day_plan(
-                pv_hourly, consumption_hourly, projection, wall_now, day_offset=1
+                pv_hourly, consumption_hourly, projection, wall_now, day_offset=1, cap=cap
             )
         else:
             snapshot.day_plan = []
@@ -1179,6 +1234,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 max_power_w=consumer.max_power_w or 0,
                 must_stay_on=self._runtime.must_stay_on(consumer, now),
                 must_stay_off=self._runtime.must_stay_off(consumer, now),
+                cap_mode=consumer.cap_mode,
             )
             for consumer in self.consumers
             if snapshot.is_controllable_now(consumer.subentry_id)
@@ -1202,7 +1258,23 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 settings.night_reserve_pct,
                 settings.charge_secured_buffer_kwh * 1000,
                 battery.min_soc_pct / 100 * battery.capacity_wh,
+                (
+                    lambda moment: battery.full_soc_pct / 100 * battery.capacity_wh
+                    - cap.space_needed_at(moment)
+                )
+                if cap is not None
+                else None,
             )
+        cap_control = (
+            CapControl(
+                limit_w=cap.limit_w,
+                hold_charging=cap.hold_charging,
+                export_w=cap.export_power_w,
+                margin_w=CAP_MARGIN_W,
+            )
+            if cap is not None
+            else None
+        )
         allocation = allocate(
             snapshot.available_power_w,
             battery,
@@ -1215,6 +1287,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             snapshot.expected_surplus_wh,
             snapshot.night_discharge.power_w if snapshot.night_discharge else None,
             snapshot.feed_in_limit_w,
+            cap_control,
         )
         unused_w = sum(
             max(0.0, power - (snapshot.consumers[subentry_id].power_w or 0.0))
@@ -1236,7 +1309,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 allocation.battery_power_w,
                 enabled_battery_w,
                 snapshot.grid_power_w,
-                settings.discharge_max_grid_export_w,
+                max_discharge_export_w(settings.allocation_settings(), cap_control),
             )
         for subentry_id, power in allocation.consumer_power_w.items():
             self._runtime.update(subentry_id, power > 0, now)
@@ -1251,6 +1324,79 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 ramp_max_s=settings.rotation_ramp_max_s,
             ),
             now,
+        )
+
+    def _feed_in_cap(
+        self, snapshot: SystemSnapshot, battery: BatteryGroup | None, wall_now: datetime
+    ) -> CapPlan | None:
+        """Plan of the feed-in cap; also sets the buffer in effect in ``snapshot``."""
+        settings = self.settings
+        snapshot.feed_in_cap_buffer_pct = None
+        snapshot.feed_in_cap_buffer_source = None
+        snapshot.feed_in_cap_buffer_days = 0
+        consumption = snapshot.consumption_forecast
+        if (
+            not settings.feed_in_cap
+            or battery is None
+            or snapshot.pv_forecast is None
+            or consumption is None
+        ):
+            return None
+        buffer_pct = settings.feed_in_cap_buffer_pct
+        pv_factor = 1.0
+        source = "manual"
+        if settings.feed_in_cap_auto_buffer:
+            learned, days = auto_buffer(self.pv_accuracy.days)
+            snapshot.feed_in_cap_buffer_days = days
+            if learned is not None:
+                # The learned underestimation raises the PV forecast instead.
+                pv_factor, buffer_pct, source = 1 + learned, learned * 100, "auto"
+        snapshot.feed_in_cap_buffer_pct = buffer_pct
+        snapshot.feed_in_cap_buffer_source = source
+        # The correction factor describes today; tomorrow uses the raw forecast.
+        today = dt_util.as_local(wall_now).date()
+        pv = {
+            start: wh * (snapshot.pv_correction if dt_util.as_local(start).date() == today else 1.0)
+            for start, wh in snapshot.pv_forecast.items()
+        }
+        charge_w = discharge_w = 0.0
+        for runtime in self.batteries:
+            telemetry = snapshot.batteries.get(runtime.subentry_id)
+            if runtime.plannable and telemetry is not None:
+                # Without the SoC window: the power when the peak comes.
+                limits = self._power_limits(runtime, telemetry, use_soc_window=False)
+                charge_w += limits.charge_w
+                discharge_w += limits.discharge_w
+        counted_w = emergency_w = 0.0
+        for consumer in self.consumers:
+            if not snapshot.is_controllable_now(consumer.subentry_id):
+                continue
+            power = (
+                consumer.nominal_power_w
+                if consumer.control_mode is ControlMode.SWITCH
+                else consumer.max_power_w
+            ) or 0
+            if consumer.cap_mode is CapMode.COUNT:
+                counted_w += power
+            elif consumer.cap_mode is CapMode.EMERGENCY:
+                emergency_w += power
+        return plan_cap(
+            wall_now,
+            battery,
+            charge_w,
+            discharge_w,
+            pv,
+            hourly(consumption.total),
+            CapSettings(
+                limit_w=settings.feed_in_cap_limit_w,
+                buffer_pct=0.0 if source == "auto" else buffer_pct,
+                min_buffer_wh=(
+                    settings.pv_peak_power_kwp * 1000 * settings.feed_in_cap_min_buffer_pct / 100
+                ),
+                pv_factor=pv_factor,
+            ),
+            counted_w,
+            emergency_w,
         )
 
     @property
@@ -1321,11 +1467,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         projection: SocProjection | None,
         wall_now: datetime,
         day_offset: int = 0,
+        cap: CapPlan | None = None,
     ) -> list[dict]:
         """Hours of a day for the dashboard.
 
         Forecasts in Wh; planned charge power (W) and projected total SoC at
-        the end of the hour (%) for the hours from now on.
+        the end of the hour (%) for the hours from now on. With the feed-in
+        cap: PV level above which is capped (consumption + limit) and the
+        energy above it, of which the curtailed part, from the fine periods.
         """
         day_start = dt_util.start_of_local_day(dt_util.as_local(wall_now))
         day_start += timedelta(days=day_offset)
@@ -1346,6 +1495,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     "soc_pct": round(soc[start], 1) if start in soc else None,
                 }
             )
+            if cap is not None:
+                hour_cap = cap.hourly.get(start)
+                rows[-1].update(
+                    {
+                        "cap_line_wh": round(consumption_hourly.get(start, 0.0) + cap.limit_w),
+                        "cap_excess_wh": round(hour_cap.excess_wh) if hour_cap else None,
+                        "cap_curtailed_wh": round(hour_cap.curtailed_wh) if hour_cap else None,
+                    }
+                )
         return rows
 
     def fast_snapshot(

@@ -31,7 +31,13 @@ def _forecasts(pv_per_hour: float) -> tuple[dict, dict]:
     return pv, consumption
 
 
-def plan(soc: float, pv_per_hour: float, now: datetime | None = None, min_wh: float = 0.0):
+def plan(
+    soc: float,
+    pv_per_hour: float,
+    now: datetime | None = None,
+    min_wh: float = 0.0,
+    max_target=None,
+):
     pv, consumption = _forecasts(pv_per_hour)
     return plan_night_discharge(
         now or _day().replace(hour=22),
@@ -44,6 +50,7 @@ def plan(soc: float, pv_per_hour: float, now: datetime | None = None, min_wh: fl
         reserve_pct_of_consumption=25,
         buffer_wh=1000,
         min_wh=min_wh,
+        max_target=max_target,
     )
 
 
@@ -68,6 +75,15 @@ def test_reserve_comes_on_top_of_the_minimum_soc() -> None:
     result = plan(soc=80, pv_per_hour=2400, min_wh=1200)
     assert result.target_wh == pytest.approx(3600)
     assert result.power_w == pytest.approx(440)
+
+
+def test_feed_in_cap_lowers_the_target() -> None:
+    # The cap needs 9 kWh free space when PV takes over: at most 1 kWh stored,
+    # but never below the minimum SoC.
+    result = plan(soc=80, pv_per_hour=2400, min_wh=1200, max_target=lambda _: 1000)
+    assert result.target_wh == pytest.approx(1200)
+    result = plan(soc=80, pv_per_hour=2400, max_target=lambda _: 2000)
+    assert result.target_wh == pytest.approx(2000)
 
 
 def test_no_discharge_below_target() -> None:

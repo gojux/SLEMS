@@ -9,14 +9,16 @@ from homeassistant.util import dt as dt_util
 from custom_components.slems.allocation import (
     AllocationSettings,
     BatteryGroup,
+    CapControl,
     ConsumerRequest,
     Strategy,
     allocate,
     expected_surplus_wh,
     limit_discharge_export,
+    max_discharge_export_w,
     remaining_pv_wh,
 )
-from custom_components.slems.const import ControlMode
+from custom_components.slems.const import CapMode, ControlMode
 
 SETTINGS = AllocationSettings(
     battery_priority_soc_pct=30,
@@ -208,3 +210,69 @@ def test_export_limit_reduces_discharge() -> None:
     # Never turns a discharge into charging, charging is untouched.
     assert limit_discharge_export(-200, 0, -900, 100) == 0
     assert limit_discharge_export(500, 0, -900, 100) == 500
+
+
+CAP = CapControl(limit_w=3000, margin_w=100)
+COUNTED_ROD = ConsumerRequest(
+    subentry_id="rod", priority=2, control_mode=ControlMode.POWER,
+    min_power_w=300, max_power_w=3000, cap_mode=CapMode.COUNT,
+)
+EMERGENCY_PUMP = ConsumerRequest(
+    subentry_id="pump", priority=1, control_mode=ControlMode.SWITCH, nominal_power_w=500,
+)
+
+
+def test_feed_in_cap_surplus_above_limit_order() -> None:
+    # 3100 W above 2900 W: counted rod first, then the batteries.
+    result = allocate(
+        6000, battery(20), [COUNTED_ROD, EMERGENCY_PUMP], SETTINGS, None, cap=CAP
+    )
+    assert result.strategy is Strategy.FEED_IN_CAP
+    assert result.consumer_power_w["rod"] == 3000
+    # 100 W above the limit plus the surplus below it (battery priority).
+    assert result.battery_power_w == 3000
+    assert result.consumer_power_w["pump"] == 0
+
+
+def test_feed_in_cap_emergency_consumers_after_the_batteries() -> None:
+    small = BatteryGroup(
+        soc_pct=20, capacity_wh=10000, max_charge_w=1000, max_discharge_w=1000,
+        charge_efficiency=0.95,
+    )
+    result = allocate(4500, small, [EMERGENCY_PUMP], SETTINGS, None, cap=CAP)
+    # 1600 W above the limit: 1000 W batteries, 500 W pump.
+    assert result.battery_power_w == 1000
+    assert result.consumer_power_w["pump"] == 500
+
+
+def test_feed_in_cap_holds_charging_below_the_limit() -> None:
+    hold = CapControl(limit_w=3000, margin_w=100, hold_charging=True)
+    result = allocate(4000, battery(20), [EMERGENCY_PUMP], SETTINGS, None, cap=hold)
+    # Only the 1100 W above the limit are charged; the pump gets surplus below it.
+    assert result.battery_power_w == 1100
+    assert result.consumer_power_w["pump"] == 500
+
+
+def test_feed_in_cap_overrides_grid_friendly_and_share() -> None:
+    result = allocate(
+        5000, battery(80), [], SETTINGS, expected_surplus_wh=50000, feed_in_limit_w=4000,
+        cap=CAP,
+    )
+    # Grid friendly would not charge at all; the part above the limit is charged anyway.
+    assert result.battery_power_w == pytest.approx(2100)
+
+
+def test_feed_in_cap_export_before_the_peak() -> None:
+    export = CapControl(limit_w=3000, margin_w=100, export_w=1500)
+    result = allocate(1000, battery(80), [], SETTINGS, None, cap=export)
+    assert result.strategy is Strategy.FEED_IN_CAP
+    assert result.battery_power_w == -1500
+    # Never above the limit.
+    result = allocate(2000, battery(80), [], SETTINGS, None, cap=export)
+    assert result.battery_power_w == -900
+
+
+def test_feed_in_cap_export_limit() -> None:
+    assert max_discharge_export_w(SETTINGS, None) == 200
+    assert max_discharge_export_w(SETTINGS, CAP) == 200
+    assert max_discharge_export_w(SETTINGS, CapControl(3000, export_w=500)) == 2900

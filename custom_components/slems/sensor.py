@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
+import time
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -34,6 +35,7 @@ from .cell_balancing import TOP_ZONE_V, BalancingPhase, balance_status
 from .controller import ControlStatus
 from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 from .forecast.accuracy import Accuracy
+from .problems import CAP_EXCEEDED_AFTER_S
 from .pv_forecast import energy_on_day
 
 
@@ -147,6 +149,64 @@ def _consumption_accuracy_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> 
     attributes["history_days"] = accuracy.history_days if accuracy else 0
     attributes["heat_pump_days"] = accuracy.heat_pump_days if accuracy else 0
     return attributes
+
+
+def _kwh(wh: float) -> float:
+    return round(wh / 1000, 2)
+
+
+def _time(moment) -> str | None:
+    return moment.isoformat() if moment is not None else None
+
+
+def _cap_absorb_kwh(s: SystemSnapshot, _: SlemsCoordinator) -> float | None:
+    if s.feed_in_cap is None:
+        return None
+    return sum(block.absorbed_wh for block in s.feed_in_cap.day_blocks()) / 1000
+
+
+def _cap_exceeded(c: SlemsCoordinator) -> bool:
+    since = c.cap_exceeded_since
+    return since is not None and time.monotonic() - since >= CAP_EXCEEDED_AFTER_S
+
+
+def _cap_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
+    cap = s.feed_in_cap
+    if cap is None:
+        return {"limit_w": round(c.settings.feed_in_cap_limit_w), "limit_exceeded": _cap_exceeded(c)}
+    day = cap.day_blocks()
+    return {
+        "limit_w": round(cap.limit_w),
+        "peak_start": _time(day[0].start) if day else None,
+        "peak_end": _time(day[-1].end) if day else None,
+        "excess_kwh": _kwh(sum(b.excess_wh for b in day)),
+        "curtailed_kwh": _kwh(sum(b.curtailed_wh for b in day)),
+        "required_space_kwh": _kwh(cap.required_space_wh),
+        "free_now_kwh": _kwh(cap.free_now_wh),
+        "export_needed_kwh": _kwh(cap.export_needed_wh),
+        "export_possible_kwh": _kwh(cap.export_possible_wh),
+        "export_start": _time(cap.export_start),
+        "export_until": _time(cap.export_until),
+        "export_power_w": round(cap.export_power_w),
+        "hold_charging": cap.hold_charging,
+        "buffer_pct": (
+            None if s.feed_in_cap_buffer_pct is None else round(s.feed_in_cap_buffer_pct, 1)
+        ),
+        "buffer_source": s.feed_in_cap_buffer_source,
+        "buffer_days": s.feed_in_cap_buffer_days,
+        "peaks": [
+            {
+                "start": _time(b.start),
+                "end": _time(b.end),
+                "excess_kwh": _kwh(b.excess_wh),
+                "absorbed_kwh": _kwh(b.absorbed_wh),
+                "curtailed_kwh": _kwh(b.curtailed_wh),
+            }
+            for b in cap.blocks
+        ],
+        "problems": cap.problems,
+        "limit_exceeded": _cap_exceeded(c),
+    }
 
 
 def _pv_accuracy_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
@@ -313,6 +373,25 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
                 sum(b.driver.capabilities.capacity_wh for b in c.batteries if b.plannable) / 1000, 2
             ),
         },
+    ),
+    SystemSensorDescription(
+        key="feed_in_cap_energy",
+        translation_key="feed_in_cap_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+        value_fn=_cap_absorb_kwh,
+        attributes_fn=_cap_attributes,
+    ),
+    SystemSensorDescription(
+        key="feed_in_cap_export",
+        translation_key="feed_in_cap_export",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+        value_fn=lambda s, _: (
+            None if s.feed_in_cap is None else s.feed_in_cap.export_needed_wh / 1000
+        ),
     ),
     SystemSensorDescription(
         key="consumption_forecast_accuracy",
@@ -514,7 +593,7 @@ class SystemSensor(SlemsSystemEntity, SensorEntity):
     """System level sensor."""
 
     entity_description: SystemSensorDescription
-    _unrecorded_attributes = frozenset({"day_plan", "day_plan_tomorrow", "days"})
+    _unrecorded_attributes = frozenset({"day_plan", "day_plan_tomorrow", "days", "peaks"})
 
     def __init__(
         self, coordinator: SlemsCoordinator, description: SystemSensorDescription

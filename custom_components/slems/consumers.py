@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import (
     CONF_BLOCK_ENTITY,
+    CONF_CAP_MODE,
     CONF_CONSUMER_TYPE,
     CONF_CONTROL_ENTITY,
     CONF_CONTROL_MODE,
@@ -25,6 +26,7 @@ from .const import (
     CONF_PRIORITY,
     CONF_THERMOSTAT_CYCLES,
     DEFAULT_PRIORITY,
+    CapMode,
     ConsumerType,
     ControlMode,
 )
@@ -60,6 +62,8 @@ class ConsumerConfig:
     # Its own thermostat switches it on and off while it is commanded (e.g. a
     # heating rod that measures at the element): pauses are no saturation.
     thermostat_cycles: bool = False
+    # Part in the feed-in cap.
+    cap_mode: CapMode = CapMode.EMERGENCY
 
     @property
     def controllable(self) -> bool:
@@ -86,6 +90,7 @@ class ConsumerConfig:
             min_on_s=(data.get(CONF_MIN_ON_MINUTES) or 0) * 60,
             min_off_s=(data.get(CONF_MIN_OFF_MINUTES) or 0) * 60,
             thermostat_cycles=data.get(CONF_THERMOSTAT_CYCLES, False),
+            cap_mode=CapMode(data.get(CONF_CAP_MODE, CapMode.EMERGENCY)),
         )
 
 
