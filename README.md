@@ -86,6 +86,10 @@ EV charging; evcc complements SLEMS well (see [roadmap](#roadmap)).
 
 ### HACS (custom repository)
 
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=gojux&repository=SLEMS&category=integration)
+
+The button opens SLEMS in HACS of your Home Assistant instance and adds the custom repository; then continue with step 2. Or by hand:
+
 1. HACS → ⋮ → *Custom repositories* → add `https://github.com/gojux/SLEMS`, type *Integration*.
 2. Install *SLEMS* and restart Home Assistant.
 

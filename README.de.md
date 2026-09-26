@@ -88,6 +88,10 @@ ergänzt SLEMS gut (siehe [Roadmap](#roadmap)).
 
 ### HACS (benutzerdefiniertes Repository)
 
+[![Öffne deine Home-Assistant-Instanz und das Repository im Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=gojux&repository=SLEMS&category=integration)
+
+Der Button öffnet SLEMS im HACS deiner Home-Assistant-Instanz und fügt das benutzerdefinierte Repository hinzu; danach weiter mit Schritt 2. Oder von Hand:
+
 1. HACS → ⋮ → *Benutzerdefinierte Repositories* → `https://github.com/gojux/SLEMS` eintragen, Typ *Integration*.
 2. *SLEMS* installieren und Home Assistant neu starten.
 
