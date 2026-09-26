@@ -187,6 +187,10 @@ class CellBalancingSwitch(SlemsBatteryEntity, SwitchEntity):
             raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key="balancing_requires_active"
             )
+        if self.battery.communication_paused:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="balancing_communication_paused"
+            )
         self.coordinator.start_balancing(self.battery)
         self.async_write_ha_state()
 

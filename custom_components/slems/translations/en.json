@@ -538,6 +538,9 @@
     },
     "balancing_reason_telemetry": {
       "message": "the battery could not be read"
+    },
+    "balancing_communication_paused": {
+      "message": "Cell balancing cannot be started while the communication with the battery is paused."
     }
   },
   "issues": {

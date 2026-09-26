@@ -195,6 +195,8 @@ const STRINGS = {
       "The battery leaves the normal control: it charges into the top voltage range (from the PV surplus, at least 95 W; without surplus the other batteries cover it), stands by for a measurement, discharges a little and repeats until the cell delta is at most 30 mV (usually many hours, at most 24 h). Its discharge is fed into the grid unless the other batteries charge anyway.",
     startBalancingConfirm: "Start",
     balancingNeedsActive: "Cell balancing can only be started in operating mode active.",
+    balancingNeedsEnabled: "Cell balancing needs an enabled battery.",
+    balancingNeedsCommunication: "Cell balancing cannot be started while the communication is paused.",
     lastBalancing: "Last cell balancing",
     balancingResults: {
       done: "completed",
@@ -374,6 +376,8 @@ const STRINGS = {
       "Die Batterie verlässt die normale Steuerung: Sie lädt bis in den oberen Spannungsbereich (aus dem PV-Überschuss, mindestens mit 95 W; ohne Überschuss gleichen die anderen Batterien aus), ist für eine Messung im Standby, entlädt etwas und wiederholt das, bis das Zell-Delta höchstens 30 mV beträgt (meist viele Stunden, höchstens 24 h). Ihre Entladung wird eingespeist, außer die anderen Batterien laden ohnehin.",
     startBalancingConfirm: "Starten",
     balancingNeedsActive: "Der Zellausgleich kann nur im Betriebsmodus „Aktiv“ gestartet werden.",
+    balancingNeedsEnabled: "Der Zellausgleich braucht eine aktivierte Batterie.",
+    balancingNeedsCommunication: "Der Zellausgleich kann nicht gestartet werden, solange die Kommunikation pausiert ist.",
     lastBalancing: "Letzter Zellausgleich",
     balancingResults: {
       done: "abgeschlossen",
@@ -686,15 +690,24 @@ class SlemsPanel extends HTMLElement {
     }
     const balancing = s("cell_balancing");
     if (balancing) {
-      const active = this._state("operating_mode")?.state === "active";
+      const blocked = this._balancingBlocked(battery.device_id);
       items.push(
         balancing.state === "on"
           ? item("balancing-off", t.cancelBalancing, ` data-entity="${balancing.entity_id}"`)
-          : item("balancing-on", t.startBalancing, ` data-entity="${balancing.entity_id}" data-name="${name}"${active ? "" : ` disabled title="${escapeHtml(t.balancingNeedsActive)}"`}`)
+          : item("balancing-on", t.startBalancing, ` data-entity="${balancing.entity_id}" data-name="${name}"${blocked ? ` disabled title="${escapeHtml(blocked)}"` : ""}`)
       );
     }
     items.push(item("menu-details", t.details, ` data-device="${battery.device_id}"`));
     return `<div class="menu-wrap">${button}<div class="menu" role="menu">${items.join("")}</div></div>`;
+  }
+
+  /** Why a cell balancing run cannot be started right now (null if it can). */
+  _balancingBlocked(deviceId) {
+    const t = this._t;
+    if (this._state("battery_enabled", deviceId)?.state === "off") return t.balancingNeedsEnabled;
+    if (this._state("communication_paused", deviceId)?.state === "on") return t.balancingNeedsCommunication;
+    if (this._state("operating_mode")?.state !== "active") return t.balancingNeedsActive;
+    return null;
   }
 
   /** Handles the ⋮ menu; returns true if the click was consumed. */
@@ -1622,9 +1635,9 @@ class SlemsPanel extends HTMLElement {
         ? `${escapeHtml(this._format(top))}${status ? ` <span class="status ${status}"><ha-icon icon="${icon}"></ha-icon>${statusLabel}</span>` : ""}`
         : `<span class="muted">${t.noTopMeasurement}</span>`;
     const balancing = switchState?.state === "on";
-    const active = this._state("operating_mode")?.state === "active";
-    const disabled = active ? "" : ` disabled title="${escapeHtml(t.balancingNeedsActive)}"`;
-    const hint = active ? "" : `<span class="muted balancing-hint">${t.balancingNeedsActive}</span>`;
+    const blocked = this._balancingBlocked(battery.device_id);
+    const disabled = blocked ? ` disabled title="${escapeHtml(blocked)}"` : "";
+    const hint = blocked ? `<span class="muted balancing-hint">${blocked}</span>` : "";
     let action = "";
     if (switchState && balancing) {
       action = `<div class="balancing-run"><ha-icon icon="mdi:scale-balance"></ha-icon>

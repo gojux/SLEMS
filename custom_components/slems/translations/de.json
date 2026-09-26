@@ -538,6 +538,9 @@
     },
     "balancing_reason_telemetry": {
       "message": "die Batterie konnte nicht gelesen werden"
+    },
+    "balancing_communication_paused": {
+      "message": "Der Zellausgleich kann nicht gestartet werden, solange die Kommunikation mit der Batterie pausiert ist."
     }
   },
   "issues": {
