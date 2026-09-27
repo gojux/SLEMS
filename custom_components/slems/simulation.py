@@ -72,7 +72,9 @@ def _metrics(rows: list[dict], start: datetime, cap_limit_w: float | None) -> di
         share = min(1.0, (hour + HOUR - max(hour, start)) / HOUR)
         exported = max(0.0, -grid)
         if cap_limit_w is not None and exported > cap_limit_w:
-            curtailed += (exported - cap_limit_w) * share
+            # The day plan knows the consumers taking surplus above the limit.
+            lost = row.get("cap_lost_wh", exported - cap_limit_w)
+            curtailed += lost * share
             exported = cap_limit_w
         export += exported * share
         imported += max(0.0, grid) * share

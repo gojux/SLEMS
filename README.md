@@ -295,7 +295,9 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   for comparison, key figures (feed-in, grid import, highest import and
   feed-in, curtailed energy, state of charge at midnight) side by side below.
   Nothing is saved or used for the control; every visit starts with the
-  current settings. Consumers controlled by SLEMS and the battery priority
+  current settings. *Today* is simulated from now on (the values before are
+  measured); in the afternoon a note suggests *Tomorrow* for a whole
+  simulated day. Consumers controlled by SLEMS and the battery priority
   (which acts in the real-time distribution) are not simulated.
 - **Settings**: all settings grouped and editable directly; the *Control*
   card also shows the learned values (current control gain, smart meter
@@ -714,8 +716,11 @@ house consumption).
   dashed line: expected consumption + limit, the PV power above which the
   export would exceed the limit (the limit applies after the house
   consumption, so the line follows the consumption forecast). The energy
-  above it is shown as a bar on that line, the part that would be curtailed
-  in red.
+  above it is shown as a bar on that line; in red the part that is still
+  lost according to the plan, because the batteries are full or charge too
+  slowly (the reason is shown in the tooltip; consumers set to take surplus
+  above the limit are taken into account). The key figure *Curtailed* in the
+  simulation is the same energy.
 - **Warnings** (overview and notifications): batteries too small for
   the space needed, not enough time or power left to feed in before the peak,
   charge power too low for the surplus above the limit, and feed-in above the

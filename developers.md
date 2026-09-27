@@ -492,7 +492,15 @@ Integration:
   at least the absorbed energy of the hour; from the export start stored
   energy is reduced to full − need.
 - Day plan rows get `cap_line_wh` (consumption + limit), `cap_excess_wh`,
-  `cap_curtailed_wh` from the fine steps.
+  `cap_curtailed_wh` from the fine steps, and `cap_lost_wh` /
+  `cap_lost_reason` from the projection: export above the limit minus the
+  consumers taking surplus (`CapPlan.consumers_w`), "full" if the projected
+  SoC is at the maximum, otherwise "charge_power". The chart's red part and
+  the simulation's *curtailed* key figure use `cap_lost_wh`.
+- The projection plans the charging every hour again from the projected SoC
+  (like the controller), so charging held back before a peak is made up
+  afterwards; a plan made once per day left the batteries short after the
+  peak.
 
 Part of each consumer: select *With feed-in cap* per controllable consumer
 (`ConsumerCapModeSelect`, restored; `coordinator.consumer_cap_modes`, default

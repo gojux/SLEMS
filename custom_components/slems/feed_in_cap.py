@@ -119,6 +119,9 @@ class CapPlan:
     hold_charging: bool = False
     # More space needed than the batteries have (above the minimum SoC).
     battery_too_small: bool = False
+    # Power of the consumers that take surplus above the limit (counted and
+    # instead of curtailing).
+    consumers_w: float = 0.0
     # Local hour start -> Wh from now on (day chart, SoC projection).
     hourly: dict[datetime, HourCap] = field(default_factory=dict)
     # Same per half hour (day chart).
@@ -213,7 +216,7 @@ def plan_cap(
     buckets (Wh). ``max_charge_w`` / ``max_discharge_w`` are the powers of
     the batteries apart from the SoC window.
     """
-    plan = CapPlan(limit_w=settings.limit_w)
+    plan = CapPlan(limit_w=settings.limit_w, consumers_w=counted_consumers_w + emergency_consumers_w)
     capacity = battery.capacity_wh
     if capacity <= 0:
         return plan

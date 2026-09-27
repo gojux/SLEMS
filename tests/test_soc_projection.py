@@ -131,3 +131,22 @@ def test_no_planned_charging_when_full() -> None:
         charge == 0 for h, charge in result.planned_charge_w.items() if full_at < h < at(16)
     )
     assert full_at < at(16)
+
+
+def test_charging_held_back_by_the_feed_in_cap_is_made_up_later() -> None:
+    from custom_components.slems.feed_in_cap import CapSettings, plan_cap
+
+    # Peak 5.85 kW, limit 4 kW: charging below the limit is held back before
+    # the peak and has to be made up afterwards (the plan is made again every
+    # hour, not once per day).
+    pv, consumption = forecasts()
+    pv = {k: v * 1.3 for k, v in pv.items()}
+    now = at(6)
+    group = BatteryGroup(
+        soc_pct=12, capacity_wh=10000, max_charge_w=7500, max_discharge_w=7500,
+        charge_efficiency=1.0, min_soc_pct=12,
+    )
+    cap = plan_cap(now, group, 7500, 7500, pv, consumption, CapSettings(4000, 20, 500))
+    result = project_soc(now, group, pv, consumption, None, settings(), None, 0.0, cap)
+    assert result.soc_pct[at(11)] < 80
+    assert result.soc_pct[at(14)] == pytest.approx(100)

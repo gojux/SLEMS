@@ -306,7 +306,9 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
   (Einspeisung, Netzbezug, höchster Bezug und höchste Einspeisung,
   abgeregelte Energie, Ladezustand um Mitternacht). Nichts davon wird
   gespeichert oder für die Regelung verwendet; jeder Besuch beginnt mit den
-  aktuellen Einstellungen. Von SLEMS gesteuerte Verbraucher und der
+  aktuellen Einstellungen. *Heute* wird ab jetzt simuliert (die Werte davor
+  sind gemessen); am Nachmittag schlägt ein Hinweis *Morgen* für einen ganzen
+  simulierten Tag vor. Von SLEMS gesteuerte Verbraucher und der
   Batterievorrang (er wirkt in der Echtzeit-Verteilung) werden nicht
   simuliert.
 - **Einstellungen**: alle Einstellwerte gruppiert und direkt änderbar; die
@@ -748,7 +750,10 @@ Netzanschlusspunkt (Einspeisung, nach dem Hausverbrauch).
   Verbrauch + Grenze, also die PV-Leistung, ab der die Einspeisung über der
   Grenze läge (die Grenze gilt nach dem Hausverbrauch, deshalb folgt die
   Linie der Verbrauchsprognose). Die Energie darüber steht als Balken auf
-  dieser Linie, der Teil, der abgeregelt würde, in Rot.
+  dieser Linie; rot der Teil, der laut Plan trotzdem verloren geht, weil die
+  Batterien voll sind oder zu langsam laden (den Grund zeigt der Tooltip;
+  Verbraucher, die Überschuss über der Grenze aufnehmen, sind berücksichtigt).
+  Die Kennzahl *Abgeregelt* in der Simulation ist dieselbe Energie.
 - **Warnungen** (Übersicht und Benachrichtigungen): Batterien zu
   klein für den nötigen Platz, zu wenig Zeit oder Leistung, um vor der Spitze
   einzuspeisen, Ladeleistung zu gering für den Überschuss über der Grenze, und

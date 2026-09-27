@@ -1595,7 +1595,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             )
         pv_power = power_lookup(self._pv_native(snapshot, wall_now))
         result.day_plan = self._day_plan(
-            pv_hourly, consumption_hourly, result.projection, wall_now, cap=cap, pv_power=pv_power
+            pv_hourly,
+            consumption_hourly,
+            result.projection,
+            wall_now,
+            cap=cap,
+            pv_power=pv_power,
+            battery=battery,
         )
         result.day_plan_tomorrow = self._day_plan(
             pv_hourly,
@@ -1605,6 +1611,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             day_offset=1,
             cap=cap,
             pv_power=pv_power,
+            battery=battery,
         )
         return result
 
@@ -1765,6 +1772,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         day_offset: int = 0,
         cap: CapPlan | None = None,
         pv_power=None,
+        battery: BatteryGroup | None = None,
     ) -> list[dict]:
         """Hours of a day for the dashboard.
 
@@ -1775,6 +1783,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         energy above it, of which the curtailed part, from the fine periods.
         Per half hour: mean PV power from the native forecast periods
         (``pv_half_w``) and the feed-in cap energies (``cap_*_half_wh``).
+        ``cap_lost_wh`` is the energy the projection expects above the limit
+        (curtailed by the inverter), with the reason: batteries "full" or
+        their "charge_power" too low.
         """
         day_start = dt_util.start_of_local_day(dt_util.as_local(wall_now))
         day_start += timedelta(days=day_offset)
@@ -1817,6 +1828,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                         "cap_curtailed_wh": round(hour_cap.curtailed_wh) if hour_cap else None,
                     }
                 )
+                if start in grid:
+                    # The projection has no consumers: those taking surplus
+                    # above the limit reduce what is lost.
+                    lost = max(0.0, -grid[start] - cap.limit_w - cap.consumers_w)
+                    rows[-1]["cap_lost_wh"] = round(lost)
+                    if lost > 0 and battery is not None:
+                        full = start in soc and soc[start] >= battery.full_soc_pct - 0.5
+                        rows[-1]["cap_lost_reason"] = "full" if full else "charge_power"
         return rows
 
     def fast_snapshot(

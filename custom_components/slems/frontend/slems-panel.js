@@ -187,12 +187,16 @@ const STRINGS = {
     capLine: "PV limit of the feed-in cap",
     capExcess: "Above the limit",
     capCurtailed: "Curtailed",
+    capLostReasons: { full: "batteries full", charge_power: "charge power too low" },
     simulation: "Simulation",
     simIntro:
       "Try other settings: the chart and the key figures show how today and tomorrow would look, calculated from the current state of charge and the current forecasts. Nothing here is saved or used by SLEMS; grey dotted: the plan with the current settings. Consumers controlled by SLEMS are not simulated.",
     simToday: "Simulation: today",
     simTomorrow: "Simulation: tomorrow (expected)",
     simReset: "Reset to the current settings",
+    simAfternoon:
+      "It is past noon: the simulation only changes the rest of today from now on; the values before are measured and not simulated. Choose tomorrow for a whole simulated day.",
+    simShowTomorrow: "Show tomorrow",
     simForecast: "Forecast",
     simPv: "PV forecast change",
     simConsumption: "Consumption forecast change",
@@ -452,12 +456,16 @@ const STRINGS = {
     capLine: "PV-Grenze der Einspeisebegrenzung",
     capExcess: "Über der Grenze",
     capCurtailed: "Abgeregelt",
+    capLostReasons: { full: "Batterien voll", charge_power: "Ladeleistung zu gering" },
     simulation: "Simulation",
     simIntro:
       "Probiere andere Einstellungen aus: Diagramm und Kennzahlen zeigen, wie heute und morgen aussehen würden, gerechnet ab dem aktuellen Ladezustand mit den aktuellen Prognosen. Nichts davon wird gespeichert oder von SLEMS verwendet; grau gepunktet: der Plan mit den aktuellen Einstellungen. Von SLEMS gesteuerte Verbraucher werden nicht simuliert.",
     simToday: "Simulation: heute",
     simTomorrow: "Simulation: morgen (erwartet)",
     simReset: "Auf aktuelle Einstellungen zurücksetzen",
+    simAfternoon:
+      "Es ist nach 12 Uhr: Die Simulation ändert nur noch den Rest des Tages ab jetzt; die Werte davor sind gemessen und nicht simuliert. Für einen ganzen simulierten Tag „Morgen“ wählen.",
+    simShowTomorrow: "Morgen anzeigen",
     simForecast: "Prognose",
     simPv: "PV-Prognose ändern",
     simConsumption: "Verbrauchsprognose ändern",
@@ -1338,7 +1346,7 @@ class SlemsPanel extends HTMLElement {
       return `
         <div class="sim-layout">
           <div class="sim-main">
-            <section class="card"><div id="daychart"></div></section>
+            <section class="card"><div id="simnote"></div><div id="daychart"></div></section>
             <section class="card"><div id="simmetrics"></div></section>
           </div>
           <section class="card sim-side"><div id="simintro"></div><div id="simcontrols"></div></section>
@@ -1707,7 +1715,18 @@ class SlemsPanel extends HTMLElement {
           // Feed-in cap: PV level above which is capped, power above it and the curtailed part.
           capLine: row.cap_line_wh ?? null,
           capExcess: row.cap_excess_half_wh ? perHalf(row.cap_excess_half_wh[half]) : null,
-          capCurtailed: row.cap_curtailed_half_wh ? perHalf(row.cap_curtailed_half_wh[half]) : null,
+          // Lost above the limit as the projection expects it (batteries full or
+          // charging too slowly), split over the half hours like the excess.
+          capCurtailed: (() => {
+            const lost = row.cap_lost_wh;
+            if (lost === undefined || lost === null) {
+              return row.cap_curtailed_half_wh ? perHalf(row.cap_curtailed_half_wh[half]) : null;
+            }
+            const halves = row.cap_excess_half_wh || [];
+            const total = (halves[0] || 0) + (halves[1] || 0);
+            return perHalf(total > 0 ? (lost * (halves[half] || 0)) / total : lost / 2);
+          })(),
+          capLostReason: row.cap_lost_reason ?? null,
           // Measured values exist for today only.
           pvActual: today ? this._stats.pv[slot] ?? null : null,
           consumptionActual: today ? this._stats.house[slot] ?? null : null,
@@ -2000,7 +2019,15 @@ class SlemsPanel extends HTMLElement {
       ${entry(c.battery, t.plannedCharge, v("plannedCharge"))}${entry(c.battery, t.actualCharge, v("actualCharge"))}
       ${percentEntry(c.battery, t.socForecast, v("socForecast"))}${percentEntry(c.battery, t.socActual, v("socActual"))}
       ${entry(c.muted, t.exportCompare, v("exportCompare"))}${percentEntry(c.muted, t.socCompare, v("socCompare"))}
-      ${v("capExcess") > 0 ? entry(c.pv, t.capExcess, v("capExcess")) : ""}${v("capCurtailed") > 0 ? entry(CURTAILED_COLOR, t.capCurtailed, v("capCurtailed")) : ""}`;
+      ${v("capExcess") > 0 ? entry(c.pv, t.capExcess, v("capExcess")) : ""}${
+        v("capCurtailed") > 0
+          ? entry(
+              CURTAILED_COLOR,
+              row.capLostReason ? `${t.capCurtailed} (${t.capLostReasons[row.capLostReason]})` : t.capCurtailed,
+              v("capCurtailed")
+            )
+          : ""
+      }`;
     tooltip.hidden = false;
     // Position relative to the chart card, next to the cursor.
     const card = this.shadowRoot.getElementById("daychart").getBoundingClientRect();
@@ -2076,6 +2103,15 @@ class SlemsPanel extends HTMLElement {
       this._setSection("simmetrics", "");
       return;
     }
+    // In the afternoon most of today is already measured, not simulated.
+    const afternoon = this._chartDay === "today" && new Date().getHours() >= 12;
+    this._setSection(
+      "simnote",
+      afternoon
+        ? `<div class="info-box sim-note"><ha-icon icon="mdi:information-outline"></ha-icon><span>${escapeHtml(t.simAfternoon)}</span>
+            <button class="link" data-action="day-tomorrow">${escapeHtml(t.simShowTomorrow)}</button></div>`
+        : ""
+    );
     const plans = { today: sim.result.day_plan, tomorrow: sim.result.day_plan_tomorrow };
     this._fetchStats(false);
     this._renderDayChart({
@@ -2670,6 +2706,7 @@ const STYLE = `
   .sim-group:first-child h3 { margin-top: 8px; }
   .sim-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
   .sim-metrics td.changed { font-weight: 600; }
+  .sim-note { margin: 0 0 12px; }
   .sim-metrics th { white-space: normal; }
   @media (max-width: 500px) {
     .sim-metrics th, .sim-metrics td { padding: 4px; font-size: 12px; white-space: normal; }

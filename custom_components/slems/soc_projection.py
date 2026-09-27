@@ -6,9 +6,10 @@ simplified way:
 
 * Hours with PV surplus: planned charging. With grid friendly charging only
   the surplus above the feed-in limit, until the batteries are full plus the
-  safety buffer (see ``grid_friendly``). The plan of a day is made when the
-  projection reaches its first surplus hour, from the projected state of
-  charge at that time; today's feed-in limit is the one the controller uses.
+  safety buffer (see ``grid_friendly``). Like the controller, the charging is
+  planned again every hour from the projected state of charge, so charging
+  held back (feed-in cap) is made up later; today's feed-in limit is the one
+  the controller uses.
 * Hours with a deficit: the batteries cover it. With import peak shaving at
   low state of charge only the import above the limit; with night discharge
   at least the planned night discharge, the extra part not below its target
@@ -30,7 +31,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 import math
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 from homeassistant.util import dt as dt_util
 
@@ -97,7 +98,6 @@ def project_soc(
     end = dt_util.start_of_local_day(local_now) + timedelta(days=2)
     stored = battery.soc_pct / 100 * capacity
     full = battery.full_soc_pct / 100 * capacity
-    plans: dict[date, dict[datetime, float]] = {}
 
     def charge_plan(hour: datetime, start: datetime) -> dict[datetime, float]:
         day_end = dt_util.start_of_local_day(hour) + timedelta(days=1)
@@ -125,13 +125,11 @@ def project_soc(
         # Highest stored energy that leaves the space the feed-in cap needs.
         allowed = full - cap.space_needed_at(hour_end) if cap is not None else full
         if pv_w > load:
-            day = hour.date()
-            if day not in plans:
-                plans[day] = charge_plan(hour, start)
+            plan = charge_plan(hour, start)
             # The plan includes the buffer (it lowers the feed-in limit); only
             # what still fits into the batteries is charged.
             room = max(0.0, min(full, allowed) - stored)
-            charge = min(plans[day].get(hour, 0.0), room / (share * efficiency))
+            charge = min(plan.get(hour, 0.0), room / (share * efficiency))
             if cap is not None and hour in cap.hourly:
                 charge = max(charge, cap.hourly[hour].absorbed_wh / share)
                 charge = min(charge, max(0.0, full - stored) / (share * efficiency))
