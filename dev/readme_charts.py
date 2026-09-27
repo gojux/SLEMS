@@ -23,7 +23,8 @@ START_HOUR = 18
 CAPACITY_WH = 10000.0
 EFFICIENCY = 0.95
 PV_PEAK_KWP = 8.0
-CAP_LIMIT_W = PV_PEAK_KWP * 1000 * 0.6
+CAP_LIMIT_PCT = 45
+CAP_LIMIT_W = PV_PEAK_KWP * 1000 * CAP_LIMIT_PCT / 100
 
 # Mean power per hour of the day (W).
 PV_SUNNY = {6: 200, 7: 800, 8: 1800, 9: 3000, 10: 4200, 11: 5200, 12: 5800, 13: 5900,
@@ -149,7 +150,7 @@ TEXT = {
             "grid_friendly": "Grid friendly charging",
             "night_discharge": "Night discharge",
             "peak_shaving": "Import peak shaving (cloudy day)",
-            "feed_in_cap": "Feed-in cap 60 % (with night discharge)",
+            "feed_in_cap": f"Feed-in cap {CAP_LIMIT_PCT} % (with night discharge)",
         },
         "note": "Example: 8 kWp, 10 kWh battery; SLEMS state of charge projection, hourly means",
     },
@@ -161,7 +162,7 @@ TEXT = {
             "grid_friendly": "Netzdienliches Laden",
             "night_discharge": "Nachtentladung",
             "peak_shaving": "Bezugsspitzen abfangen (trüber Tag)",
-            "feed_in_cap": "Einspeisebegrenzung 60 % (mit Nachtentladung)",
+            "feed_in_cap": f"Einspeisebegrenzung {CAP_LIMIT_PCT} % (mit Nachtentladung)",
         },
         "note": "Beispiel: 8 kWp, 10-kWh-Batterie; SoC-Projektion von SLEMS, Stundenmittel",
     },
