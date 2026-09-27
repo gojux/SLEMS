@@ -184,7 +184,7 @@ class RealTimeController:
             self._rerun = True
             return
         now = time.monotonic()
-        wait = self._coordinator.settings.control_interval_s - (now - self._last_run)
+        wait = self._coordinator.control_interval_s - (now - self._last_run)
         if self._pending is not None:
             if now + wait >= self._pending_at:
                 return
@@ -221,6 +221,11 @@ class RealTimeController:
         battery.leaving_until = time.monotonic() + LEAVE_RAMP_S
         self.request()
         return True
+
+    def consumer_command(self, subentry_id: str) -> float | None:
+        """Power last commanded to a consumer (kept while it is saturated)."""
+        command = self._consumer_commands.get(subentry_id)
+        return command[0] if command else None
 
     def command_state(self, battery_id: str) -> tuple[float, float] | None:
         """Latest command of a battery and since when it has this direction."""
@@ -479,6 +484,7 @@ class RealTimeController:
     async def _async_apply_consumers(self, snapshot: SystemSnapshot) -> None:
         now = time.monotonic()
         for consumer in self._coordinator.consumers:
+            consumer = self._coordinator.effective_consumer(consumer)
             subentry_id = consumer.subentry_id
             target = snapshot.allocation.consumer_power_w.get(subentry_id)
             if target is None or not snapshot.is_controllable_now(subentry_id):

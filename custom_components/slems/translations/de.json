@@ -416,6 +416,15 @@
       },
       "feed_in_cap_export": {
         "name": "Einspeisebegrenzung: vor der Spitze einzuspeisen"
+      },
+      "learned_values": {
+        "name": "Gelernte Werte in Verwendung"
+      },
+      "learned_capacity": {
+        "name": "Gelernte Kapazität"
+      },
+      "learned_power": {
+        "name": "Gelernte Leistung"
       }
     },
     "switch": {
@@ -457,6 +466,24 @@
       },
       "feed_in_cap_auto_buffer": {
         "name": "Puffer der Einspeisebegrenzung automatisch"
+      },
+      "grid_friendly_buffer_auto": {
+        "name": "Puffer netzdienliches Laden automatisch"
+      },
+      "charge_secured_buffer_auto": {
+        "name": "Sicherheitspuffer gesicherte Ladung automatisch"
+      },
+      "grid_targets_auto": {
+        "name": "Ziel-Netzüberschuss automatisch"
+      },
+      "timing_auto": {
+        "name": "Regelzeiten automatisch"
+      },
+      "learn_capacity": {
+        "name": "Kapazität lernen"
+      },
+      "consumer_learning": {
+        "name": "Aus Messwerten lernen"
       }
     },
     "number": {

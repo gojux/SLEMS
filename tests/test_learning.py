@@ -1,0 +1,99 @@
+"""Tests for the learned values."""
+
+import pytest
+
+from custom_components.slems.learning import (
+    CapacityLearner,
+    ConsumerLearner,
+    GridTargetLearner,
+    auto_timing,
+    consumption_underestimate,
+    pv_overestimate,
+)
+
+
+def test_pv_overestimate_needs_14_days() -> None:
+    days = {f"2026-05-{d:02d}": {"forecast_wh": 10000, "actual_wh": 11000} for d in range(1, 10)}
+    assert pv_overestimate(days) == (None, 9)
+    for d, actual in zip(range(10, 16), (9500, 9000, 8000, 7000, 6000, 10000), strict=True):
+        days[f"2026-05-{d:02d}"] = {"forecast_wh": 10000, "actual_wh": actual}
+    share, count = pv_overestimate(days)
+    assert count == 15
+    # 80 % quantile of 5, 10, 20, 30, 40 % too high.
+    assert share == pytest.approx(0.3)
+
+
+def test_consumption_underestimate() -> None:
+    assert consumption_underestimate([(10000, 11000)] * 3) == (None, 3)
+    days = [(10000, 9000)] * 5 + [(10000, 10500), (10000, 11000), (10000, 12000)]
+    share, count = consumption_underestimate(days)
+    assert count == 8
+    # 80 % quantile of 5, 10, 20 % too low: the highest of three.
+    assert share == pytest.approx(0.2)
+
+
+def test_capacity_from_a_discharge_leg() -> None:
+    learner = CapacityLearner()
+    # 5000 Wh battery: 1000 W for 1.5 h is 30 %.
+    soc = 90.0
+    for step in range(0, 5401, 5):
+        learner.update(step, soc, -1000, 5120)
+        soc -= 1000 * 5 / 3600 / 5000 * 100
+    learner.update(5410, soc, 0, 5120)
+    learner.update(6100, soc, 0, 5120)  # rest ends the leg
+    assert learner.estimates and learner.estimates[0] == pytest.approx(5000, rel=0.01)
+    assert learner.capacity_wh is None  # three legs needed
+
+
+def test_capacity_jump_discards_the_leg() -> None:
+    learner = CapacityLearner()
+    soc = 50.0
+    for step in range(0, 3600, 5):
+        learner.update(step, soc, 1500, 5120)
+        soc += 1500 * 5 / 3600 / 5000 * 100
+    learner.update(3605, 100.0, 1500, 5120)  # BMS recalibrates to 100 %
+    learner.update(4300, 100.0, 0, 5120)
+    learner.update(5000, 100.0, 0, 5120)
+    assert learner.estimates == []
+
+
+def test_capacity_median_and_restore() -> None:
+    learner = CapacityLearner.from_dict({"estimates": [4900, 5000, 5100]})
+    assert learner.capacity_wh == 5000
+    assert CapacityLearner.from_dict(learner.as_dict()).estimates == [4900, 5000, 5100]
+
+
+def test_grid_target_from_import_deviation() -> None:
+    learner = GridTargetLearner()
+    assert learner.target_w(charging=True) is None
+    # Target 100 W export; the grid swings between 200 W export and 150 W import.
+    for i in range(400):
+        learner.add(True, -200 + (i % 8) * 50, 100)
+    # Deviations above the target: 0 … 250 W; 90 % quantile.
+    assert learner.target_w(charging=True) == pytest.approx(250)
+    assert learner.target_w(charging=False) is None
+
+
+def test_auto_timing() -> None:
+    assert auto_timing(None) is None
+    assert auto_timing(1.0) == (0.8, 3)
+    assert auto_timing(5.0) == (4.0, 15)
+
+
+def test_consumer_power_and_thermostat_cycles() -> None:
+    learner = ConsumerLearner()
+    t = 0
+    for _ in range(40):
+        learner.update(t, True, 2000 + (t % 3) * 10)
+        t += 5
+    assert learner.nominal_w == pytest.approx(2010, abs=10)
+    for cycle in range(2):
+        for _ in range(10):  # 50 s pause of the thermostat
+            learner.update(t, True, 0)
+            t += 5
+        learner.update(t, True, 2000)
+        t += 5
+    assert learner.thermostat_cycles
+    # Commanded off: no pause counted.
+    learner.update(t, False, 0)
+    assert learner.cycles == 2

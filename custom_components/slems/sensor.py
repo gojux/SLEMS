@@ -73,7 +73,7 @@ def _average_soc(snapshot: SystemSnapshot, coordinator: SlemsCoordinator) -> flo
         telemetry = snapshot.batteries.get(battery.subentry_id)
         if not battery.plannable or telemetry is None or telemetry.soc_pct is None:
             continue
-        battery_capacity = battery.driver.capabilities.capacity_wh
+        battery_capacity = battery.capacity_wh
         energy += telemetry.soc_pct * battery_capacity
         capacity += battery_capacity
     return energy / capacity if capacity else None
@@ -86,7 +86,7 @@ def _stored_energy_kwh(snapshot: SystemSnapshot, coordinator: SlemsCoordinator) 
         telemetry = snapshot.batteries.get(battery.subentry_id)
         if not battery.plannable or telemetry is None or telemetry.soc_pct is None:
             continue
-        stored = telemetry.soc_pct / 100 * battery.driver.capabilities.capacity_wh / 1000
+        stored = telemetry.soc_pct / 100 * battery.capacity_wh / 1000
         energy = (energy or 0.0) + stored
     return energy
 
@@ -94,7 +94,7 @@ def _stored_energy_kwh(snapshot: SystemSnapshot, coordinator: SlemsCoordinator) 
 def _capacity_kwh(snapshot: SystemSnapshot, coordinator: SlemsCoordinator) -> float | None:
     """Capacity of the batteries counted in the stored energy total (kWh)."""
     capacities = [
-        battery.driver.capabilities.capacity_wh / 1000
+        battery.capacity_wh / 1000
         for battery in coordinator.batteries
         if battery.plannable
         and (telemetry := snapshot.batteries.get(battery.subentry_id)) is not None
@@ -207,6 +207,58 @@ def _cap_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
         "problems": cap.problems,
         "limit_exceeded": _cap_exceeded(c),
     }
+
+
+def _pct(share: float | None) -> float | None:
+    return None if share is None else round(share * 100, 1)
+
+
+def _learned_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
+    """Learned values and their basis (see learning); None: not enough data yet."""
+    now = dt_util.now()
+    pv_share, pv_days = c.pv_overestimate
+    consumption_share, consumption_days = c.consumption_underestimate
+    today_pv, today_consumption = c._rest_of_day_energy(s, now)
+    next_pv, next_consumption = c._next_day_energy(s, now)
+    both = pv_share is not None and consumption_share is not None
+    timing = c.learned_timing
+
+    def kwh(wh: float | None) -> float | None:
+        return None if wh is None else round(wh / 1000, 2)
+
+    return {
+        "pv_overestimate_pct": _pct(pv_share),
+        "pv_days": pv_days,
+        "consumption_underestimate_pct": _pct(consumption_share),
+        "consumption_days": consumption_days,
+        "grid_friendly_buffer_kwh": kwh(pv_share * today_pv if pv_share is not None else None),
+        "charge_secured_buffer_kwh": kwh(
+            pv_share * today_pv + consumption_share * today_consumption if both else None
+        ),
+        "night_buffer_kwh": kwh(
+            pv_share * next_pv + consumption_share * next_consumption if both else None
+        ),
+        "charge_grid_target_w": c.grid_targets.target_w(True),
+        "discharge_grid_target_w": c.grid_targets.target_w(False),
+        "grid_target_samples": [len(c.grid_targets.charge), len(c.grid_targets.discharge)],
+        "control_interval_s": timing[0] if timing else None,
+        "surplus_average_window_s": timing[1] if timing else None,
+    }
+
+
+def _learned_in_use(s: SystemSnapshot, c: SlemsCoordinator) -> int:
+    """Number of learned values in effect (switched on and enough data)."""
+    settings = c.settings
+    a = _learned_attributes(s, c)
+    return sum(
+        (
+            settings.grid_friendly_buffer_auto and a["grid_friendly_buffer_kwh"] is not None,
+            settings.charge_secured_buffer_auto and a["charge_secured_buffer_kwh"] is not None,
+            settings.grid_targets_auto and a["charge_grid_target_w"] is not None,
+            settings.grid_targets_auto and a["discharge_grid_target_w"] is not None,
+            settings.timing_auto and a["control_interval_s"] is not None,
+        )
+    ) + sum(1 for b in c.batteries if b.learn_capacity and b.capacity_learner.capacity_wh is not None)
 
 
 def _pv_accuracy_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
@@ -370,7 +422,7 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
             # For the note on the energy left above the minimum SoC.
             "min_soc_pct": round(c.min_soc_pct, 1),
             "capacity_kwh": round(
-                sum(b.driver.capabilities.capacity_wh for b in c.batteries if b.plannable) / 1000, 2
+                sum(b.capacity_wh for b in c.batteries if b.plannable) / 1000, 2
             ),
         },
     ),
@@ -410,6 +462,13 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         suggested_display_precision=0,
         value_fn=lambda _, c: _accuracy_value(c.pv_accuracy.accuracy()),
         attributes_fn=_pv_accuracy_attributes,
+    ),
+    SystemSensorDescription(
+        key="learned_values",
+        translation_key="learned_values",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_learned_in_use,
+        attributes_fn=_learned_attributes,
     ),
     SystemSensorDescription(
         key="battery_energy_total",
@@ -561,6 +620,7 @@ async def async_setup_entry(
                 *([FirmwareSensor(coordinator, battery)] if battery.driver.has_connection else []),
                 EfficiencySensor(coordinator, battery),
                 PlannedBatteryPowerSensor(coordinator, battery),
+                LearnedCapacitySensor(coordinator, battery),
                 *(
                     [
                         CellDeltaSensor(coordinator, battery),
@@ -584,7 +644,10 @@ async def async_setup_entry(
     for consumer in coordinator.consumers:
         if consumer.controllable:
             async_add_entities(
-                [PlannedConsumerPowerSensor(coordinator, consumer)],
+                [
+                    PlannedConsumerPowerSensor(coordinator, consumer),
+                    LearnedConsumerPowerSensor(coordinator, consumer),
+                ],
                 config_subentry_id=consumer.subentry_id,
             )
 
@@ -668,11 +731,11 @@ class StoredEnergySensor(SlemsBatteryEntity, SensorEntity):
         telemetry = self.coordinator.data.batteries.get(self.battery.subentry_id)
         if telemetry is None or telemetry.soc_pct is None:
             return None
-        return telemetry.soc_pct / 100 * self.battery.driver.capabilities.capacity_wh / 1000
+        return telemetry.soc_pct / 100 * self.battery.capacity_wh / 1000
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {"capacity_kwh": round(self.battery.driver.capabilities.capacity_wh / 1000, 2)}
+        return {"capacity_kwh": round(self.battery.capacity_wh / 1000, 2)}
 
 
 class EfficiencySensor(SlemsBatteryEntity, SensorEntity):
@@ -939,4 +1002,57 @@ class BalancingPhaseSensor(SlemsBatteryEntity, SensorEntity):
             ),
             # done / cancelled / timeout / telemetry
             "last_result": self.battery.balancing_result,
+        }
+
+
+class LearnedCapacitySensor(SlemsBatteryEntity, SensorEntity):
+    """Usable capacity learned from charge and discharge legs (see learning)."""
+
+    _attr_device_class = SensorDeviceClass.ENERGY_STORAGE
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_suggested_display_precision = 2
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: SlemsCoordinator, battery) -> None:
+        super().__init__(coordinator, battery, "learned_capacity")
+
+    @property
+    def native_value(self) -> float | None:
+        learned = self.battery.capacity_learner.capacity_wh
+        return None if learned is None else learned / 1000
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {
+            "estimates_kwh": [round(e / 1000, 2) for e in self.battery.capacity_learner.estimates],
+            "configured_kwh": round(self.battery.driver.capabilities.capacity_wh / 1000, 2),
+            "in_use": self.battery.learn_capacity and self.native_value is not None,
+        }
+
+
+class LearnedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
+    """Power of a consumer while on and its thermostat pauses, learned (see learning)."""
+
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_suggested_display_precision = 0
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: SlemsCoordinator, consumer) -> None:
+        super().__init__(coordinator, consumer, "learned_power")
+
+    @property
+    def _learner(self):
+        return self.coordinator.consumer_learners[self.consumer.subentry_id]
+
+    @property
+    def native_value(self) -> float | None:
+        return self._learner.nominal_w
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {
+            "thermostat_pauses": self._learner.cycles,
+            "thermostat_cycles": self._learner.thermostat_cycles,
+            "in_use": self.consumer.subentry_id in self.coordinator.consumer_learning,
         }

@@ -28,6 +28,10 @@ SETTING_SWITCHES: dict[str, str] = {
     "peak_shaving_auto": "peak_shaving_auto",
     "feed_in_cap": "feed_in_cap",
     "feed_in_cap_auto_buffer": "feed_in_cap_auto_buffer",
+    "grid_friendly_buffer_auto": "grid_friendly_buffer_auto",
+    "charge_secured_buffer_auto": "charge_secured_buffer_auto",
+    "grid_targets_auto": "grid_targets_auto",
+    "timing_auto": "timing_auto",
 }
 
 
@@ -43,7 +47,10 @@ async def async_setup_entry(
         for key, attribute in SETTING_SWITCHES.items()
     )
     for battery in coordinator.batteries:
-        entities: list[SwitchEntity] = [BatteryEnabledSwitch(coordinator, battery)]
+        entities: list[SwitchEntity] = [
+            BatteryEnabledSwitch(coordinator, battery),
+            LearnCapacitySwitch(coordinator, battery),
+        ]
         if battery.supports_balancing:
             entities.append(CellBalancingSwitch(coordinator, battery))
         if battery.driver.has_connection:
@@ -52,7 +59,10 @@ async def async_setup_entry(
     for consumer in coordinator.consumers:
         if consumer.controllable:
             async_add_entities(
-                [ConsumerControlSwitch(coordinator, consumer)],
+                [
+                    ConsumerControlSwitch(coordinator, consumer),
+                    ConsumerLearningSwitch(coordinator, consumer),
+                ],
                 config_subentry_id=consumer.subentry_id,
             )
 
@@ -232,4 +242,56 @@ class ConsumerControlSwitch(SlemsConsumerEntity, SwitchEntity, RestoreEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         self.coordinator.consumer_control_disabled.add(self.consumer.subentry_id)
         await self.coordinator.controller.async_release_consumer(self.consumer)
+        self.async_write_ha_state()
+
+
+class LearnCapacitySwitch(SlemsBatteryEntity, SwitchEntity, RestoreEntity):
+    """Plan with the learned usable capacity instead of the configured one."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator: SlemsCoordinator, battery: BatteryRuntime) -> None:
+        super().__init__(coordinator, battery, "learn_capacity")
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if (last_state := await self.async_get_last_state()) is not None:
+            self.battery.learn_capacity = last_state.state == STATE_ON
+
+    @property
+    def is_on(self) -> bool:
+        return self.battery.learn_capacity
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self.battery.learn_capacity = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self.battery.learn_capacity = False
+        self.async_write_ha_state()
+
+
+class ConsumerLearningSwitch(SlemsConsumerEntity, SwitchEntity, RestoreEntity):
+    """Use the learned power and thermostat behaviour of the consumer."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator: SlemsCoordinator, consumer: ConsumerConfig) -> None:
+        super().__init__(coordinator, consumer, "consumer_learning")
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if (last_state := await self.async_get_last_state()) is not None and last_state.state == STATE_ON:
+            self.coordinator.consumer_learning.add(self.consumer.subentry_id)
+
+    @property
+    def is_on(self) -> bool:
+        return self.consumer.subentry_id in self.coordinator.consumer_learning
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self.coordinator.consumer_learning.add(self.consumer.subentry_id)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self.coordinator.consumer_learning.discard(self.consumer.subentry_id)
         self.async_write_ha_state()

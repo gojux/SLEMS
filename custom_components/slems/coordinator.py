@@ -27,10 +27,12 @@ from .allocation import (
     BatteryGroup,
     CapControl,
     ConsumerRequest,
+    Strategy,
     allocate,
     expected_surplus_wh,
     limit_discharge_export,
     max_discharge_export_w,
+    remaining_pv_wh,
 )
 from .const import (
     CONF_GRID_POWER_ENTITY,
@@ -69,7 +71,7 @@ from .const import (
     ControlMode,
     OperatingMode,
 )
-from .controller import RealTimeController
+from .controller import ControlStatus, RealTimeController
 from .consumers import ConsumerConfig, ConsumerState, RuntimeTracker, read_consumer_state
 from .drivers import BatteryDriver, BatteryDriverError, BatteryTelemetry
 from .battery_distribution import (
@@ -100,6 +102,14 @@ from .forecast import (
 )
 from .forecast.accuracy import PvAccuracyTracker
 from .grid_filter import GridPowerFilter
+from .learning import (
+    CapacityLearner,
+    ConsumerLearner,
+    GridTargetLearner,
+    auto_timing,
+    consumption_underestimate,
+    pv_overestimate,
+)
 from .grid_friendly import (
     energy_from_means,
     feed_in_limit,
@@ -129,6 +139,7 @@ DEVICE_INFO_INTERVAL_S = 6 * 3600
 # Store key of the controller data (next to the per battery subentry ids).
 CONTROL_STORE_KEY = "control"
 PV_ACCURACY_STORE_KEY = "pv_accuracy"
+CONSUMERS_STORE_KEY = "consumers"
 HALF_HOUR = timedelta(minutes=30)
 
 
@@ -169,12 +180,23 @@ class BatteryRuntime:
     device_info_read: float | None = None
     limits: BatteryLimitSettings = field(default_factory=BatteryLimitSettings)
     soc_window: SocWindow = field(default_factory=SocWindow)
+    capacity_learner: CapacityLearner = field(default_factory=CapacityLearner)
+    # Plan with the learned usable capacity instead of the configured one.
+    learn_capacity: bool = False
     # Allowed power right now (updated with every poll).
     power_limits: PowerLimits | None = None
     delivery: DeliveryMonitor = field(init=False)
 
     def __post_init__(self) -> None:
         self.delivery = DeliveryMonitor(self.name)
+
+    @property
+    def capacity_wh(self) -> float:
+        """Usable capacity in effect: learned (if switched on and known) or configured."""
+        learned = self.capacity_learner.capacity_wh
+        if self.learn_capacity and learned is not None:
+            return learned
+        return self.driver.capabilities.capacity_wh
 
     @property
     def balancing_requested(self) -> bool:
@@ -258,6 +280,11 @@ class ControlSettings:
     # or start value of the automatic adaptation.
     control_gain: float = DEFAULT_CONTROL_GAIN
     auto_gain: bool = True
+    # Learned instead of the fixed values (see learning).
+    grid_friendly_buffer_auto: bool = False
+    charge_secured_buffer_auto: bool = False
+    grid_targets_auto: bool = False
+    timing_auto: bool = False
     # Charge into the PV feed-in peak instead of as early as possible.
     grid_friendly_charging: bool = True
     # Energy grid friendly charging plans in addition to filling the
@@ -540,6 +567,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.pv_accuracy = PvAccuracyTracker()
         # Monotonic time since the export is above the feed-in cap.
         self.cap_exceeded_since: float | None = None
+        self.grid_targets = GridTargetLearner()
+        self.consumer_learners = {c.subentry_id: ConsumerLearner() for c in consumers}
+        # Consumers whose learned power and thermostat behaviour are used.
+        self.consumer_learning: set[str] = set()
 
     @property
     def _config(self):
@@ -553,6 +584,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         """Restore learned data and follow the grid meter."""
         stored = await self._store.async_load() or {}
         self.pv_accuracy.restore(stored.get(PV_ACCURACY_STORE_KEY))
+        for subentry_id, data in (stored.get(CONSUMERS_STORE_KEY) or {}).items():
+            if subentry_id in self.consumer_learners:
+                self.consumer_learners[subentry_id] = ConsumerLearner.from_dict(data)
         if gain := (stored.get(CONTROL_STORE_KEY) or {}).get("gain"):
             self.controller.gain_adapter.reset(gain)
         for battery in self.batteries:
@@ -562,6 +596,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if loss_curve := data.get("loss_curve"):
                 battery.loss_curve = LossCurveLearner.from_dict(loss_curve)
             battery.cell_monitor.restore(data.get("cell_monitor"))
+            battery.capacity_learner = CapacityLearner.from_dict(data.get("capacity_learner"))
             battery.paused_until = data.get("paused_until")
             battery.pause_reason = data.get("pause_reason")
             if balancer := data.get("balancer"):
@@ -679,8 +714,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 "balancer": b.balancer.as_dict() if b.balancer else None,
                 "paused_until": b.paused_until,
                 "pause_reason": b.pause_reason,
+                "capacity_learner": b.capacity_learner.as_dict(),
             }
             for b in self.batteries
+        }
+        data[CONSUMERS_STORE_KEY] = {
+            subentry_id: learner.as_dict() for subentry_id, learner in self.consumer_learners.items()
         }
         data[CONTROL_STORE_KEY] = {"gain": self.controller.gain_adapter.gain}
         data[PV_ACCURACY_STORE_KEY] = self.pv_accuracy.as_dict()
@@ -698,7 +737,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if grid is not None and config.get(CONF_GRID_POWER_INVERTED, False):
             grid = -grid
         snapshot.grid_power_w = grid
-        self._grid_filter.window_s = self.settings.surplus_average_window_s
+        self._grid_filter.window_s = self.average_window_s
         snapshot.grid_power_filtered_w = self._grid_filter.conservative(now)
         if pv_entity := config.get(CONF_PV_POWER_ENTITY):
             snapshot.pv_power_w = state_as_watts(self.hass.states.get(pv_entity))
@@ -707,6 +746,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         for consumer in self.consumers:
             snapshot.consumers[consumer.subentry_id] = read_consumer_state(
                 self.hass, consumer
+            )
+            # Learned all the time, used when switched on (effective_consumer).
+            command = (
+                self.controller.consumer_command(consumer.subentry_id)
+                if self.settings.operating_mode is OperatingMode.ACTIVE
+                else None
+            )
+            self.consumer_learners[consumer.subentry_id].update(
+                now, command is not None and command > 0, snapshot.consumers[consumer.subentry_id].power_w
             )
 
         if forecast_entries := config.get(CONF_PV_FORECAST_ENTRIES):
@@ -745,6 +793,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if telemetry.ac_power_w is not None:
                 battery.loss_curve.add(telemetry.ac_power_w, telemetry.power_w)
             battery.soc_window.update(telemetry.soc_pct, battery.limits)
+            battery.capacity_learner.update(
+                now, telemetry.soc_pct, telemetry.power_w, battery.driver.capabilities.capacity_wh
+            )
             battery.power_limits = self._power_limits(battery, telemetry)
             self._check_delivery(battery, telemetry, now)
         # After all batteries were read: the balancing share of the surplus
@@ -1068,7 +1119,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             ):
                 continue
             missing = max(0.0, 100.0 - telemetry.soc_pct) / 100
-            total += missing * battery.driver.capabilities.capacity_wh / battery.efficiency.one_way
+            total += missing * battery.capacity_wh / battery.efficiency.one_way
         return total
 
     @staticmethod
@@ -1093,16 +1144,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 continue
             caps = battery.driver.capabilities
             limits = battery.power_limits or self._power_limits(battery, telemetry)
-            energy += telemetry.soc_pct * caps.capacity_wh
-            capacity += caps.capacity_wh
+            energy += telemetry.soc_pct * battery.capacity_wh
+            capacity += battery.capacity_wh
             max_charge += limits.charge_w
             max_discharge += limits.discharge_w
-            weighted_eff += battery.efficiency.one_way * caps.capacity_wh
+            weighted_eff += battery.efficiency.one_way * battery.capacity_wh
             if caps.controllable:
-                min_soc += battery.limits.min_soc_pct * caps.capacity_wh
-                full_soc += battery.limits.max_soc_pct * caps.capacity_wh
+                min_soc += battery.limits.min_soc_pct * battery.capacity_wh
+                full_soc += battery.limits.max_soc_pct * battery.capacity_wh
             else:
-                full_soc += 100.0 * caps.capacity_wh
+                full_soc += 100.0 * battery.capacity_wh
         if not capacity:
             return None
         return BatteryGroup(
@@ -1195,7 +1246,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 must_stay_off=self._runtime.must_stay_off(consumer, now),
                 cap_mode=self.cap_mode(consumer.subentry_id),
             )
-            for consumer in self.consumers
+            for consumer in map(self.effective_consumer, self.consumers)
             if snapshot.is_controllable_now(consumer.subentry_id)
         ]
         # Always set: in active mode the snapshot is a copy of the previous one.
@@ -1215,7 +1266,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 snapshot.pv_forecast,
                 snapshot.consumption_forecast.total,
                 settings.night_reserve_pct,
-                settings.charge_secured_buffer_kwh * 1000,
+                self.secured_buffer_wh(settings, *self._next_day_energy(snapshot, wall_now)),
                 battery.min_soc_pct / 100 * battery.capacity_wh,
                 (
                     lambda moment: battery.full_soc_pct / 100 * battery.capacity_wh
@@ -1242,6 +1293,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 settings.allocation_settings(),
                 peak_shaving_grid_limit_w=peak_limit_w,
                 peak_shaving_soc_threshold_pct=peak_threshold_pct,
+                charge_secured_buffer_wh=self.secured_buffer_wh(
+                    settings, *self._rest_of_day_energy(snapshot, wall_now)
+                ),
+                charge_grid_target_w=self.grid_target_w(settings, charging=True),
+                discharge_grid_target_w=self.grid_target_w(settings, charging=False),
             ),
             snapshot.expected_surplus_wh,
             snapshot.night_discharge.power_w if snapshot.night_discharge else None,
@@ -1270,6 +1326,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 snapshot.grid_power_w,
                 max_discharge_export_w(settings.allocation_settings(), cap_control),
             )
+        if previous_total_w is not None:
+            self._learn_grid_target(snapshot, allocation, battery, settings)
         for subentry_id, power in allocation.consumer_power_w.items():
             self._runtime.update(subentry_id, power > 0, now)
         snapshot.allocation = allocation
@@ -1284,6 +1342,127 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             ),
             now,
         )
+
+    # --- learned values (see learning) ------------------------------------------------
+
+    @property
+    def pv_overestimate(self) -> tuple[float | None, int]:
+        return pv_overestimate(self.pv_accuracy.days)
+
+    @property
+    def consumption_underestimate(self) -> tuple[float | None, int]:
+        accuracy = self.forecaster.accuracy
+        days = [(d.forecast_wh, d.actual_wh) for d in accuracy.days] if accuracy else []
+        return consumption_underestimate(days)
+
+    def grid_friendly_buffer_wh(self, settings: ControlSettings, pv_remaining_wh: float) -> float:
+        """Buffer of grid friendly charging: learned PV overestimate of the rest of the day."""
+        share = self.pv_overestimate[0]
+        if settings.grid_friendly_buffer_auto and share is not None:
+            return share * pv_remaining_wh
+        return settings.grid_friendly_buffer_kwh * 1000
+
+    def secured_buffer_wh(
+        self, settings: ControlSettings, pv_wh: float, consumption_wh: float
+    ) -> float:
+        """Buffer of charge secured and night discharge: PV too high plus consumption too low."""
+        pv_share = self.pv_overestimate[0]
+        consumption_share = self.consumption_underestimate[0]
+        if settings.charge_secured_buffer_auto and pv_share is not None and consumption_share is not None:
+            return pv_share * pv_wh + consumption_share * consumption_wh
+        return settings.charge_secured_buffer_kwh * 1000
+
+    def grid_target_w(self, settings: ControlSettings, *, charging: bool) -> float:
+        learned = self.grid_targets.target_w(charging)
+        if settings.grid_targets_auto and learned is not None:
+            return learned
+        return settings.charge_grid_target_w if charging else settings.discharge_grid_target_w
+
+    @property
+    def learned_timing(self) -> tuple[float, float] | None:
+        """(control interval, averaging window) from the smart meter, None until known."""
+        return auto_timing(self.controller.meter.interval_s)
+
+    @property
+    def control_interval_s(self) -> float:
+        timing = self.learned_timing
+        if self.settings.timing_auto and timing is not None:
+            return timing[0]
+        return self.settings.control_interval_s
+
+    @property
+    def average_window_s(self) -> float:
+        timing = self.learned_timing
+        if self.settings.timing_auto and timing is not None:
+            return timing[1]
+        return self.settings.surplus_average_window_s
+
+    def effective_consumer(self, consumer: ConsumerConfig) -> ConsumerConfig:
+        """The consumer with its learned power and thermostat behaviour, if switched on."""
+        if consumer.subentry_id not in self.consumer_learning:
+            return consumer
+        learner = self.consumer_learners[consumer.subentry_id]
+        nominal = learner.nominal_w
+        return replace(
+            consumer,
+            nominal_power_w=(
+                nominal
+                if nominal is not None and consumer.control_mode is ControlMode.SWITCH
+                else consumer.nominal_power_w
+            ),
+            thermostat_cycles=consumer.thermostat_cycles or learner.thermostat_cycles,
+        )
+
+    @staticmethod
+    def _energy(series: dict[datetime, float] | None, start: datetime, end: datetime) -> float:
+        return sum(wh for moment, wh in (series or {}).items() if start <= moment < end)
+
+    def _rest_of_day_energy(self, snapshot: SystemSnapshot, wall_now: datetime) -> tuple[float, float]:
+        """(PV, consumption) forecast from the current hour until midnight (Wh)."""
+        start = dt_util.as_local(wall_now).replace(minute=0, second=0, microsecond=0)
+        end = dt_util.start_of_local_day(dt_util.as_local(wall_now)) + timedelta(days=1)
+        return self._forecast_energy(snapshot, start, end)
+
+    def _next_day_energy(self, snapshot: SystemSnapshot, wall_now: datetime) -> tuple[float, float]:
+        """(PV, consumption) forecast of the next 24 hours (Wh)."""
+        start = dt_util.as_local(wall_now).replace(minute=0, second=0, microsecond=0)
+        return self._forecast_energy(snapshot, start, start + timedelta(days=1))
+
+    def _forecast_energy(
+        self, snapshot: SystemSnapshot, start: datetime, end: datetime
+    ) -> tuple[float, float]:
+        consumption = snapshot.consumption_forecast
+        pv = (
+            self._energy(snapshot.pv_forecast, start, end) * snapshot.pv_correction
+            if snapshot.pv_forecast
+            else 0.0
+        )
+        return pv, self._energy(consumption.total if consumption else None, start, end)
+
+    def _learn_grid_target(
+        self,
+        snapshot: SystemSnapshot,
+        allocation: Allocation,
+        battery: BatteryGroup | None,
+        settings: ControlSettings,
+    ) -> None:
+        """Sample the grid deviation while the batteries control the grid (active mode)."""
+        grid = snapshot.grid_power_w
+        if (
+            grid is None
+            or battery is None
+            or settings.operating_mode is not OperatingMode.ACTIVE
+            or self.controller.status is not ControlStatus.ACTIVE
+        ):
+            return
+        power = allocation.battery_power_w
+        # Not at a limit, otherwise the batteries cannot correct the deviation.
+        if allocation.strategy in (Strategy.BATTERY_PRIORITY, Strategy.SHARED, Strategy.GRID_FRIENDLY):
+            if 50 < power < 0.9 * battery.max_charge_w:
+                self.grid_targets.add(True, grid, self.grid_target_w(settings, charging=True))
+        elif allocation.strategy is Strategy.SELF_CONSUMPTION:
+            if -0.9 * battery.max_discharge_w < power < -50:
+                self.grid_targets.add(False, grid, self.grid_target_w(settings, charging=False))
 
     def forecast_plan(
         self,
@@ -1321,7 +1500,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             )
             result.feed_in_limit_w = feed_in_limit(
                 surplus,
-                battery.energy_to_full_wh + settings.grid_friendly_buffer_kwh * 1000 + balancing_wh,
+                battery.energy_to_full_wh
+                + self.grid_friendly_buffer_wh(settings, remaining_pv_wh(pv_forecast, wall_now))
+                + balancing_wh,
                 battery.max_charge_w,
             )
             result.feed_in_limit_reason = (
@@ -1356,11 +1537,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     grid_friendly_charging=settings.grid_friendly_charging,
                     # Like the feed-in limit: only with grid friendly charging.
                     charge_buffer_wh=(
-                        settings.grid_friendly_buffer_kwh * 1000
+                        self.grid_friendly_buffer_wh(settings, remaining_pv_wh(pv_forecast, wall_now))
                         if settings.grid_friendly_charging
                         else 0.0
                     ),
-                    night_buffer_wh=settings.charge_secured_buffer_kwh * 1000,
+                    night_buffer_wh=self.secured_buffer_wh(
+                        settings, *self._next_day_energy(snapshot, wall_now)
+                    ),
                     peak_shaving=settings.peak_shaving,
                     peak_shaving_grid_limit_w=result.peak_limit_w,
                     peak_shaving_soc_threshold_pct=result.peak_threshold_pct,
@@ -1439,7 +1622,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if power_w is not None:
             charge_w, discharge_w = power_w
         counted_w = emergency_w = 0.0
-        for consumer in self.consumers:
+        for consumer in map(self.effective_consumer, self.consumers):
             if not snapshot.is_controllable_now(consumer.subentry_id):
                 continue
             power = (

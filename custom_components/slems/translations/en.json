@@ -416,6 +416,15 @@
       },
       "feed_in_cap_export": {
         "name": "Feed-in cap export before the peak"
+      },
+      "learned_values": {
+        "name": "Learned values in use"
+      },
+      "learned_capacity": {
+        "name": "Learned capacity"
+      },
+      "learned_power": {
+        "name": "Learned power"
       }
     },
     "switch": {
@@ -457,6 +466,24 @@
       },
       "feed_in_cap_auto_buffer": {
         "name": "Automatic feed-in cap buffer"
+      },
+      "grid_friendly_buffer_auto": {
+        "name": "Automatic grid friendly charging buffer"
+      },
+      "charge_secured_buffer_auto": {
+        "name": "Automatic charge secured safety buffer"
+      },
+      "grid_targets_auto": {
+        "name": "Automatic grid surplus targets"
+      },
+      "timing_auto": {
+        "name": "Automatic control timing"
+      },
+      "learn_capacity": {
+        "name": "Learn capacity"
+      },
+      "consumer_learning": {
+        "name": "Learn from measurements"
       }
     },
     "number": {

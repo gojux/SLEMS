@@ -42,6 +42,13 @@ ahead and controls precisely:
   800 W), temperature charge limit, cell delta monitoring with active cell
   balancing, detection of batteries that do not respond, repair issues and
   notifications.
+- **Learns instead of asking.** Besides the consumption forecast, SLEMS
+  learns the conversion losses and the response time of the batteries, the
+  smart meter interval, the control gain and the consumption peaks; on request
+  also the forecast buffers, the grid surplus targets, the control timing, the
+  usable capacity of every battery and the power and thermostat behaviour of
+  consumers (see *Learned values*). Every learned value can be switched back
+  to a fixed one.
 - **Transparent and local.** A dashboard with energy flow, forecast chart and
   all settings; everything runs locally in Home Assistant without a cloud. The
   simulation mode shows what SLEMS would do before it controls anything, also
@@ -618,7 +625,7 @@ peaks are lower, the energy balance stays about the same.
 ![Feed-in cap](docs/images/feed_in_cap_en.svg)
 
 Without it the batteries are full at noon and the inverter curtails
-everything above the limit (red, here 1.7 kWh). With it SLEMS keeps enough
+everything above the limit (red, here 7.2 kWh at a limit of 45 %). With it SLEMS keeps enough
 room free; here the night discharge makes the room and the batteries absorb
 the energy above the limit. Needed whenever your grid operator limits the
 feed-in; it takes precedence over the other options.
@@ -711,6 +718,23 @@ house consumption).
 Sensors: *Feed-in cap energy to absorb* (on the day of the next peak, with the
 peaks, the space needed, the export plan and the buffer as attributes) and
 *Feed-in cap export before the peak*.
+
+### Learned values
+
+Each of these values has a switch *… automatic* (or *Learn …*). Off, the value
+you set applies; on, SLEMS uses the learned value as soon as there is enough
+data, until then still yours. The settings show the learned value (*learned*)
+or the note that there is not enough data yet; the diagnostic sensor *Learned
+values in use* has all learned values as attributes.
+
+| Value | Learned from | Needs |
+|---|---|---|
+| Grid friendly charging buffer | recorded PV forecasts: of the days with less PV than forecast the shortfall not exceeded on 80 % of them, applied to the PV still expected today | 14 recorded days |
+| Charge secured safety buffer (also the night discharge target) | the same for the PV plus the consumption forecast being too low (backtest), applied to the rest of the day or the next 24 hours | 14 PV days, 7 consumption days |
+| Grid surplus targets while charging and discharging | how far the grid power swings towards import while the batteries control it; the target keeps the grid on the export side 90 % of the time (20–1000 W) | some controlling in operating mode *active* |
+| Control interval and surplus averaging window | the learned report interval of the smart meter (0.8 × and 3 ×) | a few meter reports |
+| Usable capacity (per battery, *Learn capacity*) | charge and discharge legs over at least 20 % state of charge: DC energy / change of the state of charge (legs with a jump of the state of charge are discarded), median of the last ten | three legs |
+| Power and thermostat of a consumer (per consumer, *Learn from measurements*) | the power while switched on (on/off consumers) and pauses of its own thermostat while it is commanded (then treated like *thermostat cycles by itself*) | 30 samples, two pauses |
 
 ### Further settings (entities)
 

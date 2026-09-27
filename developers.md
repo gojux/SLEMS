@@ -87,6 +87,7 @@ custom_components/slems/
   sensor.py          system and battery sensors
   diagnostics.py     diagnostics download (entry and battery devices), incl. internal states
   simulation.py      websocket command slems/simulate for the simulation tab
+  learning.py        learned values: forecast buffers, capacity, grid targets, timing, consumers
   select.py          operating mode (off / simulation / active)
   switch.py          vacation, import peak shaving
   number.py          numeric runtime settings (averaging window, allocation, peak shaving)
@@ -496,6 +497,39 @@ Integration:
 Part of each consumer: select *With feed-in cap* per controllable consumer
 (`ConsumerCapModeSelect`, restored; `coordinator.consumer_cap_modes`, default
 `emergency`), shown on the consumer card while the cap is on.
+
+### Learned values
+
+`learning.py` (pure) with the learners; the coordinator decides per value
+whether the learned or the set value applies (switch on and learned value
+known):
+
+- `grid_friendly_buffer_wh(settings, pv_remaining_wh)`: `pv_overestimate`
+  share × PV still expected today; used for the feed-in limit and the
+  projection's charge buffer.
+- `secured_buffer_wh(settings, pv_wh, consumption_wh)`: PV share × PV +
+  `consumption_underestimate` share (from the backtest days of
+  `ConsumptionAccuracy`) × consumption; rest of the day for *charge secured*
+  (allocation), next 24 h for the night discharge buffer (real plan and
+  projection).
+- `grid_target_w(settings, charging)`: `GridTargetLearner` samples
+  `max(0, grid + target)` in `plan()` during controller cycles (active mode,
+  control status active, strategy charging or self consumption, battery power
+  not near its limit); 90 % quantile of the last 3000 samples, 20–1000 W,
+  from 300 samples. Not stored (relearned within an hour).
+- `control_interval_s` / `average_window_s`: `auto_timing` of
+  `controller.meter.interval_s`; used by the controller and the grid filter.
+- `BatteryRuntime.capacity_wh`: learned capacity if `learn_capacity` and
+  three estimates; replaces `capabilities.capacity_wh` in the battery group,
+  balancing energy and the stored energy sensors. `CapacityLearner.update`
+  runs with every poll on the DC power (legs ≥ 20 % SoC, idle > 10 min or a
+  direction change ends a leg, a SoC jump > 3 % or a gap > 60 s discards,
+  plausible 50–130 % of the configured capacity). Stored per battery.
+- `effective_consumer(consumer)`: learned `nominal_power_w` (on/off
+  consumers) and `thermostat_cycles` if the consumer's learning switch is on;
+  used in the allocation requests, the feed-in cap and the controller.
+  `ConsumerLearner.update` runs with every poll on the command last sent by
+  the controller (kept while saturated) and the measured power. Stored.
 
 ### Simulation
 
@@ -1032,3 +1066,4 @@ docstring).
 | 2026-09-26 | Batteries can be searched in the network when adding a Venus (port 502 + SoC read). No automatic discovery for now; the way that keeps `single_config_entry` is noted under *Finding batteries*. |
 | 2026-09-27 | A Venus draws about 13 W DC at standby: resting is up to 25 W, a refused balancing charge is below 30 W (instead of ±10 W, which kept a run in its charge leg). The top cell delta is measured once per charge (re-armed below 3.49 V, not armed after a start), because a battery standing full relaxes and the value kept falling. Diagnostics download with the internal states. |
 | 2026-09-27 | Simulation tab: day plans with other settings, batteries and forecasts, calculated by the backend with the real planning code (`forecast_plan`), compared with the real plan; nothing stored. The SoC projection now also respects the maximum grid export while discharging. |
+| 2026-09-27 | Learned values with a switch each (the set value applies when off or without enough data): grid friendly buffer and safety buffer from the forecast errors, grid targets from the grid deviation, control timing from the meter interval, usable capacity per battery, consumer power and thermostat pauses. The night discharge reserve is left for a later decision. |

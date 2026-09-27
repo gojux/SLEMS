@@ -103,6 +103,8 @@ const STRINGS = {
     totalCharged: "Charged in total",
     totalDischarged: "Discharged in total",
     automatic: "automatic",
+    learned: "learned",
+    learnedWaiting: "Not enough data to learn yet; this value applies.",
     cycles: "Charge cycles",
     forecastAccuracy: "Forecast accuracy",
     forecastAccuracyHint: "Consumption: recalculated for the last 14 days; PV: recorded forecasts compared with the production",
@@ -219,6 +221,18 @@ const STRINGS = {
     peakShavingNote:
       "Below the threshold only {usable} above the minimum state of charge ({min}) are left for peaks, about {kwh} kWh.",
     settingHints: {
+      grid_friendly_buffer_auto:
+        "Learns the buffer from the recorded PV forecasts: of the days with less PV than forecast, the shortfall not exceeded on 80 % of them, applied to the PV still expected today. Needs 14 recorded days.",
+      charge_secured_buffer_auto:
+        "Learns the safety buffer (charge secured and night discharge target) from the PV forecast being too high and the consumption forecast being too low, each the error not exceeded on 80 % of such days, applied to the forecasts of the rest of the day or the next 24 hours.",
+      grid_targets_auto:
+        "Learns both grid surplus targets from how far the grid power swings towards import while the batteries control it: the target keeps the grid on the export side 90 % of the time (20–1000 W). Needs some controlling in operating mode active first.",
+      timing_auto:
+        "Derives the control interval (0.8 × the report interval of the smart meter) and the averaging window (3 × the report interval) from the learned smart meter interval.",
+      learn_capacity:
+        "Learns the usable capacity from charge and discharge legs of at least 20 % state of charge (DC energy / change of the state of charge; legs with a jump of the state of charge are discarded). Used for planning once three legs were measured.",
+      consumer_learning:
+        "Uses the measured power while on (for on/off consumers) instead of the configured one, and recognises when the own thermostat switches the consumer off while it is commanded (then treated like \"thermostat cycles by itself\").",
       feed_in_cap:
         "Keeps the export at the grid connection point below PV peak power × limit. From the PV and consumption forecasts SLEMS plans how much energy above the limit the batteries must absorb, keeps that space free (night discharge, otherwise feeding in battery energy before the peak, as late as possible and never above the limit) and warns if it does not work out. Takes precedence over grid friendly charging, night discharge and battery priority.",
       pv_peak_power: "Peak power of the PV system the limit refers to.",
@@ -349,6 +363,8 @@ const STRINGS = {
     totalCharged: "Gesamt geladen",
     totalDischarged: "Gesamt entladen",
     automatic: "automatisch",
+    learned: "gelernt",
+    learnedWaiting: "Noch zu wenig Daten zum Lernen; dieser Wert gilt.",
     cycles: "Ladezyklen",
     forecastAccuracy: "Prognosegüte",
     forecastAccuracyHint: "Verbrauch: für die letzten 14 Tage nachgerechnet; PV: gespeicherte Prognosen mit der Erzeugung verglichen",
@@ -465,6 +481,18 @@ const STRINGS = {
     peakShavingNote:
       "Unter der Schwelle bleiben nur {usable} über dem minimalen Ladezustand ({min}) für Spitzen, etwa {kwh} kWh.",
     settingHints: {
+      grid_friendly_buffer_auto:
+        "Lernt den Puffer aus den aufgezeichneten PV-Prognosen: von den Tagen mit weniger PV als prognostiziert die Abweichung, die an 80 % davon nicht überschritten wurde, angewendet auf die heute noch erwartete PV. Braucht 14 aufgezeichnete Tage.",
+      charge_secured_buffer_auto:
+        "Lernt den Sicherheitspuffer (gesicherte Ladung und Ziel der Nachtentladung) aus zu hoher PV- und zu niedriger Verbrauchsprognose, jeweils die Abweichung, die an 80 % solcher Tage nicht überschritten wurde, angewendet auf die Prognosen des restlichen Tages bzw. der nächsten 24 Stunden.",
+      grid_targets_auto:
+        "Lernt beide Ziel-Netzüberschüsse daraus, wie weit die Netzleistung Richtung Bezug schwankt, während die Batterien regeln: Das Ziel hält das Netz 90 % der Zeit auf der Einspeiseseite (20–1000 W). Braucht zuerst etwas Regelbetrieb im Modus Aktiv.",
+      timing_auto:
+        "Leitet Regelintervall (0,8 × Meldeintervall des Smart Meters) und Mittelungsfenster (3 × Meldeintervall) aus dem gelernten Meldeintervall ab.",
+      learn_capacity:
+        "Lernt die nutzbare Kapazität aus Lade- und Entladevorgängen über mindestens 20 % Ladezustand (DC-Energie / Änderung des Ladezustands; Vorgänge mit einem Sprung des Ladezustands werden verworfen). Wird zur Planung verwendet, sobald drei Vorgänge gemessen sind.",
+      consumer_learning:
+        "Verwendet die gemessene Leistung im eingeschalteten Zustand (bei Ein/Aus-Verbrauchern) statt der eingestellten und erkennt, wenn der eigene Thermostat den Verbraucher trotz Vorgabe abschaltet (dann wie „Thermostat taktet selbst“).",
       feed_in_cap:
         "Hält die Einspeisung am Netzanschlusspunkt unter PV-Leistung × Grenze. Aus PV- und Verbrauchsprognose plant SLEMS, wie viel Energie über der Grenze die Batterien aufnehmen müssen, hält dafür Platz frei (Nachtentladung, sonst Einspeisen von Batterieenergie vor der Spitze, möglichst spät und nie über der Grenze) und warnt, wenn es sich nicht ausgeht. Hat Vorrang vor netzdienlichem Laden, Nachtentladung und Batterievorrang.",
       pv_peak_power: "Spitzenleistung der PV-Anlage, auf die sich die Grenze bezieht.",
@@ -534,7 +562,18 @@ const STRINGS = {
 };
 
 // Settings tab: limits of every battery (translation keys of its entities).
-const BATTERY_SETTINGS = ["min_soc", "max_soc", "max_charge_limit", "max_discharge_limit"];
+const BATTERY_SETTINGS = ["min_soc", "max_soc", "max_charge_limit", "max_discharge_limit", "learn_capacity", "learned_capacity"];
+
+// Settings with a learned value: number key -> [switch key, attribute of the
+// sensor "learned_values" (see learning.py)].
+const LEARNED_SETTINGS = {
+  grid_friendly_buffer: ["grid_friendly_buffer_auto", "grid_friendly_buffer_kwh"],
+  charge_secured_buffer: ["charge_secured_buffer_auto", "charge_secured_buffer_kwh"],
+  charge_grid_target: ["grid_targets_auto", "charge_grid_target_w"],
+  discharge_grid_target: ["grid_targets_auto", "discharge_grid_target_w"],
+  control_interval: ["timing_auto", "control_interval_s"],
+  surplus_average_window: ["timing_auto", "surplus_average_window_s"],
+};
 
 // Settings tab: translation keys of the system entities per group.
 const SETTING_GROUPS = [
@@ -544,6 +583,7 @@ const SETTING_GROUPS = [
     [
       "auto_gain",
       "control_gain",
+      "timing_auto",
       "control_interval",
       "surplus_average_window",
       // Learned values (read only).
@@ -557,7 +597,9 @@ const SETTING_GROUPS = [
     [
       "battery_priority_soc",
       "battery_share_when_secured",
+      "charge_secured_buffer_auto",
       "charge_secured_buffer",
+      "grid_targets_auto",
       "charge_grid_target",
       "discharge_grid_target",
       "discharge_max_grid_export",
@@ -574,7 +616,7 @@ const SETTING_GROUPS = [
       "feed_in_cap_min_buffer",
     ],
   ],
-  ["gridFriendly", ["grid_friendly_charging", "grid_friendly_buffer"]],
+  ["gridFriendly", ["grid_friendly_charging", "grid_friendly_buffer_auto", "grid_friendly_buffer"]],
   ["night", ["night_discharge", "night_reserve"]],
   [
     "peak",
@@ -2281,6 +2323,13 @@ class SlemsPanel extends HTMLElement {
           const control = this._state("consumer_control", c.device_id);
           // Only while the feed-in cap is on.
           const capMode = this._state("cap_mode", c.device_id);
+          const learning = this._state("consumer_learning", c.device_id);
+          const learnedPower = this._state("learned_power", c.device_id);
+          const settings = [
+            learning,
+            learning?.state === "on" ? learnedPower : null,
+            capMode && this._capState() ? capMode : null,
+          ].filter(Boolean);
           const chips = [
             !c.controllable ? t.notControlled : "",
             control?.state === "off" ? t.controlOff : "",
@@ -2301,7 +2350,9 @@ class SlemsPanel extends HTMLElement {
               ${this._row(t.measured, escapeHtml(this._format(measured)), c.power_entity)}
               ${planned ? this._row(t.planned, escapeHtml(this._format(planned)), planned.entity_id) : ""}
               ${c.controllable ? this._row(t.responseTime, response, planned?.entity_id) : ""}
-            </dl>${capMode && this._capState() ? `<div class="settings card-setting">${this._control(capMode)}</div>` : ""}</section>`;
+            </dl>${
+              settings.length ? `<div class="settings card-setting">${settings.map((st) => this._control(st)).join("")}</div>` : ""
+            }</section>`;
         })
         .join("")
     );
@@ -2378,13 +2429,25 @@ class SlemsPanel extends HTMLElement {
     const key = this._hass.entities?.[stateObj.entity_id]?.translation_key;
     const hint = this._t.settingHints[key];
     // Title for the mouse, a click on the icon opens the text (touch screens).
-    const name = hint
+    let name = hint
       ? `${escapeHtml(this._name(stateObj))}<button class="info" data-action="toggle-hint" data-key="${key}" title="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}"><ha-icon icon="mdi:information-outline"></ha-icon></button>${
           this._openHints.has(key) ? `<span class="setting-hint">${escapeHtml(hint)}</span>` : ""
         }`
       : escapeHtml(this._name(stateObj));
     if (domain === "switch") {
       return `<div class="setting"><span>${name}</span>${this._toggle(stateObj, name)}</div>`;
+    }
+    const learned = LEARNED_SETTINGS[key];
+    if (learned && this._state(learned[0])?.state === "on") {
+      const value = this._state("learned_values")?.attributes?.[learned[1]];
+      const unit = stateObj.attributes.unit_of_measurement || "";
+      if (value !== null && value !== undefined) {
+        const language = this._hass?.locale?.language || "en";
+        const text = `${new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(value)} ${unit}`.trim();
+        return `<div class="setting"><span>${name}</span><span class="readonly">${escapeHtml(text)} (${this._t.learned})</span></div>`;
+      }
+      // Not enough data yet: the set value applies and stays editable.
+      name += `<span class="setting-hint">${escapeHtml(this._t.learnedWaiting)}</span>`;
     }
     if (key === "peak_shaving_grid_limit" && this._state("peak_shaving_auto")?.state === "on") {
       const effective = this._state("peak_shaving_limit");

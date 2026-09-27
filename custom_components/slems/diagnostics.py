@@ -112,6 +112,9 @@ def _battery(coordinator: SlemsCoordinator, battery: BatteryRuntime) -> dict:
             "power_w": battery.balancing_power_w,
         },
         "balancing_result": battery.balancing_result,
+        "learn_capacity": battery.learn_capacity,
+        "capacity_in_use_wh": battery.capacity_wh,
+        "capacity_learner": battery.capacity_learner.as_dict(),
     }
 
 
@@ -164,6 +167,24 @@ def _system(coordinator: SlemsCoordinator) -> dict:
         else {"created": _plain(forecast.created), "hours": len(forecast.total)},
         "pv_accuracy_days": _plain(coordinator.pv_accuracy.days),
         "consumers": [_plain(consumer) for consumer in coordinator.consumers],
+        "consumer_learning": {
+            consumer.subentry_id: {
+                "in_use": consumer.subentry_id in coordinator.consumer_learning,
+                "nominal_w": coordinator.consumer_learners[consumer.subentry_id].nominal_w,
+                "thermostat_pauses": coordinator.consumer_learners[consumer.subentry_id].cycles,
+            }
+            for consumer in coordinator.consumers
+        },
+        "learned": {
+            "pv_overestimate": coordinator.pv_overestimate,
+            "consumption_underestimate": coordinator.consumption_underestimate,
+            "charge_grid_target_w": coordinator.grid_targets.target_w(True),
+            "discharge_grid_target_w": coordinator.grid_targets.target_w(False),
+            "grid_target_samples": [len(coordinator.grid_targets.charge), len(coordinator.grid_targets.discharge)],
+            "timing": coordinator.learned_timing,
+            "control_interval_s": coordinator.control_interval_s,
+            "average_window_s": coordinator.average_window_s,
+        },
     }
 
 

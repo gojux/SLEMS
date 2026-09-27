@@ -43,6 +43,13 @@ plant voraus und regelt genau:
   (z. B. 800 W), Ladebegrenzung nach Temperatur, Überwachung des Zell-Deltas mit
   aktivem Zellausgleich, Erkennung nicht reagierender Batterien,
   Reparatur-Einträge und Benachrichtigungen.
+- **Lernt statt zu fragen.** Neben der Verbrauchsprognose lernt SLEMS die
+  Umwandlungsverluste und die Reaktionszeit der Batterien, das Meldeintervall
+  des Smart Meters, die Regelverstärkung und die Verbrauchsspitzen; auf Wunsch
+  auch die Prognose-Puffer, die Ziel-Netzüberschüsse, die Regelzeiten, die
+  nutzbare Kapazität jeder Batterie sowie Leistung und Thermostatverhalten von
+  Verbrauchern (siehe *Gelernte Werte*). Jeder gelernte Wert lässt sich wieder
+  auf einen festen umstellen.
 - **Transparent und lokal.** Ein Dashboard mit Energiefluss,
   Prognose-Diagramm und allen Einstellungen; alles läuft lokal in Home
   Assistant, ohne Cloud. Im Simulationsmodus siehst du, was SLEMS tun würde,
@@ -647,7 +654,7 @@ Spitzenleistung)
 ![Einspeisebegrenzung](docs/images/feed_in_cap_de.svg)
 
 Ohne sind die Batterien mittags voll, und der Wechselrichter regelt alles
-über der Grenze ab (rot, hier 1,7 kWh). Mit hält SLEMS genug Platz frei; hier
+über der Grenze ab (rot, hier 7,2 kWh bei einer Grenze von 45 %). Mit hält SLEMS genug Platz frei; hier
 schafft die Nachtentladung den Platz, und die Batterien nehmen die Energie
 über der Grenze auf. Nötig, sobald dein Netzbetreiber die Einspeisung begrenzt;
 sie hat Vorrang vor den anderen Optionen.
@@ -744,6 +751,24 @@ Netzanschlusspunkt (Einspeisung, nach dem Hausverbrauch).
 Sensoren: *Einspeisebegrenzung: aufzunehmende Energie* (am Tag der nächsten
 Spitze, mit den Spitzen, dem nötigen Platz, dem Einspeiseplan und dem Puffer
 als Attribute) und *Einspeisebegrenzung: vor der Spitze einzuspeisen*.
+
+### Gelernte Werte
+
+Jeder dieser Werte hat einen Schalter *… automatisch* (bzw. *… lernen*). Aus
+gilt dein eingestellter Wert; an verwendet SLEMS den gelernten, sobald genug
+Daten vorliegen, bis dahin weiter deinen. Die Einstellungen zeigen den
+gelernten Wert (*gelernt*) oder den Hinweis, dass noch Daten fehlen; der
+Diagnose-Sensor *Gelernte Werte in Verwendung* enthält alle gelernten Werte als
+Attribute.
+
+| Wert | Gelernt aus | Braucht |
+|---|---|---|
+| Puffer netzdienliches Laden | aufgezeichneten PV-Prognosen: von den Tagen mit weniger PV als prognostiziert die Abweichung, die an 80 % davon nicht überschritten wurde, angewendet auf die heute noch erwartete PV | 14 aufgezeichnete Tage |
+| Sicherheitspuffer gesicherte Ladung (auch Ziel der Nachtentladung) | dasselbe für die PV plus zu niedrige Verbrauchsprognose (Rückrechnung), angewendet auf den restlichen Tag bzw. die nächsten 24 Stunden | 14 PV-Tage, 7 Verbrauchstage |
+| Ziel-Netzüberschuss beim Laden und Entladen | wie weit die Netzleistung Richtung Bezug schwankt, während die Batterien regeln; das Ziel hält das Netz 90 % der Zeit auf der Einspeiseseite (20–1000 W) | etwas Regelbetrieb im Modus *Aktiv* |
+| Regelintervall und Mittelungsfenster | dem gelernten Meldeintervall des Smart Meters (0,8 × und 3 ×) | einige Meldungen des Zählers |
+| Nutzbare Kapazität (je Batterie, *Kapazität lernen*) | Lade- und Entladevorgängen über mindestens 20 % Ladezustand: DC-Energie / Änderung des Ladezustands (Vorgänge mit einem Sprung des Ladezustands werden verworfen), Median der letzten zehn | drei Vorgänge |
+| Leistung und Thermostat eines Verbrauchers (je Verbraucher, *Aus Messwerten lernen*) | der Leistung im eingeschalteten Zustand (Ein/Aus-Verbraucher) und Pausen des eigenen Thermostats trotz Vorgabe (dann wie *Thermostat taktet selbst*) | 30 Messwerte, zwei Pausen |
 
 ### Weitere Einstellungen (Entities)
 
