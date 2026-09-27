@@ -641,7 +641,8 @@ balance), then moves only a share of the way there:
 
 ```
 seen      = battery commands issued at least the battery response time ago
-available = -grid_filtered + seen + controllable consumer power
+consumers = controllable consumers as the meter shows them (seen_consumer_power)
+available = -grid_filtered + seen + consumers
 target    = allocation(available, ...)            # absolute set point
 new       = latest + gain · (target - latest)     # latest = last commanded total
 new       = limit_discharge_export(new, ...)      # hard export limit
@@ -653,6 +654,13 @@ new       = limit_discharge_export(new, ...)      # hard export limit
 - **Dead time compensation** (Smith predictor principle): the energy balance
   uses the command the meter can already show, so a command is not counted
   again while it is on its way. This removes the main cause of oscillation.
+  The controllable consumers are treated the same way
+  (`seen_consumer_power`): until a command reached the grid meter (the
+  consumer's grid response, learned per consumer like the battery response;
+  until then the battery response) the power before it counts, afterwards the
+  measured power, or the commanded one while the consumer's own sensor
+  (response learned separately) has not caught up. Outside the controller
+  cycles (poll, simulation mode) the measured power is used.
 - **No D part**: smart meter values are noisy (switching loads); a derivative
   would amplify that noise. Omnibattery uses a PD controller (Kp 0.35,
   Kd 0.3) because it corrects on the error only, without an energy balance.

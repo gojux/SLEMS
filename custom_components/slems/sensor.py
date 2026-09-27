@@ -792,6 +792,10 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             "response_time_s": self.coordinator.controller.consumer_response_s(
                 self.consumer.subentry_id
             ),
+            # Command until it shows up at the grid meter.
+            "grid_response_time_s": self.coordinator.controller.consumer_grid_response_s(
+                self.consumer.subentry_id
+            ),
         }
 
 

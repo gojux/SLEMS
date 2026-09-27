@@ -281,7 +281,8 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   the cell delta with its balance status, a recommendation for active cell
   balancing and the phase of a running one.
 - **Consumers**: measured and planned power, blocked/saturated state, the
-  learned response time and the *Control active* switch.
+  learned response times (own sensor and at the meter) and the *Control
+  active* switch.
 - **Simulation**: try other settings without changing anything. Next to the
   day chart (today from now on or tomorrow) grid friendly charging, night
   discharge, import peak shaving and the feed-in cap can be switched on and
@@ -527,7 +528,12 @@ meter:
    grid power exactly to the target (e.g. 100 W export while charging).
 2. It only counts battery commands that the smart meter can already show.
    A new command needs some time until it appears in the meter value; SLEMS
-   learns this *response time* and does not count a command twice.
+   learns this *response time* and does not count a command twice. The same
+   applies to the controlled consumers: until a command reaches the meter
+   (*response time at the meter*, learned per consumer) the power before it
+   counts, afterwards the measured power, or the commanded one while the
+   consumer's own sensor has not caught up yet. So meter value, batteries and
+   consumers always describe the same moment.
 3. It does not jump to the calculated value at once but moves a share of the
    way per cycle, the *control gain*. With 0.5, half of the remaining
    deviation is corrected per cycle. A high gain reacts faster, a too high

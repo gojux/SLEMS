@@ -1182,7 +1182,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         """
         if snapshot.grid_power_filtered_w is None:
             return
-        controlled_w = snapshot.controlled_consumer_power_w()
+        controlled_w = measured_controlled_w = snapshot.controlled_consumer_power_w()
+        if previous_total_w is not None:
+            # Controller cycle: the consumers as the grid meter shows them, like
+            # the batteries (commands still on their way count as not yet done).
+            controlled_w = sum(
+                self.controller.consumer_power_seen(subentry_id, state.power_w, now)
+                for subentry_id, state in snapshot.consumers.items()
+                if snapshot.is_controllable_now(subentry_id)
+            )
         enabled_battery_w = sum(
             power
             for battery in self.batteries
@@ -1208,7 +1216,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             + balancing_discharge_w
         )
         house = snapshot.house_power_w
-        load = None if house is None else house - controlled_w
+        load = None if house is None else house - measured_controlled_w
         consumption = snapshot.consumption_forecast
         pv_forecast = snapshot.pv_forecast
         if pv_forecast is not None:

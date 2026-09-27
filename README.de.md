@@ -290,7 +290,8 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
   bestätigt werden), das Zell-Delta mit seinem Status, eine Empfehlung für
   den aktiven Zellausgleich und die Phase eines laufenden Ausgleichs.
 - **Verbraucher**: gemessene und geplante Leistung, gesperrt/gesättigt, die
-  gelernte Reaktionszeit und der Schalter *Steuerung aktiv*.
+  gelernten Reaktionszeiten (eigener Sensor und am Zähler) und der Schalter
+  *Steuerung aktiv*.
 - **Simulation**: andere Einstellungen ausprobieren, ohne etwas zu ändern.
   Neben dem Tagesdiagramm (heute ab jetzt oder morgen) lassen sich
   netzdienliches Laden, Nachtentladung, Bezugsspitzen abfangen und
@@ -548,7 +549,12 @@ Meters:
 2. Es berücksichtigt nur Batteriebefehle, die der Smart Meter bereits zeigen
    kann. Ein neuer Befehl braucht eine Weile, bis er im Zählerwert
    auftaucht; diese *Reaktionszeit* lernt SLEMS und zählt einen Befehl nicht
-   doppelt.
+   doppelt. Dasselbe gilt für die gesteuerten Verbraucher: Bis ein Befehl
+   den Zähler erreicht (*Reaktionszeit am Zähler*, je Verbraucher gelernt),
+   zählt die Leistung davor, danach die gemessene, oder die befohlene, solange
+   der eigene Sensor des Verbrauchers noch nicht nachgezogen hat. So
+   beschreiben Zählerwert, Batterien und Verbraucher immer denselben
+   Zeitpunkt.
 3. Es springt nicht sofort auf den berechneten Wert, sondern geht pro Zyklus
    einen Teil des Weges, die *Regelverstärkung*. Bei 0,5 wird pro Zyklus die
    Hälfte der verbleibenden Abweichung korrigiert. Eine hohe Verstärkung

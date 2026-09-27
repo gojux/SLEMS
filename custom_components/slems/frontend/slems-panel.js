@@ -137,7 +137,8 @@ const STRINGS = {
     resting: "thermostat pause",
     controlOff: "control off",
     controlActive: "Control active",
-    responseTime: "Response time",
+    responseTime: "Response time (own sensor)",
+    gridResponseTime: "Response time at the meter",
     notControlled: "measured only",
     noBatteries: "No batteries configured.",
     noConsumers: "No consumers configured.",
@@ -397,7 +398,8 @@ const STRINGS = {
     resting: "Thermostat-Pause",
     controlOff: "Steuerung aus",
     controlActive: "Steuerung aktiv",
-    responseTime: "Reaktionszeit",
+    responseTime: "Reaktionszeit (eigener Sensor)",
+    gridResponseTime: "Reaktionszeit am Zähler",
     notControlled: "nur gemessen",
     noBatteries: "Keine Batterien konfiguriert.",
     noConsumers: "Keine Verbraucher konfiguriert.",
@@ -2340,16 +2342,16 @@ class SlemsPanel extends HTMLElement {
             .filter(Boolean)
             .map((chip) => `<span class="chip">${chip}</span>`)
             .join("");
-          const response =
-            attrs.response_time_s !== null && attrs.response_time_s !== undefined
-              ? `${Math.round(attrs.response_time_s)} s`
-              : "–";
+          const seconds = (v) => (v === null || v === undefined ? "–" : `${Math.round(v * 10) / 10} s`);
+          const response = seconds(attrs.response_time_s);
+          const gridResponse = seconds(attrs.grid_response_time_s);
           return `<section class="card">
             <div class="card-head"><h2>${escapeHtml(c.name)}</h2><div class="chips">${chips}${control ? this._toggle(control, t.controlActive) : ""}</div></div>
             <dl>
               ${this._row(t.measured, escapeHtml(this._format(measured)), c.power_entity)}
               ${planned ? this._row(t.planned, escapeHtml(this._format(planned)), planned.entity_id) : ""}
               ${c.controllable ? this._row(t.responseTime, response, planned?.entity_id) : ""}
+              ${c.controllable ? this._row(t.gridResponseTime, gridResponse, planned?.entity_id) : ""}
             </dl>${
               settings.length ? `<div class="settings card-setting">${settings.map((st) => this._control(st)).join("")}</div>` : ""
             }</section>`;

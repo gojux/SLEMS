@@ -108,6 +108,10 @@ class RealTimeController:
         self._balancing_commands: dict[str, tuple[float, float]] = {}
         # consumer id -> (commanded power, monotonic time of the command)
         self._consumer_commands: dict[str, tuple[float, float]] = {}
+        # Measured power of a consumer when its last command was sent.
+        self._consumer_before: dict[str, float] = {}
+        # Time a consumer command takes to show up at the grid meter.
+        self.consumer_grid_response: dict[str, StepResponse] = {}
         # consumer id -> monotonic time until which it counts as saturated
         self._saturated_until: dict[str, float] = {}
         # Consumers with a cycling thermostat: since when they draw nothing,
@@ -132,7 +136,10 @@ class RealTimeController:
     def observe_grid(self, grid_w: float) -> None:
         """A new grid power value arrived."""
         self._last_grid_w = grid_w
-        self.battery_response.sample(time.monotonic(), grid_w)
+        now = time.monotonic()
+        self.battery_response.sample(now, grid_w)
+        for learner in self.consumer_grid_response.values():
+            learner.sample(now, grid_w)
 
     @callback
     def observe_consumers(self, snapshot: SystemSnapshot) -> None:
@@ -152,6 +159,28 @@ class RealTimeController:
     def consumer_response_s(self, subentry_id: str) -> float | None:
         learner = self.consumer_response.get(subentry_id)
         return learner.response_s if learner else None
+
+    def consumer_grid_response_s(self, subentry_id: str) -> float | None:
+        learner = self.consumer_grid_response.get(subentry_id)
+        return learner.response_s if learner else None
+
+    def consumer_power_seen(self, subentry_id: str, measured_w: float | None, now: float) -> float:
+        """Power of a consumer as the grid meter shows it right now (see seen_consumer_power)."""
+        command = self._consumer_commands.get(subentry_id)
+        if command is None:
+            return measured_w or 0.0
+        target, since = command
+        grid = self.consumer_grid_response_s(subentry_id)
+        sensor = self.consumer_response.get(subentry_id)
+        return seen_consumer_power(
+            measured_w,
+            self._consumer_before.get(subentry_id),
+            target,
+            now - since,
+            # Until learned: the batteries' response at the meter.
+            grid if grid is not None else self.battery_response.value,
+            sensor.value if sensor else DEFAULT_CONSUMER_RESPONSE_S,
+        )
 
     # --- scheduling -----------------------------------------------------------
 
@@ -523,12 +552,18 @@ class RealTimeController:
                     "set_value",
                     {ATTR_ENTITY_ID: consumer.control_entity_id, "value": value},
                 )
-            self._consumer_commands[subentry_id] = (target, now)
             measured = snapshot.consumers[subentry_id].power_w
+            # The power the meter still shows until the command arrives there.
+            self._consumer_before[subentry_id] = self.consumer_power_seen(subentry_id, measured, now)
+            self._consumer_commands[subentry_id] = (target, now)
             learner = self.consumer_response.setdefault(
                 subentry_id, StepResponse(DEFAULT_CONSUMER_RESPONSE_S, CONSUMER_MIN_STEP_W)
             )
             learner.command(now, measured, target - (measured or 0.0))
+            # More consumption raises the grid power (+import).
+            self.consumer_grid_response.setdefault(
+                subentry_id, StepResponse(DEFAULT_CONSUMER_RESPONSE_S)
+            ).command(now, self._last_grid_w, target - self._consumer_before[subentry_id])
 
     async def async_release_consumer(self, consumer: ConsumerConfig) -> None:
         """Set a consumer to 0 W / off once; SLEMS leaves it alone afterwards."""
@@ -605,3 +640,26 @@ def _clamp_to_entity(value: float, state) -> float:
     if maximum is not None:
         value = min(float(maximum), value)
     return round(value / step) * step
+
+
+def seen_consumer_power(
+    measured_w: float | None,
+    before_w: float | None,
+    target_w: float,
+    elapsed_s: float,
+    grid_delay_s: float,
+    sensor_delay_s: float,
+) -> float:
+    """Power of a consumer as the grid meter shows it ``elapsed_s`` after a command.
+
+    The control combines the grid power with the consumer powers; all must
+    describe the same moment. Until the command reached the meter
+    (``grid_delay_s``) the meter still shows the power before it; afterwards
+    the measured power, or the commanded one while the consumer's own sensor
+    has not caught up yet (``sensor_delay_s``).
+    """
+    if elapsed_s < grid_delay_s and before_w is not None:
+        return before_w
+    if elapsed_s < sensor_delay_s or measured_w is None:
+        return target_w
+    return measured_w
