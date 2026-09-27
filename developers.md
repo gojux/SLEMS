@@ -86,6 +86,7 @@ custom_components/slems/
   entity.py          base classes (system device, battery devices)
   sensor.py          system and battery sensors
   diagnostics.py     diagnostics download (entry and battery devices), incl. internal states
+  simulation.py      websocket command slems/simulate for the simulation tab
   select.py          operating mode (off / simulation / active)
   switch.py          vacation, import peak shaving
   number.py          numeric runtime settings (averaging window, allocation, peak shaving)
@@ -495,6 +496,24 @@ Integration:
 Part of each consumer: select *With feed-in cap* per controllable consumer
 (`ConsumerCapModeSelect`, restored; `coordinator.consumer_cap_modes`, default
 `emergency`), shown on the consumer card while the cap is on.
+
+### Simulation
+
+`simulation.py`, websocket command `slems/simulate` (registered once per HA
+run in `async_setup_entry`). The request carries `settings` (fields of
+`ControlSettings` listed in `SETTINGS`, the ones that change the plans),
+`battery` (total capacity, min/max SoC, charge/discharge power of the group)
+and `pv_pct` / `consumption_pct`. It builds a `ControlSettings` copy, a
+modified `BatteryGroup` (the SoC in % stays) and a snapshot copy with scaled
+forecasts, and calls `SlemsCoordinator.forecast_plan` – the same method the
+real `plan()` uses for the feed-in limit, feed-in cap, peak shaving limit, SoC
+projection and day plans. The reply has the day plans, key figures per day
+from `grid_w` of the rows (`_metrics`: export/import energy of the projected
+part, peaks, energy above the cap limit, last SoC) for the simulation and the
+real plan, and the starting values (`base`). Nothing is stored; the panel
+starts from `base` on every visit (`_sim` state, 250 ms debounce). The chart
+reuses `_chartRows(plans, compare)` / `_renderDayChart(options)`; the real
+plan appears as `socCompare` / `exportCompare` (grey dotted, drawn first).
 
 ### Dashboard
 
@@ -1012,3 +1031,4 @@ docstring).
 | 2026-09-26 | Forecast.Solar periods are re-keyed from their end to their start when read (before, its forecast was used one hour late everywhere). Day chart in half hours with mean power, measured charging from the 5 minute statistics next to the planned one. |
 | 2026-09-26 | Batteries can be searched in the network when adding a Venus (port 502 + SoC read). No automatic discovery for now; the way that keeps `single_config_entry` is noted under *Finding batteries*. |
 | 2026-09-27 | A Venus draws about 13 W DC at standby: resting is up to 25 W, a refused balancing charge is below 30 W (instead of ±10 W, which kept a run in its charge leg). The top cell delta is measured once per charge (re-armed below 3.49 V, not armed after a start), because a battery standing full relaxes and the value kept falling. Diagnostics download with the internal states. |
+| 2026-09-27 | Simulation tab: day plans with other settings, batteries and forecasts, calculated by the backend with the real planning code (`forecast_plan`), compared with the real plan; nothing stored. The SoC projection now also respects the maximum grid export while discharging. |

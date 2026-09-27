@@ -184,6 +184,33 @@ const STRINGS = {
     capLine: "PV limit of the feed-in cap",
     capExcess: "Above the limit",
     capCurtailed: "Curtailed",
+    simulation: "Simulation",
+    simIntro:
+      "Try other settings: the chart and the key figures show how today and tomorrow would look, calculated from the current state of charge and the current forecasts. Nothing here is saved or used by SLEMS; grey dotted: the plan with the current settings. Consumers controlled by SLEMS are not simulated.",
+    simToday: "Simulation: today",
+    simTomorrow: "Simulation: tomorrow (expected)",
+    simReset: "Reset to the current settings",
+    simForecast: "Forecast",
+    simPv: "PV forecast change",
+    simConsumption: "Consumption forecast change",
+    simBatteries: "Batteries (all together)",
+    simCapacity: "Usable capacity",
+    simMinSoc: "Minimum state of charge",
+    simMaxSoc: "Maximum state of charge",
+    simChargePower: "Charge power",
+    simDischargePower: "Discharge power",
+    simMetricsToday: "Key figures today (from now on)",
+    simMetricsTomorrow: "Key figures tomorrow",
+    simCurrent: "Current settings",
+    simSimulated: "Simulation",
+    mExport: "Feed-in",
+    mImport: "Grid import",
+    mMaxImport: "Highest import",
+    mMaxExport: "Highest feed-in",
+    mCurtailed: "Curtailed",
+    mSocEnd: "State of charge at midnight",
+    exportCompare: "Feed-in (current settings)",
+    socCompare: "State of charge (current settings)",
     status: "Status",
     tileHints: {
       feed_in_limit:
@@ -403,6 +430,33 @@ const STRINGS = {
     capLine: "PV-Grenze der Einspeisebegrenzung",
     capExcess: "Über der Grenze",
     capCurtailed: "Abgeregelt",
+    simulation: "Simulation",
+    simIntro:
+      "Probiere andere Einstellungen aus: Diagramm und Kennzahlen zeigen, wie heute und morgen aussehen würden, gerechnet ab dem aktuellen Ladezustand mit den aktuellen Prognosen. Nichts davon wird gespeichert oder von SLEMS verwendet; grau gepunktet: der Plan mit den aktuellen Einstellungen. Von SLEMS gesteuerte Verbraucher werden nicht simuliert.",
+    simToday: "Simulation: heute",
+    simTomorrow: "Simulation: morgen (erwartet)",
+    simReset: "Auf aktuelle Einstellungen zurücksetzen",
+    simForecast: "Prognose",
+    simPv: "PV-Prognose ändern",
+    simConsumption: "Verbrauchsprognose ändern",
+    simBatteries: "Batterien (alle zusammen)",
+    simCapacity: "Nutzbare Kapazität",
+    simMinSoc: "Minimaler Ladezustand",
+    simMaxSoc: "Maximaler Ladezustand",
+    simChargePower: "Ladeleistung",
+    simDischargePower: "Entladeleistung",
+    simMetricsToday: "Kennzahlen heute (ab jetzt)",
+    simMetricsTomorrow: "Kennzahlen morgen",
+    simCurrent: "Aktuelle Einstellungen",
+    simSimulated: "Simulation",
+    mExport: "Einspeisung",
+    mImport: "Netzbezug",
+    mMaxImport: "Höchster Bezug",
+    mMaxExport: "Höchste Einspeisung",
+    mCurtailed: "Abgeregelt",
+    mSocEnd: "Ladezustand um Mitternacht",
+    exportCompare: "Einspeisung (aktuelle Einstellungen)",
+    socCompare: "Ladezustand (aktuelle Einstellungen)",
     status: "Status",
     tileHints: {
       feed_in_limit:
@@ -559,17 +613,20 @@ function runs(rows, key) {
   return result;
 }
 
-/** One polyline per run of points; a single point becomes a dot. */
+/** One polyline per run of points; a single point becomes a dot. ``dash``: true or a dash pattern. */
 function polylines(pointRuns, color, dash) {
   return pointRuns
     .map((points) =>
       points.length === 1
         ? `<circle cx="${points[0][0]}" cy="${points[0][1]}" r="2.5" fill="${color}"/>`
         : `<polyline points="${points.map((p) => p.join(",")).join(" ")}" fill="none" stroke="${color}"
-          stroke-width="2" stroke-linejoin="round" stroke-linecap="round" ${dash ? 'stroke-dasharray="5 4"' : ""}/>`
+          stroke-width="2" stroke-linejoin="round" stroke-linecap="round" ${dash ? `stroke-dasharray="${dash === true ? "5 4" : dash}"` : ""}/>`
     )
     .join("");
 }
+
+// Comparison series of the simulation (plan with the current settings): dotted.
+const COMPARE_DASH = "1 4";
 
 // localStorage key of the day chart series hidden via the legend.
 const HIDDEN_SERIES_KEY = "slems-hidden-series";
@@ -607,6 +664,8 @@ class SlemsPanel extends HTMLElement {
     super();
     this._tab = "overview";
     this._showTable = false;
+    // Simulation tab: form values, last result (see _simulate).
+    this._sim = { form: null, result: null, serial: 0, timer: null, requested: false };
     // Series of the day chart switched off in its legend (kept in the browser).
     this._hiddenSeries = new Set();
     try {
@@ -1130,6 +1189,10 @@ class SlemsPanel extends HTMLElement {
     this.shadowRoot.getElementById("tabs").addEventListener("click", (event) => {
       const tab = event.target.closest("button")?.dataset.tab;
       if (tab) {
+        if (tab === "simulation" && this._tab !== "simulation") {
+          // Starts with the real settings on every visit.
+          this._sim = { form: null, result: null, serial: this._sim.serial + 1, timer: null, requested: false };
+        }
         this._tab = tab;
         this._sections = {};
         this._render();
@@ -1182,7 +1245,7 @@ class SlemsPanel extends HTMLElement {
     menu.hass = this._hass;
     menu.narrow = this._narrow;
     const t = this._t;
-    const tabs = ["overview", "batteries", "consumers", "settings"];
+    const tabs = ["overview", "batteries", "consumers", "simulation", "settings"];
     this._setSection(
       "tabs",
       tabs
@@ -1203,6 +1266,7 @@ class SlemsPanel extends HTMLElement {
     if (this._tab === "overview") this._renderOverview();
     else if (this._tab === "batteries") this._renderBatteries();
     else if (this._tab === "consumers") this._renderConsumers();
+    else if (this._tab === "simulation") this._renderSimulation();
     else this._renderSettings();
   }
 
@@ -1216,6 +1280,16 @@ class SlemsPanel extends HTMLElement {
         </div>
         <section class="card"><div id="daychart"></div></section>
         <section class="card"><div id="accuracy"></div></section>`;
+    }
+    if (this._tab === "simulation") {
+      return `
+        <div class="sim-layout">
+          <div class="sim-main">
+            <section class="card"><div id="daychart"></div></section>
+            <section class="card"><div id="simmetrics"></div></section>
+          </div>
+          <section class="card sim-side"><div id="simintro"></div><div id="simcontrols"></div></section>
+        </div>`;
     }
     return `<div id="${this._tab}-list" class="grid cards"></div>`;
   }
@@ -1536,10 +1610,27 @@ class SlemsPanel extends HTMLElement {
     }
   }
 
-  _chartRows() {
+  /** Day plans of the real planning: {today, tomorrow} (rows of the backend). */
+  _realPlans() {
     const attributes = this._state("feed_in_limit")?.attributes || {};
+    return { today: attributes.day_plan || [], tomorrow: attributes.day_plan_tomorrow || [] };
+  }
+
+  /**
+   * Chart rows of ``plans`` for the selected day; ``compare`` (other plans)
+   * adds their state of charge and feed-in as comparison series.
+   */
+  _chartRows(plans = this._realPlans(), compare = null) {
     const today = this._chartDay === "today";
-    const plan = (today ? attributes.day_plan : attributes.day_plan_tomorrow) || [];
+    const plan = (today ? plans.today : plans.tomorrow) || [];
+    const comparePlan = compare ? (today ? compare.today : compare.tomorrow) || [] : [];
+    const exportOf = (row) =>
+      row?.grid_w === null || row?.grid_w === undefined
+        ? null
+        : Math.min(
+            Math.max(0, -row.grid_w),
+            row.cap_line_wh === undefined ? Infinity : row.cap_line_wh - (row.consumption_wh ?? 0)
+          );
     // Half hours; all values are mean powers (W). The plan rows are hourly
     // (Wh per hour = mean W); PV and the feed-in cap also come per half hour.
     const perHalf = (wh) => (wh === null || wh === undefined ? null : wh * 2);
@@ -1555,13 +1646,9 @@ class SlemsPanel extends HTMLElement {
           consumptionForecast: row.consumption_wh,
           plannedCharge: row.planned_charge_w,
           // With the feed-in cap the inverter curtails the export above the limit.
-          exportForecast:
-            row.grid_w === null || row.grid_w === undefined
-              ? null
-              : Math.min(
-                  Math.max(0, -row.grid_w),
-                  row.cap_line_wh === undefined ? Infinity : row.cap_line_wh - (row.consumption_wh ?? 0)
-                ),
+          exportForecast: exportOf(row),
+          socCompare: compare && half ? comparePlan[hour]?.soc_pct ?? null : null,
+          exportCompare: compare ? exportOf(comparePlan[hour]) : null,
           // Projected total state of charge at the end of the hour.
           socForecast: half ? row.soc_pct : null,
           // Feed-in cap: PV level above which is capped, power above it and the curtailed part.
@@ -1580,24 +1667,29 @@ class SlemsPanel extends HTMLElement {
   }
 
   /** Where the projected state of charge line starts: [hour of day, %]. */
-  _socStart() {
+  _socStart(todayPlan = this._realPlans().today) {
     if (this._chartDay === "today") {
       const now = new Date();
       const soc = this._number(this._state("battery_soc_total"));
       return soc === null ? null : [now.getHours() + now.getMinutes() / 60, soc];
     }
-    const today = this._state("feed_in_limit")?.attributes?.day_plan || [];
-    const last = today[today.length - 1]?.soc_pct;
+    const last = todayPlan[todayPlan.length - 1]?.soc_pct;
     return last === null || last === undefined ? null : [0, last];
   }
 
-  _renderDayChart() {
+  /**
+   * The day chart in section "daychart"; the simulation passes its rows,
+   * titles and the plan of today (start of tomorrow's state of charge).
+   */
+  _renderDayChart(options = {}) {
     const t = this._t;
-    const rows = this._chartRows();
+    const rows = options.rows || this._chartRows();
+    this._socStartPlan = options.todayPlan || this._realPlans().today;
     const day = this._chartDay;
+    const titles = options.titles || [t.dayChart, t.dayChartTomorrow];
     const header = `
       <div class="chart-head">
-        <div><h2>${day === "today" ? t.dayChart : t.dayChartTomorrow}</h2><span class="hint">${t.dayChartHint}</span></div>
+        <div><h2>${day === "today" ? titles[0] : titles[1]}</h2><span class="hint">${t.dayChartHint}</span></div>
         <div class="chart-actions">
           <div class="segmented" role="group">
             <button data-action="day-today" class="${day === "today" ? "active" : ""}" aria-pressed="${day === "today"}">${t.today}</button>
@@ -1632,7 +1724,9 @@ class SlemsPanel extends HTMLElement {
       return `<button class="legend-item${hidden ? " off" : ""}" data-action="toggle-series" data-series="${key}" aria-pressed="${!hidden}"><svg width="22" height="10">${
         style === "bar"
           ? `<rect x="4" y="0" width="14" height="10" rx="2" fill="${color}"/>`
-          : `<line x1="1" y1="5" x2="21" y2="5" stroke="${color}" stroke-width="2" ${style === "dash" ? 'stroke-dasharray="4 3"' : ""}/>`
+          : `<line x1="1" y1="5" x2="21" y2="5" stroke="${color}" stroke-width="2" stroke-linecap="round" ${
+              style === "dash" ? 'stroke-dasharray="4 3"' : style === "dot" ? `stroke-dasharray="${COMPARE_DASH}"` : ""
+            }/>`
       }</svg>${label}</button>`;
     };
     const c = this._colors;
@@ -1642,6 +1736,7 @@ class SlemsPanel extends HTMLElement {
       ${item("exportForecast", c.grid, t.exportForecast, "dash")}${item("exportActual", c.grid, t.exportActual, "solid")}
       ${item("plannedCharge", `${c.battery}66`, t.plannedCharge, "bar")}${item("actualCharge", c.battery, t.actualCharge, "bar")}
       ${item("socForecast", c.battery, t.socForecast, "dash")}${item("socActual", c.battery, t.socActual, "solid")}
+      ${item("exportCompare", c.muted, t.exportCompare, "dot")}${item("socCompare", c.muted, t.socCompare, "dot")}
       ${item("capLine", c.muted, t.capLine, "dash")}${item("capExcess", `${c.pv}73`, t.capExcess, "bar")}
       ${item("capCurtailed", CURTAILED_COLOR, t.capCurtailed, "bar")}</div>`;
   }
@@ -1654,6 +1749,7 @@ class SlemsPanel extends HTMLElement {
     const height = width < 500 ? 220 : 260;
     // The total state of charge is drawn on top with its own scale (0–100 %) on the right.
     const hasSoc = rows.some((r) => r.socForecast !== null && r.socForecast !== undefined) ||
+      rows.some((r) => r.socCompare !== null && r.socCompare !== undefined) ||
       rows.some((r) => r.socActual !== null && r.socActual !== undefined);
     const pad = { left: 52, right: hasSoc ? 46 : 22, top: 10, bottom: 26 };
     const plotW = width - pad.left - pad.right;
@@ -1664,7 +1760,7 @@ class SlemsPanel extends HTMLElement {
     // The scale follows the series shown.
     const scaled = [
       "pvForecast", "consumptionForecast", "plannedCharge", "actualCharge", "pvActual", "consumptionActual",
-      "exportForecast", "exportActual",
+      "exportForecast", "exportActual", "exportCompare",
     ].filter(shown);
     const values = rows.flatMap((r) => scaled.map((key) => r[key]));
     // The feed-in limit only widens the scale where energy lies above it.
@@ -1680,12 +1776,17 @@ class SlemsPanel extends HTMLElement {
       for (const v of [0, 25, 50, 75, 100]) {
         socLines.push(`<text x="${width - pad.right + 6}" y="${ys(v) + 4}" text-anchor="start" class="tick">${escapeHtml(this._percent(v))}</text>`);
       }
-      const start = this._socStart();
+      const start = this._socStart(this._socStartPlan);
       // Forecast points at the end of each hour (second half hour rows).
       const hourEnds = rows.filter((r) => r.slot % 2 === 1);
       const forecast = runs(hourEnds, "socForecast").map((run) => run.map((r) => [x(r.hour + 0.5), ys(r.socForecast)]));
       if (start && forecast.length) forecast[0].unshift([x(start[0]), ys(start[1])]);
       const actual = runs(rows, "socActual").map((run) => run.map((r) => [x(r.hour + 0.25), ys(r.socActual)]));
+      // The comparison first, so the simulation is drawn on top.
+      if (shown("socCompare")) {
+        const compare = runs(hourEnds, "socCompare").map((run) => run.map((r) => [x(r.hour + 0.5), ys(r.socCompare)]));
+        socLines.push(polylines(compare, c.muted, COMPARE_DASH));
+      }
       if (shown("socForecast")) socLines.push(polylines(forecast, c.battery, true));
       if (shown("socActual")) socLines.push(polylines(actual, c.battery, false));
     }
@@ -1726,6 +1827,7 @@ class SlemsPanel extends HTMLElement {
       consumptionForecast: () => true,
       capLine: () => true,
       exportForecast: () => true,
+      exportCompare: () => true,
       pvForecast: (r) => r.pvHourly,
     };
     const path = (key, color, dash) => {
@@ -1769,7 +1871,7 @@ class SlemsPanel extends HTMLElement {
         ${hourLines}${gridLines.join("")}${hourTicks}${bars}${capBars}${capLine}
         ${path("pvForecast", c.pv, true)}${path("pvActual", c.pv, false)}
         ${path("consumptionForecast", c.house, true)}${path("consumptionActual", c.house, false)}
-        ${path("exportForecast", c.grid, true)}${path("exportActual", c.grid, false)}
+        ${path("exportCompare", c.muted, COMPARE_DASH)}${path("exportForecast", c.grid, true)}${path("exportActual", c.grid, false)}
         ${socLines.join("")}
         ${showNow ? `<line x1="${x(nowHour)}" x2="${x(nowHour)}" y1="${pad.top}" y2="${plotBottom}" stroke="${c.muted}" stroke-dasharray="2 3"/>
         <text x="${x(nowHour) + 4}" y="${pad.top + 10}" class="tick">${this._t.now}</text>` : ""}
@@ -1844,6 +1946,7 @@ class SlemsPanel extends HTMLElement {
       ${entry(c.grid, t.exportForecast, v("exportForecast"))}${entry(c.grid, t.exportActual, v("exportActual"))}
       ${entry(c.battery, t.plannedCharge, v("plannedCharge"))}${entry(c.battery, t.actualCharge, v("actualCharge"))}
       ${percentEntry(c.battery, t.socForecast, v("socForecast"))}${percentEntry(c.battery, t.socActual, v("socActual"))}
+      ${entry(c.muted, t.exportCompare, v("exportCompare"))}${percentEntry(c.muted, t.socCompare, v("socCompare"))}
       ${v("capExcess") > 0 ? entry(c.pv, t.capExcess, v("capExcess")) : ""}${v("capCurtailed") > 0 ? entry(CURTAILED_COLOR, t.capCurtailed, v("capCurtailed")) : ""}`;
     tooltip.hidden = false;
     // Position relative to the chart card, next to the cursor.
@@ -1860,6 +1963,191 @@ class SlemsPanel extends HTMLElement {
     const tooltip = this.shadowRoot?.getElementById("tooltip");
     if (tooltip) tooltip.hidden = true;
     this.shadowRoot?.getElementById("crosshair")?.setAttribute("visibility", "hidden");
+  }
+
+  // --- simulation ------------------------------------------------------------------
+  //
+  // Day plans with other settings, calculated by SLEMS (slems/simulate) from
+  // the current state of charge and forecasts. Nothing is stored or used by
+  // the control; the values start with the real settings on every visit.
+
+  async _simulate() {
+    if (!this._hass) return;
+    const sim = this._sim;
+    const request = { type: `${DOMAIN}/simulate` };
+    if (sim.form) Object.assign(request, JSON.parse(JSON.stringify(sim.form)));
+    const serial = ++sim.serial;
+    try {
+      const result = await this._hass.callWS(request);
+      if (serial !== sim.serial) return;
+      sim.result = result;
+      if (!sim.form) sim.form = this._simBaseForm(result.base);
+    } catch (err) {
+      console.error("SLEMS: simulation failed", err);
+      sim.result = { available: false };
+    }
+    this._sections.daychart = undefined;
+    this._sections.simcontrols = undefined;
+    this._queueRender();
+  }
+
+  _simBaseForm(base) {
+    return {
+      settings: { ...(base?.settings || {}) },
+      battery: { ...(base?.battery || {}) },
+      pv_pct: 0,
+      consumption_pct: 0,
+    };
+  }
+
+  _simSchedule() {
+    clearTimeout(this._sim.timer);
+    this._sim.timer = setTimeout(() => this._simulate(), 250);
+  }
+
+  _renderSimulation() {
+    const t = this._t;
+    const sim = this._sim;
+    if (!sim.result) {
+      if (!sim.requested) {
+        sim.requested = true;
+        this._simulate();
+      }
+      this._setSection("daychart", `<p class="empty">…</p>`);
+      return;
+    }
+    this._setSection("simintro", `<p class="hint">${escapeHtml(t.simIntro)}</p>`);
+    this._setSection("simcontrols", this._simControls());
+    if (!sim.result.available) {
+      this._setSection("daychart", `<p class="empty">${t.noData}</p>`);
+      this._setSection("simmetrics", "");
+      return;
+    }
+    const plans = { today: sim.result.day_plan, tomorrow: sim.result.day_plan_tomorrow };
+    this._fetchStats(false);
+    this._renderDayChart({
+      rows: this._chartRows(plans, this._realPlans()),
+      titles: [t.simToday, t.simTomorrow],
+      todayPlan: plans.today,
+    });
+    this._setSection("simmetrics", this._simMetrics());
+  }
+
+  _simMetrics() {
+    const t = this._t;
+    const day = this._chartDay;
+    const real = this._sim.result.real_metrics?.[day];
+    const simulated = this._sim.result.metrics?.[day];
+    if (!real || !simulated) return "";
+    const kwh = (v) => this._kwh((v ?? 0) * 1000);
+    const watts = (v) => this._watts(v ?? 0);
+    const percent = (v) => (v === null || v === undefined ? "–" : this._percent(v));
+    const rows = [
+      [t.mExport, "export_kwh", kwh],
+      [t.mImport, "import_kwh", kwh],
+      [t.mMaxImport, "max_import_w", watts],
+      [t.mMaxExport, "max_export_w", watts],
+      [t.mCurtailed, "curtailed_kwh", kwh],
+      [t.mSocEnd, "soc_end_pct", percent],
+    ];
+    return `<h3>${escapeHtml(day === "today" ? t.simMetricsToday : t.simMetricsTomorrow)}</h3>
+      <div class="table-wrap"><table class="sim-metrics">
+      <thead><tr><th></th><th>${escapeHtml(t.simCurrent)}</th><th>${escapeHtml(t.simSimulated)}</th></tr></thead>
+      <tbody>${rows
+        .map(([label, key, format]) => {
+          const changed = real[key] !== simulated[key];
+          return `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(format(real[key]))}</td>
+            <td class="${changed ? "changed" : ""}">${escapeHtml(format(simulated[key]))}</td></tr>`;
+        })
+        .join("")}</tbody></table></div>`;
+  }
+
+  /** Input for a simulation value; entity keys take name, unit and limits from the real setting. */
+  _simField(path, { entity, label, unit, min, max, step, disabled = false } = {}) {
+    const t = this._t;
+    const [group, key] = path.includes(".") ? path.split(".") : [null, path];
+    const form = this._sim.form;
+    const value = group ? form[group]?.[key] : form[key];
+    const stateObj = entity ? this._state(entity) : null;
+    const a = stateObj?.attributes || {};
+    const name = label ?? (stateObj ? this._name(stateObj) : key);
+    const hint = entity ? t.settingHints[entity] : null;
+    const info = hint
+      ? `<button class="info" data-action="toggle-hint" data-key="${entity}" title="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}"><ha-icon icon="mdi:information-outline"></ha-icon></button>${
+          this._openHints.has(entity) ? `<span class="setting-hint">${escapeHtml(hint)}</span>` : ""
+        }`
+      : "";
+    if (typeof value === "boolean") {
+      return `<div class="setting"><span>${escapeHtml(name)}${info}</span><label class="switch">
+        <input type="checkbox" data-sim="${path}" data-kind="sim-bool" ${value ? "checked" : ""}${disabled ? " disabled" : ""}><span></span></label></div>`;
+    }
+    const stepValue = step ?? a.step ?? 1;
+    const decimals = String(stepValue).split(".")[1]?.length ?? 0;
+    const shown = Number.isFinite(value) ? Number(value).toFixed(decimals) : "";
+    return `<div class="setting"><span>${escapeHtml(name)}${info}</span><span class="number">
+      <input type="number" data-sim="${path}" data-kind="sim-number" value="${escapeHtml(shown)}"
+        min="${min ?? a.min ?? ""}" max="${max ?? a.max ?? ""}" step="${stepValue}"${disabled ? " disabled" : ""}><span class="unit">${escapeHtml(unit ?? a.unit_of_measurement ?? "")}</span></span></div>`;
+  }
+
+  _simControls() {
+    const t = this._t;
+    const s = this._sim.form?.settings || {};
+    const field = (path, options) => this._simField(path, options);
+    const setting = (key, entity, options = {}) => field(`settings.${key}`, { entity, ...options });
+    const group = (title, body) => `<div class="sim-group"><h3>${escapeHtml(title)}</h3><div class="settings">${body}</div></div>`;
+    const option = (title, switchKey, switchEntity, children) =>
+      group(title, setting(switchKey, switchEntity) + (s[switchKey] ? children : ""));
+    return `
+      <div class="sim-actions"><button class="link" data-action="sim-reset">${escapeHtml(t.simReset)}</button></div>
+      ${group(
+        t.simForecast,
+        field("pv_pct", { label: t.simPv, unit: "%", min: -90, max: 100, step: 5 }) +
+          field("consumption_pct", { label: t.simConsumption, unit: "%", min: -90, max: 200, step: 5 })
+      )}
+      ${group(
+        t.simBatteries,
+        field("battery.capacity_kwh", { label: t.simCapacity, unit: "kWh", min: 0.5, max: 500, step: 0.1 }) +
+          field("battery.min_soc_pct", { label: t.simMinSoc, unit: "%", min: 0, max: 100, step: 1 }) +
+          field("battery.max_soc_pct", { label: t.simMaxSoc, unit: "%", min: 0, max: 100, step: 1 }) +
+          field("battery.max_charge_w", { label: t.simChargePower, unit: "W", min: 0, max: 100000, step: 100 }) +
+          field("battery.max_discharge_w", { label: t.simDischargePower, unit: "W", min: 0, max: 100000, step: 100 })
+      )}
+      ${group(
+        t.groups.priority,
+        setting("charge_secured_buffer_kwh", "charge_secured_buffer") +
+          setting("discharge_max_grid_export_w", "discharge_max_grid_export", { max: 100000 })
+      )}
+      ${option(t.groups.gridFriendly, "grid_friendly_charging", "grid_friendly_charging",
+        setting("grid_friendly_buffer_kwh", "grid_friendly_buffer"))}
+      ${option(t.groups.night, "night_discharge", "night_discharge", setting("night_reserve_pct", "night_reserve"))}
+      ${option(t.groups.peak, "peak_shaving", "peak_shaving",
+        setting("peak_shaving_auto", "peak_shaving_auto") +
+          setting("peak_shaving_grid_limit_w", "peak_shaving_grid_limit", { disabled: s.peak_shaving_auto }) +
+          setting("peak_shaving_soc_threshold_pct", "peak_shaving_soc_threshold", { min: 0 }) +
+          (s.peak_shaving_auto ? setting("peak_shaving_reserve_pct", "peak_shaving_reserve") : ""))}
+      ${option(t.groups.feedInCap, "feed_in_cap", "feed_in_cap",
+        setting("pv_peak_power_kwp", "pv_peak_power") +
+          setting("feed_in_cap_limit_pct", "feed_in_cap_limit") +
+          setting("feed_in_cap_auto_buffer", "feed_in_cap_auto_buffer") +
+          setting("feed_in_cap_buffer_pct", "feed_in_cap_buffer", { disabled: s.feed_in_cap_auto_buffer }) +
+          setting("feed_in_cap_min_buffer_pct", "feed_in_cap_min_buffer"))}`;
+  }
+
+  _onSimChange(target) {
+    const path = target.dataset.sim;
+    const [group, key] = path.includes(".") ? path.split(".") : [null, path];
+    const form = this._sim.form;
+    let value;
+    if (target.dataset.kind === "sim-bool") value = target.checked;
+    else {
+      value = parseFloat(target.value);
+      if (!Number.isFinite(value)) return;
+    }
+    if (group) form[group][key] = value;
+    else form[key] = value;
+    this._sections.simcontrols = undefined;
+    this._render();
+    this._simSchedule();
   }
 
   // --- batteries & consumers -----------------------------------------------------
@@ -2186,6 +2474,13 @@ class SlemsPanel extends HTMLElement {
       this._render();
       return;
     }
+    if (event.target.closest("[data-action='sim-reset']")) {
+      this._sim.form = this._simBaseForm(this._sim.result?.base);
+      this._sections.simcontrols = undefined;
+      this._render();
+      this._simSchedule();
+      return;
+    }
     const seriesButton = event.target.closest("[data-action='toggle-series']");
     if (seriesButton) {
       const key = seriesButton.dataset.series;
@@ -2208,6 +2503,10 @@ class SlemsPanel extends HTMLElement {
 
   _onChange(event) {
     const target = event.target;
+    if (target.dataset?.sim) {
+      this._onSimChange(target);
+      return;
+    }
     const entityId = target.dataset?.entity;
     if (!entityId) return;
     const kind = target.dataset.kind;
@@ -2291,6 +2590,17 @@ const STYLE = `
   .tile { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--divider-color); }
   .tile { min-width: 0; overflow-wrap: break-word; hyphens: auto; }
   .tile.wide { grid-column: 1 / -1; }
+  .sim-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+  .sim-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .sim-side h3, #simmetrics h3 { margin: 16px 0 8px; font-size: 14px; }
+  .sim-group:first-child h3 { margin-top: 8px; }
+  .sim-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+  .sim-metrics td.changed { font-weight: 600; }
+  .sim-metrics th { white-space: normal; }
+  @media (max-width: 500px) {
+    .sim-metrics th, .sim-metrics td { padding: 4px; font-size: 12px; white-space: normal; }
+  }
+  @media (max-width: 900px) { .sim-layout { grid-template-columns: 1fr; } }
   .card-setting { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--divider-color); }
   .tile .label { font-size: 12px; }
   .menu-wrap { position: relative; }

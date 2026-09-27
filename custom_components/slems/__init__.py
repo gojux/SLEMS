@@ -25,6 +25,7 @@ from .drivers import BatteryDriver, create_driver
 from .efficiency import EfficiencyTracker
 from .panel import async_register_panel, async_unregister_panel
 from .problems import async_remove_issues
+from .simulation import async_register_websocket
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -72,6 +73,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_register_panel(hass, entry)
+    async_register_websocket(hass)
     return True
 
 

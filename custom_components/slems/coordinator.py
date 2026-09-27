@@ -450,6 +450,20 @@ class SystemSnapshot:
         return house + self._consumer_power_w(included_in_meter=False)
 
 
+@dataclass
+class ForecastPlan:
+    """Result of ``SlemsCoordinator.forecast_plan``."""
+
+    cap: CapPlan | None = None
+    feed_in_limit_w: float | None = None
+    feed_in_limit_reason: str | None = None
+    peak_threshold_pct: float = 0.0
+    peak_limit_w: float = 0.0
+    projection: SocProjection | None = None
+    day_plan: list[dict] = field(default_factory=list)
+    day_plan_tomorrow: list[dict] = field(default_factory=list)
+
+
 class HousePowerHold:
     """Replacement for a negative house power from the energy balance.
 
@@ -1158,88 +1172,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             snapshot.expected_surplus_wh = max(0.0, snapshot.expected_surplus_wh - balancing_wh)
         battery = self._battery_group(snapshot)
         settings = self.settings
-        cap = self._feed_in_cap(snapshot, battery, wall_now)
+        forecast_plan = self.forecast_plan(snapshot, battery, wall_now, load, settings, balancing_wh)
+        cap = forecast_plan.cap
         snapshot.feed_in_cap = cap
-        snapshot.feed_in_limit_w = None
-        if not settings.grid_friendly_charging:
-            snapshot.feed_in_limit_reason = "disabled"
-        elif battery is None or pv_forecast is None:
-            snapshot.feed_in_limit_reason = "no_forecast"
-        else:
-            surplus = remaining_surplus(
-                pv_forecast, consumption.total if consumption else None, load, wall_now
-            )
-            snapshot.feed_in_limit_w = feed_in_limit(
-                surplus,
-                battery.energy_to_full_wh + settings.grid_friendly_buffer_kwh * 1000 + balancing_wh,
-                battery.max_charge_w,
-            )
-            snapshot.feed_in_limit_reason = (
-                "not_enough_surplus" if snapshot.feed_in_limit_w is None else None
-            )
-            if cap is not None and snapshot.feed_in_limit_w is not None:
-                snapshot.feed_in_limit_w = min(snapshot.feed_in_limit_w, cap.limit_w)
-        # The correction factor describes today; tomorrow uses the raw forecast.
-        today = dt_util.as_local(wall_now).date()
-        pv_hourly = (
-            {
-                start: wh * (snapshot.pv_correction if start.date() == today else 1.0)
-                for start, wh in hourly(snapshot.pv_forecast).items()
-            }
-            if snapshot.pv_forecast is not None
-            else None
-        )
-        consumption_hourly = hourly(consumption.total) if consumption else None
-        peak_threshold_pct, peak_limit_w = self._peak_shaving(
-            battery, wall_now, pv_hourly, consumption_hourly
-        )
+        snapshot.feed_in_limit_w = forecast_plan.feed_in_limit_w
+        snapshot.feed_in_limit_reason = forecast_plan.feed_in_limit_reason
+        peak_threshold_pct = forecast_plan.peak_threshold_pct
+        peak_limit_w = forecast_plan.peak_limit_w
         snapshot.peak_shaving_limit_w = peak_limit_w if settings.peak_shaving else None
-        if pv_forecast is not None:
-            projection = (
-                project_soc(
-                    wall_now,
-                    battery,
-                    pv_hourly,
-                    consumption_hourly,
-                    load,
-                    ProjectionSettings(
-                        grid_friendly_charging=settings.grid_friendly_charging,
-                        # Like the feed-in limit: only with grid friendly charging.
-                        charge_buffer_wh=(
-                            settings.grid_friendly_buffer_kwh * 1000
-                            if settings.grid_friendly_charging
-                            else 0.0
-                        ),
-                        night_buffer_wh=settings.charge_secured_buffer_kwh * 1000,
-                        peak_shaving=settings.peak_shaving,
-                        peak_shaving_grid_limit_w=peak_limit_w,
-                        peak_shaving_soc_threshold_pct=peak_threshold_pct,
-                        night_discharge=settings.night_discharge,
-                        night_reserve_pct=settings.night_reserve_pct,
-                    ),
-                    snapshot.feed_in_limit_w,
-                    balancing_wh,
-                    cap,
-                )
-                if battery is not None
-                else None
-            )
-            pv_power = power_lookup(self._pv_native(snapshot, wall_now))
-            snapshot.day_plan = self._day_plan(
-                pv_hourly, consumption_hourly, projection, wall_now, cap=cap, pv_power=pv_power
-            )
-            snapshot.day_plan_tomorrow = self._day_plan(
-                pv_hourly,
-                consumption_hourly,
-                projection,
-                wall_now,
-                day_offset=1,
-                cap=cap,
-                pv_power=pv_power,
-            )
-        else:
-            snapshot.day_plan = []
-            snapshot.day_plan_tomorrow = []
+        snapshot.day_plan = forecast_plan.day_plan
+        snapshot.day_plan_tomorrow = forecast_plan.day_plan_tomorrow
 
         requests = [
             ConsumerRequest(
@@ -1343,6 +1285,108 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             now,
         )
 
+    def forecast_plan(
+        self,
+        snapshot: SystemSnapshot,
+        battery: BatteryGroup | None,
+        wall_now: datetime,
+        load: float | None,
+        settings: ControlSettings,
+        balancing_wh: float = 0.0,
+        power_w: tuple[float, float] | None = None,
+    ) -> ForecastPlan:
+        """Plans from the forecasts with ``settings``: feed-in limit, feed-in
+        cap, peak shaving and the SoC projection with the day plans.
+
+        Used for the real planning and, with other settings, battery and
+        forecasts, for the simulation. ``power_w`` replaces the charge and
+        discharge power of the batteries for the feed-in cap.
+        """
+        result = ForecastPlan()
+        consumption = snapshot.consumption_forecast
+        pv_forecast = (
+            {k: v * snapshot.pv_correction for k, v in snapshot.pv_forecast.items()}
+            if snapshot.pv_forecast is not None
+            else None
+        )
+        cap = self._feed_in_cap(snapshot, battery, wall_now, settings, power_w)
+        result.cap = cap
+        if not settings.grid_friendly_charging:
+            result.feed_in_limit_reason = "disabled"
+        elif battery is None or pv_forecast is None:
+            result.feed_in_limit_reason = "no_forecast"
+        else:
+            surplus = remaining_surplus(
+                pv_forecast, consumption.total if consumption else None, load, wall_now
+            )
+            result.feed_in_limit_w = feed_in_limit(
+                surplus,
+                battery.energy_to_full_wh + settings.grid_friendly_buffer_kwh * 1000 + balancing_wh,
+                battery.max_charge_w,
+            )
+            result.feed_in_limit_reason = (
+                "not_enough_surplus" if result.feed_in_limit_w is None else None
+            )
+            if cap is not None and result.feed_in_limit_w is not None:
+                result.feed_in_limit_w = min(result.feed_in_limit_w, cap.limit_w)
+        # The correction factor describes today; tomorrow uses the raw forecast.
+        today = dt_util.as_local(wall_now).date()
+        pv_hourly = (
+            {
+                start: wh * (snapshot.pv_correction if start.date() == today else 1.0)
+                for start, wh in hourly(snapshot.pv_forecast).items()
+            }
+            if snapshot.pv_forecast is not None
+            else None
+        )
+        consumption_hourly = hourly(consumption.total) if consumption else None
+        result.peak_threshold_pct, result.peak_limit_w = self._peak_shaving(
+            battery, wall_now, pv_hourly, consumption_hourly, settings
+        )
+        if pv_forecast is None:
+            return result
+        if battery is not None:
+            result.projection = project_soc(
+                wall_now,
+                battery,
+                pv_hourly,
+                consumption_hourly,
+                load,
+                ProjectionSettings(
+                    grid_friendly_charging=settings.grid_friendly_charging,
+                    # Like the feed-in limit: only with grid friendly charging.
+                    charge_buffer_wh=(
+                        settings.grid_friendly_buffer_kwh * 1000
+                        if settings.grid_friendly_charging
+                        else 0.0
+                    ),
+                    night_buffer_wh=settings.charge_secured_buffer_kwh * 1000,
+                    peak_shaving=settings.peak_shaving,
+                    peak_shaving_grid_limit_w=result.peak_limit_w,
+                    peak_shaving_soc_threshold_pct=result.peak_threshold_pct,
+                    night_discharge=settings.night_discharge,
+                    night_reserve_pct=settings.night_reserve_pct,
+                    discharge_max_grid_export_w=settings.discharge_max_grid_export_w,
+                ),
+                result.feed_in_limit_w,
+                balancing_wh,
+                cap,
+            )
+        pv_power = power_lookup(self._pv_native(snapshot, wall_now))
+        result.day_plan = self._day_plan(
+            pv_hourly, consumption_hourly, result.projection, wall_now, cap=cap, pv_power=pv_power
+        )
+        result.day_plan_tomorrow = self._day_plan(
+            pv_hourly,
+            consumption_hourly,
+            result.projection,
+            wall_now,
+            day_offset=1,
+            cap=cap,
+            pv_power=pv_power,
+        )
+        return result
+
     @staticmethod
     def _pv_native(snapshot: SystemSnapshot, wall_now: datetime) -> PvForecast:
         """PV forecast in its own periods; today corrected, tomorrow raw."""
@@ -1353,10 +1397,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         }
 
     def _feed_in_cap(
-        self, snapshot: SystemSnapshot, battery: BatteryGroup | None, wall_now: datetime
+        self,
+        snapshot: SystemSnapshot,
+        battery: BatteryGroup | None,
+        wall_now: datetime,
+        settings: ControlSettings,
+        power_w: tuple[float, float] | None = None,
     ) -> CapPlan | None:
         """Plan of the feed-in cap; also sets the buffer in effect in ``snapshot``."""
-        settings = self.settings
         snapshot.feed_in_cap_buffer_pct = None
         snapshot.feed_in_cap_buffer_source = None
         snapshot.feed_in_cap_buffer_days = 0
@@ -1381,13 +1429,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         snapshot.feed_in_cap_buffer_source = source
         pv = self._pv_native(snapshot, wall_now)
         charge_w = discharge_w = 0.0
-        for runtime in self.batteries:
+        for runtime in self.batteries if power_w is None else ():
             telemetry = snapshot.batteries.get(runtime.subentry_id)
             if runtime.plannable and telemetry is not None:
                 # Without the SoC window: the power when the peak comes.
                 limits = self._power_limits(runtime, telemetry, use_soc_window=False)
                 charge_w += limits.charge_w
                 discharge_w += limits.discharge_w
+        if power_w is not None:
+            charge_w, discharge_w = power_w
         counted_w = emergency_w = 0.0
         for consumer in self.consumers:
             if not snapshot.is_controllable_now(consumer.subentry_id):
@@ -1441,6 +1491,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         wall_now: datetime,
         pv_hourly: dict[datetime, float] | None,
         consumption_hourly: dict[datetime, float] | None,
+        settings: ControlSettings,
     ) -> tuple[float, float]:
         """SoC threshold and import limit of peak shaving in effect.
 
@@ -1450,7 +1501,6 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         calculated from the SoC capped at the threshold: above it peak shaving
         is not active, and the limit shows what applies once it is reached.
         """
-        settings = self.settings
         threshold = settings.peak_shaving_soc_threshold_pct
         limit = settings.peak_shaving_grid_limit_w
         if battery is None:

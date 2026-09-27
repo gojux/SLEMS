@@ -11,7 +11,8 @@ simplified way:
   charge at that time; today's feed-in limit is the one the controller uses.
 * Hours with a deficit: the batteries cover it. With import peak shaving at
   low state of charge only the import above the limit; with night discharge
-  at least the planned night discharge, the extra part not below its target.
+  at least the planned night discharge, the extra part not below its target
+  and not above the maximum grid export while discharging.
 * Charge and discharge losses with the one-way efficiency; maximum charge and
   discharge power; the SoC window of the batteries (minimum and maximum SoC).
 
@@ -27,6 +28,7 @@ active cell balancing are left out.
 from __future__ import annotations
 
 from collections.abc import Mapping
+import math
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
@@ -52,6 +54,8 @@ class ProjectionSettings:
     peak_shaving_soc_threshold_pct: float
     night_discharge: bool
     night_reserve_pct: float
+    # Grid export caused by discharging (night discharge) at most.
+    discharge_max_grid_export_w: float = math.inf
 
 
 @dataclass
@@ -199,5 +203,9 @@ def _discharge(
         return after
     # As in the allocation: at least the night discharge; the part beyond the
     # deficit stops at the target.
-    extra = min(max(0.0, plan.power_w - power), battery.max_discharge_w - power)
+    extra = min(
+        max(0.0, plan.power_w - power),
+        battery.max_discharge_w - power,
+        settings.discharge_max_grid_export_w,
+    )
     return max(min(after, plan.target_wh), after - extra * share / efficiency)

@@ -275,6 +275,20 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   balancing and the phase of a running one.
 - **Consumers**: measured and planned power, blocked/saturated state, the
   learned response time and the *Control active* switch.
+- **Simulation**: try other settings without changing anything. Next to the
+  day chart (today from now on or tomorrow) grid friendly charging, night
+  discharge, import peak shaving and the feed-in cap can be switched on and
+  off; their values appear below each switch as in the settings. The batteries
+  (capacity, minimum/maximum state of charge, charge and discharge power), the
+  night discharge buffer, the maximum grid export while discharging and the
+  PV and consumption forecasts (±%) can be changed too. SLEMS calculates the
+  day plans like the real ones, from the current state of charge and the
+  current forecasts; the plan with the current settings is shown grey dotted
+  for comparison, key figures (feed-in, grid import, highest import and
+  feed-in, curtailed energy, state of charge at midnight) side by side below.
+  Nothing is saved or used for the control; every visit starts with the
+  current settings. Consumers controlled by SLEMS and the battery priority
+  (which acts in the real-time distribution) are not simulated.
 - **Settings**: all settings grouped and editable directly; the *Control*
   card also shows the learned values (current control gain, smart meter
   update interval, battery response time).

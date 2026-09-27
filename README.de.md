@@ -284,6 +284,23 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
   den aktiven Zellausgleich und die Phase eines laufenden Ausgleichs.
 - **Verbraucher**: gemessene und geplante Leistung, gesperrt/gesättigt, die
   gelernte Reaktionszeit und der Schalter *Steuerung aktiv*.
+- **Simulation**: andere Einstellungen ausprobieren, ohne etwas zu ändern.
+  Neben dem Tagesdiagramm (heute ab jetzt oder morgen) lassen sich
+  netzdienliches Laden, Nachtentladung, Bezugsspitzen abfangen und
+  Einspeisebegrenzung ein- und ausschalten; ihre Werte erscheinen wie in den
+  Einstellungen unter dem jeweiligen Schalter. Auch die Batterien (Kapazität,
+  minimaler/maximaler Ladezustand, Lade- und Entladeleistung), der
+  Sicherheitspuffer der Nachtentladung, die maximale Einspeisung beim Entladen
+  und die PV- und Verbrauchsprognose (±%) lassen sich ändern. SLEMS rechnet
+  die Tagespläne wie die echten, ab dem aktuellen Ladezustand mit den
+  aktuellen Prognosen; der Plan mit den aktuellen Einstellungen ist zum
+  Vergleich grau gepunktet, darunter stehen Kennzahlen nebeneinander
+  (Einspeisung, Netzbezug, höchster Bezug und höchste Einspeisung,
+  abgeregelte Energie, Ladezustand um Mitternacht). Nichts davon wird
+  gespeichert oder für die Regelung verwendet; jeder Besuch beginnt mit den
+  aktuellen Einstellungen. Von SLEMS gesteuerte Verbraucher und der
+  Batterievorrang (er wirkt in der Echtzeit-Verteilung) werden nicht
+  simuliert.
 - **Einstellungen**: alle Einstellwerte gruppiert und direkt änderbar; die
   Karte *Regelung* zeigt auch die gelernten Werte (aktuelle Regelverstärkung,
   Aktualisierungsintervall des Smart Meters, Reaktionszeit der Batterie).
