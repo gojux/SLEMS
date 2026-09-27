@@ -365,7 +365,11 @@ live value is only meaningful near full charge: in the middle of the charge
 the voltage curve is so flat that unequal cells show almost the same voltage.
 SLEMS therefore records the *Cell delta at top of charge*: after the highest
 cell reached 3.60 V or the BMS ended the charge at 100 %, and the battery then
-rested for 60 seconds. The curve is steep there; Marstek cells typically show
+rested for 60 seconds (standby, including the about 13 W a Venus draws itself).
+It is measured once per charge: while the battery stands full the cells relax
+and the delta keeps falling without the balance getting better, so the next
+measurement follows only after the battery was discharged out of the top range
+(highest cell below 3.49 V); after a restart of SLEMS, too. The curve is steep there; Marstek cells typically show
 about 180 mV from the factory, which is normal. Status: below 200 mV good,
 below 230 mV minor, below 250 mV moderate, otherwise high imbalance. From 230 mV the dashboard
 recommends active cell balancing.
@@ -383,8 +387,10 @@ in operating mode *active*:
 3. It charges with 95 W until the highest cell reaches 3.60 V, stands by for
    60 seconds and measures the cell delta.
 4. Above 30 mV it discharges with 200 W to the retry voltage (3.49 V) and
-   repeats from step 3. If the BMS refuses to charge, the retry voltage is
-   lowered in steps of 10 mV (down to 3.40 V).
+   repeats from step 3. If the BMS refuses to charge (less than 30 W instead
+   of 95 W, e.g. because it reports full at about 3.55 V), it stands by,
+   measures, and the retry voltage is lowered in steps of 10 mV (down to
+   3.40 V).
 5. At 30 mV or less it discharges with 200 W to 3.48 V and ends.
 
 The discharge of the balancing battery is fed into the grid; the other
@@ -466,7 +472,13 @@ read*, *not responding*), in the energy flow and, for the smart meter, at the
 top of the overview. The end of an active cell balancing run (finished, after
 24 hours or because the battery could not be read) creates a notification
 with the cell delta before and after and the duration; cancelling it
-yourself does not. The warnings of the feed-in cap (batteries too small, not
+yourself does not.
+
+For a problem report, *Settings → Devices & services → SLEMS → ⋮ → Download
+diagnostics* (or the same on a battery device) saves the configuration and the
+internal state as a file: measurements, plans, battery limits, the last
+register values, the state of the cell delta measurement and of a balancing
+run. IP and MAC addresses are removed. The warnings of the feed-in cap (batteries too small, not
 enough time to make room, charge power too low, feed-in above the limit, see
 *Feed-in cap*) are notifications too; they disappear by themselves when the
 problem is gone.

@@ -9,7 +9,10 @@ delta (highest minus lowest cell voltage) is therefore only meaningful at the
 top of the charge. As in Omnibattery, the monitor records a *top measurement*
 after the highest cell reached ``CHARGE_STOP_V`` or the BMS ended the charge
 (SoC ``BMS_FULL_SOC_PCT``) and the battery then rested for
-``MEASUREMENT_WAIT_S``; the live delta is shown but not judged. The curve is
+``MEASUREMENT_WAIT_S``; the live delta is shown but not judged. There is one
+measurement per charge: a battery standing full keeps relaxing, and its delta
+keeps falling without the balance getting better. The next one is possible
+after the battery was discharged out of the top window (below ``TOP_ZONE_V``). The curve is
 steep there: Marstek cells typically show 170–180 mV from the factory, which
 is normal, so the status limits are far above that.
 
@@ -21,7 +24,7 @@ window):
    most the maximum charge power) until the highest cell reaches
    ``TOP_ZONE_V``.
 2. CHARGE: charge with ``TOP_CHARGE_W`` until ``CHARGE_STOP_V``. If the BMS
-   refuses charging (``REJECTION_SAMPLES`` samples of about 0 W after
+   refuses charging (``REJECTION_SAMPLES`` samples below ``REFUSED_BELOW_W`` after
    ``CHARGE_ENGAGE_GRACE_S``), the retry voltage is lowered by
    ``RESUME_STEP_V`` (not below ``MIN_RESUME_V``).
 3. WAIT_MEASURE: idle for ``MEASUREMENT_WAIT_S``, then measure the delta.
@@ -50,7 +53,12 @@ DISCHARGE_W = 200
 MEASUREMENT_WAIT_S = 60.0
 CHARGE_ENGAGE_GRACE_S = 10.0
 REJECTION_SAMPLES = 3
-IDLE_POWER_W = 10.0
+# Up to this DC power the battery counts as resting: a Venus at standby draws
+# about 13 W from its cells.
+IDLE_POWER_W = 25.0
+# While charge is commanded, less than this means the BMS refuses charging
+# (at standby the DC power is slightly negative).
+REFUSED_BELOW_W = 30.0
 MAX_RUN_S = 24 * 3600.0
 
 # The BMS ended the charge (top measurement without reaching CHARGE_STOP_V).
@@ -106,6 +114,10 @@ class CellMonitor:
         self._rest_since: float | None = None
         # The top of the charge was reached and not yet measured.
         self._top_reached = False
+        # A new top can be recognised: the battery was below the top window
+        # since the last measurement. Not after a start while it stands full,
+        # so a relaxed value does not replace the measurement of that charge.
+        self._armed = False
 
     def update(
         self,
@@ -120,10 +132,13 @@ class CellMonitor:
             self._rest_since = None
             return
         if max_cell_v >= CHARGE_STOP_V or (soc_pct is not None and soc_pct >= BMS_FULL_SOC_PCT):
-            self._top_reached = True
+            if self._armed:
+                self._top_reached = True
+                self._armed = False
         elif max_cell_v < TOP_ZONE_V:
-            # Discharged out of the top window: no longer a top measurement.
+            # Discharged out of the top window: the next top can be measured.
             self._top_reached = False
+            self._armed = True
             self._rest_since = None
             return
         if not self._top_reached or abs(power_w) > IDLE_POWER_W:
@@ -253,7 +268,7 @@ class CellBalancer:
 
         if self.phase is BalancingPhase.PRE_TOP_CHARGE:
             refused = (
-                abs(power_w) <= IDLE_POWER_W and now - self._leg_started >= CHARGE_ENGAGE_GRACE_S
+                power_w < REFUSED_BELOW_W and now - self._leg_started >= CHARGE_ENGAGE_GRACE_S
             )
             if max_cell_v >= TOP_ZONE_V or refused:
                 self._enter(BalancingPhase.CHARGE, now)
@@ -266,8 +281,8 @@ class CellBalancer:
                 self._enter(BalancingPhase.WAIT_MEASURE, now)
             else:
                 if now - self._leg_started >= CHARGE_ENGAGE_GRACE_S:
-                    # Consecutive samples of about 0 W while charge is commanded.
-                    self._rejections = self._rejections + 1 if abs(power_w) <= IDLE_POWER_W else 0
+                    # Consecutive samples without charging while charge is commanded.
+                    self._rejections = self._rejections + 1 if power_w < REFUSED_BELOW_W else 0
                 if self._rejections < REJECTION_SAMPLES:
                     return BalancingStep(TOP_CHARGE_W, self.phase)
                 # The BMS refuses charging: retry from a lower voltage.

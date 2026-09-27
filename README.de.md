@@ -376,7 +376,12 @@ ist der Live-Wert nur nahe der Vollladung aussagekräftig: In der Mitte ist die
 Spannungskurve so flach, dass ungleiche Zellen fast dieselbe Spannung zeigen.
 SLEMS erfasst daher das *Zell-Delta am oberen Ladeende*: nachdem die höchste
 Zelle 3,60 V erreicht oder das BMS die Ladung bei 100 % beendet hat und die
-Batterie danach 60 Sekunden im Standby war. Die Kurve ist dort steil;
+Batterie danach 60 Sekunden im Standby war (einschließlich der etwa 13 W, die
+eine Venus selbst braucht). Gemessen wird einmal pro Ladung: Steht die Batterie
+voll, entspannen sich die Zellen, und das Delta sinkt weiter, ohne dass der
+Ausgleich besser wird; die nächste Messung folgt daher erst, nachdem die
+Batterie aus dem oberen Bereich entladen wurde (höchste Zelle unter 3,49 V),
+auch nach einem Neustart von SLEMS. Die Kurve ist dort steil;
 Marstek-Zellen zeigen ab Werk typischerweise etwa 180 mV, das ist normal.
 Status: unter 200 mV gut, unter 230 mV leichtes, unter 250 mV mittleres, sonst
 starkes Ungleichgewicht. Ab
@@ -395,8 +400,10 @@ lässt sich nur im Betriebsmodus *Aktiv* starten:
 3. Sie lädt mit 95 W, bis die höchste Zelle 3,60 V erreicht, ist 60 Sekunden
    im Standby und misst das Zell-Delta.
 4. Über 30 mV entlädt sie mit 200 W bis zur Wiederholspannung (3,49 V) und
-   wiederholt ab Schritt 3. Verweigert das BMS das Laden, sinkt die
-   Wiederholspannung in Schritten von 10 mV (bis 3,40 V).
+   wiederholt ab Schritt 3. Verweigert das BMS das Laden (weniger als 30 W
+   statt 95 W, z. B. weil es bei etwa 3,55 V voll meldet), wartet sie im
+   Standby, misst, und die Wiederholspannung sinkt in Schritten von 10 mV
+   (bis 3,40 V).
 5. Bei höchstens 30 mV entlädt sie mit 200 W bis 3,48 V und endet.
 
 Die Entladung der ausgleichenden Batterie wird eingespeist; die anderen
@@ -481,7 +488,12 @@ Das Dashboard zeigt sie ebenfalls: ein roter Hinweis auf der Batteriekarte
 oben in der Übersicht. Das Ende eines aktiven Zellausgleichs (abgeschlossen,
 nach 24 Stunden oder weil die Batterie nicht lesbar war) erzeugt eine
 Benachrichtigung mit dem Zell-Delta vorher und nachher und der Dauer; ein
-selbst abgebrochener Ausgleich nicht. Die Warnungen der Einspeisebegrenzung
+selbst abgebrochener Ausgleich nicht. Für eine Fehlermeldung speichert
+*Einstellungen → Geräte & Dienste → SLEMS → ⋮ → Diagnosedaten herunterladen*
+(oder dasselbe bei einem Batterie-Gerät) die Konfiguration und den internen
+Zustand als Datei: Messwerte, Pläne, Grenzen der Batterien, die letzten
+Registerwerte, den Stand der Zell-Delta-Messung und eines Zellausgleichs.
+IP- und MAC-Adressen werden entfernt. Die Warnungen der Einspeisebegrenzung
 (Batterien zu klein, zu wenig Zeit für Platz, Ladeleistung zu gering,
 Einspeisung über der Grenze, siehe *Einspeisebegrenzung*) sind ebenfalls
 Benachrichtigungen; sie verschwinden von selbst, sobald das Problem behoben

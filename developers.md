@@ -85,6 +85,7 @@ custom_components/slems/
   efficiency.py      round trip efficiency (battery counters / learned / manual)
   entity.py          base classes (system device, battery devices)
   sensor.py          system and battery sensors
+  diagnostics.py     diagnostics download (entry and battery devices), incl. internal states
   select.py          operating mode (off / simulation / active)
   switch.py          vacation, import peak shaving
   number.py          numeric runtime settings (averaging window, allocation, peak shaving)
@@ -1010,3 +1011,4 @@ docstring).
 | 2026-09-26 | Feed-in cap warnings as notifications (created on appearance, dismissed when gone) instead of repair issues: they come from the forecast. The part of each consumer in the cap is a select on the consumer card instead of a config flow field. |
 | 2026-09-26 | Forecast.Solar periods are re-keyed from their end to their start when read (before, its forecast was used one hour late everywhere). Day chart in half hours with mean power, measured charging from the 5 minute statistics next to the planned one. |
 | 2026-09-26 | Batteries can be searched in the network when adding a Venus (port 502 + SoC read). No automatic discovery for now; the way that keeps `single_config_entry` is noted under *Finding batteries*. |
+| 2026-09-27 | A Venus draws about 13 W DC at standby: resting is up to 25 W, a refused balancing charge is below 30 W (instead of ±10 W, which kept a run in its charge leg). The top cell delta is measured once per charge (re-armed below 3.49 V, not armed after a start), because a battery standing full relaxes and the value kept falling. Diagnostics download with the internal states. |

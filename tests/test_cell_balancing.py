@@ -23,6 +23,7 @@ def test_balance_status_thresholds() -> None:
 
 def test_monitor_records_after_the_top_and_a_rest() -> None:
     monitor = CellMonitor()
+    monitor.update(-60, 3.45, 3.40, 800, 940)  # charging below the top window
     monitor.update(0, 3.605, 3.40, 95, 1000)  # charging reaches the top
     monitor.update(10, 3.58, 3.40, 0, 1010)  # rests, the voltage relaxes
     monitor.update(40, 3.56, 3.40, 5, 1040)
@@ -36,10 +37,36 @@ def test_monitor_records_after_the_top_and_a_rest() -> None:
 
 def test_monitor_records_after_the_bms_ended_the_charge() -> None:
     monitor = CellMonitor()
+    monitor.update(-60, 3.45, 3.30, 500, 940, soc_pct=97)
     monitor.update(0, 3.52, 3.30, 0, 1000, soc_pct=100)
     monitor.update(61, 3.52, 3.28, 0, 1061, soc_pct=100)
     assert monitor.last.delta_mv == 240.0
     assert monitor.suggest_balancing
+
+
+def test_monitor_measures_once_while_the_battery_stays_full() -> None:
+    monitor = CellMonitor()
+    monitor.update(-60, 3.45, 3.40, 900, 940, soc_pct=97)
+    monitor.update(0, 3.55, 3.46, -13, 1000, soc_pct=100)  # standby draw counts as rest
+    monitor.update(61, 3.55, 3.46, -13, 1061, soc_pct=100)
+    assert monitor.last.delta_mv == 90.0
+    # Standing full, the cells relax: no further measurement.
+    for t in range(120, 4000, 60):
+        monitor.update(t, 3.549, 3.475, -13, 1000 + t, soc_pct=100)
+    assert monitor.last.timestamp == 1061
+    # Discharged out of the top window and charged again: measured again.
+    monitor.update(5000, 3.40, 3.38, -800, 6000, soc_pct=60)
+    monitor.update(9000, 3.55, 3.47, -13, 10000, soc_pct=100)
+    monitor.update(9061, 3.55, 3.47, -13, 10061, soc_pct=100)
+    assert monitor.last.timestamp == 10061
+    assert monitor.last.delta_mv == 80.0
+
+
+def test_no_measurement_after_a_start_while_full() -> None:
+    monitor = CellMonitor()
+    for t in range(0, 600, 60):
+        monitor.update(t, 3.549, 3.475, -13, 1000 + t, soc_pct=100)
+    assert monitor.last is None
 
 
 def test_monitor_ignores_plateau_knee_and_load() -> None:
@@ -100,6 +127,16 @@ def test_rejected_charge_lowers_retry_voltage() -> None:
         balancer.step(t, START + t, 3.55, 3.45, 0)
     assert balancer.phase is BalancingPhase.WAIT_MEASURE
     assert balancer.retry_voltage == 3.48
+
+
+def test_refusal_with_standby_draw() -> None:
+    # A Venus at standby shows about -13 W DC while the BMS refuses charging.
+    balancer = CellBalancer(max_charge_w=2500, started_at=START)
+    balancer.step(0, START, 3.55, 3.47, -13)
+    assert balancer.phase is BalancingPhase.CHARGE
+    for t in range(15, 40, 5):
+        balancer.step(t, START + t, 3.549, 3.47, -13)
+    assert balancer.phase is BalancingPhase.WAIT_MEASURE
 
 
 def test_invalid_telemetry_stops_the_run() -> None:
