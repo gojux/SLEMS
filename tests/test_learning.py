@@ -97,3 +97,50 @@ def test_consumer_power_and_thermostat_cycles() -> None:
     # Commanded off: no pause counted.
     learner.update(t, False, 0)
     assert learner.cycles == 2
+
+
+def test_morning_gap_and_reserve() -> None:
+    from datetime import datetime, timedelta
+
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.slems.learning import MorningGapLearner
+
+    dt_util.set_default_time_zone(dt_util.get_time_zone("Europe/Vienna"))
+    day = datetime(2026, 9, 28, tzinfo=dt_util.get_default_time_zone())
+    learner = MorningGapLearner()
+    learner.plan(day + timedelta(hours=8), 20000)
+    # PV takes over at 9:00 instead of 8:00: 1 h with 500 W deficit.
+    t = 0.0
+    moment = day + timedelta(hours=8)
+    while moment < day + timedelta(hours=10):
+        pv = 0 if moment < day + timedelta(hours=9) else 2000
+        learner.update(t, moment, pv, 500)
+        t += 60
+        moment += timedelta(seconds=60)
+    # 500 Wh of 20 kWh (integrated from the second sample on).
+    assert learner.days["2026-09-28"] == pytest.approx(2.5, abs=0.05)
+    assert learner.planned is None
+
+    for d in range(1, 14):
+        learner.days[f"2026-09-{d:02d}"] = d * 0.5
+    assert learner.reserve_pct(90) == 6.0
+    # Above 100 %: the largest gap plus 10 %.
+    assert learner.reserve_pct(110) == 7.2
+    assert MorningGapLearner.from_dict(learner.as_dict()).days == learner.days
+
+
+def test_morning_gap_zero_when_pv_is_early() -> None:
+    from datetime import datetime, timedelta
+
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.slems.learning import MorningGapLearner
+
+    dt_util.set_default_time_zone(dt_util.get_time_zone("Europe/Vienna"))
+    day = datetime(2026, 9, 28, tzinfo=dt_util.get_default_time_zone())
+    learner = MorningGapLearner()
+    learner.plan(day + timedelta(hours=8), 20000)
+    for minute in range(0, 20):
+        learner.update(minute * 60.0, day + timedelta(hours=8, minutes=minute), 3000, 500)
+    assert learner.days == {"2026-09-28": 0.0}

@@ -17,6 +17,10 @@ the value set by the user applies.
   report interval of the smart meter.
 * Consumers (``ConsumerLearner``): power while switched on, and whether their
   own thermostat switches them off while they are commanded.
+* Reserve of the night discharge (``MorningGapLearner``): the energy the house
+  needed from battery or grid between the moment PV should have taken over
+  (end of the night discharge as planned) and the moment it really did, as a
+  share of the day's forecast consumption.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from datetime import datetime
 import math
 import statistics
 
@@ -258,3 +263,91 @@ class ConsumerLearner:
         learner = cls(cycles=data.get("cycles", 0))
         learner.powers.extend(data.get("powers", []))
         return learner
+
+
+# --- reserve of the night discharge ---------------------------------------------------
+
+MORNING_MIN_DAYS = 14
+MORNING_KEEP_DAYS = 60
+# PV covers the consumption for this long: it has taken over.
+TAKEOVER_S = 15 * 60
+# The morning is over at this local hour at the latest.
+MORNING_END_HOUR = 12
+# Samples further apart are not integrated (missed polls, restart).
+MORNING_MAX_GAP_S = 120.0
+
+
+@dataclass
+class MorningGapLearner:
+    """Morning gap per day in % of the day's forecast consumption."""
+
+    days: dict[str, float] = field(default_factory=dict)
+    # Planned takeover of the coming morning and the day's forecast consumption.
+    planned: datetime | None = None
+    forecast_wh: float | None = None
+    _gap_wh: float = 0.0
+    _covered_since: float | None = None
+    _last: float | None = None
+
+    def plan(self, takeover: datetime, forecast_wh: float | None) -> None:
+        """The takeover as planned; called until it is reached, the last one counts."""
+        if self.planned is None or takeover.date() != self.planned.date():
+            self._gap_wh = 0.0
+            self._covered_since = None
+            self._last = None
+        self.planned = takeover
+        self.forecast_wh = forecast_wh
+
+    def update(self, now: float, local_now: datetime, pv_w: float | None, consumption_w: float | None) -> None:
+        """Measure from the planned takeover until PV covers the consumption."""
+        planned = self.planned
+        if planned is None or local_now < planned or pv_w is None or consumption_w is None:
+            return
+        key = planned.date().isoformat()
+        if key in self.days:
+            return
+        end = planned.replace(hour=MORNING_END_HOUR, minute=0, second=0, microsecond=0)
+        deficit = max(0.0, consumption_w - pv_w)
+        if self._last is not None and now - self._last <= MORNING_MAX_GAP_S and deficit > 0:
+            self._gap_wh += deficit * (now - self._last) / 3600
+        self._last = now
+        if deficit == 0:
+            if self._covered_since is None:
+                self._covered_since = now
+            taken_over = now - self._covered_since >= TAKEOVER_S
+        else:
+            self._covered_since = None
+            taken_over = False
+        if taken_over or local_now >= end:
+            if self.forecast_wh:
+                self.days[key] = round(self._gap_wh / self.forecast_wh * 100, 2)
+                for old in sorted(self.days)[:-MORNING_KEEP_DAYS]:
+                    del self.days[old]
+            self.planned = None
+
+    def reserve_pct(self, coverage_pct: float) -> float | None:
+        """Reserve that covers ``coverage_pct`` of the mornings (above 100: the
+        largest gap times the coverage); None until ``MORNING_MIN_DAYS``."""
+        if len(self.days) < MORNING_MIN_DAYS:
+            return None
+        values = list(self.days.values())
+        if coverage_pct > 100:
+            return round(max(values) * coverage_pct / 100, 1)
+        return round(quantile(values, coverage_pct / 100), 1)
+
+    def as_dict(self) -> dict:
+        return {
+            "days": dict(self.days),
+            "planned": self.planned.isoformat() if self.planned else None,
+            "forecast_wh": self.forecast_wh,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> MorningGapLearner:
+        data = data or {}
+        planned = data.get("planned")
+        return cls(
+            days=dict(data.get("days", {})),
+            planned=datetime.fromisoformat(planned) if planned else None,
+            forecast_wh=data.get("forecast_wh"),
+        )

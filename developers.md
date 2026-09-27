@@ -531,6 +531,17 @@ known):
   `ConsumerLearner.update` runs with every poll on the command last sent by
   the controller (kept while saturated) and the measured power. Stored.
 
+Night discharge reserve (`night_reserve_pct(settings)`): `MorningGapLearner`.
+With every poll (any operating mode, also without night discharge) the
+coordinator keeps the planned PV takeover of the coming morning
+(`night_discharge.pv_takeover`, the first hour PV exceeds consumption; updated
+until it is reached) with the forecast consumption of that day. From the
+takeover on it integrates max(0, total consumption − PV) until PV has covered
+the consumption for 15 minutes (or 12:00) and stores the gap in % of the
+forecast consumption (60 days). The reserve is the `night_reserve_coverage_pct`
+quantile of the gaps, above 100 % the largest gap times the coverage; from 14
+mornings. Used by the real night discharge plan and the projection.
+
 ### Simulation
 
 `simulation.py`, websocket command `slems/simulate` (registered once per HA
@@ -1075,3 +1086,4 @@ docstring).
 | 2026-09-27 | A Venus draws about 13 W DC at standby: resting is up to 25 W, a refused balancing charge is below 30 W (instead of ±10 W, which kept a run in its charge leg). The top cell delta is measured once per charge (re-armed below 3.49 V, not armed after a start), because a battery standing full relaxes and the value kept falling. Diagnostics download with the internal states. |
 | 2026-09-27 | Simulation tab: day plans with other settings, batteries and forecasts, calculated by the backend with the real planning code (`forecast_plan`), compared with the real plan; nothing stored. The SoC projection now also respects the maximum grid export while discharging. |
 | 2026-09-27 | Learned values with a switch each (the set value applies when off or without enough data): grid friendly buffer and safety buffer from the forecast errors, grid targets from the grid deviation, control timing from the meter interval, usable capacity per battery, consumer power and thermostat pauses. The night discharge reserve is left for a later decision. |
+| 2026-09-27 | Night discharge reserve learnable from the morning gap (planned vs. real PV takeover) in % of the forecast consumption, with a coverage setting (quantile, above 100 % a margin over the worst morning); no price based optimisation, because whether the energy community takes the energy at night is not known live. |

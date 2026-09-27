@@ -243,6 +243,8 @@ def _learned_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
         "grid_target_samples": [len(c.grid_targets.charge), len(c.grid_targets.discharge)],
         "control_interval_s": timing[0] if timing else None,
         "surplus_average_window_s": timing[1] if timing else None,
+        "night_reserve_pct": c.morning_gap.reserve_pct(c.settings.night_reserve_coverage_pct),
+        "morning_days": len(c.morning_gap.days),
     }
 
 
@@ -257,6 +259,7 @@ def _learned_in_use(s: SystemSnapshot, c: SlemsCoordinator) -> int:
             settings.grid_targets_auto and a["charge_grid_target_w"] is not None,
             settings.grid_targets_auto and a["discharge_grid_target_w"] is not None,
             settings.timing_auto and a["control_interval_s"] is not None,
+            settings.night_reserve_auto and a["night_reserve_pct"] is not None,
         )
     ) + sum(1 for b in c.batteries if b.learn_capacity and b.capacity_learner.capacity_wh is not None)
 

@@ -484,6 +484,9 @@
       },
       "consumer_learning": {
         "name": "Learn from measurements"
+      },
+      "night_reserve_auto": {
+        "name": "Automatic night discharge reserve"
       }
     },
     "number": {
@@ -579,6 +582,9 @@
       },
       "feed_in_cap_min_buffer": {
         "name": "Feed-in cap minimum buffer"
+      },
+      "night_reserve_coverage": {
+        "name": "Night discharge reserve coverage"
       }
     },
     "binary_sensor": {

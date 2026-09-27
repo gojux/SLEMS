@@ -125,6 +125,7 @@ SETTING_NUMBERS: tuple[SettingNumberDescription, ...] = (
         entity_category=EntityCategory.CONFIG,
     ),
     _percentage("night_reserve", "night_reserve_pct"),
+    _percentage("night_reserve_coverage", "night_reserve_coverage_pct", 50, 200),
     _percentage("rotation_soc_threshold", "rotation_soc_threshold_pct", 1, 50),
     SettingNumberDescription(
         key="rotation_min_interval",

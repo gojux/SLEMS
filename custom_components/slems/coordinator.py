@@ -106,6 +106,7 @@ from .learning import (
     CapacityLearner,
     ConsumerLearner,
     GridTargetLearner,
+    MorningGapLearner,
     auto_timing,
     consumption_underestimate,
     pv_overestimate,
@@ -116,7 +117,7 @@ from .grid_friendly import (
     pv_correction,
     remaining_surplus,
 )
-from .night_discharge import NightDischargePlan, plan_night_discharge
+from .night_discharge import NightDischargePlan, plan_night_discharge, pv_takeover
 from .peak_shaving import auto_limit, hours_until_refill
 from .pv_forecast import (
     PvForecast,
@@ -140,6 +141,7 @@ DEVICE_INFO_INTERVAL_S = 6 * 3600
 CONTROL_STORE_KEY = "control"
 PV_ACCURACY_STORE_KEY = "pv_accuracy"
 CONSUMERS_STORE_KEY = "consumers"
+MORNING_GAP_STORE_KEY = "morning_gap"
 HALF_HOUR = timedelta(minutes=30)
 
 
@@ -293,6 +295,10 @@ class ControlSettings:
     night_discharge: bool = False
     # Night discharge reserve in % of tomorrow's forecast daily consumption.
     night_reserve_pct: float = DEFAULT_NIGHT_RESERVE_PCT
+    # Learned from the morning gaps; share of the mornings it covers (above
+    # 100 %: the largest gap times this).
+    night_reserve_auto: bool = False
+    night_reserve_coverage_pct: float = 100.0
     # Feed-in cap at the grid connection point (see feed_in_cap).
     feed_in_cap: bool = False
     pv_peak_power_kwp: float = DEFAULT_PV_PEAK_POWER_KWP
@@ -568,6 +574,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # Monotonic time since the export is above the feed-in cap.
         self.cap_exceeded_since: float | None = None
         self.grid_targets = GridTargetLearner()
+        self.morning_gap = MorningGapLearner()
         self.consumer_learners = {c.subentry_id: ConsumerLearner() for c in consumers}
         # Consumers whose learned power and thermostat behaviour are used.
         self.consumer_learning: set[str] = set()
@@ -584,6 +591,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         """Restore learned data and follow the grid meter."""
         stored = await self._store.async_load() or {}
         self.pv_accuracy.restore(stored.get(PV_ACCURACY_STORE_KEY))
+        self.morning_gap = MorningGapLearner.from_dict(stored.get(MORNING_GAP_STORE_KEY))
         for subentry_id, data in (stored.get(CONSUMERS_STORE_KEY) or {}).items():
             if subentry_id in self.consumer_learners:
                 self.consumer_learners[subentry_id] = ConsumerLearner.from_dict(data)
@@ -723,6 +731,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         }
         data[CONTROL_STORE_KEY] = {"gain": self.controller.gain_adapter.gain}
         data[PV_ACCURACY_STORE_KEY] = self.pv_accuracy.as_dict()
+        data[MORNING_GAP_STORE_KEY] = self.morning_gap.as_dict()
         return data
 
     async def _async_update_data(self) -> SystemSnapshot:
@@ -805,6 +814,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
 
         self._house_hold.check(snapshot, now)
+        self._learn_morning_gap(snapshot, now)
         snapshot.saturated = self.controller.saturated
         snapshot.resting = self.controller.resting
         self.controller.observe_consumers(snapshot)
@@ -1273,7 +1283,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 battery.charge_efficiency,
                 snapshot.pv_forecast,
                 snapshot.consumption_forecast.total,
-                settings.night_reserve_pct,
+                self.night_reserve_pct(settings),
                 self.secured_buffer_wh(settings, *self._next_day_energy(snapshot, wall_now)),
                 battery.min_soc_pct / 100 * battery.capacity_wh,
                 (
@@ -1362,6 +1372,26 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         accuracy = self.forecaster.accuracy
         days = [(d.forecast_wh, d.actual_wh) for d in accuracy.days] if accuracy else []
         return consumption_underestimate(days)
+
+    def night_reserve_pct(self, settings: ControlSettings) -> float:
+        """Reserve of the night discharge in %: learned from the morning gaps or set."""
+        learned = self.morning_gap.reserve_pct(settings.night_reserve_coverage_pct)
+        if settings.night_reserve_auto and learned is not None:
+            return learned
+        return settings.night_reserve_pct
+
+    def _learn_morning_gap(self, snapshot: SystemSnapshot, now: float) -> None:
+        """Keep the planned PV takeover of the coming morning and measure the gap."""
+        local_now = dt_util.now()
+        learner = self.morning_gap
+        consumption = snapshot.consumption_forecast
+        if snapshot.pv_forecast is not None and consumption is not None and (
+            learner.planned is None or local_now < learner.planned
+        ):
+            takeover = pv_takeover(local_now, snapshot.pv_forecast, consumption.total)
+            if takeover is not None:
+                learner.plan(takeover, consumption.energy_on_day(takeover.date()))
+        learner.update(now, local_now, snapshot.pv_power_w, snapshot.total_consumption_w)
 
     def grid_friendly_buffer_wh(self, settings: ControlSettings, pv_remaining_wh: float) -> float:
         """Buffer of grid friendly charging: learned PV overestimate of the rest of the day."""
@@ -1556,7 +1586,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     peak_shaving_grid_limit_w=result.peak_limit_w,
                     peak_shaving_soc_threshold_pct=result.peak_threshold_pct,
                     night_discharge=settings.night_discharge,
-                    night_reserve_pct=settings.night_reserve_pct,
+                    night_reserve_pct=self.night_reserve_pct(settings),
                     discharge_max_grid_export_w=settings.discharge_max_grid_export_w,
                 ),
                 result.feed_in_limit_w,

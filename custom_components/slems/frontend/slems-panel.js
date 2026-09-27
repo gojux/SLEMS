@@ -222,6 +222,10 @@ const STRINGS = {
     peakShavingNote:
       "Below the threshold only {usable} above the minimum state of charge ({min}) are left for peaks, about {kwh} kWh.",
     settingHints: {
+      night_reserve_auto:
+        "Learns the reserve from the mornings: every day SLEMS measures how much energy the house needed from battery or grid between the moment PV should have taken over (end of the night discharge as planned) and the moment it really did (PV covering the consumption for 15 minutes), in % of the day's forecast consumption. Needs 14 measured mornings; the measurement also runs while the night discharge is off.",
+      night_reserve_coverage:
+        "Share of the mornings the learned reserve covers: 90 % = enough on 9 of 10 mornings. Above 100 % the largest measured gap times this value, e.g. 110 % = 10 % more than the worst morning so far. Lower values feed in more at night.",
       grid_friendly_buffer_auto:
         "Learns the buffer from the recorded PV forecasts: of the days with less PV than forecast, the shortfall not exceeded on 80 % of them, applied to the PV still expected today. Needs 14 recorded days.",
       charge_secured_buffer_auto:
@@ -483,6 +487,10 @@ const STRINGS = {
     peakShavingNote:
       "Unter der Schwelle bleiben nur {usable} über dem minimalen Ladezustand ({min}) für Spitzen, etwa {kwh} kWh.",
     settingHints: {
+      night_reserve_auto:
+        "Lernt die Reserve aus den Morgen: Jeden Tag misst SLEMS, wie viel Energie das Haus zwischen dem Zeitpunkt, an dem die PV hätte übernehmen sollen (Ende der Nachtentladung laut Plan), und dem, an dem sie es wirklich tat (PV deckt den Verbrauch 15 Minuten lang), aus Batterie oder Netz brauchte, in % des prognostizierten Tagesverbrauchs. Braucht 14 gemessene Morgen; gemessen wird auch, wenn die Nachtentladung aus ist.",
+      night_reserve_coverage:
+        "Anteil der Morgen, für den die gelernte Reserve reicht: 90 % = an 9 von 10 Morgen. Über 100 % die größte gemessene Lücke mal diesem Wert, z. B. 110 % = 10 % mehr als der bisher schlechteste Morgen. Kleinere Werte speisen nachts mehr ein.",
       grid_friendly_buffer_auto:
         "Lernt den Puffer aus den aufgezeichneten PV-Prognosen: von den Tagen mit weniger PV als prognostiziert die Abweichung, die an 80 % davon nicht überschritten wurde, angewendet auf die heute noch erwartete PV. Braucht 14 aufgezeichnete Tage.",
       charge_secured_buffer_auto:
@@ -575,6 +583,7 @@ const LEARNED_SETTINGS = {
   discharge_grid_target: ["grid_targets_auto", "discharge_grid_target_w"],
   control_interval: ["timing_auto", "control_interval_s"],
   surplus_average_window: ["timing_auto", "surplus_average_window_s"],
+  night_reserve: ["night_reserve_auto", "night_reserve_pct"],
 };
 
 // Settings tab: translation keys of the system entities per group.
@@ -619,7 +628,7 @@ const SETTING_GROUPS = [
     ],
   ],
   ["gridFriendly", ["grid_friendly_charging", "grid_friendly_buffer_auto", "grid_friendly_buffer"]],
-  ["night", ["night_discharge", "night_reserve"]],
+  ["night", ["night_discharge", "night_reserve_auto", "night_reserve", "night_reserve_coverage"]],
   [
     "peak",
     [

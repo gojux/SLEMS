@@ -46,6 +46,27 @@ def _energy(forecast: Mapping[datetime, float], start: datetime) -> float:
     return forecast.get(start, 0.0)
 
 
+def pv_takeover(
+    now: datetime,
+    pv_forecast: Mapping[datetime, float],
+    consumption_forecast: Mapping[datetime, float],
+) -> datetime | None:
+    """Start of the first hour after the current one in which PV exceeds consumption.
+
+    None while PV exceeds consumption right now or without one within the
+    lookahead.
+    """
+    pv_forecast = hourly(pv_forecast)
+    consumption_forecast = hourly(consumption_forecast)
+    period_start = dt_util.as_local(now).replace(minute=0, second=0, microsecond=0)
+    start = period_start
+    while start < period_start + MAX_LOOKAHEAD:
+        if _energy(pv_forecast, start) > _energy(consumption_forecast, start):
+            return start if start > period_start else None
+        start += PERIOD
+    return None
+
+
 def plan_night_discharge(
     now: datetime,
     soc_pct: float,
@@ -69,15 +90,8 @@ def plan_night_discharge(
     """
     pv_forecast = hourly(pv_forecast)
     consumption_forecast = hourly(consumption_forecast)
-    period_start = dt_util.as_local(now).replace(minute=0, second=0, microsecond=0)
-    crossover: datetime | None = None
-    start = period_start
-    while start < period_start + MAX_LOOKAHEAD:
-        if _energy(pv_forecast, start) > _energy(consumption_forecast, start):
-            crossover = start
-            break
-        start += PERIOD
-    if crossover is None or crossover <= period_start:
+    crossover = pv_takeover(now, pv_forecast, consumption_forecast)
+    if crossover is None:
         return None
 
     day_start = dt_util.start_of_local_day(dt_util.as_local(crossover))

@@ -183,6 +183,8 @@ def _system(coordinator: SlemsCoordinator) -> dict:
             "grid_target_samples": [len(coordinator.grid_targets.charge), len(coordinator.grid_targets.discharge)],
             "timing": coordinator.learned_timing,
             "control_interval_s": coordinator.control_interval_s,
+            "morning_gap": coordinator.morning_gap.as_dict(),
+            "night_reserve_pct": coordinator.night_reserve_pct(coordinator.settings),
             "average_window_s": coordinator.average_window_s,
         },
     }
