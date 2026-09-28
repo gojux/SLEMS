@@ -1039,6 +1039,22 @@ projection with example data; after changes to the planning run it again
 (two steps: simulate in the tests container, render on the host; see its
 docstring).
 
+## Continuous integration
+
+`.github/workflows/validate.yml` runs the HACS validation (`hacs/action`,
+category integration) and `hassfest` on every push, on pull requests and
+daily; `tests.yml` runs the test suite in the same container as locally
+(`docker compose --profile tests run --rm tests`). `hassfest` can be run
+locally before a push:
+
+```bash
+docker run --rm -v "$PWD/custom_components:/github/workspace/custom_components:ro" ghcr.io/home-assistant/hassfest
+```
+
+The HACS check also looks at the GitHub repository itself: it needs a
+description and topics, and a brand icon in the `home-assistant/brands`
+repository (otherwise its *brands* check fails).
+
 ## Decision log
 
 | Date | Decision |

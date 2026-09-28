@@ -1,0 +1,18 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Same container as locally: Home Assistant image with pytest.
+      - run: docker compose --profile tests run --rm tests
