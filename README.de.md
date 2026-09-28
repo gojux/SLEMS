@@ -281,7 +281,9 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
   Nachtentladung, falls aktiviert. Beim Überfahren erscheinen die Werte einer
   halben Stunde (am Handy durch Antippen, Tippen daneben schließt sie); ein
   Klick auf einen Eintrag der Legende blendet diese Kurve aus oder ein (die
-  Skala folgt den angezeigten Kurven; der Browser merkt sich die Auswahl);
+  Skala folgt den angezeigten Kurven; der Browser merkt sich die Auswahl;
+  *PV über der Grenze* der Einspeisebegrenzung ist ausgeblendet, bis man es
+  einschaltet);
   *Tabelle anzeigen* schaltet auf eine Tabelle um. Das Diagramm zeigt die
   mittlere Leistung je halbe Stunde in kW.
 - **Batterien**: Ladezustand, gespeicherte Energie und Kapazität (kWh), netzseitige
@@ -690,9 +692,14 @@ Laden in die Spitze:
   Prognose neu berechnet. Hinkt das Laden hinterher (z. B. mehr Wolken als
   vorhergesagt), sinkt sie von selbst.
 - Die PV-Prognose wird mit der tatsächlichen Erzeugung des Tages korrigiert
-  (Diagnose-Sensor *Korrektur PV-Prognose*). Nach einem Neustart übernimmt
-  SLEMS die bisherige Erzeugung aus den Statistiken des PV-Sensors, es geht
-  also nichts verloren.
+  (Diagnose-Sensor *Korrektur PV-Prognose*: Verhältnis der Erzeugung zur
+  Prognose bis jetzt, 50–120 %). Ein Morgen sagt wenig über den ganzen Tag
+  (Nebel, ein Hügel, der die ersten Stunden abschattet), deshalb wirkt das
+  Verhältnis gewichtet: auf die laufende Stunde zu 80 %, über zwei Stunden
+  auslaufend, und auf den Rest des Tages erst, wenn 15 % der prognostizierten
+  Tagesenergie vorbei sind, voll ab 50 % (Attribute des Sensors). Nach einem
+  Neustart übernimmt SLEMS die bisherige Erzeugung aus den Statistiken des
+  PV-Sensors, es geht also nichts verloren.
 - Solange die Ladung nicht gesichert ist (Ladezustand unter
   *Batterievorrang unter Ladezustand* oder die Prognose reicht nicht), lädt
   SLEMS wie bisher sofort.

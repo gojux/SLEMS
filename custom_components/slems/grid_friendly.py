@@ -18,6 +18,14 @@ The PV forecast is corrected by the ratio of the PV energy produced today to
 the energy forecast for the same time (``pv_correction``). The energy produced
 today comes from the 5 minute statistics of the PV power sensor at startup
 (``energy_from_means``) and is then integrated from the live values.
+
+The ratio says little early in the day (a foggy morning, a hill shading the
+first hours), so it is applied with a weight (``correction_weight``): for the
+rest of the day from ``CORRECTION_START_SHARE`` of the day's forecast energy
+on, rising to full weight at ``CORRECTION_FULL_SHARE``; the current and the
+next hour more strongly (``NEAR_WEIGHT``, fading over ``NEAR_HOURS``), because
+the weather of the last hours says more about the next one than about the
+afternoon.
 """
 
 from __future__ import annotations
@@ -33,6 +41,13 @@ PERIOD = timedelta(hours=1)
 # Forecast energy today (Wh) before the correction factor is trusted.
 MIN_FORECAST_FOR_CORRECTION_WH = 1000.0
 CORRECTION_LIMITS = (0.5, 1.2)
+# Share of the day's forecast energy passed: from here the ratio counts for
+# the rest of the day, at the second value fully.
+CORRECTION_START_SHARE = 0.15
+CORRECTION_FULL_SHARE = 0.5
+# Weight of the ratio for the current hour, fading to 0 over NEAR_HOURS.
+NEAR_WEIGHT = 0.8
+NEAR_HOURS = 2.0
 # Precision of the limit search (W).
 RESOLUTION_W = 10.0
 
@@ -55,6 +70,44 @@ def pv_correction(
         return 1.0
     low, high = CORRECTION_LIMITS
     return min(high, max(low, produced_today_wh / expected))
+
+
+def pv_elapsed_share(forecast: Mapping[datetime, float], now: datetime) -> float:
+    """Share of today's forecast PV energy that lies before ``now``."""
+    day_start = dt_util.start_of_local_day(dt_util.as_local(now))
+    day_end = day_start + timedelta(days=1)
+    total = expected = 0.0
+    for start, wh in hourly(forecast).items():
+        end = start + PERIOD
+        if end <= day_start or start >= day_end:
+            continue
+        total += wh
+        if start < now:
+            expected += wh * (min(end, now) - start) / PERIOD
+    return expected / total if total > 0 else 0.0
+
+
+def correction_weight(elapsed_share: float, hours_ahead: float) -> float:
+    """Weight (0..1) of the PV correction for a period ``hours_ahead`` from now."""
+    span = CORRECTION_FULL_SHARE - CORRECTION_START_SHARE
+    day = min(1.0, max(0.0, (elapsed_share - CORRECTION_START_SHARE) / span))
+    near = NEAR_WEIGHT * max(0.0, 1 - max(0.0, hours_ahead) / NEAR_HOURS)
+    return max(day, near)
+
+
+def corrected_forecast(
+    forecast: Mapping[datetime, float], now: datetime, ratio: float, elapsed_share: float
+) -> dict[datetime, float]:
+    """Forecast with the weighted correction for today; other days unchanged."""
+    today = dt_util.as_local(now).date()
+    result = {}
+    for start, wh in forecast.items():
+        if dt_util.as_local(start).date() != today or ratio == 1.0:
+            result[start] = wh
+            continue
+        weight = correction_weight(elapsed_share, (start - now) / PERIOD)
+        result[start] = wh * (1 + (ratio - 1) * weight)
+    return result
 
 
 def remaining_surplus(

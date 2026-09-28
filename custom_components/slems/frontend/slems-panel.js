@@ -196,7 +196,7 @@ const STRINGS = {
     capBufferAuto: " (learned from {days} days)",
     capBufferWaiting: " (fixed; automatic from 14 recorded days, {days} so far)",
     capLine: "PV limit of the feed-in cap",
-    capExcess: "Above the limit",
+    capExcess: "PV above the limit",
     capCurtailed: "Curtailed",
     capLostReasons: { full: "batteries full", charge_power: "charge power too low" },
     simulation: "Simulation",
@@ -476,7 +476,7 @@ const STRINGS = {
     capBufferAuto: " (gelernt aus {days} Tagen)",
     capBufferWaiting: " (fest; automatisch ab 14 aufgezeichneten Tagen, bisher {days})",
     capLine: "PV-Grenze der Einspeisebegrenzung",
-    capExcess: "Über der Grenze",
+    capExcess: "PV über der Grenze",
     capCurtailed: "Abgeregelt",
     capLostReasons: { full: "Batterien voll", charge_power: "Ladeleistung zu gering" },
     simulation: "Simulation",
@@ -715,8 +715,12 @@ function polylines(pointRuns, color, dash) {
 // Comparison series of the simulation (plan with the current settings): dotted.
 const COMPARE_DASH = "1 4";
 
-// localStorage key of the day chart series hidden via the legend.
+// localStorage keys of the day chart series hidden via the legend and of the
+// series hidden by default that were switched on.
 const HIDDEN_SERIES_KEY = "slems-hidden-series";
+const SHOWN_SERIES_KEY = "slems-shown-series";
+// Series hidden until switched on in the legend.
+const DEFAULT_HIDDEN_SERIES = ["capExcess"];
 
 // Energy the feed-in cap forecasts to be curtailed (status colour "critical", not a series colour).
 const CURTAILED_COLOR = "#d03b3b";
@@ -754,11 +758,13 @@ class SlemsPanel extends HTMLElement {
     // Simulation tab: form values, last result (see _simulate).
     this._sim = { form: null, result: null, serial: 0, timer: null, requested: false };
     // Series of the day chart switched off in its legend (kept in the browser).
-    this._hiddenSeries = new Set();
+    this._hiddenSeries = new Set(DEFAULT_HIDDEN_SERIES);
     try {
-      this._hiddenSeries = new Set(JSON.parse(localStorage.getItem(HIDDEN_SERIES_KEY) || "[]"));
+      const shown = JSON.parse(localStorage.getItem(SHOWN_SERIES_KEY) || "[]");
+      const hidden = JSON.parse(localStorage.getItem(HIDDEN_SERIES_KEY) || "[]");
+      this._hiddenSeries = new Set([...DEFAULT_HIDDEN_SERIES.filter((k) => !shown.includes(k)), ...hidden]);
     } catch (err) {
-      // Storage not available: all series shown.
+      // Storage not available: the default series shown.
     }
     this._chartDay = "today";
     // Settings whose explanation is shown (translation keys).
@@ -1881,7 +1887,9 @@ class SlemsPanel extends HTMLElement {
     // The PV limit of the feed-in cap is always drawn completely (hide it in
     // the legend to get a smaller scale), the energy above it on top.
     if (shown("capLine")) for (const r of rows) if (r.capLine !== null && r.capLine !== undefined) values.push(r.capLine);
-    if (shown("capExcess")) for (const r of rows) if (r.capExcess > 0) values.push(r.capLine + r.capExcess);
+    if (shown("capExcess") || shown("capCurtailed")) {
+      for (const r of rows) if (r.capExcess > 0) values.push(r.capLine + r.capExcess);
+    }
     const max = Math.max(100, ...values.filter((v) => v !== null && v !== undefined));
     const step = niceStep(max / 4);
     const top = Math.ceil(max / step) * step;
@@ -2638,8 +2646,13 @@ class SlemsPanel extends HTMLElement {
     if (seriesButton) {
       const key = seriesButton.dataset.series;
       if (!this._hiddenSeries.delete(key)) this._hiddenSeries.add(key);
+      const hidden = [...this._hiddenSeries];
       try {
-        localStorage.setItem(HIDDEN_SERIES_KEY, JSON.stringify([...this._hiddenSeries]));
+        localStorage.setItem(HIDDEN_SERIES_KEY, JSON.stringify(hidden));
+        localStorage.setItem(
+          SHOWN_SERIES_KEY,
+          JSON.stringify(DEFAULT_HIDDEN_SERIES.filter((k) => !hidden.includes(k)))
+        );
       } catch (err) {
         // Not stored: the choice lasts until the page is reloaded.
       }

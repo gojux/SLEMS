@@ -170,3 +170,32 @@ def test_energy_from_five_minute_means() -> None:
     assert energy == pytest.approx(2400)
     assert covered_until == start + timedelta(hours=2)
     assert energy_from_means({}, timedelta(minutes=5)) == (0.0, None)
+
+
+def test_weighted_pv_correction() -> None:
+    from custom_components.slems.grid_friendly import (
+        correction_weight,
+        corrected_forecast,
+        pv_elapsed_share,
+    )
+
+    # Early morning (5 % of the day passed): only the next hours are corrected.
+    assert correction_weight(0.05, 0) == pytest.approx(0.8)
+    assert correction_weight(0.05, 1) == pytest.approx(0.4)
+    assert correction_weight(0.05, 3) == 0
+    # From 15 % on for the rest of the day, fully at 50 %.
+    assert correction_weight(0.325, 5) == pytest.approx(0.5)
+    assert correction_weight(0.6, 5) == 1
+
+    start = dt_util.start_of_local_day(dt_util.now()).replace(hour=6)
+    forecast = {start + timedelta(hours=h): 1000.0 for h in range(12)}
+    now = start + timedelta(hours=1)
+    assert pv_elapsed_share(forecast, now) == pytest.approx(1 / 12)
+    corrected = corrected_forecast(forecast, now, 0.5, 1 / 12)
+    # The current hour: 1 + (0.5 - 1) * 0.8.
+    assert corrected[now] == pytest.approx(600)
+    # The afternoon keeps the forecast.
+    assert corrected[start + timedelta(hours=8)] == pytest.approx(1000)
+    # Tomorrow is never corrected.
+    tomorrow = {start + timedelta(days=1): 1000.0}
+    assert corrected_forecast(tomorrow, now, 0.5, 0.9) == tomorrow

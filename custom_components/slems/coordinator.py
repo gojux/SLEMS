@@ -112,9 +112,11 @@ from .learning import (
     pv_overestimate,
 )
 from .grid_friendly import (
+    corrected_forecast,
     energy_from_means,
     feed_in_limit,
     pv_correction,
+    pv_elapsed_share,
     remaining_surplus,
 )
 from .night_discharge import NightDischargePlan, plan_night_discharge, pv_takeover
@@ -394,8 +396,10 @@ class SystemSnapshot:
     # Why there is no feed-in limit: "disabled", "no_forecast" (no battery or
     # PV forecast) or "not_enough_surplus" (charge at once).
     feed_in_limit_reason: str | None = None
-    # Ratio of today's PV production to the forecast until now.
+    # Ratio of today's PV production to the forecast until now, applied with a
+    # weight depending on the share of the day passed (see grid_friendly).
     pv_correction: float = 1.0
+    pv_elapsed_share: float = 0.0
     # Hours of today for the dashboard: start, corrected PV forecast (Wh),
     # consumption forecast (Wh), planned battery charging (W) and projected
     # total SoC at the end of the hour (%), the last two from now on.
@@ -829,6 +833,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 "feed_in_limit_reason",
                 "peak_shaving_limit_w",
                 "pv_correction",
+                "pv_elapsed_share",
                 "day_plan",
                 "day_plan_tomorrow",
                 "allocation",
@@ -1231,7 +1236,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         pv_forecast = snapshot.pv_forecast
         if pv_forecast is not None:
             snapshot.pv_correction = pv_correction(pv_forecast, wall_now, self._pv_today_wh)
-            pv_forecast = {k: v * snapshot.pv_correction for k, v in pv_forecast.items()}
+            snapshot.pv_elapsed_share = pv_elapsed_share(pv_forecast, wall_now)
+            pv_forecast = self._pv_native(snapshot, wall_now)
         # Balancing batteries take the PV surplus first.
         balancing_wh = self._balancing_charge_wh(snapshot)
         snapshot.expected_surplus_wh = expected_surplus_wh(
@@ -1471,7 +1477,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     ) -> tuple[float, float]:
         consumption = snapshot.consumption_forecast
         pv = (
-            self._energy(snapshot.pv_forecast, start, end) * snapshot.pv_correction
+            self._energy(self._pv_native(snapshot, dt_util.now()), start, end)
             if snapshot.pv_forecast
             else 0.0
         )
@@ -1522,9 +1528,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         result = ForecastPlan()
         consumption = snapshot.consumption_forecast
         pv_forecast = (
-            {k: v * snapshot.pv_correction for k, v in snapshot.pv_forecast.items()}
-            if snapshot.pv_forecast is not None
-            else None
+            self._pv_native(snapshot, wall_now) if snapshot.pv_forecast is not None else None
         )
         cap = self._feed_in_cap(snapshot, battery, wall_now, settings, power_w)
         result.cap = cap
@@ -1548,16 +1552,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             )
             if cap is not None and result.feed_in_limit_w is not None:
                 result.feed_in_limit_w = min(result.feed_in_limit_w, cap.limit_w)
-        # The correction factor describes today; tomorrow uses the raw forecast.
-        today = dt_util.as_local(wall_now).date()
-        pv_hourly = (
-            {
-                start: wh * (snapshot.pv_correction if start.date() == today else 1.0)
-                for start, wh in hourly(snapshot.pv_forecast).items()
-            }
-            if snapshot.pv_forecast is not None
-            else None
-        )
+        pv_hourly = hourly(pv_forecast) if pv_forecast is not None else None
         consumption_hourly = hourly(consumption.total) if consumption else None
         result.peak_threshold_pct, result.peak_limit_w = self._peak_shaving(
             battery, wall_now, pv_hourly, consumption_hourly, settings
@@ -1617,12 +1612,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
 
     @staticmethod
     def _pv_native(snapshot: SystemSnapshot, wall_now: datetime) -> PvForecast:
-        """PV forecast in its own periods; today corrected, tomorrow raw."""
-        today = dt_util.as_local(wall_now).date()
-        return {
-            start: wh * (snapshot.pv_correction if dt_util.as_local(start).date() == today else 1.0)
-            for start, wh in (snapshot.pv_forecast or {}).items()
-        }
+        """PV forecast in its own periods; today corrected (weighted), tomorrow raw."""
+        return corrected_forecast(
+            snapshot.pv_forecast or {}, wall_now, snapshot.pv_correction, snapshot.pv_elapsed_share
+        )
 
     def _feed_in_cap(
         self,

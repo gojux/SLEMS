@@ -273,7 +273,8 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   shaving and night discharge if enabled. Hovering (on a phone: tapping, a
   tap elsewhere closes it) shows the values of a half hour; a click on an
   entry of the legend hides or shows that series (the scale follows the
-  series shown; the browser keeps the choice); *Show table* switches to a
+  series shown; the browser keeps the choice; *PV above the limit* of the
+  feed-in cap is hidden until switched on); *Show table* switches to a
   table.
 - **Batteries**: state of charge, stored energy and capacity (kWh), power on the grid side
   (AC) with its direction, the SLEMS set point, efficiency, state and
@@ -661,8 +662,13 @@ peak:
   and the remaining forecast. If charging falls behind (e.g. more clouds
   than forecast), the limit drops by itself.
 - The PV forecast is corrected with today's actual production (diagnostic
-  sensor *PV forecast correction*). After a restart SLEMS takes the production
-  so far from the statistics of the PV sensor, so nothing is lost.
+  sensor *PV forecast correction*: the ratio of the production to the
+  forecast until now, 50–120 %). A morning says little about the whole day
+  (fog, a hill shading the first hours), so the ratio is applied with a
+  weight: the current hour at 80 %, fading out over two hours, and the rest
+  of the day only once 15 % of the day's forecast energy has passed, fully
+  from 50 % on (attributes of the sensor). After a restart SLEMS takes the
+  production so far from the statistics of the PV sensor, so nothing is lost.
 - As long as the charge is not secured (state of charge below *Battery
   priority below state of charge* or the forecast is not sufficient), SLEMS
   charges at once as before.

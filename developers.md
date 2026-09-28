@@ -417,8 +417,31 @@ capped at `remaining − T` (strategy *grid_friendly* while the cap limits);
 the rest goes to the consumers by priority, then to the grid. Not secured →
 battery priority as before, no cap.
 
-PV correction: ratio of today's measured PV energy to the forecast until now,
-limited to 0.5–1.2, used once the forecast until now exceeds 1 kWh. Idea for
+PV correction (`grid_friendly.py`): the ratio of today's measured PV energy
+to the forecast until now, limited to 0.5–1.2, used once the forecast until
+now exceeds 1 kWh. A morning says little about the whole day (fog, a hill
+shading the first hours), so the ratio is applied per forecast period with a
+weight:
+
+```
+ratio   = clamp(produced today / forecast until now, 0.5, 1.2)   # pv_correction
+elapsed = forecast until now / forecast of the whole day           # pv_elapsed_share
+day     = clamp((elapsed - 0.15) / (0.50 - 0.15), 0, 1)            # rest of the day
+near    = 0.8 · max(0, 1 - hours_ahead / 2)                        # current and next hour
+weight  = max(day, near)                                           # correction_weight
+period  = forecast · (1 + (ratio - 1) · weight)                    # corrected_forecast
+```
+
+`hours_ahead` is the time from now to the start of the period (0 for the
+current and past periods). Example: fog until 8:00, ratio 0.5, 3 % of the day
+passed: the current hour is lowered by 40 %, the next by 20 %, noon keeps the
+forecast. The constants are `CORRECTION_START_SHARE`,
+`CORRECTION_FULL_SHARE`, `NEAR_WEIGHT` and `NEAR_HOURS`. All users of the
+corrected forecast (planning, feed-in limit, feed-in cap, night discharge,
+projection, day chart, simulation) go through `SlemsCoordinator._pv_native`;
+tomorrow is never corrected. The diagnostic sensor *PV forecast correction*
+shows the ratio, its attributes the elapsed share and the weights for now and
+the rest of the day. Idea for
 later: a higher upper limit (e.g. 1.5); on a morning where the forecast is far
 too low the plan and the feed-in limit are otherwise too cautious. The
 energy of today is read at startup from the 5 minute statistics of the PV
@@ -1113,3 +1136,4 @@ repository (otherwise its *brands* check fails).
 | 2026-09-27 | Simulation tab: day plans with other settings, batteries and forecasts, calculated by the backend with the real planning code (`forecast_plan`), compared with the real plan; nothing stored. The SoC projection now also respects the maximum grid export while discharging. |
 | 2026-09-27 | Learned values with a switch each (the set value applies when off or without enough data): grid friendly buffer and safety buffer from the forecast errors, grid targets from the grid deviation, control timing from the meter interval, usable capacity per battery, consumer power and thermostat pauses. The night discharge reserve is left for a later decision. |
 | 2026-09-27 | Night discharge reserve learnable from the morning gap (planned vs. real PV takeover) in % of the forecast consumption, with a coverage setting (quantile, above 100 % a margin over the worst morning); no price based optimisation, because whether the energy community takes the energy at night is not known live. |
+| 2026-09-28 | PV correction weighted: the rest of the day only from 15 % of the day's forecast energy on (fully from 50 %), the current and next hour more strongly; a foggy morning halved the whole day's forecast before. |

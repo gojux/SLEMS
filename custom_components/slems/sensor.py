@@ -35,6 +35,7 @@ from .cell_balancing import TOP_ZONE_V, BalancingPhase, balance_status
 from .controller import ControlStatus
 from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 from .forecast.accuracy import Accuracy
+from .grid_friendly import correction_weight
 from .problems import CAP_EXCEEDED_AFTER_S
 from .pv_forecast import energy_on_day
 
@@ -398,6 +399,13 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         suggested_display_precision=0,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s, _: s.pv_correction * 100,
+        attributes_fn=lambda s, _: {
+            # Share of today's forecast energy passed and the weight of the
+            # correction for the rest of the day (the next hours: more).
+            "elapsed_share_pct": round(s.pv_elapsed_share * 100),
+            "weight_rest_of_day_pct": round(correction_weight(s.pv_elapsed_share, 24) * 100),
+            "weight_now_pct": round(correction_weight(s.pv_elapsed_share, 0) * 100),
+        },
     ),
     SystemSensorDescription(
         key="expected_surplus_energy",
