@@ -2533,7 +2533,7 @@ class SlemsPanel extends HTMLElement {
         }`
       : escapeHtml(this._name(stateObj));
     if (domain === "switch") {
-      return `<div class="setting"><span>${name}</span>${this._toggle(stateObj, name)}</div>`;
+      return `<div class="setting"><span>${name}</span>${this._toggle(stateObj, this._name(stateObj))}</div>`;
     }
     const learned = LEARNED_SETTINGS[key];
     if (learned && this._state(learned[0])?.state === "on") {
