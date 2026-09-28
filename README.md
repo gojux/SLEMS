@@ -12,6 +12,14 @@ absorbed, based on forecasts of consumption and PV production.
 The name is a combination of *Slug* (a wonderful word for a very interesting
 animal) and *EMS* (energy management system).
 
+> **Supported batteries:** SLEMS currently controls the **Marstek Venus E 3.0**
+> (Modbus TCP). Other batteries can be added read-only through their Home
+> Assistant entities (planning and simulation, no control). If you would like
+> to use SLEMS with another battery, please
+> [open an issue](https://github.com/gojux/SLEMS/issues) with the model and
+> how it is connected (Modbus, local API, Home Assistant integration), and
+> whether you could test it.
+
 ## Why SLEMS?
 
 Most home battery controls react to the moment: they keep the grid power

@@ -13,6 +13,14 @@ und PV-Ertrag.
 Der Name setzt sich aus *Slug* (ein wunderbares Wort für ein sehr
 interessantes Tier) und *EMS* (Energiemanagementsystem) zusammen.
 
+> **Unterstützte Batterien:** SLEMS steuert derzeit die **Marstek Venus E 3.0**
+> (Modbus TCP). Andere Batterien lassen sich über ihre Home-Assistant-Entities
+> nur lesend einbinden (Planung und Simulation, keine Steuerung). Wenn du
+> SLEMS mit einer anderen Batterie nutzen möchtest, erstelle bitte ein
+> [Issue](https://github.com/gojux/SLEMS/issues) mit dem Modell, der
+> Anbindung (Modbus, lokale API, Home-Assistant-Integration) und ob du testen
+> könntest.
+
 ## Warum SLEMS?
 
 Die meisten Speichersteuerungen reagieren auf den Moment: Sie halten die

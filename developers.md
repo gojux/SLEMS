@@ -877,6 +877,46 @@ CH395 can be sent from the simulator container to test it.
    `extra_telemetry_keys`; matching sensors in `BATTERY_EXTRA_SENSORS` are then
    created automatically.
 
+### Other batteries (Omnibattery drivers)
+
+Omnibattery (GPL-3.0 like SLEMS, so its code may be used with attribution)
+supports more batteries than SLEMS. Its drivers cannot be copied as they are:
+they are built for Omnibattery's coordinator (read groups, register keys,
+control helpers), while a SLEMS driver only connects, reads telemetry, sets a
+net power, releases control and reads device information. What carries over
+is the device knowledge (registers, sign conventions, control sequences,
+quirks); the wrapper has to be written for SLEMS, a few hundred lines per
+brand. Assessment of the drivers in `Omnibattery/custom_components/omnibattery/drivers/`:
+
+| Battery | Transport | Effort | Notes |
+|---|---|---|---|
+| Marstek Venus v2 / vA / vD | Modbus TCP | low | register maps in `const/registers_v2/va/vd.py`; the SLEMS Venus driver fits |
+| Marstek behind a LilyGo RS485 bridge (`esphome.py`) | HA entities (ESPHome) | low to medium | a Venus v2; close to `drivers/ha_entities.py` |
+| Zendure SolarFlow AC models | local HTTP | medium | AC coupled; HEMS must be off in the app, otherwise the device overrides the set points |
+| Sessy | local HTTP | low to medium | AC coupled, simple signed power set point |
+| Anker Solarbank | Modbus TCP | high | DC coupled |
+| Hoymiles | MQTT (HA broker) | high | DC coupled |
+| Huawei LUNA2000 | Modbus + `huawei_solar` | high | split transport (telemetry direct, commands via the integration or a direct write sequence), usually behind a Modbus proxy |
+
+Open points before other brands:
+
+- DC coupled batteries (PV on the battery's own DC bus): SLEMS assumes a
+  separately measured PV and a battery that charges and discharges on the grid
+  side. Planning, delivery monitoring and the feed-in cap would have to take
+  PV "inside" the battery into account (Omnibattery: `dc_coupled`,
+  `ac_delivered_power`).
+- Cell balancing, the communication pause for firmware updates and the
+  efficiency from the battery counters are Venus specific and must be switched
+  off through the driver capabilities for other brands.
+- The dev environment only simulates the Venus; every other brand needs a
+  tester with the device.
+- Order if it is done: Venus variants first (most benefit, least effort), then
+  Zendure and Sessy (AC coupled), DC coupled devices only with a tester and
+  after the model is extended.
+
+Until then any battery with SoC and power entities in Home Assistant can be
+added read-only (`ha_entities`) for simulation and planning.
+
 ## Consumption forecast
 
 `forecast/` – horizon today and tomorrow, hourly. The forecast covers the
@@ -1200,3 +1240,4 @@ repository (otherwise its *brands* check fails).
 | 2026-09-28 | Feed-in cap mode *Instead of curtailing* means only against curtailment: such consumers get no normal surplus while the cap is on (a heating rod ran on normal surplus although the batteries could take the peak). Default mode changed to *Plan with*. |
 | 2026-09-28 | Feed-in cap roles *Supporting* / *Normal* (default) / *Never* instead of counted / instead of curtailing / never. Batteries first; supporting consumers get no normal surplus while the cap is on, and for energy that does not fit into the batteries they are planned from the start of the peak, because a consumer with less power than the surplus only takes a fraction of it once the batteries are full. Nothing is counted on to make room (a hot boiler would cost battery space in the peak); problems count the consumers' spare power, a note names them. Optional temperature sensors per consumer: the storage capacity is learned from the mean of the sensors (energy per K, cycling and full temperature, cycling power) without knowing which sensor switches the thermostat, and limits the planned energy (80 %). |
 | 2026-09-29 | Feed-in cap minimum buffer fixed at 5 % of the kWp instead of a setting: it covers errors in the timing and height of a peak that the learned buffer (from daily totals) does not show, and its right value depends on the forecasts rather than the house, so a user cannot judge it. The night discharge reserve coverage is only shown while the reserve is automatic. |
+| 2026-09-29 | Other batteries from Omnibattery: not ported for now. Its drivers are tied to its coordinator; the device knowledge can be taken over (both GPL-3.0). Order if done: Venus v2/vA/vD, then AC coupled Zendure and Sessy, DC coupled devices only after the model is extended and with a tester. Users who want another battery are asked to open an issue. |
