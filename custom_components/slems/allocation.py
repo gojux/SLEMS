@@ -110,7 +110,7 @@ class ConsumerRequest:
     must_stay_on: bool = False
     # Minimum pause not yet elapsed: must stay off.
     must_stay_off: bool = False
-    cap_mode: CapMode = CapMode.EMERGENCY
+    cap_mode: CapMode = CapMode.COUNT
 
     @property
     def minimum_running_power_w(self) -> float:
@@ -266,7 +266,9 @@ def allocate(
     battery_power = min(battery_budget, max_charge)
     consumer_budget = remaining - battery_power
 
-    unused = _distribute(consumer_budget, ordered, consumer_power)
+    # With the feed-in cap, emergency consumers only take what would be curtailed.
+    normal = ordered if cap is None else [c for c in ordered if c.cap_mode is not CapMode.EMERGENCY]
+    unused = _distribute(consumer_budget, normal, consumer_power)
     # What the consumers cannot take goes back to the batteries.
     battery_power = min(battery_power + unused, max_charge) + cap_charge
     if capped:

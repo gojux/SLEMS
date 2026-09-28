@@ -219,10 +219,13 @@ Every consumer needs its own power **and** energy sensor.
   off in operating mode *active* sets it to 0 W (or off) once; afterwards
   SLEMS leaves it alone and plans it like an uncontrolled load.
 - **With feed-in cap** (select per controlled consumer, on its card in the
-  dashboard while the feed-in cap is on): *Plan with* – the consumer
-  takes the surplus above the feed-in limit before the batteries, so they need
-  less free space; *Instead of curtailing* (default) – only what the batteries
-  cannot absorb; *Never*. See *Feed-in cap*.
+  dashboard while the feed-in cap is on): *Plan with* (default) – the
+  consumer takes the surplus above the feed-in limit before the batteries, so
+  they need less free space, and below the limit it is used as usual;
+  *Instead of curtailing* – the consumer runs only for what the batteries
+  cannot absorb above the limit and gets no other surplus; *Never* – not used
+  for the energy above the limit, below it as usual. Applies only while *Control active* is on (greyed out
+  otherwise). See *Feed-in cap*.
 
 **Battery efficiency** (round trip, AC to AC), one of three sources per
 battery:

@@ -1693,7 +1693,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
 
     def cap_mode(self, subentry_id: str) -> CapMode:
-        return self.consumer_cap_modes.get(subentry_id, CapMode.EMERGENCY)
+        return self.consumer_cap_modes.get(subentry_id, CapMode.COUNT)
 
     def missing_batteries(self, snapshot: SystemSnapshot) -> list[tuple[str, str]]:
         """(name, reason) of the batteries that are not planned with right now."""

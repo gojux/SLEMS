@@ -225,10 +225,13 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   Last.
 - **Bei Einspeisebegrenzung** (Auswahl je gesteuertem Verbraucher, auf
   seiner Karte im Dashboard, solange die Einspeisebegrenzung an ist):
-  *Einkalkulieren* – der Verbraucher nimmt den Überschuss über der
-  Einspeisegrenze vor den Batterien auf, sie brauchen dann weniger freien Platz; *Statt Abregeln*
-  (Standard) – nur, was die Batterien nicht aufnehmen können; *Nie*. Siehe
-  *Einspeisebegrenzung*.
+  *Einkalkulieren* (Standard) – der Verbraucher nimmt den Überschuss über
+  der Einspeisegrenze vor den Batterien auf, sie brauchen dann weniger freien
+  Platz, und unterhalb der Grenze wird er wie gewohnt genutzt; *Statt
+  Abregeln* – der Verbraucher läuft nur für das, was die Batterien über der
+  Grenze nicht aufnehmen können, und bekommt sonst keinen Überschuss; *Nie* –
+  für die Energie über der Grenze nicht genutzt, darunter wie gewohnt. Wirkt nur, solange *Steuerung aktiv* an ist (sonst ausgegraut).
+  Siehe *Einspeisebegrenzung*.
 
 **Wirkungsgrad der Batterie** (Gesamtwirkungsgrad, AC zu AC), je Batterie
 aus einer von drei Quellen:

@@ -136,6 +136,7 @@ const STRINGS = {
     saturated: "saturated",
     resting: "thermostat pause",
     controlOff: "control off",
+    onlyWithControl: "Applies only while the control is active.",
     controlActive: "Control active",
     responseTime: "Response time (own sensor)",
     gridResponseTime: "Response time at the meter",
@@ -262,7 +263,7 @@ const STRINGS = {
       feed_in_cap_min_buffer:
         "Space kept free per peak in any case, in % of the PV peak power as energy of one hour (10 kWp, 5 % → 0.5 kWh). Covers small peaks for which the percentage buffer is tiny.",
       cap_mode:
-        "Plan with: takes the surplus above the feed-in limit before the batteries, so they need less free space. Instead of curtailing: only what the batteries cannot absorb. Never: not used for the feed-in cap.",
+        "Plan with: takes the surplus above the feed-in limit before the batteries, so they need less free space. Instead of curtailing: runs only for what the batteries cannot absorb above the limit, no other surplus. Never: not used for the energy above the limit. Below the limit, Plan with and Never use the consumer as usual.",
       feed_in_cap_auto_buffer:
         "Uses the recorded PV forecast errors instead of the fixed buffer: of the days with more PV than forecast, the underestimation not exceeded on 80 % of them raises the PV forecast. Needs 14 recorded days; until then the fixed buffer applies.",
       peak_shaving_grid_limit:
@@ -416,6 +417,7 @@ const STRINGS = {
     saturated: "gesättigt",
     resting: "Thermostat-Pause",
     controlOff: "Steuerung aus",
+    onlyWithControl: "Wirkt nur bei aktiver Steuerung.",
     controlActive: "Steuerung aktiv",
     responseTime: "Reaktionszeit (eigener Sensor)",
     gridResponseTime: "Reaktionszeit am Zähler",
@@ -542,7 +544,7 @@ const STRINGS = {
       feed_in_cap_min_buffer:
         "Platz, der je Spitze auf jeden Fall frei bleibt, in % der PV-Spitzenleistung als Energie einer Stunde (10 kWp, 5 % → 0,5 kWh). Deckt kleine Spitzen ab, bei denen der prozentuale Puffer winzig ist.",
       cap_mode:
-        "Einkalkulieren: nimmt den Überschuss über der Einspeisegrenze vor den Batterien auf, sie brauchen dann weniger freien Platz. Statt Abregeln: nur, was die Batterien nicht aufnehmen können. Nie: wird für die Einspeisebegrenzung nicht genutzt.",
+        "Einkalkulieren: nimmt den Überschuss über der Einspeisegrenze vor den Batterien auf, sie brauchen dann weniger freien Platz. Statt Abregeln: läuft nur für das, was die Batterien über der Grenze nicht aufnehmen können, sonst kein Überschuss. Nie: wird für die Energie über der Grenze nicht genutzt. Unterhalb der Grenze nutzen Einkalkulieren und Nie den Verbraucher wie gewohnt.",
       feed_in_cap_auto_buffer:
         "Verwendet statt des festen Puffers die aufgezeichneten Abweichungen der PV-Prognose: Von den Tagen mit mehr PV als prognostiziert hebt die Unterschätzung, die an 80 % davon nicht überschritten wurde, die PV-Prognose an. Braucht 14 aufgezeichnete Tage; bis dahin gilt der feste Puffer.",
       peak_shaving_grid_limit:
@@ -2449,7 +2451,7 @@ class SlemsPanel extends HTMLElement {
               ${c.controllable ? this._row(t.responseTime, response, planned?.entity_id) : ""}
               ${c.controllable ? this._row(t.gridResponseTime, gridResponse, planned?.entity_id) : ""}
             </dl>${
-              settings.length ? `<div class="settings card-setting">${settings.map((st) => this._control(st)).join("")}</div>` : ""
+              settings.length ? `<div class="settings card-setting">${settings.map((st) => this._control(st, st === capMode && control?.state === "off" ? t.onlyWithControl : null)).join("")}</div>` : ""
             }</section>`;
         })
         .join("")
@@ -2522,7 +2524,8 @@ class SlemsPanel extends HTMLElement {
       <span></span></label>`;
   }
 
-  _control(stateObj) {
+  // disabledNote: the control is shown greyed out with this note.
+  _control(stateObj, disabledNote = null) {
     const domain = stateObj.entity_id.split(".")[0];
     const key = this._hass.entities?.[stateObj.entity_id]?.translation_key;
     const hint = this._t.settingHints[key];
@@ -2560,7 +2563,8 @@ class SlemsPanel extends HTMLElement {
       const options = stateObj.attributes.options || [];
       const label = (option) =>
         this._hass.formatEntityState ? this._hass.formatEntityState(stateObj, option) : option;
-      return `<div class="setting"><span>${name}</span><select data-entity="${stateObj.entity_id}" data-kind="select">
+      if (disabledNote) name += `<span class="setting-hint">${escapeHtml(disabledNote)}</span>`;
+      return `<div class="setting${disabledNote ? " disabled" : ""}"><span>${name}</span><select data-entity="${stateObj.entity_id}" data-kind="select"${disabledNote ? " disabled" : ""}>
         ${options.map((o) => `<option value="${escapeHtml(o)}" ${o === stateObj.state ? "selected" : ""}>${escapeHtml(label(o))}</option>`).join("")}
         </select></div>`;
     }
@@ -2888,6 +2892,8 @@ const STYLE = `
   .setting select { font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--divider-color);
     background: var(--card-background-color); color: var(--primary-text-color); max-width: 60%; }
   .card-setting .setting > span:first-child { min-width: 0; }
+  .setting.disabled > span:first-child { color: var(--secondary-text-color); }
+  .setting select:disabled { opacity: 0.5; }
   .card-setting select { min-width: 0; max-width: 55%; font-size: 14px; padding: 3px 4px; }
   .number { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
   .switch { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }

@@ -529,7 +529,10 @@ Integration:
 
 Part of each consumer: select *With feed-in cap* per controllable consumer
 (`ConsumerCapModeSelect`, restored; `coordinator.consumer_cap_modes`, default
-`emergency`), shown on the consumer card while the cap is on.
+`count`), shown on the consumer card while the cap is on. While the cap is on,
+`allocate` leaves `emergency` consumers out of the normal surplus
+distribution: they only take the surplus above the limit the batteries cannot
+absorb. `count` and `never` consumers get the normal surplus as usual.
 
 ### Learned values
 
@@ -1137,3 +1140,4 @@ repository (otherwise its *brands* check fails).
 | 2026-09-27 | Learned values with a switch each (the set value applies when off or without enough data): grid friendly buffer and safety buffer from the forecast errors, grid targets from the grid deviation, control timing from the meter interval, usable capacity per battery, consumer power and thermostat pauses. The night discharge reserve is left for a later decision. |
 | 2026-09-27 | Night discharge reserve learnable from the morning gap (planned vs. real PV takeover) in % of the forecast consumption, with a coverage setting (quantile, above 100 % a margin over the worst morning); no price based optimisation, because whether the energy community takes the energy at night is not known live. |
 | 2026-09-28 | PV correction weighted: the rest of the day only from 15 % of the day's forecast energy on (fully from 50 %), the current and next hour more strongly; a foggy morning halved the whole day's forecast before. |
+| 2026-09-28 | Feed-in cap mode *Instead of curtailing* means only against curtailment: such consumers get no normal surplus while the cap is on (a heating rod ran on normal surplus although the batteries could take the peak). Default mode changed to *Plan with*. |

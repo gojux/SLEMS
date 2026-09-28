@@ -1,5 +1,6 @@
 """Tests for the distribution of power between batteries and consumers."""
 
+from dataclasses import replace
 from datetime import datetime, timedelta
 
 import pytest
@@ -219,6 +220,7 @@ COUNTED_ROD = ConsumerRequest(
 )
 EMERGENCY_PUMP = ConsumerRequest(
     subentry_id="pump", priority=1, control_mode=ControlMode.SWITCH, nominal_power_w=500,
+    cap_mode=CapMode.EMERGENCY,
 )
 
 
@@ -247,9 +249,21 @@ def test_feed_in_cap_emergency_consumers_after_the_batteries() -> None:
 
 def test_feed_in_cap_holds_charging_below_the_limit() -> None:
     hold = CapControl(limit_w=3000, margin_w=100, hold_charging=True)
-    result = allocate(4000, battery(20), [EMERGENCY_PUMP], SETTINGS, None, cap=hold)
+    pump = replace(EMERGENCY_PUMP, cap_mode=CapMode.NEVER)
+    result = allocate(4000, battery(20), [pump], SETTINGS, None, cap=hold)
     # Only the 1100 W above the limit are charged; the pump gets surplus below it.
     assert result.battery_power_w == 1100
+    assert result.consumer_power_w["pump"] == 500
+
+
+def test_feed_in_cap_emergency_consumers_get_no_normal_surplus() -> None:
+    # Surplus below the limit, charge secured: the share left for consumers is exported.
+    result = allocate(
+        2000, battery(80), [EMERGENCY_PUMP], SETTINGS, expected_surplus_wh=50000, cap=CAP
+    )
+    assert result.consumer_power_w["pump"] == 0
+    # Without the feed-in cap the pump takes surplus as usual.
+    result = allocate(2000, battery(80), [EMERGENCY_PUMP], SETTINGS, expected_surplus_wh=50000)
     assert result.consumer_power_w["pump"] == 500
 
 
