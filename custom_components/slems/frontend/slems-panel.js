@@ -1878,7 +1878,9 @@ class SlemsPanel extends HTMLElement {
       "exportForecast", "exportActual", "exportCompare",
     ].filter(shown);
     const values = rows.flatMap((r) => scaled.map((key) => r[key]));
-    // The feed-in limit only widens the scale where energy lies above it.
+    // The PV limit of the feed-in cap is always drawn completely (hide it in
+    // the legend to get a smaller scale), the energy above it on top.
+    if (shown("capLine")) for (const r of rows) if (r.capLine !== null && r.capLine !== undefined) values.push(r.capLine);
     if (shown("capExcess")) for (const r of rows) if (r.capExcess > 0) values.push(r.capLine + r.capExcess);
     const max = Math.max(100, ...values.filter((v) => v !== null && v !== undefined));
     const step = niceStep(max / 4);
@@ -1970,9 +1972,7 @@ class SlemsPanel extends HTMLElement {
       .join("");
     const capLine = !shown("capLine") ? "" : polylines(
       runs(
-        rows
-          .filter((r) => r.slot % 2 === 0)
-          .map((r) => ({ ...r, capLine: r.capLine !== null && r.capLine <= top ? r.capLine : null })),
+        rows.filter((r) => r.slot % 2 === 0),
         "capLine"
       ).map((run) => run.map((r) => [x(r.hour + 0.5), y(r.capLine)])),
       c.muted,
