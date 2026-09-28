@@ -37,6 +37,7 @@ def plan(
     now: datetime | None = None,
     min_wh: float = 0.0,
     max_target=None,
+    full_wh: float | None = None,
 ):
     pv, consumption = _forecasts(pv_per_hour)
     return plan_night_discharge(
@@ -51,6 +52,7 @@ def plan(
         buffer_wh=1000,
         min_wh=min_wh,
         max_target=max_target,
+        full_wh=full_wh,
     )
 
 
@@ -68,6 +70,12 @@ def test_higher_reserve_when_pv_is_not_enough() -> None:
     result = plan(soc=80, pv_per_hour=1000)
     assert result.target_wh == pytest.approx(6200)
     assert result.power_w == pytest.approx(180)
+
+
+def test_target_from_the_maximum_soc() -> None:
+    # Maximum SoC 90 %: 3.8 kWh rechargeable up to 9 kWh, not up to 10 kWh.
+    result = plan(soc=80, pv_per_hour=1000, full_wh=9000)
+    assert result.target_wh == pytest.approx(5200)
 
 
 def test_reserve_comes_on_top_of_the_minimum_soc() -> None:

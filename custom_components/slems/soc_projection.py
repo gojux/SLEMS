@@ -196,6 +196,7 @@ def _discharge(
         (lambda moment: battery.full_soc_pct / 100 * capacity - cap.space_needed_at(moment))
         if cap is not None
         else None,
+        full_wh=battery.full_soc_pct / 100 * capacity,
     )
     if plan is None:
         return after

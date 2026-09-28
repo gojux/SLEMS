@@ -79,13 +79,15 @@ def plan_night_discharge(
     buffer_wh: float,
     min_wh: float = 0.0,
     max_target: Callable[[datetime], float] | None = None,
+    full_wh: float | None = None,
 ) -> NightDischargePlan | None:
     """Plan the night discharge; None if not applicable right now.
 
     Both forecasts map period starts to Wh. ``min_wh`` is the energy below
     the minimum SoC of the batteries: it cannot be used, so the reserve comes
     on top of it. ``max_target`` gives the highest stored energy allowed at
-    a moment (feed-in cap). Not applicable while PV already
+    a moment (feed-in cap), ``full_wh`` the stored energy at the maximum SoC
+    (default: the capacity). Not applicable while PV already
     exceeds consumption, or if no crossover is found within the lookahead.
     """
     pv_forecast = hourly(pv_forecast)
@@ -107,7 +109,8 @@ def plan_night_discharge(
 
     reserve = reserve_pct_of_consumption / 100 * daily_consumption
     rechargeable = max(0.0, surplus - buffer_wh) * charge_efficiency
-    target = min(capacity_wh, max(min_wh + reserve, capacity_wh - rechargeable, 0.0))
+    full = capacity_wh if full_wh is None else full_wh
+    target = min(full, max(min_wh + reserve, full - rechargeable, 0.0))
     if max_target is not None:
         target = max(min_wh, min(target, max_target(crossover)))
 

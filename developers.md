@@ -194,7 +194,8 @@ batteries only cover the house consumption at night.
   of the energy below the minimum SoC of the batteries (not usable). If
   tomorrow's PV surplus (from the crossover until the end of the day, minus the
   safety buffer, times the charge efficiency) cannot refill the batteries from
-  there, the target is raised to the level from which it can.
+  there up to their maximum SoC, the target is raised to the level from which
+  it can.
 - **Power**: (stored energy − target) × discharge efficiency / hours until the
   crossover, recomputed every cycle. The batteries deliver at least this power;
   the discharge grid target is ignored, the maximum grid export while
