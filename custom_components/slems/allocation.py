@@ -367,7 +367,7 @@ def remaining_pv_wh(forecast: PvForecast, now: datetime) -> float:
     """Forecast PV energy from ``now`` until the end of the local day."""
     end_of_day = dt_util.start_of_local_day(dt_util.as_local(now)) + timedelta(days=1)
     total = 0.0
-    for start, wh in forecast.items():
+    for start, wh in hourly(forecast).items():
         end = start + PV_PERIOD
         if end <= now or start >= end_of_day:
             continue
@@ -378,11 +378,11 @@ def remaining_pv_wh(forecast: PvForecast, now: datetime) -> float:
 
 
 def pv_end_today(forecast: PvForecast, now: datetime) -> datetime | None:
-    """End of the last period with PV production today, None if already over."""
+    """End of the last hour with PV production today, None if already over."""
     end_of_day = dt_util.start_of_local_day(dt_util.as_local(now)) + timedelta(days=1)
     ends = [
         start + PV_PERIOD
-        for start, wh in forecast.items()
+        for start, wh in hourly(forecast).items()
         if wh > 0 and start < end_of_day and start + PV_PERIOD > now
     ]
     return max(ends) if ends else None

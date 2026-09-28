@@ -300,3 +300,12 @@ def test_feed_in_cap_export_limit() -> None:
     assert max_discharge_export_w(SETTINGS, None) == 200
     assert max_discharge_export_w(SETTINGS, CAP) == 200
     assert max_discharge_export_w(SETTINGS, CapControl(3000, export_w=500)) == 2900
+
+
+def test_remaining_pv_with_half_hour_periods() -> None:
+    now = datetime(2026, 6, 1, 12, 40, tzinfo=dt_util.get_default_time_zone())
+    start = now.replace(hour=11, minute=0)
+    # 500 Wh per half hour from 11:00 to 14:00.
+    forecast = {start + timedelta(minutes=30 * i): 500.0 for i in range(6)}
+    # 12:40–13:00 is a third of the hour 12:00 (1000 Wh), then 13:00–14:00.
+    assert remaining_pv_wh(forecast, now) == pytest.approx(1000 / 3 + 1000)
