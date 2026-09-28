@@ -635,6 +635,9 @@ const LEARNED_SETTINGS = {
 };
 
 // Settings tab: translation keys of the system entities per group.
+// Settings shown only while the switch they belong to is on.
+const SETTING_SHOWN_WITH = { night_reserve_coverage: "night_reserve_auto" };
+
 const SETTING_GROUPS = [
   ["mode", ["operating_mode", "vacation"]],
   [
@@ -2505,7 +2508,10 @@ class SlemsPanel extends HTMLElement {
     this._setSection(
       "settings-list",
       SETTING_GROUPS.map(([group, keys]) => {
-        const rows = keys.map((key) => this._state(key)).filter(Boolean);
+        const rows = keys
+          .filter((key) => !SETTING_SHOWN_WITH[key] || this._state(SETTING_SHOWN_WITH[key])?.state === "on")
+          .map((key) => this._state(key))
+          .filter(Boolean);
         if (!rows.length) return "";
         return `<section class="card"><h2>${t.groups[group]}</h2>
           <div class="settings">${rows.map((s) => this._control(s)).join("")}</div>${
