@@ -478,7 +478,8 @@ Im selben Menü lässt sich die Batterie aktivieren oder deaktivieren, der
 Zellausgleich starten oder abbrechen, und *Details* zeigt Modell, Gerätename,
 Firmware-Versionen (EMS, VMS, BMS, Kommunikationsmodul; Sensor *Firmware*),
 MAC-Adresse, Kapazität, Ladezyklen sowie die insgesamt geladene und entladene
-Energie.
+Energie. *Gerät in Home Assistant öffnen* führt zur Geräteseite der Batterie
+mit allen ihren Entities.
 
 ### Grenzen und Schutz der Batterien
 

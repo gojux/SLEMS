@@ -90,6 +90,7 @@ const STRINGS = {
     pauseText: "SLEMS hands the battery back to its own logic and does not read or send anything for {min} minutes, e.g. during a firmware update. Afterwards it reconnects by itself; you can also resume earlier.",
     pauseConfirm: "Pause",
     details: "Details",
+    deviceView: "Open device in Home Assistant",
     close: "Close",
     noDetails: "No details available.",
     model: "Model",
@@ -377,6 +378,7 @@ const STRINGS = {
     pauseText: "SLEMS gibt die Batterie an ihre eigene Logik zurück und liest und sendet {min} Minuten lang nichts, z. B. während eines Firmware-Updates. Danach verbindet es sich von selbst wieder; du kannst auch früher fortsetzen.",
     pauseConfirm: "Pausieren",
     details: "Details",
+    deviceView: "Gerät in Home Assistant öffnen",
     close: "Schließen",
     noDetails: "Keine Details verfügbar.",
     model: "Modell",
@@ -1072,6 +1074,7 @@ class SlemsPanel extends HTMLElement {
       );
     }
     items.push(item("menu-details", t.details, ` data-device="${battery.device_id}"`));
+    items.push(item("menu-device", t.deviceView, ` data-device="${battery.device_id}"`));
     return `<div class="menu-wrap">${button}<div class="menu" role="menu">${items.join("")}</div></div>`;
   }
 
@@ -1131,6 +1134,11 @@ class SlemsPanel extends HTMLElement {
         this._renderDetails();
         this.shadowRoot.getElementById("details").showModal();
         break;
+      case "menu-device":
+        // Navigation inside the Home Assistant frontend without a reload.
+        history.pushState(null, "", `/config/devices/device/${item.dataset.device}`);
+        window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+        return true;
       default:
         // balancing-on / balancing-off: handled by the caller.
         this._render();
