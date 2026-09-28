@@ -32,10 +32,12 @@ batteries discharge at least with the planned night power, ignoring the
 discharge grid target but still respecting the maximum grid export.
 
 Feed-in cap (optional, see feed_in_cap) takes precedence over all of the
-above: the surplus above the limit goes to the consumers counted for the cap,
-then to the batteries (regardless of battery priority, share or grid friendly
-charging), then to the consumers set to take it instead of curtailing. The surplus below
-the limit is distributed as usual, except that the batteries do not charge
+above: the surplus above the limit goes to the supporting consumers as far as
+the plan runs them from the start of a peak that does not fit into the
+batteries (``support_w``), then to the batteries (regardless of battery
+priority, share or grid friendly charging), then to the supporting and then
+the normal consumers (``CapMode``). The surplus below the limit is distributed
+as usual without the supporting consumers, and the batteries do not charge
 with it while the space is needed later (``hold_charging``). Before a peak the
 batteries feed in the planned export power; the export never exceeds the
 limit, and the cap export may exceed the maximum grid export while
