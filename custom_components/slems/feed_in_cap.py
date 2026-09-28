@@ -205,9 +205,11 @@ def auto_buffer(days: Mapping[str, Mapping[str, float]]) -> tuple[float | None, 
 
 @dataclass(frozen=True)
 class CapConsumer:
-    """A consumer supporting the batteries in a peak (``CapMode.SUPPORT``)."""
+    """A consumer taking surplus above the limit (``CapMode.SUPPORT`` / ``NORMAL``)."""
 
     power_w: float
+    # On/off consumer: it only runs with its full power.
+    switch: bool = False
     # Energy it can take before it is full (AC); None: not known, only its
     # power limits it.
     capacity_wh: float | None = None
@@ -232,10 +234,10 @@ class _Step:
     surplus_w: float
     excess_w: float = 0.0
     # Supporting consumers planned from the start of a peak that does not
-    # fit into the batteries, and the power they have left (their capacity
-    # taken into account; None: their full power).
+    # fit into the batteries, and the (power, switch) they have left (their
+    # capacity taken into account; None: their full power).
     early_w: float = 0.0
-    support_left_w: float | None = None
+    support_left: list[tuple[float, bool]] | None = None
     absorbed_w: float = 0.0
     curtailed_w: float = 0.0
     # Power of the consumers taking what the batteries cannot absorb that is
@@ -253,31 +255,32 @@ def plan_cap(
     consumption: Mapping[datetime, float],
     settings: CapSettings,
     support: Sequence[CapConsumer] = (),
-    normal_consumers_w: float = 0.0,
+    normal: Sequence[CapConsumer] = (),
 ) -> CapPlan:
     """Plan the feed-in cap from ``now`` until the end of tomorrow.
 
     ``pv`` are the native forecast periods (Wh), ``consumption`` hourly local
     buckets (Wh). ``max_charge_w`` / ``max_discharge_w`` are the powers of
     the batteries apart from the SoC window. ``support`` are the supporting
-    consumers (in order of priority), ``normal_consumers_w`` the power of the
-    normal consumers, which take what the supporting ones cannot.
+    consumers and ``normal`` the normal ones (each in order of priority); the
+    normal ones take what the supporting ones cannot.
 
     The plan is made with the batteries first. Energy that does not fit (too
     small, or too late to make room, both with the buffers) is then given to
     the supporting consumers from the start of its peak, as far as their
     power and capacity allow, and the plan is made again.
     """
-    support_w = sum(consumer.power_w for consumer in support)
     if battery.capacity_wh <= 0:
-        return CapPlan(limit_w=settings.limit_w, consumers_w=support_w + normal_consumers_w)
+        return CapPlan(
+            limit_w=settings.limit_w, consumers_w=sum(c.power_w for c in (*support, *normal))
+        )
     local_now = dt_util.as_local(now)
     steps = _steps(local_now, pv, consumption, settings, max_discharge_w)
     args = (steps, battery, max_charge_w, max_discharge_w, settings, local_now)
-    plan, shortfalls = _evaluate(*args, support_w, normal_consumers_w)
+    plan, shortfalls = _evaluate(*args, support, normal)
     if support and any(value > PROBLEM_TOLERANCE_WH for value in shortfalls):
         _assign_early(steps, plan.blocks, shortfalls, support)
-        plan, _ = _evaluate(*args, support_w, normal_consumers_w)
+        plan, _ = _evaluate(*args, support, normal)
     plan.early_wh = sum(step.early_w * step.hours for step in steps)
     plan.takeover_wh += plan.early_wh
     plan.support_w = steps[0].early_w if steps else 0.0
@@ -346,14 +349,21 @@ def _assign_early(
         if block is not None and left[block] > 0 and step.excess_w > 0:
             room = min(step.excess_w, left[block] / step.hours)
             for index, power in enumerate(available):
-                power = min(power, room - step.early_w)
+                if support[index].switch:
+                    # Switched on only if its full power fits.
+                    if room - step.early_w < support[index].power_w:
+                        continue
+                else:
+                    power = min(power, room - step.early_w)
                 if power <= 0:
                     continue
                 step.early_w += power
                 available[index] -= power
                 taken[index] += power * step.hours
             left[block] -= step.early_w * step.hours
-        step.support_left_w = sum(available)
+        step.support_left = [
+            (power, consumer.switch) for power, consumer in zip(available, support, strict=True)
+        ]
 
 
 def _evaluate(
@@ -363,8 +373,8 @@ def _evaluate(
     max_discharge_w: float,
     settings: CapSettings,
     local_now: datetime,
-    support_w: float,
-    normal_consumers_w: float,
+    support: Sequence[CapConsumer],
+    normal: Sequence[CapConsumer],
 ) -> tuple[CapPlan, list[float]]:
     """Plan with the early consumer power of ``steps``.
 
@@ -372,7 +382,10 @@ def _evaluate(
     with the buffers (for the next block including what cannot be made room
     for in time), before the consumers taking it instead of curtailing.
     """
-    plan = CapPlan(limit_w=settings.limit_w, consumers_w=support_w + normal_consumers_w)
+    plan = CapPlan(
+        limit_w=settings.limit_w, consumers_w=sum(c.power_w for c in (*support, *normal))
+    )
+    normal_parts = [(c.power_w, c.switch) for c in normal]
     capacity = battery.capacity_wh
     efficiency = battery.charge_efficiency or 1.0
     for step in steps:
@@ -382,14 +395,14 @@ def _evaluate(
         over = max(0.0, step.excess_w - step.early_w)
         step.absorbed_w = min(over, max_charge_w)
         rest = over - step.absorbed_w
-        support_left = (
-            max(0.0, support_w - step.early_w)
-            if step.support_left_w is None
-            else step.support_left_w
-        )
-        reactive = support_left + normal_consumers_w
-        step.curtailed_w = max(0.0, rest - reactive)
-        step.spare_w = min(reactive, over) - min(reactive, rest)
+        parts = (
+            [(c.power_w, c.switch) for c in support]
+            if step.support_left is None
+            else step.support_left
+        ) + normal_parts
+        taken = _takeable(rest, parts)
+        step.curtailed_w = rest - taken
+        step.spare_w = _takeable(over, parts) - taken
 
     for step in steps:
         hour = step.start.replace(minute=0)
@@ -474,6 +487,25 @@ def _evaluate(
     plan.takeover_wh += taken
     plan.too_late = late - taken > PROBLEM_TOLERANCE_WH
     return plan, shortfalls
+
+
+def _takeable(budget: float, parts: Sequence[tuple[float, bool]]) -> float:
+    """Power the consumers take of ``budget`` in order, as the allocation hands it out.
+
+    ``parts`` are (power, switch); an on/off consumer only runs if its full
+    power fits.
+    """
+    taken = 0.0
+    for power, switch in parts:
+        left = budget - taken
+        if left <= 0:
+            break
+        if switch:
+            if power <= left:
+                taken += power
+        else:
+            taken += min(power, left)
+    return taken
 
 
 def _blocks(steps: Sequence[_Step]) -> list[PeakBlock]:

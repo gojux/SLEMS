@@ -115,7 +115,7 @@ def test_charge_power_too_low() -> None:
     assert result.curtailed_wh == pytest.approx(500)
     assert "charge_power_too_low" in result.problems
     helped = plan(
-        midnight(0) + timedelta(hours=20), pv, charge=500.0, normal_consumers_w=500.0
+        midnight(0) + timedelta(hours=20), pv, charge=500.0, normal=[CapConsumer(500.0)]
     )
     assert helped.curtailed_wh == pytest.approx(0)
     assert helped.problems == []
@@ -239,3 +239,19 @@ def test_consumers_cover_a_late_export() -> None:
     assert not covered.too_late
     assert covered.problems == []
     assert covered.takeover_wh > 0
+
+
+def test_switch_consumers_only_with_their_full_power() -> None:
+    # 12 kWh above the limit in one hour, 2 kWh do not fit.
+    pv = pv_hours({(1, 12): 15400})
+    now = midnight(0) + timedelta(hours=20)
+    # 3 kW on/off: fits into the 12 kW above the limit, runs with its full power.
+    fits = plan(now, pv, charge=20000.0, support=[CapConsumer(3000, switch=True)])
+    assert not fits.battery_too_small
+    # 2.5 kW above the limit are not enough for a 3 kW on/off consumer.
+    small = plan(now, pv_hours({(1, 12): 5900}), charge=2000.0,
+                 support=[CapConsumer(3000, switch=True)])
+    assert small.curtailed_wh == pytest.approx(500)
+    assert "charge_power_too_low" in small.problems
+    power = plan(now, pv_hours({(1, 12): 5900}), charge=2000.0, support=[CapConsumer(3000)])
+    assert power.curtailed_wh == pytest.approx(0)

@@ -476,9 +476,10 @@ are multiplied by the PV correction. Consumption is the hourly forecast.
 excess     = max(0, PV − consumption − limit)
 over       = max(0, excess − early)              early: supporting consumers planned from the block start
 absorbed   = min(over, charge power without SoC window)
-reactive   = supporting power left (capacity) + normal consumers (max power)
-curtailed  = max(0, over − absorbed − reactive)
-spare      = min(reactive, over) − min(reactive, over − absorbed)
+taken(x)   = what the supporting consumers (power left after early, capacity) and then
+             the normal ones take of x in order; on/off consumers only with their full power
+curtailed  = (over − absorbed) − taken(over − absorbed)
+spare      = taken(over) − taken(over − absorbed)
 drained    = min(max(0, consumption − PV), discharge power)
 need(t)    = min(usable, max(0, need(t+1) + absorbed·eff·(1+buffer) [+ min buffer at a block end] − drained/eff))
 ```
@@ -501,6 +502,7 @@ export that cannot be done in time, `(needed − possible) / eff²`. With
 supporting consumers and a shortfall > 100 Wh, `_assign_early` gives each
 block's shortfall to them from the block start (step by step up to the
 excess, in order of priority, each up to its power and learned capacity,
+an on/off consumer only where its full power fits,
 `CapConsumer.power_after`; the capacity is available again each day), and
 the second pass plans with that. Sized to the shortfall, the early power
 leaves the space to make unchanged: the clipped need drops back to `usable`.

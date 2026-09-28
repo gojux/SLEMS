@@ -1685,7 +1685,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if power_w is not None:
             charge_w, discharge_w = power_w
         support: list[CapConsumer] = []
-        normal_w = 0.0
+        normal: list[CapConsumer] = []
         consumers = sorted(
             map(self.effective_consumer, self.consumers), key=lambda c: (c.priority, c.subentry_id)
         )
@@ -1701,7 +1701,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if mode is CapMode.SUPPORT:
                 support.append(self.cap_consumer(consumer, power))
             elif mode is CapMode.NORMAL:
-                normal_w += power
+                normal.append(
+                    CapConsumer(power_w=power, switch=consumer.control_mode is ControlMode.SWITCH)
+                )
         return plan_cap(
             wall_now,
             battery,
@@ -1718,7 +1720,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 pv_factor=pv_factor,
             ),
             support,
-            normal_w,
+            normal,
         )
 
     @staticmethod
@@ -1742,12 +1744,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
 
     def cap_consumer(self, consumer: ConsumerConfig, power_w: float) -> CapConsumer:
         """Supporting consumer for the cap planning (capacity from the temperatures)."""
+        switch = consumer.control_mode is ControlMode.SWITCH
         capacity = self.thermal_capacity(consumer.subentry_id)
         if capacity is None:
-            return CapConsumer(power_w=power_w)
+            return CapConsumer(power_w=power_w, switch=switch)
         until_pause, until_full = capacity
         return CapConsumer(
             power_w=power_w,
+            switch=switch,
             capacity_wh=until_full * THERMAL_SAFETY,
             full_power_wh=until_pause * THERMAL_SAFETY,
             cycling_power_w=self.thermal_learners[consumer.subentry_id].cycling_w,
