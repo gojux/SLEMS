@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import CapMode, OperatingMode
+from .const import LEGACY_CAP_MODES, CapMode, OperatingMode
 from .consumers import ConsumerConfig
 from .coordinator import SlemsConfigEntry, SlemsCoordinator
 from .entity import SlemsConsumerEntity, SlemsSystemEntity
@@ -61,7 +61,7 @@ class OperatingModeSelect(SlemsSystemEntity, SelectEntity, RestoreEntity):
 
 
 class ConsumerCapModeSelect(SlemsConsumerEntity, SelectEntity, RestoreEntity):
-    """Part of the consumer in the feed-in cap: counted, emergency only or never."""
+    """Part of the consumer in the feed-in cap: supporting, normal or never."""
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_options = [mode.value for mode in CapMode]
@@ -72,10 +72,13 @@ class ConsumerCapModeSelect(SlemsConsumerEntity, SelectEntity, RestoreEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
-        if last_state is not None and last_state.state in self._attr_options:
-            self.coordinator.consumer_cap_modes[self.consumer.subentry_id] = CapMode(
-                last_state.state
-            )
+        if last_state is None:
+            return
+        mode = LEGACY_CAP_MODES.get(last_state.state)
+        if mode is None and last_state.state in self._attr_options:
+            mode = CapMode(last_state.state)
+        if mode is not None:
+            self.coordinator.consumer_cap_modes[self.consumer.subentry_id] = mode
 
     @property
     def current_option(self) -> str:

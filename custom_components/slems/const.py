@@ -59,6 +59,9 @@ CONF_MIN_POWER_W: Final = "min_power_w"
 CONF_MAX_POWER_W: Final = "max_power_w"
 CONF_BLOCK_ENTITY: Final = "block_entity"
 CONF_THERMOSTAT_CYCLES: Final = "thermostat_cycles"
+# Optional temperature sensors of the consumer's storage (e.g. a boiler).
+CONF_TEMPERATURE_ENTITY: Final = "temperature_entity"
+CONF_TEMPERATURE_2_ENTITY: Final = "temperature_2_entity"
 CONF_PRIORITY: Final = "priority"
 CONF_MIN_ON_MINUTES: Final = "min_on_minutes"
 CONF_MIN_OFF_MINUTES: Final = "min_off_minutes"
@@ -133,11 +136,19 @@ class ControlMode(StrEnum):
 class CapMode(StrEnum):
     """How a consumer takes part in the feed-in cap (see feed_in_cap)."""
 
-    # Planned with: takes the surplus above the limit before the batteries.
-    COUNT = "count"
-    # Only takes what the batteries cannot absorb, instead of curtailing it.
-    EMERGENCY = "emergency"
+    # Takes the surplus above the limit the batteries cannot absorb (from the
+    # start of a peak that does not fit into them), no other surplus while
+    # the feed-in cap is on.
+    SUPPORT = "support"
+    # Surplus as without the feed-in cap; above the limit it takes what the
+    # batteries and the supporting consumers cannot, before it is curtailed.
+    NORMAL = "normal"
+    # Surplus as without the feed-in cap, never the surplus above the limit.
     NEVER = "never"
+
+
+# Stored values of the modes of earlier versions.
+LEGACY_CAP_MODES = {"count": CapMode.SUPPORT, "emergency": CapMode.SUPPORT}
 
 
 class OperatingMode(StrEnum):

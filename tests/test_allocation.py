@@ -214,56 +214,66 @@ def test_export_limit_reduces_discharge() -> None:
 
 
 CAP = CapControl(limit_w=3000, margin_w=100)
-COUNTED_ROD = ConsumerRequest(
+SUPPORT_ROD = ConsumerRequest(
     subentry_id="rod", priority=2, control_mode=ControlMode.POWER,
-    min_power_w=300, max_power_w=3000, cap_mode=CapMode.COUNT,
+    min_power_w=300, max_power_w=3000, cap_mode=CapMode.SUPPORT,
 )
-EMERGENCY_PUMP = ConsumerRequest(
+SUPPORT_PUMP = ConsumerRequest(
     subentry_id="pump", priority=1, control_mode=ControlMode.SWITCH, nominal_power_w=500,
-    cap_mode=CapMode.EMERGENCY,
+    cap_mode=CapMode.SUPPORT,
+)
+SMALL = BatteryGroup(
+    soc_pct=20, capacity_wh=10000, max_charge_w=1000, max_discharge_w=1000,
+    charge_efficiency=0.95,
 )
 
 
-def test_feed_in_cap_surplus_above_limit_order() -> None:
-    # 3100 W above 2900 W: counted rod first, then the batteries.
-    result = allocate(
-        6000, battery(20), [COUNTED_ROD, EMERGENCY_PUMP], SETTINGS, None, cap=CAP
-    )
+def test_feed_in_cap_batteries_first() -> None:
+    # 3100 W above 2900 W: the batteries take it, the supporting rod nothing.
+    result = allocate(6000, battery(20), [SUPPORT_ROD], SETTINGS, None, cap=CAP)
     assert result.strategy is Strategy.FEED_IN_CAP
-    assert result.consumer_power_w["rod"] == 3000
-    # 100 W above the limit plus the surplus below it (battery priority).
-    assert result.battery_power_w == 3000
-    assert result.consumer_power_w["pump"] == 0
+    assert result.consumer_power_w["rod"] == 0
+    assert result.battery_power_w == 5000
 
 
-def test_feed_in_cap_emergency_consumers_after_the_batteries() -> None:
-    small = BatteryGroup(
-        soc_pct=20, capacity_wh=10000, max_charge_w=1000, max_discharge_w=1000,
-        charge_efficiency=0.95,
-    )
-    result = allocate(4500, small, [EMERGENCY_PUMP], SETTINGS, None, cap=CAP)
-    # 1600 W above the limit: 1000 W batteries, 500 W pump.
+def test_feed_in_cap_planned_support_before_the_batteries() -> None:
+    early = CapControl(limit_w=3000, margin_w=100, support_w=2000)
+    result = allocate(6000, battery(20), [SUPPORT_ROD], SETTINGS, None, cap=early)
+    assert result.consumer_power_w["rod"] == 2000
+    # 1100 W above the limit plus the surplus below it (battery priority).
+    assert result.battery_power_w == 4000
+
+
+def test_feed_in_cap_order_after_the_batteries() -> None:
+    # Everything is above the limit: batteries, supporting pump, normal rod.
+    rod = replace(SUPPORT_ROD, cap_mode=CapMode.NORMAL)
+    no_room = CapControl(limit_w=100, margin_w=100)
+    result = allocate(2100, SMALL, [SUPPORT_PUMP, rod], SETTINGS, None, cap=no_room)
     assert result.battery_power_w == 1000
     assert result.consumer_power_w["pump"] == 500
+    assert result.consumer_power_w["rod"] == 600
+    never = replace(rod, cap_mode=CapMode.NEVER)
+    result = allocate(2100, SMALL, [SUPPORT_PUMP, never], SETTINGS, None, cap=no_room)
+    assert result.consumer_power_w["rod"] == 0
 
 
 def test_feed_in_cap_holds_charging_below_the_limit() -> None:
     hold = CapControl(limit_w=3000, margin_w=100, hold_charging=True)
-    pump = replace(EMERGENCY_PUMP, cap_mode=CapMode.NEVER)
+    pump = replace(SUPPORT_PUMP, cap_mode=CapMode.NEVER)
     result = allocate(4000, battery(20), [pump], SETTINGS, None, cap=hold)
     # Only the 1100 W above the limit are charged; the pump gets surplus below it.
     assert result.battery_power_w == 1100
     assert result.consumer_power_w["pump"] == 500
 
 
-def test_feed_in_cap_emergency_consumers_get_no_normal_surplus() -> None:
+def test_feed_in_cap_supporting_consumers_get_no_normal_surplus() -> None:
     # Surplus below the limit, charge secured: the share left for consumers is exported.
     result = allocate(
-        2000, battery(80), [EMERGENCY_PUMP], SETTINGS, expected_surplus_wh=50000, cap=CAP
+        2000, battery(80), [SUPPORT_PUMP], SETTINGS, expected_surplus_wh=50000, cap=CAP
     )
     assert result.consumer_power_w["pump"] == 0
     # Without the feed-in cap the pump takes surplus as usual.
-    result = allocate(2000, battery(80), [EMERGENCY_PUMP], SETTINGS, expected_surplus_wh=50000)
+    result = allocate(2000, battery(80), [SUPPORT_PUMP], SETTINGS, expected_surplus_wh=50000)
     assert result.consumer_power_w["pump"] == 500
 
 

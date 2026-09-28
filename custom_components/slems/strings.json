@@ -157,7 +157,9 @@
             "priority": "Priority",
             "min_on_minutes": "Minimum runtime",
             "min_off_minutes": "Minimum pause",
-            "thermostat_cycles": "Thermostat cycles by itself"
+            "thermostat_cycles": "Thermostat cycles by itself",
+            "temperature_entity": "Temperature sensor of the storage",
+            "temperature_2_entity": "Second temperature sensor"
           },
           "data_description": {
             "control_entity": "Switch for on/off consumers, number entity in W for power controlled consumers.",
@@ -165,7 +167,9 @@
             "priority": "1 = highest priority when distributing surplus power.",
             "min_on_minutes": "Optional. Once switched on by SLEMS, the consumer keeps running at least this long.",
             "min_off_minutes": "Optional. Once switched off by SLEMS, the consumer stays off at least this long.",
-            "thermostat_cycles": "On if the consumer's own thermostat switches it on and off while it is commanded (e.g. a heating rod that measures the temperature at the element). SLEMS then keeps its command during the pauses and gives the unused power to the batteries instead of treating the consumer as saturated."
+            "thermostat_cycles": "On if the consumer's own thermostat switches it on and off while it is commanded (e.g. a heating rod that measures the temperature at the element). SLEMS then keeps its command during the pauses and gives the unused power to the batteries instead of treating the consumer as saturated.",
+            "temperature_entity": "Optional, e.g. the sensor of the boiler at the heating rod. SLEMS learns from the mean of the sensors how much energy the storage takes per degree and from which temperature the thermostat cycles, and plans the consumer for the feed-in cap only as far as it can still take energy.",
+            "temperature_2_entity": "Optional, e.g. a sensor higher up in the boiler; makes the estimate more accurate."
           }
         }
       },
@@ -219,10 +223,10 @@
         }
       },
       "cap_mode": {
-        "name": "With feed-in cap",
+        "name": "Role with feed-in cap",
         "state": {
-          "count": "Plan with",
-          "emergency": "Instead of curtailing",
+          "support": "Supporting",
+          "normal": "Normal",
           "never": "Never"
         }
       }
@@ -425,6 +429,9 @@
       },
       "learned_power": {
         "name": "Learned power"
+      },
+      "storage_capacity": {
+        "name": "Storage capacity left"
       }
     },
     "switch": {

@@ -175,6 +175,11 @@ def _system(coordinator: SlemsCoordinator) -> dict:
             }
             for consumer in coordinator.consumers
         },
+        "thermal_storage": {
+            subentry_id: learner.as_dict()
+            | {"capacity_wh": coordinator.thermal_capacity(subentry_id)}
+            for subentry_id, learner in coordinator.thermal_learners.items()
+        },
         "learned": {
             "pv_overestimate": coordinator.pv_overestimate,
             "consumption_underestimate": coordinator.consumption_underestimate,

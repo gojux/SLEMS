@@ -10,9 +10,9 @@ The plan is calculated in steps of ``STEP`` from now until the end of
 tomorrow, with the native periods of the PV forecast (15/30/60 min, so short
 peaks are not averaged away) and the hourly consumption forecast:
 
-* Per step the surplus above the limit (``excess``) is taken by the consumers
-  counted for the cap first, then by the batteries up to their charge power;
-  what is left is curtailed unless consumers set to take it instead of curtailing do.
+* Per step the surplus above the limit (``excess``) is taken by the batteries
+  up to their charge power; what is left goes to the supporting consumers,
+  then to the normal ones (``CapMode``), and the rest is curtailed.
 * The free space the batteries need at each moment is calculated backwards
   over all steps, so several peaks per day and peaks on both days are covered:
   ``need(t) = max(0, need(t + 1) + absorbed(t) · (1 + buffer) − drained(t))``.
@@ -26,6 +26,13 @@ peaks are not averaged away) and the hourly consumption forecast:
   be finished ``EXPORT_MARGIN`` before the block, planned with
   ``EXPORT_USABLE_SHARE`` of the possible export power, and never above the
   limit.
+* Energy that does not fit into the batteries (too small, or not enough time
+  to make room) is planned for the supporting consumers from the start of its
+  peak, so their power is used over the whole peak instead of only after the
+  batteries are full (``early_w``). Their capacity limits this when it is
+  learned from the temperatures (``CapConsumer``). What is still left is
+  taken by the consumers' spare power once the batteries are full
+  (``takeover_wh``); only the rest is reported as a problem.
 
 Energies of the batteries (space, need) are stored energy; the charge and
 discharge losses are applied with the one-way efficiency. Consumers, excess
@@ -117,12 +124,23 @@ class CapPlan:
     export_power_w: float = 0.0
     # Charging with surplus below the limit would take space needed later.
     hold_charging: bool = False
-    # More space needed than the batteries have (above the minimum SoC).
+    # More space needed than the batteries have (above the minimum SoC) and
+    # more than the consumers can take.
     battery_too_small: bool = False
+    # Not enough time or power left to feed in before the next block, and
+    # the consumers cannot take the rest.
+    too_late: bool = False
+    # Energy the consumers are expected to take because it does not fit into
+    # the batteries (AC), planned from the start of a peak (``early_wh``) or
+    # taken once the batteries are full.
+    takeover_wh: float = 0.0
+    early_wh: float = 0.0
+    # Planned power of the supporting consumers right now.
+    support_w: float = 0.0
     # The forecast fits, the full buffer does not (a note, not a problem).
     buffer_short: bool = False
-    # Power of the consumers that take surplus above the limit (counted and
-    # instead of curtailing).
+    # Power of the consumers that take surplus above the limit (supporting
+    # and normal).
     consumers_w: float = 0.0
     # Local hour start -> Wh from now on (day chart, SoC projection).
     hourly: dict[datetime, HourCap] = field(default_factory=dict)
@@ -136,11 +154,6 @@ class CapPlan:
     @property
     def curtailed_wh(self) -> float:
         return sum(block.curtailed_wh for block in self.blocks)
-
-    @property
-    def too_late(self) -> bool:
-        """Not enough time or power left to feed in before the next block."""
-        return self.export_needed_wh - self.export_possible_wh > PROBLEM_TOLERANCE_WH
 
     @property
     def problems(self) -> list[str]:
@@ -190,14 +203,44 @@ def auto_buffer(days: Mapping[str, Mapping[str, float]]) -> tuple[float | None, 
     return under[index], len(complete)
 
 
+@dataclass(frozen=True)
+class CapConsumer:
+    """A consumer supporting the batteries in a peak (``CapMode.SUPPORT``)."""
+
+    power_w: float
+    # Energy it can take before it is full (AC); None: not known, only its
+    # power limits it.
+    capacity_wh: float | None = None
+    # Energy it takes at full power before its thermostat starts cycling, and
+    # its mean power while cycling; None: full power until ``capacity_wh``.
+    full_power_wh: float | None = None
+    cycling_power_w: float | None = None
+
+    def power_after(self, taken_wh: float) -> float:
+        """Power it can take once ``taken_wh`` are in."""
+        if self.capacity_wh is not None and taken_wh >= self.capacity_wh:
+            return 0.0
+        if self.full_power_wh is not None and taken_wh >= self.full_power_wh:
+            return self.power_w if self.cycling_power_w is None else self.cycling_power_w
+        return self.power_w
+
+
 @dataclass
 class _Step:
     start: datetime
     hours: float
     surplus_w: float
     excess_w: float = 0.0
+    # Supporting consumers planned from the start of a peak that does not
+    # fit into the batteries, and the power they have left (their capacity
+    # taken into account; None: their full power).
+    early_w: float = 0.0
+    support_left_w: float | None = None
     absorbed_w: float = 0.0
     curtailed_w: float = 0.0
+    # Power of the consumers taking what the batteries cannot absorb that is
+    # not needed in this step while the batteries take their part.
+    spare_w: float = 0.0
     drained_w: float = 0.0
 
 
@@ -209,25 +252,47 @@ def plan_cap(
     pv: Mapping[datetime, float],
     consumption: Mapping[datetime, float],
     settings: CapSettings,
-    counted_consumers_w: float = 0.0,
-    emergency_consumers_w: float = 0.0,
+    support: Sequence[CapConsumer] = (),
+    normal_consumers_w: float = 0.0,
 ) -> CapPlan:
     """Plan the feed-in cap from ``now`` until the end of tomorrow.
 
     ``pv`` are the native forecast periods (Wh), ``consumption`` hourly local
     buckets (Wh). ``max_charge_w`` / ``max_discharge_w`` are the powers of
-    the batteries apart from the SoC window.
+    the batteries apart from the SoC window. ``support`` are the supporting
+    consumers (in order of priority), ``normal_consumers_w`` the power of the
+    normal consumers, which take what the supporting ones cannot.
+
+    The plan is made with the batteries first. Energy that does not fit (too
+    small, or too late to make room, both with the buffers) is then given to
+    the supporting consumers from the start of its peak, as far as their
+    power and capacity allow, and the plan is made again.
     """
-    plan = CapPlan(limit_w=settings.limit_w, consumers_w=counted_consumers_w + emergency_consumers_w)
-    capacity = battery.capacity_wh
-    if capacity <= 0:
-        return plan
-    efficiency = battery.charge_efficiency or 1.0
+    support_w = sum(consumer.power_w for consumer in support)
+    if battery.capacity_wh <= 0:
+        return CapPlan(limit_w=settings.limit_w, consumers_w=support_w + normal_consumers_w)
     local_now = dt_util.as_local(now)
+    steps = _steps(local_now, pv, consumption, settings, max_discharge_w)
+    args = (steps, battery, max_charge_w, max_discharge_w, settings, local_now)
+    plan, shortfalls = _evaluate(*args, support_w, normal_consumers_w)
+    if support and any(value > PROBLEM_TOLERANCE_WH for value in shortfalls):
+        _assign_early(steps, plan.blocks, shortfalls, support)
+        plan, _ = _evaluate(*args, support_w, normal_consumers_w)
+    plan.early_wh = sum(step.early_w * step.hours for step in steps)
+    plan.takeover_wh += plan.early_wh
+    plan.support_w = steps[0].early_w if steps else 0.0
+    return plan
+
+
+def _steps(
+    local_now: datetime,
+    pv: Mapping[datetime, float],
+    consumption: Mapping[datetime, float],
+    settings: CapSettings,
+    max_discharge_w: float,
+) -> list[_Step]:
     end = dt_util.start_of_local_day(local_now) + timedelta(days=2)
     pv_power = power_lookup(pv)
-    limit = settings.limit_w
-
     steps: list[_Step] = []
     start = local_now.replace(minute=local_now.minute // 15 * 15, second=0, microsecond=0)
     while start < end:
@@ -237,15 +302,94 @@ def plan_cap(
         middle = start + STEP / 2
         surplus = pv_power(middle) * settings.pv_factor - consumption.get(hour, 0.0)
         step = _Step(start, hours, surplus)
-        if surplus > limit:
-            step.excess_w = surplus - limit
-            over = max(0.0, step.excess_w - counted_consumers_w)
-            step.absorbed_w = min(over, max_charge_w)
-            step.curtailed_w = max(0.0, over - step.absorbed_w - emergency_consumers_w)
+        if surplus > settings.limit_w:
+            step.excess_w = surplus - settings.limit_w
         elif surplus < 0:
             step.drained_w = min(-surplus, max_discharge_w)
         steps.append(step)
         start += STEP
+    return steps
+
+
+def _assign_early(
+    steps: Sequence[_Step],
+    blocks: Sequence[PeakBlock],
+    shortfalls: Sequence[float],
+    support: Sequence[CapConsumer],
+) -> None:
+    """Supporting consumers from the start of each block until its shortfall is taken."""
+    left = list(shortfalls)
+    taken = [0.0] * len(support)
+    day = None
+    for step in steps:
+        # The capacity is available again on the next day.
+        if step.start.date() != day:
+            day = step.start.date()
+            taken = [0.0] * len(support)
+        if step.hours <= 0:
+            continue
+        available = [
+            max(
+                0.0,
+                consumer.power_after(taken[index])
+                if consumer.capacity_wh is None
+                else min(
+                    consumer.power_after(taken[index]),
+                    (consumer.capacity_wh - taken[index]) / step.hours,
+                ),
+            )
+            for index, consumer in enumerate(support)
+        ]
+        block = next(
+            (i for i, b in enumerate(blocks) if b.start <= step.start < b.end), None
+        )
+        if block is not None and left[block] > 0 and step.excess_w > 0:
+            room = min(step.excess_w, left[block] / step.hours)
+            for index, power in enumerate(available):
+                power = min(power, room - step.early_w)
+                if power <= 0:
+                    continue
+                step.early_w += power
+                available[index] -= power
+                taken[index] += power * step.hours
+            left[block] -= step.early_w * step.hours
+        step.support_left_w = sum(available)
+
+
+def _evaluate(
+    steps: Sequence[_Step],
+    battery: BatteryGroup,
+    max_charge_w: float,
+    max_discharge_w: float,
+    settings: CapSettings,
+    local_now: datetime,
+    support_w: float,
+    normal_consumers_w: float,
+) -> tuple[CapPlan, list[float]]:
+    """Plan with the early consumer power of ``steps``.
+
+    Also returns per block the AC energy that does not fit into the batteries
+    with the buffers (for the next block including what cannot be made room
+    for in time), before the consumers taking it instead of curtailing.
+    """
+    plan = CapPlan(limit_w=settings.limit_w, consumers_w=support_w + normal_consumers_w)
+    capacity = battery.capacity_wh
+    efficiency = battery.charge_efficiency or 1.0
+    for step in steps:
+        step.absorbed_w = step.curtailed_w = step.spare_w = 0.0
+        if step.excess_w <= 0:
+            continue
+        over = max(0.0, step.excess_w - step.early_w)
+        step.absorbed_w = min(over, max_charge_w)
+        rest = over - step.absorbed_w
+        support_left = (
+            max(0.0, support_w - step.early_w)
+            if step.support_left_w is None
+            else step.support_left_w
+        )
+        reactive = support_left + normal_consumers_w
+        step.curtailed_w = max(0.0, rest - reactive)
+        step.spare_w = min(reactive, over) - min(reactive, rest)
 
     for step in steps:
         hour = step.start.replace(minute=0)
@@ -259,6 +403,21 @@ def plan_cap(
             )
     plan.blocks = _blocks(steps)
     block_ends = {block.end for block in plan.blocks}
+    block_of = {
+        step.start: index
+        for index, block in enumerate(plan.blocks)
+        for step in steps
+        if block.start <= step.start < block.end
+    }
+    # Per block: spare power of the consumers taking what the batteries
+    # cannot absorb (AC Wh) and the stored energy that does not fit, without
+    # and with buffers.
+    spare = [0.0] * len(plan.blocks)
+    for step in steps:
+        if step.start in block_of:
+            spare[block_of[step.start]] += step.spare_w * step.hours
+    overflow = [0.0] * len(plan.blocks)
+    overflow_buffered = [0.0] * len(plan.blocks)
 
     usable = max(0.0, battery.full_soc_pct - battery.min_soc_pct) / 100 * capacity
     buffer = 1 + settings.buffer_pct / 100
@@ -273,32 +432,48 @@ def plan_cap(
         need = max(0.0, need + absorbed - drained)
         # The same without buffers: does the forecast itself fit?
         bare = max(0.0, bare + stored - drained)
-        if bare > usable + PROBLEM_TOLERANCE_WH:
-            plan.battery_too_small = True
-        elif need > usable + PROBLEM_TOLERANCE_WH:
-            plan.buffer_short = True
+        index = block_of.get(step.start)
+        if index is not None:
+            overflow[index] += max(0.0, bare - usable)
+            overflow_buffered[index] += max(0.0, need - usable)
         need = min(need, usable)
         bare = min(bare, usable)
         needs.append(need)
+    shortfalls = [value / efficiency for value in overflow_buffered]
+    for index, block_spare in enumerate(spare):
+        lost = overflow[index] / efficiency
+        taken = min(lost, block_spare)
+        plan.takeover_wh += taken
+        spare[index] -= taken
+        if lost - taken > PROBLEM_TOLERANCE_WH:
+            plan.battery_too_small = True
+        elif overflow_buffered[index] / efficiency - block_spare > PROBLEM_TOLERANCE_WH:
+            plan.buffer_short = True
     if plan.battery_too_small:
         plan.buffer_short = False
     needs.reverse()
     plan.need = [(step.start, value) for step, value in zip(steps, needs, strict=True)]
     if not steps:
-        return plan
+        return plan, shortfalls
 
     plan.free_now_wh = max(0.0, battery.full_soc_pct - battery.soc_pct) / 100 * capacity
     plan.hold_charging = plan.free_now_wh - needs[0] <= HOLD_MARGIN_WH and needs[0] > 0
     block = plan.next_block
     if block is None:
-        return plan
+        return plan, shortfalls
     plan.required_space_wh = plan.space_needed_at(block.start)
     missing = max(0.0, needs[0] - plan.free_now_wh)
     plan.export_needed_wh = missing * efficiency
     if plan.export_needed_wh <= 0:
-        return plan
-    _plan_export(plan, steps, block.start, local_now, max_discharge_w, limit)
-    return plan
+        return plan, shortfalls
+    _plan_export(plan, steps, block.start, local_now, max_discharge_w, settings.limit_w)
+    # Space that cannot be made in time: PV energy the batteries cannot store.
+    late = max(0.0, plan.export_needed_wh - plan.export_possible_wh) / efficiency**2
+    shortfalls[0] += late
+    taken = min(late, spare[0])
+    plan.takeover_wh += taken
+    plan.too_late = late - taken > PROBLEM_TOLERANCE_WH
+    return plan, shortfalls
 
 
 def _blocks(steps: Sequence[_Step]) -> list[PeakBlock]:

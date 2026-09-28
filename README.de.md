@@ -223,15 +223,28 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   Ausschalten im Betriebsmodus *Aktiv* setzt SLEMS ihn einmal auf 0 W (bzw.
   aus); danach lässt SLEMS ihn in Ruhe und plant ihn wie eine ungesteuerte
   Last.
-- **Bei Einspeisebegrenzung** (Auswahl je gesteuertem Verbraucher, auf
-  seiner Karte im Dashboard, solange die Einspeisebegrenzung an ist):
-  *Einkalkulieren* (Standard) – der Verbraucher nimmt den Überschuss über
-  der Einspeisegrenze vor den Batterien auf, sie brauchen dann weniger freien
-  Platz, und unterhalb der Grenze wird er wie gewohnt genutzt; *Statt
-  Abregeln* – der Verbraucher läuft nur für das, was die Batterien über der
-  Grenze nicht aufnehmen können, und bekommt sonst keinen Überschuss; *Nie* –
-  für die Energie über der Grenze nicht genutzt, darunter wie gewohnt. Wirkt nur, solange *Steuerung aktiv* an ist (sonst ausgegraut).
-  Siehe *Einspeisebegrenzung*.
+- **Temperaturfühler des Speichers** (optional, bis zu zwei, z. B. der
+  Fühler eines Boilers am Heizstab und einer weiter oben): SLEMS lernt aus
+  dem Mittel der Fühler, wie viel Energie der Speicher je Grad aufnimmt, ab
+  welcher Temperatur der Thermostat zu takten beginnt, wie hoch die mittlere
+  Leistung beim Takten ist und wann er voll ist. Welcher Fühler den
+  Thermostat schaltet und wo sie sitzen, spielt keine Rolle. Ab drei
+  Heizläufen und zwei Taktbeginnen zeigt die Verbraucherkarte, wie viel der
+  Speicher noch aufnehmen kann, und die Einspeisebegrenzung plant den
+  Verbraucher nur mit 80 % davon ein.
+- **Einspeisebegrenzung – Einsatz** (Auswahl je gesteuertem Verbraucher, auf
+  seiner Karte im Dashboard unter *Einspeisebegrenzung*, solange sie an ist):
+  *Unterstützend* – bekommt bei aktiver Einspeisebegrenzung keinen sonstigen
+  Überschuss, nur den Überschuss über der Grenze, den die Batterien nicht
+  aufnehmen können; zeigt die Prognose, dass eine Spitze nicht in die
+  Batterien passt, läuft er ab Beginn der Spitze, damit seine Leistung über
+  die ganze Spitze genutzt wird. *Normal* (Standard) – Überschuss wie ohne
+  Einspeisebegrenzung; über der Grenze nimmt er, was Batterien und
+  unterstützende Verbraucher nicht schaffen, bevor abgeregelt wird. *Nie* –
+  Überschuss wie ohne Einspeisebegrenzung, nie den Überschuss über der
+  Grenze. Innerhalb eines Einsatzes entscheidet die Priorität. Wirkt nur,
+  solange *Steuerung aktiv* an ist (sonst ausgegraut). Siehe
+  *Einspeisebegrenzung*.
 
 **Wirkungsgrad der Batterie** (Gesamtwirkungsgrad, AC zu AC), je Batterie
 aus einer von drei Quellen:
@@ -746,10 +759,17 @@ Netzanschlusspunkt (Einspeisung, nach dem Hausverbrauch).
   dass es eine Stunde vor der Spitze mit 70 % der möglichen Leistung fertig
   ist, nie über der Grenze. Dafür darf es *Maximale Einspeisung beim Entladen*
   überschreiten.
-- **Reihenfolge in der Spitze**: Der Überschuss über der Grenze geht an
-  Verbraucher mit *Einkalkulieren*, dann an die Batterien (unabhängig
-  von Batterievorrang, Batterieanteil und netzdienlichem Laden), dann an
-  Verbraucher mit *Statt Abregeln*. Die Einspeisebegrenzung hat Vorrang vor
+- **Reihenfolge in der Spitze**: Der Überschuss über der Grenze geht an die
+  Batterien (unabhängig von Batterievorrang, Batterieanteil und
+  netzdienlichem Laden), dann an die Verbraucher mit dem Einsatz
+  *Unterstützend*, dann an die mit *Normal*; erst der Rest wird abgeregelt.
+  Zeigt die Prognose, dass eine Spitze nicht in die Batterien passt (zu
+  klein oder zu spät für Platz, mit den Puffern), plant SLEMS die
+  unterstützenden Verbraucher für den Teil, der nicht passt, ab Beginn der
+  Spitze ein: Ein Verbraucher mit wenig Leistung würde sonst erst anfangen,
+  wenn die Batterien voll sind, und könnte dann viel weniger als den
+  Überschuss aufnehmen. Mit Temperaturfühlern plant SLEMS ihn nur so weit
+  ein, wie sein Speicher noch Energie aufnehmen kann. Die Einspeisebegrenzung hat Vorrang vor
   netzdienlichem Laden (dessen Einspeisegrenze liegt nie über der Begrenzung),
   Nachtentladung und Batterievorrang; die Schwelle des Spitzenabfangs bleibt
   beim Einspeisen eine Untergrenze.
@@ -770,7 +790,11 @@ Netzanschlusspunkt (Einspeisung, nach dem Hausverbrauch).
   Einspeisung seit mehr als 5 Minuten über der Grenze. *Batterien zu klein*
   heißt, dass schon die Prognose nicht hineinpasst; passt nur der
   Sicherheitspuffer nicht vollständig, zeigt die Übersicht stattdessen den
-  Hinweis *Prognose im Pufferbereich* (ohne Benachrichtigung). Batterien, die
+  Hinweis *Prognose im Pufferbereich* (ohne Benachrichtigung). Energie, die
+  nicht in die Batterien passt (zu klein oder zu spät für Platz), gilt nicht
+  als Problem, soweit die unterstützenden und normalen Verbraucher sie in der
+  Spitze aufnehmen können; die Übersicht zeigt dann den Hinweis *Verbraucher
+  übernehmen den Rest* mit der Energie und den Verbrauchern. Batterien, die
   gerade nicht in der Planung sind (Zellausgleich, Kommunikation pausiert,
   deaktiviert, reagiert nicht), nennen die Texte.
 

@@ -207,6 +207,8 @@ def _cap_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
         ],
         "problems": cap.problems,
         "buffer_short": cap.buffer_short,
+        "takeover_kwh": _kwh(cap.takeover_wh),
+        "takeover_consumers": c.takeover_consumers(s),
         "limit_exceeded": _cap_exceeded(c),
         "missing_batteries": [
             {"name": name, "reason": reason} for name, reason in c.missing_batteries(s)
@@ -662,6 +664,11 @@ async def async_setup_entry(
                 [
                     PlannedConsumerPowerSensor(coordinator, consumer),
                     LearnedConsumerPowerSensor(coordinator, consumer),
+                    *(
+                        [StorageCapacitySensor(coordinator, consumer)]
+                        if consumer.temperature_entity_ids
+                        else []
+                    ),
                 ],
                 config_subentry_id=consumer.subentry_id,
             )
@@ -1074,4 +1081,44 @@ class LearnedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             "thermostat_pauses": self._learner.cycles,
             "thermostat_cycles": self._learner.thermostat_cycles,
             "in_use": self.consumer.subentry_id in self.coordinator.consumer_learning,
+        }
+
+
+class StorageCapacitySensor(SlemsConsumerEntity, SensorEntity):
+    """Energy the storage of a consumer can still take, from its temperatures (see learning)."""
+
+    _attr_device_class = SensorDeviceClass.ENERGY_STORAGE
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_suggested_display_precision = 1
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: SlemsCoordinator, consumer) -> None:
+        super().__init__(coordinator, consumer, "storage_capacity")
+
+    @property
+    def _learner(self):
+        return self.coordinator.thermal_learners[self.consumer.subentry_id]
+
+    @property
+    def native_value(self) -> float | None:
+        capacity = self.coordinator.thermal_capacity(self.consumer.subentry_id)
+        return None if capacity is None else round(capacity[1] / 1000, 2)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        learner = self._learner
+        capacity = self.coordinator.thermal_capacity(self.consumer.subentry_id)
+        state = self.coordinator.data.consumers.get(self.consumer.subentry_id) if self.coordinator.data else None
+        temperature = state.temperature_c if state else None
+        return {
+            "temperature_c": None if temperature is None else round(temperature, 1),
+            "until_cycling_kwh": None if capacity is None else round(capacity[0] / 1000, 2),
+            "until_full_kwh": None if capacity is None else round(capacity[1] / 1000, 2),
+            "kwh_per_k": None if learner.energy_per_k is None else round(learner.energy_per_k / 1000, 3),
+            "cycling_temperature_c": learner.pause_temp,
+            "full_temperature_c": learner.full_temp,
+            "cycling_power_w": learner.cycling_w,
+            "runs": len(learner.wh_per_k),
+            "cycling_marks": len(learner.pause_temps),
+            "full_marks": len(learner.full_temps),
         }

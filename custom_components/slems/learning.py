@@ -17,6 +17,9 @@ the value set by the user applies.
   report interval of the smart meter.
 * Consumers (``ConsumerLearner``): power while switched on, and whether their
   own thermostat switches them off while they are commanded.
+* Thermal storage of a consumer (``ThermalLearner``): energy per kelvin of its
+  temperature sensors and the temperatures at which it starts cycling and is
+  full, for the capacity it has left.
 * Reserve of the night discharge (``MorningGapLearner``): the energy the house
   needed from battery or grid between the moment PV should have taken over
   (end of the night discharge as planned) and the moment it really did, as a
@@ -263,6 +266,195 @@ class ConsumerLearner:
         learner = cls(cycles=data.get("cycles", 0))
         learner.powers.extend(data.get("powers", []))
         return learner
+
+
+# --- thermal storage of a consumer -----------------------------------------------------
+
+# A heating run counts for the energy per kelvin from this rise and energy on.
+THERMAL_MIN_RISE_K = 3.0
+THERMAL_MIN_ENERGY_WH = 300.0
+# While cycling, a window with less than this share of the learned power
+# means the storage is full.
+THERMAL_WINDOW_S = 30 * 60
+THERMAL_FULL_SHARE = 0.15
+# Cycling phases shorter than this give no mean power.
+THERMAL_MIN_CYCLING_S = 30 * 60
+THERMAL_KEEP = 20
+THERMAL_MIN_RUNS = 3
+THERMAL_MIN_MARKS = 2
+# Samples further apart are not integrated (missed polls, restart).
+THERMAL_MAX_GAP_S = 120.0
+
+
+@dataclass
+class ThermalLearner:
+    """Storage of a consumer heating water (or a room) from its temperature sensors.
+
+    Uses the mean of the configured sensors, so it needs to know neither
+    which sensor switches the thermostat nor where they sit. Learned from
+    the runs while the consumer is commanded on:
+
+    * energy per kelvin of the mean temperature (``wh_per_k``),
+    * mean temperature at which the own thermostat first pauses the consumer
+      (``pause_temp``), i.e. from which on it cycles,
+    * mean power while cycling (``cycling_w``),
+    * mean temperature at which it hardly takes anything any more
+      (``full_temp``).
+    """
+
+    wh_per_k: list[float] = field(default_factory=list)
+    pause_temps: list[float] = field(default_factory=list)
+    cycling_powers: list[float] = field(default_factory=list)
+    full_temps: list[float] = field(default_factory=list)
+    _start_temp: float | None = None
+    _energy_wh: float = 0.0
+    _last: float | None = None
+    _paused_since: float | None = None
+    _cycling_since: float | None = None
+    _cycling_wh: float = 0.0
+    _window_start: float | None = None
+    _window_wh: float = 0.0
+    _full: bool = False
+    _throttled: bool = False
+
+    def update(
+        self,
+        now: float,
+        commanded_on: bool,
+        power_w: float | None,
+        temperature: float | None,
+        nominal_w: float | None,
+        full_command: bool = True,
+    ) -> None:
+        """``temperature`` is the mean of the sensors, ``nominal_w`` the power while on.
+
+        ``full_command``: commanded at (nearly) its full power; a lower set
+        point makes the cycling power and the full detection meaningless, so
+        such a cycling phase is not used.
+        """
+        if not commanded_on or power_w is None or temperature is None:
+            self._finish(temperature)
+            return
+        if not full_command:
+            self._throttled = True
+        if self._start_temp is None:
+            self._start_temp = temperature
+            self._last = now
+            return
+        elapsed = now - (self._last or now)
+        self._last = now
+        if elapsed > THERMAL_MAX_GAP_S:
+            self._finish(None)
+            return
+        energy = max(0.0, power_w) * elapsed / 3600
+        self._energy_wh += energy
+        running = power_w >= CONSUMER_ON_W
+        if running:
+            if self._paused_since is not None and now - self._paused_since >= PAUSE_MIN_S:
+                self._start_cycling(self._paused_since, temperature)
+            self._paused_since = None
+        elif self._paused_since is None:
+            self._paused_since = now
+        if self._cycling_since is None and not running and now - self._paused_since >= PAUSE_MIN_S:
+            self._start_cycling(self._paused_since, temperature)
+        if self._cycling_since is not None:
+            self._cycling_wh += energy
+            self._window_wh += energy
+            if now - self._window_start >= THERMAL_WINDOW_S:
+                mean = self._window_wh / ((now - self._window_start) / 3600)
+                if (
+                    nominal_w
+                    and not self._full
+                    and not self._throttled
+                    and mean < THERMAL_FULL_SHARE * nominal_w
+                ):
+                    self._full = True
+                    self.full_temps = [*self.full_temps, round(temperature, 1)][-THERMAL_KEEP:]
+                self._window_start = now
+                self._window_wh = 0.0
+
+    def _start_cycling(self, since: float, temperature: float) -> None:
+        if self._cycling_since is not None:
+            return
+        self._cycling_since = since
+        self._window_start = since
+        self.pause_temps = [*self.pause_temps, round(temperature, 1)][-THERMAL_KEEP:]
+
+    def _finish(self, temperature: float | None) -> None:
+        """End of a run: energy per kelvin and mean cycling power."""
+        if self._start_temp is not None and temperature is not None:
+            rise = temperature - self._start_temp
+            if rise >= THERMAL_MIN_RISE_K and self._energy_wh >= THERMAL_MIN_ENERGY_WH:
+                self.wh_per_k = [*self.wh_per_k, round(self._energy_wh / rise, 1)][-THERMAL_KEEP:]
+        if (
+            self._cycling_since is not None
+            and self._last is not None
+            and not self._full
+            and not self._throttled
+        ):
+            duration = self._last - self._cycling_since
+            if duration >= THERMAL_MIN_CYCLING_S:
+                mean = self._cycling_wh / (duration / 3600)
+                self.cycling_powers = [*self.cycling_powers, round(mean)][-THERMAL_KEEP:]
+        self._start_temp = None
+        self._energy_wh = 0.0
+        self._last = None
+        self._paused_since = None
+        self._cycling_since = None
+        self._cycling_wh = 0.0
+        self._window_start = None
+        self._window_wh = 0.0
+        self._full = False
+        self._throttled = False
+
+    @property
+    def energy_per_k(self) -> float | None:
+        return statistics.median(self.wh_per_k) if len(self.wh_per_k) >= THERMAL_MIN_RUNS else None
+
+    @property
+    def pause_temp(self) -> float | None:
+        return statistics.median(self.pause_temps) if len(self.pause_temps) >= THERMAL_MIN_MARKS else None
+
+    @property
+    def full_temp(self) -> float | None:
+        return statistics.median(self.full_temps) if len(self.full_temps) >= THERMAL_MIN_MARKS else None
+
+    @property
+    def cycling_w(self) -> float | None:
+        return statistics.median(self.cycling_powers) if self.cycling_powers else None
+
+    def capacity(self, temperature: float | None) -> tuple[float, float] | None:
+        """(energy until it cycles, energy until it is full) in Wh at ``temperature``.
+
+        Until the full temperature is learned, only the energy until it cycles
+        counts. None while the energy per kelvin or the pause temperature is
+        not learned yet.
+        """
+        per_k, pause = self.energy_per_k, self.pause_temp
+        if per_k is None or pause is None or temperature is None:
+            return None
+        until_pause = max(0.0, (pause - temperature) * per_k)
+        full = self.full_temp
+        until_full = until_pause if full is None else max(until_pause, (full - temperature) * per_k)
+        return until_pause, until_full
+
+    def as_dict(self) -> dict:
+        return {
+            "wh_per_k": list(self.wh_per_k),
+            "pause_temps": list(self.pause_temps),
+            "cycling_powers": list(self.cycling_powers),
+            "full_temps": list(self.full_temps),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> ThermalLearner:
+        data = data or {}
+        return cls(
+            wh_per_k=list(data.get("wh_per_k", [])),
+            pause_temps=list(data.get("pause_temps", [])),
+            cycling_powers=list(data.get("cycling_powers", [])),
+            full_temps=list(data.get("full_temps", [])),
+        )
 
 
 # --- reserve of the night discharge ---------------------------------------------------

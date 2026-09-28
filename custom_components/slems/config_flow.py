@@ -32,6 +32,8 @@ from homeassistant.helpers import selector
 from .const import (
     CONF_BLOCK_ENTITY,
     CONF_THERMOSTAT_CYCLES,
+    CONF_TEMPERATURE_2_ENTITY,
+    CONF_TEMPERATURE_ENTITY,
     CONF_CAPACITY_WH,
     CONF_CONSUMER_TYPE,
     CONF_CONTROL_ENTITY,
@@ -540,6 +542,8 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
                 CONF_MIN_ON_MINUTES,
                 CONF_MIN_OFF_MINUTES,
                 CONF_THERMOSTAT_CYCLES,
+                CONF_TEMPERATURE_ENTITY,
+                CONF_TEMPERATURE_2_ENTITY,
             )
             defaults = {k: v for k, v in defaults.items() if k in keep}
 
@@ -581,6 +585,11 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
         fields[
             vol.Required(CONF_THERMOSTAT_CYCLES, default=defaults.get(CONF_THERMOSTAT_CYCLES, False))
         ] = selector.BooleanSelector()
+        temperature = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
+        )
+        fields[_optional(CONF_TEMPERATURE_ENTITY, defaults)] = temperature
+        fields[_optional(CONF_TEMPERATURE_2_ENTITY, defaults)] = temperature
         fields[
             vol.Required(CONF_PRIORITY, default=defaults.get(CONF_PRIORITY, DEFAULT_PRIORITY))
         ] = selector.NumberSelector(

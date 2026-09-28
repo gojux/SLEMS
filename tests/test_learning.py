@@ -144,3 +144,54 @@ def test_morning_gap_zero_when_pv_is_early() -> None:
     for minute in range(0, 20):
         learner.update(minute * 60.0, day + timedelta(hours=8, minutes=minute), 3000, 500)
     assert learner.days == {"2026-09-28": 0.0}
+
+
+def _heat(learner, t, temp, *, minutes, cutoff, wh_per_k=150.0, power=3400.0, full_command=True):
+    """Heating run; from ``cutoff`` on the thermostat cycles 60 s off, 60 s on."""
+    cycling_since = None
+    for _ in range(int(minutes * 60 / 5)):
+        if cycling_since is None and temp >= cutoff:
+            cycling_since = t
+        running = cycling_since is None or (t - cycling_since) % 120 >= 60
+        watts = power if running else 0.0
+        learner.update(t, True, watts, temp, power, full_command)
+        temp += watts * 5 / 3600 / wh_per_k
+        t += 5
+    learner.update(t, False, 0.0, temp, power)
+    return t + 3600, temp
+
+
+def test_thermal_storage_learns_energy_per_kelvin_and_cycling() -> None:
+    from custom_components.slems.learning import ThermalLearner
+
+    learner = ThermalLearner()
+    t = 0.0
+    for start in (30.0, 35.0, 40.0):
+        t, _ = _heat(learner, t, start, minutes=80, cutoff=52.0)
+    assert learner.energy_per_k == pytest.approx(150, rel=0.1)
+    assert learner.pause_temp == pytest.approx(52, abs=0.3)
+    assert learner.cycling_w is not None and learner.cycling_w < 3400
+    until_cycling, until_full = learner.capacity(40.0)
+    assert until_cycling == pytest.approx(12 * 150, rel=0.1)
+    # The full temperature is not learned yet: only the energy until it cycles.
+    assert until_full == until_cycling
+    assert ThermalLearner.from_dict(learner.as_dict()).wh_per_k == learner.wh_per_k
+
+
+def test_thermal_storage_full_and_throttled() -> None:
+    from custom_components.slems.learning import ThermalLearner
+
+    learner = ThermalLearner()
+    t = 0.0
+    for _ in range(2):
+        # Commanded on, but the thermostat keeps it off: the storage is full.
+        for _ in range(int(40 * 60 / 5)):
+            learner.update(t, True, 0.0, 58.0, 3400.0)
+            t += 5
+        learner.update(t, False, 0.0, 58.0, 3400.0)
+        t += 3600
+    assert learner.full_temp == 58.0
+    # Commanded below its full power: the cycling phase is not used.
+    throttled = ThermalLearner()
+    _heat(throttled, 0.0, 30.0, minutes=80, cutoff=52.0, power=650.0, full_command=False)
+    assert throttled.cycling_powers == [] and throttled.full_temps == []

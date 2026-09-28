@@ -474,25 +474,44 @@ are multiplied by the PV correction. Consumption is the hourly forecast.
 
 ```
 excess     = max(0, PV − consumption − limit)
-over       = max(0, excess − counted consumers (max power))
+over       = max(0, excess − early)              early: supporting consumers planned from the block start
 absorbed   = min(over, charge power without SoC window)
-curtailed  = max(0, over − absorbed − emergency consumers (max power))
+reactive   = supporting power left (capacity) + normal consumers (max power)
+curtailed  = max(0, over − absorbed − reactive)
+spare      = min(reactive, over) − min(reactive, over − absorbed)
 drained    = min(max(0, consumption − PV), discharge power)
 need(t)    = min(usable, max(0, need(t+1) + absorbed·eff·(1+buffer) [+ min buffer at a block end] − drained/eff))
 ```
 
 Blocks are runs of steps with excess, gaps ≤ 1 h merged. `need` is the free
-stored space required at each step; `battery_too_small` if the need
-without buffers exceeds the usable space (max − min SoC); if only the
-buffered need does, `buffer_short` (a note in the overview, no
-notification). `hold_charging` = free space now − need(now) ≤
+stored space required at each step; the need without buffers above the
+usable space (max − min SoC) is energy that does not fit (see below for
+`battery_too_small`); if only the buffered need exceeds it, `buffer_short`
+(a note in the overview, no notification). `hold_charging` = free space now − need(now) ≤
 50 Wh. `export_needed = max(0, need(now) − free now) · eff`. Export capacity
 per step before the next block = min(discharge power − deficit, limit − 100 W
 − PV surplus); `export_possible` sums it at full power; the latest start
 collects 70 % of it backwards from one hour before the block; after the start
-the export power is needed / remaining time. Problems: `battery_too_small`,
-`too_late` (needed > possible + 100 Wh), `charge_power_too_low` (curtailed >
-100 Wh); the coordinator tracks `cap_exceeded_since` (export > limit) for
+the export power is needed / remaining time.
+
+What does not fit into the batteries is planned in two passes. The first
+pass has no early consumer power; per block its *shortfall* is the buffered
+stored energy clipped at `usable` / eff (AC), for the next block plus the
+export that cannot be done in time, `(needed − possible) / eff²`. With
+supporting consumers and a shortfall > 100 Wh, `_assign_early` gives each
+block's shortfall to them from the block start (step by step up to the
+excess, in order of priority, each up to its power and learned capacity,
+`CapConsumer.power_after`; the capacity is available again each day), and
+the second pass plans with that. Sized to the shortfall, the early power
+leaves the space to make unchanged: the clipped need drops back to `usable`.
+The first step's early power is `CapPlan.support_w`, which `CapControl`
+passes to the allocation. In the final pass the stored energy still clipped
+in a block (/ eff) is covered by that block's `spare` first; the rest is
+`battery_too_small` (the buffered overflow likewise decides `buffer_short`);
+the late export is covered by the next block's remaining spare, the rest >
+100 Wh is `too_late`. The early energy plus the covered energy is
+`takeover_wh` (overview note with `takeover_consumers`). Problems: `battery_too_small`,
+`too_late`, `charge_power_too_low` (curtailed > 100 Wh); the coordinator tracks `cap_exceeded_since` (export > limit) for
 the runtime problem after 5 minutes. These problems are persistent
 notifications (see *Battery limits and delivery monitoring*), not repair
 issues.
@@ -504,9 +523,10 @@ factor instead of the percentage buffer.
 
 Integration:
 
-- Allocation (`CapControl`): surplus above `limit − margin` → consumers with
-  `CapMode.COUNT` → batteries (charge power) → `CapMode.EMERGENCY`; the rest
-  below the limit as usual, batteries without charging while
+- Allocation (`CapControl`): surplus above `limit − margin` → the planned
+  `support_w` to `CapMode.SUPPORT` consumers → batteries (charge power) →
+  `SUPPORT` consumers → `NORMAL` consumers; the rest below the limit as usual
+  without the `SUPPORT` consumers, batteries without charging while
   `hold_charging`. The export branch discharges max(normal, night, cap
   export), bounded by `max_discharge_export_w` (cap export: limit − margin,
   otherwise min(max export setting, limit − margin)); also used for
@@ -527,12 +547,21 @@ Integration:
   afterwards; a plan made once per day left the batteries short after the
   peak.
 
-Part of each consumer: select *With feed-in cap* per controllable consumer
-(`ConsumerCapModeSelect`, restored; `coordinator.consumer_cap_modes`, default
-`count`), shown on the consumer card while the cap is on. While the cap is on,
-`allocate` leaves `emergency` consumers out of the normal surplus
-distribution: they only take the surplus above the limit the batteries cannot
-absorb. `count` and `never` consumers get the normal surplus as usual.
+Role of each consumer: select *Role with feed-in cap* per controllable
+consumer (`ConsumerCapModeSelect`, restored, stored values of earlier versions
+mapped by `LEGACY_CAP_MODES`; `coordinator.consumer_cap_modes`, default
+`normal`), shown on the consumer card under *Feed-in cap* while the cap is on.
+While the cap is on, `allocate` leaves `support` consumers out of the normal
+surplus distribution; `normal` and `never` consumers get the normal surplus as
+usual. The planning does not count on consumers to make room: planned
+consumer energy is only what does not fit, so an unavailable consumer (a hot
+boiler) never costs battery space.
+
+Supporting consumers with temperature sensors (`CONF_TEMPERATURE_ENTITY`,
+`CONF_TEMPERATURE_2_ENTITY`, their mean in `ConsumerState.temperature_c`):
+`coordinator.cap_consumer` builds the `CapConsumer` from
+`ThermalLearner.capacity` × `THERMAL_SAFETY` (0.8) and the learned cycling
+power; without learned values only the power limits it.
 
 ### Learned values
 
@@ -566,6 +595,24 @@ known):
   used in the allocation requests, the feed-in cap and the controller.
   `ConsumerLearner.update` runs with every poll on the command last sent by
   the controller (kept while saturated) and the measured power. Stored.
+- Thermal storage (`ThermalLearner`, consumers with temperature sensors,
+  always learning, stored under `thermal`): with every poll on the command,
+  the measured power and the mean temperature of the sensors. A run lasts
+  while the consumer is commanded on (a gap > 120 s ends it). Learned per run:
+  Wh per K of the mean temperature (rise ≥ 3 K, ≥ 300 Wh), the mean
+  temperature 30 s into the first thermostat pause (power < 50 W while
+  commanded), the mean power from that pause to the end of the run (≥ 30 min
+  of cycling) and the mean temperature at which a 30 min window of the
+  cycling phase stays below 15 % of the learned power (full). Cycling power
+  and full detection are skipped when the run was commanded below 90 % of the
+  full power (a throttled consumer is not a full storage). Medians of the last
+  20; the energy per K from 3 runs, the temperatures from 2 marks. Capacity
+  at a temperature: until it cycles (pause temperature − T) · Wh/K, until
+  full the same with the full temperature (until it is learned: the energy
+  until it cycles). Sensor *Storage capacity left* with the learned values.
+  The mean of the sensors needs neither the role nor the position of a
+  sensor: with a sensor at the heating element and one higher up, the rise
+  per energy and the cycling mark are consistent from run to run.
 
 Night discharge reserve (`night_reserve_pct(settings)`): `MorningGapLearner`.
 With every poll (any operating mode, also without night discharge) the
@@ -1141,3 +1188,4 @@ repository (otherwise its *brands* check fails).
 | 2026-09-27 | Night discharge reserve learnable from the morning gap (planned vs. real PV takeover) in % of the forecast consumption, with a coverage setting (quantile, above 100 % a margin over the worst morning); no price based optimisation, because whether the energy community takes the energy at night is not known live. |
 | 2026-09-28 | PV correction weighted: the rest of the day only from 15 % of the day's forecast energy on (fully from 50 %), the current and next hour more strongly; a foggy morning halved the whole day's forecast before. |
 | 2026-09-28 | Feed-in cap mode *Instead of curtailing* means only against curtailment: such consumers get no normal surplus while the cap is on (a heating rod ran on normal surplus although the batteries could take the peak). Default mode changed to *Plan with*. |
+| 2026-09-28 | Feed-in cap roles *Supporting* / *Normal* (default) / *Never* instead of counted / instead of curtailing / never. Batteries first; supporting consumers get no normal surplus while the cap is on, and for energy that does not fit into the batteries they are planned from the start of the peak, because a consumer with less power than the surplus only takes a fraction of it once the batteries are full. Nothing is counted on to make room (a hot boiler would cost battery space in the peak); problems count the consumers' spare power, a note names them. Optional temperature sensors per consumer: the storage capacity is learned from the mean of the sensors (energy per K, cycling and full temperature, cycling power) without knowing which sensor switches the thermostat, and limits the planned energy (80 %). |

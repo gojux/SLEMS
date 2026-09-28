@@ -218,14 +218,25 @@ Every consumer needs its own power **and** energy sensor.
   the dashboard): off means SLEMS only measures the consumer. Switching it
   off in operating mode *active* sets it to 0 W (or off) once; afterwards
   SLEMS leaves it alone and plans it like an uncontrolled load.
-- **With feed-in cap** (select per controlled consumer, on its card in the
-  dashboard while the feed-in cap is on): *Plan with* (default) – the
-  consumer takes the surplus above the feed-in limit before the batteries, so
-  they need less free space, and below the limit it is used as usual;
-  *Instead of curtailing* – the consumer runs only for what the batteries
-  cannot absorb above the limit and gets no other surplus; *Never* – not used
-  for the energy above the limit, below it as usual. Applies only while *Control active* is on (greyed out
-  otherwise). See *Feed-in cap*.
+- **Temperature sensors of the storage** (optional, up to two, e.g. the
+  sensor of a boiler at the heating rod and one higher up): SLEMS learns from
+  the mean of the sensors how much energy the storage takes per degree, from
+  which temperature the thermostat starts cycling, its mean power while
+  cycling and when it is full. Which sensor switches the thermostat and where
+  they sit does not matter. From three heating runs and two starts of the
+  cycling on, the consumer card shows how much the storage can still take,
+  and the feed-in cap plans the consumer only with 80 % of that.
+- **Feed-in cap – role** (select per controlled consumer, on its card in the
+  dashboard under *Feed-in cap* while the cap is on): *Supporting* – gets no
+  other surplus while the feed-in cap is on, only the surplus above the limit
+  the batteries cannot absorb; if the forecast shows that a peak does not fit
+  into the batteries, it runs from the start of the peak so its power is used
+  over the whole peak. *Normal* (default) – surplus as without the feed-in
+  cap; above the limit it takes what the batteries and the supporting
+  consumers cannot, before it is curtailed. *Never* – surplus as without the
+  feed-in cap, never the surplus above the limit. Within a role the priority
+  decides. Applies only while *Control active* is on (greyed out otherwise).
+  See *Feed-in cap*.
 
 **Battery efficiency** (round trip, AC to AC), one of three sources per
 battery:
@@ -713,10 +724,16 @@ house consumption).
   possible: it is planned to be finished one hour before the peak with 70 %
   of the possible power, never above the limit. For this it may exceed
   *Maximum grid export while discharging*.
-- **Order during the peak**: the surplus above the limit goes to consumers set
-  to *Plan with*, then to the batteries (regardless of battery priority,
-  battery share and grid friendly charging), then to consumers set to *Instead of
-  curtailing*. The feed-in cap takes precedence over grid friendly charging
+- **Order during the peak**: the surplus above the limit goes to the
+  batteries (regardless of battery priority, battery share and grid friendly
+  charging), then to the consumers with the role *Supporting*, then to those
+  with *Normal*, and only the rest is curtailed. If the forecast shows that a
+  peak does not fit into the batteries (too small, or too late to make room,
+  with the buffers), SLEMS plans the supporting consumers from the start of
+  the peak for the part that does not fit: a consumer with little power
+  would otherwise only start when the batteries are full and could then take
+  far less than the surplus. With temperature sensors it plans them only as
+  far as their storage can still take energy. The feed-in cap takes precedence over grid friendly charging
   (its feed-in limit never lies above the cap), night discharge and battery
   priority; the peak shaving threshold stays a floor for feeding in.
 - **Overview**: the tile *Feed-in cap* shows the next peak, the energy the
@@ -736,7 +753,11 @@ house consumption).
   limit for more than 5 minutes. *Batteries too small* means the forecast
   itself does not fit; if only the safety buffer does not fit completely, the
   overview shows the note *forecast within the buffer zone* instead (no
-  notification). Batteries left out of the planning (cell balancing,
+  notification). Energy that does not fit into the batteries (too small, or
+  too late to make room) does not count as a problem as far as the supporting
+  and normal consumers can take it during the peak; the overview then
+  shows the note *consumers take the rest* with the energy and the
+  consumers. Batteries left out of the planning (cell balancing,
   communication paused, disabled, not responding) are named in the texts.
 
 Sensors: *Feed-in cap energy to absorb* (on the day of the next peak, with the

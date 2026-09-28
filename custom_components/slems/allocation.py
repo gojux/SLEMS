@@ -110,7 +110,7 @@ class ConsumerRequest:
     must_stay_on: bool = False
     # Minimum pause not yet elapsed: must stay off.
     must_stay_off: bool = False
-    cap_mode: CapMode = CapMode.COUNT
+    cap_mode: CapMode = CapMode.NORMAL
 
     @property
     def minimum_running_power_w(self) -> float:
@@ -147,6 +147,9 @@ class CapControl:
     export_w: float = 0.0
     # Kept between the export and the limit.
     margin_w: float = 100.0
+    # Planned power of the supporting consumers right now (before the
+    # batteries, in a peak that does not fit into them).
+    support_w: float = 0.0
 
     @property
     def max_export_w(self) -> float:
@@ -236,18 +239,16 @@ def allocate(
     cap_charge = 0.0
     capped = False
     if cap is not None:
-        # Surplus above the limit: counted consumers, batteries, emergency consumers.
+        # Surplus above the limit: the planned part of the supporting
+        # consumers, the batteries, the supporting consumers, the normal ones.
         over = max(0.0, remaining - cap.max_export_w)
         capped = over > 0
-        left = _distribute(
-            over, [c for c in ordered if c.cap_mode is CapMode.COUNT], consumer_power
-        )
+        support = [c for c in ordered if c.cap_mode is CapMode.SUPPORT]
+        early = min(over, cap.support_w)
+        left = over - early + _distribute(early, support, consumer_power)
         cap_charge = min(max_charge, left)
-        left = _distribute(
-            left - cap_charge,
-            [c for c in ordered if c.cap_mode is CapMode.EMERGENCY],
-            consumer_power,
-        )
+        left = _distribute(left - cap_charge, support, consumer_power)
+        _distribute(left, [c for c in ordered if c.cap_mode is CapMode.NORMAL], consumer_power)
         remaining -= over
         max_charge = 0.0 if cap.hold_charging else max_charge - cap_charge
     remaining = max(0.0, remaining - settings.charge_grid_target_w)
@@ -266,8 +267,8 @@ def allocate(
     battery_power = min(battery_budget, max_charge)
     consumer_budget = remaining - battery_power
 
-    # With the feed-in cap, emergency consumers only take what would be curtailed.
-    normal = ordered if cap is None else [c for c in ordered if c.cap_mode is not CapMode.EMERGENCY]
+    # With the feed-in cap, supporting consumers only take surplus above the limit.
+    normal = ordered if cap is None else [c for c in ordered if c.cap_mode is not CapMode.SUPPORT]
     unused = _distribute(consumer_budget, normal, consumer_power)
     # What the consumers cannot take goes back to the batteries.
     battery_power = min(battery_power + unused, max_charge) + cap_charge

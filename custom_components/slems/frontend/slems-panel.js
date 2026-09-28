@@ -137,6 +137,12 @@ const STRINGS = {
     resting: "thermostat pause",
     controlOff: "control off",
     onlyWithControl: "Applies only while the control is active.",
+    capSection: "Feed-in cap",
+    capRole: "Role",
+    storageCapacity: "Storage left",
+    storageLearning: "learning ({runs}/3 heating runs, {marks}/2 thermostat cycles)",
+    storageUntilCycling: "{energy} until it cycles",
+    storageUntilFull: "{cycling} until it cycles, {full} until full",
     controlActive: "Control active",
     responseTime: "Response time (own sensor)",
     gridResponseTime: "Response time at the meter",
@@ -179,7 +185,7 @@ const STRINGS = {
     capProblemTexts: {
       battery_too_small: "The batteries cannot hold the forecast energy above the limit ({space} needed); the rest is curtailed.",
       too_late: "Not enough time or power left to feed in {export} before the peak; part of the surplus will be curtailed.",
-      charge_power_too_low: "The batteries cannot charge fast enough; about {curtailed} would be curtailed. A consumer set to \"Plan with\" or \"Instead of curtailing\" for the feed-in cap can take it.",
+      charge_power_too_low: "The batteries cannot charge fast enough; about {curtailed} would be curtailed. A consumer with the role \"Supporting\" or \"Normal\" for the feed-in cap can take it.",
       limit_exceeded: "The grid export has been above the limit for more than 5 minutes.",
     },
     capNote: "Limit {limit}. Buffer in use: {buffer}{source}.",
@@ -187,6 +193,8 @@ const STRINGS = {
     capBufferShortText:
       "The forecast is within the buffer zone: the expected energy above the limit fits into the batteries, only the full safety buffer does not.",
     capMissing: "Not part of the planning right now: {batteries}.",
+    capTakeover: "Feed-in cap: consumers take the rest",
+    capTakeoverText: "{energy} do not fit into the batteries and are expected to go to these consumers instead of being curtailed: {consumers}.",
     batteryMissing: {
       balancing: "cell balancing",
       paused: "communication paused",
@@ -263,7 +271,7 @@ const STRINGS = {
       feed_in_cap_min_buffer:
         "Space kept free per peak in any case, in % of the PV peak power as energy of one hour (10 kWp, 5 % → 0.5 kWh). Covers small peaks for which the percentage buffer is tiny.",
       cap_mode:
-        "Plan with: takes the surplus above the feed-in limit before the batteries, so they need less free space. Instead of curtailing: runs only for what the batteries cannot absorb above the limit, no other surplus. Never: not used for the energy above the limit. Below the limit, Plan with and Never use the consumer as usual.",
+        "Supporting: gets no other surplus while the feed-in cap is on, only the surplus above the limit the batteries cannot absorb. If the forecast shows that a peak does not fit into the batteries, it runs from the start of the peak so its power is used for the whole peak. Normal: surplus as without the feed-in cap; above the limit it takes what the batteries and the supporting consumers cannot, before it is curtailed. Never: surplus as without the feed-in cap, never the surplus above the limit.",
       feed_in_cap_auto_buffer:
         "Uses the recorded PV forecast errors instead of the fixed buffer: of the days with more PV than forecast, the underestimation not exceeded on 80 % of them raises the PV forecast. Needs 14 recorded days; until then the fixed buffer applies.",
       peak_shaving_grid_limit:
@@ -418,6 +426,12 @@ const STRINGS = {
     resting: "Thermostat-Pause",
     controlOff: "Steuerung aus",
     onlyWithControl: "Wirkt nur bei aktiver Steuerung.",
+    capSection: "Einspeisebegrenzung",
+    capRole: "Einsatz",
+    storageCapacity: "Speicherreserve",
+    storageLearning: "lernt noch ({runs}/3 Heizläufe, {marks}/2 Taktbeginne)",
+    storageUntilCycling: "{energy} bis zum Takten",
+    storageUntilFull: "{cycling} bis zum Takten, {full} bis voll",
     controlActive: "Steuerung aktiv",
     responseTime: "Reaktionszeit (eigener Sensor)",
     gridResponseTime: "Reaktionszeit am Zähler",
@@ -460,7 +474,7 @@ const STRINGS = {
     capProblemTexts: {
       battery_too_small: "Die Batterien können die prognostizierte Energie über der Grenze nicht aufnehmen ({space} nötig); der Rest wird abgeregelt.",
       too_late: "Es bleibt nicht genug Zeit oder Leistung, um vor der Spitze {export} einzuspeisen; ein Teil des Überschusses wird abgeregelt.",
-      charge_power_too_low: "Die Batterien können nicht schnell genug laden; etwa {curtailed} würden abgeregelt. Ein Verbraucher mit „Einkalkulieren“ oder „Statt Abregeln“ bei der Einspeisebegrenzung kann ihn aufnehmen.",
+      charge_power_too_low: "Die Batterien können nicht schnell genug laden; etwa {curtailed} würden abgeregelt. Ein Verbraucher mit dem Einsatz „Unterstützend“ oder „Normal“ bei der Einspeisebegrenzung kann ihn aufnehmen.",
       limit_exceeded: "Die Einspeisung liegt seit mehr als 5 Minuten über der Grenze.",
     },
     capNote: "Grenze {limit}. Puffer in Verwendung: {buffer}{source}.",
@@ -468,6 +482,8 @@ const STRINGS = {
     capBufferShortText:
       "Die Prognose bewegt sich innerhalb der Pufferzone: Die erwartete Energie über der Grenze passt in die Batterien, nur der volle Sicherheitspuffer nicht.",
     capMissing: "Derzeit nicht in der Planung: {batteries}.",
+    capTakeover: "Einspeisebegrenzung: Verbraucher übernehmen den Rest",
+    capTakeoverText: "{energy} passen nicht in die Batterien und gehen voraussichtlich statt Abregeln an: {consumers}.",
     batteryMissing: {
       balancing: "Zellausgleich",
       paused: "Kommunikation pausiert",
@@ -544,7 +560,7 @@ const STRINGS = {
       feed_in_cap_min_buffer:
         "Platz, der je Spitze auf jeden Fall frei bleibt, in % der PV-Spitzenleistung als Energie einer Stunde (10 kWp, 5 % → 0,5 kWh). Deckt kleine Spitzen ab, bei denen der prozentuale Puffer winzig ist.",
       cap_mode:
-        "Einkalkulieren: nimmt den Überschuss über der Einspeisegrenze vor den Batterien auf, sie brauchen dann weniger freien Platz. Statt Abregeln: läuft nur für das, was die Batterien über der Grenze nicht aufnehmen können, sonst kein Überschuss. Nie: wird für die Energie über der Grenze nicht genutzt. Unterhalb der Grenze nutzen Einkalkulieren und Nie den Verbraucher wie gewohnt.",
+        "Unterstützend: bekommt bei aktiver Einspeisebegrenzung keinen sonstigen Überschuss, nur den Überschuss über der Grenze, den die Batterien nicht aufnehmen können. Zeigt die Prognose, dass eine Spitze nicht in die Batterien passt, läuft er ab Beginn der Spitze, damit seine Leistung über die ganze Spitze genutzt wird. Normal: Überschuss wie ohne Einspeisebegrenzung; über der Grenze nimmt er, was Batterien und unterstützende Verbraucher nicht schaffen, bevor abgeregelt wird. Nie: Überschuss wie ohne Einspeisebegrenzung, nie den Überschuss über der Grenze.",
       feed_in_cap_auto_buffer:
         "Verwendet statt des festen Puffers die aufgezeichneten Abweichungen der PV-Prognose: Von den Tagen mit mehr PV als prognostiziert hebt die Unterschätzung, die an 80 % davon nicht überschritten wurde, die PV-Prognose an. Braucht 14 aufgezeichnete Tage; bis dahin gilt der feste Puffer.",
       peak_shaving_grid_limit:
@@ -981,7 +997,14 @@ class SlemsPanel extends HTMLElement {
     const note = a.buffer_short
       ? `<div class="info-box"><ha-icon icon="mdi:information-outline"></ha-icon><span><b>${escapeHtml(t.capBufferShort)}</b> – ${escapeHtml(t.capBufferShortText + missing)}</span></div>`
       : "";
-    return problems + note;
+    const takeover = (a.takeover_kwh || 0) > 0.1 && !this._capProblems().length
+      ? `<div class="info-box"><ha-icon icon="mdi:information-outline"></ha-icon><span><b>${escapeHtml(t.capTakeover)}</b> – ${escapeHtml(
+          t.capTakeoverText
+            .replace("{energy}", this._kwh(a.takeover_kwh * 1000))
+            .replace("{consumers}", (a.takeover_consumers || []).join(", "))
+        )}</span></div>`
+      : "";
+    return problems + note + takeover;
   }
 
   /** Limit and buffer in use below the feed-in cap settings. */
@@ -1154,6 +1177,20 @@ class SlemsPanel extends HTMLElement {
     this.shadowRoot.getElementById("details-body").innerHTML = rows.length
       ? rows.map(([label, value, entityId]) => this._row(label, escapeHtml(String(value)), entityId)).join("")
       : `<dd class="muted">${t.noDetails}</dd>`;
+  }
+
+  /** Energy the storage of a consumer can still take, or how far the learning is. */
+  _storageText(storage) {
+    const t = this._t;
+    const a = storage.attributes || {};
+    if (a.until_cycling_kwh === null || a.until_cycling_kwh === undefined) {
+      return t.storageLearning.replace("{runs}", `${a.runs ?? 0}`).replace("{marks}", `${a.cycling_marks ?? 0}`);
+    }
+    const cycling = this._kwh(a.until_cycling_kwh * 1000);
+    if (a.full_temperature_c === null || a.full_temperature_c === undefined) {
+      return t.storageUntilCycling.replace("{energy}", cycling);
+    }
+    return t.storageUntilFull.replace("{cycling}", cycling).replace("{full}", this._kwh(a.until_full_kwh * 1000));
   }
 
   /** A dt/dd pair; with an entity both open its more-info dialog on click. */
@@ -2425,11 +2462,14 @@ class SlemsPanel extends HTMLElement {
           const capMode = this._state("cap_mode", c.device_id);
           const learning = this._state("consumer_learning", c.device_id);
           const learnedPower = this._state("learned_power", c.device_id);
-          const settings = [
-            learning,
-            learning?.state === "on" ? learnedPower : null,
-            capMode && this._capState() ? capMode : null,
-          ].filter(Boolean);
+          const settings = [learning, learning?.state === "on" ? learnedPower : null].filter(Boolean);
+          const capOff = control?.state === "off";
+          const storage = this._state("storage_capacity", c.device_id);
+          const capSection = capMode && this._capState()
+            ? `<div class="settings card-setting"><h3 class="card-subheading${capOff ? " disabled" : ""}">${t.capSection}</h3>${this._control(
+                capMode, { label: t.capRole, disabledNote: capOff ? t.onlyWithControl : null }
+              )}${storage ? `<dl>${this._row(t.storageCapacity, escapeHtml(this._storageText(storage)), storage.entity_id)}</dl>` : ""}</div>`
+            : "";
           const chips = [
             !c.controllable ? t.notControlled : "",
             control?.state === "off" ? t.controlOff : "",
@@ -2451,8 +2491,8 @@ class SlemsPanel extends HTMLElement {
               ${c.controllable ? this._row(t.responseTime, response, planned?.entity_id) : ""}
               ${c.controllable ? this._row(t.gridResponseTime, gridResponse, planned?.entity_id) : ""}
             </dl>${
-              settings.length ? `<div class="settings card-setting">${settings.map((st) => this._control(st, st === capMode && control?.state === "off" ? t.onlyWithControl : null)).join("")}</div>` : ""
-            }</section>`;
+              settings.length ? `<div class="settings card-setting">${settings.map((st) => this._control(st)).join("")}</div>` : ""
+            }${capSection}</section>`;
         })
         .join("")
     );
@@ -2524,19 +2564,21 @@ class SlemsPanel extends HTMLElement {
       <span></span></label>`;
   }
 
-  // disabledNote: the control is shown greyed out with this note.
-  _control(stateObj, disabledNote = null) {
+  // label: instead of the entity name; disabledNote: the control is shown
+  // greyed out with this note.
+  _control(stateObj, { label = null, disabledNote = null } = {}) {
     const domain = stateObj.entity_id.split(".")[0];
     const key = this._hass.entities?.[stateObj.entity_id]?.translation_key;
     const hint = this._t.settingHints[key];
     // Title for the mouse, a click on the icon opens the text (touch screens).
+    const title = label ?? this._name(stateObj);
     let name = hint
-      ? `${escapeHtml(this._name(stateObj))}<button class="info" data-action="toggle-hint" data-key="${key}" title="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}"><ha-icon icon="mdi:information-outline"></ha-icon></button>${
+      ? `${escapeHtml(title)}<button class="info" data-action="toggle-hint" data-key="${key}" title="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}"><ha-icon icon="mdi:information-outline"></ha-icon></button>${
           this._openHints.has(key) ? `<span class="setting-hint">${escapeHtml(hint)}</span>` : ""
         }`
-      : escapeHtml(this._name(stateObj));
+      : escapeHtml(title);
     if (domain === "switch") {
-      return `<div class="setting"><span>${name}</span>${this._toggle(stateObj, this._name(stateObj))}</div>`;
+      return `<div class="setting"><span>${name}</span>${this._toggle(stateObj, title)}</div>`;
     }
     const learned = LEARNED_SETTINGS[key];
     if (learned && this._state(learned[0])?.state === "on") {
@@ -2892,6 +2934,8 @@ const STYLE = `
   .setting select { font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--divider-color);
     background: var(--card-background-color); color: var(--primary-text-color); max-width: 60%; }
   .card-setting .setting > span:first-child { min-width: 0; }
+  .card-subheading { margin: 0 0 6px; font-size: 14px; font-weight: 500; color: var(--primary-text-color); }
+  .card-subheading.disabled { color: var(--secondary-text-color); }
   .setting.disabled > span:first-child { color: var(--secondary-text-color); }
   .setting select:disabled { opacity: 0.5; }
   .card-setting select { min-width: 0; max-width: 55%; font-size: 14px; padding: 3px 4px; }

@@ -23,6 +23,8 @@ from .const import (
     CONF_NOMINAL_POWER_W,
     CONF_POWER_ENTITY,
     CONF_PRIORITY,
+    CONF_TEMPERATURE_2_ENTITY,
+    CONF_TEMPERATURE_ENTITY,
     CONF_THERMOSTAT_CYCLES,
     DEFAULT_PRIORITY,
     ConsumerType,
@@ -60,6 +62,9 @@ class ConsumerConfig:
     # Its own thermostat switches it on and off while it is commanded (e.g. a
     # heating rod that measures at the element): pauses are no saturation.
     thermostat_cycles: bool = False
+    # Optional temperature sensors of its storage (a boiler); their mean is
+    # used to learn how much energy it can still take (ThermalLearner).
+    temperature_entity_ids: tuple[str, ...] = ()
 
     @property
     def controllable(self) -> bool:
@@ -86,6 +91,11 @@ class ConsumerConfig:
             min_on_s=(data.get(CONF_MIN_ON_MINUTES) or 0) * 60,
             min_off_s=(data.get(CONF_MIN_OFF_MINUTES) or 0) * 60,
             thermostat_cycles=data.get(CONF_THERMOSTAT_CYCLES, False),
+            temperature_entity_ids=tuple(
+                entity_id
+                for entity_id in (data.get(CONF_TEMPERATURE_ENTITY), data.get(CONF_TEMPERATURE_2_ENTITY))
+                if entity_id
+            ),
         )
 
 
@@ -96,6 +106,8 @@ class ConsumerState:
     power_w: float | None = None
     energy_kwh: float | None = None
     blocked: bool = False
+    # Mean of its temperature sensors (°C); None without sensors or if one is unknown.
+    temperature_c: float | None = None
 
 
 def read_consumer_state(hass: HomeAssistant, consumer: ConsumerConfig) -> ConsumerState:
@@ -109,11 +121,30 @@ def read_consumer_state(hass: HomeAssistant, consumer: ConsumerConfig) -> Consum
             blocked = block_state.state == STATE_OFF
         else:
             blocked = block_state.state == STATE_ON
+    temperatures = [_temperature(hass.states.get(e)) for e in consumer.temperature_entity_ids]
     return ConsumerState(
         power_w=state_as_watts(hass.states.get(consumer.power_entity_id)),
         energy_kwh=state_as_kwh(hass.states.get(consumer.energy_entity_id)),
         blocked=blocked,
+        temperature_c=(
+            sum(temperatures) / len(temperatures)
+            if temperatures and None not in temperatures
+            else None
+        ),
     )
+
+
+def _temperature(state) -> float | None:
+    """Temperature in °C (sensors in °F are converted)."""
+    if state is None:
+        return None
+    try:
+        value = float(state.state)
+    except (TypeError, ValueError):
+        return None
+    if state.attributes.get("unit_of_measurement") == "°F":
+        return (value - 32) * 5 / 9
+    return value
 
 
 class RuntimeTracker:

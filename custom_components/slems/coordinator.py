@@ -91,7 +91,7 @@ from .battery_limits import (
 )
 from .cell_balancing import BalancingPhase, CellBalancer, CellMonitor
 from .delivery_monitor import Action, DeliveryMonitor
-from .feed_in_cap import CAP_MARGIN_W, CapPlan, CapSettings, auto_buffer, plan_cap
+from .feed_in_cap import CAP_MARGIN_W, CapConsumer, CapPlan, CapSettings, auto_buffer, plan_cap
 from .problems import ProblemReporter
 from .efficiency import EfficiencyTracker, EnergyIntegrator, LossCurveLearner
 from .forecast import (
@@ -107,6 +107,7 @@ from .learning import (
     ConsumerLearner,
     GridTargetLearner,
     MorningGapLearner,
+    ThermalLearner,
     auto_timing,
     consumption_underestimate,
     pv_overestimate,
@@ -143,6 +144,11 @@ DEVICE_INFO_INTERVAL_S = 6 * 3600
 CONTROL_STORE_KEY = "control"
 PV_ACCURACY_STORE_KEY = "pv_accuracy"
 CONSUMERS_STORE_KEY = "consumers"
+THERMAL_STORE_KEY = "thermal"
+# Share of the learned storage capacity the feed-in cap planning relies on.
+THERMAL_SAFETY = 0.8
+# A power consumer counts as commanded at full power from this share on.
+FULL_COMMAND_SHARE = 0.9
 MORNING_GAP_STORE_KEY = "morning_gap"
 HALF_HOUR = timedelta(minutes=30)
 
@@ -580,6 +586,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.grid_targets = GridTargetLearner()
         self.morning_gap = MorningGapLearner()
         self.consumer_learners = {c.subentry_id: ConsumerLearner() for c in consumers}
+        self.thermal_learners = {
+            c.subentry_id: ThermalLearner() for c in consumers if c.temperature_entity_ids
+        }
         # Consumers whose learned power and thermostat behaviour are used.
         self.consumer_learning: set[str] = set()
 
@@ -599,6 +608,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         for subentry_id, data in (stored.get(CONSUMERS_STORE_KEY) or {}).items():
             if subentry_id in self.consumer_learners:
                 self.consumer_learners[subentry_id] = ConsumerLearner.from_dict(data)
+        for subentry_id, data in (stored.get(THERMAL_STORE_KEY) or {}).items():
+            if subentry_id in self.thermal_learners:
+                self.thermal_learners[subentry_id] = ThermalLearner.from_dict(data)
         if gain := (stored.get(CONTROL_STORE_KEY) or {}).get("gain"):
             self.controller.gain_adapter.reset(gain)
         for battery in self.batteries:
@@ -733,6 +745,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         data[CONSUMERS_STORE_KEY] = {
             subentry_id: learner.as_dict() for subentry_id, learner in self.consumer_learners.items()
         }
+        data[THERMAL_STORE_KEY] = {
+            subentry_id: learner.as_dict() for subentry_id, learner in self.thermal_learners.items()
+        }
         data[CONTROL_STORE_KEY] = {"gain": self.controller.gain_adapter.gain}
         data[PV_ACCURACY_STORE_KEY] = self.pv_accuracy.as_dict()
         data[MORNING_GAP_STORE_KEY] = self.morning_gap.as_dict()
@@ -766,9 +781,19 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 if self.settings.operating_mode is OperatingMode.ACTIVE
                 else None
             )
-            self.consumer_learners[consumer.subentry_id].update(
-                now, command is not None and command > 0, snapshot.consumers[consumer.subentry_id].power_w
-            )
+            state = snapshot.consumers[consumer.subentry_id]
+            learner = self.consumer_learners[consumer.subentry_id]
+            learner.update(now, command is not None and command > 0, state.power_w)
+            if thermal := self.thermal_learners.get(consumer.subentry_id):
+                full_power = self._full_power_w(consumer)
+                thermal.update(
+                    now,
+                    command is not None and command > 0,
+                    state.power_w,
+                    state.temperature_c,
+                    learner.nominal_w or full_power,
+                    command is not None and command >= FULL_COMMAND_SHARE * full_power,
+                )
 
         if forecast_entries := config.get(CONF_PV_FORECAST_ENTRIES):
             snapshot.pv_forecast = await async_get_pv_forecast(self.hass, forecast_entries)
@@ -1305,6 +1330,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 hold_charging=cap.hold_charging,
                 export_w=cap.export_power_w,
                 margin_w=CAP_MARGIN_W,
+                support_w=cap.support_w,
             )
             if cap is not None
             else None
@@ -1659,8 +1685,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 discharge_w += limits.discharge_w
         if power_w is not None:
             charge_w, discharge_w = power_w
-        counted_w = emergency_w = 0.0
-        for consumer in map(self.effective_consumer, self.consumers):
+        support: list[CapConsumer] = []
+        normal_w = 0.0
+        consumers = sorted(
+            map(self.effective_consumer, self.consumers), key=lambda c: (c.priority, c.subentry_id)
+        )
+        for consumer in consumers:
             if not snapshot.is_controllable_now(consumer.subentry_id):
                 continue
             power = (
@@ -1669,10 +1699,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 else consumer.max_power_w
             ) or 0
             mode = self.cap_mode(consumer.subentry_id)
-            if mode is CapMode.COUNT:
-                counted_w += power
-            elif mode is CapMode.EMERGENCY:
-                emergency_w += power
+            if mode is CapMode.SUPPORT:
+                support.append(self.cap_consumer(consumer, power))
+            elif mode is CapMode.NORMAL:
+                normal_w += power
         return plan_cap(
             wall_now,
             battery,
@@ -1688,12 +1718,54 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 ),
                 pv_factor=pv_factor,
             ),
-            counted_w,
-            emergency_w,
+            support,
+            normal_w,
         )
 
+    @staticmethod
+    def _full_power_w(consumer: ConsumerConfig) -> float:
+        return float(
+            (
+                consumer.nominal_power_w
+                if consumer.control_mode is ControlMode.SWITCH
+                else consumer.max_power_w
+            )
+            or 0
+        )
+
+    def thermal_capacity(self, subentry_id: str) -> tuple[float, float] | None:
+        """(energy until it cycles, until it is full) in Wh from the temperatures now."""
+        learner = self.thermal_learners.get(subentry_id)
+        state = self.data.consumers.get(subentry_id) if self.data is not None else None
+        if learner is None or state is None:
+            return None
+        return learner.capacity(state.temperature_c)
+
+    def cap_consumer(self, consumer: ConsumerConfig, power_w: float) -> CapConsumer:
+        """Supporting consumer for the cap planning (capacity from the temperatures)."""
+        capacity = self.thermal_capacity(consumer.subentry_id)
+        if capacity is None:
+            return CapConsumer(power_w=power_w)
+        until_pause, until_full = capacity
+        return CapConsumer(
+            power_w=power_w,
+            capacity_wh=until_full * THERMAL_SAFETY,
+            full_power_wh=until_pause * THERMAL_SAFETY,
+            cycling_power_w=self.thermal_learners[consumer.subentry_id].cycling_w,
+        )
+
+    def takeover_consumers(self, snapshot: SystemSnapshot) -> list[str]:
+        """Names of the consumers taking surplus above the limit, supporting ones first."""
+        consumers = [c for c in self.consumers if snapshot.is_controllable_now(c.subentry_id)]
+        return [
+            consumer.name
+            for mode in (CapMode.SUPPORT, CapMode.NORMAL)
+            for consumer in consumers
+            if self.cap_mode(consumer.subentry_id) is mode
+        ]
+
     def cap_mode(self, subentry_id: str) -> CapMode:
-        return self.consumer_cap_modes.get(subentry_id, CapMode.COUNT)
+        return self.consumer_cap_modes.get(subentry_id, CapMode.NORMAL)
 
     def missing_batteries(self, snapshot: SystemSnapshot) -> list[tuple[str, str]]:
         """(name, reason) of the batteries that are not planned with right now."""

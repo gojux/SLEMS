@@ -7,7 +7,7 @@ import pytest
 from homeassistant.util import dt as dt_util
 
 from custom_components.slems.allocation import BatteryGroup
-from custom_components.slems.feed_in_cap import CapSettings, auto_buffer, plan_cap
+from custom_components.slems.feed_in_cap import CapConsumer, CapSettings, auto_buffer, plan_cap
 
 LIMIT = 3000.0
 
@@ -115,16 +115,10 @@ def test_charge_power_too_low() -> None:
     assert result.curtailed_wh == pytest.approx(500)
     assert "charge_power_too_low" in result.problems
     helped = plan(
-        midnight(0) + timedelta(hours=20), pv, charge=500.0, emergency_consumers_w=500.0
+        midnight(0) + timedelta(hours=20), pv, charge=500.0, normal_consumers_w=500.0
     )
     assert helped.curtailed_wh == pytest.approx(0)
     assert helped.problems == []
-
-
-def test_counted_consumers_lower_the_need() -> None:
-    pv = pv_hours({(1, 12): 4400})
-    result = plan(midnight(0) + timedelta(hours=20), pv, counted_consumers_w=600.0)
-    assert result.required_space_wh == pytest.approx(400)
 
 
 def test_battery_too_small() -> None:
@@ -197,3 +191,51 @@ def test_forecast_fits_but_the_buffer_does_not() -> None:
     # Without buffer it fits without a note.
     plain = plan(midnight(0) + timedelta(hours=20), pv, load=400.0)
     assert not plain.buffer_short and not plain.battery_too_small
+
+
+def test_supporting_consumers_run_from_the_start_of_the_peak() -> None:
+    # 12 kWh above the limit in one hour, 10 kWh space: 2 kWh do not fit.
+    pv = pv_hours({(1, 12): 15400})
+    now = midnight(0) + timedelta(hours=20)
+    weak = plan(now, pv, charge=20000.0, support=[CapConsumer(1000)])
+    assert weak.battery_too_small
+    covered = plan(now, pv, charge=20000.0, support=[CapConsumer(3000)])
+    assert not covered.battery_too_small
+    assert covered.problems == []
+    assert covered.early_wh == pytest.approx(2000)
+    assert covered.takeover_wh == pytest.approx(2000)
+    # Planned in the first steps of the peak, not after the batteries are full.
+    first = covered.hourly[midnight(1) + timedelta(hours=12)]
+    assert first.absorbed_wh == pytest.approx(10000)
+
+
+def test_supporting_consumer_limited_by_its_capacity() -> None:
+    pv = pv_hours({(1, 12): 15400})
+    now = midnight(0) + timedelta(hours=20)
+    full = plan(now, pv, charge=20000.0, support=[CapConsumer(3000, capacity_wh=1000)])
+    assert full.early_wh == pytest.approx(1000)
+    assert full.battery_too_small
+    # At full power until the thermostat cycles, then its mean cycling power.
+    cycling = CapConsumer(4000, capacity_wh=5000, full_power_wh=1000, cycling_power_w=2000)
+    assert cycling.power_after(500) == 4000
+    assert cycling.power_after(1500) == 2000
+    assert cycling.power_after(5000) == 0
+
+
+def test_supporting_consumers_now() -> None:
+    # The peak starts now and does not fit: the consumer runs right away.
+    pv = pv_hours({(0, 12): 15400})
+    result = plan(midnight(0) + timedelta(hours=12), pv, charge=20000.0, support=[CapConsumer(3000)])
+    assert result.support_w == pytest.approx(3000)
+    fits = plan(midnight(0) + timedelta(hours=12), pv_hours({(0, 12): 8000}), charge=20000.0,
+                support=[CapConsumer(3000)])
+    assert fits.support_w == 0
+
+
+def test_consumers_cover_a_late_export() -> None:
+    pv = pv_hours({(0, 12): 9400})
+    now = midnight(0) + timedelta(hours=10, minutes=45)
+    covered = plan(now, pv, bat=battery(90), charge=10000.0, support=[CapConsumer(5000)])
+    assert not covered.too_late
+    assert covered.problems == []
+    assert covered.takeover_wh > 0
