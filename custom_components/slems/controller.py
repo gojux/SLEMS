@@ -108,6 +108,9 @@ class RealTimeController:
         self._balancing_commands: dict[str, tuple[float, float]] = {}
         # consumer id -> (commanded power, monotonic time of the command)
         self._consumer_commands: dict[str, tuple[float, float]] = {}
+        # consumer id -> power last sent to the device; it stays set on the
+        # device while the consumer is saturated (the learners use it).
+        self._device_commands: dict[str, float] = {}
         # Measured power of a consumer when its last command was sent.
         self._consumer_before: dict[str, float] = {}
         # Time a consumer command takes to show up at the grid meter.
@@ -208,6 +211,7 @@ class RealTimeController:
             self._direction_since.clear()
             self._balancing_commands.clear()
             self._consumer_commands.clear()
+            self._device_commands.clear()
             return
         if self._lock.locked():
             self._rerun = True
@@ -252,9 +256,8 @@ class RealTimeController:
         return True
 
     def consumer_command(self, subentry_id: str) -> float | None:
-        """Power last commanded to a consumer (kept while it is saturated)."""
-        command = self._consumer_commands.get(subentry_id)
-        return command[0] if command else None
+        """Power last sent to a consumer (kept while it is saturated)."""
+        return self._device_commands.get(subentry_id)
 
     def command_state(self, battery_id: str) -> tuple[float, float] | None:
         """Latest command of a battery and since when it has this direction."""
@@ -519,6 +522,9 @@ class RealTimeController:
             if target is None or not snapshot.is_controllable_now(subentry_id):
                 self._low_since.pop(subentry_id, None)
                 self._resting.discard(subentry_id)
+                if subentry_id not in snapshot.saturated:
+                    # Blocked or no longer controlled: its set point is not ours.
+                    self._device_commands.pop(subentry_id, None)
                 continue
             if consumer.thermostat_cycles:
                 self._check_resting(subentry_id, snapshot, now)
@@ -534,6 +540,7 @@ class RealTimeController:
             if consumer.control_mode is ControlMode.SWITCH:
                 want_on = target > 0
                 if (state.state == STATE_ON) == want_on:
+                    self._device_commands[subentry_id] = target
                     continue
                 await self._hass.services.async_call(
                     domain,
@@ -546,6 +553,7 @@ class RealTimeController:
                 if current is not None and abs(current - value) < CONSUMER_DEADBAND_W and (
                     value != 0 or current == 0
                 ):
+                    self._device_commands[subentry_id] = current
                     continue
                 await self._hass.services.async_call(
                     domain,
@@ -556,6 +564,7 @@ class RealTimeController:
             # The power the meter still shows until the command arrives there.
             self._consumer_before[subentry_id] = self.consumer_power_seen(subentry_id, measured, now)
             self._consumer_commands[subentry_id] = (target, now)
+            self._device_commands[subentry_id] = target
             learner = self.consumer_response.setdefault(
                 subentry_id, StepResponse(DEFAULT_CONSUMER_RESPONSE_S, CONSUMER_MIN_STEP_W)
             )
@@ -569,6 +578,7 @@ class RealTimeController:
         """Set a consumer to 0 W / off once; SLEMS leaves it alone afterwards."""
         subentry_id = consumer.subentry_id
         self._consumer_commands.pop(subentry_id, None)
+        self._device_commands.pop(subentry_id, None)
         self._low_since.pop(subentry_id, None)
         self._resting.discard(subentry_id)
         if not self._active or not consumer.controllable:

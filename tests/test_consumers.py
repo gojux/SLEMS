@@ -1,5 +1,6 @@
 """Tests for consumer state and the resting of consumers with a cycling thermostat."""
 
+import time
 from types import SimpleNamespace
 
 from custom_components.slems.const import ConsumerType, ControlMode
@@ -64,3 +65,18 @@ def test_resting_instead_of_saturation() -> None:
     assert not controller.saturated
     controller._check_resting("rod", snapshot(1900), 140.0)
     assert "rod" not in controller.resting
+
+
+def test_command_kept_for_the_learners_while_saturated() -> None:
+    controller = RealTimeController.__new__(RealTimeController)
+    controller._consumer_commands = {"rod": (2000.0, 0.0)}
+    controller._device_commands = {"rod": 2000.0}
+    controller._saturated_until = {}
+    controller.consumer_response = {}
+    # The thermostat switched off: saturated, the next command is planned anew,
+    # but the set point stays on the device.
+    snapshot = SimpleNamespace(consumers={"rod": ConsumerState(power_w=0.0)})
+    controller._check_saturation("rod", snapshot, time.monotonic())
+    assert "rod" in controller.saturated
+    assert "rod" not in controller._consumer_commands
+    assert controller.consumer_command("rod") == 2000.0
