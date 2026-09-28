@@ -188,7 +188,7 @@ const STRINGS = {
       charge_power_too_low: "The batteries cannot charge fast enough; about {curtailed} would be curtailed. A consumer with the role \"Supporting\" or \"Normal\" for the feed-in cap can take it.",
       limit_exceeded: "The grid export has been above the limit for more than 5 minutes.",
     },
-    capNote: "Limit {limit}. Buffer in use: {buffer}{source}.",
+    capNote: "Limit {limit}. Buffer in use: {buffer}{source}, at least {min} per peak.",
     capBufferShort: "Feed-in cap: forecast within the buffer zone",
     capBufferShortText:
       "The forecast is within the buffer zone: the expected energy above the limit fits into the batteries, only the full safety buffer does not.",
@@ -268,8 +268,6 @@ const STRINGS = {
       feed_in_cap_limit: "Share of the PV peak power that may be fed in at most, e.g. 60 %.",
       feed_in_cap_buffer:
         "Extra space on top of the forecast energy above the limit, in % of it, against a too low PV forecast. Negative values plan with less.",
-      feed_in_cap_min_buffer:
-        "Space kept free per peak in any case, in % of the PV peak power as energy of one hour (10 kWp, 5 % → 0.5 kWh). Covers small peaks for which the percentage buffer is tiny.",
       cap_mode:
         "Supporting: gets no other surplus while the feed-in cap is on, only the surplus above the limit the batteries cannot absorb. If the forecast shows that a peak does not fit into the batteries, it runs from the start of the peak so its power is used for the whole peak. Normal: surplus as without the feed-in cap; above the limit it takes what the batteries and the supporting consumers cannot, before it is curtailed. Never: surplus as without the feed-in cap, never the surplus above the limit.",
       feed_in_cap_auto_buffer:
@@ -477,7 +475,7 @@ const STRINGS = {
       charge_power_too_low: "Die Batterien können nicht schnell genug laden; etwa {curtailed} würden abgeregelt. Ein Verbraucher mit dem Einsatz „Unterstützend“ oder „Normal“ bei der Einspeisebegrenzung kann ihn aufnehmen.",
       limit_exceeded: "Die Einspeisung liegt seit mehr als 5 Minuten über der Grenze.",
     },
-    capNote: "Grenze {limit}. Puffer in Verwendung: {buffer}{source}.",
+    capNote: "Grenze {limit}. Puffer in Verwendung: {buffer}{source}, mindestens {min} je Spitze.",
     capBufferShort: "Einspeisebegrenzung: Prognose im Pufferbereich",
     capBufferShortText:
       "Die Prognose bewegt sich innerhalb der Pufferzone: Die erwartete Energie über der Grenze passt in die Batterien, nur der volle Sicherheitspuffer nicht.",
@@ -557,8 +555,6 @@ const STRINGS = {
       feed_in_cap_limit: "Anteil der PV-Spitzenleistung, der höchstens eingespeist werden darf, z. B. 60 %.",
       feed_in_cap_buffer:
         "Zusätzlicher Platz zur prognostizierten Energie über der Grenze, in % davon, gegen eine zu niedrige PV-Prognose. Negative Werte planen mit weniger.",
-      feed_in_cap_min_buffer:
-        "Platz, der je Spitze auf jeden Fall frei bleibt, in % der PV-Spitzenleistung als Energie einer Stunde (10 kWp, 5 % → 0,5 kWh). Deckt kleine Spitzen ab, bei denen der prozentuale Puffer winzig ist.",
       cap_mode:
         "Unterstützend: bekommt bei aktiver Einspeisebegrenzung keinen sonstigen Überschuss, nur den Überschuss über der Grenze, den die Batterien nicht aufnehmen können. Zeigt die Prognose, dass eine Spitze nicht in die Batterien passt, läuft er ab Beginn der Spitze, damit seine Leistung über die ganze Spitze genutzt wird. Normal: Überschuss wie ohne Einspeisebegrenzung; über der Grenze nimmt er, was Batterien und unterstützende Verbraucher nicht schaffen, bevor abgeregelt wird. Nie: Überschuss wie ohne Einspeisebegrenzung, nie den Überschuss über der Grenze.",
       feed_in_cap_auto_buffer:
@@ -675,7 +671,6 @@ const SETTING_GROUPS = [
       "feed_in_cap_limit",
       "feed_in_cap_buffer",
       "feed_in_cap_auto_buffer",
-      "feed_in_cap_min_buffer",
     ],
   ],
   ["gridFriendly", ["grid_friendly_charging", "grid_friendly_buffer_auto", "grid_friendly_buffer"]],
@@ -1024,7 +1019,8 @@ class SlemsPanel extends HTMLElement {
     const text = t.capNote
       .replace("{limit}", this._watts(a.limit_w))
       .replace("{buffer}", buffer)
-      .replace("{source}", source);
+      .replace("{source}", source)
+      .replace("{min}", this._kwh((a.min_buffer_kwh ?? 0) * 1000));
     return `<p class="setting-note"><ha-icon icon="mdi:information-outline"></ha-icon>${escapeHtml(text)}</p>`;
   }
 
@@ -2311,8 +2307,7 @@ class SlemsPanel extends HTMLElement {
         setting("pv_peak_power_kwp", "pv_peak_power") +
           setting("feed_in_cap_limit_pct", "feed_in_cap_limit") +
           setting("feed_in_cap_auto_buffer", "feed_in_cap_auto_buffer") +
-          setting("feed_in_cap_buffer_pct", "feed_in_cap_buffer", { disabled: s.feed_in_cap_auto_buffer }) +
-          setting("feed_in_cap_min_buffer_pct", "feed_in_cap_min_buffer"))}`;
+          setting("feed_in_cap_buffer_pct", "feed_in_cap_buffer", { disabled: s.feed_in_cap_auto_buffer }))}`;
   }
 
   _onSimChange(target) {

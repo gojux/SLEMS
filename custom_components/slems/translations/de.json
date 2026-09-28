@@ -587,9 +587,6 @@
       "feed_in_cap_buffer": {
         "name": "Puffer der Einspeisebegrenzung"
       },
-      "feed_in_cap_min_buffer": {
-        "name": "Mindestpuffer der Einspeisebegrenzung"
-      },
       "night_reserve_coverage": {
         "name": "Deckung der Reserve Nachtentladung"
       }

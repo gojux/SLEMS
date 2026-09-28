@@ -709,13 +709,16 @@ house consumption).
   the night in between, in which the batteries supply the house, makes room
   again; a surplus below the limit does not.
 - **Buffer**: *Feed-in cap buffer* (default +20 %, negative values plan with
-  less) is added to the energy to absorb, and *Feed-in cap minimum buffer*
-  (default 5 % of the PV peak power as energy of one hour, e.g. 0.5 kWh at
-  10 kWp) per peak in any case. With *Automatic feed-in cap buffer* SLEMS uses
-  the recorded PV forecast errors instead (see *Forecast accuracy*): of the
-  days with more PV than forecast, the underestimation not exceeded on 80 % of
-  them raises the PV forecast. This needs 14 recorded days; until then the
-  fixed buffer applies. The settings show the limit and the buffer in use.
+  less) is added to the energy to absorb. With *Automatic feed-in cap buffer*
+  SLEMS uses the recorded PV forecast errors instead (see *Forecast
+  accuracy*): of the days with more PV than forecast, the underestimation not
+  exceeded on 80 % of them raises the PV forecast. This needs 14 recorded
+  days; until then the fixed buffer applies. In addition a fixed minimum
+  buffer of 5 % of the PV peak power as energy of one hour (0.5 kWh at 10 kWp)
+  stays free per peak in any case: it covers errors in the timing and height
+  of a peak that the daily forecast errors do not show, and small peaks for
+  which the percentage buffer is tiny. The settings show the limit, the buffer
+  in use and the minimum buffer.
 - **Making room**: charging with surplus below the limit only happens as long
   as the space needed later stays free; above the limit the batteries always
   charge. The night discharge (if enabled) stops early enough to leave the

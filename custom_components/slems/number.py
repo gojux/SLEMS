@@ -244,7 +244,6 @@ SETTING_NUMBERS: tuple[SettingNumberDescription, ...] = (
     ),
     _percentage("feed_in_cap_limit", "feed_in_cap_limit_pct"),
     _percentage("feed_in_cap_buffer", "feed_in_cap_buffer_pct", -50, 100),
-    _percentage("feed_in_cap_min_buffer", "feed_in_cap_min_buffer_pct", 0, 50),
     _celsius("temperature_high", "temperature_high_c", 20, 70),
     _celsius("temperature_band", "temperature_band_c", 1, 30),
     _percentage("temperature_floor", "temperature_floor_pct"),

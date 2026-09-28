@@ -7,7 +7,7 @@ from typing import Any
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from .const import (
     CONF_EFFICIENCY_MODE,
@@ -15,6 +15,7 @@ from .const import (
     DEFAULT_ROUND_TRIP_EFFICIENCY_PCT,
     DOMAIN,
     MANUFACTURER,
+    REMOVED_SETTINGS,
     SUBENTRY_TYPE_BATTERY,
     SUBENTRY_TYPE_CONSUMER,
     EfficiencyMode,
@@ -71,10 +72,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
 
+    _remove_old_settings(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_register_panel(hass, entry)
     async_register_websocket(hass)
     return True
+
+
+def _remove_old_settings(hass: HomeAssistant, entry: SlemsConfigEntry) -> None:
+    """Remove the entities of settings that no longer exist."""
+    registry = er.async_get(hass)
+    for key in REMOVED_SETTINGS:
+        if entity_id := registry.async_get_entity_id(Platform.NUMBER, DOMAIN, f"{entry.entry_id}_{key}"):
+            registry.async_remove(entity_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> bool:

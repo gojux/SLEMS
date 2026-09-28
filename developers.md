@@ -521,6 +521,13 @@ with forecast and production; with ≥ 14 of them the 80 % quantile of
 actual/forecast − 1 over the days with actual > forecast is applied as a PV
 factor instead of the percentage buffer.
 
+Minimum buffer: fixed `FEED_IN_CAP_MIN_BUFFER_PCT` (5 % of the kWp as energy
+of one hour) per block, not a setting; the cap sensor reports it as
+`min_buffer_kwh` for the settings note. Settings entities that no longer
+exist (`REMOVED_SETTINGS`) are removed from the entity registry at setup.
+Learning it would need the forecast vs. real energy above the limit per
+peak, which only peaks with an active cap provide.
+
 Integration:
 
 - Allocation (`CapControl`): surplus above `limit − margin` → the planned
@@ -1189,3 +1196,4 @@ repository (otherwise its *brands* check fails).
 | 2026-09-28 | PV correction weighted: the rest of the day only from 15 % of the day's forecast energy on (fully from 50 %), the current and next hour more strongly; a foggy morning halved the whole day's forecast before. |
 | 2026-09-28 | Feed-in cap mode *Instead of curtailing* means only against curtailment: such consumers get no normal surplus while the cap is on (a heating rod ran on normal surplus although the batteries could take the peak). Default mode changed to *Plan with*. |
 | 2026-09-28 | Feed-in cap roles *Supporting* / *Normal* (default) / *Never* instead of counted / instead of curtailing / never. Batteries first; supporting consumers get no normal surplus while the cap is on, and for energy that does not fit into the batteries they are planned from the start of the peak, because a consumer with less power than the surplus only takes a fraction of it once the batteries are full. Nothing is counted on to make room (a hot boiler would cost battery space in the peak); problems count the consumers' spare power, a note names them. Optional temperature sensors per consumer: the storage capacity is learned from the mean of the sensors (energy per K, cycling and full temperature, cycling power) without knowing which sensor switches the thermostat, and limits the planned energy (80 %). |
+| 2026-09-29 | Feed-in cap minimum buffer fixed at 5 % of the kWp instead of a setting: it covers errors in the timing and height of a peak that the learned buffer (from daily totals) does not show, and its right value depends on the forecasts rather than the house, so a user cannot judge it. The night discharge reserve coverage is only shown while the reserve is automatic. |

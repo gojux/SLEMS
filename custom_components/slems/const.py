@@ -84,13 +84,21 @@ DEFAULT_NIGHT_RESERVE_PCT: Final = 25
 DEFAULT_PV_PEAK_POWER_KWP: Final = 10.0
 DEFAULT_FEED_IN_CAP_LIMIT_PCT: Final = 60
 DEFAULT_FEED_IN_CAP_BUFFER_PCT: Final = 20
-DEFAULT_FEED_IN_CAP_MIN_BUFFER_PCT: Final = 5
 DEFAULT_ROTATION_SOC_THRESHOLD_PCT: Final = 5
 DEFAULT_ROTATION_MIN_INTERVAL_MIN: Final = 15
 DEFAULT_ROTATION_RAMP_RATE_W_PER_S: Final = 100
 DEFAULT_ROTATION_RAMP_MAX_S: Final = 30
 DEFAULT_CONTROL_INTERVAL_S: Final = 1.0
 DEFAULT_CONTROL_GAIN: Final = 0.5
+
+
+# Minimum buffer of the feed-in cap per peak, in % of the PV peak power as the
+# energy of one hour: covers errors in the timing and height of a peak that
+# the daily PV forecast errors behind the percentage buffer do not show.
+FEED_IN_CAP_MIN_BUFFER_PCT: Final = 5
+
+# Settings entities of earlier versions, removed from the entity registry.
+REMOVED_SETTINGS: Final = ("feed_in_cap_min_buffer",)
 
 
 class BatteryModel(StrEnum):

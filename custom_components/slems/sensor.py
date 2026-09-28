@@ -26,7 +26,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_PV_FORECAST_ENTRIES, CONF_WEATHER_ENTITY
+from .const import CONF_PV_FORECAST_ENTRIES, CONF_WEATHER_ENTITY, FEED_IN_CAP_MIN_BUFFER_PCT
 from .coordinator import SlemsConfigEntry, SlemsCoordinator, SystemSnapshot
 from .drivers import BatteryTelemetry
 from .allocation import Strategy
@@ -173,11 +173,17 @@ def _cap_exceeded(c: SlemsCoordinator) -> bool:
 
 def _cap_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
     cap = s.feed_in_cap
+    min_buffer = _kwh(c.settings.pv_peak_power_kwp * 1000 * FEED_IN_CAP_MIN_BUFFER_PCT / 100)
     if cap is None:
-        return {"limit_w": round(c.settings.feed_in_cap_limit_w), "limit_exceeded": _cap_exceeded(c)}
+        return {
+            "limit_w": round(c.settings.feed_in_cap_limit_w),
+            "min_buffer_kwh": min_buffer,
+            "limit_exceeded": _cap_exceeded(c),
+        }
     day = cap.day_blocks()
     return {
         "limit_w": round(cap.limit_w),
+        "min_buffer_kwh": min_buffer,
         "peak_start": _time(day[0].start) if day else None,
         "peak_end": _time(day[-1].end) if day else None,
         "excess_kwh": _kwh(sum(b.excess_wh for b in day)),

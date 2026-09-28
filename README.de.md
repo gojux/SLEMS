@@ -742,15 +742,18 @@ Netzanschlusspunkt (Einspeisung, nach dem Hausverbrauch).
   Wolkenlücke oder die Nacht dazwischen, in der die Batterien das Haus
   versorgen, schafft wieder Platz; ein Überschuss unter der Grenze nicht.
 - **Puffer**: *Puffer der Einspeisebegrenzung* (Standard +20 %, negative Werte
-  planen mit weniger) kommt auf die aufzunehmende Energie, *Mindestpuffer der
-  Einspeisebegrenzung* (Standard 5 % der PV-Spitzenleistung als Energie einer
-  Stunde, z. B. 0,5 kWh bei 10 kWp) je Spitze auf jeden Fall. Mit *Puffer der
+  planen mit weniger) kommt auf die aufzunehmende Energie. Mit *Puffer der
   Einspeisebegrenzung automatisch* verwendet SLEMS stattdessen die
   aufgezeichneten Abweichungen der PV-Prognose (siehe *Prognosegüte*): Von den
   Tagen mit mehr PV als prognostiziert hebt die Unterschätzung, die an 80 %
   davon nicht überschritten wurde, die PV-Prognose an. Das braucht 14
-  aufgezeichnete Tage; bis dahin gilt der feste Puffer. Die Einstellungen
-  zeigen die Grenze und den verwendeten Puffer.
+  aufgezeichnete Tage; bis dahin gilt der feste Puffer. Zusätzlich bleibt je
+  Spitze auf jeden Fall ein fester Mindestpuffer von 5 % der
+  PV-Spitzenleistung als Energie einer Stunde frei (0,5 kWh bei 10 kWp): Er
+  deckt Fehler bei Zeitpunkt und Höhe einer Spitze ab, die in den
+  Tagesabweichungen nicht sichtbar sind, und kleine Spitzen, bei denen der
+  prozentuale Puffer winzig ist. Die Einstellungen zeigen die Grenze, den
+  verwendeten Puffer und den Mindestpuffer.
 - **Platz schaffen**: Mit Überschuss unter der Grenze wird nur geladen,
   solange der später nötige Platz frei bleibt; über der Grenze laden die
   Batterien immer. Die Nachtentladung (falls eingeschaltet) entlädt so weit,

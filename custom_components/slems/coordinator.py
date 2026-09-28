@@ -51,7 +51,7 @@ from .const import (
     DEFAULT_DISCHARGE_MAX_GRID_EXPORT_W,
     DEFAULT_FEED_IN_CAP_BUFFER_PCT,
     DEFAULT_FEED_IN_CAP_LIMIT_PCT,
-    DEFAULT_FEED_IN_CAP_MIN_BUFFER_PCT,
+    FEED_IN_CAP_MIN_BUFFER_PCT,
     DEFAULT_PV_PEAK_POWER_KWP,
     DEFAULT_NIGHT_RESERVE_PCT,
     DEFAULT_CONTROL_GAIN,
@@ -314,7 +314,6 @@ class ControlSettings:
     # Buffer on the energy to absorb (may be negative) and the minimum buffer
     # per peak in % of the peak power (as energy of one hour).
     feed_in_cap_buffer_pct: float = DEFAULT_FEED_IN_CAP_BUFFER_PCT
-    feed_in_cap_min_buffer_pct: float = DEFAULT_FEED_IN_CAP_MIN_BUFFER_PCT
     # Buffer from the recorded PV forecast errors instead of the fixed one.
     feed_in_cap_auto_buffer: bool = False
     # Duration of a communication pause (firmware update), minutes.
@@ -1714,7 +1713,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 limit_w=settings.feed_in_cap_limit_w,
                 buffer_pct=0.0 if source == "auto" else buffer_pct,
                 min_buffer_wh=(
-                    settings.pv_peak_power_kwp * 1000 * settings.feed_in_cap_min_buffer_pct / 100
+                    settings.pv_peak_power_kwp * 1000 * FEED_IN_CAP_MIN_BUFFER_PCT / 100
                 ),
                 pv_factor=pv_factor,
             ),

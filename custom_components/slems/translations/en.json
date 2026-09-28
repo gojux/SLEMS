@@ -587,9 +587,6 @@
       "feed_in_cap_buffer": {
         "name": "Feed-in cap buffer"
       },
-      "feed_in_cap_min_buffer": {
-        "name": "Feed-in cap minimum buffer"
-      },
       "night_reserve_coverage": {
         "name": "Night discharge reserve coverage"
       }

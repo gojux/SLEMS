@@ -50,7 +50,6 @@ SETTINGS = (
     "pv_peak_power_kwp",
     "feed_in_cap_limit_pct",
     "feed_in_cap_buffer_pct",
-    "feed_in_cap_min_buffer_pct",
     "feed_in_cap_auto_buffer",
 )
 BATTERY_KEYS = ("capacity_kwh", "min_soc_pct", "max_soc_pct", "max_charge_w", "max_discharge_w")
