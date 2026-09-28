@@ -625,25 +625,43 @@
       "message": "Batterien zu klein für die Einspeisebegrenzung"
     },
     "feed_in_cap_battery_too_small_message": {
-      "message": "Um den prognostizierten Überschuss über der Einspeisegrenze von {limit} W aufzunehmen, bräuchten die Batterien um {peak} {required} kWh freien Platz, mehr als sie über dem minimalen Ladestand haben. Der Rest wird abgeregelt. Stelle einen Verbraucher bei der Einspeisebegrenzung auf „Einkalkulieren“ oder verringere den Puffer."
+      "message": "Um den prognostizierten Überschuss über der Einspeisegrenze von {limit} W aufzunehmen, bräuchten die Batterien um {peak} {required} kWh freien Platz, mehr als sie über dem minimalen Ladestand haben. Der Rest wird abgeregelt. Stelle einen Verbraucher bei der Einspeisebegrenzung auf „Einkalkulieren“. {missing}"
     },
     "feed_in_cap_too_late_title": {
       "message": "Einspeisebegrenzung: zu wenig Zeit, um Platz zu schaffen"
     },
     "feed_in_cap_too_late_message": {
-      "message": "Vor der Spitze um {peak} müssten die Batterien {needed} kWh einspeisen, um genug freien Platz zu haben, bis dahin sind aber nur {possible} kWh möglich (Entladeleistung und Einspeisegrenze von {limit} W). Ein Teil des Überschusses wird abgeregelt."
+      "message": "Vor der Spitze um {peak} müssten die Batterien {needed} kWh einspeisen, um genug freien Platz zu haben, bis dahin sind aber nur {possible} kWh möglich (Entladeleistung und Einspeisegrenze von {limit} W). Ein Teil des Überschusses wird abgeregelt. {missing}"
     },
     "feed_in_cap_charge_power_title": {
       "message": "Einspeisebegrenzung: Ladeleistung zu gering"
     },
     "feed_in_cap_charge_power_message": {
-      "message": "Der Überschuss über der Einspeisegrenze von {limit} W ist laut Prognose höher, als die Batterien laden können; etwa {curtailed} kWh würden abgeregelt. Stelle einen Verbraucher bei der Einspeisebegrenzung auf „Einkalkulieren“ oder „Statt Abregeln“, um ihn zu nutzen."
+      "message": "Der Überschuss über der Einspeisegrenze von {limit} W ist laut Prognose höher, als die Batterien laden können; etwa {curtailed} kWh würden abgeregelt. Stelle einen Verbraucher bei der Einspeisebegrenzung auf „Einkalkulieren“ oder „Statt Abregeln“, um ihn zu nutzen. {missing}"
     },
     "feed_in_cap_exceeded_title": {
       "message": "Einspeisung über der Grenze"
     },
     "feed_in_cap_exceeded_message": {
       "message": "Die Einspeisung liegt seit mehr als 5 Minuten über der Einspeisegrenze von {limit} W; der Wechselrichter regelt die PV-Leistung vermutlich ab. Die Batterien sind voll oder können nicht schnell genug laden, und kein Verbraucher kann den Überschuss aufnehmen."
+    },
+    "feed_in_cap_missing": {
+      "message": "Derzeit nicht in der Planung: {batteries}."
+    },
+    "battery_missing_balancing": {
+      "message": "{name} (Zellausgleich)"
+    },
+    "battery_missing_paused": {
+      "message": "{name} (Kommunikation pausiert)"
+    },
+    "battery_missing_disabled": {
+      "message": "{name} (deaktiviert)"
+    },
+    "battery_missing_not_responding": {
+      "message": "{name} (reagiert nicht)"
+    },
+    "battery_missing_unreadable": {
+      "message": "{name} (nicht lesbar)"
     }
   },
   "issues": {

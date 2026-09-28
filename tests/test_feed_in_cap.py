@@ -184,3 +184,16 @@ def test_auto_buffer() -> None:
     assert count == 15
     # 80 % quantile of +5, +10, +15, +20, +30 %.
     assert value == pytest.approx(0.2)
+
+
+def test_forecast_fits_but_the_buffer_does_not() -> None:
+    # 9 kWh above the limit fit into 10 kWh; with +20 % they do not.
+    pv = pv_hours({(1, 11): 6400, (1, 12): 6400, (1, 13): 6400})
+    result = plan(midnight(0) + timedelta(hours=20), pv, load=400.0,
+                  cap_settings=settings(buffer_pct=20))
+    assert not result.battery_too_small
+    assert result.buffer_short
+    assert "battery_too_small" not in result.problems
+    # Without buffer it fits without a note.
+    plain = plan(midnight(0) + timedelta(hours=20), pv, load=400.0)
+    assert not plain.buffer_short and not plain.battery_too_small

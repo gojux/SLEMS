@@ -1702,6 +1702,25 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     def cap_mode(self, subentry_id: str) -> CapMode:
         return self.consumer_cap_modes.get(subentry_id, CapMode.EMERGENCY)
 
+    def missing_batteries(self, snapshot: SystemSnapshot) -> list[tuple[str, str]]:
+        """(name, reason) of the batteries that are not planned with right now."""
+        missing = []
+        for battery in self.batteries:
+            if battery.plannable and battery.subentry_id in snapshot.batteries:
+                continue
+            if battery.communication_paused:
+                reason = "paused"
+            elif not battery.enabled:
+                reason = "disabled"
+            elif battery.balancing_requested:
+                reason = "balancing"
+            elif battery.not_responding:
+                reason = "not_responding"
+            else:
+                reason = "unreadable"
+            missing.append((battery.name, reason))
+        return missing
+
     @property
     def min_soc_pct(self) -> float:
         """Capacity weighted minimum SoC of the controllable batteries."""

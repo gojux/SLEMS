@@ -724,7 +724,11 @@ house consumption).
 - **Warnings** (overview and notifications): batteries too small for
   the space needed, not enough time or power left to feed in before the peak,
   charge power too low for the surplus above the limit, and feed-in above the
-  limit for more than 5 minutes.
+  limit for more than 5 minutes. *Batteries too small* means the forecast
+  itself does not fit; if only the safety buffer does not fit completely, the
+  overview shows the note *forecast within the buffer zone* instead (no
+  notification). Batteries left out of the planning (cell balancing,
+  communication paused, disabled, not responding) are named in the texts.
 
 Sensors: *Feed-in cap energy to absorb* (on the day of the next peak, with the
 peaks, the space needed, the export plan and the buffer as attributes) and

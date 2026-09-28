@@ -119,6 +119,8 @@ class CapPlan:
     hold_charging: bool = False
     # More space needed than the batteries have (above the minimum SoC).
     battery_too_small: bool = False
+    # The forecast fits, the full buffer does not (a note, not a problem).
+    buffer_short: bool = False
     # Power of the consumers that take surplus above the limit (counted and
     # instead of curtailing).
     consumers_w: float = 0.0
@@ -260,17 +262,26 @@ def plan_cap(
 
     usable = max(0.0, battery.full_soc_pct - battery.min_soc_pct) / 100 * capacity
     buffer = 1 + settings.buffer_pct / 100
-    need = 0.0
+    need = bare = 0.0
     needs: list[float] = []
     for step in reversed(steps):
-        absorbed = step.absorbed_w * step.hours * efficiency * buffer
+        drained = step.drained_w * step.hours / efficiency
+        stored = step.absorbed_w * step.hours * efficiency
+        absorbed = stored * buffer
         if step.start + STEP in block_ends and step.absorbed_w > 0:
             absorbed += settings.min_buffer_wh
-        need = max(0.0, need + absorbed - step.drained_w * step.hours / efficiency)
-        if need > usable + PROBLEM_TOLERANCE_WH:
+        need = max(0.0, need + absorbed - drained)
+        # The same without buffers: does the forecast itself fit?
+        bare = max(0.0, bare + stored - drained)
+        if bare > usable + PROBLEM_TOLERANCE_WH:
             plan.battery_too_small = True
+        elif need > usable + PROBLEM_TOLERANCE_WH:
+            plan.buffer_short = True
         need = min(need, usable)
+        bare = min(bare, usable)
         needs.append(need)
+    if plan.battery_too_small:
+        plan.buffer_short = False
     needs.reverse()
     plan.need = [(step.start, value) for step, value in zip(steps, needs, strict=True)]
     if not steps:

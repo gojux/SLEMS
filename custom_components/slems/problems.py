@@ -150,6 +150,18 @@ class ProblemReporter:
     async def _async_notify_cap(self, problem: str, placeholders: dict[str, str]) -> None:
         key = CAP_NOTIFICATIONS[problem]
         text = await self._texts()
+        # Batteries left out of the planning (e.g. cell balancing) explain a lack of room.
+        missing = self._coordinator.missing_batteries(self._coordinator.data) if self._coordinator.data else []
+        placeholders = placeholders | {
+            "missing": text(
+                "feed_in_cap_missing",
+                batteries=", ".join(
+                    text(f"battery_missing_{reason}", name=name) for name, reason in missing
+                ),
+            )
+            if missing
+            else ""
+        }
         persistent_notification.async_create(
             self._hass,
             text(f"{key}_message", **placeholders),

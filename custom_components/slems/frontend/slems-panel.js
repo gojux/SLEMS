@@ -182,6 +182,17 @@ const STRINGS = {
       limit_exceeded: "The grid export has been above the limit for more than 5 minutes.",
     },
     capNote: "Limit {limit}. Buffer in use: {buffer}{source}.",
+    capBufferShort: "Feed-in cap: forecast within the buffer zone",
+    capBufferShortText:
+      "The forecast is within the buffer zone: the expected energy above the limit fits into the batteries, only the full safety buffer does not.",
+    capMissing: "Not part of the planning right now: {batteries}.",
+    batteryMissing: {
+      balancing: "cell balancing",
+      paused: "communication paused",
+      disabled: "disabled",
+      not_responding: "not responding",
+      unreadable: "cannot be read",
+    },
     capBufferAuto: " (learned from {days} days)",
     capBufferWaiting: " (fixed; automatic from 14 recorded days, {days} so far)",
     capLine: "PV limit of the feed-in cap",
@@ -451,6 +462,17 @@ const STRINGS = {
       limit_exceeded: "Die Einspeisung liegt seit mehr als 5 Minuten über der Grenze.",
     },
     capNote: "Grenze {limit}. Puffer in Verwendung: {buffer}{source}.",
+    capBufferShort: "Einspeisebegrenzung: Prognose im Pufferbereich",
+    capBufferShortText:
+      "Die Prognose bewegt sich innerhalb der Pufferzone: Die erwartete Energie über der Grenze passt in die Batterien, nur der volle Sicherheitspuffer nicht.",
+    capMissing: "Derzeit nicht in der Planung: {batteries}.",
+    batteryMissing: {
+      balancing: "Zellausgleich",
+      paused: "Kommunikation pausiert",
+      disabled: "deaktiviert",
+      not_responding: "reagiert nicht",
+      unreadable: "nicht lesbar",
+    },
     capBufferAuto: " (gelernt aus {days} Tagen)",
     capBufferWaiting: " (fest; automatisch ab 14 aufgezeichneten Tagen, bisher {days})",
     capLine: "PV-Grenze der Einspeisebegrenzung",
@@ -654,6 +676,10 @@ const SETTING_GROUPS = [
     ["rotation_soc_threshold", "rotation_min_interval", "rotation_ramp_rate", "rotation_ramp_max"],
   ],
 ];
+
+/** Mean of two values, null if one is missing. */
+const midpoint = (a, b) =>
+  a === null || a === undefined || b === null || b === undefined ? null : (a + b) / 2;
 
 /** "HH:MM" of the start of a half hour slot (0 = 00:00, 48 = 24:00). */
 const slotTime = (slot) => `${String(Math.floor(slot / 2)).padStart(2, "0")}:${slot % 2 ? "30" : "00"}`;
@@ -924,19 +950,30 @@ class SlemsPanel extends HTMLElement {
       <span class="value">${escapeHtml(value)}</span></div>`;
   }
 
-  /** Problem notes of the feed-in cap for the overview. */
+  /** Problem notes of the feed-in cap for the overview (and the buffer note). */
   _capNotes() {
     const t = this._t;
     const a = this._capState()?.attributes || {};
-    return this._capProblems()
+    // Batteries left out of the planning explain a lack of room.
+    const missing = (a.missing_batteries || []).length
+      ? ` ${t.capMissing.replace(
+          "{batteries}",
+          a.missing_batteries.map((b) => `${b.name} (${t.batteryMissing[b.reason] || b.reason})`).join(", ")
+        )}`
+      : "";
+    const problems = this._capProblems()
       .map((key) => {
         const text = t.capProblemTexts[key]
           .replace("{space}", this._kwh((a.required_space_kwh || 0) * 1000))
           .replace("{export}", this._kwh((a.export_needed_kwh || 0) * 1000))
           .replace("{curtailed}", this._kwh((a.curtailed_kwh || 0) * 1000));
-        return `<div class="problem"><ha-icon icon="mdi:alert-circle"></ha-icon><span><b>${escapeHtml(t.capProblems[key])}</b> – ${escapeHtml(text)}</span></div>`;
+        return `<div class="problem"><ha-icon icon="mdi:alert-circle"></ha-icon><span><b>${escapeHtml(t.capProblems[key])}</b> – ${escapeHtml(text + (key === "limit_exceeded" ? "" : missing))}</span></div>`;
       })
       .join("");
+    const note = a.buffer_short
+      ? `<div class="info-box"><ha-icon icon="mdi:information-outline"></ha-icon><span><b>${escapeHtml(t.capBufferShort)}</b> – ${escapeHtml(t.capBufferShortText + missing)}</span></div>`
+      : "";
+    return problems + note;
   }
 
   /** Limit and buffer in use below the feed-in cap settings. */
@@ -1708,10 +1745,16 @@ class SlemsPanel extends HTMLElement {
           plannedCharge: row.planned_charge_w,
           // With the feed-in cap the inverter curtails the export above the limit.
           exportForecast: exportOf(row),
-          socCompare: compare && half ? comparePlan[hour]?.soc_pct ?? null : null,
+          socCompare: !compare
+            ? null
+            : half
+              ? comparePlan[hour]?.soc_pct ?? null
+              : midpoint(comparePlan[hour - 1]?.soc_pct, comparePlan[hour]?.soc_pct),
           exportCompare: compare ? exportOf(comparePlan[hour]) : null,
-          // Projected total state of charge at the end of the hour.
-          socForecast: half ? row.soc_pct : null,
+          // Projected total state of charge at the end of the half hour: the
+          // projection is hourly, the first half is interpolated (tooltip and
+          // table; the line uses the hour ends).
+          socForecast: half ? row.soc_pct : midpoint(plan[hour - 1]?.soc_pct, row.soc_pct),
           // Feed-in cap: PV level above which is capped, power above it and the curtailed part.
           capLine: row.cap_line_wh ?? null,
           capExcess: row.cap_excess_half_wh ? perHalf(row.cap_excess_half_wh[half]) : null,

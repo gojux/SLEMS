@@ -757,7 +757,12 @@ Netzanschlusspunkt (Einspeisung, nach dem Hausverbrauch).
 - **Warnungen** (Übersicht und Benachrichtigungen): Batterien zu
   klein für den nötigen Platz, zu wenig Zeit oder Leistung, um vor der Spitze
   einzuspeisen, Ladeleistung zu gering für den Überschuss über der Grenze, und
-  Einspeisung seit mehr als 5 Minuten über der Grenze.
+  Einspeisung seit mehr als 5 Minuten über der Grenze. *Batterien zu klein*
+  heißt, dass schon die Prognose nicht hineinpasst; passt nur der
+  Sicherheitspuffer nicht vollständig, zeigt die Übersicht stattdessen den
+  Hinweis *Prognose im Pufferbereich* (ohne Benachrichtigung). Batterien, die
+  gerade nicht in der Planung sind (Zellausgleich, Kommunikation pausiert,
+  deaktiviert, reagiert nicht), nennen die Texte.
 
 Sensoren: *Einspeisebegrenzung: aufzunehmende Energie* (am Tag der nächsten
 Spitze, mit den Spitzen, dem nötigen Platz, dem Einspeiseplan und dem Puffer

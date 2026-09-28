@@ -459,8 +459,10 @@ need(t)    = min(usable, max(0, need(t+1) + absorbed·eff·(1+buffer) [+ min buf
 ```
 
 Blocks are runs of steps with excess, gaps ≤ 1 h merged. `need` is the free
-stored space required at each step; `battery_too_small` if it exceeds the
-usable space (max − min SoC). `hold_charging` = free space now − need(now) ≤
+stored space required at each step; `battery_too_small` if the need
+without buffers exceeds the usable space (max − min SoC); if only the
+buffered need does, `buffer_short` (a note in the overview, no
+notification). `hold_charging` = free space now − need(now) ≤
 50 Wh. `export_needed = max(0, need(now) − free now) · eff`. Export capacity
 per step before the next block = min(discharge power − deficit, limit − 100 W
 − PV surplus); `export_possible` sums it at full power; the latest start

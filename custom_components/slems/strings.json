@@ -625,25 +625,43 @@
       "message": "Batteries too small for the feed-in cap"
     },
     "feed_in_cap_battery_too_small_message": {
-      "message": "To absorb the forecast surplus above the feed-in limit of {limit} W, the batteries would need {required} kWh of free space at {peak}, more than they have above the minimum state of charge. The rest is curtailed. Set a consumer to \"Plan with\" for the feed-in cap, or lower the buffer."
+      "message": "To absorb the forecast surplus above the feed-in limit of {limit} W, the batteries would need {required} kWh of free space at {peak}, more than they have above the minimum state of charge. The rest is curtailed. Set a consumer to \"Plan with\" for the feed-in cap. {missing}"
     },
     "feed_in_cap_too_late_title": {
       "message": "Feed-in cap: not enough time to make room"
     },
     "feed_in_cap_too_late_message": {
-      "message": "Before the peak at {peak} the batteries would have to feed in {needed} kWh to have enough free space, but only {possible} kWh are possible until then (discharge power and feed-in limit of {limit} W). Part of the surplus will be curtailed."
+      "message": "Before the peak at {peak} the batteries would have to feed in {needed} kWh to have enough free space, but only {possible} kWh are possible until then (discharge power and feed-in limit of {limit} W). Part of the surplus will be curtailed. {missing}"
     },
     "feed_in_cap_charge_power_title": {
       "message": "Feed-in cap: charge power too low"
     },
     "feed_in_cap_charge_power_message": {
-      "message": "The surplus above the feed-in limit of {limit} W is forecast to be higher than the batteries can charge; about {curtailed} kWh would be curtailed. Set a consumer to \"Plan with\" or \"Instead of curtailing\" for the feed-in cap to use it."
+      "message": "The surplus above the feed-in limit of {limit} W is forecast to be higher than the batteries can charge; about {curtailed} kWh would be curtailed. Set a consumer to \"Plan with\" or \"Instead of curtailing\" for the feed-in cap to use it. {missing}"
     },
     "feed_in_cap_exceeded_title": {
       "message": "Feed-in above the limit"
     },
     "feed_in_cap_exceeded_message": {
       "message": "The grid export has been above the feed-in limit of {limit} W for more than 5 minutes; the inverter probably curtails the PV power. The batteries are full or cannot charge fast enough, and no consumer can take the surplus."
+    },
+    "feed_in_cap_missing": {
+      "message": "Not part of the planning right now: {batteries}."
+    },
+    "battery_missing_balancing": {
+      "message": "{name} (cell balancing)"
+    },
+    "battery_missing_paused": {
+      "message": "{name} (communication paused)"
+    },
+    "battery_missing_disabled": {
+      "message": "{name} (disabled)"
+    },
+    "battery_missing_not_responding": {
+      "message": "{name} (not responding)"
+    },
+    "battery_missing_unreadable": {
+      "message": "{name} (cannot be read)"
     }
   },
   "issues": {

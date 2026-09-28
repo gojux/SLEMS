@@ -205,7 +205,11 @@ def _cap_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
             for b in cap.blocks
         ],
         "problems": cap.problems,
+        "buffer_short": cap.buffer_short,
         "limit_exceeded": _cap_exceeded(c),
+        "missing_batteries": [
+            {"name": name, "reason": reason} for name, reason in c.missing_batteries(s)
+        ],
     }
 
 
