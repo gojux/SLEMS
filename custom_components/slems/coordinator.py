@@ -997,7 +997,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         power = telemetry.power_w if telemetry else None
         wall = dt_util.utcnow().timestamp()
         if telemetry is not None:
-            battery.cell_monitor.observe_full(max_cell, telemetry.soc_pct, wall)
+            command = self.controller.command_state(battery.subentry_id)
+            battery.cell_monitor.observe_full(
+                max_cell,
+                telemetry.soc_pct,
+                wall,
+                now=now,
+                commanded_w=command[0] if command else None,
+                power_w=power,
+            )
         balancer = battery.balancer
         if balancer is None:
             if telemetry is not None:

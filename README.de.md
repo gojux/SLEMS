@@ -540,10 +540,12 @@ ihren Entities.
 
 Die letzte Vollladung (Sensor *Letzte Vollladung*) ist der Zeitpunkt, an dem
 die Batterie zuletzt oben angekommen ist: höchste Zelle auf der
-Ladeschlussspannung oder der Ladezustand, den das BMS bei voll meldet, auch
-wenn sie gleich danach wieder entladen wurde. Eine neue Vollladung zählt, wenn
-die Batterie den oberen Bereich verlassen hat (höchste Zelle unter 3,49 V,
-ohne Zellspannungen unter 97 %). LFP-Batterien kalibrieren ihren Ladezustand
+Ladeschlussspannung, der Ladezustand, den das BMS bei voll meldet, oder das
+BMS beendet die Ladung kurz vor oben (sie nimmt 2 Minuten lang nichts auf,
+obwohl SLEMS mindestens 100 W vorgibt, ab 98 % oder 3,45 V), auch wenn sie
+gleich danach wieder entladen wurde. Eine neue Vollladung zählt, wenn die
+Batterie den oberen Bereich verlassen hat (höchste Zelle unter 3,40 V, ohne
+Zellspannungen unter 97 %). LFP-Batterien kalibrieren ihren Ladezustand
 nur bei einer Vollladung neu, sie sollte daher regelmäßig vorkommen.
 
 **Regelmäßige Vollladung** (gleichnamige Einstellungsgruppe, standardmäßig

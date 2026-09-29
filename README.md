@@ -513,10 +513,12 @@ and when the cell delta was last measured. *Open device in Home Assistant*
 leads to the device page of the battery with all its entities.
 
 The last full charge (sensor *Last full charge*) is the moment the battery
-last reached the top: the highest cell at the charge stop voltage or the SoC
-the BMS reports when full, also if it was discharged again right away. A new
-full charge counts once the battery has left the top (highest cell below
-3.49 V, without cell voltages below 97 %). LFP batteries recalibrate their
+last reached the top: the highest cell at the charge stop voltage, the SoC
+the BMS reports when full, or the BMS ending the charge near the top (it
+takes nothing for 2 minutes although SLEMS commands at least 100 W, from
+98 % or 3.45 V on), also if it was discharged again right away. A new full
+charge counts once the battery has left the top (highest cell below 3.40 V,
+without cell voltages below 97 %). LFP batteries recalibrate their
 state of charge only when full, so it should happen regularly.
 
 **Regular full charge** (settings group of the same name, on by default): a

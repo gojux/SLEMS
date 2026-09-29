@@ -358,9 +358,12 @@ and `blueprints/marstek_active_balance_blueprint.yaml` of Omnibattery.
   monitor meanwhile. Stored with the learned data.
 - **Last full charge** (`CellMonitor.observe_full`, every poll, also during a
   balancing run and for batteries without cell voltages): the wall clock time
-  the battery reached the top (highest cell ≥ 3.60 V or SoC ≥ 99.5 %), without
-  waiting for a rest. A new one counts after leaving the top (highest cell
-  < 3.49 V, or SoC < 97 % without cell voltages); after a start while full the
+  the battery reached the top (highest cell ≥ 3.60 V or SoC ≥ 99.5 %, or the
+  BMS ended the charge near the top: commanded ≥ 100 W, power < 25 W for
+  120 s from SoC ≥ 98 % or a cell ≥ 3.45 V, as Omnibattery's BMS cut-off
+  detector; that also arms a top delta measurement), without waiting for a
+  rest. A new one counts after leaving the top (highest cell < 3.40 V, below
+  the BMS end voltage, or SoC < 97 % without cell voltages); after a start while full the
   stored time stays (`_at_top` unknown). Stored under `cell_monitor.last_full`;
   sensor *Last full charge* (timestamp); shown in the battery details only.
 - **Regular full charge** (`full_charge.py`, pure): `due_battery` picks one
@@ -1355,3 +1358,4 @@ repository (otherwise its *brands* check fails).
 | 2026-09-29 | Forced runs of daily targets are an extra load in the day chart, the SoC projection and the night discharge, planned from the latest start as the worst case (shrinks as the surplus fills the target). A target temperature raised later in the period is no longer reached. |
 | 2026-09-29 | Gentle charging near the top without a setting (200 W from 3.48 V, released below 3.44 V, as Omnibattery's default): the BMS balances passively before the highest cell ends the charge; it costs only the last one or two percent. |
 | 2026-09-29 | Energy per kelvin learned per temperature sensor too, so a temperature target of one sensor estimates its latest start with that sensor's value (the mean's until learned). |
+| 2026-09-29 | A full charge also when the BMS ends the charge near the top (commanded ≥ 100 W, nothing taken for 2 min from 98 % / 3.45 V): a battery the BMS stops at 99 % would otherwise stay due for its full charge forever. The top is left only below 3.40 V. |
