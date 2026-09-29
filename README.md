@@ -467,9 +467,16 @@ before an update.
 The same menu enables or disables the battery, starts or cancels the cell
 balancing and opens *Details*: model, device name, firmware versions (EMS,
 VMS, BMS, communication module; sensor *Firmware*), MAC address, capacity,
-charge cycles and the total charged and discharged energy. *Open device in
-Home Assistant* leads to the device page of the battery with all its
-entities.
+charge cycles, the total charged and discharged energy, the last full charge
+and when the cell delta was last measured. *Open device in Home Assistant*
+leads to the device page of the battery with all its entities.
+
+The last full charge (sensor *Last full charge*) is the moment the battery
+last reached the top: the highest cell at the charge stop voltage or the SoC
+the BMS reports when full, also if it was discharged again right away. A new
+full charge counts once the battery has left the top (highest cell below
+3.49 V, without cell voltages below 97 %). LFP batteries recalibrate their
+state of charge only when full, so it should happen regularly.
 
 ### Battery limits and protection
 

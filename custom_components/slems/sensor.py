@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 import time
 
 from homeassistant.components.sensor import (
@@ -644,6 +644,7 @@ async def async_setup_entry(
                 EfficiencySensor(coordinator, battery),
                 PlannedBatteryPowerSensor(coordinator, battery),
                 LearnedCapacitySensor(coordinator, battery),
+                LastFullChargeSensor(coordinator, battery),
                 *(
                     [
                         CellDeltaSensor(coordinator, battery),
@@ -973,6 +974,25 @@ class TopCellDeltaSensor(SlemsBatteryEntity, SensorEntity):
             "source": last.source if last else None,
             "suggest_balancing": monitor.suggest_balancing,
         }
+
+
+class LastFullChargeSensor(SlemsBatteryEntity, SensorEntity):
+    """Moment the battery last became full (see CellMonitor.observe_full)."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: SlemsCoordinator, battery) -> None:
+        super().__init__(coordinator, battery, "last_full_charge")
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success
+
+    @property
+    def native_value(self) -> datetime | None:
+        last_full = self.battery.cell_monitor.last_full
+        return None if last_full is None else dt_util.utc_from_timestamp(last_full)
 
 
 class AllowedPowerSensor(SlemsBatteryEntity, SensorEntity):

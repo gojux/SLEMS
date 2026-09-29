@@ -368,6 +368,9 @@
       "top_cell_delta": {
         "name": "Zell-Delta am oberen Ladeende"
       },
+      "last_full_charge": {
+        "name": "Letzte Vollladung"
+      },
       "max_cell_voltage": {
         "name": "Maximale Zellspannung"
       },

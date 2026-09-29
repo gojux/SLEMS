@@ -96,6 +96,8 @@ def _battery(coordinator: SlemsCoordinator, battery: BatteryRuntime) -> dict:
         },
         "cell_monitor": {
             "last": _plain(monitor.last),
+            "last_full": monitor.last_full,
+            "at_top": monitor._at_top,
             "top_reached": monitor._top_reached,
             "armed": monitor._armed,
             "resting_for_s": _ago(monitor._rest_since, now),

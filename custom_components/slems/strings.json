@@ -368,6 +368,9 @@
       "top_cell_delta": {
         "name": "Cell delta at top of charge"
       },
+      "last_full_charge": {
+        "name": "Last full charge"
+      },
       "max_cell_voltage": {
         "name": "Maximum cell voltage"
       },

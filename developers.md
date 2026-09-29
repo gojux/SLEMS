@@ -343,6 +343,13 @@ and `blueprints/marstek_active_balance_blueprint.yaml` of Omnibattery.
   documentation are outdated). A balancing
   run records its own measurements (source `balancing`) and pauses the
   monitor meanwhile. Stored with the learned data.
+- **Last full charge** (`CellMonitor.observe_full`, every poll, also during a
+  balancing run and for batteries without cell voltages): the wall clock time
+  the battery reached the top (highest cell ≥ 3.60 V or SoC ≥ 99.5 %), without
+  waiting for a rest. A new one counts after leaving the top (highest cell
+  < 3.49 V, or SoC < 97 % without cell voltages); after a start while full the
+  stored time stays (`_at_top` unknown). Stored under `cell_monitor.last_full`;
+  sensor *Last full charge* (timestamp); shown in the battery details only.
 - **Run** (`CellBalancer`, one step per battery poll, 5 s): phases
   `pre_top_charge → charge → wait_measure → discharge → charge … →
   final_discharge → done`. Constants at the top of the module (Omnibattery

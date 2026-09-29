@@ -106,6 +106,8 @@ const STRINGS = {
     capacity: "Capacity",
     totalCharged: "Charged in total",
     totalDischarged: "Discharged in total",
+    lastFullCharge: "Last full charge",
+    topDeltaMeasured: "Cell delta last measured",
     automatic: "automatic",
     learned: "learned",
     learnedWaiting: "Not enough data to learn yet; this value applies.",
@@ -394,6 +396,8 @@ const STRINGS = {
     capacity: "Kapazität",
     totalCharged: "Gesamt geladen",
     totalDischarged: "Gesamt entladen",
+    lastFullCharge: "Letzte Vollladung",
+    topDeltaMeasured: "Zell-Delta zuletzt gemessen",
     automatic: "automatisch",
     learned: "gelernt",
     learnedWaiting: "Noch zu wenig Daten zum Lernen; dieser Wert gilt.",
@@ -1244,6 +1248,8 @@ class SlemsPanel extends HTMLElement {
       [t.cycles, s("cycle_count") && this._format(s("cycle_count")), s("cycle_count")?.entity_id],
       [t.totalCharged, s("total_charging_energy") && this._format(s("total_charging_energy")), s("total_charging_energy")?.entity_id],
       [t.totalDischarged, s("total_discharging_energy") && this._format(s("total_discharging_energy")), s("total_discharging_energy")?.entity_id],
+      [t.lastFullCharge, this._moment(s("last_full_charge")?.state), s("last_full_charge")?.entity_id],
+      [t.topDeltaMeasured, this._moment(s("top_cell_delta")?.attributes?.measured_at), s("top_cell_delta")?.entity_id],
     ].filter(([, value]) => value !== undefined && value !== null && value !== "");
     this.shadowRoot.getElementById("details-title").textContent = `${t.details}: ${battery?.name ?? ""}`;
     this.shadowRoot.getElementById("details-close").textContent = t.close;
@@ -1264,6 +1270,23 @@ class SlemsPanel extends HTMLElement {
       return t.storageUntilCycling.replace("{energy}", cycling);
     }
     return t.storageUntilFull.replace("{cycling}", cycling).replace("{full}", this._kwh(a.until_full_kwh * 1000));
+  }
+
+  /** "28.09.2026, 14:32 (vor 2 Tagen)" for an ISO time; undefined without a valid one. */
+  _moment(iso) {
+    const moment = iso ? new Date(iso) : null;
+    if (!moment || Number.isNaN(moment.getTime())) return undefined;
+    const language = this._hass?.locale?.language || "en";
+    const absolute = new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(moment);
+    const seconds = (moment.getTime() - Date.now()) / 1000;
+    const [value, unit] =
+      Math.abs(seconds) < 3600
+        ? [Math.round(seconds / 60), "minute"]
+        : Math.abs(seconds) < 86400
+          ? [Math.round(seconds / 3600), "hour"]
+          : [Math.round(seconds / 86400), "day"];
+    const relative = new Intl.RelativeTimeFormat(language, { numeric: "auto" }).format(value, unit);
+    return `${absolute} (${relative})`;
   }
 
   /** A dt/dd pair; with an entity both open its more-info dialog on click. */

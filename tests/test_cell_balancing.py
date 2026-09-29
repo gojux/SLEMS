@@ -21,6 +21,33 @@ def test_balance_status_thresholds() -> None:
     assert balance_status(250) == "red"
 
 
+def test_last_full_charge() -> None:
+    monitor = CellMonitor()
+    # Full at a start with nothing stored: that moment counts.
+    monitor.observe_full(3.60, 100, 1000)
+    assert monitor.last_full == 1000
+    monitor.observe_full(3.58, 100, 1100)  # still at the top
+    assert monitor.last_full == 1000
+    monitor.observe_full(3.45, 80, 2000)  # discharged out of the top window
+    monitor.observe_full(3.61, 99, 3000)  # full again, discharged right away (no rest)
+    assert monitor.last_full == 3000
+    assert monitor.last is None
+    # Stored and restored; standing full after a restart keeps the stored time.
+    restored = CellMonitor()
+    restored.restore(monitor.as_dict())
+    restored.observe_full(3.60, 100, 5000)
+    assert restored.last_full == 3000
+    # Without cell voltages the SoC decides.
+    soc_only = CellMonitor()
+    soc_only.observe_full(None, 99.6, 100)
+    soc_only.observe_full(None, 98.0, 200)  # not out of the top yet
+    soc_only.observe_full(None, 99.8, 300)
+    assert soc_only.last_full == 100
+    soc_only.observe_full(None, 90.0, 400)
+    soc_only.observe_full(None, 99.6, 500)
+    assert soc_only.last_full == 500
+
+
 def test_monitor_records_after_the_top_and_a_rest() -> None:
     monitor = CellMonitor()
     monitor.update(-60, 3.45, 3.40, 800, 940)  # charging below the top window

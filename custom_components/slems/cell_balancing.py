@@ -63,6 +63,8 @@ MAX_RUN_S = 24 * 3600.0
 
 # The BMS ended the charge (top measurement without reaching CHARGE_STOP_V).
 BMS_FULL_SOC_PCT = 99.5
+# Without cell voltages the battery has left the top below this SoC.
+TOP_EXIT_SOC_PCT = 97.0
 
 # Balance status of a top measurement (mV), as in Omnibattery (measured at
 # 3.60 V or at the BMS cut-off; about 180 mV is normal for Marstek cells).
@@ -118,6 +120,32 @@ class CellMonitor:
         # since the last measurement. Not after a start while it stands full,
         # so a relaxed value does not replace the measurement of that charge.
         self._armed = False
+        # Wall clock time the battery last became full, and whether it is at
+        # the top right now (None: not known yet after a start).
+        self.last_full: float | None = None
+        self._at_top: bool | None = None
+
+    def observe_full(
+        self, max_cell_v: float | None, soc_pct: float | None, wall_timestamp: float
+    ) -> None:
+        """Keep the moment the battery last became full (with or without a rest).
+
+        Full is the charge stop voltage of the highest cell or the SoC the BMS
+        reports when full. The battery counts as having left the top below
+        the top window (cells) or ``TOP_EXIT_SOC_PCT`` without cell voltages.
+        A battery already full at a start keeps the stored time.
+        """
+        full = (max_cell_v is not None and max_cell_v >= CHARGE_STOP_V) or (
+            soc_pct is not None and soc_pct >= BMS_FULL_SOC_PCT
+        )
+        if full:
+            if self._at_top is False or (self._at_top is None and self.last_full is None):
+                self.last_full = wall_timestamp
+            self._at_top = True
+        elif (max_cell_v is not None and max_cell_v < TOP_ZONE_V) or (
+            max_cell_v is None and soc_pct is not None and soc_pct < TOP_EXIT_SOC_PCT
+        ):
+            self._at_top = False
 
     def update(
         self,
@@ -159,18 +187,22 @@ class CellMonitor:
     def suggest_balancing(self) -> bool:
         return self.last is not None and self.last.delta_mv >= SUGGEST_BALANCING_MV
 
-    def as_dict(self) -> dict | None:
-        if self.last is None:
-            return None
-        return {
-            "delta_mv": self.last.delta_mv,
-            "timestamp": self.last.timestamp,
-            "source": self.last.source,
-        }
+    def as_dict(self) -> dict:
+        data: dict = {"last_full": self.last_full}
+        if self.last is not None:
+            data |= {
+                "delta_mv": self.last.delta_mv,
+                "timestamp": self.last.timestamp,
+                "source": self.last.source,
+            }
+        return data
 
     def restore(self, data: dict | None) -> None:
-        if data:
+        if not data:
+            return
+        if "delta_mv" in data:
             self.last = TopMeasurement(data["delta_mv"], data["timestamp"], data["source"])
+        self.last_full = data.get("last_full")
 
     def pause(self) -> None:
         """No rest measurement (e.g. during a balancing run, which measures itself)."""

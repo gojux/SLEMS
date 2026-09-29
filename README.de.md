@@ -487,9 +487,18 @@ Abfrage auf, daher vor einem Update besser manuell pausieren.
 Im selben Menü lässt sich die Batterie aktivieren oder deaktivieren, der
 Zellausgleich starten oder abbrechen, und *Details* zeigt Modell, Gerätename,
 Firmware-Versionen (EMS, VMS, BMS, Kommunikationsmodul; Sensor *Firmware*),
-MAC-Adresse, Kapazität, Ladezyklen sowie die insgesamt geladene und entladene
-Energie. *Gerät in Home Assistant öffnen* führt zur Geräteseite der Batterie
-mit allen ihren Entities.
+MAC-Adresse, Kapazität, Ladezyklen, die insgesamt geladene und entladene
+Energie, die letzte Vollladung und wann das Zell-Delta zuletzt gemessen wurde.
+*Gerät in Home Assistant öffnen* führt zur Geräteseite der Batterie mit allen
+ihren Entities.
+
+Die letzte Vollladung (Sensor *Letzte Vollladung*) ist der Zeitpunkt, an dem
+die Batterie zuletzt oben angekommen ist: höchste Zelle auf der
+Ladeschlussspannung oder der Ladezustand, den das BMS bei voll meldet, auch
+wenn sie gleich danach wieder entladen wurde. Eine neue Vollladung zählt, wenn
+die Batterie den oberen Bereich verlassen hat (höchste Zelle unter 3,49 V,
+ohne Zellspannungen unter 97 %). LFP-Batterien kalibrieren ihren Ladezustand
+nur bei einer Vollladung neu, sie sollte daher regelmäßig vorkommen.
 
 ### Grenzen und Schutz der Batterien
 

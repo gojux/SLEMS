@@ -951,6 +951,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         min_cell = extra.get("min_cell_voltage")
         power = telemetry.power_w if telemetry else None
         wall = dt_util.utcnow().timestamp()
+        if telemetry is not None:
+            battery.cell_monitor.observe_full(max_cell, telemetry.soc_pct, wall)
         balancer = battery.balancer
         if balancer is None:
             if telemetry is not None:
