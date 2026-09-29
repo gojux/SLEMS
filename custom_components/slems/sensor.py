@@ -829,6 +829,20 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             "response_off_s": controller.consumer_response_s(subentry_id, on=False),
             "grid_response_on_s": controller.consumer_grid_response_s(subentry_id, on=True),
             "grid_response_off_s": controller.consumer_grid_response_s(subentry_id, on=False),
+            # Of the sensor chosen for the daily target (the mean by default).
+            "temperature_c": (
+                None
+                if state is None
+                or (
+                    temperature := target_temperature(
+                        self.coordinator.consumer_targets[subentry_id],
+                        state.temperature_c,
+                        state.temperatures_c,
+                    )
+                )
+                is None
+                else round(temperature, 1)
+            ),
             **self._target_attributes(state),
         }
 

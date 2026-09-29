@@ -1778,9 +1778,19 @@ class SlemsPanel extends HTMLElement {
         title: consumer.name,
         power: this._powerW(this._hass.states[consumer.power_entity]),
         entity: consumer.power_entity,
+        // Temperature of its storage (the sensor chosen for the daily target).
+        detail: this._consumerTemperature(consumer),
       });
     }
     return nodes;
+  }
+
+  /** "52 °C" for a consumer with temperature sensors, "" otherwise. */
+  _consumerTemperature(consumer) {
+    const value = this._state("planned_power", consumer.device_id)?.attributes?.temperature_c;
+    if (value === null || value === undefined) return "";
+    const language = this._hass?.locale?.language || "en";
+    return `${new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(value)} °C`;
   }
 
   _renderFlow() {

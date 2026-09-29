@@ -240,7 +240,9 @@ Every consumer needs its own power **and** energy sensor.
   cycling and when it is full. Which sensor switches the thermostat and where
   they sit does not matter. From three heating runs and two starts of the
   cycling on, the consumer card shows how much the storage can still take,
-  and the feed-in cap plans the consumer only with 80 % of that.
+  and the feed-in cap plans the consumer only with 80 % of that. Its box in
+  the energy flow shows the temperature of the sensor chosen for the daily
+  target (the mean by default).
 - **Feed-in cap – role** (select per controlled consumer, on its card in the
   dashboard under *Feed-in cap* while the cap is on): *Supporting* – gets no
   other surplus while the feed-in cap is on, only the surplus above the limit

@@ -787,6 +787,9 @@ field of the consumer subentry, default on). The panel is removed on unload and 
   side with at least `MIN_FLOW_BOX_W` (130 px) each, `_layoutFlow` stacks them
   (class `stacked`); their connectors then run down a trunk left of the boxes
   (the consumers' trunk is on the right).
+- A consumer box shows the temperature of its storage below the power
+  (attribute `temperature_c` of *Planned power*: the sensor chosen for the
+  daily target, `target_temperature`, the mean by default).
 - The crossing of the flow lines shows the SLEMS icon:
   `frontend/slems-icon.svg` is a copy of `assets/icon.svg` (HACS installs only
   `custom_components/slems`); update both together.

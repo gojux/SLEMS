@@ -249,7 +249,9 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   Thermostat schaltet und wo sie sitzen, spielt keine Rolle. Ab drei
   Heizläufen und zwei Taktbeginnen zeigt die Verbraucherkarte, wie viel der
   Speicher noch aufnehmen kann, und die Einspeisebegrenzung plant den
-  Verbraucher nur mit 80 % davon ein.
+  Verbraucher nur mit 80 % davon ein. Seine Box im Energiefluss zeigt die
+  Temperatur des für das Tagesziel gewählten Fühlers (standardmäßig den
+  Mittelwert).
 - **Einspeisebegrenzung – Einsatz** (Auswahl je gesteuertem Verbraucher, auf
   seiner Karte im Dashboard unter *Einspeisebegrenzung*, solange sie an ist):
   *Unterstützend* – bekommt bei aktiver Einspeisebegrenzung keinen sonstigen
