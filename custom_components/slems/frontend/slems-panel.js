@@ -2314,13 +2314,13 @@ class SlemsPanel extends HTMLElement {
       : "";
     if (typeof value === "boolean") {
       return `<div class="setting"><span>${escapeHtml(name)}${info}</span><label class="switch">
-        <input type="checkbox" data-sim="${path}" data-kind="sim-bool" ${value ? "checked" : ""}${disabled ? " disabled" : ""}><span></span></label></div>`;
+        <input type="checkbox" data-sim="${path}" data-kind="sim-bool" aria-label="${escapeHtml(name)}" ${value ? "checked" : ""}${disabled ? " disabled" : ""}><span></span></label></div>`;
     }
     const stepValue = step ?? a.step ?? 1;
     const decimals = String(stepValue).split(".")[1]?.length ?? 0;
     const shown = Number.isFinite(value) ? Number(value).toFixed(decimals) : "";
     return `<div class="setting"><span>${escapeHtml(name)}${info}</span><span class="number">
-      <input type="number" data-sim="${path}" data-kind="sim-number" value="${escapeHtml(shown)}"
+      <input type="number" data-sim="${path}" data-kind="sim-number" aria-label="${escapeHtml(name)}" value="${escapeHtml(shown)}"
         min="${min ?? a.min ?? ""}" max="${max ?? a.max ?? ""}" step="${stepValue}"${disabled ? " disabled" : ""}><span class="unit">${escapeHtml(unit ?? a.unit_of_measurement ?? "")}</span></span></div>`;
   }
 
@@ -2618,7 +2618,7 @@ class SlemsPanel extends HTMLElement {
   _toggle(stateObj, label, confirmOffName = null) {
     const confirm = confirmOffName ? ` data-confirm-off="${escapeHtml(confirmOffName)}"` : "";
     return `<label class="switch" title="${escapeHtml(label)}">
-      <input type="checkbox" data-entity="${stateObj.entity_id}" data-kind="switch"${confirm} ${stateObj.state === "on" ? "checked" : ""}>
+      <input type="checkbox" data-entity="${stateObj.entity_id}" data-kind="switch" aria-label="${escapeHtml(label)}"${confirm} ${stateObj.state === "on" ? "checked" : ""}>
       <span></span></label>`;
   }
 
@@ -2664,7 +2664,7 @@ class SlemsPanel extends HTMLElement {
       const label = (option) =>
         this._hass.formatEntityState ? this._hass.formatEntityState(stateObj, option) : option;
       if (disabledNote) name += `<span class="setting-hint">${escapeHtml(disabledNote)}</span>`;
-      return `<div class="setting${disabledNote ? " disabled" : ""}"><span>${name}</span><select data-entity="${stateObj.entity_id}" data-kind="select"${disabledNote ? " disabled" : ""}>
+      return `<div class="setting${disabledNote ? " disabled" : ""}"><span>${name}</span><select data-entity="${stateObj.entity_id}" data-kind="select" aria-label="${escapeHtml(title)}"${disabledNote ? " disabled" : ""}>
         ${options.map((o) => `<option value="${escapeHtml(o)}" ${o === stateObj.state ? "selected" : ""}>${escapeHtml(label(o))}</option>`).join("")}
         </select></div>`;
     }
@@ -2674,7 +2674,7 @@ class SlemsPanel extends HTMLElement {
     const numeric = parseFloat(stateObj.state);
     const value = Number.isFinite(numeric) ? numeric.toFixed(decimals) : stateObj.state;
     return `<div class="setting"><span>${name}</span><span class="number">
-      <input type="number" data-entity="${stateObj.entity_id}" data-kind="number" value="${escapeHtml(value)}"
+      <input type="number" data-entity="${stateObj.entity_id}" data-kind="number" aria-label="${escapeHtml(title)}" value="${escapeHtml(value)}"
         min="${a.min}" max="${a.max}" step="${a.step}"><span class="unit">${escapeHtml(a.unit_of_measurement || "")}</span></span></div>`;
   }
 
