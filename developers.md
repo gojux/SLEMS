@@ -741,6 +741,9 @@ entities. The panel is removed on unload and re-registered on every setup.
   `--slems-accent`: the theme's primary colour in dark mode, mixed with 38 %
   black in light mode (the plain primary colour reaches only about 3:1 on
   light backgrounds); active tabs and segments are also underlined.
+- Phones (≤ 600 px): the tab row scrolls sideways instead of wrapping; on a
+  tab change only the row scrolls to the active tab. Flow box titles take up
+  to two lines.
 - Strings: English and German inside the file (`STRINGS`), picked from the HA
   language.
 - Switches marked with `data-confirm-off` (battery *Enabled*) are kept on and

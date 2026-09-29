@@ -1478,6 +1478,17 @@ class SlemsPanel extends HTMLElement {
         .join("")
     );
     this.toggleAttribute("dark", Boolean(this._hass.themes?.darkMode));
+    // The active tab stays visible in the sideways scrolling tab row (phones);
+    // only the row scrolls, never the page.
+    if (this._shownTab !== this._tab) {
+      this._shownTab = this._tab;
+      const nav = this.shadowRoot.getElementById("tabs");
+      const active = nav.querySelector("button.active");
+      if (active && nav.scrollWidth > nav.clientWidth) {
+        const left = active.getBoundingClientRect().left - nav.getBoundingClientRect().left + nav.scrollLeft;
+        nav.scrollLeft = left - (nav.clientWidth - active.offsetWidth) / 2;
+      }
+    }
     const content = this.shadowRoot.getElementById("content");
     content.style.setProperty("--c-pv", this._colors.pv);
     content.style.setProperty("--c-battery", this._colors.battery);
@@ -2876,6 +2887,12 @@ const STYLE = `
   nav { display: flex; gap: 4px; flex-wrap: wrap; }
   nav button { background: none; border: none; color: var(--secondary-text-color); font: inherit; padding: 8px 12px;
     border-radius: 8px; cursor: pointer; }
+  /* Phones: the tabs stay in one row and scroll sideways. */
+  @media (max-width: 600px) {
+    nav { flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px 4px; }
+    nav::-webkit-scrollbar { display: none; }
+    nav button { flex: none; white-space: nowrap; }
+  }
   nav button.active { color: var(--slems-accent); background: color-mix(in srgb, var(--primary-color) 12%, transparent);
     box-shadow: inset 0 -2px 0 var(--primary-color); }
   .grid { display: grid; gap: 16px; margin-bottom: 16px; }
@@ -2957,7 +2974,9 @@ const STYLE = `
   .fbox-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0;
     border-radius: 8px; background: color-mix(in srgb, var(--accent) 16%, transparent); }
   .fbox-icon ha-icon { --mdc-icon-size: 18px; color: var(--accent); }
-  .fbox-title { font-size: 12px; color: var(--secondary-text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Up to two lines, so longer consumer names stay readable in narrow boxes. */
+  .fbox-title { font-size: 12px; line-height: 1.25; color: var(--secondary-text-color); overflow: hidden;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
   .fbox-value { font-size: 20px; font-weight: 500; margin-top: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .fbox-detail { font-size: 12px; color: var(--secondary-text-color); min-height: 16px; margin-top: auto; }
   .fbox-soc { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; }
