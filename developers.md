@@ -222,10 +222,17 @@ sends commands.
 - **Learned timing** (`response.py`, moving averages):
   meter cadence from every report of the grid meter (also unchanged values,
   `EVENT_STATE_REPORTED`); battery response time from commands with ≥ 300 W
-  change until the meter moved 60 % of it; consumer response time from
-  commands with ≥ 100 W change until the consumer's own power sensor moved
-  60 %. The consumer value sets the saturation delay (5 × response time,
-  30–300 s) and is shown as attribute of *Planned power*.
+  change until the meter moved 60 % of it; consumer response times
+  (`DirectionalResponse`) from commands with ≥ 100 W change until the
+  consumer's own power sensor moved 60 % (at the meter ≥ 300 W), switching on
+  and off learned apart, each measured up to 5 min (`CONSUMER_MAX_RESPONSE_S`):
+  switching on includes the start delay of a device (compressor), switching
+  off is mostly the reporting delay; a command the other way drops a pending
+  measurement. `seen_consumer_power` uses the times of the command's
+  direction; until the meter time is learned, the consumer's own time (the
+  start delay is seen by the meter too), then the battery response. Shown as
+  attributes of *Planned power* (`response_on_s`, `response_off_s`,
+  `grid_response_on_s`, `grid_response_off_s`).
 - **Batteries**: new set point only when it changes by ≥ 25 W or changes
   direction; every 60 s a complete write as keep-alive (also re-enables RS485
   control). The Venus driver skips registers whose value did not change, so a
@@ -237,15 +244,18 @@ sends commands.
   the entity's min/max/step, dead band 50 W); at most one command per consumer
   every 10 s. Blocked consumers are left alone.
 - **Saturation**: a consumer drawing < 10 % of its command for longer than
-  5 × its response time (30–300 s; own thermostat) counts as saturated for
-  15 min and is planned like an uncontrolled load; its last command stays.
+  5 × its response time of switching off, and at least 1.5 × its learned
+  start time (30–600 s; own thermostat, or the device did not start), counts
+  as saturated for 15 min and is planned like an uncontrolled load; its last
+  command stays on the device.
 - **Control active** (`ConsumerControlSwitch`, RestoreEntity): the ids of
   switched-off consumers are in `SlemsCoordinator.consumer_control_disabled`
   and `SystemSnapshot.control_disabled`; `is_controllable_now` is false for
   them. Switching off calls `async_release_consumer` (0 W clamped to the
   entity / `turn_off`, only in active mode).
 - **Resting** (consumers with `thermostat_cycles`, instead of saturation):
-  < 10 % of the command for longer than 2 × response time (10–60 s) →
+  < 10 % of the command for longer than 2 × response time of switching off
+  (10–60 s) →
   `RealTimeController.resting`; the consumer stays in the allocation and keeps
   its command, `plan` adds its unused power (allocated − measured) to the
   battery power (up to the maximum charge power). Ends with the first sample

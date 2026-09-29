@@ -5,8 +5,11 @@
 * Battery response time: time from a battery command until the grid meter
   shows most of the commanded change. The controller uses it to know which
   commands the current meter value already contains.
-* Consumer response time: time from a consumer command until the consumer's
-  own power sensor shows most of the change.
+* Consumer response times: time from a consumer command until the consumer's
+  own power sensor (and the grid meter) shows most of the change, separately
+  for switching on and off (``DirectionalResponse``): switching on includes
+  the start delay of the device (e.g. a compressor), switching off is usually
+  only the reporting delay.
 
 All values are exponential moving averages of individual measurements; a
 measurement is dropped when another command interferes or nothing happens
@@ -22,6 +25,8 @@ EMA_ALPHA = 0.3
 ARRIVED_RATIO = 0.6
 MIN_STEP_W = 300.0
 MAX_RESPONSE_S = 30.0
+# Consumers may start several minutes after the command (compressor delay).
+CONSUMER_MAX_RESPONSE_S = 300.0
 
 DEFAULT_METER_INTERVAL_S = 2.0
 DEFAULT_BATTERY_RESPONSE_S = 3.0
@@ -61,9 +66,12 @@ class _PendingStep:
 class StepResponse:
     """Learns how long a commanded step takes to show up in a measurement."""
 
-    def __init__(self, default_s: float, min_step_w: float = MIN_STEP_W) -> None:
+    def __init__(
+        self, default_s: float, min_step_w: float = MIN_STEP_W, max_response_s: float = MAX_RESPONSE_S
+    ) -> None:
         self._default_s = default_s
         self._min_step_w = min_step_w
+        self._max_response_s = max_response_s
         self.response_s: float | None = None
         self._pending: _PendingStep | None = None
 
@@ -80,16 +88,45 @@ class StepResponse:
             return
         self._pending = _PendingStep(timestamp, baseline, change)
 
+    def cancel(self) -> None:
+        """Drop a measurement still waiting (another command interfered)."""
+        self._pending = None
+
     def sample(self, timestamp: float, value: float) -> None:
         """A new measured value arrived."""
         pending = self._pending
         if pending is None:
             return
         elapsed = timestamp - pending.start
-        if elapsed > MAX_RESPONSE_S:
+        if elapsed > self._max_response_s:
             self._pending = None
             return
         moved = (value - pending.baseline) / pending.change
         if moved >= ARRIVED_RATIO:
             self.response_s = _ema(self.response_s, max(0.1, elapsed))
             self._pending = None
+
+
+class DirectionalResponse:
+    """Response times of switching on (more power) and off (less power), learned apart."""
+
+    def __init__(self, default_s: float, min_step_w: float = MIN_STEP_W) -> None:
+        self.on = StepResponse(default_s, min_step_w, CONSUMER_MAX_RESPONSE_S)
+        self.off = StepResponse(default_s, min_step_w, CONSUMER_MAX_RESPONSE_S)
+
+    def command(self, timestamp: float, baseline: float | None, change: float) -> None:
+        """A command changes the measured value by ``change`` (+: more power)."""
+        (self.on if change > 0 else self.off).command(timestamp, baseline, change)
+        # A step the other way ends a measurement still waiting.
+        (self.off if change > 0 else self.on).cancel()
+
+    def sample(self, timestamp: float, value: float) -> None:
+        self.on.sample(timestamp, value)
+        self.off.sample(timestamp, value)
+
+    def learned(self, increase: bool) -> float | None:
+        """Learned response time of a step in this direction, None until measured."""
+        return (self.on if increase else self.off).response_s
+
+    def value(self, increase: bool) -> float:
+        return (self.on if increase else self.off).value

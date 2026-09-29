@@ -35,3 +35,24 @@ def test_step_response_ignores_small_and_disturbed_steps() -> None:
     response.command(20, 0, 800)
     response.sample(60, 800)  # nothing within the maximum time
     assert response.response_s is None
+
+
+def test_switching_on_and_off_learned_apart() -> None:
+    from custom_components.slems.response import DirectionalResponse
+
+    # A dehumidifier behind a smart plug: starts 2 min after switching on,
+    # the plug shows switching off after 3 s.
+    response = DirectionalResponse(default_s=10.0, min_step_w=100)
+    for start in (0.0, 1000.0):
+        response.command(start, 0, 300)
+        response.sample(start + 60, 0)
+        response.sample(start + 120, 290)
+        response.command(start + 500, 290, -290)
+        response.sample(start + 503, 5)
+    assert response.learned(True) == pytest.approx(120)
+    assert response.learned(False) == pytest.approx(3)
+    # A command the other way ends the measurement still waiting.
+    response.command(3000, 0, 300)
+    response.command(3010, 0, -300)
+    response.sample(3100, 300)
+    assert response.learned(True) == pytest.approx(120)

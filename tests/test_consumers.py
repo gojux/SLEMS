@@ -80,3 +80,24 @@ def test_command_kept_for_the_learners_while_saturated() -> None:
     assert "rod" in controller.saturated
     assert "rod" not in controller._consumer_commands
     assert controller.consumer_command("rod") == 2000.0
+
+
+def test_no_saturation_while_the_device_starts() -> None:
+    from custom_components.slems.response import DirectionalResponse
+
+    controller = RealTimeController.__new__(RealTimeController)
+    controller._saturated_until = {}
+    learner = DirectionalResponse(10.0, 100)
+    learner.on.response_s = 120.0  # learned start delay of 2 minutes
+    learner.off.response_s = 3.0
+    controller.consumer_response = {"rod": learner}
+    now = time.monotonic()
+    snapshot = SimpleNamespace(consumers={"rod": ConsumerState(power_w=0.0)})
+    # 90 s after switching on it still starts: not saturated.
+    controller._consumer_commands = {"rod": (300.0, now - 90)}
+    controller._check_saturation("rod", snapshot, now)
+    assert "rod" not in controller.saturated
+    # After 1.5 x the start delay it counts as saturated.
+    controller._consumer_commands = {"rod": (300.0, now - 190)}
+    controller._check_saturation("rod", snapshot, now)
+    assert "rod" in controller.saturated

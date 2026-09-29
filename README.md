@@ -310,8 +310,9 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   the cell delta with its balance status, a recommendation for active cell
   balancing and the phase of a running one.
 - **Consumers**: measured and planned power, blocked/saturated state, the
-  learned response times (own sensor and at the meter) and the *Control
-  active* switch.
+  learned response times for switching on and off (own sensor and at the
+  meter; switching on includes a start delay of the device, e.g. a
+  compressor) and the *Control active* switch.
 - **Simulation**: try other settings without changing anything. Next to the
   day chart (today from now on or tomorrow) grid friendly charging, night
   discharge, import peak shaving and the feed-in cap can be switched on and

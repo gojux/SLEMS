@@ -150,8 +150,8 @@ const STRINGS = {
     storageUntilCycling: "{energy} until it cycles",
     storageUntilFull: "{cycling} until it cycles, {full} until full",
     controlActive: "Control active",
-    responseTime: "Response time (own sensor)",
-    gridResponseTime: "Response time at the meter",
+    responseTime: "Response time on/off (own sensor)",
+    gridResponseTime: "Response time on/off at the meter",
     notControlled: "measured only",
     noBatteries: "No batteries configured.",
     noConsumers: "No consumers configured.",
@@ -440,8 +440,8 @@ const STRINGS = {
     storageUntilCycling: "{energy} bis zum Takten",
     storageUntilFull: "{cycling} bis zum Takten, {full} bis voll",
     controlActive: "Steuerung aktiv",
-    responseTime: "Reaktionszeit (eigener Sensor)",
-    gridResponseTime: "Reaktionszeit am Zähler",
+    responseTime: "Reaktionszeit an/aus (eigener Sensor)",
+    gridResponseTime: "Reaktionszeit an/aus am Zähler",
     notControlled: "nur gemessen",
     noBatteries: "Keine Batterien konfiguriert.",
     noConsumers: "Keine Verbraucher konfiguriert.",
@@ -2607,8 +2607,9 @@ class SlemsPanel extends HTMLElement {
             .map((chip) => `<span class="chip">${chip}</span>`)
             .join("");
           const seconds = (v) => (v === null || v === undefined ? "–" : `${Math.round(v * 10) / 10} s`);
-          const response = seconds(attrs.response_time_s);
-          const gridResponse = seconds(attrs.grid_response_time_s);
+          // Switching on (with the start delay of the device) / off.
+          const response = `${seconds(attrs.response_on_s)} / ${seconds(attrs.response_off_s)}`;
+          const gridResponse = `${seconds(attrs.grid_response_on_s)} / ${seconds(attrs.grid_response_off_s)}`;
           return `<section class="card">
             <div class="card-head"><h2>${escapeHtml(c.name)}</h2><div class="chips">${chips}${control ? this._toggle(control, t.controlActive) : ""}</div></div>
             <dl>

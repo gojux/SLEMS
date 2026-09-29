@@ -814,17 +814,18 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
     def extra_state_attributes(self) -> dict:
         data = self.coordinator.data
         state = data.consumers.get(self.consumer.subentry_id)
+        controller = self.coordinator.controller
+        subentry_id = self.consumer.subentry_id
         return {
             "blocked": state.blocked if state else None,
             "saturated": self.consumer.subentry_id in data.saturated,
             "resting": self.consumer.subentry_id in data.resting,
-            "response_time_s": self.coordinator.controller.consumer_response_s(
-                self.consumer.subentry_id
-            ),
-            # Command until it shows up at the grid meter.
-            "grid_response_time_s": self.coordinator.controller.consumer_grid_response_s(
-                self.consumer.subentry_id
-            ),
+            # Command until the own sensor / the grid meter shows it, switching
+            # on (with the start delay of the device) and off.
+            "response_on_s": controller.consumer_response_s(subentry_id, on=True),
+            "response_off_s": controller.consumer_response_s(subentry_id, on=False),
+            "grid_response_on_s": controller.consumer_grid_response_s(subentry_id, on=True),
+            "grid_response_off_s": controller.consumer_grid_response_s(subentry_id, on=False),
         }
 
 

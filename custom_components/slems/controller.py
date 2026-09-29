@@ -49,6 +49,7 @@ from .const import ControlMode, OperatingMode
 from .response import (
     DEFAULT_BATTERY_RESPONSE_S,
     DEFAULT_CONSUMER_RESPONSE_S,
+    DirectionalResponse,
     MeterCadence,
     StepResponse,
 )
@@ -70,9 +71,11 @@ CONSUMER_COMMAND_INTERVAL_S = 10.0
 CONSUMER_MIN_STEP_W = 100.0
 SATURATION_RATIO = 0.1
 SATURATION_HOLD_S = 900.0
-# Saturation is assumed after this many consumer response times (bounded).
+# Saturation is assumed after this many response times of switching off, and
+# not before this share more than the learned start time (bounded).
 SATURATION_RESPONSE_FACTOR = 5
-SATURATION_DELAY_RANGE_S = (30.0, 300.0)
+SATURATION_START_FACTOR = 1.5
+SATURATION_DELAY_RANGE_S = (30.0, 600.0)
 # Resting after this many consumer response times without power (bounded).
 RESTING_RESPONSE_FACTOR = 2
 RESTING_DELAY_RANGE_S = (10.0, 60.0)
@@ -114,7 +117,7 @@ class RealTimeController:
         # Measured power of a consumer when its last command was sent.
         self._consumer_before: dict[str, float] = {}
         # Time a consumer command takes to show up at the grid meter.
-        self.consumer_grid_response: dict[str, StepResponse] = {}
+        self.consumer_grid_response: dict[str, DirectionalResponse] = {}
         # consumer id -> monotonic time until which it counts as saturated
         self._saturated_until: dict[str, float] = {}
         # Consumers with a cycling thermostat: since when they draw nothing,
@@ -124,7 +127,7 @@ class RealTimeController:
         self._last_grid_w: float | None = None
         self.meter = MeterCadence()
         self.battery_response = StepResponse(DEFAULT_BATTERY_RESPONSE_S)
-        self.consumer_response: dict[str, StepResponse] = {}
+        self.consumer_response: dict[str, DirectionalResponse] = {}
         self.gain_adapter = AdaptiveGain(coordinator.settings.control_gain)
         self.status = ControlStatus.INACTIVE
 
@@ -159,13 +162,15 @@ class RealTimeController:
         settings = self._coordinator.settings
         return self.gain_adapter.gain if settings.auto_gain else settings.control_gain
 
-    def consumer_response_s(self, subentry_id: str) -> float | None:
+    def consumer_response_s(self, subentry_id: str, *, on: bool) -> float | None:
+        """Learned time until the consumer's own sensor shows switching on / off."""
         learner = self.consumer_response.get(subentry_id)
-        return learner.response_s if learner else None
+        return learner.learned(on) if learner else None
 
-    def consumer_grid_response_s(self, subentry_id: str) -> float | None:
+    def consumer_grid_response_s(self, subentry_id: str, *, on: bool) -> float | None:
+        """Learned time until the grid meter shows the consumer switching on / off."""
         learner = self.consumer_grid_response.get(subentry_id)
-        return learner.response_s if learner else None
+        return learner.learned(on) if learner else None
 
     def consumer_power_seen(self, subentry_id: str, measured_w: float | None, now: float) -> float:
         """Power of a consumer as the grid meter shows it right now (see seen_consumer_power)."""
@@ -173,16 +178,21 @@ class RealTimeController:
         if command is None:
             return measured_w or 0.0
         target, since = command
-        grid = self.consumer_grid_response_s(subentry_id)
+        before = self._consumer_before.get(subentry_id)
+        on = target > (before or 0.0)
         sensor = self.consumer_response.get(subentry_id)
+        # Until learned at the meter: the consumer's own start (it includes a
+        # start delay the meter sees as well), then the batteries' response.
+        grid = self.consumer_grid_response_s(subentry_id, on=on)
+        if grid is None:
+            grid = sensor.learned(on) if sensor else None
         return seen_consumer_power(
             measured_w,
-            self._consumer_before.get(subentry_id),
+            before,
             target,
             now - since,
-            # Until learned: the batteries' response at the meter.
             grid if grid is not None else self.battery_response.value,
-            sensor.value if sensor else DEFAULT_CONSUMER_RESPONSE_S,
+            sensor.value(on) if sensor else DEFAULT_CONSUMER_RESPONSE_S,
         )
 
     # --- scheduling -----------------------------------------------------------
@@ -566,12 +576,12 @@ class RealTimeController:
             self._consumer_commands[subentry_id] = (target, now)
             self._device_commands[subentry_id] = target
             learner = self.consumer_response.setdefault(
-                subentry_id, StepResponse(DEFAULT_CONSUMER_RESPONSE_S, CONSUMER_MIN_STEP_W)
+                subentry_id, DirectionalResponse(DEFAULT_CONSUMER_RESPONSE_S, CONSUMER_MIN_STEP_W)
             )
             learner.command(now, measured, target - (measured or 0.0))
             # More consumption raises the grid power (+import).
             self.consumer_grid_response.setdefault(
-                subentry_id, StepResponse(DEFAULT_CONSUMER_RESPONSE_S)
+                subentry_id, DirectionalResponse(DEFAULT_CONSUMER_RESPONSE_S)
             ).command(now, self._last_grid_w, target - self._consumer_before[subentry_id])
 
     async def async_release_consumer(self, consumer: ConsumerConfig) -> None:
@@ -616,7 +626,7 @@ class RealTimeController:
             return
         since = self._low_since.setdefault(subentry_id, now)
         learner = self.consumer_response.get(subentry_id)
-        response = learner.value if learner else DEFAULT_CONSUMER_RESPONSE_S
+        response = learner.value(False) if learner else DEFAULT_CONSUMER_RESPONSE_S
         low, high = RESTING_DELAY_RANGE_S
         if now - since > min(high, max(low, RESTING_RESPONSE_FACTOR * response)):
             if subentry_id not in self._resting:
@@ -631,9 +641,11 @@ class RealTimeController:
             return
         commanded, since = previous
         learner = self.consumer_response.get(subentry_id)
-        response = learner.value if learner else DEFAULT_CONSUMER_RESPONSE_S
+        response = learner.value(False) if learner else DEFAULT_CONSUMER_RESPONSE_S
+        start = (learner.learned(True) if learner else None) or 0.0
         low, high = SATURATION_DELAY_RANGE_S
-        delay = min(high, max(low, SATURATION_RESPONSE_FACTOR * response))
+        # A device with a start delay (compressor) is not saturated while it starts.
+        delay = min(high, max(low, SATURATION_RESPONSE_FACTOR * response, SATURATION_START_FACTOR * start))
         if commanded > 0 and now - since > delay and measured < commanded * SATURATION_RATIO:
             _LOGGER.debug("Consumer %s saturated (draws %.0f W)", subentry_id, measured)
             self._saturated_until[subentry_id] = now + SATURATION_HOLD_S

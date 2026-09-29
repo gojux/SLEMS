@@ -325,7 +325,9 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
   bestätigt werden), das Zell-Delta mit seinem Status, eine Empfehlung für
   den aktiven Zellausgleich und die Phase eines laufenden Ausgleichs.
 - **Verbraucher**: gemessene und geplante Leistung, gesperrt/gesättigt, die
-  gelernten Reaktionszeiten (eigener Sensor und am Zähler) und der Schalter
+  gelernten Reaktionszeiten beim Ein- und Ausschalten (eigener Sensor und am
+  Zähler; das Einschalten enthält eine Anlaufverzögerung des Geräts, z. B.
+  eines Kompressors) und der Schalter
   *Steuerung aktiv*.
 - **Simulation**: andere Einstellungen ausprobieren, ohne etwas zu ändern.
   Neben dem Tagesdiagramm (heute ab jetzt oder morgen) lassen sich
