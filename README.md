@@ -9,7 +9,7 @@ controllable consumers. Its goal is to operate the batteries in a grid friendly
 way, e.g. by shifting the charging time so that the daily feed-in peak is
 absorbed, based on forecasts of consumption and PV production.
 
-The name is a combination of *Slug* (a wonderful word for a very interesting
+The name is a combination of *[Slug](https://en.wikipedia.org/wiki/Sea_slug)* (a wonderful word for a very interesting
 animal) and *EMS* (energy management system).
 
 > **Supported batteries:** SLEMS currently controls the **Marstek Venus E 3.0**
@@ -50,6 +50,12 @@ ahead and controls precisely:
   800 W), temperature charge limit, cell delta monitoring with active cell
   balancing, detection of batteries that do not respond, repair issues and
   notifications.
+- **Regular full charge without losing surplus.** LFP batteries recalibrate
+  their state of charge only when full. SLEMS charges the battery whose last
+  full charge is the oldest first, one at a time and only with the surplus it
+  would store anyway, and spares it when discharging so it starts the next day
+  higher. It also recognises a full charge the BMS ends slightly below 100 %,
+  and it measures the cell delta at the top.
 - **Learns instead of asking.** Besides the consumption forecast, SLEMS
   learns the conversion losses and the response time of the batteries, the
   smart meter interval, the control gain and the consumption peaks; on request
@@ -61,6 +67,10 @@ ahead and controls precisely:
   all settings; everything runs locally in Home Assistant without a cloud. The
   simulation mode shows what SLEMS would do before it controls anything, also
   next to an existing battery integration.
+- **Try before you change.** The simulation in the dashboard calculates the
+  day plan with other settings (grid friendly charging, night discharge, feed-in
+  cap, battery limits, forecasts ±%) and compares feed-in, grid import and
+  state of charge with the current plan, without changing anything.
 
 **When another solution fits better (today):** many different battery brands
 (SLEMS currently supports the Marstek Venus E 3.0 and read-only batteries from
@@ -95,7 +105,9 @@ EV charging; evcc complements SLEMS well (see [roadmap](#roadmap)).
 | Cell delta and active cell balancing (Marstek Venus E 3.0) | ✅ (not yet tested on a real device) |
 | Battery limits: minimum/maximum SoC, charge/discharge power limit (e.g. 800 W), temperature charge limit | ✅ |
 | Detection of batteries that do not deliver the commanded power, confirmation of set points | ✅ |
+| Regular full charge for the SoC calibration of LFP cells (one battery at a time, from the surplus, spared when discharging) | ✅ |
 | Dashboard (sidebar panel): energy flow, key figures, daily forecast and plan chart, batteries, consumers, settings | ✅ |
+| Simulation in the dashboard: day plan with other settings compared with the current one (today or tomorrow) | ✅ |
 
 ## Installation
 
@@ -713,8 +725,10 @@ summer):
 - It works well together with the **feed-in cap**: the batteries start the
   day with room for the energy above the limit, so SLEMS rarely has to feed in
   shortly before the peak.
-- The energy passes the battery twice (charge and discharge losses, about
-  10 %), and less energy is left for a power outage until the next charge.
+
+The energy fed in at night passes the battery twice (charge and discharge
+losses, about 10 %), and less energy is left for a power outage until the
+next charge. Switch it off if the batteries are meant as a backup supply.
 
 **Import peak shaving** (useful on days with little PV, e.g. in winter)
 
@@ -950,8 +964,6 @@ Possible extensions:
 - Load exclusion and evcc connection: large loads such as a wallbox are not
   covered by the batteries; an evcc load point as controllable or excluded
   consumer, so both do not control the same surplus.
-- Regular full charge (e.g. weekly) for the SoC calibration of LFP cells,
-  coordinated with grid friendly charging.
 - Dynamic electricity tariffs (charging from the grid at low or negative
   prices) and further battery models via the driver interface.
 

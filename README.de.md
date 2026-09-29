@@ -10,7 +10,7 @@ z. B. durch Verschieben des Ladezeitpunkts, damit die tägliche
 Einspeisespitze abgefangen wird. Grundlage dafür sind Prognosen für Verbrauch
 und PV-Ertrag.
 
-Der Name setzt sich aus *Slug* (ein wunderbares Wort für ein sehr
+Der Name setzt sich aus *[Slug](https://en.wikipedia.org/wiki/Sea_slug)* (ein wunderbares Wort für ein sehr
 interessantes Tier) und *EMS* (Energiemanagementsystem) zusammen.
 
 > **Unterstützte Batterien:** SLEMS steuert derzeit die **Marstek Venus E 3.0**
@@ -51,6 +51,13 @@ plant voraus und regelt genau:
   (z. B. 800 W), Ladebegrenzung nach Temperatur, Überwachung des Zell-Deltas mit
   aktivem Zellausgleich, Erkennung nicht reagierender Batterien,
   Reparatur-Einträge und Benachrichtigungen.
+- **Regelmäßige Vollladung ohne verschenkten Überschuss.** LFP-Batterien
+  kalibrieren ihren Ladezustand nur bei einer Vollladung neu. SLEMS lädt die
+  Batterie mit der ältesten letzten Vollladung zuerst, immer nur eine und nur
+  mit dem Überschuss, der ohnehin gespeichert würde, und schont sie beim
+  Entladen, damit sie am nächsten Tag höher startet. Es erkennt auch eine
+  Vollladung, die das BMS knapp unter 100 % beendet, und misst dabei das
+  Zell-Delta am oberen Ladeende.
 - **Lernt statt zu fragen.** Neben der Verbrauchsprognose lernt SLEMS die
   Umwandlungsverluste und die Reaktionszeit der Batterien, das Meldeintervall
   des Smart Meters, die Regelverstärkung und die Verbrauchsspitzen; auf Wunsch
@@ -62,6 +69,11 @@ plant voraus und regelt genau:
   Prognose-Diagramm und allen Einstellungen; alles läuft lokal in Home
   Assistant, ohne Cloud. Im Simulationsmodus siehst du, was SLEMS tun würde,
   bevor es etwas steuert, auch neben einer bestehenden Batterie-Integration.
+- **Erst ausprobieren, dann ändern.** Die Simulation im Dashboard berechnet
+  den Tagesplan mit anderen Einstellungen (netzdienliches Laden,
+  Nachtentladung, Einspeisebegrenzung, Grenzen der Batterien, Prognosen ±%) und
+  vergleicht Einspeisung, Netzbezug und Ladezustand mit dem aktuellen Plan,
+  ohne etwas zu ändern.
 
 **Wann (heute) eine andere Lösung besser passt:** viele verschiedene
 Batteriemarken (SLEMS unterstützt derzeit die Marstek Venus E 3.0 und nur
@@ -97,7 +109,9 @@ ergänzt SLEMS gut (siehe [Roadmap](#roadmap)).
 | Zell-Delta und aktiver Zellausgleich (Marstek Venus E 3.0) | ✅ (noch nicht am echten Gerät getestet) |
 | Grenzen je Batterie: minimaler/maximaler Ladezustand, Grenze Lade-/Entladeleistung (z. B. 800 W), Ladebegrenzung nach Temperatur | ✅ |
 | Erkennung von Batterien, die die vorgegebene Leistung nicht liefern, Bestätigung der Sollwerte | ✅ |
+| Regelmäßige Vollladung zur SoC-Kalibrierung der LFP-Zellen (immer eine Batterie, aus dem Überschuss, beim Entladen geschont) | ✅ |
 | Dashboard (Seitenleiste): Energiefluss, Kennzahlen, Tagesdiagramm mit Prognose und Plan, Batterien, Verbraucher, Einstellungen | ✅ |
+| Simulation im Dashboard: Tagesplan mit anderen Einstellungen im Vergleich zum aktuellen (heute oder morgen) | ✅ |
 
 ## Installation
 
@@ -751,9 +765,11 @@ Batterie, wenig Verbrauch in der Nacht, Sommer):
 - Sie wirkt gut mit der **Einspeisebegrenzung** zusammen: Die Batterien
   starten mit Platz für die Energie über der Grenze in den Tag, SLEMS muss
   dann selten kurz vor der Spitze einspeisen.
-- Die Energie geht zweimal durch die Batterie (Lade- und Entladeverluste, etwa
-  10 %), und bis zur nächsten Ladung bleibt weniger Energie für einen
-  Stromausfall.
+
+Die nachts eingespeiste Energie geht zweimal durch die Batterie (Lade- und
+Entladeverluste, etwa 10 %), und bis zur nächsten Ladung bleibt weniger
+Energie für einen Stromausfall. Ausschalten, wenn die Batterien als
+Notstromreserve dienen sollen.
 
 **Bezugsspitzen abfangen** (sinnvoll an Tagen mit wenig PV, z. B. im Winter)
 
@@ -1001,8 +1017,6 @@ Mögliche Erweiterungen:
   werden nicht aus den Batterien versorgt; ein evcc-Ladepunkt als steuerbarer
   oder ausgeschlossener Verbraucher, damit beide nicht um denselben
   Überschuss regeln.
-- Regelmäßige Vollladung (z. B. wöchentlich) zur SoC-Kalibrierung der
-  LFP-Zellen, abgestimmt mit dem netzdienlichen Laden.
 - Dynamische Stromtarife (Laden aus dem Netz bei niedrigen oder negativen
   Preisen) und weitere Batteriemodelle über die Treiber-Schnittstelle.
 
