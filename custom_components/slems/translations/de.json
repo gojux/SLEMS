@@ -250,6 +250,14 @@
           "battery": "Überschuss + Batterie",
           "grid": "Überschuss + Batterie + Netz"
         }
+      },
+      "target_sensor": {
+        "name": "Tagesziel Fühler",
+        "state": {
+          "mean": "Mittelwert",
+          "first": "Fühler 1",
+          "second": "Fühler 2"
+        }
       }
     },
     "sensor": {

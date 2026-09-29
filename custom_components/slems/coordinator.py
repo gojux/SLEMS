@@ -133,6 +133,7 @@ from .consumer_targets import (
     TargetState,
     evaluate,
     forced_load,
+    target_temperature,
 )
 from .night_discharge import NightDischargePlan, plan_night_discharge, pv_takeover
 from .peak_shaving import auto_limit, hours_until_refill
@@ -1833,10 +1834,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         got = self.target_got(settings, progress)
         end = progress.end
         result = progress.update(now, dt_util.now(), settings, state.power_w, commanded_on)
-        if settings.type is TargetType.TEMPERATURE and state.temperature_c is not None:
-            if state.temperature_c >= settings.min_temp_c:
+        temperature = target_temperature(settings, state.temperature_c, state.temperatures_c)
+        if settings.type is TargetType.TEMPERATURE and temperature is not None:
+            if temperature >= settings.min_temp_c:
                 progress.min_reached = True
-            if state.temperature_c >= settings.target_temp_c:
+            if temperature >= settings.target_temp_c:
                 progress.mark_done(settings.target_temp_c)
         if result == "missed" and end is not None:
             self.config_entry.async_create_background_task(
@@ -1904,7 +1906,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 progress,
                 dt_util.as_local(wall_now),
                 power_w=power,
-                temperature_c=state.temperature_c if state else None,
+                temperature_c=(
+                    target_temperature(settings, state.temperature_c, state.temperatures_c)
+                    if state
+                    else None
+                ),
                 wh_per_k=thermal.energy_per_k if thermal else None,
                 expected_surplus_wh=surplus,
                 battery_need_wh=battery.energy_to_full_wh if battery else 0.0,

@@ -603,7 +603,10 @@ boiler) never costs battery space.
 Daily targets (`consumer_targets.py`, pure): `TargetSettings` per consumer
 (entities on its card: selects `target_type`, `target_source`, numbers
 `target_hours`, `target_energy`, `target_min_temperature`,
-`target_max_temperature` (only with temperature sensors), switch
+`target_max_temperature` (only with temperature sensors), select
+`target_sensor` (only with two sensors: `TargetSensor` mean / first /
+second, `target_temperature`; the latest start still uses the energy per
+kelvin learned for the mean, for a single sensor an approximation), switch
 `target_priority`, time `target_deadline`; `coordinator.consumer_targets`),
 `TargetProgress` per period from deadline to deadline (stored under
 `targets`; runtime from ≥ 50 W, enabled time from the device command, energy

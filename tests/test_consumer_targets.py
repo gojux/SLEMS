@@ -149,3 +149,18 @@ def test_forced_load_for_the_planning() -> None:
     load = forced_load(temperature, below, now, power_w=3000, wh_per_k=150)
     assert sum(load.values()) == pytest.approx(1500)
     assert min(load) == local(17)
+
+
+def test_temperature_of_the_chosen_sensor() -> None:
+    from custom_components.slems.const import TargetSensor
+    from custom_components.slems.consumer_targets import target_temperature
+
+    settings = TargetSettings(type=TargetType.TEMPERATURE)
+    readings = (60.0, 42.0)  # at the heating rod, higher up
+    assert target_temperature(settings, 51.0, readings) == 51.0
+    settings.sensor = TargetSensor.FIRST
+    assert target_temperature(settings, 51.0, readings) == 60.0
+    settings.sensor = TargetSensor.SECOND
+    assert target_temperature(settings, 51.0, readings) == 42.0
+    # Only one sensor configured: the mean is that sensor.
+    assert target_temperature(settings, 55.0, (55.0,)) == 55.0

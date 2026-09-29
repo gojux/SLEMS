@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import LEGACY_CAP_MODES, CapMode, OperatingMode, TargetSource, TargetType
+from .const import LEGACY_CAP_MODES, CapMode, OperatingMode, TargetSensor, TargetSource, TargetType
 from .consumers import ConsumerConfig
 from .coordinator import SlemsConfigEntry, SlemsCoordinator
 from .entity import SlemsConsumerEntity, SlemsSystemEntity
@@ -29,6 +29,11 @@ async def async_setup_entry(
                     ConsumerCapModeSelect(coordinator, consumer),
                     ConsumerTargetTypeSelect(coordinator, consumer),
                     ConsumerTargetSourceSelect(coordinator, consumer),
+                    *(
+                        [ConsumerTargetSensorSelect(coordinator, consumer)]
+                        if len(consumer.temperature_entity_ids) >= 2
+                        else []
+                    ),
                 ],
                 config_subentry_id=consumer.subentry_id,
             )
@@ -144,3 +149,14 @@ class ConsumerTargetSourceSelect(_TargetSelect):
 
     def __init__(self, coordinator: SlemsCoordinator, consumer: ConsumerConfig) -> None:
         super().__init__(coordinator, consumer, "target_source")
+
+
+class ConsumerTargetSensorSelect(_TargetSelect):
+    """Temperature sensor (or the mean) the temperature target applies to."""
+
+    _attribute = "sensor"
+    _enum = TargetSensor
+    _attr_options = [s.value for s in TargetSensor]
+
+    def __init__(self, coordinator: SlemsCoordinator, consumer: ConsumerConfig) -> None:
+        super().__init__(coordinator, consumer, "target_sensor")

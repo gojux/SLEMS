@@ -154,6 +154,7 @@ const STRINGS = {
     targetKind: "Kind",
     targetHours: "Hours",
     targetEnergy: "Energy",
+    targetSensor: "Sensor",
     targetMin: "Minimum temperature",
     targetMax: "Target temperature",
     targetDeadline: "Until",
@@ -304,6 +305,8 @@ const STRINGS = {
         "Extra space on top of the forecast energy above the limit, in % of it, against a too low PV forecast. Negative values plan with less.",
       target_type:
         "Runtime: time the consumer draws power. Enabled time: time SLEMS has it switched on, for devices with their own control (a dehumidifier with a hygrostat). Energy: kWh. Temperature: minimum and target temperature of its storage (temperature sensors). Counted from one deadline to the next; met from the surplus first.",
+      target_sensor:
+        "Which temperature the minimum and target temperature apply to: the mean of both sensors, or one of them (e.g. the upper sensor for the hot water at the tap). Sensor 1 is the temperature sensor of the storage, sensor 2 the second one in the consumer's configuration. The latest start is estimated with the learned energy per degree of the mean, for a single sensor an approximation.",
       target_source:
         "What may cover the rest if the surplus is not enough by the deadline. With the batteries (and the grid) the consumer runs from the latest start on regardless of the surplus. Only surplus: the target may be missed (notification).",
       target_priority:
@@ -480,6 +483,7 @@ const STRINGS = {
     targetKind: "Art",
     targetHours: "Stunden",
     targetEnergy: "Energie",
+    targetSensor: "Fühler",
     targetMin: "Mindesttemperatur",
     targetMax: "Zieltemperatur",
     targetDeadline: "Bis",
@@ -630,6 +634,8 @@ const STRINGS = {
         "Zusätzlicher Platz zur prognostizierten Energie über der Grenze, in % davon, gegen eine zu niedrige PV-Prognose. Negative Werte planen mit weniger.",
       target_type:
         "Laufzeit: Zeit, in der der Verbraucher Leistung zieht. Freigabezeit: Zeit, in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung (Luftentfeuchter mit Hygrostat). Energie: kWh. Temperatur: Mindest- und Zieltemperatur seines Speichers (Temperaturfühler). Gezählt von Frist zu Frist; zuerst aus dem Überschuss.",
+      target_sensor:
+        "Für welche Temperatur Mindest- und Zieltemperatur gelten: das Mittel beider Fühler oder einer davon (z. B. der obere Fühler für das Warmwasser am Hahn). Fühler 1 ist der Temperaturfühler des Speichers, Fühler 2 der zweite in der Konfiguration des Verbrauchers. Die späteste Startzeit wird mit der gelernten Energie pro Grad des Mittelwerts geschätzt, für einen einzelnen Fühler eine Näherung.",
       target_source:
         "Was den Rest decken darf, wenn der Überschuss bis zur Frist nicht reicht. Mit Batterie (und Netz) läuft der Verbraucher ab der spätesten Startzeit unabhängig vom Überschuss. Nur Überschuss: Das Ziel kann verfehlt werden (Benachrichtigung).",
       target_priority:
@@ -2741,7 +2747,11 @@ class SlemsPanel extends HTMLElement {
     if (type === "runtime" || type === "enabled") controls.push([s("target_hours"), t.targetHours]);
     if (type === "energy") controls.push([s("target_energy"), t.targetEnergy]);
     if (type === "temperature") {
-      controls.push([s("target_min_temperature"), t.targetMin], [s("target_max_temperature"), t.targetMax]);
+      controls.push(
+        [s("target_sensor"), t.targetSensor],
+        [s("target_min_temperature"), t.targetMin],
+        [s("target_max_temperature"), t.targetMax]
+      );
     }
     if (type !== "none") controls.push([s("target_deadline"), t.targetDeadline], [s("target_source"), t.targetSource]);
     if (type !== "none" && type !== "temperature") controls.push([s("target_priority"), t.targetPriority]);

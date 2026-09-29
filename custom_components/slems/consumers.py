@@ -112,6 +112,8 @@ class ConsumerState:
     blocked: bool = False
     # Mean of its temperature sensors (°C); None without sensors or if one is unknown.
     temperature_c: float | None = None
+    # Each sensor in the order of the configuration (None if unknown).
+    temperatures_c: tuple[float | None, ...] = ()
 
 
 def read_consumer_state(hass: HomeAssistant, consumer: ConsumerConfig) -> ConsumerState:
@@ -135,6 +137,7 @@ def read_consumer_state(hass: HomeAssistant, consumer: ConsumerConfig) -> Consum
             if temperatures and None not in temperatures
             else None
         ),
+        temperatures_c=tuple(temperatures),
     )
 
 

@@ -266,7 +266,9 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   *Tagesziel*): *Laufzeit* (Zeit, in der er Leistung zieht), *Freigabezeit*
   (Zeit, in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung
   wie einen Luftentfeuchter mit Hygrostat), *Energie* (kWh) oder *Temperatur*
-  (mit Temperaturfühlern: Mindest- und Zieltemperatur seines Speichers).
+  (mit Temperaturfühlern: Mindest- und Zieltemperatur seines Speichers; mit
+  zwei Fühlern wählt *Fühler* den Mittelwert, Fühler 1 oder Fühler 2, in der
+  Reihenfolge der Konfiguration des Verbrauchers).
   Gezählt von Frist (*Bis*, Standard 22:00, auch über Mitternacht) zu Frist
   und zuerst aus dem Überschuss erfüllt. *Quelle* bestimmt, was den Rest
   rechtzeitig decken darf: *Nur Überschuss* (Standard; das Ziel kann

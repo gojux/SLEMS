@@ -157,6 +157,14 @@ class TargetType(StrEnum):
     TEMPERATURE = "temperature"
 
 
+class TargetSensor(StrEnum):
+    """Which temperature the temperature target applies to (two sensors)."""
+
+    MEAN = "mean"
+    FIRST = "first"
+    SECOND = "second"
+
+
 class TargetSource(StrEnum):
     """What may cover a daily target the surplus does not reach in time."""
 

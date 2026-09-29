@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta
 from enum import StrEnum
 
-from .const import TargetSource, TargetType
+from .const import TargetSensor, TargetSource, TargetType
 
 TIME_FACTOR = 1.2
 START_MARGIN = timedelta(minutes=10)
@@ -63,6 +63,19 @@ class TargetSettings:
     deadline: time = time(22, 0)
     source: TargetSource = TargetSource.SURPLUS
     priority: bool = False
+    # Temperature target with two sensors: the mean or one of them.
+    sensor: TargetSensor = TargetSensor.MEAN
+
+
+def target_temperature(
+    settings: TargetSettings, mean_c: float | None, temperatures_c: tuple[float | None, ...]
+) -> float | None:
+    """Temperature the temperature target applies to."""
+    if settings.sensor is TargetSensor.FIRST and len(temperatures_c) >= 1:
+        return temperatures_c[0]
+    if settings.sensor is TargetSensor.SECOND and len(temperatures_c) >= 2:
+        return temperatures_c[1]
+    return mean_c
 
 
 def period_end(now: datetime, deadline: time) -> datetime:

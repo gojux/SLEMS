@@ -250,6 +250,14 @@
           "battery": "Surplus + batteries",
           "grid": "Surplus + batteries + grid"
         }
+      },
+      "target_sensor": {
+        "name": "Daily target sensor",
+        "state": {
+          "mean": "Mean",
+          "first": "Sensor 1",
+          "second": "Sensor 2"
+        }
       }
     },
     "sensor": {

@@ -255,7 +255,9 @@ Every consumer needs its own power **and** energy sensor.
   target*): *runtime* (time it draws power), *enabled time* (time SLEMS has
   it switched on, for devices with their own control such as a dehumidifier
   with a hygrostat), *energy* (kWh) or *temperature* (with temperature
-  sensors: minimum and target temperature of its storage). Counted from one
+  sensors: minimum and target temperature of its storage; with two sensors
+  *Sensor* chooses the mean, sensor 1 or sensor 2, in the order of the
+  consumer's configuration). Counted from one
   deadline (*Until*, default 22:00, also across midnight) to the next and met
   from the surplus first. *Source* decides what may cover the rest in time:
   *surplus only* (default; the target may be missed, then a notification

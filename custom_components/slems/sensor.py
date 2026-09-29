@@ -36,6 +36,7 @@ from .controller import ControlStatus
 from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 from .forecast.accuracy import Accuracy
 from .full_charge import is_due
+from .consumer_targets import target_temperature
 from .const import TargetType
 from .grid_friendly import correction_weight
 from .problems import CAP_EXCEEDED_AFTER_S
@@ -849,7 +850,10 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             "target_unit": unit,
             "target_max_temperature_c": settings.target_temp_c,
             "target_temperature_c": (
-                None if state is None or state.temperature_c is None else round(state.temperature_c, 1)
+                None
+                if state is None
+                or (temperature := target_temperature(settings, state.temperature_c, state.temperatures_c)) is None
+                else round(temperature, 1)
             ),
             "target_done": progress.done_for(settings),
             "target_deadline": progress.end.isoformat() if progress.end else None,
