@@ -744,6 +744,8 @@ entities. The panel is removed on unload and re-registered on every setup.
 - Phones (≤ 600 px): the tab row scrolls sideways instead of wrapping; on a
   tab change only the row scrolls to the active tab. Flow box titles take up
   to two lines.
+- Forecast accuracy: accuracy and the expected deviation of tomorrow only
+  from `MIN_ACCURACY_DAYS` (7) compared days, before that *collecting data*.
 - Strings: English and German inside the file (`STRINGS`), picked from the HA
   language.
 - Switches marked with `data-confirm-off` (battery *Enabled*) are kept on and

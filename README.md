@@ -191,8 +191,9 @@ accuracy* and *PV forecast accuracy*):
   somewhat better than it was.
 - PV: past forecasts are not available from the solar forecast integration,
   so SLEMS records the forecast of each day at its start and compares it with
-  the production in the evening; the values become meaningful after about a
-  week.
+  the production in the evening. The card shows accuracy and expected
+  deviation from 7 compared days on (before: *collecting data*), because a
+  few days say little.
 
 The sensor *House consumption* (used for the forecast and shown in the energy
 flow) is calculated as grid + PV − batteries. The smart meter often reports a

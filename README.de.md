@@ -194,7 +194,9 @@ Verbrauchsprognose* und *Treffsicherheit PV-Prognose*):
   nachgerechnet; ihr Anteil wirkt dadurch etwas besser, als er war.
 - PV: Vergangene Prognosen liefert die Solarprognose-Integration nicht mehr,
   daher speichert SLEMS die Prognose jedes Tages zu Tagesbeginn und vergleicht
-  sie abends mit der Erzeugung; aussagekräftig wird das nach etwa einer Woche.
+  sie abends mit der Erzeugung. Die Karte zeigt Treffsicherheit und erwartete
+  Abweichung ab 7 verglichenen Tagen (vorher: *sammelt noch Daten*), weil
+  wenige Tage wenig aussagen.
 
 Der Sensor *Hausverbrauch* (Grundlage der Prognose und Anzeige im
 Energiefluss) wird als Netz + PV − Batterien berechnet. Der Smart Meter meldet

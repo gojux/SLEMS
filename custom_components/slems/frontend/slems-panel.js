@@ -38,6 +38,9 @@ const COLORS = {
   },
 };
 
+// Days of a forecast comparison before its accuracy is shown.
+const MIN_ACCURACY_DAYS = 7;
+
 const STRINGS = {
   en: {
     overview: "Overview",
@@ -113,7 +116,7 @@ const STRINGS = {
     pvForecastTitle: "PV",
     accuracy: "Accuracy",
     lastDays: "last {n} days",
-    notEnoughData: "not enough data yet",
+    collectingData: "collecting data ({n}/{min} days)",
     tendency: "Tendency",
     tooHigh: "too high",
     tooLow: "too low",
@@ -401,7 +404,7 @@ const STRINGS = {
     pvForecastTitle: "PV",
     accuracy: "Treffsicherheit",
     lastDays: "letzte {n} Tage",
-    notEnoughData: "noch zu wenig Daten",
+    collectingData: "sammelt noch Daten ({n}/{min} Tage)",
     tendency: "Tendenz",
     tooHigh: "zu hoch",
     tooLow: "zu niedrig",
@@ -891,9 +894,15 @@ class SlemsPanel extends HTMLElement {
       if (!st) return "";
       const a = st.attributes;
       const accuracy = this._number(st);
+      const days = a.evaluated_days ?? 0;
+      // A few days say little: an error of 200 % on day 3 is no accuracy yet.
+      const collecting = accuracy === null || days < MIN_ACCURACY_DAYS;
       const rows = [];
-      if (accuracy === null) {
-        rows.push([t.accuracy, `<span class="muted">${t.notEnoughData}</span>`]);
+      if (collecting) {
+        rows.push([
+          t.accuracy,
+          `<span class="muted">${t.collectingData.replace("{n}", days).replace("{min}", MIN_ACCURACY_DAYS)}</span>`,
+        ]);
       } else {
         rows.push([t.accuracy, `${this._percent(accuracy)} <span class="muted">(${t.lastDays.replace("{n}", a.evaluated_days)})</span>`]);
         if (a.bias_pct !== null && a.bias_pct !== undefined) {
@@ -906,7 +915,7 @@ class SlemsPanel extends HTMLElement {
       }
       rows.push([t.dataBasis, basis(a)]);
       if (a.tomorrow_forecast_kwh !== null && a.tomorrow_forecast_kwh !== undefined) {
-        const error = a.tomorrow_expected_error_kwh;
+        const error = collecting ? null : a.tomorrow_expected_error_kwh;
         rows.push([
           t.tomorrow,
           `${kwh(a.tomorrow_forecast_kwh)}${error !== null && error !== undefined ? ` ± ${kwh(error)}` : ""}`,
