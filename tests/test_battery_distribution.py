@@ -21,12 +21,12 @@ def unit(battery_id: str, soc: float, leaving: float | None = None) -> BatteryUn
     return BatteryUnit(battery_id, soc, 2500, 2500, LOSSES, leaving_fraction=leaving)
 
 
-def settle(distributor, total, units, start=0.0, seconds=300, step=5):
+def settle(distributor, total, units, start=0.0, seconds=300, step=5, full_charge=None):
     """Call repeatedly so that ramps complete; return the last result."""
     result = None
     t = start
     while t <= start + seconds:
-        result = distributor.distribute(total, units, SETTINGS, t)
+        result = distributor.distribute(total, units, SETTINGS, t, full_charge=full_charge)
         t += step
     return result
 
@@ -156,3 +156,28 @@ def test_loss_curve_ignores_transients() -> None:
     for power in (500, 1500, 500, 1500) * 30:
         learner.add(-power, -power * 0.5)  # nonsense values during changes
     assert learner.bins == {}
+
+
+def test_full_charge_battery_is_charged_first() -> None:
+    distributor = BatteryDistributor()
+    units = [unit("a", 30), unit("b", 60), unit("c", 70)]
+    # The due battery has the highest SoC, normally charged last.
+    result = distributor.distribute(3000, units, SETTINGS, 0.0, full_charge="c")
+    assert result.power_w["c"] == 2500
+    assert result.power_w["a"] + result.power_w["b"] == pytest.approx(500)
+    result = distributor.distribute(1000, units, SETTINGS, 5.0, full_charge="c")
+    assert result.power_w == {"a": 0, "b": 0, "c": 1000}
+
+
+def test_full_charge_battery_spared_while_the_others_are_above_half() -> None:
+    units = [unit("a", 70), unit("b", 60), unit("c", 95)]
+    result = settle(BatteryDistributor(), -1500, units, full_charge="c")
+    assert result.power_w["c"] == 0
+    assert result.power_w["a"] + result.power_w["b"] == pytest.approx(-1500)
+    # One of the others at 50 %: no longer spared.
+    low = [unit("a", 70), unit("b", 50), unit("c", 95)]
+    result = settle(BatteryDistributor(), -1500, low, full_charge="c")
+    assert result.power_w["c"] < 0
+    # The others cannot deliver the power: it helps.
+    result = settle(BatteryDistributor(), -6000, units, full_charge="c")
+    assert result.power_w["c"] < 0

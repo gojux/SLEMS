@@ -360,6 +360,19 @@ and `blueprints/marstek_active_balance_blueprint.yaml` of Omnibattery.
   < 3.49 V, or SoC < 97 % without cell voltages); after a start while full the
   stored time stays (`_at_top` unknown). Stored under `cell_monitor.last_full`;
   sensor *Last full charge* (timestamp); shown in the battery details only.
+- **Regular full charge** (`full_charge.py`, pure): `due_battery` picks one
+  due battery (last full charge older than `full_charge_interval_days` or
+  unknown; oldest first, then name) among the plannable controllable ones,
+  every poll (`_update_full_charge`, `SlemsCoordinator.full_charge_battery`).
+  It may exceed its maximum SoC (`power_limits(full_charge=True)`, group
+  `full_soc_pct` 100 for it); `BatteryDistributor.distribute(full_charge=…)`
+  gives it the charge power first (the rest to the others as usual) and
+  leaves it out when discharging while all others are above
+  `SPARE_OTHERS_MIN_SOC_PCT` (50 %) and can deliver the power. When its
+  `last_full` changes it rests `REST_S` (90 s, zero limits in
+  `_battery_units`) so the monitor measures the top delta. Sensor *Last full
+  charge* has `due` and `preferred`; the card shows a chip, the overview a
+  note after `FULL_CHARGE_NOTE_DAYS` (14, frontend).
 - **Run** (`CellBalancer`, one step per battery poll, 5 s): phases
   `pre_top_charge → charge → wait_measure → discharge → charge … →
   final_discharge → done`. Constants at the top of the module (Omnibattery
@@ -1284,3 +1297,4 @@ repository (otherwise its *brands* check fails).
 | 2026-09-28 | Feed-in cap roles *Supporting* / *Normal* (default) / *Never* instead of counted / instead of curtailing / never. Batteries first; supporting consumers get no normal surplus while the cap is on, and for energy that does not fit into the batteries they are planned from the start of the peak, because a consumer with less power than the surplus only takes a fraction of it once the batteries are full. Nothing is counted on to make room (a hot boiler would cost battery space in the peak); problems count the consumers' spare power, a note names them. Optional temperature sensors per consumer: the storage capacity is learned from the mean of the sensors (energy per K, cycling and full temperature, cycling power) without knowing which sensor switches the thermostat, and limits the planned energy (80 %). |
 | 2026-09-29 | Feed-in cap minimum buffer fixed at 5 % of the kWp instead of a setting: it covers errors in the timing and height of a peak that the learned buffer (from daily totals) does not show, and its right value depends on the forecasts rather than the house, so a user cannot judge it. The night discharge reserve coverage is only shown while the reserve is automatic. |
 | 2026-09-29 | Other batteries from Omnibattery: not ported for now. Its drivers are tied to its coordinator; the device knowledge can be taken over (both GPL-3.0). Order if done: Venus v2/vA/vD, then AC coupled Zendure and Sessy, DC coupled devices only after the model is extended and with a tester. Users who want another battery are asked to open an issue. |
+| 2026-09-29 | Regular full charge: one due battery at a time (older than 7 days or unknown; oldest, then name) is charged first and may exceed its maximum SoC once; spared when discharging while all others are above 50 % (fixed, not a setting); rests 90 s when full for a top delta measurement. The split between batteries and consumers is unchanged. |

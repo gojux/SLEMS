@@ -500,6 +500,9 @@
       },
       "night_reserve_auto": {
         "name": "Reserve Nachtentladung automatisch"
+      },
+      "regular_full_charge": {
+        "name": "Regelmäßige Vollladung"
       }
     },
     "number": {
@@ -595,6 +598,9 @@
       },
       "night_reserve_coverage": {
         "name": "Deckung der Reserve Nachtentladung"
+      },
+      "full_charge_interval": {
+        "name": "Vollladung spätestens alle"
       }
     },
     "binary_sensor": {

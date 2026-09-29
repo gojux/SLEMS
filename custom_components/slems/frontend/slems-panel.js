@@ -107,6 +107,10 @@ const STRINGS = {
     totalCharged: "Charged in total",
     totalDischarged: "Discharged in total",
     lastFullCharge: "Last full charge",
+    fullChargeDue: "full charge due",
+    fullChargeDueHint: "Not full for longer than the interval: charged first until it is full once (see settings, regular full charge).",
+    fullChargeOverdue: "Not fully charged for a long time",
+    fullChargeOverdueText: "{name} was last full {days} days ago. Without enough PV SLEMS charges it first at the next opportunity.",
     topDeltaMeasured: "Cell delta last measured",
     automatic: "automatic",
     learned: "learned",
@@ -264,6 +268,10 @@ const STRINGS = {
         "Learns both grid surplus targets from how far the grid power swings towards import while the batteries control it: the target keeps the grid on the export side 90 % of the time (20–1000 W). Needs some controlling in operating mode active first.",
       timing_auto:
         "Derives the control interval (0.8 × the report interval of the smart meter) and the averaging window (3 × the report interval) from the learned smart meter interval.",
+      regular_full_charge:
+        "A battery not full for longer than the interval (or never full since SLEMS records it) is charged first until it was full once, one battery at a time; it may exceed its maximum SoC for that. When discharging it is spared while the other batteries have more than 50 %. Once full it rests 90 s so the cell delta at the top is measured. LFP batteries recalibrate their state of charge only when full.",
+      full_charge_interval:
+        "Days after the last full charge from which a battery is charged first.",
       learn_capacity:
         "SLEMS always learns the usable capacity from charge and discharge legs of at least 20 % state of charge (DC energy / change of the state of charge; legs with a jump of the state of charge are discarded). On: the learned capacity is used for planning once three legs were measured. Off: the configured capacity applies.",
       consumer_learning:
@@ -330,6 +338,7 @@ const STRINGS = {
       night: "Night discharge",
       peak: "Import peak shaving",
       rotation: "Several batteries",
+      fullCharge: "Regular full charge",
     },
   },
   de: {
@@ -397,6 +406,10 @@ const STRINGS = {
     totalCharged: "Gesamt geladen",
     totalDischarged: "Gesamt entladen",
     lastFullCharge: "Letzte Vollladung",
+    fullChargeDue: "Vollladung fällig",
+    fullChargeDueHint: "Länger als das eingestellte Intervall nicht voll: wird zuerst geladen, bis sie einmal voll war (siehe Einstellungen, regelmäßige Vollladung).",
+    fullChargeOverdue: "Lange nicht voll geladen",
+    fullChargeOverdueText: "{name} war zuletzt vor {days} Tagen voll. Fehlt die PV, lädt SLEMS sie bei der nächsten Gelegenheit zuerst.",
     topDeltaMeasured: "Zell-Delta zuletzt gemessen",
     automatic: "automatisch",
     learned: "gelernt",
@@ -554,6 +567,10 @@ const STRINGS = {
         "Lernt beide Ziel-Netzüberschüsse daraus, wie weit die Netzleistung Richtung Bezug schwankt, während die Batterien regeln: Das Ziel hält das Netz 90 % der Zeit auf der Einspeiseseite (20–1000 W). Braucht zuerst etwas Regelbetrieb im Modus Aktiv.",
       timing_auto:
         "Leitet Regelintervall (0,8 × Meldeintervall des Smart Meters) und Mittelungsfenster (3 × Meldeintervall) aus dem gelernten Meldeintervall ab.",
+      regular_full_charge:
+        "Eine Batterie, die länger als das Intervall nicht voll war (oder seit der Aufzeichnung durch SLEMS noch nie), wird zuerst geladen, bis sie einmal voll war, immer nur eine Batterie; dafür darf sie ihren maximalen Ladezustand überschreiten. Beim Entladen wird sie geschont, solange die anderen Batterien über 50 % haben. Ist sie voll, ruht sie 90 s, damit das Zell-Delta am oberen Ladeende gemessen wird. LFP-Batterien kalibrieren ihren Ladezustand nur bei einer Vollladung.",
+      full_charge_interval:
+        "Tage nach der letzten Vollladung, ab denen eine Batterie zuerst geladen wird.",
       learn_capacity:
         "SLEMS lernt die nutzbare Kapazität immer aus Lade- und Entladevorgängen über mindestens 20 % Ladezustand (DC-Energie / Änderung des Ladezustands; Vorgänge mit einem Sprung des Ladezustands werden verworfen). Ein: Die gelernte Kapazität wird zur Planung verwendet, sobald drei Vorgänge gemessen sind. Aus: Es gilt die eingestellte Kapazität.",
       consumer_learning:
@@ -620,6 +637,7 @@ const STRINGS = {
       night: "Nachtentladung",
       peak: "Bezugsspitzen abfangen",
       rotation: "Mehrere Batterien",
+      fullCharge: "Regelmäßige Vollladung",
     },
   },
 };
@@ -641,7 +659,13 @@ const LEARNED_SETTINGS = {
 
 // Settings tab: translation keys of the system entities per group.
 // Settings shown only while the switch they belong to is on.
-const SETTING_SHOWN_WITH = { night_reserve_coverage: "night_reserve_auto" };
+const SETTING_SHOWN_WITH = {
+  night_reserve_coverage: "night_reserve_auto",
+  full_charge_interval: "regular_full_charge",
+};
+
+// A battery not full for longer than this is named in the overview.
+const FULL_CHARGE_NOTE_DAYS = 14;
 
 const SETTING_GROUPS = [
   ["mode", ["operating_mode", "vacation"]],
@@ -696,6 +720,7 @@ const SETTING_GROUPS = [
     ],
   ],
   ["temperature", ["temperature_limit", "temperature_high", "temperature_band", "temperature_floor", "temperature_low"]],
+  ["fullCharge", ["regular_full_charge", "full_charge_interval"]],
   [
     "rotation",
     ["rotation_soc_threshold", "rotation_min_interval", "rotation_ramp_rate", "rotation_ramp_max"],
@@ -1014,6 +1039,21 @@ class SlemsPanel extends HTMLElement {
     }
     return `<div class="tile wide" data-more-info="${energy.entity_id}"><span class="label">${escapeHtml(label)}</span>
       <span class="value">${escapeHtml(value)}</span></div>`;
+  }
+
+  /** Batteries not full for longer than FULL_CHARGE_NOTE_DAYS (a note, not a problem). */
+  _fullChargeNotes() {
+    const t = this._t;
+    return (this._config.batteries || [])
+      .map((battery) => {
+        const moment = new Date(this._state("last_full_charge", battery.device_id)?.state ?? "");
+        if (Number.isNaN(moment.getTime())) return "";
+        const days = Math.floor((Date.now() - moment.getTime()) / 86400000);
+        if (days <= FULL_CHARGE_NOTE_DAYS) return "";
+        const text = t.fullChargeOverdueText.replace("{name}", battery.name).replace("{days}", days);
+        return `<div class="info-box"><ha-icon icon="mdi:battery-alert-variant-outline"></ha-icon><span><b>${escapeHtml(t.fullChargeOverdue)}</b> – ${escapeHtml(text)}</span></div>`;
+      })
+      .join("");
   }
 
   /** Problem notes of the feed-in cap for the overview (and the buffer note). */
@@ -1571,7 +1611,7 @@ class SlemsPanel extends HTMLElement {
       "banner",
       (this._state("control_status")?.state === "grid_stale"
         ? `<div class="problem"><ha-icon icon="mdi:alert-circle"></ha-icon><span><b>${t.gridStale}</b> – ${t.gridStaleText}</span></div>`
-        : "") + this._capNotes()
+        : "") + this._capNotes() + this._fullChargeNotes()
     );
     this._renderFlow();
     this._setSection(
@@ -2513,7 +2553,9 @@ class SlemsPanel extends HTMLElement {
           }
           return `<section class="card">
             <div class="card-head"><h2>${escapeHtml(b.name)}</h2>
-              <div class="chips">${enabled?.state === "off" ? `<span class="chip">${t.disabled}</span>` : ""}${this._batteryMenu(b)}</div></div>
+              <div class="chips">${enabled?.state === "off" ? `<span class="chip">${t.disabled}</span>` : ""}${
+                s("last_full_charge")?.attributes?.preferred ? `<span class="chip" title="${escapeHtml(t.fullChargeDueHint)}">${t.fullChargeDue}</span>` : ""
+              }${this._batteryMenu(b)}</div></div>
             ${problem}
             <div class="soc"><div class="soc-bar"><div style="width:${soc ?? 0}%"></div></div>
               <span>${soc === null ? "–" : Math.round(soc) + " %"}</span></div>

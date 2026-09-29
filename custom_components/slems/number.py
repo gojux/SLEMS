@@ -162,6 +162,18 @@ SETTING_NUMBERS: tuple[SettingNumberDescription, ...] = (
         entity_category=EntityCategory.CONFIG,
     ),
     SettingNumberDescription(
+        key="full_charge_interval",
+        translation_key="full_charge_interval",
+        attribute="full_charge_interval_days",
+        device_class=NumberDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.DAYS,
+        native_min_value=1,
+        native_max_value=60,
+        native_step=1,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    SettingNumberDescription(
         key="rotation_ramp_rate",
         translation_key="rotation_ramp_rate",
         attribute="rotation_ramp_rate_w_per_s",

@@ -509,6 +509,21 @@ die Batterie den oberen Bereich verlassen hat (höchste Zelle unter 3,49 V,
 ohne Zellspannungen unter 97 %). LFP-Batterien kalibrieren ihren Ladezustand
 nur bei einer Vollladung neu, sie sollte daher regelmäßig vorkommen.
 
+**Regelmäßige Vollladung** (gleichnamige Einstellungsgruppe, standardmäßig
+an): Eine Batterie, die länger als *Vollladung spätestens alle* (Standard
+7 Tage) nicht voll war oder seit der Aufzeichnung durch SLEMS noch nie, wird
+zuerst geladen, bis sie einmal voll war. Immer nur eine Batterie, die mit der
+ältesten letzten Vollladung (noch nie voll zuerst, dann nach Namen). Die
+Aufteilung zwischen Batterien und Verbrauchern ändert sich nicht; die Batterie
+bekommt die Ladeleistung nur vor den anderen Batterien. Dafür darf sie ihren
+maximalen Ladezustand einmal überschreiten, danach gilt die Grenze wieder.
+Wird sie mangels PV nicht voll, bleibt sie an den nächsten Tagen zuerst dran.
+Beim Entladen wird sie geschont, solange alle anderen Batterien über 50 %
+haben und die Leistung liefern können; so startet sie am nächsten Tag höher.
+Ist sie voll, ruht sie 90 Sekunden, damit das Zell-Delta am oberen Ladeende
+gemessen wird. Ihre Karte zeigt solange *Vollladung fällig*; nach 14 Tagen
+ohne Vollladung nennt die Übersicht die Batterie.
+
 ### Grenzen und Schutz der Batterien
 
 Jede steuerbare Batterie hat diese Einstellungen (Dashboard: *Einstellungen*):

@@ -23,12 +23,19 @@ A battery that is being disabled while discharging is *leaving*: it is no
 longer selected, its weight is limited to the remaining fraction of
 ``LEAVE_RAMP_S`` (independent of how often the distribution runs) and it
 never helps out.
+
+A battery due for its regular full charge (see full_charge) gets the charge
+power first; the others share the rest as above. When discharging it is
+spared while all others have more than ``SPARE_OTHERS_MIN_SOC_PCT`` and can
+deliver the power.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+
+from .full_charge import SPARE_OTHERS_MIN_SOC_PCT
 
 KEEP_TOLERANCE = 1.05
 # Below this total loss the loss model gives no reason to run more batteries.
@@ -113,10 +120,44 @@ class BatteryDistributor:
         units: Sequence[BatteryUnit],
         settings: RotationSettings,
         now: float,
+        full_charge: str | None = None,
     ) -> Distribution:
-        """Split ``total_w`` (+charge / -discharge) between ``units``."""
+        """Split ``total_w`` (+charge / -discharge) between ``units``.
+
+        ``full_charge`` is the battery due for its full charge: charged first,
+        spared when discharging while the others can do it.
+        """
         elapsed = 0.0 if self._last_call is None else max(0.0, now - self._last_call)
         self._last_call = now
+        unit = next((u for u in units if u.battery_id == full_charge), None)
+        if unit is not None and total_w > 0 and unit.can(True):
+            first = min(total_w, unit.max_charge_w)
+            others = [u for u in units if u is not unit]
+            result = self._distribute(total_w - first, others, settings, now, elapsed)
+            result.power_w[unit.battery_id] = first
+            return result
+        if unit is not None and total_w < 0:
+            others = [u for u in units if u is not unit and u.can(False) and not u.leaving]
+            if (
+                others
+                and all(u.soc_pct > SPARE_OTHERS_MIN_SOC_PCT for u in others)
+                and sum(u.max_discharge_w for u in others) >= -total_w
+            ):
+                result = self._distribute(
+                    total_w, [u for u in units if u is not unit], settings, now, elapsed
+                )
+                result.power_w[unit.battery_id] = 0.0
+                return result
+        return self._distribute(total_w, units, settings, now, elapsed)
+
+    def _distribute(
+        self,
+        total_w: float,
+        units: Sequence[BatteryUnit],
+        settings: RotationSettings,
+        now: float,
+        elapsed: float,
+    ) -> Distribution:
         power = abs(total_w)
         leaving = {u.battery_id: u.leaving_fraction for u in units if u.leaving}
         if total_w == 0 or not units:

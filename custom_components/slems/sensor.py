@@ -35,6 +35,7 @@ from .cell_balancing import TOP_ZONE_V, BalancingPhase, balance_status
 from .controller import ControlStatus
 from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 from .forecast.accuracy import Accuracy
+from .full_charge import is_due
 from .grid_friendly import correction_weight
 from .problems import CAP_EXCEEDED_AFTER_S
 from .pv_forecast import energy_on_day
@@ -994,6 +995,20 @@ class LastFullChargeSensor(SlemsBatteryEntity, SensorEntity):
     def native_value(self) -> datetime | None:
         last_full = self.battery.cell_monitor.last_full
         return None if last_full is None else dt_util.utc_from_timestamp(last_full)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        settings = self.coordinator.settings
+        return {
+            "due": settings.regular_full_charge
+            and is_due(
+                self.battery.cell_monitor.last_full,
+                dt_util.utcnow().timestamp(),
+                settings.full_charge_interval_days,
+            ),
+            # The battery charged first right now (one at a time).
+            "preferred": self.coordinator.full_charge_battery == self.battery.subentry_id,
+        }
 
 
 class AllowedPowerSensor(SlemsBatteryEntity, SensorEntity):

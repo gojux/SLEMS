@@ -58,3 +58,12 @@ def test_power_limits_combine() -> None:
     # Cell balancing ignores the SoC window.
     limits = power_limits(2500, 2500, settings, window, 20, ON, use_soc_window=False)
     assert limits.discharge_w == 800
+
+
+def test_full_charge_may_exceed_the_maximum_soc() -> None:
+    settings = BatteryLimitSettings(max_soc_pct=90)
+    window = SocWindow()
+    window.update(92.0, settings)
+    assert power_limits(2500, 2500, settings, window, None, TemperatureLimit()).charge_w == 0
+    due = power_limits(2500, 2500, settings, window, None, TemperatureLimit(), full_charge=True)
+    assert due.charge_w == 2500

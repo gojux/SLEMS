@@ -500,6 +500,9 @@
       },
       "night_reserve_auto": {
         "name": "Automatic night discharge reserve"
+      },
+      "regular_full_charge": {
+        "name": "Regular full charge"
       }
     },
     "number": {
@@ -595,6 +598,9 @@
       },
       "night_reserve_coverage": {
         "name": "Night discharge reserve coverage"
+      },
+      "full_charge_interval": {
+        "name": "Full charge at the latest every"
       }
     },
     "binary_sensor": {

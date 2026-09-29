@@ -484,6 +484,20 @@ full charge counts once the battery has left the top (highest cell below
 3.49 V, without cell voltages below 97 %). LFP batteries recalibrate their
 state of charge only when full, so it should happen regularly.
 
+**Regular full charge** (settings group of the same name, on by default): a
+battery not full for longer than *Full charge at the latest every* (default
+7 days), or never full since SLEMS records it, is charged first until it was
+full once. Only one battery at a time, the one whose last full charge is the
+oldest (never full first, then by name). The split between batteries and
+consumers does not change; the battery only gets the charge power before the
+other batteries. For this it may exceed its maximum SoC once; afterwards the
+limit applies again. If it does not get full for lack of PV, it stays first
+the next days. When discharging it is spared while all other batteries have
+more than 50 % and can deliver the power, so it starts the next day higher.
+Once full it rests 90 seconds, so the cell delta at the top is measured. Its
+card shows *full charge due* meanwhile; after 14 days without a full charge
+the overview names the battery.
+
 ### Battery limits and protection
 
 Every controllable battery has these settings (dashboard: *Settings*):

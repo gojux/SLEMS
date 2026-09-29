@@ -58,6 +58,7 @@ from .const import (
     DEFAULT_CONTROL_INTERVAL_S,
     DEFAULT_ROTATION_MIN_INTERVAL_MIN,
     DEFAULT_ROTATION_RAMP_MAX_S,
+    DEFAULT_FULL_CHARGE_INTERVAL_DAYS,
     DEFAULT_ROTATION_RAMP_RATE_W_PER_S,
     DEFAULT_ROTATION_SOC_THRESHOLD_PCT,
     DEFAULT_OPERATING_MODE,
@@ -91,6 +92,7 @@ from .battery_limits import (
 )
 from .cell_balancing import BalancingPhase, CellBalancer, CellMonitor
 from .delivery_monitor import Action, DeliveryMonitor
+from .full_charge import REST_S as FULL_CHARGE_REST_S, FullChargeCandidate, due_battery
 from .feed_in_cap import CAP_MARGIN_W, CapConsumer, CapPlan, CapSettings, auto_buffer, plan_cap
 from .problems import ProblemReporter
 from .efficiency import EfficiencyTracker, EnergyIntegrator, LossCurveLearner
@@ -284,6 +286,9 @@ class ControlSettings:
     rotation_min_interval_min: float = DEFAULT_ROTATION_MIN_INTERVAL_MIN
     rotation_ramp_rate_w_per_s: float = DEFAULT_ROTATION_RAMP_RATE_W_PER_S
     rotation_ramp_max_s: float = DEFAULT_ROTATION_RAMP_MAX_S
+    # Prefer a battery not full for longer than the interval (see full_charge).
+    regular_full_charge: bool = True
+    full_charge_interval_days: float = DEFAULT_FULL_CHARGE_INTERVAL_DAYS
     # Minimum time between two control cycles.
     control_interval_s: float = DEFAULT_CONTROL_INTERVAL_S
     # Share of the remaining deviation corrected per control cycle: fixed value,
@@ -590,6 +595,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         }
         # Consumers whose learned power and thermostat behaviour are used.
         self.consumer_learning: set[str] = set()
+        # Battery due for its regular full charge (see full_charge), batteries
+        # resting after it (monotonic end) and the last full charge seen.
+        self.full_charge_battery: str | None = None
+        self._full_charge_rest: dict[str, float] = {}
+        self._last_full_seen: dict[str, float | None] = {}
 
     @property
     def _config(self):
@@ -839,6 +849,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # depends on the other batteries.
         for battery in self.batteries:
             self._update_cells(battery, snapshot, now)
+        self._update_full_charge(snapshot, now)
         self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
 
         self._house_hold.check(snapshot, now)
@@ -997,6 +1008,30 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         elif step.phase is not previous_phase:
             self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
 
+    def _update_full_charge(self, snapshot: SystemSnapshot, now: float) -> None:
+        """Battery due for its regular full charge, and the rest once it got full."""
+        for battery in self.batteries:
+            last_full = battery.cell_monitor.last_full
+            previous = self._last_full_seen.get(battery.subentry_id, last_full)
+            if last_full != previous and battery.subentry_id == self.full_charge_battery:
+                # Full now: no power for a moment, so the top cell delta is measured.
+                self._full_charge_rest[battery.subentry_id] = now + FULL_CHARGE_REST_S
+            self._last_full_seen[battery.subentry_id] = last_full
+        self._full_charge_rest = {k: v for k, v in self._full_charge_rest.items() if v > now}
+        if not self.settings.regular_full_charge:
+            self.full_charge_battery = None
+            return
+        candidates = [
+            FullChargeCandidate(battery.subentry_id, battery.name, battery.cell_monitor.last_full)
+            for battery in self.batteries
+            if battery.plannable
+            and battery.driver.capabilities.controllable
+            and battery.subentry_id in snapshot.batteries
+        ]
+        self.full_charge_battery = due_battery(
+            candidates, dt_util.utcnow().timestamp(), self.settings.full_charge_interval_days
+        )
+
     def _power_limits(
         self, battery: BatteryRuntime, telemetry: BatteryTelemetry, *, use_soc_window: bool = True
     ) -> PowerLimits:
@@ -1010,6 +1045,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self.settings.temperature(),
             # Read-only batteries follow their own logic.
             use_soc_window=use_soc_window and caps.controllable,
+            full_charge=battery.subentry_id == self.full_charge_battery,
         )
 
     def _check_delivery(
@@ -1192,7 +1228,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             weighted_eff += battery.efficiency.one_way * battery.capacity_wh
             if caps.controllable:
                 min_soc += battery.limits.min_soc_pct * battery.capacity_wh
-                full_soc += battery.limits.max_soc_pct * battery.capacity_wh
+                # Due for its full charge: may charge above its maximum SoC.
+                maximum = 100.0 if battery.subentry_id == self.full_charge_battery else battery.limits.max_soc_pct
+                full_soc += maximum * battery.capacity_wh
             else:
                 full_soc += 100.0 * battery.capacity_wh
         if not capacity:
@@ -1393,6 +1431,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 ramp_max_s=settings.rotation_ramp_max_s,
             ),
             now,
+            full_charge=self.full_charge_battery,
         )
 
     # --- learned values (see learning) ------------------------------------------------
@@ -1992,12 +2031,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if not battery.participating or telemetry is None or telemetry.soc_pct is None:
                 continue
             limits = battery.power_limits or self._power_limits(battery, telemetry)
+            resting = battery.subentry_id in self._full_charge_rest
             units.append(
                 BatteryUnit(
                     battery_id=battery.subentry_id,
                     soc_pct=telemetry.soc_pct,
-                    max_charge_w=limits.charge_w,
-                    max_discharge_w=limits.discharge_w,
+                    max_charge_w=0.0 if resting else limits.charge_w,
+                    max_discharge_w=0.0 if resting else limits.discharge_w,
                     loss_model=battery.loss_curve.model(LossModel()),
                     leaving_fraction=(
                         None

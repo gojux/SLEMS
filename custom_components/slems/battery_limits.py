@@ -104,15 +104,20 @@ def power_limits(
     temperature: TemperatureLimit,
     *,
     use_soc_window: bool = True,
+    full_charge: bool = False,
 ) -> PowerLimits:
-    """Combine capability, user power limits, SoC window and temperature."""
+    """Combine capability, user power limits, SoC window and temperature.
+
+    ``full_charge``: the battery is due for its regular full charge and may
+    charge above its maximum SoC.
+    """
     charge, charge_reason = max_charge_w, None
     if settings.charge_limit_w is not None and settings.charge_limit_w < charge:
         charge, charge_reason = settings.charge_limit_w, "power"
     factor = temperature_factor(temperature_c, temperature)
     if factor < 1.0:
         charge, charge_reason = charge * factor, "temperature"
-    if use_soc_window and window.charge_blocked:
+    if use_soc_window and window.charge_blocked and not full_charge:
         charge, charge_reason = 0.0, "soc"
 
     discharge, discharge_reason = max_discharge_w, None
