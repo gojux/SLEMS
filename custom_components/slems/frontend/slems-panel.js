@@ -765,6 +765,15 @@ const OVERVIEW_TILES = [
   "consumption_forecast_tomorrow",
 ];
 
+/** Selector that finds a control again after its section was drawn anew. */
+function focusSelector(element) {
+  const attributes = ["data-action", "data-entity", "data-sim", "data-device", "data-series", "data-tab", "data-key"];
+  const parts = attributes
+    .filter((name) => element.hasAttribute(name))
+    .map((name) => `[${name}="${CSS.escape(element.getAttribute(name))}"]`);
+  return parts.length ? element.tagName.toLowerCase() + parts.join("") : null;
+}
+
 const escapeHtml = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
@@ -1087,6 +1096,32 @@ class SlemsPanel extends HTMLElement {
     return null;
   }
 
+  /** Enabled items of the ⋮ menu of a battery. */
+  _menuItems(deviceId) {
+    const toggle = this.shadowRoot.querySelector(`[data-action='battery-menu'][data-device="${deviceId}"]`);
+    return [...(toggle?.closest(".menu-wrap")?.querySelectorAll(".menu-item:not([disabled])") || [])];
+  }
+
+  /** Keyboard in the ⋮ menu: arrows move, Escape closes it and returns to its button. */
+  _onMenuKey(event) {
+    const deviceId = this._openMenu;
+    if (!deviceId) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      this._openMenu = null;
+      this._render();
+      this.shadowRoot.querySelector(`[data-action='battery-menu'][data-device="${deviceId}"]`)?.focus();
+      return;
+    }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    const items = this._menuItems(deviceId);
+    if (!items.length) return;
+    event.preventDefault();
+    const index = items.indexOf(this.shadowRoot.activeElement);
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    items[(index + step + items.length) % items.length].focus();
+  }
+
   /** Handles the ⋮ menu; returns true if the click was consumed. */
   _onMenuClick(event) {
     const t = this._t;
@@ -1094,6 +1129,8 @@ class SlemsPanel extends HTMLElement {
     if (toggle) {
       this._openMenu = this._openMenu === toggle.dataset.device ? null : toggle.dataset.device;
       this._render();
+      // The card is drawn anew: move the focus into the opened menu.
+      if (this._openMenu) this._menuItems(this._openMenu)[0]?.focus();
       return true;
     }
     const item = event.target.closest(".menu-item, [data-action='menu-resume']");
@@ -1273,9 +1310,20 @@ class SlemsPanel extends HTMLElement {
 
   _setSection(name, html) {
     const element = this.shadowRoot.getElementById(name);
-    if (element && this._sections[name] !== html) {
-      element.innerHTML = html;
-      this._sections[name] = html;
+    if (!element || this._sections[name] === html) return;
+    // The focused control and a value being typed survive the new drawing.
+    const active = this.shadowRoot.activeElement;
+    const key = active && element.contains(active) ? focusSelector(active) : null;
+    const typed =
+      key && active.matches("input:not([type=checkbox]), select") && active.value !== active.getAttribute("value")
+        ? active.value
+        : null;
+    element.innerHTML = html;
+    this._sections[name] = html;
+    const again = key ? element.querySelector(key) : null;
+    if (again) {
+      if (typed !== null && active.tagName === "INPUT") again.value = typed;
+      again.focus();
     }
   }
 
@@ -1359,6 +1407,7 @@ class SlemsPanel extends HTMLElement {
     });
     this._resizeObserver.observe(content);
     content.addEventListener("click", (event) => this._onClick(event));
+    content.addEventListener("keydown", (event) => this._onMenuKey(event));
     content.addEventListener("change", (event) => this._onChange(event));
     // The mouse wheel over a focused number field would change and save its
     // value while scrolling the page; the field loses the focus instead.
