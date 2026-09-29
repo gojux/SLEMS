@@ -220,6 +220,10 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   Verbraucher nicht, solange ein Schalter oder Binärsensor eingeschaltet ist
   oder ein Water Heater in der Betriebsart *off* steht), dazu eine
   Priorität (1 = höchste) und optional eine Mindestlaufzeit und Mindestpause.
+  Bei Ein/Aus-Verbrauchern reicht für die Leistung im eingeschalteten Zustand
+  eine grobe Schätzung, wenn *Gelernte Werte verwenden* an ist; lieber zu
+  niedrig als zu hoch, weil SLEMS nur lernt, während es den Verbraucher
+  betreibt.
 - **Thermostat taktet selbst**: für Verbraucher, die ihr eigener Thermostat
   während der Ansteuerung ein- und ausschaltet (z. B. ein Heizstab, der am
   Heizelement misst). Normalerweise gilt ein Verbraucher, der trotz Vorgabe

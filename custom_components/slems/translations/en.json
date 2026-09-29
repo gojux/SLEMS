@@ -163,6 +163,7 @@
           },
           "data_description": {
             "control_entity": "Switch for on/off consumers, number entity in W for power controlled consumers.",
+            "nominal_power_w": "A rough estimate is enough if *Use learned values* is on: SLEMS then measures the real power while it runs the consumer (operating mode active) and uses it after about 30 samples. Rather estimate a little too low than too high: too high, SLEMS waits for a larger surplus and may never switch the consumer on, so nothing is learned.",
             "block_entity": "SLEMS does not control the consumer while it is blocked (e.g. by the device or an automation): a water heater while its operation mode is \"off\", other entities while they are \"on\".",
             "priority": "1 = highest priority when distributing surplus power.",
             "min_on_minutes": "Optional. Once switched on by SLEMS, the consumer keeps running at least this long.",

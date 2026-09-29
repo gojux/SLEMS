@@ -163,6 +163,7 @@
           },
           "data_description": {
             "control_entity": "Schalter für Ein/Aus-Verbraucher, Number-Entity in W für leistungsgeregelte Verbraucher.",
+            "nominal_power_w": "Eine grobe Schätzung reicht, wenn *Gelernte Werte verwenden* an ist: SLEMS misst dann die tatsächliche Leistung, während es den Verbraucher betreibt (Betriebsmodus Aktiv), und verwendet sie nach etwa 30 Messwerten. Lieber etwas zu niedrig als zu hoch schätzen: Zu hoch wartet SLEMS auf mehr Überschuss und schaltet den Verbraucher womöglich nie ein, dann wird auch nichts gelernt.",
             "block_entity": "Solange der Verbraucher gesperrt ist (z. B. vom Gerät oder einer Automation), steuert SLEMS ihn nicht: ein Water Heater bei Betriebsart „off“, andere Entities, solange sie „on“ sind.",
             "priority": "1 = höchste Priorität bei der Verteilung von Überschuss.",
             "min_on_minutes": "Optional. Nach dem Einschalten durch SLEMS läuft der Verbraucher mindestens so lange.",

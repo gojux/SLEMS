@@ -215,7 +215,9 @@ Every consumer needs its own power **and** energy sensor.
   selected that blocks them externally (SLEMS leaves the consumer alone while
   a switch or binary sensor is on, or while a water heater is in operation
   mode *off*), a priority (1 = highest) and optionally a minimum runtime
-  and a minimum pause.
+  and a minimum pause. For on/off consumers a rough estimate of the power
+  when on is enough if *Use learned values* is on; rather too low than too
+  high, because SLEMS only learns while it runs the consumer.
 - **Thermostat cycles by itself**: for consumers whose own thermostat
   switches them on and off while they are commanded (e.g. a heating rod that
   measures at the element). Normally a consumer that draws nothing although
