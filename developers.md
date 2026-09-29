@@ -669,8 +669,9 @@ plan appears as `socCompare` / `exportCompare` (grey dotted, drawn first).
 serves `frontend/` under `/slems_static` (registered once per HA run; the
 module URL carries the file's modification time to bust the browser cache).
 The panel config passes what the frontend cannot find itself: system device
-id, batteries and consumers with their device ids and the consumers' power
-entities. The panel is removed on unload and re-registered on every setup.
+id, batteries and consumers with their device ids, the consumers' power
+entities and whether they are shown in the energy flow (`show_in_flow`, a
+field of the consumer subentry, default on). The panel is removed on unload and re-registered on every setup.
 
 `frontend/slems-panel.js` is a plain custom element without build step:
 

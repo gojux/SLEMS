@@ -1653,6 +1653,7 @@ class SlemsPanel extends HTMLElement {
       });
     }
     for (const consumer of this._config.consumers || []) {
+      if (consumer.show_in_flow === false) continue;
       nodes.push({
         id: `consumer-${consumer.id}`,
         role: "consumer",

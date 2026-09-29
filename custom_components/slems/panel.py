@@ -80,6 +80,7 @@ def _panel_config(hass: HomeAssistant, entry: SlemsConfigEntry) -> dict:
                 "power_entity": consumer.power_entity_id,
                 "type": consumer.consumer_type.value,
                 "controllable": consumer.controllable,
+                "show_in_flow": consumer.show_in_flow,
             }
             for consumer in coordinator.consumers
         ],

@@ -31,6 +31,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_BLOCK_ENTITY,
+    CONF_SHOW_IN_FLOW,
     CONF_THERMOSTAT_CYCLES,
     CONF_TEMPERATURE_2_ENTITY,
     CONF_TEMPERATURE_ENTITY,
@@ -504,6 +505,9 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
                 ): _ENERGY_SENSOR,
                 vol.Required(
                     CONF_INCLUDED_IN_METER, default=defaults.get(CONF_INCLUDED_IN_METER, True)
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_SHOW_IN_FLOW, default=defaults.get(CONF_SHOW_IN_FLOW, True)
                 ): selector.BooleanSelector(),
                 vol.Required(
                     CONF_CONTROL_MODE,

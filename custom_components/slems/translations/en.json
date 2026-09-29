@@ -139,11 +139,13 @@
             "power_entity": "Power sensor",
             "energy_entity": "Energy sensor",
             "included_in_meter": "Included in smart meter",
+            "show_in_flow": "Show in the energy flow",
             "control_mode": "Control"
           },
           "data_description": {
             "consumer_type": "Heat pump consumption is forecast from the weather; a heating rod is typically used for hot water in summer.",
-            "included_in_meter": "Enable if the consumer is behind the smart meter, i.e. its consumption is already part of the measured grid power."
+            "included_in_meter": "Enable if the consumer is behind the smart meter, i.e. its consumption is already part of the measured grid power.",
+            "show_in_flow": "Shows the consumer as its own box in the energy flow of the dashboard. Off: its consumption still counts in the house; the consumer card shows it."
           }
         },
         "control": {

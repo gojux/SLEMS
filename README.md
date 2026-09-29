@@ -207,6 +207,9 @@ Every consumer needs its own power **and** energy sensor.
 - **Included in smart meter**: enable if the consumer is behind the smart
   meter (its consumption is already part of the grid power). Disable for
   consumers on a separate supply.
+- **Show in the energy flow** (default on): off hides the consumer's box in
+  the energy flow of the dashboard; its consumption still counts in the house,
+  and the consumer card still shows it.
 - **Type**: *heat pump* (heating and hot water, forecast from the weather),
   *heating rod* (e.g. hot water in summer) or *other*. Heat pump and heating
   rod may run at the same time.

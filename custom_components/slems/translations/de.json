@@ -139,11 +139,13 @@
             "power_entity": "Leistungssensor",
             "energy_entity": "Energiesensor",
             "included_in_meter": "Im Smart Meter enthalten",
+            "show_in_flow": "Im Energiefluss anzeigen",
             "control_mode": "Steuerung"
           },
           "data_description": {
             "consumer_type": "Der Verbrauch einer Wärmepumpe wird wetterabhängig prognostiziert; eine Heizpatrone wird typischerweise im Sommer für Warmwasser genutzt.",
-            "included_in_meter": "Aktivieren, wenn der Verbraucher hinter dem Smart Meter hängt, sein Verbrauch also bereits in der gemessenen Netzleistung enthalten ist."
+            "included_in_meter": "Aktivieren, wenn der Verbraucher hinter dem Smart Meter hängt, sein Verbrauch also bereits in der gemessenen Netzleistung enthalten ist.",
+            "show_in_flow": "Zeigt den Verbraucher als eigene Box im Energiefluss des Dashboards. Aus: Sein Verbrauch zählt weiter im Haus; die Verbraucherkarte zeigt ihn."
           }
         },
         "control": {

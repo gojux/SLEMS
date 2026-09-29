@@ -211,6 +211,9 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
 - **Im Smart Meter enthalten**: aktivieren, wenn der Verbraucher hinter dem
   Smart Meter hängt (sein Verbrauch ist bereits in der Netzleistung enthalten).
   Für Verbraucher an einer separaten Versorgung deaktivieren.
+- **Im Energiefluss anzeigen** (Standard: an): aus blendet die Box des
+  Verbrauchers im Energiefluss des Dashboards aus; sein Verbrauch zählt weiter
+  im Haus, und die Verbraucherkarte zeigt ihn weiterhin.
 - **Typ**: *Wärmepumpe* (Heizung und Warmwasser, wetterabhängige Prognose),
   *Heizpatrone* (z. B. Warmwasser im Sommer) oder *Sonstiges*. Wärmepumpe und
   Heizpatrone dürfen gleichzeitig laufen.

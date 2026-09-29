@@ -23,6 +23,7 @@ from .const import (
     CONF_NOMINAL_POWER_W,
     CONF_POWER_ENTITY,
     CONF_PRIORITY,
+    CONF_SHOW_IN_FLOW,
     CONF_TEMPERATURE_2_ENTITY,
     CONF_TEMPERATURE_ENTITY,
     CONF_THERMOSTAT_CYCLES,
@@ -65,6 +66,8 @@ class ConsumerConfig:
     # Optional temperature sensors of its storage (a boiler); their mean is
     # used to learn how much energy it can still take (ThermalLearner).
     temperature_entity_ids: tuple[str, ...] = ()
+    # Shown as a box in the energy flow of the dashboard.
+    show_in_flow: bool = True
 
     @property
     def controllable(self) -> bool:
@@ -91,6 +94,7 @@ class ConsumerConfig:
             min_on_s=(data.get(CONF_MIN_ON_MINUTES) or 0) * 60,
             min_off_s=(data.get(CONF_MIN_OFF_MINUTES) or 0) * 60,
             thermostat_cycles=data.get(CONF_THERMOSTAT_CYCLES, False),
+            show_in_flow=data.get(CONF_SHOW_IN_FLOW, True),
             temperature_entity_ids=tuple(
                 entity_id
                 for entity_id in (data.get(CONF_TEMPERATURE_ENTITY), data.get(CONF_TEMPERATURE_2_ENTITY))

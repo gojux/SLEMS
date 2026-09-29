@@ -62,6 +62,8 @@ CONF_THERMOSTAT_CYCLES: Final = "thermostat_cycles"
 # Optional temperature sensors of the consumer's storage (e.g. a boiler).
 CONF_TEMPERATURE_ENTITY: Final = "temperature_entity"
 CONF_TEMPERATURE_2_ENTITY: Final = "temperature_2_entity"
+# Shown as a box in the energy flow of the dashboard.
+CONF_SHOW_IN_FLOW: Final = "show_in_flow"
 CONF_PRIORITY: Final = "priority"
 CONF_MIN_ON_MINUTES: Final = "min_on_minutes"
 CONF_MIN_OFF_MINUTES: Final = "min_off_minutes"
