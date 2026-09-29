@@ -155,6 +155,11 @@ const STRINGS = {
     targetHours: "Hours",
     targetEnergy: "Energy",
     targetSensor: "Sensor",
+    targetEarliestOn: "Earliest start",
+    targetEarliest: "From",
+    targetWaiting: "waits until {time}",
+    showSettings: "Show settings",
+    hideSettings: "Hide settings",
     targetMin: "Minimum temperature",
     targetMax: "Target temperature",
     targetDeadline: "Until",
@@ -305,6 +310,8 @@ const STRINGS = {
         "Extra space on top of the forecast energy above the limit, in % of it, against a too low PV forecast. Negative values plan with less.",
       target_type:
         "Runtime: time the consumer draws power. Enabled time: time SLEMS has it switched on, for devices with their own control (a dehumidifier with a hygrostat). Energy: kWh. Temperature: minimum and target temperature of its storage (temperature sensors). Counted from one deadline to the next; met from the surplus first.",
+      target_earliest_enabled:
+        "Not switched on before the earliest start, also with surplus (e.g. a dehumidifier only from 10:00). Counted until the deadline; the latest start is never before it.",
       target_sensor:
         "Which temperature the minimum and target temperature apply to: the mean of both sensors, or one of them (e.g. the upper sensor for the hot water at the tap). Sensor 1 is the temperature sensor of the storage, sensor 2 the second one in the consumer's configuration. The latest start is estimated with the learned energy per degree of the mean, for a single sensor an approximation.",
       target_source:
@@ -484,6 +491,11 @@ const STRINGS = {
     targetHours: "Stunden",
     targetEnergy: "Energie",
     targetSensor: "Fühler",
+    targetEarliestOn: "Frühester Beginn",
+    targetEarliest: "Ab",
+    targetWaiting: "wartet bis {time}",
+    showSettings: "Einstellungen anzeigen",
+    hideSettings: "Einstellungen ausblenden",
     targetMin: "Mindesttemperatur",
     targetMax: "Zieltemperatur",
     targetDeadline: "Bis",
@@ -634,6 +646,8 @@ const STRINGS = {
         "Zusätzlicher Platz zur prognostizierten Energie über der Grenze, in % davon, gegen eine zu niedrige PV-Prognose. Negative Werte planen mit weniger.",
       target_type:
         "Laufzeit: Zeit, in der der Verbraucher Leistung zieht. Freigabezeit: Zeit, in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung (Luftentfeuchter mit Hygrostat). Energie: kWh. Temperatur: Mindest- und Zieltemperatur seines Speichers (Temperaturfühler). Gezählt von Frist zu Frist; zuerst aus dem Überschuss.",
+      target_earliest_enabled:
+        "Vor dem frühesten Beginn wird der Verbraucher nicht eingeschaltet, auch nicht mit Überschuss (z. B. ein Luftentfeuchter erst ab 10:00). Gezählt bis zur Frist; die späteste Startzeit liegt nie davor.",
       target_sensor:
         "Für welche Temperatur Mindest- und Zieltemperatur gelten: das Mittel beider Fühler oder einer davon (z. B. der obere Fühler für das Warmwasser am Hahn). Fühler 1 ist der Temperaturfühler des Speichers, Fühler 2 der zweite in der Konfiguration des Verbrauchers. Die späteste Startzeit wird mit der gelernten Energie pro Grad des Mittelwerts geschätzt, für einen einzelnen Fühler eine Näherung.",
       target_source:
@@ -828,6 +842,8 @@ const COMPARE_DASH = "1 4";
 // localStorage keys of the day chart series hidden via the legend and of the
 // series hidden by default that were switched on.
 const HIDDEN_SERIES_KEY = "slems-hidden-series";
+// localStorage key of the consumer cards shown with all their settings.
+const EXPANDED_CONSUMERS_KEY = "slems-expanded-consumers";
 const SHOWN_SERIES_KEY = "slems-shown-series";
 // Series hidden until switched on in the legend.
 const DEFAULT_HIDDEN_SERIES = ["capExcess"];
@@ -884,6 +900,13 @@ class SlemsPanel extends HTMLElement {
       this._hiddenSeries = new Set([...DEFAULT_HIDDEN_SERIES.filter((k) => !shown.includes(k)), ...hidden]);
     } catch (err) {
       // Storage not available: the default series shown.
+    }
+    // Consumer cards shown with all their settings (kept in the browser).
+    this._expandedConsumers = new Set();
+    try {
+      this._expandedConsumers = new Set(JSON.parse(localStorage.getItem(EXPANDED_CONSUMERS_KEY) || "[]"));
+    } catch (err) {
+      // Storage not available: all cards collapsed.
     }
     this._chartDay = "today";
     // Settings whose explanation is shown (translation keys).
@@ -2721,23 +2744,39 @@ class SlemsPanel extends HTMLElement {
           // Switching on (with the start delay of the device) / off.
           const response = `${seconds(attrs.response_on_s)} / ${seconds(attrs.response_off_s)}`;
           const gridResponse = `${seconds(attrs.grid_response_on_s)} / ${seconds(attrs.grid_response_off_s)}`;
+          // Collapsed: the important values; expanded: all settings too.
+          const expanded = this._expandedConsumers.has(c.id);
+          const targetType = this._state("target_type", c.device_id)?.state;
+          const progress =
+            c.controllable && targetType && targetType !== "none"
+              ? this._row(t.targetProgress, escapeHtml(this._targetText(attrs, this._state("target_source", c.device_id)?.state)), planned?.entity_id)
+              : "";
+          const details = expanded
+            ? `<dl>
+              ${c.controllable ? this._row(t.responseTime, response, planned?.entity_id) : ""}
+              ${c.controllable ? this._row(t.gridResponseTime, gridResponse, planned?.entity_id) : ""}
+            </dl>${
+              settings.length ? `<div class="settings card-setting">${settings.map((st) => this._control(st)).join("")}</div>` : ""
+            }${capSection}${c.controllable ? this._targetSection(c) : ""}`
+            : "";
+          const toggle = c.controllable
+            ? `<button class="link card-toggle" data-action="toggle-consumer" data-id="${c.id}" aria-expanded="${expanded}">
+                <ha-icon icon="${expanded ? "mdi:chevron-up" : "mdi:chevron-down"}"></ha-icon>${expanded ? t.hideSettings : t.showSettings}</button>`
+            : "";
           return `<section class="card">
             <div class="card-head"><h2>${escapeHtml(c.name)}</h2><div class="chips">${chips}${control ? this._toggle(control, t.controlActive) : ""}</div></div>
             <dl>
               ${this._row(t.measured, escapeHtml(this._format(measured)), c.power_entity)}
               ${planned ? this._row(t.planned, escapeHtml(this._format(planned)), planned.entity_id) : ""}
-              ${c.controllable ? this._row(t.responseTime, response, planned?.entity_id) : ""}
-              ${c.controllable ? this._row(t.gridResponseTime, gridResponse, planned?.entity_id) : ""}
-            </dl>${
-              settings.length ? `<div class="settings card-setting">${settings.map((st) => this._control(st)).join("")}</div>` : ""
-            }${capSection}${c.controllable ? this._targetSection(c, attrs, planned) : ""}</section>`;
+              ${progress}
+            </dl>${details}${toggle}</section>`;
         })
         .join("")
     );
   }
 
-  /** Daily target of a consumer: its settings (only the ones of its kind) and the progress. */
-  _targetSection(c, attrs, planned) {
+  /** Settings of a consumer's daily target (only the ones of its kind). */
+  _targetSection(c) {
     const t = this._t;
     const s = (key) => this._state(key, c.device_id);
     const kind = s("target_type");
@@ -2753,14 +2792,17 @@ class SlemsPanel extends HTMLElement {
         [s("target_max_temperature"), t.targetMax]
       );
     }
+    if (type !== "none" && type !== "temperature") {
+      const earliest = s("target_earliest_enabled");
+      controls.push([earliest, t.targetEarliestOn]);
+      if (earliest?.state === "on") controls.push([s("target_earliest"), t.targetEarliest]);
+    }
     if (type !== "none") controls.push([s("target_deadline"), t.targetDeadline], [s("target_source"), t.targetSource]);
     if (type !== "none" && type !== "temperature") controls.push([s("target_priority"), t.targetPriority]);
-    const progress =
-      type === "none" ? "" : `<dl>${this._row(t.targetProgress, escapeHtml(this._targetText(attrs, s("target_source")?.state)), planned?.entity_id)}</dl>`;
     return `<div class="settings card-setting"><h3 class="card-subheading">${t.targetSection}</h3>${controls
       .filter(([st]) => st)
       .map(([st, label]) => this._control(st, { label }))
-      .join("")}${progress}</div>`;
+      .join("")}</div>`;
   }
 
   /** "2,5 / 4 h · bis 22:00 · erzwungen ab 19:30" or "43 °C · min. 40 °C · Ziel 55 °C". */
@@ -2781,6 +2823,7 @@ class SlemsPanel extends HTMLElement {
     }
     parts.push(t.targetUntil.replace("{time}", clock(attrs.target_deadline)));
     if (mode === "done") parts.push(t.targetDone);
+    else if (mode === "waiting") parts.push(t.targetWaiting.replace("{time}", clock(attrs.target_earliest)));
     else if (mode === "forced") parts.push(t.targetForced);
     else if (source !== "surplus" && attrs.target_latest_start) parts.push(t.targetLatest.replace("{time}", clock(attrs.target_latest_start)));
     if (mode === "boost") parts.push(t.targetBoost);
@@ -2982,6 +3025,18 @@ class SlemsPanel extends HTMLElement {
       this._sections.simcontrols = undefined;
       this._render();
       this._simSchedule();
+      return;
+    }
+    const consumerToggle = event.target.closest("[data-action='toggle-consumer']");
+    if (consumerToggle) {
+      const id = consumerToggle.dataset.id;
+      if (!this._expandedConsumers.delete(id)) this._expandedConsumers.add(id);
+      try {
+        localStorage.setItem(EXPANDED_CONSUMERS_KEY, JSON.stringify([...this._expandedConsumers]));
+      } catch (err) {
+        // Not stored: the choice lasts until the page is reloaded.
+      }
+      this._render();
       return;
     }
     const seriesButton = event.target.closest("[data-action='toggle-series']");
@@ -3248,6 +3303,8 @@ const STYLE = `
   .setting select { font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--divider-color);
     background: var(--card-background-color); color: var(--primary-text-color); max-width: 60%; }
   .card-setting .setting > span:first-child { min-width: 0; }
+  .card-toggle { display: flex; align-items: center; gap: 4px; margin: 8px 0 -6px auto; font-size: 13px; }
+  .card-toggle ha-icon { --mdc-icon-size: 18px; }
   .card-subheading { margin: 0 0 6px; font-size: 14px; font-weight: 500; color: var(--primary-text-color); }
   .card-subheading.disabled { color: var(--secondary-text-color); }
   .setting.disabled > span:first-child { color: var(--secondary-text-color); }

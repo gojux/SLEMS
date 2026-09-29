@@ -270,7 +270,10 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   zwei Fühlern wählt *Fühler* den Mittelwert, Fühler 1 oder Fühler 2, in der
   Reihenfolge der Konfiguration des Verbrauchers).
   Gezählt von Frist (*Bis*, Standard 22:00, auch über Mitternacht) zu Frist
-  und zuerst aus dem Überschuss erfüllt. *Quelle* bestimmt, was den Rest
+  und zuerst aus dem Überschuss erfüllt. *Frühester Beginn* (Laufzeit,
+  Freigabezeit, Energie): Vorher schaltet SLEMS den Verbraucher nicht ein,
+  auch nicht mit Überschuss (z. B. ein Luftentfeuchter erst ab 10:00); die
+  späteste Startzeit liegt nie davor. *Quelle* bestimmt, was den Rest
   rechtzeitig decken darf: *Nur Überschuss* (Standard; das Ziel kann
   verfehlt werden, dann meldet es eine Benachrichtigung), *Überschuss +
   Batterie* (ab der spätesten Startzeit läuft der Verbraucher unabhängig vom
@@ -354,7 +357,10 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
   Status und der Schalter *Aktiviert* jeder Batterie (das Deaktivieren muss
   bestätigt werden), das Zell-Delta mit seinem Status, eine Empfehlung für
   den aktiven Zellausgleich und die Phase eines laufenden Ausgleichs.
-- **Verbraucher**: gemessene und geplante Leistung, gesperrt/gesättigt, die
+- **Verbraucher**: eine Karte je Verbraucher, zugeklappt mit den wichtigen
+  Werten (gemessene und geplante Leistung, Fortschritt des Tagesziels),
+  aufgeklappt über *Einstellungen anzeigen* (der Browser merkt sich die
+  Auswahl). Gemessene und geplante Leistung, gesperrt/gesättigt, die
   gelernten Reaktionszeiten beim Ein- und Ausschalten (eigener Sensor und am
   Zähler; das Einschalten enthält eine Anlaufverzögerung des Geräts, z. B.
   eines Kompressors) und der Schalter

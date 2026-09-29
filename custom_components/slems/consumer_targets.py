@@ -12,6 +12,10 @@ deliver), also the batteries and the grid. From the latest start
 (deadline − remaining time × ``TIME_FACTOR`` − ``START_MARGIN``) on the
 consumer runs regardless of the surplus (*forced*).
 
+An earliest start (runtime, enabled time, energy; optional) restricts the
+period to the time from the last earliest start before the deadline: before
+it SLEMS keeps the consumer off, also with surplus (*waiting*).
+
 The planning (day chart, SoC projection, night discharge) counts the forced
 run as an extra load from the latest start on (``forced_load``): the worst
 case, as if no surplus covered any of the rest; it shrinks as the surplus
@@ -45,6 +49,7 @@ RUNNING_W = 50.0
 
 class TargetMode(StrEnum):
     NONE = "none"
+    WAITING = "waiting"
     DONE = "done"
     SURPLUS = "surplus"
     BOOST = "boost"
@@ -65,6 +70,17 @@ class TargetSettings:
     priority: bool = False
     # Temperature target with two sensors: the mean or one of them.
     sensor: TargetSensor = TargetSensor.MEAN
+    # Not switched on before this time of the period (runtime, enabled time, energy).
+    earliest_enabled: bool = False
+    earliest: time = time(8, 0)
+
+
+def window_start(settings: TargetSettings, end: datetime) -> datetime | None:
+    """Earliest start before the deadline ``end``, None without one."""
+    if not settings.earliest_enabled or settings.type is TargetType.TEMPERATURE:
+        return None
+    start = end.replace(hour=settings.earliest.hour, minute=settings.earliest.minute)
+    return start if start < end else start - timedelta(days=1)
 
 
 def target_temperature(
@@ -253,6 +269,7 @@ def evaluate(
     missing = remaining(settings, progress)
     if missing <= 0:
         return TargetState(TargetMode.DONE, end=end)
+    earliest = window_start(settings, end)
     if settings.type is TargetType.ENERGY:
         energy = missing
         seconds = missing / power_w * 3600 if power_w > 0 else None
@@ -262,6 +279,10 @@ def evaluate(
     latest = (
         end - timedelta(seconds=seconds * TIME_FACTOR) - START_MARGIN if seconds is not None else None
     )
+    if earliest is not None and latest is not None:
+        latest = max(latest, earliest)
+    if earliest is not None and local_now < earliest:
+        return TargetState(TargetMode.WAITING, missing, latest, end)
     if may_force and latest is not None and local_now >= latest:
         return TargetState(TargetMode.FORCED, missing, latest, end)
     if settings.priority and expected_surplus_wh < energy + battery_need_wh:

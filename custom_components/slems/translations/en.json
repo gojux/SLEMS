@@ -532,6 +532,9 @@
       },
       "target_priority": {
         "name": "Daily target before the batteries"
+      },
+      "target_earliest_enabled": {
+        "name": "Daily target earliest start"
       }
     },
     "number": {
@@ -655,6 +658,9 @@
     "time": {
       "target_deadline": {
         "name": "Daily target deadline"
+      },
+      "target_earliest": {
+        "name": "Daily target earliest from"
       }
     }
   },

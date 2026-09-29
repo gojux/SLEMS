@@ -65,6 +65,7 @@ async def async_setup_entry(
                     ConsumerControlSwitch(coordinator, consumer),
                     ConsumerLearningSwitch(coordinator, consumer),
                     ConsumerTargetPrioritySwitch(coordinator, consumer),
+                    ConsumerTargetEarliestSwitch(coordinator, consumer),
                 ],
                 config_subentry_id=consumer.subentry_id,
             )
@@ -328,5 +329,37 @@ class ConsumerTargetPrioritySwitch(SlemsConsumerEntity, SwitchEntity, RestoreEnt
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self._settings.priority = False
+        self.async_write_ha_state()
+        self.coordinator.async_update_listeners()
+
+
+class ConsumerTargetEarliestSwitch(SlemsConsumerEntity, SwitchEntity, RestoreEntity):
+    """Daily target: not switched on before the earliest start (see consumer_targets)."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator: SlemsCoordinator, consumer: ConsumerConfig) -> None:
+        super().__init__(coordinator, consumer, "target_earliest_enabled")
+
+    @property
+    def _settings(self):
+        return self.coordinator.consumer_targets[self.consumer.subentry_id]
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if (last_state := await self.async_get_last_state()) is not None:
+            self._settings.earliest_enabled = last_state.state == STATE_ON
+
+    @property
+    def is_on(self) -> bool:
+        return self._settings.earliest_enabled
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self._settings.earliest_enabled = True
+        self.async_write_ha_state()
+        self.coordinator.async_update_listeners()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self._settings.earliest_enabled = False
         self.async_write_ha_state()
         self.coordinator.async_update_listeners()

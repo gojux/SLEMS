@@ -36,7 +36,7 @@ from .controller import ControlStatus
 from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 from .forecast.accuracy import Accuracy
 from .full_charge import is_due
-from .consumer_targets import target_temperature
+from .consumer_targets import target_temperature, window_start
 from .const import TargetType
 from .grid_friendly import correction_weight
 from .problems import CAP_EXCEEDED_AFTER_S
@@ -857,6 +857,11 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             ),
             "target_done": progress.done_for(settings),
             "target_deadline": progress.end.isoformat() if progress.end else None,
+            "target_earliest": (
+                earliest.isoformat()
+                if progress.end and (earliest := window_start(settings, progress.end))
+                else None
+            ),
             "target_latest_start": (
                 target.latest_start.isoformat() if target and target.latest_start else None
             ),

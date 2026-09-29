@@ -1,4 +1,4 @@
-"""Time platform: deadline of each consumer's daily target (see consumer_targets)."""
+"""Time platform: deadline and earliest start of each consumer's daily target (see consumer_targets)."""
 
 from __future__ import annotations
 
@@ -20,23 +20,29 @@ async def async_setup_entry(
     entry: SlemsConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the deadline of every controllable consumer."""
+    """Set up the deadline and the earliest start of every controllable consumer."""
     coordinator = entry.runtime_data
     for consumer in coordinator.consumers:
         if consumer.controllable:
             async_add_entities(
-                [ConsumerTargetDeadline(coordinator, consumer)],
+                [
+                    ConsumerTargetTime(coordinator, consumer, "target_deadline", "deadline"),
+                    ConsumerTargetTime(coordinator, consumer, "target_earliest", "earliest"),
+                ],
                 config_subentry_id=consumer.subentry_id,
             )
 
 
-class ConsumerTargetDeadline(SlemsConsumerEntity, TimeEntity, RestoreEntity):
-    """End of the daily target's period (local time), restored after a restart."""
+class ConsumerTargetTime(SlemsConsumerEntity, TimeEntity, RestoreEntity):
+    """Deadline or earliest start of the daily target (local time), restored."""
 
     _attr_entity_category = EntityCategory.CONFIG
 
-    def __init__(self, coordinator: SlemsCoordinator, consumer: ConsumerConfig) -> None:
-        super().__init__(coordinator, consumer, "target_deadline")
+    def __init__(
+        self, coordinator: SlemsCoordinator, consumer: ConsumerConfig, key: str, attribute: str
+    ) -> None:
+        super().__init__(coordinator, consumer, key)
+        self._attribute = attribute
 
     @property
     def _settings(self):
@@ -47,15 +53,15 @@ class ConsumerTargetDeadline(SlemsConsumerEntity, TimeEntity, RestoreEntity):
         last_state = await self.async_get_last_state()
         if last_state is not None:
             try:
-                self._settings.deadline = time.fromisoformat(last_state.state)
+                setattr(self._settings, self._attribute, time.fromisoformat(last_state.state))
             except ValueError:
                 pass
 
     @property
     def native_value(self) -> time:
-        return self._settings.deadline
+        return getattr(self._settings, self._attribute)
 
     async def async_set_value(self, value: time) -> None:
-        self._settings.deadline = value.replace(second=0, microsecond=0)
+        setattr(self._settings, self._attribute, value.replace(second=0, microsecond=0))
         self.async_write_ha_state()
         self.coordinator.async_update_listeners()

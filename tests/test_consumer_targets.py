@@ -164,3 +164,33 @@ def test_temperature_of_the_chosen_sensor() -> None:
     assert target_temperature(settings, 51.0, readings) == 42.0
     # Only one sensor configured: the mean is that sensor.
     assert target_temperature(settings, 55.0, (55.0,)) == 55.0
+
+
+
+def test_earliest_start() -> None:
+    settings = TargetSettings(
+        type=TargetType.ENABLED, hours=2.0, deadline=time(22, 0), source=TargetSource.GRID,
+        earliest_enabled=True, earliest=time(10, 0),
+    )
+    progress = TargetProgress(end=local(22))
+    # Before 10:00: off, also with surplus.
+    assert state(settings, progress, local(9)).mode is TargetMode.WAITING
+    assert state(settings, progress, local(11)).mode is TargetMode.SURPLUS
+    # Deadline across midnight: the window starts the evening before.
+    overnight = TargetSettings(
+        type=TargetType.RUNTIME, hours=1.0, deadline=time(6, 0),
+        earliest_enabled=True, earliest=time(20, 0),
+    )
+    night = TargetProgress(end=local(6, day=2))
+    assert state(overnight, night, local(19)).mode is TargetMode.WAITING
+    assert state(overnight, night, local(23)).mode is TargetMode.SURPLUS
+    # The latest start is never before the earliest one.
+    short = TargetSettings(
+        type=TargetType.RUNTIME, hours=10.0, deadline=time(22, 0), source=TargetSource.GRID,
+        earliest_enabled=True, earliest=time(16, 0),
+    )
+    late = state(short, TargetProgress(end=local(22)), local(16, 5))
+    assert late.latest_start == local(16) and late.mode is TargetMode.FORCED
+    # Switched off: no restriction.
+    settings.earliest_enabled = False
+    assert state(settings, progress, local(9)).mode is TargetMode.SURPLUS

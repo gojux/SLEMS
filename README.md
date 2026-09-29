@@ -259,7 +259,10 @@ Every consumer needs its own power **and** energy sensor.
   *Sensor* chooses the mean, sensor 1 or sensor 2, in the order of the
   consumer's configuration). Counted from one
   deadline (*Until*, default 22:00, also across midnight) to the next and met
-  from the surplus first. *Source* decides what may cover the rest in time:
+  from the surplus first. *Earliest start* (runtime, enabled time, energy):
+  before this time SLEMS does not switch the consumer on, not even with
+  surplus (e.g. a dehumidifier only from 10:00); the latest start is never
+  before it. *Source* decides what may cover the rest in time:
   *surplus only* (default; the target may be missed, then a notification
   says so), *surplus + batteries* (from the latest start on the consumer runs
   regardless of the surplus as long as the batteries can deliver, a power
@@ -337,7 +340,10 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   the *Enabled* switch of every battery (disabling asks for confirmation),
   the cell delta with its balance status, a recommendation for active cell
   balancing and the phase of a running one.
-- **Consumers**: measured and planned power, blocked/saturated state, the
+- **Consumers**: one card per consumer, collapsed to the important values
+  (measured and planned power, progress of the daily target) and expanded
+  with *Show settings* (the browser keeps the choice). Measured and planned
+  power, blocked/saturated state, the
   learned response times for switching on and off (own sensor and at the
   meter; switching on includes a start delay of the device, e.g. a
   compressor) and the *Control active* switch.

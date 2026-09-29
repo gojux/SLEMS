@@ -603,7 +603,11 @@ boiler) never costs battery space.
 Daily targets (`consumer_targets.py`, pure): `TargetSettings` per consumer
 (entities on its card: selects `target_type`, `target_source`, numbers
 `target_hours`, `target_energy`, `target_min_temperature`,
-`target_max_temperature` (only with temperature sensors), select
+`target_max_temperature` (only with temperature sensors), switch
+`target_earliest_enabled` and time `target_earliest` (earliest start,
+`window_start`: the last one before the deadline; mode *waiting* keeps the
+consumer off, the latest start is never before it; not for temperatures),
+select
 `target_sensor` (only with two sensors: `TargetSensor` mean / first /
 second, `target_temperature`; the latest start still uses the energy per
 kelvin learned for the mean, for a single sensor an approximation), switch
@@ -752,6 +756,9 @@ field of the consumer subentry, default on). The panel is removed on unload and 
   `hass` updates. When a section is replaced, the focused control is found
   again by its data attributes (`focusSelector`) and focused, with a value
   being typed kept. Events are delegated on the content element.
+- Consumer cards are collapsed to measured / planned power and the target
+  progress; *Show settings* expands the rest (`_expandedConsumers`,
+  localStorage `slems-expanded-consumers`).
 - Keyboard: the battery ⋮ menu moves the focus to its first item when opened,
   arrows move between the items, Escape closes it and returns to its button.
   Every input, switch and select carries an `aria-label` with its name.

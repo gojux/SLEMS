@@ -1807,9 +1807,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             min_power_w=consumer.min_power_w or 0,
             max_power_w=consumer.max_power_w or 0,
             must_stay_on=must_stay_on,
-            # A met target switches it off (after its minimum runtime).
+            # A met target or one before its earliest start keeps it off
+            # (after its minimum runtime).
             must_stay_off=self._runtime.must_stay_off(consumer, now)
-            or (mode is TargetMode.DONE and not must_stay_on),
+            or (mode in (TargetMode.DONE, TargetMode.WAITING) and not must_stay_on),
             cap_mode=self.cap_mode(consumer.subentry_id),
             boost=mode is TargetMode.BOOST,
             forced=mode is TargetMode.FORCED,
