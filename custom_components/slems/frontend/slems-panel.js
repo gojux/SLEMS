@@ -2928,7 +2928,8 @@ const STYLE = `
   @media (max-width: 500px) {
     .sim-metrics th, .sim-metrics td { padding: 4px; font-size: 12px; white-space: normal; }
   }
-  @media (max-width: 900px) { .sim-layout { grid-template-columns: 1fr; } }
+  /* One column: the inputs first, chart and key figures below. */
+  @media (max-width: 900px) { .sim-layout { grid-template-columns: 1fr; } .sim-side { order: -1; } }
   .card-setting { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--divider-color); }
   .tile .label { font-size: 12px; }
   .menu-wrap { position: relative; }

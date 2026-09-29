@@ -743,7 +743,8 @@ entities. The panel is removed on unload and re-registered on every setup.
   light backgrounds); active tabs and segments are also underlined.
 - Phones (≤ 600 px): the tab row scrolls sideways instead of wrapping; on a
   tab change only the row scrolls to the active tab. Flow box titles take up
-  to two lines.
+  to two lines. The simulation shows its inputs above chart and key figures
+  in one column (≤ 900 px).
 - Forecast accuracy: accuracy and the expected deviation of tomorrow only
   from `MIN_ACCURACY_DAYS` (7) compared days, before that *collecting data*.
 - Strings: English and German inside the file (`STRINGS`), picked from the HA
