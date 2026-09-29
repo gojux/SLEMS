@@ -827,9 +827,10 @@ als Attribute) und *Einspeisebegrenzung: vor der Spitze einzuspeisen*.
 
 ### Gelernte Werte
 
-Jeder dieser Werte hat einen Schalter *… automatisch* (bzw. *… lernen*). Aus
-gilt dein eingestellter Wert; an verwendet SLEMS den gelernten, sobald genug
-Daten vorliegen, bis dahin weiter deinen. Die Einstellungen zeigen den
+Jeder dieser Werte hat einen Schalter *… automatisch* (bzw. *Gelernte …
+verwenden*). SLEMS lernt immer, unabhängig vom Schalter; er entscheidet nur,
+was verwendet wird. Aus gilt dein eingestellter Wert; an verwendet SLEMS den
+gelernten, sobald genug Daten vorliegen, bis dahin weiter deinen. Die Einstellungen zeigen den
 gelernten Wert (*gelernt*) oder den Hinweis, dass noch Daten fehlen; der
 Diagnose-Sensor *Gelernte Werte in Verwendung* enthält alle gelernten Werte als
 Attribute.
@@ -840,9 +841,9 @@ Attribute.
 | Sicherheitspuffer gesicherte Ladung (auch Ziel der Nachtentladung) | dasselbe für die PV plus zu niedrige Verbrauchsprognose (Rückrechnung), angewendet auf den restlichen Tag bzw. die nächsten 24 Stunden | 14 PV-Tage, 7 Verbrauchstage |
 | Ziel-Netzüberschuss beim Laden und Entladen | wie weit die Netzleistung Richtung Bezug schwankt, während die Batterien regeln; das Ziel hält das Netz 90 % der Zeit auf der Einspeiseseite (20–1000 W) | etwas Regelbetrieb im Modus *Aktiv* |
 | Regelintervall und Mittelungsfenster | dem gelernten Meldeintervall des Smart Meters (0,8 × und 3 ×) | einige Meldungen des Zählers |
-| Nutzbare Kapazität (je Batterie, *Kapazität lernen*) | Lade- und Entladevorgängen über mindestens 20 % Ladezustand: DC-Energie / Änderung des Ladezustands (Vorgänge mit einem Sprung des Ladezustands werden verworfen), Median der letzten zehn | drei Vorgänge |
+| Nutzbare Kapazität (je Batterie, *Gelernte Kapazität verwenden*) | Lade- und Entladevorgängen über mindestens 20 % Ladezustand: DC-Energie / Änderung des Ladezustands (Vorgänge mit einem Sprung des Ladezustands werden verworfen), Median der letzten zehn | drei Vorgänge |
 | Reserve Nachtentladung (*Deckung der Reserve Nachtentladung* bestimmt, wie vorsichtig; nur sichtbar, solange die Reserve automatisch ist) | der Morgenlücke: Energie, die das Haus zwischen der geplanten Übernahme durch die PV (Ende der Nachtentladung) und der tatsächlichen (PV deckt den Verbrauch 15 Minuten lang) aus Batterie oder Netz brauchte, in % des prognostizierten Tagesverbrauchs; die Reserve deckt den gewählten Anteil der Morgen (90 % = 9 von 10), über 100 % die größte Lücke mal dem Wert (110 % = 10 % mehr als der schlechteste Morgen) | 14 gemessene Morgen (gemessen wird auch bei ausgeschalteter Nachtentladung) |
-| Leistung und Thermostat eines Verbrauchers (je Verbraucher, *Aus Messwerten lernen*) | der Leistung im eingeschalteten Zustand (Ein/Aus-Verbraucher) und Pausen des eigenen Thermostats trotz Vorgabe (dann wie *Thermostat taktet selbst*) | 30 Messwerte, zwei Pausen |
+| Leistung und Thermostat eines Verbrauchers (je Verbraucher, *Gelernte Werte verwenden*) | der Leistung im eingeschalteten Zustand (Ein/Aus-Verbraucher) und Pausen des eigenen Thermostats trotz Vorgabe (dann wie *Thermostat taktet selbst*) | 30 Messwerte, zwei Pausen |
 
 ### Weitere Einstellungen (Entities)
 

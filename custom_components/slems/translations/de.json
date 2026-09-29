@@ -490,10 +490,10 @@
         "name": "Regelzeiten automatisch"
       },
       "learn_capacity": {
-        "name": "Kapazität lernen"
+        "name": "Gelernte Kapazität verwenden"
       },
       "consumer_learning": {
-        "name": "Aus Messwerten lernen"
+        "name": "Gelernte Werte verwenden"
       },
       "night_reserve_auto": {
         "name": "Reserve Nachtentladung automatisch"

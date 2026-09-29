@@ -787,9 +787,10 @@ peaks, the space needed, the export plan and the buffer as attributes) and
 
 ### Learned values
 
-Each of these values has a switch *… automatic* (or *Learn …*). Off, the value
-you set applies; on, SLEMS uses the learned value as soon as there is enough
-data, until then still yours. The settings show the learned value (*learned*)
+Each of these values has a switch *… automatic* (or *Use learned …*). SLEMS
+always learns, whatever the switch; it only decides what is used. Off, the
+value you set applies; on, SLEMS uses the learned value as soon as there is
+enough data, until then still yours. The settings show the learned value (*learned*)
 or the note that there is not enough data yet; the diagnostic sensor *Learned
 values in use* has all learned values as attributes.
 
@@ -799,9 +800,9 @@ values in use* has all learned values as attributes.
 | Charge secured safety buffer (also the night discharge target) | the same for the PV plus the consumption forecast being too low (backtest), applied to the rest of the day or the next 24 hours | 14 PV days, 7 consumption days |
 | Grid surplus targets while charging and discharging | how far the grid power swings towards import while the batteries control it; the target keeps the grid on the export side 90 % of the time (20–1000 W) | some controlling in operating mode *active* |
 | Control interval and surplus averaging window | the learned report interval of the smart meter (0.8 × and 3 ×) | a few meter reports |
-| Usable capacity (per battery, *Learn capacity*) | charge and discharge legs over at least 20 % state of charge: DC energy / change of the state of charge (legs with a jump of the state of charge are discarded), median of the last ten | three legs |
+| Usable capacity (per battery, *Use learned capacity*) | charge and discharge legs over at least 20 % state of charge: DC energy / change of the state of charge (legs with a jump of the state of charge are discarded), median of the last ten | three legs |
 | Night discharge reserve (*Night discharge reserve coverage* sets how cautious; shown only while the reserve is automatic) | the morning gap: energy the house needed from battery or grid between the planned takeover of PV (end of the night discharge) and the real one (PV covering the consumption for 15 minutes), in % of the day's forecast consumption; the reserve covers the chosen share of the mornings (90 % = 9 of 10), above 100 % the largest gap times the value (110 % = 10 % more than the worst morning) | 14 measured mornings (also measured while the night discharge is off) |
-| Power and thermostat of a consumer (per consumer, *Learn from measurements*) | the power while switched on (on/off consumers) and pauses of its own thermostat while it is commanded (then treated like *thermostat cycles by itself*) | 30 samples, two pauses |
+| Power and thermostat of a consumer (per consumer, *Use learned values*) | the power while switched on (on/off consumers) and pauses of its own thermostat while it is commanded (then treated like *thermostat cycles by itself*) | 30 samples, two pauses |
 
 ### Further settings (entities)
 

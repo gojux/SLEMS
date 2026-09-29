@@ -265,9 +265,9 @@ const STRINGS = {
       timing_auto:
         "Derives the control interval (0.8 × the report interval of the smart meter) and the averaging window (3 × the report interval) from the learned smart meter interval.",
       learn_capacity:
-        "Learns the usable capacity from charge and discharge legs of at least 20 % state of charge (DC energy / change of the state of charge; legs with a jump of the state of charge are discarded). Used for planning once three legs were measured.",
+        "SLEMS always learns the usable capacity from charge and discharge legs of at least 20 % state of charge (DC energy / change of the state of charge; legs with a jump of the state of charge are discarded). On: the learned capacity is used for planning once three legs were measured. Off: the configured capacity applies.",
       consumer_learning:
-        "Uses the measured power while on (for on/off consumers) instead of the configured one, and recognises when the own thermostat switches the consumer off while it is commanded (then treated like \"thermostat cycles by itself\").",
+        "SLEMS always learns along in operating mode active: the power while on and whether the own thermostat switches the consumer off while it is commanded. On: it plans with the measured power (on/off consumers) and treats a consumer whose thermostat cycles like \"thermostat cycles by itself\". Off: the configured values apply.",
       feed_in_cap:
         "Keeps the export at the grid connection point below PV peak power × limit. From the PV and consumption forecasts SLEMS plans how much energy above the limit the batteries must absorb, keeps that space free (night discharge, otherwise feeding in battery energy before the peak, as late as possible and never above the limit) and warns if it does not work out. Takes precedence over grid friendly charging, night discharge and battery priority.",
       pv_peak_power: "Peak power of the PV system the limit refers to.",
@@ -555,9 +555,9 @@ const STRINGS = {
       timing_auto:
         "Leitet Regelintervall (0,8 × Meldeintervall des Smart Meters) und Mittelungsfenster (3 × Meldeintervall) aus dem gelernten Meldeintervall ab.",
       learn_capacity:
-        "Lernt die nutzbare Kapazität aus Lade- und Entladevorgängen über mindestens 20 % Ladezustand (DC-Energie / Änderung des Ladezustands; Vorgänge mit einem Sprung des Ladezustands werden verworfen). Wird zur Planung verwendet, sobald drei Vorgänge gemessen sind.",
+        "SLEMS lernt die nutzbare Kapazität immer aus Lade- und Entladevorgängen über mindestens 20 % Ladezustand (DC-Energie / Änderung des Ladezustands; Vorgänge mit einem Sprung des Ladezustands werden verworfen). Ein: Die gelernte Kapazität wird zur Planung verwendet, sobald drei Vorgänge gemessen sind. Aus: Es gilt die eingestellte Kapazität.",
       consumer_learning:
-        "Verwendet die gemessene Leistung im eingeschalteten Zustand (bei Ein/Aus-Verbrauchern) statt der eingestellten und erkennt, wenn der eigene Thermostat den Verbraucher trotz Vorgabe abschaltet (dann wie „Thermostat taktet selbst“).",
+        "SLEMS lernt im Betriebsmodus Aktiv immer mit: die Leistung im eingeschalteten Zustand und ob der eigene Thermostat den Verbraucher trotz Vorgabe abschaltet. Ein: Es plant mit der gemessenen Leistung (bei Ein/Aus-Verbrauchern) und behandelt einen selbst taktenden Thermostat wie „Thermostat taktet selbst“. Aus: Es gelten die eingestellten Werte.",
       feed_in_cap:
         "Hält die Einspeisung am Netzanschlusspunkt unter PV-Leistung × Grenze. Aus PV- und Verbrauchsprognose plant SLEMS, wie viel Energie über der Grenze die Batterien aufnehmen müssen, hält dafür Platz frei (Nachtentladung, sonst Einspeisen von Batterieenergie vor der Spitze, möglichst spät und nie über der Grenze) und warnt, wenn es sich nicht ausgeht. Hat Vorrang vor netzdienlichem Laden, Nachtentladung und Batterievorrang.",
       pv_peak_power: "Spitzenleistung der PV-Anlage, auf die sich die Grenze bezieht.",
