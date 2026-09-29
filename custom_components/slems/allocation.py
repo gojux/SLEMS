@@ -91,6 +91,9 @@ class BatteryGroup:
     # SoC window of the batteries (capacity weighted): "full" is the maximum SoC.
     min_soc_pct: float = 0.0
     full_soc_pct: float = 100.0
+    # Every battery full on its own (see ``battery_full``); None: judged by the
+    # mean SoC. The mean hides one battery below full behind full ones.
+    all_full: bool | None = None
 
     @property
     def energy_to_full_wh(self) -> float:
@@ -100,7 +103,14 @@ class BatteryGroup:
 
     @property
     def is_full(self) -> bool:
-        return self.soc_pct >= min(FULL_SOC_PCT, self.full_soc_pct - (100.0 - FULL_SOC_PCT))
+        if self.all_full is not None:
+            return self.all_full
+        return battery_full(self.soc_pct, self.full_soc_pct)
+
+
+def battery_full(soc_pct: float, full_soc_pct: float) -> bool:
+    """Whether a battery (or the group) with this SoC and maximum SoC is full."""
+    return soc_pct >= min(FULL_SOC_PCT, full_soc_pct - (100.0 - FULL_SOC_PCT))
 
 
 @dataclass(frozen=True)

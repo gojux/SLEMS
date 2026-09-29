@@ -26,7 +26,8 @@ Safety:
   ``SATURATION_HOLD_S`` and planned like an uncontrolled load meanwhile.
   A consumer whose thermostat cycles by itself (option) is never saturated:
   it keeps its command and is only *resting* while it draws nothing; the
-  batteries get its unused power meanwhile.
+  batteries get its unused power meanwhile. The controller counts a resting
+  consumer at its command, so its restart is no surprise.
 """
 
 from __future__ import annotations
@@ -178,6 +179,10 @@ class RealTimeController:
         if command is None:
             return measured_w or 0.0
         target, since = command
+        if subentry_id in self._resting:
+            # Its own sensor shows a restart only seconds after the grid meter;
+            # counted at its command, the restart is no new house load.
+            measured_w = target
         before = self._consumer_before.get(subentry_id)
         on = target > (before or 0.0)
         sensor = self.consumer_response.get(subentry_id)

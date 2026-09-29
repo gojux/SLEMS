@@ -14,6 +14,7 @@ from custom_components.slems.allocation import (
     ConsumerRequest,
     Strategy,
     allocate,
+    battery_full,
     expected_surplus_wh,
     limit_discharge_export,
     max_discharge_export_w,
@@ -47,6 +48,18 @@ def battery(soc: float) -> BatteryGroup:
         soc_pct=soc, capacity_wh=10000, max_charge_w=5000, max_discharge_w=5000,
         charge_efficiency=0.95,
     )
+
+
+def test_group_is_full_only_when_every_battery_is() -> None:
+    # Mean SoC 99.5 %, but one battery at 98.5 % still charges.
+    group = replace(battery(99.5), max_charge_w=2500, all_full=False)
+    assert not group.is_full
+    result = allocate(4000, group, [ROD], SETTINGS, expected_surplus_wh=50000)
+    assert result.battery_power_w > 0
+    assert replace(battery(99.0), all_full=True).is_full
+    assert battery_full(99.5, 100.0)
+    assert not battery_full(98.5, 100.0)
+    assert battery_full(89.5, 90.0)
 
 
 def test_battery_has_priority_below_soc_threshold() -> None:

@@ -258,8 +258,11 @@ sends commands.
   (10–60 s) →
   `RealTimeController.resting`; the consumer stays in the allocation and keeps
   its command, `plan` adds its unused power (allocated − measured) to the
-  battery power (up to the maximum charge power). Ends with the first sample
-  with power. A water heater as block entity blocks in operation mode `off`;
+  battery power (up to the maximum charge power). In the controller cycle a
+  resting consumer counts at its command (`consumer_power_seen`), because its
+  own sensor shows a restart seconds after the grid meter; the command is
+  taken off the battery power again, since it is not in the grid power. Ends
+  with the first sample with power. A water heater as block entity blocks in operation mode `off`;
   its temperatures are not used (e.g. my-PV measures at the element and
   cycles).
 - **Grid meter stale** (no report within max(60 s, 10 × meter interval),
@@ -285,6 +288,8 @@ replace the capabilities in `BatteryUnit` (distribution) and `BatteryGroup`
 (allocation). `BatteryGroup` carries the capacity weighted `min_soc_pct` and
 `full_soc_pct`: `energy_to_full_wh` and `is_full` use the maximum SoC, the
 night discharge target (`min_wh`) and the SoC projection the minimum.
+The group is full only when every battery is (`all_full`, `battery_full`),
+and a full battery adds nothing to `max_charge_w`.
 Balancing runs use `power_limits(..., use_soc_window=False)`. Read-only
 batteries ignore the SoC window. Settings: per battery `BatteryNumber`
 (RestoreNumber; a power limit at the capability is stored as `None`),
@@ -1374,3 +1379,5 @@ repository (otherwise its *brands* check fails).
 | 2026-09-29 | A full charge also when the BMS ends the charge near the top (commanded ≥ 100 W, nothing taken for 2 min from 98 % / 3.45 V): a battery the BMS stops at 99 % would otherwise stay due for its full charge forever. The top is left only below 3.40 V. |
 | 2026-09-29 | The learned power of a power controlled consumer is its highest power, sampled only while commanded at ≥ 90 % of its maximum power (the median of throttled set points said nothing); with learning on it caps the maximum power, so no power is planned that the device does not take. The thermostat pauses are not part of it; the mean power while cycling is the storage's own learned value. |
 | 2026-09-29 | A temperature target applies to the calendar day: from midnight to the deadline, then the consumer waits (off, also with surplus) until midnight; temperatures in that time count for no day. Otherwise a storage that reached its target before the deadline heated again right after it, when the next period began. |
+| 2026-09-29 | The battery group is full only when every battery is full, and full batteries add no charge power: with the mean SoC one battery at 98.4 % among full ones switched the group between full and not full with each SoC step, and the heating rod between its allocation and a quarter of it. |
+| 2026-09-29 | A resting consumer (thermostat pause) counts at its command in the controller cycle: its restart appeared at the grid meter up to 5 s before its own sensor, as new house load, and SLEMS cut it back to almost nothing. |

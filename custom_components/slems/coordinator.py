@@ -29,6 +29,7 @@ from .allocation import (
     ConsumerRequest,
     Strategy,
     allocate,
+    battery_full,
     expected_surplus_wh,
     limit_discharge_export,
     max_discharge_export_w,
@@ -1264,6 +1265,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     def _battery_group(self, snapshot: SystemSnapshot) -> BatteryGroup | None:
         energy = capacity = max_charge = max_discharge = weighted_eff = 0.0
         min_soc = full_soc = 0.0
+        all_full = True
         for battery in self.batteries:
             telemetry = snapshot.batteries.get(battery.subentry_id)
             if not battery.plannable or telemetry is None or telemetry.soc_pct is None:
@@ -1272,16 +1274,20 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             limits = battery.power_limits or self._power_limits(battery, telemetry)
             energy += telemetry.soc_pct * battery.capacity_wh
             capacity += battery.capacity_wh
-            max_charge += limits.charge_w
             max_discharge += limits.discharge_w
             weighted_eff += battery.efficiency.one_way * battery.capacity_wh
             if caps.controllable:
                 min_soc += battery.limits.min_soc_pct * battery.capacity_wh
                 # Due for its full charge: may charge above its maximum SoC.
                 maximum = 100.0 if battery.subentry_id == self.full_charge_battery else battery.limits.max_soc_pct
-                full_soc += maximum * battery.capacity_wh
             else:
-                full_soc += 100.0 * battery.capacity_wh
+                maximum = 100.0
+            full_soc += maximum * battery.capacity_wh
+            # A full battery takes nothing, whatever its power limit says.
+            if battery_full(telemetry.soc_pct, maximum):
+                continue
+            all_full = False
+            max_charge += limits.charge_w
         if not capacity:
             return None
         return BatteryGroup(
@@ -1292,6 +1298,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             charge_efficiency=weighted_eff / capacity,
             min_soc_pct=min_soc / capacity,
             full_soc_pct=full_soc / capacity,
+            all_full=all_full,
         )
 
     def plan(
@@ -1311,14 +1318,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if snapshot.grid_power_filtered_w is None:
             return
         controlled_w = measured_controlled_w = snapshot.controlled_consumer_power_w()
+        seen_w: dict[str, float] = {}
         if previous_total_w is not None:
             # Controller cycle: the consumers as the grid meter shows them, like
             # the batteries (commands still on their way count as not yet done).
-            controlled_w = sum(
-                self.controller.consumer_power_seen(subentry_id, state.power_w, now)
+            seen_w = {
+                subentry_id: self.controller.consumer_power_seen(subentry_id, state.power_w, now)
                 for subentry_id, state in snapshot.consumers.items()
                 if snapshot.is_controllable_now(subentry_id)
-            )
+            }
+            controlled_w = sum(seen_w.values())
         enabled_battery_w = sum(
             power
             for battery in self.batteries
@@ -1435,17 +1444,22 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             snapshot.feed_in_limit_w,
             cap_control,
         )
-        unused_w = sum(
-            max(0.0, power - (snapshot.consumers[subentry_id].power_w or 0.0))
-            for subentry_id, power in allocation.consumer_power_w.items()
-            if subentry_id in snapshot.resting
-        )
-        if unused_w and battery is not None:
+        # Resting consumers draw nothing: the batteries take their allocation.
+        # Counted at their command (controller cycle), that command is not in
+        # the grid power and comes off again.
+        unused_w = 0.0
+        for subentry_id, power in allocation.consumer_power_w.items():
+            if subentry_id in snapshot.resting:
+                measured = snapshot.consumers[subentry_id].power_w or 0.0
+                unused_w += max(0.0, power - measured) - (seen_w.get(subentry_id, measured) - measured)
+        if unused_w > 0 and battery is not None:
             max_charge = 0.0 if battery.is_full else battery.max_charge_w
             allocation.battery_power_w = max(
                 allocation.battery_power_w,
                 min(max_charge, allocation.battery_power_w + unused_w),
             )
+        elif unused_w < 0:
+            allocation.battery_power_w += unused_w
         if previous_total_w is not None:
             allocation.battery_power_w = previous_total_w + gain * (
                 allocation.battery_power_w - previous_total_w

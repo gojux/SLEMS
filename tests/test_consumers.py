@@ -67,6 +67,21 @@ def test_resting_instead_of_saturation() -> None:
     assert "rod" not in controller.resting
 
 
+def test_resting_consumer_is_seen_at_its_command() -> None:
+    controller = RealTimeController.__new__(RealTimeController)
+    controller._consumer_commands = {"rod": (2000.0, 0.0)}
+    controller._consumer_before = {"rod": 2000.0}
+    controller._resting = set()
+    controller.consumer_response = {}
+    controller.consumer_grid_response = {}
+    controller.battery_response = SimpleNamespace(value=5.0)
+    assert controller.consumer_power_seen("rod", 0.0, 200.0) == 0.0
+    # Resting: a restart the grid meter shows before the rod's own sensor
+    # is no new house load.
+    controller._resting = {"rod"}
+    assert controller.consumer_power_seen("rod", 0.0, 200.0) == 2000.0
+
+
 def test_command_kept_for_the_learners_while_saturated() -> None:
     controller = RealTimeController.__new__(RealTimeController)
     controller._consumer_commands = {"rod": (2000.0, 0.0)}
