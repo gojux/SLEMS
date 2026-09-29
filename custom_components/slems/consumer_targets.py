@@ -14,7 +14,9 @@ consumer runs regardless of the surplus (*forced*).
 
 An earliest start (runtime, enabled time, energy; optional) restricts the
 period to the time from the last earliest start before the deadline: before
-it SLEMS keeps the consumer off, also with surplus (*waiting*).
+it SLEMS keeps the consumer off, also with surplus (*waiting*). A temperature
+target always starts at midnight: after its deadline the consumer waits for
+the next day.
 
 The planning (day chart, SoC projection, night discharge) counts the forced
 run as an extra load from the latest start on (``forced_load``): the worst
@@ -25,7 +27,7 @@ does.
 enabled time and energy only with its priority option and when the forecast
 surplus until the deadline is short for the rest of the target plus filling
 the batteries. Below the minimum temperature always. From the target
-temperature on the consumer is off until the next period (*done*).
+temperature on the consumer is off for the rest of the day (*done*).
 """
 
 from __future__ import annotations
@@ -76,8 +78,15 @@ class TargetSettings:
 
 
 def window_start(settings: TargetSettings, end: datetime) -> datetime | None:
-    """Earliest start before the deadline ``end``, None without one."""
-    if not settings.earliest_enabled or settings.type is TargetType.TEMPERATURE:
+    """Earliest start before the deadline ``end``, None without one.
+
+    A temperature target applies to the calendar day: from midnight to the
+    deadline, off after the deadline until midnight.
+    """
+    if settings.type is TargetType.TEMPERATURE:
+        start = end.replace(hour=0, minute=0, second=0, microsecond=0)
+        return start if start < end else start - timedelta(days=1)
+    if not settings.earliest_enabled:
         return None
     start = end.replace(hour=settings.earliest.hour, minute=settings.earliest.minute)
     return start if start < end else start - timedelta(days=1)
@@ -251,6 +260,9 @@ def evaluate(
     )
 
     if settings.type is TargetType.TEMPERATURE:
+        earliest = window_start(settings, end)
+        if earliest is not None and local_now < earliest:
+            return TargetState(TargetMode.WAITING, end=end)
         if temperature_c is None:
             return TargetState(TargetMode.SURPLUS, end=end)
         if progress.done_for(settings) or temperature_c >= settings.target_temp_c:

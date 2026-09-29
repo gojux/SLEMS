@@ -127,6 +127,23 @@ def test_temperature_target() -> None:
     assert state(settings, progress, local(12), temperature_c=50).mode is TargetMode.DONE
 
 
+def test_temperature_target_waits_after_the_deadline_until_midnight() -> None:
+    settings = TargetSettings(
+        type=TargetType.TEMPERATURE, min_temp_c=40, target_temp_c=55,
+        deadline=time(16, 0), source=TargetSource.GRID,
+    )
+    # After 16:00 the period runs until 16:00 tomorrow, but starts at midnight.
+    progress = TargetProgress(end=local(16, day=2))
+    evening = state(settings, progress, local(17), temperature_c=30)
+    assert evening.mode is TargetMode.WAITING
+    assert state(settings, progress, local(1, day=2), temperature_c=30).mode is TargetMode.BOOST
+    assert state(settings, progress, local(1, day=2), temperature_c=45).mode is TargetMode.SURPLUS
+    # Deadline at midnight: the whole day.
+    settings.deadline = time(0, 0)
+    whole_day = TargetProgress(end=local(0, day=2))
+    assert state(settings, whole_day, local(23), temperature_c=45).mode is TargetMode.SURPLUS
+
+
 
 def test_forced_load_for_the_planning() -> None:
     settings = TargetSettings(type=TargetType.RUNTIME, hours=2.0, source=TargetSource.BATTERY)

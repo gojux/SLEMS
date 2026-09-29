@@ -135,6 +135,7 @@ from .consumer_targets import (
     evaluate,
     forced_load,
     target_temperature,
+    window_start,
 )
 from .night_discharge import NightDischargePlan, plan_night_discharge, pv_takeover
 from .peak_shaving import auto_limit, hours_until_refill
@@ -1856,9 +1857,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         goal, unit = self.target_goal(settings)
         got = self.target_got(settings, progress)
         end = progress.end
-        result = progress.update(now, dt_util.now(), settings, state.power_w, commanded_on)
+        local_now = dt_util.now()
+        result = progress.update(now, local_now, settings, state.power_w, commanded_on)
         temperature = target_temperature(settings, state.temperature_c, state.temperatures_c)
-        if settings.type is TargetType.TEMPERATURE and temperature is not None:
+        start = window_start(settings, progress.end) if progress.end is not None else None
+        # Temperatures between the deadline and midnight belong to no day.
+        if (
+            settings.type is TargetType.TEMPERATURE
+            and temperature is not None
+            and (start is None or local_now >= start)
+        ):
             if temperature >= settings.min_temp_c:
                 progress.min_reached = True
             if temperature >= settings.target_temp_c:

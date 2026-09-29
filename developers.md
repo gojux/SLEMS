@@ -609,7 +609,9 @@ Daily targets (`consumer_targets.py`, pure): `TargetSettings` per consumer
 `target_max_temperature` (only with temperature sensors), switch
 `target_earliest_enabled` and time `target_earliest` (earliest start,
 `window_start`: the last one before the deadline; mode *waiting* keeps the
-consumer off, the latest start is never before it; not for temperatures),
+consumer off, the latest start is never before it; a temperature target
+always has midnight as its window start, so it waits from the deadline until
+midnight, and `_count_target` ignores its temperatures in that time),
 select
 `target_sensor` (only with two sensors: `TargetSensor` mean / first /
 second, `target_temperature`; the latest start uses the energy per kelvin
@@ -1371,3 +1373,4 @@ repository (otherwise its *brands* check fails).
 | 2026-09-29 | Energy per kelvin learned per temperature sensor too, so a temperature target of one sensor estimates its latest start with that sensor's value (the mean's until learned). |
 | 2026-09-29 | A full charge also when the BMS ends the charge near the top (commanded ≥ 100 W, nothing taken for 2 min from 98 % / 3.45 V): a battery the BMS stops at 99 % would otherwise stay due for its full charge forever. The top is left only below 3.40 V. |
 | 2026-09-29 | The learned power of a power controlled consumer is its highest power, sampled only while commanded at ≥ 90 % of its maximum power (the median of throttled set points said nothing); with learning on it caps the maximum power, so no power is planned that the device does not take. The thermostat pauses are not part of it; the mean power while cycling is the storage's own learned value. |
+| 2026-09-29 | A temperature target applies to the calendar day: from midnight to the deadline, then the consumer waits (off, also with surplus) until midnight; temperatures in that time count for no day. Otherwise a storage that reached its target before the deadline heated again right after it, when the next period began. |

@@ -289,8 +289,10 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   Unter der Mindesttemperatur bekommt er den Überschuss immer vor den
   Batterien (ab der spätesten Startzeit erzwungen, geschätzt mit der
   gelernten Energie pro Grad, sonst 2 Stunden vor der Frist); ab der
-  Zieltemperatur ist er bis zur nächsten Periode aus; wird später in der
-  Periode eine höhere Zieltemperatur eingestellt, heizt er weiter. Die Karte
+  Zieltemperatur ist er für den Rest des Tages aus; wird später am Tag eine
+  höhere Zieltemperatur eingestellt, heizt er weiter. Ein Temperaturziel
+  gilt für den Kalendertag: Nach der Frist bleibt der Verbraucher bis
+  Mitternacht aus (*wartet bis 00:00*), auch mit Überschuss. Die Karte
   zeigt den Fortschritt, z. B. *1,5 / 4 h · bis 22:00 · erzwungen ab 19:30*,
   und die Chips *Vorrang* oder *erzwungen*, solange sie gelten. Mit einer
   Quelle über den Überschuss hinaus rechnet die Planung den erzwungenen Lauf
