@@ -197,9 +197,6 @@ const STRINGS = {
       discharge_not_delivered: "no discharging",
       write_failed: "command not confirmed",
     },
-    allowedCharge: "Charging limited",
-    allowedDischarge: "Discharging limited",
-    limitReasons: { soc: "state of charge limit", power: "power limit", temperature: "temperature", top: "top of the charge" },
     batteryLimits: "Limits: {name}",
     feedInLimitReasons: {
       disabled: "off",
@@ -533,9 +530,6 @@ const STRINGS = {
       discharge_not_delivered: "entlädt nicht",
       write_failed: "Befehl nicht bestätigt",
     },
-    allowedCharge: "Laden begrenzt",
-    allowedDischarge: "Entladen begrenzt",
-    limitReasons: { soc: "Ladezustandsgrenze", power: "Leistungsgrenze", temperature: "Temperatur", top: "oberer Ladebereich" },
     batteryLimits: "Grenzen: {name}",
     feedInLimitReasons: {
       disabled: "aus",
@@ -2599,11 +2593,6 @@ class SlemsPanel extends HTMLElement {
           const soc = this._number(s("battery_soc"));
           const enabled = s("battery_enabled");
           const notResponding = s("not_responding");
-          const limited = (key, label) => {
-            const st = s(key);
-            const reason = st?.attributes?.reason;
-            return reason ? [`${label} (${t.limitReasons[reason] || reason})`, st, st.entity_id] : [label, undefined];
-          };
           const direction = (value) => {
             if (value === null || value === undefined) return undefined;
             const text = value > 10 ? t.charging : value < -10 ? t.discharging : t.idle;
@@ -2616,8 +2605,6 @@ class SlemsPanel extends HTMLElement {
             [t.efficiency, s("round_trip_efficiency"), s("round_trip_efficiency")?.entity_id],
             [t.state, s("inverter_state"), s("inverter_state")?.entity_id],
             [t.temperature, s("internal_temperature"), s("internal_temperature")?.entity_id],
-            limited("allowed_charge_power", t.allowedCharge),
-            limited("allowed_discharge_power", t.allowedDischarge),
           ].filter(([, st]) => st);
           let problem = "";
           const pause = s("communication_paused");

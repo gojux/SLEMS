@@ -594,7 +594,7 @@ passiv aus, bevor die höchste Zelle die Ladung beendet; so werden die
 Batterien wirklich voll, mit kleinerem Zell-Delta, und die Zellen sehen
 weniger Spannungsspitze und Wärme. Das betrifft nur das letzte ein bis zwei
 Prozent; der Überschuss geht in der Zeit an die anderen Batterien oder die
-Verbraucher. Angezeigt als Grund *oberer Ladebereich*; Batterien ohne
+Verbraucher. Der Sensor *Erlaubte Ladeleistung* hat den Grund `top`; Batterien ohne
 Zellspannungen werden nicht begrenzt.
 
 Im Betriebsmodus *Aktiv* prüft SLEMS wie Omnibattery, ob jede Batterie die

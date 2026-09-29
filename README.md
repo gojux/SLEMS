@@ -565,7 +565,7 @@ current the BMS balances the cells passively before the highest cell ends
 the charge, so the batteries get really full with a smaller cell delta, and
 the cells see less voltage peak and heat. It only affects the last one or
 two percent; the surplus meanwhile goes to the other batteries or the
-consumers. Shown as reason *top of the charge*; batteries without cell
+consumers. The sensor *Allowed charge power* has the reason `top`; batteries without cell
 voltages are not limited.
 
 In operating mode *active* SLEMS checks, like Omnibattery, whether every
