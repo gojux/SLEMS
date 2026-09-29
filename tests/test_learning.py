@@ -197,6 +197,29 @@ def test_thermal_storage_full_and_throttled() -> None:
     assert throttled.cycling_powers == [] and throttled.full_temps == []
 
 
+def test_consumer_power_only_at_full_command() -> None:
+    # A power controlled heating rod: throttled set points are not its power.
+    learner = ConsumerLearner()
+    t = 0
+    for _ in range(40):
+        learner.update(t, True, 800, full_command=False)
+        t += 5
+    assert learner.nominal_w is None
+    for _ in range(40):
+        learner.update(t, True, 3400, full_command=True)
+        t += 5
+    assert learner.nominal_w == 3400
+
+
+def test_consumer_powers_without_marker_dropped_when_power_controlled() -> None:
+    stored = {"powers": [800.0] * 40, "cycles": 3}
+    assert ConsumerLearner.from_dict(stored, power_controlled=True).nominal_w is None
+    assert ConsumerLearner.from_dict(stored, power_controlled=True).cycles == 3
+    assert ConsumerLearner.from_dict(stored).nominal_w == 800
+    marked = ConsumerLearner.from_dict(stored).as_dict()
+    assert ConsumerLearner.from_dict(marked, power_controlled=True).nominal_w == 800
+
+
 def test_long_pauses_are_no_thermostat_cycles() -> None:
     # A dehumidifier: off for 30 min once the target humidity is reached.
     learner = ConsumerLearner()

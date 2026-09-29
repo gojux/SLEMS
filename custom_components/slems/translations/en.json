@@ -462,6 +462,9 @@
       "learned_power": {
         "name": "Learned power"
       },
+      "learned_max_power": {
+        "name": "Learned maximum power"
+      },
       "storage_capacity": {
         "name": "Storage capacity left"
       }

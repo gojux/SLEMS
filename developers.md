@@ -682,10 +682,18 @@ known):
   direction change ends a leg, a SoC jump > 3 % or a gap > 60 s discards,
   plausible 50–130 % of the configured capacity). Stored per battery.
 - `effective_consumer(consumer)`: learned `nominal_power_w` (on/off
-  consumers) and `thermostat_cycles` if the consumer's learning switch is on;
-  used in the allocation requests, the feed-in cap and the controller.
+  consumers), `max_power_w` capped at the learned power (power controlled
+  consumers; never raised, never below `min_power_w`) and
+  `thermostat_cycles` if the consumer's learning switch is on; used in the
+  allocation requests, the feed-in cap and the controller.
   `ConsumerLearner.update` runs with every poll on the command last sent by
-  the controller (kept while saturated) and the measured power. Stored. A pause counts as a thermostat cycle only from 30 s to 10 min
+  the controller (kept while saturated) and the measured power. The power is
+  sampled only at a full command (≥ `FULL_COMMAND_SHARE`, 90 %, of the
+  configured full power): the median of throttled set points of a power
+  controlled consumer would be meaningless. Its sensor is named *Learned
+  maximum power* there (translation key `learned_max_power`, same unique
+  id). Stored with the marker `full_command`; powers of a power controlled
+  consumer stored without it are dropped on load. A pause counts as a thermostat cycle only from 30 s to 10 min
   (`PAUSE_MAX_S`): a device with its own long control, such as a dehumidifier
   at its target humidity, is better treated as saturated (its surplus goes to
   the other consumers) than as resting. No power right after switching on is
@@ -1362,3 +1370,4 @@ repository (otherwise its *brands* check fails).
 | 2026-09-29 | Gentle charging near the top without a setting (200 W from 3.48 V, released below 3.44 V, as Omnibattery's default): the BMS balances passively before the highest cell ends the charge; it costs only the last one or two percent. |
 | 2026-09-29 | Energy per kelvin learned per temperature sensor too, so a temperature target of one sensor estimates its latest start with that sensor's value (the mean's until learned). |
 | 2026-09-29 | A full charge also when the BMS ends the charge near the top (commanded ≥ 100 W, nothing taken for 2 min from 98 % / 3.45 V): a battery the BMS stops at 99 % would otherwise stay due for its full charge forever. The top is left only below 3.40 V. |
+| 2026-09-29 | The learned power of a power controlled consumer is its highest power, sampled only while commanded at ≥ 90 % of its maximum power (the median of throttled set points said nothing); with learning on it caps the maximum power, so no power is planned that the device does not take. The thermostat pauses are not part of it; the mean power while cycling is the storage's own learned value. |

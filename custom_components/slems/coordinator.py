@@ -639,9 +639,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         stored = await self._store.async_load() or {}
         self.pv_accuracy.restore(stored.get(PV_ACCURACY_STORE_KEY))
         self.morning_gap = MorningGapLearner.from_dict(stored.get(MORNING_GAP_STORE_KEY))
+        consumers = {c.subentry_id: c for c in self.consumers}
         for subentry_id, data in (stored.get(CONSUMERS_STORE_KEY) or {}).items():
-            if subentry_id in self.consumer_learners:
-                self.consumer_learners[subentry_id] = ConsumerLearner.from_dict(data)
+            if (consumer := consumers.get(subentry_id)) is not None:
+                self.consumer_learners[subentry_id] = ConsumerLearner.from_dict(
+                    data, consumer.control_mode is not ControlMode.SWITCH
+                )
         for subentry_id, data in (stored.get(THERMAL_STORE_KEY) or {}).items():
             if subentry_id in self.thermal_learners:
                 self.thermal_learners[subentry_id] = ThermalLearner.from_dict(data)
@@ -823,16 +826,17 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             )
             state = snapshot.consumers[consumer.subentry_id]
             learner = self.consumer_learners[consumer.subentry_id]
-            learner.update(now, command is not None and command > 0, state.power_w)
+            full_power = self._full_power_w(consumer)
+            full_command = command is not None and command >= FULL_COMMAND_SHARE * full_power
+            learner.update(now, command is not None and command > 0, state.power_w, full_command)
             if thermal := self.thermal_learners.get(consumer.subentry_id):
-                full_power = self._full_power_w(consumer)
                 thermal.update(
                     now,
                     command is not None and command > 0,
                     state.power_w,
                     state.temperature_c,
                     learner.nominal_w or full_power,
-                    command is not None and command >= FULL_COMMAND_SHARE * full_power,
+                    full_command,
                     state.temperatures_c,
                 )
             self._count_target(consumer, state, now, command is not None and command > 0)
@@ -1545,20 +1549,28 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         return self.settings.surplus_average_window_s
 
     def effective_consumer(self, consumer: ConsumerConfig) -> ConsumerConfig:
-        """The consumer with its learned power and thermostat behaviour, if switched on."""
+        """The consumer with its learned power and thermostat behaviour, if switched on.
+
+        On/off: the learned power replaces the nominal power. Power controlled:
+        the maximum power is capped at the learned highest power, so no power
+        is planned that the device does not take (never raised above the
+        configured maximum, never below the minimum power).
+        """
         if consumer.subentry_id not in self.consumer_learning:
             return consumer
         learner = self.consumer_learners[consumer.subentry_id]
         nominal = learner.nominal_w
-        return replace(
-            consumer,
-            nominal_power_w=(
-                nominal
-                if nominal is not None and consumer.control_mode is ControlMode.SWITCH
-                else consumer.nominal_power_w
-            ),
-            thermostat_cycles=consumer.thermostat_cycles or learner.thermostat_cycles,
-        )
+        thermostat_cycles = consumer.thermostat_cycles or learner.thermostat_cycles
+        if consumer.control_mode is ControlMode.SWITCH:
+            return replace(
+                consumer,
+                nominal_power_w=nominal if nominal is not None else consumer.nominal_power_w,
+                thermostat_cycles=thermostat_cycles,
+            )
+        max_power = consumer.max_power_w
+        if nominal is not None and max_power is not None and nominal < max_power:
+            max_power = max(nominal, consumer.min_power_w or 0)
+        return replace(consumer, max_power_w=max_power, thermostat_cycles=thermostat_cycles)
 
     @staticmethod
     def _energy(series: dict[datetime, float] | None, start: datetime, end: datetime) -> float:

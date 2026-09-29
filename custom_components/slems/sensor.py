@@ -37,7 +37,7 @@ from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 from .forecast.accuracy import Accuracy
 from .full_charge import is_due
 from .consumer_targets import target_temperature, window_start
-from .const import TargetType
+from .const import ControlMode, TargetType
 from .grid_friendly import correction_weight
 from .problems import CAP_EXCEEDED_AFTER_S
 from .pv_forecast import energy_on_day
@@ -1152,7 +1152,10 @@ class LearnedCapacitySensor(SlemsBatteryEntity, SensorEntity):
 
 
 class LearnedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
-    """Power of a consumer while on and its thermostat pauses, learned (see learning)."""
+    """Power of a consumer while on and its thermostat pauses, learned (see learning).
+
+    For a power controlled consumer this is its highest power.
+    """
 
     _attr_device_class = SensorDeviceClass.POWER
     _attr_native_unit_of_measurement = UnitOfPower.WATT
@@ -1161,6 +1164,8 @@ class LearnedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
 
     def __init__(self, coordinator: SlemsCoordinator, consumer) -> None:
         super().__init__(coordinator, consumer, "learned_power")
+        if consumer.control_mode is not ControlMode.SWITCH:
+            self._attr_translation_key = "learned_max_power"
 
     @property
     def _learner(self):

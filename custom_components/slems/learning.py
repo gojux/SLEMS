@@ -15,8 +15,10 @@ the value set by the user applies.
   the grid on the export side for ``TARGET_QUANTILE`` of the time.
 * Control interval and averaging window (``auto_timing``): from the learned
   report interval of the smart meter.
-* Consumers (``ConsumerLearner``): power while switched on, and whether their
-  own thermostat switches them off while they are commanded.
+* Consumers (``ConsumerLearner``): power while switched on (a power
+  controlled consumer: its highest power, measured while commanded at nearly
+  full power), and whether their own thermostat switches them off while they
+  are commanded.
 * Thermal storage of a consumer (``ThermalLearner``): energy per kelvin of its
   temperature sensors and the temperatures at which it starts cycling and is
   full, for the capacity it has left.
@@ -233,7 +235,12 @@ CYCLES_FOR_THERMOSTAT = 2
 
 @dataclass
 class ConsumerLearner:
-    """Power while on and pauses of the own thermostat of one consumer."""
+    """Power while on and pauses of the own thermostat of one consumer.
+
+    The power is learned only while the consumer is commanded at (nearly) its
+    full power: for a power controlled consumer the median of throttled set
+    points would say nothing, at full command it is the power it really takes.
+    """
 
     powers: deque = field(default_factory=lambda: deque(maxlen=CONSUMER_KEEP))
     cycles: int = 0
@@ -241,7 +248,9 @@ class ConsumerLearner:
     # Ran since it was switched on: before, no power is its start delay.
     _ran: bool = False
 
-    def update(self, now: float, commanded_on: bool, power_w: float | None) -> None:
+    def update(
+        self, now: float, commanded_on: bool, power_w: float | None, full_command: bool = True
+    ) -> None:
         if power_w is None or not commanded_on:
             self._paused_since = None
             self._ran = False
@@ -251,7 +260,8 @@ class ConsumerLearner:
                 self.cycles += 1
             self._paused_since = None
             self._ran = True
-            self.powers.append(power_w)
+            if full_command:
+                self.powers.append(power_w)
             return
         nominal = self.nominal_w
         if (
@@ -273,13 +283,16 @@ class ConsumerLearner:
         return self.cycles >= CYCLES_FOR_THERMOSTAT
 
     def as_dict(self) -> dict:
-        return {"powers": list(self.powers), "cycles": self.cycles}
+        return {"powers": list(self.powers), "cycles": self.cycles, "full_command": True}
 
     @classmethod
-    def from_dict(cls, data: dict | None) -> ConsumerLearner:
+    def from_dict(cls, data: dict | None, power_controlled: bool = False) -> ConsumerLearner:
+        """``power_controlled``: stored powers without the marker ``full_command``
+        may hold throttled set points and are dropped."""
         data = data or {}
         learner = cls(cycles=data.get("cycles", 0))
-        learner.powers.extend(data.get("powers", []))
+        if not power_controlled or data.get("full_command"):
+            learner.powers.extend(data.get("powers", []))
         return learner
 
 

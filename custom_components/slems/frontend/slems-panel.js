@@ -298,7 +298,7 @@ const STRINGS = {
       learn_capacity:
         "SLEMS always learns the usable capacity from charge and discharge legs of at least 20 % state of charge (DC energy / change of the state of charge; legs with a jump of the state of charge are discarded). On: the learned capacity is used for planning once three legs were measured. Off: the configured capacity applies.",
       consumer_learning:
-        "SLEMS always learns along in operating mode active: the power while on and whether the own thermostat switches the consumer off while it is commanded. On: it plans with the measured power (on/off consumers) and treats a consumer whose thermostat cycles like \"thermostat cycles by itself\". Off: the configured values apply.",
+        "SLEMS always learns along in operating mode active: the power while on (power controlled consumers: the highest power, measured while commanded at 90 % of the maximum power or more) and whether the own thermostat switches the consumer off while it is commanded. On: it plans with the measured power (on/off consumers) or caps the maximum power at the learned highest power (power controlled consumers) and treats a consumer whose thermostat cycles like \"thermostat cycles by itself\". Off: the configured values apply.",
       feed_in_cap:
         "Keeps the export at the grid connection point below PV peak power × limit. From the PV and consumption forecasts SLEMS plans how much energy above the limit the batteries must absorb, keeps that space free (night discharge, otherwise feeding in battery energy before the peak, as late as possible and never above the limit) and warns if it does not work out. Takes precedence over grid friendly charging, night discharge and battery priority.",
       pv_peak_power: "Peak power of the PV system the limit refers to.",
@@ -631,7 +631,7 @@ const STRINGS = {
       learn_capacity:
         "SLEMS lernt die nutzbare Kapazität immer aus Lade- und Entladevorgängen über mindestens 20 % Ladezustand (DC-Energie / Änderung des Ladezustands; Vorgänge mit einem Sprung des Ladezustands werden verworfen). Ein: Die gelernte Kapazität wird zur Planung verwendet, sobald drei Vorgänge gemessen sind. Aus: Es gilt die eingestellte Kapazität.",
       consumer_learning:
-        "SLEMS lernt im Betriebsmodus Aktiv immer mit: die Leistung im eingeschalteten Zustand und ob der eigene Thermostat den Verbraucher trotz Vorgabe abschaltet. Ein: Es plant mit der gemessenen Leistung (bei Ein/Aus-Verbrauchern) und behandelt einen selbst taktenden Thermostat wie „Thermostat taktet selbst“. Aus: Es gelten die eingestellten Werte.",
+        "SLEMS lernt im Betriebsmodus Aktiv immer mit: die Leistung im eingeschalteten Zustand (leistungsgeregelte Verbraucher: die Höchstleistung, gemessen bei einer Vorgabe ab 90 % der maximalen Leistung) und ob der eigene Thermostat den Verbraucher trotz Vorgabe abschaltet. Ein: Es plant mit der gemessenen Leistung (Ein/Aus-Verbraucher) bzw. begrenzt die maximale Leistung auf die gelernte Höchstleistung (leistungsgeregelte Verbraucher) und behandelt einen selbst taktenden Thermostat wie „Thermostat taktet selbst“. Aus: Es gelten die eingestellten Werte.",
       feed_in_cap:
         "Hält die Einspeisung am Netzanschlusspunkt unter PV-Leistung × Grenze. Aus PV- und Verbrauchsprognose plant SLEMS, wie viel Energie über der Grenze die Batterien aufnehmen müssen, hält dafür Platz frei (Nachtentladung, sonst Einspeisen von Batterieenergie vor der Spitze, möglichst spät und nie über der Grenze) und warnt, wenn es sich nicht ausgeht. Hat Vorrang vor netzdienlichem Laden, Nachtentladung und Batterievorrang.",
       pv_peak_power: "Spitzenleistung der PV-Anlage, auf die sich die Grenze bezieht.",
@@ -2713,7 +2713,8 @@ class SlemsPanel extends HTMLElement {
           // Only while the feed-in cap is on.
           const capMode = this._state("cap_mode", c.device_id);
           const learning = this._state("consumer_learning", c.device_id);
-          const learnedPower = this._state("learned_power", c.device_id);
+          const learnedPower =
+            this._state("learned_power", c.device_id) || this._state("learned_max_power", c.device_id);
           const settings = [learning, learning?.state === "on" ? learnedPower : null].filter(Boolean);
           const capOff = control?.state === "off";
           const storage = this._state("storage_capacity", c.device_id);
