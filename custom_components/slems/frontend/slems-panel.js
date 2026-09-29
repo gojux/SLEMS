@@ -1451,6 +1451,7 @@ class SlemsPanel extends HTMLElement {
         .map((tab) => `<button data-tab="${tab}" class="${tab === this._tab ? "active" : ""}">${t[tab]}</button>`)
         .join("")
     );
+    this.toggleAttribute("dark", Boolean(this._hass.themes?.darkMode));
     const content = this.shadowRoot.getElementById("content");
     content.style.setProperty("--c-pv", this._colors.pv);
     content.style.setProperty("--c-battery", this._colors.battery);
@@ -2838,6 +2839,9 @@ function roundedTopBar(x, y, width, height) {
 }
 
 const STYLE = `
+  /* Accent for text: the theme colour itself is too light on light backgrounds. */
+  :host { --slems-accent: color-mix(in srgb, var(--primary-color) 62%, black); }
+  :host([dark]) { --slems-accent: var(--primary-color); }
   :host { display: block; min-height: 100%; background: var(--primary-background-color); color: var(--primary-text-color);
     font-family: var(--ha-font-family-body, system-ui, -apple-system, "Segoe UI", sans-serif); }
   .page { max-width: 1280px; margin: 0 auto; padding: 0 16px 24px; }
@@ -2846,7 +2850,8 @@ const STYLE = `
   nav { display: flex; gap: 4px; flex-wrap: wrap; }
   nav button { background: none; border: none; color: var(--secondary-text-color); font: inherit; padding: 8px 12px;
     border-radius: 8px; cursor: pointer; }
-  nav button.active { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 12%, transparent); }
+  nav button.active { color: var(--slems-accent); background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+    box-shadow: inset 0 -2px 0 var(--primary-color); }
   .grid { display: grid; gap: 16px; margin-bottom: 16px; }
   .grid.two { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
   .grid.cards { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
@@ -2890,7 +2895,7 @@ const STYLE = `
   .info-box button { margin-left: auto; }
   #details dl { margin: 0 0 16px; min-width: 300px; }
   [data-more-info] { cursor: pointer; }
-  .tile[data-more-info]:hover .value, dd[data-more-info]:hover, dt[data-more-info]:hover + dd { color: var(--primary-color); }
+  .tile[data-more-info]:hover .value, dd[data-more-info]:hover, dt[data-more-info]:hover + dd { color: var(--slems-accent); }
   .fbox[data-more-info]:hover { border-color: var(--accent); }
   .accuracy { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 32px; margin-top: 12px; }
   .accuracy h3 { margin: 0 0 4px; font-size: 14px; font-weight: 500; }
@@ -2940,13 +2945,14 @@ const STYLE = `
   }
   .chart-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
   .chart-head h2 { margin-bottom: 2px; }
-  button.link { background: none; border: none; color: var(--primary-color); cursor: pointer; font: inherit; padding: 4px; }
+  button.link { background: none; border: none; color: var(--slems-accent); cursor: pointer; font: inherit; padding: 4px; }
   .chart-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
   .segmented { display: inline-flex; border: 1px solid var(--divider-color); border-radius: 8px; overflow: hidden; }
   .segmented button { background: none; border: none; font: inherit; font-size: 13px; padding: 4px 12px; cursor: pointer;
     color: var(--secondary-text-color); }
   .segmented button + button { border-left: 1px solid var(--divider-color); }
-  .segmented button.active { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 12%, transparent); }
+  .segmented button.active { color: var(--slems-accent); background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+    box-shadow: inset 0 -2px 0 var(--primary-color); }
   .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 12px 0 4px; font-size: 12px; color: var(--primary-text-color); }
   .legend-item { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; padding: 2px 0;
     font: inherit; color: inherit; cursor: pointer; }

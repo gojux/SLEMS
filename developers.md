@@ -732,7 +732,10 @@ entities. The panel is removed on unload and re-registered on every setup.
   the `COLORS` table); dark values when `hass.themes.darkMode`. Everything
   else uses the HA theme variables. Some light-mode colours are below 3:1
   contrast on the card; legend, direct labels and the table view carry the
-  identity.
+  identity. Accent text (active tab, active segment, links) uses
+  `--slems-accent`: the theme's primary colour in dark mode, mixed with 38 %
+  black in light mode (the plain primary colour reaches only about 3:1 on
+  light backgrounds); active tabs and segments are also underlined.
 - Strings: English and German inside the file (`STRINGS`), picked from the HA
   language.
 - Switches marked with `data-confirm-off` (battery *Enabled*) are kept on and
