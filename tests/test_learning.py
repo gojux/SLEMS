@@ -211,3 +211,22 @@ def test_long_pauses_are_no_thermostat_cycles() -> None:
     learner.update(t, True, 300)
     assert learner.cycles == 0
     assert not learner.thermostat_cycles
+
+
+def test_start_delay_is_no_thermostat_pause() -> None:
+    # Switched on, the compressor starts after 2 minutes; twice.
+    learner = ConsumerLearner()
+    t = 0
+    for _ in range(40):
+        learner.update(t, True, 300)
+        t += 5
+    for _ in range(2):
+        learner.update(t, False, 0)
+        t += 600
+        for _ in range(24):  # 2 min start delay
+            learner.update(t, True, 0)
+            t += 5
+        for _ in range(60):
+            learner.update(t, True, 300)
+            t += 5
+    assert learner.cycles == 0

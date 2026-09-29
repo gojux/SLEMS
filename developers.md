@@ -614,7 +614,10 @@ known):
   the controller (kept while saturated) and the measured power. Stored. A pause counts as a thermostat cycle only from 30 s to 10 min
   (`PAUSE_MAX_S`): a device with its own long control, such as a dehumidifier
   at its target humidity, is better treated as saturated (its surplus goes to
-  the other consumers) than as resting.
+  the other consumers) than as resting. No power right after switching on is
+  the start delay, not a pause: only pauses after the consumer ran count (the
+  thermal learner takes a pause before the first run only after
+  `START_DELAY_MAX_S`, 5 min, as a warm storage).
 - Thermal storage (`ThermalLearner`, consumers with temperature sensors,
   always learning, stored under `thermal`): with every poll on the command,
   the measured power and the mean temperature of the sensors. A run lasts

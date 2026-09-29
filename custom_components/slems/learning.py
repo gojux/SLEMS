@@ -225,6 +225,9 @@ PAUSE_MIN_S = 30.0
 # Longer pauses are no thermostat cycling: a device with its own long control
 # (a dehumidifier reaching its target humidity) is better treated as saturated.
 PAUSE_MAX_S = 600.0
+# Right after switching on, a device may take this long to start (compressor):
+# no pause before it ran once, unless nothing happens for longer.
+START_DELAY_MAX_S = 300.0
 CYCLES_FOR_THERMOSTAT = 2
 
 
@@ -235,19 +238,28 @@ class ConsumerLearner:
     powers: deque = field(default_factory=lambda: deque(maxlen=CONSUMER_KEEP))
     cycles: int = 0
     _paused_since: float | None = None
+    # Ran since it was switched on: before, no power is its start delay.
+    _ran: bool = False
 
     def update(self, now: float, commanded_on: bool, power_w: float | None) -> None:
         if power_w is None or not commanded_on:
             self._paused_since = None
+            self._ran = False
             return
         if power_w >= CONSUMER_ON_W:
             if self._paused_since is not None and PAUSE_MIN_S <= now - self._paused_since <= PAUSE_MAX_S:
                 self.cycles += 1
             self._paused_since = None
+            self._ran = True
             self.powers.append(power_w)
             return
         nominal = self.nominal_w
-        if nominal is not None and power_w < PAUSE_SHARE * nominal and self._paused_since is None:
+        if (
+            self._ran
+            and nominal is not None
+            and power_w < PAUSE_SHARE * nominal
+            and self._paused_since is None
+        ):
             self._paused_since = now
 
     @property
@@ -319,6 +331,7 @@ class ThermalLearner:
     _window_wh: float = 0.0
     _full: bool = False
     _throttled: bool = False
+    _ran: bool = False
 
     def update(
         self,
@@ -353,12 +366,21 @@ class ThermalLearner:
         self._energy_wh += energy
         running = power_w >= CONSUMER_ON_W
         if running:
-            if self._paused_since is not None and now - self._paused_since >= PAUSE_MIN_S:
+            if self._ran and self._paused_since is not None and now - self._paused_since >= PAUSE_MIN_S:
                 self._start_cycling(self._paused_since, temperature)
             self._paused_since = None
+            self._ran = True
         elif self._paused_since is None:
             self._paused_since = now
-        if self._cycling_since is None and not running and now - self._paused_since >= PAUSE_MIN_S:
+        # Before it ran, no power is its start delay; only a much longer one
+        # means the storage is already warm.
+        wait = PAUSE_MIN_S if self._ran else START_DELAY_MAX_S
+        if (
+            self._cycling_since is None
+            and not running
+            and self._paused_since is not None
+            and now - self._paused_since >= wait
+        ):
             self._start_cycling(self._paused_since, temperature)
         if self._cycling_since is not None:
             self._cycling_wh += energy
@@ -409,6 +431,7 @@ class ThermalLearner:
         self._window_wh = 0.0
         self._full = False
         self._throttled = False
+        self._ran = False
 
     @property
     def energy_per_k(self) -> float | None:
