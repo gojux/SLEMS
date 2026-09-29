@@ -675,6 +675,11 @@ entities. The panel is removed on unload and re-registered on every setup.
 - Keyboard: the battery ⋮ menu moves the focus to its first item when opened,
   arrows move between the items, Escape closes it and returns to its button.
   Every input, switch and select carries an `aria-label` with its name.
+- Entity names come from the integration's translations in the frontend
+  language (`hass.loadBackendTranslation("entity", "slems")`,
+  `component.slems.entity.<domain>.<key>.name`), not from the friendly name,
+  which is in the server language; entities renamed by the user (full registry,
+  `config/entity_registry/list`, `name` set) keep their name.
 - Energy flow: rounded boxes in a CSS grid (PV on top; grid, hub, house in
   the middle; one box per battery below the hub, consumers stacked below the
   house). The DOM is built once per set of batteries/consumers

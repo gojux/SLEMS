@@ -806,6 +806,26 @@ class SlemsPanel extends HTMLElement {
     this._hass = hass;
     // Hyphenation of long words in narrow tiles follows the language.
     this.lang = hass?.locale?.language || hass?.language || "en";
+    // Entity names in the language of the frontend, not of the server.
+    if (hass?.loadBackendTranslation && this._entityLanguage !== this.lang) {
+      this._entityLanguage = this.lang;
+      hass.loadBackendTranslation("entity", DOMAIN).then(() => {
+        this._sections = {};
+        this._queueRender();
+      });
+    }
+    if (hass && this._renamed === undefined) {
+      // Entities renamed by the user keep their name (only the full registry knows).
+      this._renamed = new Set();
+      hass
+        .callWS({ type: "config/entity_registry/list" })
+        .then((entries) => {
+          this._renamed = new Set(entries.filter((e) => e.platform === DOMAIN && e.name).map((e) => e.entity_id));
+          this._sections = {};
+          this._queueRender();
+        })
+        .catch(() => {});
+    }
     this._queueRender();
   }
 
@@ -1281,6 +1301,12 @@ class SlemsPanel extends HTMLElement {
   _name(stateObj) {
     if (!stateObj) return "";
     const entry = this._hass.entities?.[stateObj.entity_id];
+    // Not renamed by the user: the translated name in the frontend language.
+    if (entry?.platform === DOMAIN && entry.translation_key && !this._renamed?.has(stateObj.entity_id)) {
+      const domain = stateObj.entity_id.split(".")[0];
+      const translated = this._hass.localize?.(`component.${DOMAIN}.entity.${domain}.${entry.translation_key}.name`);
+      if (translated) return translated;
+    }
     const device = entry?.device_id ? this._hass.devices?.[entry.device_id] : undefined;
     let name = stateObj.attributes.friendly_name || stateObj.entity_id;
     const prefix = device?.name_by_user || device?.name;
