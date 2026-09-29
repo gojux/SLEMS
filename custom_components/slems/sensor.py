@@ -851,7 +851,7 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             "target_temperature_c": (
                 None if state is None or state.temperature_c is None else round(state.temperature_c, 1)
             ),
-            "target_done": progress.done,
+            "target_done": progress.done_for(settings),
             "target_deadline": progress.end.isoformat() if progress.end else None,
             "target_latest_start": (
                 target.latest_start.isoformat() if target and target.latest_start else None

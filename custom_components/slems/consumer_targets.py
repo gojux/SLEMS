@@ -12,6 +12,11 @@ deliver), also the batteries and the grid. From the latest start
 (deadline − remaining time × ``TIME_FACTOR`` − ``START_MARGIN``) on the
 consumer runs regardless of the surplus (*forced*).
 
+The planning (day chart, SoC projection, night discharge) counts the forced
+run as an extra load from the latest start on (``forced_load``): the worst
+case, as if no surplus covered any of the rest; it shrinks as the surplus
+does.
+
 *Boost*: the consumer gets the surplus before the batteries. For runtime,
 enabled time and energy only with its priority option and when the forecast
 surplus until the deadline is short for the rest of the target plus filling
@@ -74,9 +79,12 @@ class TargetProgress:
     runtime_s: float = 0.0
     enabled_s: float = 0.0
     energy_wh: float = 0.0
-    # Temperature target: reached the minimum / the target in this period.
+    # Temperature target: reached the minimum / the target in this period,
+    # and the target temperature it was reached with (a higher one set later
+    # in the period is not reached yet).
     min_reached: bool = False
     done: bool = False
+    done_target_c: float | None = None
     # "met" / "missed" of the last period.
     last_result: str | None = None
     # The previous sample: its state applies until this one.
@@ -121,10 +129,22 @@ class TargetProgress:
         self.end = end
         self.runtime_s = self.enabled_s = self.energy_wh = 0.0
         self.min_reached = self.done = False
+        self.done_target_c = None
+
+    def mark_done(self, target_c: float) -> None:
+        """The target temperature ``target_c`` was reached in this period."""
+        self.done = True
+        self.done_target_c = max(target_c, self.done_target_c or target_c)
+
+    def done_for(self, settings: TargetSettings) -> bool:
+        """Reached the target temperature that is set now."""
+        return self.done and (
+            self.done_target_c is None or settings.target_temp_c <= self.done_target_c
+        )
 
     def met(self, settings: TargetSettings) -> bool:
         if settings.type is TargetType.TEMPERATURE:
-            return self.done or self.min_reached
+            return self.done_for(settings) or self.min_reached
         return remaining(settings, self) <= 0
 
     def as_dict(self) -> dict:
@@ -135,6 +155,7 @@ class TargetProgress:
             "energy_wh": self.energy_wh,
             "min_reached": self.min_reached,
             "done": self.done,
+            "done_target_c": self.done_target_c,
             "last_result": self.last_result,
         }
 
@@ -149,6 +170,7 @@ class TargetProgress:
             energy_wh=data.get("energy_wh", 0.0),
             min_reached=data.get("min_reached", False),
             done=data.get("done", False),
+            done_target_c=data.get("done_target_c"),
             last_result=data.get("last_result"),
         )
 
@@ -202,7 +224,7 @@ def evaluate(
     if settings.type is TargetType.TEMPERATURE:
         if temperature_c is None:
             return TargetState(TargetMode.SURPLUS, end=end)
-        if progress.done or temperature_c >= settings.target_temp_c:
+        if progress.done_for(settings) or temperature_c >= settings.target_temp_c:
             return TargetState(TargetMode.DONE, end=end)
         if temperature_c >= settings.min_temp_c:
             return TargetState(TargetMode.SURPLUS, end=end)
@@ -232,3 +254,46 @@ def evaluate(
     if settings.priority and expected_surplus_wh < energy + battery_need_wh:
         return TargetState(TargetMode.BOOST, missing, latest, end)
     return TargetState(TargetMode.SURPLUS, missing, latest, end)
+
+
+def forced_load(
+    settings: TargetSettings,
+    state: TargetState,
+    local_now: datetime,
+    *,
+    power_w: float,
+    wh_per_k: float | None,
+) -> dict[datetime, float]:
+    """Energy (Wh) per local hour of the forced run the target may still need.
+
+    From the latest start (or now) at ``power_w`` until the rest is covered or
+    the deadline; nothing with the source "surplus only" or once met.
+    """
+    if (
+        settings.source is TargetSource.SURPLUS
+        or state.mode in (TargetMode.NONE, TargetMode.DONE)
+        or state.latest_start is None
+        or state.end is None
+        or power_w <= 0
+    ):
+        return {}
+    if settings.type is TargetType.TEMPERATURE:
+        energy = (
+            state.missing * wh_per_k
+            if wh_per_k
+            else power_w * TEMPERATURE_FALLBACK / timedelta(hours=1)
+        ) if state.missing > 0 else 0.0
+    elif settings.type is TargetType.ENERGY:
+        energy = state.missing
+    else:
+        energy = state.missing / 3600 * power_w
+    result: dict[datetime, float] = {}
+    moment = max(state.latest_start, local_now)
+    while energy > 0 and moment < state.end:
+        hour = moment.replace(minute=0, second=0, microsecond=0)
+        until = min(hour + timedelta(hours=1), state.end)
+        wh = min(energy, power_w * (until - moment) / timedelta(hours=1))
+        result[hour] = result.get(hour, 0.0) + wh
+        energy -= wh
+        moment = until
+    return result

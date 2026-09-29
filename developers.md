@@ -619,8 +619,20 @@ forecast surplus until the deadline, `remaining_surplus_by_hour`, is below
 the missing energy plus `energy_to_full_wh`), else *surplus*. In `allocate`
 forced consumers get their power up front (the batteries cover the deficit
 like any load), boost consumers the surplus before the battery budget.
-Sensor *Planned power* has the `target_*` attributes for the card. Not yet
-in the day chart, the SoC projection and the night discharge.
+Sensor *Planned power* has the `target_*` attributes for the card. The
+target temperature counts as reached for the value it was reached with
+(`TargetProgress.done_target_c`): a higher one set later heats on.
+
+Planning: `_target_states` runs in `plan()` before `forecast_plan` and sums
+`forced_load` of every consumer with a source beyond the surplus into
+`coordinator.target_load` (local hour -> Wh): the rest of the target at the
+forced power (batteries only: at most their discharge power) from the
+latest start until the deadline, the worst case without further surplus;
+heat pumps are left out (their consumption is in the heat pump model;
+controllable consumers are subtracted from the base load, so nothing is
+counted twice). `_with_target_load` adds it to the hourly consumption for
+the SoC projection, the night discharge (real plan and projection) and the
+day plan (`consumption_wh`, part `target_wh` for the tooltip).
 
 Supporting consumers with temperature sensors (`CONF_TEMPERATURE_ENTITY`,
 `CONF_TEMPERATURE_2_ENTITY`, their mean in `ConsumerState.temperature_c`):
@@ -1324,3 +1336,4 @@ repository (otherwise its *brands* check fails).
 | 2026-09-29 | Other batteries from Omnibattery: not ported for now. Its drivers are tied to its coordinator; the device knowledge can be taken over (both GPL-3.0). Order if done: Venus v2/vA/vD, then AC coupled Zendure and Sessy, DC coupled devices only after the model is extended and with a tester. Users who want another battery are asked to open an issue. |
 | 2026-09-29 | Regular full charge: one due battery at a time (older than 7 days or unknown; oldest, then name) is charged first and may exceed its maximum SoC once; spared when discharging while all others are above 50 % (fixed, not a setting); rests 90 s when full for a top delta measurement. The split between batteries and consumers is unchanged. |
 | 2026-09-29 | Daily targets per consumer (runtime, enabled time, energy, temperature) from deadline to deadline, set on the card; sources staged surplus only (default) / + batteries / + batteries + grid, forced as late as possible; priority over the batteries optional and only when the forecast is short; the minimum temperature always before the batteries, the target temperature ends the day. Forced runs are not yet part of the day chart and the SoC projection. |
+| 2026-09-29 | Forced runs of daily targets are an extra load in the day chart, the SoC projection and the night discharge, planned from the latest start as the worst case (shrinks as the surplus fills the target). A target temperature raised later in the period is no longer reached. |

@@ -65,6 +65,7 @@ const STRINGS = {
     pvForecast: "PV forecast",
     pvActual: "PV measured",
     consumptionForecast: "Consumption forecast",
+    targetLoad: "of which daily targets",
     consumptionActual: "Consumption measured",
     plannedCharge: "Planned charging",
     actualCharge: "Charging measured",
@@ -390,6 +391,7 @@ const STRINGS = {
     pvForecast: "PV-Prognose",
     pvActual: "PV gemessen",
     consumptionForecast: "Verbrauchsprognose",
+    targetLoad: "davon Tagesziele",
     consumptionActual: "Verbrauch gemessen",
     plannedCharge: "Geplantes Laden",
     actualCharge: "Laden gemessen",
@@ -2006,6 +2008,8 @@ class SlemsPanel extends HTMLElement {
           // Forecasts with one value per hour are drawn at the middle of the hour.
           pvHourly: !row.pv_half_w || row.pv_half_w[0] === row.pv_half_w[1],
           consumptionForecast: row.consumption_wh,
+          // Part of it: forced runs of the consumers' daily targets.
+          targetLoad: row.target_wh || null,
           plannedCharge: row.planned_charge_w,
           // With the feed-in cap the inverter curtails the export above the limit.
           exportForecast: exportOf(row),
@@ -2323,7 +2327,9 @@ class SlemsPanel extends HTMLElement {
     const v = (key) => (this._hiddenSeries.has(key) ? null : row[key]);
     tooltip.innerHTML = `<div class="tt-title">${slotTime(slot)}–${slotTime(slot + 1)}</div>
       ${entry(c.pv, t.pvForecast, v("pvForecast"))}${entry(c.pv, t.pvActual, v("pvActual"))}
-      ${entry(c.house, t.consumptionForecast, v("consumptionForecast"))}${entry(c.house, t.consumptionActual, v("consumptionActual"))}
+      ${entry(c.house, t.consumptionForecast, v("consumptionForecast"))}${
+        v("consumptionForecast") !== null && row.targetLoad ? entry(c.house, t.targetLoad, row.targetLoad) : ""
+      }${entry(c.house, t.consumptionActual, v("consumptionActual"))}
       ${entry(c.grid, t.exportForecast, v("exportForecast"))}${entry(c.grid, t.exportActual, v("exportActual"))}
       ${entry(c.battery, t.plannedCharge, v("plannedCharge"))}${entry(c.battery, t.actualCharge, v("actualCharge"))}
       ${percentEntry(c.battery, t.socForecast, v("socForecast"))}${percentEntry(c.battery, t.socActual, v("socActual"))}

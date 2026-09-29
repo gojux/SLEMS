@@ -125,7 +125,14 @@ from .grid_friendly import (
     remaining_surplus,
     remaining_surplus_by_hour,
 )
-from .consumer_targets import TargetMode, TargetProgress, TargetSettings, TargetState, evaluate
+from .consumer_targets import (
+    TargetMode,
+    TargetProgress,
+    TargetSettings,
+    TargetState,
+    evaluate,
+    forced_load,
+)
 from .night_discharge import NightDischargePlan, plan_night_discharge, pv_takeover
 from .peak_shaving import auto_limit, hours_until_refill
 from .pv_forecast import (
@@ -606,6 +613,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.consumer_targets = {c.subentry_id: TargetSettings() for c in consumers}
         self.target_progress = {c.subentry_id: TargetProgress() for c in consumers}
         self.target_states: dict[str, TargetState] = {}
+        # Local hour start -> Wh of the forced runs the targets may still need
+        # (extra load in the planning, see consumer_targets.forced_load).
+        self.target_load: dict[datetime, float] = {}
         # Battery due for its regular full charge (see full_charge), batteries
         # resting after it (monotonic end) and the last full charge seen.
         self.full_charge_battery: str | None = None
@@ -1329,6 +1339,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             snapshot.expected_surplus_wh = max(0.0, snapshot.expected_surplus_wh - balancing_wh)
         battery = self._battery_group(snapshot)
         settings = self.settings
+        # The daily targets first: their forced runs are a load in the plans.
+        self._target_states(snapshot, battery, pv_forecast, load, wall_now)
         forecast_plan = self.forecast_plan(snapshot, battery, wall_now, load, settings, balancing_wh)
         cap = forecast_plan.cap
         snapshot.feed_in_cap = cap
@@ -1340,7 +1352,6 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         snapshot.day_plan = forecast_plan.day_plan
         snapshot.day_plan_tomorrow = forecast_plan.day_plan_tomorrow
 
-        self._target_states(snapshot, battery, pv_forecast, load, wall_now)
         requests = [
             self._request(consumer, now, battery)
             for consumer in map(self.effective_consumer, self.consumers)
@@ -1361,7 +1372,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 battery.charge_efficiency,
                 battery.charge_efficiency,
                 snapshot.pv_forecast,
-                snapshot.consumption_forecast.total,
+                self._with_target_load(snapshot.consumption_forecast.total),
                 self.night_reserve_pct(settings),
                 self.secured_buffer_wh(settings, *self._next_day_energy(snapshot, wall_now)),
                 battery.min_soc_pct / 100 * battery.capacity_wh,
@@ -1629,7 +1640,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if cap is not None and result.feed_in_limit_w is not None:
                 result.feed_in_limit_w = min(result.feed_in_limit_w, cap.limit_w)
         pv_hourly = hourly(pv_forecast) if pv_forecast is not None else None
-        consumption_hourly = hourly(consumption.total) if consumption else None
+        consumption_hourly = self._with_target_load(consumption.total) if consumption else None
         result.peak_threshold_pct, result.peak_limit_w = self._peak_shaving(
             battery, wall_now, pv_hourly, consumption_hourly, settings
         )
@@ -1673,6 +1684,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             cap=cap,
             pv_power=pv_power,
             battery=battery,
+            target_load=self.target_load,
         )
         result.day_plan_tomorrow = self._day_plan(
             pv_hourly,
@@ -1683,6 +1695,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             cap=cap,
             pv_power=pv_power,
             battery=battery,
+            target_load=self.target_load,
         )
         return result
 
@@ -1819,7 +1832,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if state.temperature_c >= settings.min_temp_c:
                 progress.min_reached = True
             if state.temperature_c >= settings.target_temp_c:
-                progress.done = True
+                progress.mark_done(settings.target_temp_c)
         if result == "missed" and end is not None:
             self.config_entry.async_create_background_task(
                 self.hass,
@@ -1855,9 +1868,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         load: float | None,
         wall_now: datetime,
     ) -> None:
-        """Mode of every consumer's daily target for this plan."""
+        """Mode of every consumer's daily target for this plan, and the load of
+        the forced runs they may still need."""
         consumption = snapshot.consumption_forecast
+        local_now = dt_util.as_local(wall_now)
         self.target_states = {}
+        self.target_load = {}
         for consumer in map(self.effective_consumer, self.consumers):
             settings = self.consumer_targets[consumer.subentry_id]
             if settings.type is TargetType.NONE or not consumer.controllable:
@@ -1889,6 +1905,27 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 battery_need_wh=battery.energy_to_full_wh if battery else 0.0,
                 battery_can_supply=battery is not None and battery.max_discharge_w >= needed,
             )
+            # A heat pump's consumption is already in its own forecast model.
+            if consumer.consumer_type is ConsumerType.HEAT_PUMP:
+                continue
+            forced_w = power
+            if settings.source is TargetSource.BATTERY:
+                forced_w = min(power, battery.max_discharge_w) if battery is not None else 0.0
+            for hour, wh in forced_load(
+                settings,
+                self.target_states[consumer.subentry_id],
+                local_now,
+                power_w=forced_w,
+                wh_per_k=thermal.energy_per_k if thermal else None,
+            ).items():
+                self.target_load[hour] = self.target_load.get(hour, 0.0) + wh
+
+    def _with_target_load(self, consumption: dict[datetime, float]) -> dict[datetime, float]:
+        """Hourly consumption forecast plus the forced runs of the daily targets."""
+        result = hourly(consumption)
+        for hour, wh in self.target_load.items():
+            result[hour] = result.get(hour, 0.0) + wh
+        return result
 
     @staticmethod
     def _full_power_w(consumer: ConsumerConfig) -> float:
@@ -2027,6 +2064,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         cap: CapPlan | None = None,
         pv_power=None,
         battery: BatteryGroup | None = None,
+        target_load: dict[datetime, float] | None = None,
     ) -> list[dict]:
         """Hours of a day for the dashboard.
 
@@ -2057,6 +2095,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     "consumption_wh": (
                         round(consumption_hourly[start]) if start in consumption_hourly else None
                     ),
+                    # Part of it: forced runs of the consumers' daily targets.
+                    "target_wh": round(target_load[start]) if target_load and start in target_load else None,
                     "planned_charge_w": round(planned[start]) if start in planned else None,
                     "soc_pct": round(soc[start], 1) if start in soc else None,
                     # Expected grid power (+ import / − export) from the projection.

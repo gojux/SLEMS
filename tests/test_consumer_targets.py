@@ -12,6 +12,7 @@ from custom_components.slems.consumer_targets import (
     TargetProgress,
     TargetSettings,
     evaluate,
+    forced_load,
     period_end,
 )
 
@@ -116,5 +117,35 @@ def test_temperature_target() -> None:
     # Between minimum and target: surplus only; at the target: done.
     assert state(settings, progress, local(12), temperature_c=45).mode is TargetMode.SURPLUS
     assert state(settings, progress, local(12), temperature_c=55).mode is TargetMode.DONE
-    progress.done = True
+    progress.mark_done(55)
     assert state(settings, progress, local(12), temperature_c=50).mode is TargetMode.DONE
+    # A higher target temperature set later in the period: not reached yet.
+    settings.target_temp_c = 60
+    assert state(settings, progress, local(12), temperature_c=50).mode is TargetMode.SURPLUS
+    # Lower again: still reached.
+    settings.target_temp_c = 52
+    assert state(settings, progress, local(12), temperature_c=50).mode is TargetMode.DONE
+
+
+
+def test_forced_load_for_the_planning() -> None:
+    settings = TargetSettings(type=TargetType.RUNTIME, hours=2.0, source=TargetSource.BATTERY)
+    progress = TargetProgress(end=local(22))
+    now = local(12)
+    target = state(settings, progress, now)
+    # 2 h at 300 W from the latest start 19:26 until 22:00.
+    load = forced_load(settings, target, now, power_w=300, wh_per_k=None)
+    assert load[local(19)] == pytest.approx(300 * 34 / 60)
+    assert load[local(20)] == pytest.approx(300)
+    assert sum(load.values()) == pytest.approx(600)
+    # Only surplus: nothing is planned.
+    settings.source = TargetSource.SURPLUS
+    assert forced_load(settings, state(settings, progress, now), now, power_w=300, wh_per_k=None) == {}
+    # Temperature: missing kelvin × Wh/K, from the latest start.
+    temperature = TargetSettings(type=TargetType.TEMPERATURE, min_temp_c=40, target_temp_c=55,
+                                 deadline=time(18, 0), source=TargetSource.GRID)
+    progress = TargetProgress(end=local(18))
+    below = state(temperature, progress, now, temperature_c=30, wh_per_k=150, power_w=3000)
+    load = forced_load(temperature, below, now, power_w=3000, wh_per_k=150)
+    assert sum(load.values()) == pytest.approx(1500)
+    assert min(load) == local(17)

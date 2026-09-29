@@ -281,9 +281,15 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   Unter der Mindesttemperatur bekommt er den Überschuss immer vor den
   Batterien (ab der spätesten Startzeit erzwungen, geschätzt mit der
   gelernten Energie pro Grad, sonst 2 Stunden vor der Frist); ab der
-  Zieltemperatur ist er bis zur nächsten Periode aus. Die Karte zeigt den
-  Fortschritt, z. B. *1,5 / 4 h · bis 22:00 · erzwungen ab 19:30*, und die
-  Chips *Vorrang* oder *erzwungen*, solange sie gelten.
+  Zieltemperatur ist er bis zur nächsten Periode aus; wird später in der
+  Periode eine höhere Zieltemperatur eingestellt, heizt er weiter. Die Karte
+  zeigt den Fortschritt, z. B. *1,5 / 4 h · bis 22:00 · erzwungen ab 19:30*,
+  und die Chips *Vorrang* oder *erzwungen*, solange sie gelten. Mit einer
+  Quelle über den Überschuss hinaus rechnet die Planung den erzwungenen Lauf
+  ab der spätesten Startzeit als zusätzlichen Verbrauch ein (Tagesdiagramm,
+  Tooltip *davon Tagesziele*, Ladezustandsprognose und Nachtentladung), so
+  als deckte der Überschuss nichts mehr; der geplante Lauf schrumpft, sobald
+  der Überschuss das Ziel füllt.
 
 **Wirkungsgrad der Batterie** (Gesamtwirkungsgrad, AC zu AC), je Batterie
 aus einer von drei Quellen:

@@ -269,9 +269,14 @@ Every consumer needs its own power **and** energy sensor.
   below the minimum the consumer always gets the surplus before the
   batteries (forced from the latest start, estimated with the learned energy
   per degree, otherwise 2 hours before the deadline); at the target
-  temperature it is off until the next period. The card shows the progress,
-  e.g. *1.5 / 4 h · until 22:00 · forced from 19:30*, and the chips *priority*
-  or *forced* while they apply.
+  temperature it is off until the next period; if a higher target
+  temperature is set later in the period, it heats on. The card shows the
+  progress, e.g. *1.5 / 4 h · until 22:00 · forced from 19:30*, and the chips
+  *priority* or *forced* while they apply. With a source beyond the surplus
+  the planning counts the forced run as extra consumption from the latest
+  start on (day chart, tooltip *of which daily targets*, state of charge
+  forecast and night discharge), as if the surplus covered nothing more; the
+  planned run shrinks as the surplus fills the target.
 
 **Battery efficiency** (round trip, AC to AC), one of three sources per
 battery:
