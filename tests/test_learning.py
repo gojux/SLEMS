@@ -195,3 +195,19 @@ def test_thermal_storage_full_and_throttled() -> None:
     throttled = ThermalLearner()
     _heat(throttled, 0.0, 30.0, minutes=80, cutoff=52.0, power=650.0, full_command=False)
     assert throttled.cycling_powers == [] and throttled.full_temps == []
+
+
+def test_long_pauses_are_no_thermostat_cycles() -> None:
+    # A dehumidifier: off for 30 min once the target humidity is reached.
+    learner = ConsumerLearner()
+    t = 0
+    for _ in range(3):
+        for _ in range(40):
+            learner.update(t, True, 300)
+            t += 5
+        for _ in range(360):
+            learner.update(t, True, 0)
+            t += 5
+    learner.update(t, True, 300)
+    assert learner.cycles == 0
+    assert not learner.thermostat_cycles

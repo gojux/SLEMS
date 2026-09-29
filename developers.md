@@ -611,7 +611,10 @@ known):
   consumers) and `thermostat_cycles` if the consumer's learning switch is on;
   used in the allocation requests, the feed-in cap and the controller.
   `ConsumerLearner.update` runs with every poll on the command last sent by
-  the controller (kept while saturated) and the measured power. Stored.
+  the controller (kept while saturated) and the measured power. Stored. A pause counts as a thermostat cycle only from 30 s to 10 min
+  (`PAUSE_MAX_S`): a device with its own long control, such as a dehumidifier
+  at its target humidity, is better treated as saturated (its surplus goes to
+  the other consumers) than as resting.
 - Thermal storage (`ThermalLearner`, consumers with temperature sensors,
   always learning, stored under `thermal`): with every poll on the command,
   the measured power and the mean temperature of the sensors. A run lasts

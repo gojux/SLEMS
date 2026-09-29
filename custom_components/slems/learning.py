@@ -222,6 +222,9 @@ CONSUMER_MIN_SAMPLES = 30
 PAUSE_SHARE = 0.1
 # ... for at least this long, then running again without a new command.
 PAUSE_MIN_S = 30.0
+# Longer pauses are no thermostat cycling: a device with its own long control
+# (a dehumidifier reaching its target humidity) is better treated as saturated.
+PAUSE_MAX_S = 600.0
 CYCLES_FOR_THERMOSTAT = 2
 
 
@@ -238,7 +241,7 @@ class ConsumerLearner:
             self._paused_since = None
             return
         if power_w >= CONSUMER_ON_W:
-            if self._paused_since is not None and now - self._paused_since >= PAUSE_MIN_S:
+            if self._paused_since is not None and PAUSE_MIN_S <= now - self._paused_since <= PAUSE_MAX_S:
                 self.cycles += 1
             self._paused_since = None
             self.powers.append(power_w)
