@@ -67,3 +67,26 @@ def test_full_charge_may_exceed_the_maximum_soc() -> None:
     assert power_limits(2500, 2500, settings, window, None, TemperatureLimit()).charge_w == 0
     due = power_limits(2500, 2500, settings, window, None, TemperatureLimit(), full_charge=True)
     assert due.charge_w == 2500
+
+
+def test_top_taper_with_hysteresis() -> None:
+    from custom_components.slems.battery_limits import TOP_TAPER_W, TopTaper
+
+    taper = TopTaper()
+    taper.update(3.40)
+    assert not taper.active
+    taper.update(3.48)
+    assert taper.active
+    taper.update(3.45)  # relaxes after the power dropped: still limited
+    assert taper.active
+    taper.update(None)  # no reading: unchanged
+    assert taper.active
+    taper.update(3.43)
+    assert not taper.active
+    settings = BatteryLimitSettings()
+    limits = power_limits(2500, 2500, settings, SocWindow(), None, TemperatureLimit(), top_taper=True)
+    assert limits.charge_w == TOP_TAPER_W and limits.charge_reason == "top"
+    assert limits.discharge_w == 2500
+    # A lower user limit stays the reason.
+    low = BatteryLimitSettings(charge_limit_w=150)
+    assert power_limits(2500, 2500, low, SocWindow(), None, TemperatureLimit(), top_taper=True).charge_w == 150

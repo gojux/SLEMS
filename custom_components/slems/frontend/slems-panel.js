@@ -193,7 +193,7 @@ const STRINGS = {
     },
     allowedCharge: "Charging limited",
     allowedDischarge: "Discharging limited",
-    limitReasons: { soc: "state of charge limit", power: "power limit", temperature: "temperature" },
+    limitReasons: { soc: "state of charge limit", power: "power limit", temperature: "temperature", top: "top of the charge" },
     batteryLimits: "Limits: {name}",
     feedInLimitReasons: {
       disabled: "off",
@@ -519,7 +519,7 @@ const STRINGS = {
     },
     allowedCharge: "Laden begrenzt",
     allowedDischarge: "Entladen begrenzt",
-    limitReasons: { soc: "Ladezustandsgrenze", power: "Leistungsgrenze", temperature: "Temperatur" },
+    limitReasons: { soc: "Ladezustandsgrenze", power: "Leistungsgrenze", temperature: "Temperatur", top: "oberer Ladebereich" },
     batteryLimits: "Grenzen: {name}",
     feedInLimitReasons: {
       disabled: "aus",

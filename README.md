@@ -549,6 +549,16 @@ temperature, not the cell temperature; the BMS keeps its own protection.
 The sensors *Allowed charge power* and *Allowed discharge power* show the
 current limit and its reason.
 
+Near the top of the charge SLEMS charges gently (always, after Omnibattery's
+full charge voltage taper): once the highest cell reaches 3.48 V a battery
+charges with at most 200 W until the cell falls below 3.44 V again. At a low
+current the BMS balances the cells passively before the highest cell ends
+the charge, so the batteries get really full with a smaller cell delta, and
+the cells see less voltage peak and heat. It only affects the last one or
+two percent; the surplus meanwhile goes to the other batteries or the
+consumers. Shown as reason *top of the charge*; batteries without cell
+voltages are not limited.
+
 In operating mode *active* SLEMS checks, like Omnibattery, whether every
 battery delivers the commanded power. A battery that delivers less than
 10 % of a command of at least 100 W (after 30 s in that direction) three

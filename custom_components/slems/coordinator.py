@@ -90,6 +90,7 @@ from .battery_limits import (
     PowerLimits,
     SocWindow,
     TemperatureLimit,
+    TopTaper,
     power_limits,
 )
 from .cell_balancing import BalancingPhase, CellBalancer, CellMonitor
@@ -204,6 +205,7 @@ class BatteryRuntime:
     device_info_read: float | None = None
     limits: BatteryLimitSettings = field(default_factory=BatteryLimitSettings)
     soc_window: SocWindow = field(default_factory=SocWindow)
+    top_taper: TopTaper = field(default_factory=TopTaper)
     capacity_learner: CapacityLearner = field(default_factory=CapacityLearner)
     # Plan with the learned usable capacity instead of the configured one.
     learn_capacity: bool = False
@@ -868,6 +870,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if telemetry.ac_power_w is not None:
                 battery.loss_curve.add(telemetry.ac_power_w, telemetry.power_w)
             battery.soc_window.update(telemetry.soc_pct, battery.limits)
+            battery.top_taper.update(telemetry.extra.get("max_cell_voltage"))
             battery.capacity_learner.update(
                 now, telemetry.soc_pct, telemetry.power_w, battery.driver.capabilities.capacity_wh
             )
@@ -1074,6 +1077,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             # Read-only batteries follow their own logic.
             use_soc_window=use_soc_window and caps.controllable,
             full_charge=battery.subentry_id == self.full_charge_battery,
+            # Read-only batteries charge by their own logic.
+            top_taper=battery.top_taper.active and caps.controllable,
         )
 
     def _check_delivery(

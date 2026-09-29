@@ -8,6 +8,12 @@
   succession (as in Omnibattery).
 * Power limits: user limits of the AC charge and discharge power, e.g. 800 W
   for a plug-in system; never above the capability of the battery.
+* Top of the charge (after Omnibattery's full charge voltage taper): once the
+  highest cell reaches ``TOP_TAPER_ON_V`` the battery charges with at most
+  ``TOP_TAPER_W`` until the cell falls below ``TOP_TAPER_OFF_V``. At a low
+  current the BMS balances the cells passively before the highest one ends
+  the charge, and the cells see less voltage peak and heat. Batteries
+  without cell voltages are not limited.
 * Temperature (optional; the high limit after Omnibattery's temperature charge
   limit): above the high limit the charge power ramps linearly down to the
   floor at high limit + band. Below the low limit no charging; above it the
@@ -21,6 +27,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 SOC_REENTRY_MARGIN_PCT = 2.0
+TOP_TAPER_ON_V = 3.48
+TOP_TAPER_OFF_V = 3.44
+TOP_TAPER_W = 200.0
 LOW_TEMPERATURE_BAND_C = 5.0
 
 
@@ -84,13 +93,28 @@ class SocWindow:
             self.charge_blocked = False
 
 
+class TopTaper:
+    """Charge power limited near the top of the charge, with hysteresis."""
+
+    def __init__(self) -> None:
+        self.active = False
+
+    def update(self, max_cell_v: float | None) -> None:
+        if max_cell_v is None:
+            return
+        if max_cell_v >= TOP_TAPER_ON_V:
+            self.active = True
+        elif max_cell_v < TOP_TAPER_OFF_V:
+            self.active = False
+
+
 @dataclass(frozen=True)
 class PowerLimits:
     """Allowed AC power of one battery right now (W, both ≥ 0)."""
 
     charge_w: float
     discharge_w: float
-    # Why charging/discharging is limited: "soc", "power", "temperature".
+    # Why charging/discharging is limited: "soc", "power", "temperature", "top".
     charge_reason: str | None = None
     discharge_reason: str | None = None
 
@@ -105,6 +129,7 @@ def power_limits(
     *,
     use_soc_window: bool = True,
     full_charge: bool = False,
+    top_taper: bool = False,
 ) -> PowerLimits:
     """Combine capability, user power limits, SoC window and temperature.
 
@@ -117,6 +142,8 @@ def power_limits(
     factor = temperature_factor(temperature_c, temperature)
     if factor < 1.0:
         charge, charge_reason = charge * factor, "temperature"
+    if top_taper and charge > TOP_TAPER_W:
+        charge, charge_reason = TOP_TAPER_W, "top"
     if use_soc_window and window.charge_blocked and not full_charge:
         charge, charge_reason = 0.0, "soc"
 

@@ -578,6 +578,16 @@ Venus meldet ihre Innentemperatur, nicht die Zelltemperatur; das BMS behält
 seinen eigenen Schutz. Die Sensoren *Erlaubte Ladeleistung* und *Erlaubte
 Entladeleistung* zeigen die aktuelle Grenze und ihren Grund.
 
+Kurz vor voll lädt SLEMS sanft (immer, nach Omnibattery): Sobald die höchste
+Zelle 3,48 V erreicht, lädt eine Batterie mit höchstens 200 W, bis die Zelle
+wieder unter 3,44 V fällt. Bei kleinem Strom gleicht das BMS die Zellen
+passiv aus, bevor die höchste Zelle die Ladung beendet; so werden die
+Batterien wirklich voll, mit kleinerem Zell-Delta, und die Zellen sehen
+weniger Spannungsspitze und Wärme. Das betrifft nur das letzte ein bis zwei
+Prozent; der Überschuss geht in der Zeit an die anderen Batterien oder die
+Verbraucher. Angezeigt als Grund *oberer Ladebereich*; Batterien ohne
+Zellspannungen werden nicht begrenzt.
+
 Im Betriebsmodus *Aktiv* prüft SLEMS wie Omnibattery, ob jede Batterie die
 vorgegebene Leistung liefert. Liefert eine Batterie bei einer Vorgabe von
 mindestens 100 W (nach 30 s in dieser Richtung) dreimal hintereinander

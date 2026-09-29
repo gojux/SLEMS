@@ -275,8 +275,11 @@ sends commands.
 `battery_limits.py` (pure): `SocWindow` (block discharge at ≤ min SoC and
 charge at ≥ max SoC below 100 %, release 2 % away), `temperature_factor`
 (high limit after Omnibattery's `TemperatureChargeLimitManager`, plus a low
-limit with a 5 °C ramp) and `power_limits` (capability → user power limit →
-temperature → SoC window, with the limiting reason). The coordinator updates
+limit with a 5 °C ramp), `TopTaper` (after Omnibattery's full charge
+voltage taper: 200 W charge from a highest cell ≥ 3.48 V until < 3.44 V,
+always on, controllable batteries with cell voltages only) and
+`power_limits` (capability → user power limit → temperature → top taper →
+SoC window, with the limiting reason). The coordinator updates
 the window and `BatteryRuntime.power_limits` with every poll; the limits
 replace the capabilities in `BatteryUnit` (distribution) and `BatteryGroup`
 (allocation). `BatteryGroup` carries the capacity weighted `min_soc_pct` and
@@ -1337,3 +1340,4 @@ repository (otherwise its *brands* check fails).
 | 2026-09-29 | Regular full charge: one due battery at a time (older than 7 days or unknown; oldest, then name) is charged first and may exceed its maximum SoC once; spared when discharging while all others are above 50 % (fixed, not a setting); rests 90 s when full for a top delta measurement. The split between batteries and consumers is unchanged. |
 | 2026-09-29 | Daily targets per consumer (runtime, enabled time, energy, temperature) from deadline to deadline, set on the card; sources staged surplus only (default) / + batteries / + batteries + grid, forced as late as possible; priority over the batteries optional and only when the forecast is short; the minimum temperature always before the batteries, the target temperature ends the day. Forced runs are not yet part of the day chart and the SoC projection. |
 | 2026-09-29 | Forced runs of daily targets are an extra load in the day chart, the SoC projection and the night discharge, planned from the latest start as the worst case (shrinks as the surplus fills the target). A target temperature raised later in the period is no longer reached. |
+| 2026-09-29 | Gentle charging near the top without a setting (200 W from 3.48 V, released below 3.44 V, as Omnibattery's default): the BMS balances passively before the highest cell ends the charge; it costs only the last one or two percent. |
