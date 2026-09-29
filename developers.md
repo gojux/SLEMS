@@ -597,6 +597,31 @@ usual. The planning does not count on consumers to make room: planned
 consumer energy is only what does not fit, so an unavailable consumer (a hot
 boiler) never costs battery space.
 
+Daily targets (`consumer_targets.py`, pure): `TargetSettings` per consumer
+(entities on its card: selects `target_type`, `target_source`, numbers
+`target_hours`, `target_energy`, `target_min_temperature`,
+`target_max_temperature` (only with temperature sensors), switch
+`target_priority`, time `target_deadline`; `coordinator.consumer_targets`),
+`TargetProgress` per period from deadline to deadline (stored under
+`targets`; runtime from ≥ 50 W, enabled time from the device command, energy
+from the power, each sample's state until the next, gaps > 120 s skipped;
+`min_reached` / `done` for temperatures). `_count_target` runs with every
+poll and notifies a missed target once (`problems.async_notify_target_missed`).
+`evaluate` in `plan()` (`_target_states`): *done* (met, or the target
+temperature reached: off until the next period, `must_stay_off` after the
+minimum runtime), *forced* from the latest start (deadline − remaining time
+× 1.2 − 10 min; temperature: missing K × Wh/K of `ThermalLearner` / power, or
+2 h) if the source allows (batteries: they deliver an on/off consumer's full
+power, a power controlled one at least its minimum; it is then limited to
+their discharge power, `forced_max_w`), *boost* (surplus before the batteries:
+below the minimum temperature always; otherwise with `priority` when the
+forecast surplus until the deadline, `remaining_surplus_by_hour`, is below
+the missing energy plus `energy_to_full_wh`), else *surplus*. In `allocate`
+forced consumers get their power up front (the batteries cover the deficit
+like any load), boost consumers the surplus before the battery budget.
+Sensor *Planned power* has the `target_*` attributes for the card. Not yet
+in the day chart, the SoC projection and the night discharge.
+
 Supporting consumers with temperature sensors (`CONF_TEMPERATURE_ENTITY`,
 `CONF_TEMPERATURE_2_ENTITY`, their mean in `ConsumerState.temperature_c`):
 `coordinator.cap_consumer` builds the `CapConsumer` from
@@ -1298,3 +1323,4 @@ repository (otherwise its *brands* check fails).
 | 2026-09-29 | Feed-in cap minimum buffer fixed at 5 % of the kWp instead of a setting: it covers errors in the timing and height of a peak that the learned buffer (from daily totals) does not show, and its right value depends on the forecasts rather than the house, so a user cannot judge it. The night discharge reserve coverage is only shown while the reserve is automatic. |
 | 2026-09-29 | Other batteries from Omnibattery: not ported for now. Its drivers are tied to its coordinator; the device knowledge can be taken over (both GPL-3.0). Order if done: Venus v2/vA/vD, then AC coupled Zendure and Sessy, DC coupled devices only after the model is extended and with a tester. Users who want another battery are asked to open an issue. |
 | 2026-09-29 | Regular full charge: one due battery at a time (older than 7 days or unknown; oldest, then name) is charged first and may exceed its maximum SoC once; spared when discharging while all others are above 50 % (fixed, not a setting); rests 90 s when full for a top delta measurement. The split between batteries and consumers is unchanged. |
+| 2026-09-29 | Daily targets per consumer (runtime, enabled time, energy, temperature) from deadline to deadline, set on the card; sources staged surplus only (default) / + batteries / + batteries + grid, forced as late as possible; priority over the batteries optional and only when the forecast is short; the minimum temperature always before the batteries, the target temperature ends the day. Forced runs are not yet part of the day chart and the SoC projection. |

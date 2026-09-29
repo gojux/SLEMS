@@ -1,4 +1,4 @@
-"""Select platform: global operating mode, part of each consumer in the feed-in cap."""
+"""Select platform: global operating mode; role in the feed-in cap and daily target of each consumer."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import LEGACY_CAP_MODES, CapMode, OperatingMode
+from .const import LEGACY_CAP_MODES, CapMode, OperatingMode, TargetSource, TargetType
 from .consumers import ConsumerConfig
 from .coordinator import SlemsConfigEntry, SlemsCoordinator
 from .entity import SlemsConsumerEntity, SlemsSystemEntity
@@ -25,7 +25,11 @@ async def async_setup_entry(
     for consumer in coordinator.consumers:
         if consumer.controllable:
             async_add_entities(
-                [ConsumerCapModeSelect(coordinator, consumer)],
+                [
+                    ConsumerCapModeSelect(coordinator, consumer),
+                    ConsumerTargetTypeSelect(coordinator, consumer),
+                    ConsumerTargetSourceSelect(coordinator, consumer),
+                ],
                 config_subentry_id=consumer.subentry_id,
             )
 
@@ -87,3 +91,56 @@ class ConsumerCapModeSelect(SlemsConsumerEntity, SelectEntity, RestoreEntity):
     async def async_select_option(self, option: str) -> None:
         self.coordinator.consumer_cap_modes[self.consumer.subentry_id] = CapMode(option)
         self.async_write_ha_state()
+
+
+class _TargetSelect(SlemsConsumerEntity, SelectEntity, RestoreEntity):
+    """Option of a consumer's daily target (see consumer_targets), restored."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attribute: str
+    _enum: type
+
+    @property
+    def _settings(self):
+        return self.coordinator.consumer_targets[self.consumer.subentry_id]
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in self.options:
+            setattr(self._settings, self._attribute, self._enum(last_state.state))
+
+    @property
+    def current_option(self) -> str:
+        return getattr(self._settings, self._attribute).value
+
+    async def async_select_option(self, option: str) -> None:
+        setattr(self._settings, self._attribute, self._enum(option))
+        self.async_write_ha_state()
+        self.coordinator.async_update_listeners()
+
+
+class ConsumerTargetTypeSelect(_TargetSelect):
+    """Kind of daily target; the temperature target needs temperature sensors."""
+
+    _attribute = "type"
+    _enum = TargetType
+
+    def __init__(self, coordinator: SlemsCoordinator, consumer: ConsumerConfig) -> None:
+        super().__init__(coordinator, consumer, "target_type")
+        self._attr_options = [
+            t.value
+            for t in TargetType
+            if t is not TargetType.TEMPERATURE or consumer.temperature_entity_ids
+        ]
+
+
+class ConsumerTargetSourceSelect(_TargetSelect):
+    """What may cover the rest of the daily target in time."""
+
+    _attribute = "source"
+    _enum = TargetSource
+    _attr_options = [s.value for s in TargetSource]
+
+    def __init__(self, coordinator: SlemsCoordinator, consumer: ConsumerConfig) -> None:
+        super().__init__(coordinator, consumer, "target_source")

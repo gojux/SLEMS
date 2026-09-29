@@ -309,3 +309,34 @@ def test_remaining_pv_with_half_hour_periods() -> None:
     forecast = {start + timedelta(minutes=30 * i): 500.0 for i in range(6)}
     # 12:40–13:00 is a third of the hour 12:00 (1000 Wh), then 13:00–14:00.
     assert remaining_pv_wh(forecast, now) == pytest.approx(1000 / 3 + 1000)
+
+
+def test_boost_before_the_batteries() -> None:
+    # Below the battery priority threshold the batteries would take everything.
+    boosted = replace(ROD, boost=True)
+    result = allocate(2000, battery(20), [boosted], SETTINGS, expected_surplus_wh=None)
+    assert result.consumer_power_w["rod"] == 2000
+    assert result.battery_power_w == 0
+    result = allocate(4000, battery(20), [boosted], SETTINGS, expected_surplus_wh=None)
+    assert result.consumer_power_w["rod"] == 3000
+    assert result.battery_power_w == 1000
+
+
+def test_forced_without_surplus() -> None:
+    forced = replace(PUMP, forced=True)
+    # No surplus: the pump runs, the batteries cover it (grid target 0).
+    result = allocate(0, battery(60), [forced], SETTINGS, expected_surplus_wh=None)
+    assert result.consumer_power_w["pump"] == 500
+    assert result.battery_power_w == -500
+
+
+def test_done_target_switches_off() -> None:
+    done = replace(PUMP, must_stay_off=True)
+    result = allocate(3000, battery(80), [done], SETTINGS, expected_surplus_wh=50000)
+    assert result.consumer_power_w["pump"] == 0
+
+
+def test_forced_from_the_batteries_only_limited() -> None:
+    forced = replace(ROD, forced=True, forced_max_w=2500)
+    result = allocate(0, battery(60), [forced], SETTINGS, expected_surplus_wh=None)
+    assert result.consumer_power_w["rod"] == 2500

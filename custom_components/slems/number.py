@@ -22,8 +22,9 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .consumers import ConsumerConfig
 from .coordinator import BatteryRuntime, SlemsConfigEntry, SlemsCoordinator
-from .entity import SlemsBatteryEntity, SlemsSystemEntity
+from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -331,6 +332,16 @@ async def async_setup_entry(
                 (BatteryNumber(coordinator, battery, d) for d in BATTERY_NUMBERS),
                 config_subentry_id=battery.subentry_id,
             )
+    for consumer in coordinator.consumers:
+        if consumer.controllable:
+            async_add_entities(
+                (
+                    ConsumerTargetNumber(coordinator, consumer, d)
+                    for d in TARGET_NUMBERS
+                    if consumer.temperature_entity_ids or d.native_unit_of_measurement != UnitOfTemperature.CELSIUS
+                ),
+                config_subentry_id=consumer.subentry_id,
+            )
 
 
 class SettingNumber(SlemsSystemEntity, RestoreNumber):
@@ -428,3 +439,94 @@ class BatteryNumber(SlemsBatteryEntity, RestoreNumber):
     async def async_set_native_value(self, value: float) -> None:
         self._set(value)
         self.async_write_ha_state()
+
+
+@dataclass(frozen=True, kw_only=True)
+class TargetNumberDescription(NumberEntityDescription):
+    """Value of a consumer's daily target (see consumer_targets)."""
+
+    attribute: str
+
+
+TARGET_NUMBERS: tuple[TargetNumberDescription, ...] = (
+    TargetNumberDescription(
+        key="target_hours",
+        translation_key="target_hours",
+        attribute="hours",
+        native_unit_of_measurement=UnitOfTime.HOURS,
+        native_min_value=0.5,
+        native_max_value=24,
+        native_step=0.5,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    TargetNumberDescription(
+        key="target_energy",
+        translation_key="target_energy",
+        attribute="energy_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        native_min_value=0.1,
+        native_max_value=100,
+        native_step=0.1,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    TargetNumberDescription(
+        key="target_min_temperature",
+        translation_key="target_min_temperature",
+        attribute="min_temp_c",
+        device_class=NumberDeviceClass.TEMPERATURE,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        native_min_value=5,
+        native_max_value=90,
+        native_step=1,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    TargetNumberDescription(
+        key="target_max_temperature",
+        translation_key="target_max_temperature",
+        attribute="target_temp_c",
+        device_class=NumberDeviceClass.TEMPERATURE,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        native_min_value=5,
+        native_max_value=90,
+        native_step=1,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+    ),
+)
+
+
+class ConsumerTargetNumber(SlemsConsumerEntity, RestoreNumber):
+    """Value of a consumer's daily target, restored after a restart."""
+
+    entity_description: TargetNumberDescription
+
+    def __init__(
+        self,
+        coordinator: SlemsCoordinator,
+        consumer: ConsumerConfig,
+        description: TargetNumberDescription,
+    ) -> None:
+        super().__init__(coordinator, consumer, description.key)
+        self.entity_description = description
+
+    @property
+    def _settings(self):
+        return self.coordinator.consumer_targets[self.consumer.subentry_id]
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_number_data()
+        if last is not None and last.native_value is not None:
+            setattr(self._settings, self.entity_description.attribute, last.native_value)
+
+    @property
+    def native_value(self) -> float:
+        return getattr(self._settings, self.entity_description.attribute)
+
+    async def async_set_native_value(self, value: float) -> None:
+        setattr(self._settings, self.entity_description.attribute, value)
+        self.async_write_ha_state()
+        self.coordinator.async_update_listeners()

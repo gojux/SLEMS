@@ -64,6 +64,7 @@ async def async_setup_entry(
                 [
                     ConsumerControlSwitch(coordinator, consumer),
                     ConsumerLearningSwitch(coordinator, consumer),
+                    ConsumerTargetPrioritySwitch(coordinator, consumer),
                 ],
                 config_subentry_id=consumer.subentry_id,
             )
@@ -297,3 +298,35 @@ class ConsumerLearningSwitch(SlemsConsumerEntity, SwitchEntity, RestoreEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         self.coordinator.consumer_learning.discard(self.consumer.subentry_id)
         self.async_write_ha_state()
+
+
+class ConsumerTargetPrioritySwitch(SlemsConsumerEntity, SwitchEntity, RestoreEntity):
+    """Daily target: surplus before the batteries when the forecast is short (see consumer_targets)."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator: SlemsCoordinator, consumer: ConsumerConfig) -> None:
+        super().__init__(coordinator, consumer, "target_priority")
+
+    @property
+    def _settings(self):
+        return self.coordinator.consumer_targets[self.consumer.subentry_id]
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if (last_state := await self.async_get_last_state()) is not None:
+            self._settings.priority = last_state.state == STATE_ON
+
+    @property
+    def is_on(self) -> bool:
+        return self._settings.priority
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self._settings.priority = True
+        self.async_write_ha_state()
+        self.coordinator.async_update_listeners()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self._settings.priority = False
+        self.async_write_ha_state()
+        self.coordinator.async_update_listeners()

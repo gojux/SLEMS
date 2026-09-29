@@ -36,6 +36,7 @@ from .controller import ControlStatus
 from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 from .forecast.accuracy import Accuracy
 from .full_charge import is_due
+from .const import TargetType
 from .grid_friendly import correction_weight
 from .problems import CAP_EXCEEDED_AFTER_S
 from .pv_forecast import energy_on_day
@@ -827,6 +828,35 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             "response_off_s": controller.consumer_response_s(subentry_id, on=False),
             "grid_response_on_s": controller.consumer_grid_response_s(subentry_id, on=True),
             "grid_response_off_s": controller.consumer_grid_response_s(subentry_id, on=False),
+            **self._target_attributes(state),
+        }
+
+    def _target_attributes(self, state) -> dict:
+        """Daily target: mode, progress of the period, deadline and latest start."""
+        coordinator = self.coordinator
+        subentry_id = self.consumer.subentry_id
+        settings = coordinator.consumer_targets[subentry_id]
+        if settings.type is TargetType.NONE:
+            return {"target_type": settings.type.value}
+        progress = coordinator.target_progress[subentry_id]
+        target = coordinator.target_states.get(subentry_id)
+        goal, unit = coordinator.target_goal(settings)
+        return {
+            "target_type": settings.type.value,
+            "target_mode": target.mode.value if target else None,
+            "target_got": round(coordinator.target_got(settings, progress), 2),
+            "target_goal": goal,
+            "target_unit": unit,
+            "target_max_temperature_c": settings.target_temp_c,
+            "target_temperature_c": (
+                None if state is None or state.temperature_c is None else round(state.temperature_c, 1)
+            ),
+            "target_done": progress.done,
+            "target_deadline": progress.end.isoformat() if progress.end else None,
+            "target_latest_start": (
+                target.latest_start.isoformat() if target and target.latest_start else None
+            ),
+            "target_last_result": progress.last_result,
         }
 
 

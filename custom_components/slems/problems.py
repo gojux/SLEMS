@@ -216,6 +216,31 @@ class ProblemReporter:
         )
 
 
+    async def async_notify_target_missed(
+        self, subentry_id: str, name: str, got: float, goal: float, unit: str, deadline: str
+    ) -> None:
+        """Notification: a consumer did not reach its daily target by the deadline."""
+        text = await self._texts()
+        comma = self._hass.config.language.startswith("de")
+
+        def number(value: float) -> str:
+            formatted = f"{value:.1f}"
+            return formatted.replace(".", ",") if comma else formatted
+
+        placeholders = {
+            "name": name,
+            "got": f"{number(got)} {unit}",
+            "goal": f"{number(goal)} {unit}",
+            "deadline": deadline,
+        }
+        persistent_notification.async_create(
+            self._hass,
+            text("target_missed_message", **placeholders),
+            title=text("target_missed_title", **placeholders),
+            notification_id=f"{DOMAIN}_target_{subentry_id}",
+        )
+
+
 def _clock(moment: datetime) -> str:
     return dt_util.as_local(moment).strftime("%H:%M")
 

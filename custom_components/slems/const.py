@@ -144,6 +144,29 @@ class ControlMode(StrEnum):
     POWER = "power"
 
 
+class TargetType(StrEnum):
+    """Daily target of a consumer (see consumer_targets)."""
+
+    NONE = "none"
+    # Time it draws power.
+    RUNTIME = "runtime"
+    # Time SLEMS has it switched on (devices with their own control).
+    ENABLED = "enabled"
+    ENERGY = "energy"
+    # Minimum and target temperature of its storage (temperature sensors).
+    TEMPERATURE = "temperature"
+
+
+class TargetSource(StrEnum):
+    """What may cover a daily target the surplus does not reach in time."""
+
+    SURPLUS = "surplus"
+    # Also the batteries, as long as they can deliver.
+    BATTERY = "battery"
+    # Also the batteries and then the grid.
+    GRID = "grid"
+
+
 class CapMode(StrEnum):
     """How a consumer takes part in the feed-in cap (see feed_in_cap)."""
 

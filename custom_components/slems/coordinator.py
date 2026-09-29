@@ -68,6 +68,8 @@ from .const import (
     DOMAIN,
     SCAN_INTERVAL,
     CapMode,
+    TargetSource,
+    TargetType,
     ConsumerType,
     ControlMode,
     OperatingMode,
@@ -121,7 +123,9 @@ from .grid_friendly import (
     pv_correction,
     pv_elapsed_share,
     remaining_surplus,
+    remaining_surplus_by_hour,
 )
+from .consumer_targets import TargetMode, TargetProgress, TargetSettings, TargetState, evaluate
 from .night_discharge import NightDischargePlan, plan_night_discharge, pv_takeover
 from .peak_shaving import auto_limit, hours_until_refill
 from .pv_forecast import (
@@ -147,6 +151,7 @@ CONTROL_STORE_KEY = "control"
 PV_ACCURACY_STORE_KEY = "pv_accuracy"
 CONSUMERS_STORE_KEY = "consumers"
 THERMAL_STORE_KEY = "thermal"
+TARGETS_STORE_KEY = "targets"
 # Share of the learned storage capacity the feed-in cap planning relies on.
 THERMAL_SAFETY = 0.8
 # A power consumer counts as commanded at full power from this share on.
@@ -595,6 +600,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         }
         # Consumers whose learned power and thermostat behaviour are used.
         self.consumer_learning: set[str] = set()
+        # Daily targets of the consumers (see consumer_targets): settings
+        # (restored by their entities), progress of the period (stored) and
+        # the mode of the last plan.
+        self.consumer_targets = {c.subentry_id: TargetSettings() for c in consumers}
+        self.target_progress = {c.subentry_id: TargetProgress() for c in consumers}
+        self.target_states: dict[str, TargetState] = {}
         # Battery due for its regular full charge (see full_charge), batteries
         # resting after it (monotonic end) and the last full charge seen.
         self.full_charge_battery: str | None = None
@@ -620,6 +631,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         for subentry_id, data in (stored.get(THERMAL_STORE_KEY) or {}).items():
             if subentry_id in self.thermal_learners:
                 self.thermal_learners[subentry_id] = ThermalLearner.from_dict(data)
+        for subentry_id, data in (stored.get(TARGETS_STORE_KEY) or {}).items():
+            if subentry_id in self.target_progress:
+                self.target_progress[subentry_id] = TargetProgress.from_dict(data)
         if gain := (stored.get(CONTROL_STORE_KEY) or {}).get("gain"):
             self.controller.gain_adapter.reset(gain)
         for battery in self.batteries:
@@ -757,6 +771,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         data[THERMAL_STORE_KEY] = {
             subentry_id: learner.as_dict() for subentry_id, learner in self.thermal_learners.items()
         }
+        data[TARGETS_STORE_KEY] = {
+            subentry_id: progress.as_dict() for subentry_id, progress in self.target_progress.items()
+        }
         data[CONTROL_STORE_KEY] = {"gain": self.controller.gain_adapter.gain}
         data[PV_ACCURACY_STORE_KEY] = self.pv_accuracy.as_dict()
         data[MORNING_GAP_STORE_KEY] = self.morning_gap.as_dict()
@@ -803,6 +820,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     learner.nominal_w or full_power,
                     command is not None and command >= FULL_COMMAND_SHARE * full_power,
                 )
+            self._count_target(consumer, state, now, command is not None and command > 0)
 
         if forecast_entries := config.get(CONF_PV_FORECAST_ENTRIES):
             snapshot.pv_forecast = await async_get_pv_forecast(self.hass, forecast_entries)
@@ -1322,18 +1340,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         snapshot.day_plan = forecast_plan.day_plan
         snapshot.day_plan_tomorrow = forecast_plan.day_plan_tomorrow
 
+        self._target_states(snapshot, battery, pv_forecast, load, wall_now)
         requests = [
-            ConsumerRequest(
-                subentry_id=consumer.subentry_id,
-                priority=consumer.priority,
-                control_mode=consumer.control_mode,
-                nominal_power_w=consumer.nominal_power_w or 0,
-                min_power_w=consumer.min_power_w or 0,
-                max_power_w=consumer.max_power_w or 0,
-                must_stay_on=self._runtime.must_stay_on(consumer, now),
-                must_stay_off=self._runtime.must_stay_off(consumer, now),
-                cap_mode=self.cap_mode(consumer.subentry_id),
-            )
+            self._request(consumer, now, battery)
             for consumer in map(self.effective_consumer, self.consumers)
             if snapshot.is_controllable_now(consumer.subentry_id)
         ]
@@ -1764,6 +1773,122 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             support,
             normal,
         )
+
+    def _request(
+        self, consumer: ConsumerConfig, now: float, battery: BatteryGroup | None
+    ) -> ConsumerRequest:
+        """Allocation request of a consumer, with its daily target."""
+        mode = self.target_states.get(consumer.subentry_id, TargetState(TargetMode.NONE)).mode
+        must_stay_on = self._runtime.must_stay_on(consumer, now)
+        return ConsumerRequest(
+            subentry_id=consumer.subentry_id,
+            priority=consumer.priority,
+            control_mode=consumer.control_mode,
+            nominal_power_w=consumer.nominal_power_w or 0,
+            min_power_w=consumer.min_power_w or 0,
+            max_power_w=consumer.max_power_w or 0,
+            must_stay_on=must_stay_on,
+            # A met target switches it off (after its minimum runtime).
+            must_stay_off=self._runtime.must_stay_off(consumer, now)
+            or (mode is TargetMode.DONE and not must_stay_on),
+            cap_mode=self.cap_mode(consumer.subentry_id),
+            boost=mode is TargetMode.BOOST,
+            forced=mode is TargetMode.FORCED,
+            forced_max_w=(
+                battery.max_discharge_w
+                if mode is TargetMode.FORCED
+                and battery is not None
+                and self.consumer_targets[consumer.subentry_id].source is TargetSource.BATTERY
+                else None
+            ),
+        )
+
+    def _count_target(
+        self, consumer: ConsumerConfig, state: ConsumerState, now: float, commanded_on: bool
+    ) -> None:
+        """Progress of the consumer's daily target; a missed one is notified once."""
+        settings = self.consumer_targets[consumer.subentry_id]
+        if settings.type is TargetType.NONE:
+            return
+        progress = self.target_progress[consumer.subentry_id]
+        goal, unit = self.target_goal(settings)
+        got = self.target_got(settings, progress)
+        end = progress.end
+        result = progress.update(now, dt_util.now(), settings, state.power_w, commanded_on)
+        if settings.type is TargetType.TEMPERATURE and state.temperature_c is not None:
+            if state.temperature_c >= settings.min_temp_c:
+                progress.min_reached = True
+            if state.temperature_c >= settings.target_temp_c:
+                progress.done = True
+        if result == "missed" and end is not None:
+            self.config_entry.async_create_background_task(
+                self.hass,
+                self.problems.async_notify_target_missed(
+                    consumer.subentry_id, consumer.name, got, goal, unit,
+                    dt_util.as_local(end).strftime("%H:%M"),
+                ),
+                "slems target notification",
+            )
+
+    @staticmethod
+    def target_goal(settings: TargetSettings) -> tuple[float, str]:
+        if settings.type is TargetType.ENERGY:
+            return settings.energy_kwh, "kWh"
+        if settings.type is TargetType.TEMPERATURE:
+            return settings.min_temp_c, "°C"
+        return settings.hours, "h"
+
+    def target_got(self, settings: TargetSettings, progress: TargetProgress) -> float:
+        if settings.type is TargetType.ENERGY:
+            return progress.energy_wh / 1000
+        if settings.type is TargetType.RUNTIME:
+            return progress.runtime_s / 3600
+        if settings.type is TargetType.ENABLED:
+            return progress.enabled_s / 3600
+        return 0.0
+
+    def _target_states(
+        self,
+        snapshot: SystemSnapshot,
+        battery: BatteryGroup | None,
+        pv_forecast: PvForecast | None,
+        load: float | None,
+        wall_now: datetime,
+    ) -> None:
+        """Mode of every consumer's daily target for this plan."""
+        consumption = snapshot.consumption_forecast
+        self.target_states = {}
+        for consumer in map(self.effective_consumer, self.consumers):
+            settings = self.consumer_targets[consumer.subentry_id]
+            if settings.type is TargetType.NONE or not consumer.controllable:
+                continue
+            progress = self.target_progress[consumer.subentry_id]
+            power = self._full_power_w(consumer)
+            state = snapshot.consumers.get(consumer.subentry_id)
+            end = progress.end
+            surplus = 0.0
+            if pv_forecast is not None and end is not None:
+                surplus = sum(
+                    power_w * hours
+                    for _, power_w, hours in remaining_surplus_by_hour(
+                        pv_forecast, consumption.total if consumption else None, load, wall_now, end
+                    )
+                )
+            thermal = self.thermal_learners.get(consumer.subentry_id)
+            # The batteries must deliver an on/off consumer's full power, a
+            # power controlled one at least its minimum (it is then limited).
+            needed = power if consumer.control_mode is ControlMode.SWITCH else max(consumer.min_power_w or 0, 1.0)
+            self.target_states[consumer.subentry_id] = evaluate(
+                settings,
+                progress,
+                dt_util.as_local(wall_now),
+                power_w=power,
+                temperature_c=state.temperature_c if state else None,
+                wh_per_k=thermal.energy_per_k if thermal else None,
+                expected_surplus_wh=surplus,
+                battery_need_wh=battery.energy_to_full_wh if battery else 0.0,
+                battery_can_supply=battery is not None and battery.max_discharge_w >= needed,
+            )
 
     @staticmethod
     def _full_power_w(consumer: ConsumerConfig) -> float:

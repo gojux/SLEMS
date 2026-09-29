@@ -232,6 +232,24 @@
           "normal": "Normal",
           "never": "Nie"
         }
+      },
+      "target_type": {
+        "name": "Tagesziel",
+        "state": {
+          "none": "Keins",
+          "runtime": "Laufzeit",
+          "enabled": "Freigabezeit",
+          "energy": "Energie",
+          "temperature": "Temperatur"
+        }
+      },
+      "target_source": {
+        "name": "Tagesziel Quelle",
+        "state": {
+          "surplus": "Nur Überschuss",
+          "battery": "Überschuss + Batterie",
+          "grid": "Überschuss + Batterie + Netz"
+        }
       }
     },
     "sensor": {
@@ -503,6 +521,9 @@
       },
       "regular_full_charge": {
         "name": "Regelmäßige Vollladung"
+      },
+      "target_priority": {
+        "name": "Tagesziel vor der Batterie"
       }
     },
     "number": {
@@ -601,6 +622,18 @@
       },
       "full_charge_interval": {
         "name": "Vollladung spätestens alle"
+      },
+      "target_hours": {
+        "name": "Tagesziel Stunden"
+      },
+      "target_energy": {
+        "name": "Tagesziel Energie"
+      },
+      "target_min_temperature": {
+        "name": "Mindesttemperatur"
+      },
+      "target_max_temperature": {
+        "name": "Zieltemperatur"
       }
     },
     "binary_sensor": {
@@ -610,11 +643,22 @@
       "not_responding": {
         "name": "Reagiert nicht"
       }
+    },
+    "time": {
+      "target_deadline": {
+        "name": "Tagesziel bis"
+      }
     }
   },
   "exceptions": {
     "balancing_requires_active": {
       "message": "Der aktive Zellausgleich kann nur in der Betriebsmodus „Aktiv“ gestartet werden."
+    },
+    "target_missed_title": {
+      "message": "Tagesziel von {name} verfehlt"
+    },
+    "target_missed_message": {
+      "message": "{name} hat bis {deadline} {got} von {goal} erreicht. Reicht der Überschuss öfter nicht, erlaube auf seiner Karte die Batterie oder das Netz als Quelle, dann holt SLEMS den Rest rechtzeitig nach."
     },
     "balancing_done_title": {
       "message": "Zellausgleich von {name} abgeschlossen"

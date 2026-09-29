@@ -251,6 +251,27 @@ Every consumer needs its own power **and** energy sensor.
   feed-in cap, never the surplus above the limit. Within a role the priority
   decides. Applies only while *Control active* is on (greyed out otherwise).
   See *Feed-in cap*.
+- **Daily target** (per controlled consumer, on its card under *Daily
+  target*): *runtime* (time it draws power), *enabled time* (time SLEMS has
+  it switched on, for devices with their own control such as a dehumidifier
+  with a hygrostat), *energy* (kWh) or *temperature* (with temperature
+  sensors: minimum and target temperature of its storage). Counted from one
+  deadline (*Until*, default 22:00, also across midnight) to the next and met
+  from the surplus first. *Source* decides what may cover the rest in time:
+  *surplus only* (default; the target may be missed, then a notification
+  says so), *surplus + batteries* (from the latest start on the consumer runs
+  regardless of the surplus as long as the batteries can deliver, a power
+  controlled one at most with their discharge power) or
+  *surplus + batteries + grid*. The latest start is the deadline minus the
+  remaining time × 1.2 minus 10 minutes. *Before the batteries when short*: the consumer gets the
+  surplus before the batteries if the forecast surplus until the deadline is
+  short for the rest of its target plus filling the batteries. Temperature:
+  below the minimum the consumer always gets the surplus before the
+  batteries (forced from the latest start, estimated with the learned energy
+  per degree, otherwise 2 hours before the deadline); at the target
+  temperature it is off until the next period. The card shows the progress,
+  e.g. *1.5 / 4 h · until 22:00 · forced from 19:30*, and the chips *priority*
+  or *forced* while they apply.
 
 **Battery efficiency** (round trip, AC to AC), one of three sources per
 battery:

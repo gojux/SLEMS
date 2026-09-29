@@ -31,6 +31,11 @@ Night discharge (optional, see night_discharge): outside a surplus the
 batteries discharge at least with the planned night power, ignoring the
 discharge grid target but still respecting the maximum grid export.
 
+Daily targets of consumers (see consumer_targets): a consumer short of its
+target gets the surplus before the batteries (boost); from its latest start
+on it runs at full power regardless of the surplus (forced), the batteries
+or the grid cover it like any other load.
+
 Feed-in cap (optional, see feed_in_cap) takes precedence over all of the
 above: the surplus above the limit goes to the supporting consumers as far as
 the plan runs them from the start of a peak that does not fit into the
@@ -113,12 +118,24 @@ class ConsumerRequest:
     # Minimum pause not yet elapsed: must stay off.
     must_stay_off: bool = False
     cap_mode: CapMode = CapMode.NORMAL
+    # Daily target (see consumer_targets): gets the surplus before the
+    # batteries (boost), or runs regardless of the surplus (forced).
+    boost: bool = False
+    forced: bool = False
+    # Forced from the batteries only: at most what they can deliver.
+    forced_max_w: float | None = None
 
     @property
     def minimum_running_power_w(self) -> float:
         if self.control_mode is ControlMode.SWITCH:
             return self.nominal_power_w
         return self.min_power_w
+
+    @property
+    def full_power_w(self) -> float:
+        if self.control_mode is ControlMode.SWITCH:
+            return self.nominal_power_w
+        return self.max_power_w
 
 
 @dataclass(frozen=True)
@@ -191,9 +208,16 @@ def allocate(
     ordered = sorted(consumers, key=lambda c: (c.priority, c.subentry_id))
     consumer_power = {c.subentry_id: 0.0 for c in ordered}
 
-    # Consumers within their minimum runtime keep at least their running power.
+    # Consumers within their minimum runtime keep at least their running power;
+    # forced ones (daily target) run at full power, the batteries or the grid
+    # cover the deficit like any other load.
     for consumer in ordered:
-        if consumer.must_stay_on:
+        if consumer.forced:
+            power = consumer.full_power_w
+            if consumer.forced_max_w is not None:
+                power = min(power, consumer.forced_max_w)
+            consumer_power[consumer.subentry_id] = power
+        elif consumer.must_stay_on:
             consumer_power[consumer.subentry_id] = consumer.minimum_running_power_w
     remaining = available_w - sum(consumer_power.values())
 
@@ -254,6 +278,8 @@ def allocate(
         remaining -= over
         max_charge = 0.0 if cap.hold_charging else max_charge - cap_charge
     remaining = max(0.0, remaining - settings.charge_grid_target_w)
+    # Daily targets that are short on time take the surplus before the batteries.
+    remaining = _distribute(remaining, [c for c in ordered if c.boost], consumer_power)
 
     if charge_secured:
         strategy = Strategy.SHARED

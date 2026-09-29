@@ -262,6 +262,28 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   Grenze. Innerhalb eines Einsatzes entscheidet die Priorität. Wirkt nur,
   solange *Steuerung aktiv* an ist (sonst ausgegraut). Siehe
   *Einspeisebegrenzung*.
+- **Tagesziel** (je gesteuertem Verbraucher, auf seiner Karte unter
+  *Tagesziel*): *Laufzeit* (Zeit, in der er Leistung zieht), *Freigabezeit*
+  (Zeit, in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung
+  wie einen Luftentfeuchter mit Hygrostat), *Energie* (kWh) oder *Temperatur*
+  (mit Temperaturfühlern: Mindest- und Zieltemperatur seines Speichers).
+  Gezählt von Frist (*Bis*, Standard 22:00, auch über Mitternacht) zu Frist
+  und zuerst aus dem Überschuss erfüllt. *Quelle* bestimmt, was den Rest
+  rechtzeitig decken darf: *Nur Überschuss* (Standard; das Ziel kann
+  verfehlt werden, dann meldet es eine Benachrichtigung), *Überschuss +
+  Batterie* (ab der spätesten Startzeit läuft der Verbraucher unabhängig vom
+  Überschuss, solange die Batterien liefern können, ein leistungsgeregelter
+  höchstens mit ihrer Entladeleistung) oder *Überschuss + Batterie + Netz*.
+  Die späteste Startzeit ist die Frist minus Restzeit × 1,2 minus 10 Minuten.
+  *Vor der Batterie, wenn knapp*: Der Verbraucher bekommt den Überschuss vor
+  den Batterien, wenn der prognostizierte Überschuss bis zur Frist für den
+  Rest seines Ziels plus das Füllen der Batterien knapp ist. Temperatur:
+  Unter der Mindesttemperatur bekommt er den Überschuss immer vor den
+  Batterien (ab der spätesten Startzeit erzwungen, geschätzt mit der
+  gelernten Energie pro Grad, sonst 2 Stunden vor der Frist); ab der
+  Zieltemperatur ist er bis zur nächsten Periode aus. Die Karte zeigt den
+  Fortschritt, z. B. *1,5 / 4 h · bis 22:00 · erzwungen ab 19:30*, und die
+  Chips *Vorrang* oder *erzwungen*, solange sie gelten.
 
 **Wirkungsgrad der Batterie** (Gesamtwirkungsgrad, AC zu AC), je Batterie
 aus einer von drei Quellen:

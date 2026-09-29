@@ -232,6 +232,24 @@
           "normal": "Normal",
           "never": "Never"
         }
+      },
+      "target_type": {
+        "name": "Daily target",
+        "state": {
+          "none": "None",
+          "runtime": "Runtime",
+          "enabled": "Enabled time",
+          "energy": "Energy",
+          "temperature": "Temperature"
+        }
+      },
+      "target_source": {
+        "name": "Daily target source",
+        "state": {
+          "surplus": "Surplus only",
+          "battery": "Surplus + batteries",
+          "grid": "Surplus + batteries + grid"
+        }
       }
     },
     "sensor": {
@@ -503,6 +521,9 @@
       },
       "regular_full_charge": {
         "name": "Regular full charge"
+      },
+      "target_priority": {
+        "name": "Daily target before the batteries"
       }
     },
     "number": {
@@ -601,6 +622,18 @@
       },
       "full_charge_interval": {
         "name": "Full charge at the latest every"
+      },
+      "target_hours": {
+        "name": "Daily target hours"
+      },
+      "target_energy": {
+        "name": "Daily target energy"
+      },
+      "target_min_temperature": {
+        "name": "Minimum temperature"
+      },
+      "target_max_temperature": {
+        "name": "Target temperature"
       }
     },
     "binary_sensor": {
@@ -610,11 +643,22 @@
       "not_responding": {
         "name": "Not responding"
       }
+    },
+    "time": {
+      "target_deadline": {
+        "name": "Daily target deadline"
+      }
     }
   },
   "exceptions": {
     "balancing_requires_active": {
       "message": "Active cell balancing can only be started in operating mode active."
+    },
+    "target_missed_title": {
+      "message": "Daily target of {name} missed"
+    },
+    "target_missed_message": {
+      "message": "{name} got {got} of {goal} by {deadline}. If the surplus is often not enough, allow the batteries or the grid as source on its card, so SLEMS makes up the rest in time."
     },
     "balancing_done_title": {
       "message": "Cell balancing of {name} finished"

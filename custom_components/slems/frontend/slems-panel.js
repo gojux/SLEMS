@@ -149,6 +149,25 @@ const STRINGS = {
     onlyWithControl: "Applies only while the control is active.",
     capSection: "Feed-in cap",
     capRole: "Role",
+    targetSection: "Daily target",
+    targetKind: "Kind",
+    targetHours: "Hours",
+    targetEnergy: "Energy",
+    targetMin: "Minimum temperature",
+    targetMax: "Target temperature",
+    targetDeadline: "Until",
+    targetSource: "Source",
+    targetPriority: "Before the batteries when short",
+    targetProgress: "Today",
+    targetUntil: "until {time}",
+    targetLatest: "forced from {time}",
+    targetDone: "reached",
+    targetForced: "running forced",
+    targetBoost: "before the batteries",
+    targetMinShort: "min.",
+    targetGoalTemp: "target",
+    targetBoostChip: "priority",
+    targetForcedChip: "forced",
     storageCapacity: "Storage left",
     storageLearning: "learning ({runs}/3 heating runs, {marks}/2 thermostat cycles)",
     storageUntilCycling: "{energy} until it cycles",
@@ -282,6 +301,13 @@ const STRINGS = {
       feed_in_cap_limit: "Share of the PV peak power that may be fed in at most, e.g. 60 %.",
       feed_in_cap_buffer:
         "Extra space on top of the forecast energy above the limit, in % of it, against a too low PV forecast. Negative values plan with less.",
+      target_type:
+        "Runtime: time the consumer draws power. Enabled time: time SLEMS has it switched on, for devices with their own control (a dehumidifier with a hygrostat). Energy: kWh. Temperature: minimum and target temperature of its storage (temperature sensors). Counted from one deadline to the next; met from the surplus first.",
+      target_source:
+        "What may cover the rest if the surplus is not enough by the deadline. With the batteries (and the grid) the consumer runs from the latest start on regardless of the surplus. Only surplus: the target may be missed (notification).",
+      target_priority:
+        "The consumer gets the surplus before the batteries if the forecast surplus until the deadline is short for the rest of its target plus filling the batteries.",
+      target_deadline: "End of the daily period, e.g. 22:00; also across midnight (06:00 = until the next morning).",
       cap_mode:
         "Supporting: gets no other surplus while the feed-in cap is on, only the surplus above the limit the batteries cannot absorb. If the forecast shows that a peak does not fit into the batteries, it runs from the start of the peak so its power is used for the whole peak. Normal: surplus as without the feed-in cap; above the limit it takes what the batteries and the supporting consumers cannot, before it is curtailed. Never: surplus as without the feed-in cap, never the surplus above the limit.",
       feed_in_cap_auto_buffer:
@@ -448,6 +474,25 @@ const STRINGS = {
     onlyWithControl: "Wirkt nur bei aktiver Steuerung.",
     capSection: "Einspeisebegrenzung",
     capRole: "Einsatz",
+    targetSection: "Tagesziel",
+    targetKind: "Art",
+    targetHours: "Stunden",
+    targetEnergy: "Energie",
+    targetMin: "Mindesttemperatur",
+    targetMax: "Zieltemperatur",
+    targetDeadline: "Bis",
+    targetSource: "Quelle",
+    targetPriority: "Vor der Batterie, wenn knapp",
+    targetProgress: "Heute",
+    targetUntil: "bis {time}",
+    targetLatest: "erzwungen ab {time}",
+    targetDone: "erreicht",
+    targetForced: "läuft erzwungen",
+    targetBoost: "vor der Batterie",
+    targetMinShort: "min.",
+    targetGoalTemp: "Ziel",
+    targetBoostChip: "Vorrang",
+    targetForcedChip: "erzwungen",
     storageCapacity: "Speicherreserve",
     storageLearning: "lernt noch ({runs}/3 Heizläufe, {marks}/2 Taktbeginne)",
     storageUntilCycling: "{energy} bis zum Takten",
@@ -581,6 +626,13 @@ const STRINGS = {
       feed_in_cap_limit: "Anteil der PV-Spitzenleistung, der höchstens eingespeist werden darf, z. B. 60 %.",
       feed_in_cap_buffer:
         "Zusätzlicher Platz zur prognostizierten Energie über der Grenze, in % davon, gegen eine zu niedrige PV-Prognose. Negative Werte planen mit weniger.",
+      target_type:
+        "Laufzeit: Zeit, in der der Verbraucher Leistung zieht. Freigabezeit: Zeit, in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung (Luftentfeuchter mit Hygrostat). Energie: kWh. Temperatur: Mindest- und Zieltemperatur seines Speichers (Temperaturfühler). Gezählt von Frist zu Frist; zuerst aus dem Überschuss.",
+      target_source:
+        "Was den Rest decken darf, wenn der Überschuss bis zur Frist nicht reicht. Mit Batterie (und Netz) läuft der Verbraucher ab der spätesten Startzeit unabhängig vom Überschuss. Nur Überschuss: Das Ziel kann verfehlt werden (Benachrichtigung).",
+      target_priority:
+        "Der Verbraucher bekommt den Überschuss vor den Batterien, wenn der prognostizierte Überschuss bis zur Frist für den Rest seines Ziels plus das Füllen der Batterien knapp ist.",
+      target_deadline: "Ende des Tageszeitraums, z. B. 22:00; auch über Mitternacht (06:00 = bis zum nächsten Morgen).",
       cap_mode:
         "Unterstützend: bekommt bei aktiver Einspeisebegrenzung keinen sonstigen Überschuss, nur den Überschuss über der Grenze, den die Batterien nicht aufnehmen können. Zeigt die Prognose, dass eine Spitze nicht in die Batterien passt, läuft er ab Beginn der Spitze, damit seine Leistung über die ganze Spitze genutzt wird. Normal: Überschuss wie ohne Einspeisebegrenzung; über der Grenze nimmt er, was Batterien und unterstützende Verbraucher nicht schaffen, bevor abgeregelt wird. Nie: Überschuss wie ohne Einspeisebegrenzung, nie den Überschuss über der Grenze.",
       feed_in_cap_auto_buffer:
@@ -2644,11 +2696,16 @@ class SlemsPanel extends HTMLElement {
             attrs.blocked ? t.blocked : "",
             attrs.saturated ? t.saturated : "",
             attrs.resting ? t.resting : "",
+            attrs.target_mode === "boost" ? t.targetBoostChip : "",
+            attrs.target_mode === "forced" ? t.targetForcedChip : "",
           ]
             .filter(Boolean)
             .map((chip) => `<span class="chip">${chip}</span>`)
             .join("");
-          const seconds = (v) => (v === null || v === undefined ? "–" : `${Math.round(v * 10) / 10} s`);
+          const seconds = (v) =>
+            v === null || v === undefined
+              ? "–"
+              : `${new Intl.NumberFormat(this._hass?.locale?.language || "en", { maximumFractionDigits: 1 }).format(v)} s`;
           // Switching on (with the start delay of the device) / off.
           const response = `${seconds(attrs.response_on_s)} / ${seconds(attrs.response_off_s)}`;
           const gridResponse = `${seconds(attrs.grid_response_on_s)} / ${seconds(attrs.grid_response_off_s)}`;
@@ -2661,10 +2718,57 @@ class SlemsPanel extends HTMLElement {
               ${c.controllable ? this._row(t.gridResponseTime, gridResponse, planned?.entity_id) : ""}
             </dl>${
               settings.length ? `<div class="settings card-setting">${settings.map((st) => this._control(st)).join("")}</div>` : ""
-            }${capSection}</section>`;
+            }${capSection}${c.controllable ? this._targetSection(c, attrs, planned) : ""}</section>`;
         })
         .join("")
     );
+  }
+
+  /** Daily target of a consumer: its settings (only the ones of its kind) and the progress. */
+  _targetSection(c, attrs, planned) {
+    const t = this._t;
+    const s = (key) => this._state(key, c.device_id);
+    const kind = s("target_type");
+    if (!kind) return "";
+    const type = kind.state;
+    const controls = [[kind, t.targetKind]];
+    if (type === "runtime" || type === "enabled") controls.push([s("target_hours"), t.targetHours]);
+    if (type === "energy") controls.push([s("target_energy"), t.targetEnergy]);
+    if (type === "temperature") {
+      controls.push([s("target_min_temperature"), t.targetMin], [s("target_max_temperature"), t.targetMax]);
+    }
+    if (type !== "none") controls.push([s("target_deadline"), t.targetDeadline], [s("target_source"), t.targetSource]);
+    if (type !== "none" && type !== "temperature") controls.push([s("target_priority"), t.targetPriority]);
+    const progress =
+      type === "none" ? "" : `<dl>${this._row(t.targetProgress, escapeHtml(this._targetText(attrs, s("target_source")?.state)), planned?.entity_id)}</dl>`;
+    return `<div class="settings card-setting"><h3 class="card-subheading">${t.targetSection}</h3>${controls
+      .filter(([st]) => st)
+      .map(([st, label]) => this._control(st, { label }))
+      .join("")}${progress}</div>`;
+  }
+
+  /** "2,5 / 4 h · bis 22:00 · erzwungen ab 19:30" or "43 °C · min. 40 °C · Ziel 55 °C". */
+  _targetText(attrs, source) {
+    const t = this._t;
+    const language = this._hass?.locale?.language || "en";
+    const number = (v) => new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(v);
+    const clock = (iso) =>
+      iso ? new Date(iso).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" }) : "–";
+    const mode = attrs.target_mode;
+    const parts = [];
+    if (attrs.target_type === "temperature") {
+      const temperature = attrs.target_temperature_c;
+      parts.push(temperature === null || temperature === undefined ? "– °C" : `${number(temperature)} °C`);
+      parts.push(`${t.targetMinShort} ${number(attrs.target_goal)} °C`, `${t.targetGoalTemp} ${number(attrs.target_max_temperature_c)} °C`);
+    } else {
+      parts.push(`${number(attrs.target_got ?? 0)} / ${number(attrs.target_goal)} ${attrs.target_unit}`);
+    }
+    parts.push(t.targetUntil.replace("{time}", clock(attrs.target_deadline)));
+    if (mode === "done") parts.push(t.targetDone);
+    else if (mode === "forced") parts.push(t.targetForced);
+    else if (source !== "surplus" && attrs.target_latest_start) parts.push(t.targetLatest.replace("{time}", clock(attrs.target_latest_start)));
+    if (mode === "boost") parts.push(t.targetBoost);
+    return parts.join(" · ");
   }
 
   // --- settings ----------------------------------------------------------------
@@ -2769,6 +2873,10 @@ class SlemsPanel extends HTMLElement {
       return `<div class="setting"><span>${name}</span><span class="readonly">${escapeHtml(
         effective ? this._format(effective) : "–"
       )} (${this._t.automatic})</span></div>`;
+    }
+    if (domain === "time") {
+      const value = (stateObj.state || "").slice(0, 5);
+      return `<div class="setting"><span>${name}</span><input type="time" data-entity="${stateObj.entity_id}" data-kind="time" aria-label="${escapeHtml(title)}" value="${escapeHtml(value)}"></div>`;
     }
     if (domain === "sensor") {
       return `<div class="setting"><span>${name}</span><span class="readonly">${escapeHtml(this._format(stateObj))}</span></div>`;
@@ -2910,6 +3018,8 @@ class SlemsPanel extends HTMLElement {
       this._hass.callService("switch", target.checked ? "turn_on" : "turn_off", { entity_id: entityId });
     } else if (kind === "select") {
       this._hass.callService("select", "select_option", { entity_id: entityId, option: target.value });
+    } else if (kind === "time") {
+      if (target.value) this._hass.callService("time", "set_value", { entity_id: entityId, time: `${target.value}:00` });
     } else if (kind === "number") {
       const value = parseFloat(target.value);
       if (Number.isFinite(value)) {
@@ -3117,6 +3227,8 @@ const STYLE = `
   .setting-hint { display: block; margin-top: 4px; font-size: 12px; color: var(--secondary-text-color); line-height: 1.35; }
   .setting input[type=number] { width: 90px; font: inherit; padding: 4px 6px; border-radius: 6px; text-align: right;
     border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); }
+  .setting input[type=time] { font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--divider-color);
+    background: var(--card-background-color); color: var(--primary-text-color); color-scheme: light dark; }
   .setting select { font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--divider-color);
     background: var(--card-background-color); color: var(--primary-text-color); max-width: 60%; }
   .card-setting .setting > span:first-child { min-width: 0; }
