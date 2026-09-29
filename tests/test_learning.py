@@ -230,3 +230,27 @@ def test_start_delay_is_no_thermostat_pause() -> None:
             learner.update(t, True, 300)
             t += 5
     assert learner.cycles == 0
+
+
+def test_thermal_storage_energy_per_kelvin_per_sensor() -> None:
+    from custom_components.slems.learning import ThermalLearner
+
+    # 3 runs of 1 h at 3000 W: the sensor at the heating element rises 30 K,
+    # the one higher up 10 K, the mean 20 K.
+    learner = ThermalLearner()
+    t = 0.0
+    for _ in range(3):
+        low, high = 20.0, 30.0
+        for step in range(721):
+            share = step / 720
+            temps = (low + 30 * share, high + 10 * share)
+            learner.update(t, True, 3000.0, sum(temps) / 2, 3000.0, True, temps)
+            t += 5
+        learner.update(t, False, 0.0, (50.0 + 40.0) / 2, 3000.0, True, (50.0, 40.0))
+        t += 3600
+    assert learner.energy_per_k == pytest.approx(150, rel=0.02)
+    assert learner.sensor_energy_per_k(0) == pytest.approx(100, rel=0.02)
+    assert learner.sensor_energy_per_k(1) == pytest.approx(300, rel=0.02)
+    assert learner.sensor_energy_per_k(2) is None
+    restored = ThermalLearner.from_dict(learner.as_dict())
+    assert restored.sensor_energy_per_k(1) == learner.sensor_energy_per_k(1)

@@ -313,7 +313,7 @@ const STRINGS = {
       target_earliest_enabled:
         "Not switched on before the earliest start, also with surplus (e.g. a dehumidifier only from 10:00). Counted until the deadline; the latest start is never before it.",
       target_sensor:
-        "Which temperature the minimum and target temperature apply to: the mean of both sensors, or one of them (e.g. the upper sensor for the hot water at the tap). Sensor 1 is the temperature sensor of the storage, sensor 2 the second one in the consumer's configuration. The latest start is estimated with the learned energy per degree of the mean, for a single sensor an approximation.",
+        "Which temperature the minimum and target temperature apply to: the mean of both sensors, or one of them (e.g. the upper sensor for the hot water at the tap). Sensor 1 is the temperature sensor of the storage, sensor 2 the second one in the consumer's configuration. The latest start is estimated with the energy per degree learned for the chosen sensor (the mean's until it is learned).",
       target_source:
         "What may cover the rest if the surplus is not enough by the deadline. With the batteries (and the grid) the consumer runs from the latest start on regardless of the surplus. Only surplus: the target may be missed (notification).",
       target_priority:
@@ -649,7 +649,7 @@ const STRINGS = {
       target_earliest_enabled:
         "Vor dem frühesten Beginn wird der Verbraucher nicht eingeschaltet, auch nicht mit Überschuss (z. B. ein Luftentfeuchter erst ab 10:00). Gezählt bis zur Frist; die späteste Startzeit liegt nie davor.",
       target_sensor:
-        "Für welche Temperatur Mindest- und Zieltemperatur gelten: das Mittel beider Fühler oder einer davon (z. B. der obere Fühler für das Warmwasser am Hahn). Fühler 1 ist der Temperaturfühler des Speichers, Fühler 2 der zweite in der Konfiguration des Verbrauchers. Die späteste Startzeit wird mit der gelernten Energie pro Grad des Mittelwerts geschätzt, für einen einzelnen Fühler eine Näherung.",
+        "Für welche Temperatur Mindest- und Zieltemperatur gelten: das Mittel beider Fühler oder einer davon (z. B. der obere Fühler für das Warmwasser am Hahn). Fühler 1 ist der Temperaturfühler des Speichers, Fühler 2 der zweite in der Konfiguration des Verbrauchers. Die späteste Startzeit wird mit der für den gewählten Fühler gelernten Energie pro Grad geschätzt (bis sie gelernt ist, mit der des Mittelwerts).",
       target_source:
         "Was den Rest decken darf, wenn der Überschuss bis zur Frist nicht reicht. Mit Batterie (und Netz) läuft der Verbraucher ab der spätesten Startzeit unabhängig vom Überschuss. Nur Überschuss: Das Ziel kann verfehlt werden (Benachrichtigung).",
       target_priority:

@@ -68,6 +68,7 @@ from .const import (
     DOMAIN,
     SCAN_INTERVAL,
     CapMode,
+    TargetSensor,
     TargetSource,
     TargetType,
     ConsumerType,
@@ -832,6 +833,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     state.temperature_c,
                     learner.nominal_w or full_power,
                     command is not None and command >= FULL_COMMAND_SHARE * full_power,
+                    state.temperatures_c,
                 )
             self._count_target(consumer, state, now, command is not None and command > 0)
 
@@ -1912,7 +1914,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     if state
                     else None
                 ),
-                wh_per_k=thermal.energy_per_k if thermal else None,
+                wh_per_k=self._target_wh_per_k(settings, thermal),
                 expected_surplus_wh=surplus,
                 battery_need_wh=battery.energy_to_full_wh if battery else 0.0,
                 battery_can_supply=battery is not None and battery.max_discharge_w >= needed,
@@ -1928,9 +1930,19 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 self.target_states[consumer.subentry_id],
                 local_now,
                 power_w=forced_w,
-                wh_per_k=thermal.energy_per_k if thermal else None,
+                wh_per_k=self._target_wh_per_k(settings, thermal),
             ).items():
                 self.target_load[hour] = self.target_load.get(hour, 0.0) + wh
+
+    @staticmethod
+    def _target_wh_per_k(settings: TargetSettings, thermal: ThermalLearner | None) -> float | None:
+        """Energy per kelvin of the temperature the target applies to (the mean
+        until the chosen sensor's own value is learned)."""
+        if thermal is None:
+            return None
+        index = {TargetSensor.FIRST: 0, TargetSensor.SECOND: 1}.get(settings.sensor)
+        own = thermal.sensor_energy_per_k(index) if index is not None else None
+        return own if own is not None else thermal.energy_per_k
 
     def _with_target_load(self, consumption: dict[datetime, float]) -> dict[datetime, float]:
         """Hourly consumption forecast plus the forced runs of the daily targets."""

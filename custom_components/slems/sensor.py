@@ -1196,6 +1196,11 @@ class StorageCapacitySensor(SlemsConsumerEntity, SensorEntity):
             "until_cycling_kwh": None if capacity is None else round(capacity[0] / 1000, 2),
             "until_full_kwh": None if capacity is None else round(capacity[1] / 1000, 2),
             "kwh_per_k": None if learner.energy_per_k is None else round(learner.energy_per_k / 1000, 3),
+            # Per sensor in the order of the configuration.
+            "sensor_kwh_per_k": [
+                None if (value := learner.sensor_energy_per_k(index)) is None else round(value / 1000, 3)
+                for index in range(len(self.consumer.temperature_entity_ids))
+            ],
             "cycling_temperature_c": learner.pause_temp,
             "full_temperature_c": learner.full_temp,
             "cycling_power_w": learner.cycling_w,

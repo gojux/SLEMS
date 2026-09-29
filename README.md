@@ -234,7 +234,8 @@ Every consumer needs its own power **and** energy sensor.
   SLEMS leaves it alone and plans it like an uncontrolled load.
 - **Temperature sensors of the storage** (optional, up to two, e.g. the
   sensor of a boiler at the heating rod and one higher up): SLEMS learns from
-  the mean of the sensors how much energy the storage takes per degree, from
+  the mean of the sensors (and of each sensor) how much energy the storage
+  takes per degree, from
   which temperature the thermostat starts cycling, its mean power while
   cycling and when it is full. Which sensor switches the thermostat and where
   they sit does not matter. From three heating runs and two starts of the

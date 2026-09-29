@@ -242,7 +242,8 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   Last.
 - **Temperaturfühler des Speichers** (optional, bis zu zwei, z. B. der
   Fühler eines Boilers am Heizstab und einer weiter oben): SLEMS lernt aus
-  dem Mittel der Fühler, wie viel Energie der Speicher je Grad aufnimmt, ab
+  dem Mittel der Fühler (und für jeden Fühler einzeln), wie viel Energie der
+  Speicher je Grad aufnimmt, ab
   welcher Temperatur der Thermostat zu takten beginnt, wie hoch die mittlere
   Leistung beim Takten ist und wann er voll ist. Welcher Fühler den
   Thermostat schaltet und wo sie sitzen, spielt keine Rolle. Ab drei

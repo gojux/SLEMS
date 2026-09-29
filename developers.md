@@ -609,8 +609,9 @@ Daily targets (`consumer_targets.py`, pure): `TargetSettings` per consumer
 consumer off, the latest start is never before it; not for temperatures),
 select
 `target_sensor` (only with two sensors: `TargetSensor` mean / first /
-second, `target_temperature`; the latest start still uses the energy per
-kelvin learned for the mean, for a single sensor an approximation), switch
+second, `target_temperature`; the latest start uses the energy per kelvin
+learned for that sensor, `ThermalLearner.sensor_energy_per_k`, the mean's
+until it is learned), switch
 `target_priority`, time `target_deadline`; `coordinator.consumer_targets`),
 `TargetProgress` per period from deadline to deadline (stored under
 `targets`; runtime from ≥ 50 W, enabled time from the device command, energy
@@ -692,7 +693,9 @@ known):
   always learning, stored under `thermal`): with every poll on the command,
   the measured power and the mean temperature of the sensors. A run lasts
   while the consumer is commanded on (a gap > 120 s ends it). Learned per run:
-  Wh per K of the mean temperature (rise ≥ 3 K, ≥ 300 Wh), the mean
+  Wh per K of the mean temperature (rise ≥ 3 K, ≥ 300 Wh) and of every
+  sensor (`sensor_wh_per_k`, same rules; a sensor at the heating element
+  rises much faster than one higher up), the mean
   temperature 30 s into the first thermostat pause (power < 50 W while
   commanded), the mean power from that pause to the end of the run (≥ 30 min
   of cycling) and the mean temperature at which a 30 min window of the
@@ -1351,3 +1354,4 @@ repository (otherwise its *brands* check fails).
 | 2026-09-29 | Daily targets per consumer (runtime, enabled time, energy, temperature) from deadline to deadline, set on the card; sources staged surplus only (default) / + batteries / + batteries + grid, forced as late as possible; priority over the batteries optional and only when the forecast is short; the minimum temperature always before the batteries, the target temperature ends the day. Forced runs are not yet part of the day chart and the SoC projection. |
 | 2026-09-29 | Forced runs of daily targets are an extra load in the day chart, the SoC projection and the night discharge, planned from the latest start as the worst case (shrinks as the surplus fills the target). A target temperature raised later in the period is no longer reached. |
 | 2026-09-29 | Gentle charging near the top without a setting (200 W from 3.48 V, released below 3.44 V, as Omnibattery's default): the BMS balances passively before the highest cell ends the charge; it costs only the last one or two percent. |
+| 2026-09-29 | Energy per kelvin learned per temperature sensor too, so a temperature target of one sensor estimates its latest start with that sensor's value (the mean's until learned). |

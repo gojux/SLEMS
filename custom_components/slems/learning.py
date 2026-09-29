@@ -309,7 +309,9 @@ class ThermalLearner:
     which sensor switches the thermostat nor where they sit. Learned from
     the runs while the consumer is commanded on:
 
-    * energy per kelvin of the mean temperature (``wh_per_k``),
+    * energy per kelvin of the mean temperature (``wh_per_k``), and of every
+      single sensor (``sensor_wh_per_k``, for a target of one sensor: a
+      sensor at the heating element rises much faster than one higher up),
     * mean temperature at which the own thermostat first pauses the consumer
       (``pause_temp``), i.e. from which on it cycles,
     * mean power while cycling (``cycling_w``),
@@ -321,7 +323,10 @@ class ThermalLearner:
     pause_temps: list[float] = field(default_factory=list)
     cycling_powers: list[float] = field(default_factory=list)
     full_temps: list[float] = field(default_factory=list)
+    # Per sensor (configuration order): energy per kelvin of that sensor.
+    sensor_wh_per_k: list[list[float]] = field(default_factory=list)
     _start_temp: float | None = None
+    _start_temps: tuple[float | None, ...] = ()
     _energy_wh: float = 0.0
     _last: float | None = None
     _paused_since: float | None = None
@@ -341,20 +346,23 @@ class ThermalLearner:
         temperature: float | None,
         nominal_w: float | None,
         full_command: bool = True,
+        temperatures: tuple[float | None, ...] = (),
     ) -> None:
-        """``temperature`` is the mean of the sensors, ``nominal_w`` the power while on.
+        """``temperature`` is the mean of the sensors, ``temperatures`` each of
+        them, ``nominal_w`` the power while on.
 
         ``full_command``: commanded at (nearly) its full power; a lower set
         point makes the cycling power and the full detection meaningless, so
         such a cycling phase is not used.
         """
         if not commanded_on or power_w is None or temperature is None:
-            self._finish(temperature)
+            self._finish(temperature, temperatures)
             return
         if not full_command:
             self._throttled = True
         if self._start_temp is None:
             self._start_temp = temperature
+            self._start_temps = temperatures
             self._last = now
             return
         elapsed = now - (self._last or now)
@@ -405,12 +413,22 @@ class ThermalLearner:
         self._window_start = since
         self.pause_temps = [*self.pause_temps, round(temperature, 1)][-THERMAL_KEEP:]
 
-    def _finish(self, temperature: float | None) -> None:
+    def _finish(
+        self, temperature: float | None, temperatures: tuple[float | None, ...] = ()
+    ) -> None:
         """End of a run: energy per kelvin and mean cycling power."""
         if self._start_temp is not None and temperature is not None:
             rise = temperature - self._start_temp
             if rise >= THERMAL_MIN_RISE_K and self._energy_wh >= THERMAL_MIN_ENERGY_WH:
                 self.wh_per_k = [*self.wh_per_k, round(self._energy_wh / rise, 1)][-THERMAL_KEEP:]
+        if self._energy_wh >= THERMAL_MIN_ENERGY_WH:
+            for index, (start, end) in enumerate(zip(self._start_temps, temperatures, strict=False)):
+                if start is None or end is None or end - start < THERMAL_MIN_RISE_K:
+                    continue
+                while len(self.sensor_wh_per_k) <= index:
+                    self.sensor_wh_per_k.append([])
+                values = self.sensor_wh_per_k[index]
+                self.sensor_wh_per_k[index] = [*values, round(self._energy_wh / (end - start), 1)][-THERMAL_KEEP:]
         if (
             self._cycling_since is not None
             and self._last is not None
@@ -422,6 +440,7 @@ class ThermalLearner:
                 mean = self._cycling_wh / (duration / 3600)
                 self.cycling_powers = [*self.cycling_powers, round(mean)][-THERMAL_KEEP:]
         self._start_temp = None
+        self._start_temps = ()
         self._energy_wh = 0.0
         self._last = None
         self._paused_since = None
@@ -436,6 +455,12 @@ class ThermalLearner:
     @property
     def energy_per_k(self) -> float | None:
         return statistics.median(self.wh_per_k) if len(self.wh_per_k) >= THERMAL_MIN_RUNS else None
+
+    def sensor_energy_per_k(self, index: int) -> float | None:
+        """Energy per kelvin of one sensor (0: the first); None until learned."""
+        if index >= len(self.sensor_wh_per_k) or len(self.sensor_wh_per_k[index]) < THERMAL_MIN_RUNS:
+            return None
+        return statistics.median(self.sensor_wh_per_k[index])
 
     @property
     def pause_temp(self) -> float | None:
@@ -470,6 +495,7 @@ class ThermalLearner:
             "pause_temps": list(self.pause_temps),
             "cycling_powers": list(self.cycling_powers),
             "full_temps": list(self.full_temps),
+            "sensor_wh_per_k": [list(values) for values in self.sensor_wh_per_k],
         }
 
     @classmethod
@@ -478,6 +504,7 @@ class ThermalLearner:
         return cls(
             wh_per_k=list(data.get("wh_per_k", [])),
             pause_temps=list(data.get("pause_temps", [])),
+            sensor_wh_per_k=[list(values) for values in data.get("sensor_wh_per_k", [])],
             cycling_powers=list(data.get("cycling_powers", [])),
             full_temps=list(data.get("full_temps", [])),
         )
