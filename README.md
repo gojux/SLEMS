@@ -5,34 +5,34 @@
 # SLEMS
 
 SLEMS is a Home Assistant integration that manages home batteries and
-controllable consumers. Its goal is to operate the batteries in a grid friendly
-way, e.g. by shifting the charging time so that the daily feed-in peak is
-absorbed, based on forecasts of consumption and PV production.
+controllable consumers. Its goal is to operate the batteries in a grid
+friendly way, e.g. by shifting the charging time so that the daily feed-in
+peak is absorbed, based on forecasts of consumption and PV production.
 
-The name is a combination of *[Slug](https://en.wikipedia.org/wiki/Sea_slug)* (a wonderful word for a very interesting
-animal) and *EMS* (energy management system).
+The name is a combination of *[Slug](https://en.wikipedia.org/wiki/Sea_slug)*
+(a wonderful word for a very interesting animal) and *EMS* (energy management
+system).
 
-> **Supported batteries:** SLEMS currently controls the **Marstek Venus E 3.0**
-> (Modbus TCP) directly. Other batteries can be added through the entities of
-> their Home Assistant integration, read-only or controlled (experimental).
-> If you would like
-> to use SLEMS with another battery, please
+> **Supported batteries:** SLEMS currently controls the **Marstek Venus E
+> 3.0** (Modbus TCP) directly. Other batteries can be added through the
+> entities of their Home Assistant integration, read-only or controlled
+> (experimental). If you would like to use SLEMS with another battery, please
 > [open an issue](https://github.com/gojux/SLEMS/issues) with the model and
 > how it is connected (Modbus, local API, Home Assistant integration), and
 > whether you could test it.
 
 ## Why SLEMS?
 
-Most home battery controls react to the moment: they keep the grid power
-at zero and charge whenever there is surplus. The battery is then full by
-late morning, and the midday peak goes into the grid anyway. SLEMS plans
-ahead and controls precisely:
+Most home battery controls react to the moment: they keep the grid power at
+zero and charge whenever there is surplus. The battery is then full by late
+morning, and the midday peak goes into the grid anyway. SLEMS plans ahead and
+controls precisely:
 
 - **Grid friendly instead of full by 10 o'clock.** From the PV and consumption
-  forecasts SLEMS calculates a feed-in limit and charges the batteries with the
-  surplus above it, so they absorb the feed-in peak and are still full in the
-  evening. The limit is recalculated continuously and drops by itself when the
-  day turns out worse than forecast.
+  forecasts SLEMS calculates a feed-in limit and charges the batteries with
+  the surplus above it, so they absorb the feed-in peak and are still full in
+  the evening. The limit is recalculated continuously and drops by itself when
+  the day turns out worse than forecast.
 - **Its own consumption forecast.** Learned from the long-term statistics of
   your house, with the weather and a separate heat pump model; vacation mode,
   night discharge to a forecast based reserve and a projection of the state of
@@ -47,8 +47,8 @@ ahead and controls precisely:
 - **Precise control without oscillation.** Event driven on every report of the
   smart meter; the learned response time of the batteries is compensated and
   the control gain adapts itself.
-- **Battery care and safety.** State of charge window, power limits (e.g.
-  800 W), temperature charge limit, cell delta monitoring with active cell
+- **Battery care and safety.** State of charge window, power limits (e.g. 800
+  W), temperature charge limit, cell delta monitoring with active cell
   balancing, detection of batteries that do not respond, repair issues and
   notifications.
 - **Regular full charge without losing surplus.** LFP batteries recalibrate
@@ -57,10 +57,10 @@ ahead and controls precisely:
   would store anyway, and spares it when discharging so it starts the next day
   higher. It also recognises a full charge the BMS ends slightly below 100 %,
   and it measures the cell delta at the top.
-- **Learns instead of asking.** Besides the consumption forecast, SLEMS
-  learns the conversion losses and the response time of the batteries, the
-  smart meter interval, the control gain and the consumption peaks; on request
-  also the forecast buffers, the grid surplus targets, the control timing, the
+- **Learns instead of asking.** Besides the consumption forecast, SLEMS learns
+  the conversion losses and the response time of the batteries, the smart
+  meter interval, the control gain and the consumption peaks; on request also
+  the forecast buffers, the grid surplus targets, the control timing, the
   usable capacity of every battery and the power and thermostat behaviour of
   consumers (see *Learned values*). Every learned value can be switched back
   to a fixed one.
@@ -69,15 +69,16 @@ ahead and controls precisely:
   simulation mode shows what SLEMS would do before it controls anything, also
   next to an existing battery integration.
 - **Try before you change.** The simulation in the dashboard calculates the
-  day plan with other settings (grid friendly charging, night discharge, feed-in
-  cap, battery limits, forecasts ±%) and compares feed-in, grid import and
-  state of charge with the current plan, without changing anything.
+  day plan with other settings (grid friendly charging, night discharge,
+  feed-in cap, battery limits, forecasts ±%) and compares feed-in, grid import
+  and state of charge with the current plan, without changing anything.
 
 **When another solution fits better (today):** many different battery brands
 (SLEMS talks directly only to the Marstek Venus E 3.0; other batteries are
-controlled through the entities of their integration, which is coarser), charging from the grid by dynamic tariffs or electric
-vehicle charging. Omnibattery covers many battery models, evcc specialises in
-EV charging; evcc complements SLEMS well (see [roadmap](#roadmap)).
+controlled through the entities of their integration, which is coarser),
+charging from the grid by dynamic tariffs or electric vehicle charging.
+Omnibattery covers many battery models, evcc specialises in EV charging; evcc
+complements SLEMS well (see [roadmap](#roadmap)).
 
 ## Features
 
@@ -116,9 +117,11 @@ EV charging; evcc complements SLEMS well (see [roadmap](#roadmap)).
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=gojux&repository=SLEMS&category=integration)
 
-The button opens SLEMS in HACS of your Home Assistant instance and adds the custom repository; then continue with step 2. Or by hand:
+The button opens SLEMS in HACS of your Home Assistant instance and adds the
+custom repository; then continue with step 2. Or by hand:
 
-1. HACS → ⋮ → *Custom repositories* → add `https://github.com/gojux/SLEMS`, type *Integration*.
+1. HACS → ⋮ → *Custom repositories* → add `https://github.com/gojux/SLEMS`,
+   type *Integration*.
 2. Install *SLEMS* and restart Home Assistant.
 
 ### Manual
@@ -142,8 +145,8 @@ Requires Home Assistant 2026.9 or newer.
 Every integration that provides a solar forecast for the Home Assistant energy
 dashboard can be selected, e.g. Forecast.Solar or Solcast. Several entries
 (e.g. one Forecast.Solar entry per roof plane) are summed up. SLEMS uses the
-finest resolution the provider delivers (e.g. 15 or 30 minutes). Forecast.Solar
-marks each period by its end; SLEMS takes this into account.
+finest resolution the provider delivers (e.g. 15 or 30 minutes).
+Forecast.Solar marks each period by its end; SLEMS takes this into account.
 
 ### Weather (optional)
 
@@ -152,11 +155,11 @@ pump. Recommendations for Vorarlberg / the Alpine region:
 
 - **GeoSphere Austria AROME**: high resolution model of the Austrian weather
   service, well suited for alpine valleys. Available in Home Assistant through
-  custom integrations such as
-  [GeoSphere Austria Plus](https://github.com/coding-pagro/GeoSphere-Austria-Plus) or
-  [GeoSphere Austria Next](https://github.com/slettmayer/ha-geosphere-next) (HACS).
-  The built-in *GeoSphere Austria* integration only provides station
-  measurements, no forecast.
+  custom integrations such as [GeoSphere Austria
+  Plus](https://github.com/coding-pagro/GeoSphere-Austria-Plus) or [GeoSphere
+  Austria Next](https://github.com/slettmayer/ha-geosphere-next) (HACS). The
+  built-in *GeoSphere Austria* integration only provides station measurements,
+  no forecast.
 - **Open-Meteo** (built-in integration): no account needed, combines several
   weather models.
 - **Met.no** (Home Assistant default): works everywhere, less detailed in
@@ -202,11 +205,11 @@ accuracy* and *PV forecast accuracy*):
   and tomorrow's forecast with its expected deviation. The heat pump is
   recalculated with the measured temperature of the day, so its share looks
   somewhat better than it was.
-- PV: past forecasts are not available from the solar forecast integration,
-  so SLEMS records the forecast of each day at its start and compares it with
-  the production in the evening. The card shows accuracy and expected
-  deviation from 7 compared days on (before: *collecting data*), because a
-  few days say little.
+- PV: past forecasts are not available from the solar forecast integration, so
+  SLEMS records the forecast of each day at its start and compares it with the
+  production in the evening. The card shows accuracy and expected deviation
+  from 7 compared days on (before: *collecting data*), because a few days say
+  little.
 
 The sensor *House consumption* (used for the forecast and shown in the energy
 flow) is calculated as grid + PV − batteries. The smart meter often reports a
@@ -230,32 +233,31 @@ Every consumer needs its own power **and** energy sensor.
   point via a number entity in W. For controlled consumers an entity can be
   selected that blocks them externally (SLEMS leaves the consumer alone while
   a switch or binary sensor is on, or while a water heater is in operation
-  mode *off*), a priority (1 = highest) and optionally a minimum runtime
-  and a minimum pause. For on/off consumers a rough estimate of the power
-  when on is enough if *Use learned values* is on; rather too low than too
-  high, because SLEMS only learns while it runs the consumer.
-- **Thermostat cycles by itself**: for consumers whose own thermostat
-  switches them on and off while they are commanded (e.g. a heating rod that
-  measures at the element). Normally a consumer that draws nothing although
-  commanded counts as saturated for 15 minutes and keeps its last command.
-  With this option SLEMS keeps controlling it: during a pause (no power for
-  2 response times, 10–60 s) the batteries get its unused power, and as soon
-  as it draws again it gets it back (shown as *thermostat pause*).
+  mode *off*), a priority (1 = highest) and optionally a minimum runtime and a
+  minimum pause. For on/off consumers a rough estimate of the power when on is
+  enough if *Use learned values* is on; rather too low than too high, because
+  SLEMS only learns while it runs the consumer.
+- **Thermostat cycles by itself**: for consumers whose own thermostat switches
+  them on and off while they are commanded (e.g. a heating rod that measures
+  at the element). Normally a consumer that draws nothing although commanded
+  counts as saturated for 15 minutes and keeps its last command. With this
+  option SLEMS keeps controlling it: during a pause (no power for 2 response
+  times, 10–60 s) the batteries get its unused power, and as soon as it draws
+  again it gets it back (shown as *thermostat pause*).
 - **Control active** (switch per controllable consumer, also on its card in
-  the dashboard): off means SLEMS only measures the consumer. Switching it
-  off in operating mode *active* sets it to 0 W (or off) once; afterwards
-  SLEMS leaves it alone and plans it like an uncontrolled load.
-- **Temperature sensors of the storage** (optional, up to two, e.g. the
-  sensor of a boiler at the heating rod and one higher up): SLEMS learns from
-  the mean of the sensors (and of each sensor) how much energy the storage
-  takes per degree, from
-  which temperature the thermostat starts cycling, its mean power while
-  cycling and when it is full. Which sensor switches the thermostat and where
-  they sit does not matter. From three heating runs and two starts of the
-  cycling on, the consumer card shows how much the storage can still take,
-  and the feed-in cap plans the consumer only with 80 % of that. Its box in
-  the energy flow shows the temperature of the sensor chosen for the daily
-  target (the mean by default).
+  the dashboard): off means SLEMS only measures the consumer. Switching it off
+  in operating mode *active* sets it to 0 W (or off) once; afterwards SLEMS
+  leaves it alone and plans it like an uncontrolled load.
+- **Temperature sensors of the storage** (optional, up to two, e.g. the sensor
+  of a boiler at the heating rod and one higher up): SLEMS learns from the
+  mean of the sensors (and of each sensor) how much energy the storage takes
+  per degree, from which temperature the thermostat starts cycling, its mean
+  power while cycling and when it is full. Which sensor switches the
+  thermostat and where they sit does not matter. From three heating runs and
+  two starts of the cycling on, the consumer card shows how much the storage
+  can still take, and the feed-in cap plans the consumer only with 80 % of
+  that. Its box in the energy flow shows the temperature of the sensor chosen
+  for the daily target (the mean by default).
 - **Feed-in cap – role** (select per controlled consumer, on its card in the
   dashboard under *Feed-in cap* while the cap is on): *Supporting* – gets no
   other surplus while the feed-in cap is on, only the surplus above the limit
@@ -268,32 +270,31 @@ Every consumer needs its own power **and** energy sensor.
   decides. Applies only while *Control active* is on (greyed out otherwise).
   See *Feed-in cap*.
 - **Daily target** (per controlled consumer, on its card under *Daily
-  target*): *runtime* (time it draws power), *enabled time* (time SLEMS has
-  it switched on, for devices with their own control such as a dehumidifier
-  with a hygrostat), *energy* (kWh) or *temperature* (with temperature
-  sensors: minimum and target temperature of its storage; with two sensors
-  *Sensor* chooses the mean, sensor 1 or sensor 2, in the order of the
-  consumer's configuration). Counted from one
-  deadline (*Until*, default 22:00, also across midnight) to the next and met
-  from the surplus first. *Earliest start* (runtime, enabled time, energy):
-  before this time SLEMS does not switch the consumer on, not even with
-  surplus (e.g. a dehumidifier only from 10:00); the latest start is never
-  before it. *Source* decides what may cover the rest in time:
-  *surplus only* (default; the target may be missed, then a notification
-  says so), *surplus + batteries* (from the latest start on the consumer runs
-  regardless of the surplus as long as the batteries can deliver, a power
-  controlled one at most with their discharge power) or
+  target*): *runtime* (time it draws power), *enabled time* (time SLEMS has it
+  switched on, for devices with their own control such as a dehumidifier with
+  a hygrostat), *energy* (kWh) or *temperature* (with temperature sensors:
+  minimum and target temperature of its storage; with two sensors *Sensor*
+  chooses the mean, sensor 1 or sensor 2, in the order of the consumer's
+  configuration). Counted from one deadline (*Until*, default 22:00, also
+  across midnight) to the next and met from the surplus first. *Earliest
+  start* (runtime, enabled time, energy): before this time SLEMS does not
+  switch the consumer on, not even with surplus (e.g. a dehumidifier only from
+  10:00); the latest start is never before it. *Source* decides what may cover
+  the rest in time: *surplus only* (default; the target may be missed, then a
+  notification says so), *surplus + batteries* (from the latest start on the
+  consumer runs regardless of the surplus as long as the batteries can
+  deliver, a power controlled one at most with their discharge power) or
   *surplus + batteries + grid*. The latest start is the deadline minus the
-  remaining time × 1.2 minus 10 minutes. *Before the batteries when short*: the consumer gets the
-  surplus before the batteries if the forecast surplus until the deadline is
-  short for the rest of its target plus filling the batteries. Temperature:
-  below the minimum the consumer always gets the surplus before the
-  batteries (forced from the latest start, estimated with the learned energy
-  per degree, otherwise 2 hours before the deadline); at the target
-  temperature it is off for the rest of the day; if a higher target
+  remaining time × 1.2 minus 10 minutes. *Before the batteries when short*:
+  the consumer gets the surplus before the batteries if the forecast surplus
+  until the deadline is short for the rest of its target plus filling the
+  batteries. Temperature: below the minimum the consumer always gets the
+  surplus before the batteries (forced from the latest start, estimated with
+  the learned energy per degree, otherwise 2 hours before the deadline); at
+  the target temperature it is off for the rest of the day; if a higher target
   temperature is set later in the day, it heats on. A temperature target
-  applies to the calendar day: after the deadline the consumer stays off
-  until midnight (*waits until 00:00*), also with surplus. The card shows the
+  applies to the calendar day: after the deadline the consumer stays off until
+  midnight (*waits until 00:00*), also with surplus. The card shows the
   progress, e.g. *1.5 / 4 h · until 22:00 · forced from 19:30*, and the chips
   *priority* or *forced* while they apply. With a source beyond the surplus
   the planning counts the forced run as extra consumption from the latest
@@ -304,30 +305,29 @@ Every consumer needs its own power **and** energy sensor.
 **Battery efficiency** (round trip, AC to AC), one of three sources per
 battery:
 
-- *Battery counters* (recommended for the Marstek Venus E 3.0 and for batteries
-  from entities with energy counters): from the
-  lifetime charge and discharge counters of the battery and its state of
-  charge: (discharged + stored) / charged. The battery counts itself, fast and
-  over its whole operating time, so the value is accurate at once and stable.
-  The only assumption is an empty battery at the start of the counters; its
-  influence disappears after a few cycles.
-- *Learned*: SLEMS adds up the measured battery power itself (every 5
-  seconds) from the start of SLEMS. It only counts after about three full
-  charge cycles (until then the start value applies), and short power peaks
-  between two polls are missed. Recommended for batteries without their own
-  counters.
+- *Battery counters* (recommended for the Marstek Venus E 3.0 and for
+  batteries from entities with energy counters): from the lifetime charge and
+  discharge counters of the battery and its state of charge: (discharged +
+  stored) / charged. The battery counts itself, fast and over its whole
+  operating time, so the value is accurate at once and stable. The only
+  assumption is an empty battery at the start of the counters; its influence
+  disappears after a few cycles.
+- *Learned*: SLEMS adds up the measured battery power itself (every 5 seconds)
+  from the start of SLEMS. It only counts after about three full charge cycles
+  (until then the start value applies), and short power peaks between two
+  polls are missed. Recommended for batteries without their own counters.
 - *Manual*: a fixed value, e.g. from the data sheet.
 
 The efficiency is used where energy is converted: whether the PV surplus will
 fill the batteries (charge secured), grid friendly charging, the night
-discharge and the state of charge projection. It is **not** used to decide
-how many batteries run: for that SLEMS learns a separate loss curve per
-battery from the difference of AC and DC power at every power level (fixed
-loss of a running inverter plus losses rising with the power). From it the
-distribution calculates the number of batteries with the lowest total loss:
-at low power one battery, above the break-even point several (see *Batteries*
-below). This works with every efficiency source, but only for
-batteries that report AC and DC power (Marstek Venus E 3.0).
+discharge and the state of charge projection. It is **not** used to decide how
+many batteries run: for that SLEMS learns a separate loss curve per battery
+from the difference of AC and DC power at every power level (fixed loss of a
+running inverter plus losses rising with the power). From it the distribution
+calculates the number of batteries with the lowest total loss: at low power
+one battery, above the break-even point several (see *Batteries* below). This
+works with every efficiency source, but only for batteries that report AC and
+DC power (Marstek Venus E 3.0).
 
 ### Dashboard
 
@@ -337,69 +337,68 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
   state of charge) and the consumers; the animated dots run in the direction
   of the flow, faster and on a thicker line the higher the power. Key figures
   (status: problems first – smart meter without values, battery unreadable or
-  not responding – otherwise the operating mode; strategy, state of charge, feed-in limit,
-  stored energy and capacity, forecasts), and the forecast chart (mean power per half
-  hour in kW): *Today* shows PV and consumption
+  not responding – otherwise the operating mode; strategy, state of charge,
+  feed-in limit, stored energy and capacity, forecasts), and the forecast
+  chart (mean power per half hour in kW): *Today* shows PV and consumption
   forecast (dashed), the measured values so far (solid), the expected and the
   measured feed-in into the grid (blue; the expected one from the plan,
-  including night discharge, at most the feed-in cap), the planned
-  battery charging (light bars) and the measured charging (solid bars), plus the projected total state of charge (dashed)
-  and the measured one (solid) with their scale in % on the right. *Tomorrow* shows the forecasts,
-  planned charging and state of charge of the next day, continued from
-  today's projection. The projection follows the planning: charging only
-  with the planned surplus, deficits covered by the batteries, import peak
-  shaving and night discharge if enabled. Hovering (on a phone: tapping, a
-  tap elsewhere closes it) shows the values of a half hour; a click on an
-  entry of the legend hides or shows that series (the scale follows the
-  series shown; the browser keeps the choice; *PV above the limit* of the
-  feed-in cap is hidden until switched on); *Show table* switches to a
-  table.
-- **Batteries**: state of charge, stored energy and capacity (kWh), power on the grid side
-  (AC) with its direction, the SLEMS set point, efficiency, state and
-  the *Enabled* switch of every battery (disabling asks for confirmation),
-  the cell delta with its balance status, a recommendation for active cell
-  balancing and the phase of a running one.
+  including night discharge, at most the feed-in cap), the planned battery
+  charging (light bars) and the measured charging (solid bars), plus the
+  projected total state of charge (dashed) and the measured one (solid) with
+  their scale in % on the right. *Tomorrow* shows the forecasts, planned
+  charging and state of charge of the next day, continued from today's
+  projection. The projection follows the planning: charging only with the
+  planned surplus, deficits covered by the batteries, import peak shaving and
+  night discharge if enabled. Hovering (on a phone: tapping, a tap elsewhere
+  closes it) shows the values of a half hour; a click on an entry of the
+  legend hides or shows that series (the scale follows the series shown; the
+  browser keeps the choice; *PV above the limit* of the feed-in cap is hidden
+  until switched on); *Show table* switches to a table.
+- **Batteries**: state of charge, stored energy and capacity (kWh), power on
+  the grid side (AC) with its direction, the SLEMS set point, efficiency,
+  state and the *Enabled* switch of every battery (disabling asks for
+  confirmation), the cell delta with its balance status, a recommendation for
+  active cell balancing and the phase of a running one.
 - **Consumers**: one card per consumer, collapsed to the important values
-  (measured and planned power, progress of the daily target) and expanded
-  with *Show settings* (the browser keeps the choice). Measured and planned
-  power, blocked/saturated state, the
-  learned response times for switching on and off (own sensor and at the
-  meter; switching on includes a start delay of the device, e.g. a
-  compressor) and the *Control active* switch.
+  (measured and planned power, progress of the daily target) and expanded with
+  *Show settings* (the browser keeps the choice). Measured and planned power,
+  blocked/saturated state, the learned response times for switching on and off
+  (own sensor and at the meter; switching on includes a start delay of the
+  device, e.g. a compressor) and the *Control active* switch.
 - **Simulation**: try other settings without changing anything. Next to the
   day chart (today from now on or tomorrow) grid friendly charging, night
   discharge, import peak shaving and the feed-in cap can be switched on and
   off; their values appear below each switch as in the settings. The batteries
   (capacity, minimum/maximum state of charge, charge and discharge power), the
-  night discharge buffer, the maximum grid export while discharging and the
-  PV and consumption forecasts (±%) can be changed too. SLEMS calculates the
-  day plans like the real ones, from the current state of charge and the
-  current forecasts; the plan with the current settings is shown grey dotted
-  for comparison, key figures (feed-in, grid import, highest import and
-  feed-in, curtailed energy, state of charge at midnight) side by side below.
-  Nothing is saved or used for the control; every visit starts with the
-  current settings. *Today* is simulated from now on (the values before are
-  measured); in the afternoon a note suggests *Tomorrow* for a whole
-  simulated day. Consumers controlled by SLEMS and the battery priority
-  (which acts in the real-time distribution) are not simulated.
-- **Settings**: all settings grouped and editable directly; the *Control*
-  card also shows the learned values (current control gain, smart meter
-  update interval, battery response time).
+  night discharge buffer, the maximum grid export while discharging and the PV
+  and consumption forecasts (±%) can be changed too. SLEMS calculates the day
+  plans like the real ones, from the current state of charge and the current
+  forecasts; the plan with the current settings is shown grey dotted for
+  comparison, key figures (feed-in, grid import, highest import and feed-in,
+  curtailed energy, state of charge at midnight) side by side below. Nothing
+  is saved or used for the control; every visit starts with the current
+  settings. *Today* is simulated from now on (the values before are measured);
+  in the afternoon a note suggests *Tomorrow* for a whole simulated day.
+  Consumers controlled by SLEMS and the battery priority (which acts in the
+  real-time distribution) are not simulated.
+- **Settings**: all settings grouped and editable directly; the *Control* card
+  also shows the learned values (current control gain, smart meter update
+  interval, battery response time).
 
 A click on a value (tile, box in the energy flow, row of a card) opens the
 Home Assistant dialog of its entity with history and settings.
 
-The dashboard follows the language and the light/dark theme of Home
-Assistant and works on phones (with little space the batteries in the energy
-flow are shown one below the other).
+The dashboard follows the language and the light/dark theme of Home Assistant
+and works on phones (with little space the batteries in the energy flow are
+shown one below the other).
 
 ### Batteries
 
 - **Marstek Venus E 3.0**: host/IP, port (502) and Modbus unit ID. The battery
-  accepts only **one** Modbus TCP connection. Never let two integrations
-  (e.g. SLEMS and Omnibattery) talk to the same battery at the same time.
-  Its sensor *AC power* is positive when discharging and negative when
-  charging, as the Home Assistant energy dashboard expects for battery power.
+  accepts only **one** Modbus TCP connection. Never let two integrations (e.g.
+  SLEMS and Omnibattery) talk to the same battery at the same time. Its sensor
+  *AC power* is positive when discharging and negative when charging, as the
+  Home Assistant energy dashboard expects for battery power.
 
   **Search**: when adding a Venus, SLEMS first searches the network of Home
   Assistant for batteries (TCP port 502, then a test read of the state of
@@ -407,8 +406,8 @@ flow are shown one below the other).
   are left out. A battery whose single Modbus connection is held by another
   integration cannot be found.
 
-  **Finding the IP address**: Modbus TCP is only available on the **LAN
-  port** of the battery (connect it with a network cable), not over Wi‑Fi. The
+  **Finding the IP address**: Modbus TCP is only available on the **LAN port**
+  of the battery (connect it with a network cable), not over Wi‑Fi. The
   Marstek app does not show the LAN IP address; look it up in your router /
   internet gateway / DHCP server (list of connected devices). Give the battery
   a fixed address there (DHCP reservation), so it does not change later.
@@ -422,23 +421,23 @@ flow are shown one below the other).
   Every address listed with `502/tcp open` is a Modbus TCP device (nmap shows
   the MAC address when run with `sudo` in the same network, which helps to
   tell several batteries apart). When adding the battery, SLEMS checks the
-  connection by reading its state of charge; stop other integrations using
-  the battery first.
+  connection by reading its state of charge; stop other integrations using the
+  battery first.
 - **Existing Home Assistant entities** (control: experimental): any battery
   that another integration brings into Home Assistant. First choose the
-  battery's device: SLEMS suggests its entities (state of charge, power,
-  set points, mode, optional temperature, cell voltages and energy counters);
+  battery's device: SLEMS suggests its entities (state of charge, power, set
+  points, mode, optional temperature, cell voltages and energy counters);
   check and correct them. Leave the device empty to choose everything by hand.
-  - **Read only**: SLEMS never sends commands, e.g. to run SLEMS in
-    simulation mode side by side with an existing battery integration.
+  - **Read only**: SLEMS never sends commands, e.g. to run SLEMS in simulation
+    mode side by side with an existing battery integration.
   - **Set point**: one number entity with the signed power (+charge /
     −discharge, sign can be inverted).
   - **Separate charge and discharge power**: one number each, optionally a
     mode select (charge / discharge / standby / automatic, the options are
     assigned in the next step).
-  - **Script**: a script of yours receives the power as variable `power_w`
-    (W, +charge / −discharge, 0 = standby); optionally a release script.
-    This covers batteries controlled through actions (services).
+  - **Script**: a script of yours receives the power as variable `power_w` (W,
+    +charge / −discharge, 0 = standby); optionally a release script. This
+    covers batteries controlled through actions (services).
 
   Optionally a *remote control* switch or select is switched on before the
   first set point. For controlling, the battery power sensor is required.
@@ -466,11 +465,11 @@ single battery is usually more efficient, at high power sharing is. When
 discharging the battery with the highest state of charge runs, when charging
 the one with the lowest. If the running battery drifts more than *Battery
 rotation threshold* (default 5 %) away from the best inactive one, SLEMS
-switches, at most once per *Battery rotation minimum interval* (default
-15 min) and with a smooth transition: the power moves with *Battery rotation
-ramp rate* (default 100 W/s), but never takes longer than *Battery rotation
-maximum ramp time* (default 30 s). The conversion losses per power level are learned from the
-battery's AC and DC power.
+switches, at most once per *Battery rotation minimum interval* (default 15
+min) and with a smooth transition: the power moves with *Battery rotation ramp
+rate* (default 100 W/s), but never takes longer than *Battery rotation maximum
+ramp time* (default 30 s). The conversion losses per power level are learned
+from the battery's AC and DC power.
 
 Every battery has an *Enabled* switch. A disabled battery is still measured
 (its power is part of the energy balance), but it is neither planned with nor
@@ -482,15 +481,15 @@ before it is handed back to its own logic.
 
 When SLEMS takes over a battery from another integration (e.g. Omnibattery),
 the history of the old sensors (e.g. the charged and discharged energy used in
-the energy dashboard) can be carried over to the SLEMS sensors with
-[HA Merge Sensor History](https://github.com/mayerwin/HA-Merge-Sensor-History).
-It copies states and long-term statistics, so the running totals of the energy
+the energy dashboard) can be carried over to the SLEMS sensors with [HA Merge
+Sensor History](https://github.com/mayerwin/HA-Merge-Sensor-History). It
+copies states and long-term statistics, so the running totals of the energy
 dashboard continue.
 
 - Make a full backup of Home Assistant first; the tool writes directly into
   the database.
-- Check the preview: the counters of the Venus (registers 33000/33002) have the
-  same value in both integrations, so the total continues without a jump.
+- Check the preview: the counters of the Venus (registers 33000/33002) have
+  the same value in both integrations, so the total continues without a jump.
 - Compare the sign of power sensors: the SLEMS *AC power* is positive when
   discharging.
 - Afterwards replace the old sensors in the energy dashboard with the SLEMS
@@ -504,13 +503,14 @@ live value is only meaningful near full charge: in the middle of the charge
 the voltage curve is so flat that unequal cells show almost the same voltage.
 SLEMS therefore records the *Cell delta at top of charge*: after the highest
 cell reached 3.60 V or the BMS ended the charge at 100 %, and the battery then
-rested for 60 seconds (standby, including the about 13 W a Venus draws itself).
-It is measured once per charge: while the battery stands full the cells relax
-and the delta keeps falling without the balance getting better, so the next
-measurement follows only after the battery was discharged out of the top range
-(highest cell below 3.49 V); after a restart of SLEMS, too. The curve is steep there; Marstek cells typically show
-about 180 mV from the factory, which is normal. Status: below 200 mV good,
-below 230 mV minor, below 250 mV moderate, otherwise high imbalance. From 230 mV the dashboard
+rested for 60 seconds (standby, including the about 13 W a Venus draws
+itself). It is measured once per charge: while the battery stands full the
+cells relax and the delta keeps falling without the balance getting better, so
+the next measurement follows only after the battery was discharged out of the
+top range (highest cell below 3.49 V); after a restart of SLEMS, too. The
+curve is steep there; Marstek cells typically show about 180 mV from the
+factory, which is normal. Status: below 200 mV good, below 230 mV minor, below
+250 mV moderate, otherwise high imbalance. From 230 mV the dashboard
 recommends active cell balancing.
 
 Active cell balancing (switch *Active cell balancing*, or the button in the
@@ -528,19 +528,18 @@ in operating mode *active*:
 4. Above 30 mV it discharges with 200 W to the retry voltage (3.49 V) and
    repeats from step 3. If the BMS refuses to charge (less than 30 W instead
    of 95 W, e.g. because it reports full at about 3.55 V), it stands by,
-   measures, and the retry voltage is lowered in steps of 10 mV (down to
-   3.40 V).
+   measures, and the retry voltage is lowered in steps of 10 mV (down to 3.40
+   V).
 5. At 30 mV or less it discharges with 200 W to 3.48 V and ends.
 
 The discharge of the balancing battery is fed into the grid; the other
-batteries do not store it (they keep charging only if they charge anyway).
-Its expected charge is taken into account in the expected PV surplus and in
-grid friendly charging. The run ends after 24 hours at the latest, and at
-once if the battery cannot be read; it pauses outside operating mode
-*active* and continues after a restart of Home Assistant. When it ends, the
-battery is handed back to its own logic and then returns to the normal
-planning. The sensor *Cell balancing phase* shows the phase and the result of
-the last run.
+batteries do not store it (they keep charging only if they charge anyway). Its
+expected charge is taken into account in the expected PV surplus and in grid
+friendly charging. The run ends after 24 hours at the latest, and at once if
+the battery cannot be read; it pauses outside operating mode *active* and
+continues after a restart of Home Assistant. When it ends, the battery is
+handed back to its own logic and then returns to the normal planning. The
+sensor *Cell balancing phase* shows the phase and the result of the last run.
 
 ### Firmware updates and battery menu
 
@@ -563,17 +562,17 @@ and when the cell delta was last measured. *Open device in Home Assistant*
 leads to the device page of the battery with all its entities.
 
 The last full charge (sensor *Last full charge*) is the moment the battery
-last reached the top: the highest cell at the charge stop voltage, the SoC
-the BMS reports when full, or the BMS ending the charge near the top (it
-takes nothing for 2 minutes although SLEMS commands at least 100 W, from
-98 % or 3.45 V on), also if it was discharged again right away. A new full
-charge counts once the battery has left the top (highest cell below 3.40 V,
-without cell voltages below 97 %). LFP batteries recalibrate their
-state of charge only when full, so it should happen regularly.
+last reached the top: the highest cell at the charge stop voltage, the SoC the
+BMS reports when full, or the BMS ending the charge near the top (it takes
+nothing for 2 minutes although SLEMS commands at least 100 W, from 98 % or
+3.45 V on), also if it was discharged again right away. A new full charge
+counts once the battery has left the top (highest cell below 3.40 V, without
+cell voltages below 97 %). LFP batteries recalibrate their state of charge
+only when full, so it should happen regularly.
 
 **Regular full charge** (settings group of the same name, on by default): a
-battery not full for longer than *Full charge at the latest every* (default
-7 days), or never full since SLEMS records it, is charged first until it was
+battery not full for longer than *Full charge at the latest every* (default 7
+days), or never full since SLEMS records it, is charged first until it was
 full once. Only one battery at a time, the one whose last full charge is the
 oldest (never full first, then by name). The split between batteries and
 consumers does not change; the battery only gets the charge power before the
@@ -593,49 +592,48 @@ Every controllable battery has these settings (dashboard: *Settings*):
   (default 100 %): SLEMS does not discharge at or below the minimum and does
   not charge at or above the maximum (with 100 % the BMS ends the charge).
   After reaching a limit the battery is used again 2 % away from it, because
-  the resting SoC rebounds after a load. The maximum counts as "full" for
-  grid friendly charging, the charge secured check and the projection; the
-  minimum is the lowest target of the night discharge. Active cell balancing
-  ignores the SoC window (it needs the top of the charge).
+  the resting SoC rebounds after a load. The maximum counts as "full" for grid
+  friendly charging, the charge secured check and the projection; the minimum
+  is the lowest target of the night discharge. Active cell balancing ignores
+  the SoC window (it needs the top of the charge).
 - *Charge power limit* and *Discharge power limit* (default: the maximum of
   the battery), e.g. 800 W for a plug-in system.
 
 *Temperature charge limit* (off by default, after Omnibattery) limits the
-charge power by the battery temperature: above *Charge derating
-temperature* (40 °C) it decreases linearly across *Charge derating range*
-(10 °C) down to *Charge power at high temperature* (40 %); at or below
-*Minimum charging temperature* (0 °C) there is no charging, and within 5 °C
-above it the power rises to full again. The Venus reports its internal
-temperature, not the cell temperature; the BMS keeps its own protection.
-The sensors *Allowed charge power* and *Allowed discharge power* show the
-current limit and its reason.
+charge power by the battery temperature: above *Charge derating temperature*
+(40 °C) it decreases linearly across *Charge derating range* (10 °C) down to
+*Charge power at high temperature* (40 %); at or below *Minimum charging
+temperature* (0 °C) there is no charging, and within 5 °C above it the power
+rises to full again. The Venus reports its internal temperature, not the cell
+temperature; the BMS keeps its own protection. The sensors *Allowed charge
+power* and *Allowed discharge power* show the current limit and its reason.
 
 Near the top of the charge SLEMS charges gently (always, after Omnibattery's
 full charge voltage taper): once the highest cell reaches 3.48 V a battery
 charges with at most 200 W until the cell falls below 3.44 V again. At a low
-current the BMS balances the cells passively before the highest cell ends
-the charge, so the batteries get really full with a smaller cell delta, and
-the cells see less voltage peak and heat. It only affects the last one or
-two percent; the surplus meanwhile goes to the other batteries or the
-consumers. The sensor *Allowed charge power* has the reason `top`; batteries without cell
+current the BMS balances the cells passively before the highest cell ends the
+charge, so the batteries get really full with a smaller cell delta, and the
+cells see less voltage peak and heat. It only affects the last one or two
+percent; the surplus meanwhile goes to the other batteries or the consumers.
+The sensor *Allowed charge power* has the reason `top`; batteries without cell
 voltages are not limited.
 
 In operating mode *active* SLEMS checks, like Omnibattery, whether every
-battery delivers the commanded power. A battery that delivers less than
-10 % of a command of at least 100 W (after 30 s in that direction) three
-polls in a row first gets all control registers written again; if that does
-not help, it is excluded for 5 minutes (like a disabled battery, handed back
-to its own logic, the others take over) and then retried. A full battery
-that stops charging or a battery at 20 % or less that stops discharging does
-not count (the BMS protects it). The Venus also reads its control registers
-back after every complete write (first command and every 60 s); a write that
-is not confirmed counts as well. The binary sensor *Not responding* and the
-dashboard show an excluded battery.
+battery delivers the commanded power. A battery that delivers less than 10 %
+of a command of at least 100 W (after 30 s in that direction) three polls in a
+row first gets all control registers written again; if that does not help, it
+is excluded for 5 minutes (like a disabled battery, handed back to its own
+logic, the others take over) and then retried. A full battery that stops
+charging or a battery at 20 % or less that stops discharging does not count
+(the BMS protects it). The Venus also reads its control registers back after
+every complete write (first command and every 60 s); a write that is not
+confirmed counts as well. The binary sensor *Not responding* and the dashboard
+show an excluded battery.
 
 ### Problems and notifications
 
-Ongoing problems appear under *Settings → Repairs* and disappear by
-themselves when they are solved:
+Ongoing problems appear under *Settings → Repairs* and disappear by themselves
+when they are solved:
 
 - a battery does not respond (excluded, see above),
 - a battery could not be read for more than 5 minutes,
@@ -644,18 +642,18 @@ themselves when they are solved:
 The dashboard also shows them: a red note on the battery card (*cannot be
 read*, *not responding*), in the energy flow and, for the smart meter, at the
 top of the overview. The end of an active cell balancing run (finished, after
-24 hours or because the battery could not be read) creates a notification
-with the cell delta before and after and the duration; cancelling it
-yourself does not.
+24 hours or because the battery could not be read) creates a notification with
+the cell delta before and after and the duration; cancelling it yourself does
+not.
 
 For a problem report, *Settings → Devices & services → SLEMS → ⋮ → Download
 diagnostics* (or the same on a battery device) saves the configuration and the
 internal state as a file: measurements, plans, battery limits, the last
 register values, the state of the cell delta measurement and of a balancing
-run. IP and MAC addresses are removed. The warnings of the feed-in cap (batteries too small, not
-enough time to make room, charge power too low, feed-in above the limit, see
-*Feed-in cap*) are notifications too; they disappear by themselves when the
-problem is gone.
+run. IP and MAC addresses are removed. The warnings of the feed-in cap
+(batteries too small, not enough time to make room, charge power too low,
+feed-in above the limit, see *Feed-in cap*) are notifications too; they
+disappear by themselves when the problem is gone.
 
 ### Operating mode
 
@@ -664,22 +662,21 @@ The entity *SLEMS Operating mode* switches between:
 - **Off** – nothing is planned or sent.
 - **Simulation** – forecasts and plans are computed and shown, but no command
   is sent to batteries or consumers. This is the default.
-- **Active** – plans are executed: SLEMS sends set points to the batteries
-  and switches/sets the consumers. It reacts to every change of the smart
-  meter. The entity *Control status* shows whether the control is active or
-  paused because the smart meter did not report for a while (60 s or ten
-  update intervals; the batteries then follow their own logic until the meter
-  is back).
+- **Active** – plans are executed: SLEMS sends set points to the batteries and
+  switches/sets the consumers. It reacts to every change of the smart meter.
+  The entity *Control status* shows whether the control is active or paused
+  because the smart meter did not report for a while (60 s or ten update
+  intervals; the batteries then follow their own logic until the meter is
+  back).
 
 ### How the control works
 
-In operating mode *active* SLEMS reacts to every new value of the smart
-meter:
+In operating mode *active* SLEMS reacts to every new value of the smart meter:
 
 1. From the energy balance it calculates which battery power would bring the
    grid power exactly to the target (e.g. 100 W export while charging).
-2. It only counts battery commands that the smart meter can already show.
-   A new command needs some time until it appears in the meter value; SLEMS
+2. It only counts battery commands that the smart meter can already show. A
+   new command needs some time until it appears in the meter value; SLEMS
    learns this *response time* and does not count a command twice. The same
    applies to the controlled consumers: until a command reaches the meter
    (*response time at the meter*, learned per consumer) the power before it
@@ -696,8 +693,8 @@ corrections and adjusts the gain between 0.2 and 0.9:
 
 - If the corrections change direction several times in a row without dying
   out, the control swings: the gain is lowered at once (× 0.8).
-- If the grid power approaches the target only slowly over many cycles
-  without ever overshooting, the gain is raised in small steps (+ 0.05).
+- If the grid power approaches the target only slowly over many cycles without
+  ever overshooting, the gain is raised in small steps (+ 0.05).
 - After each change SLEMS waits 30 seconds to see its effect. Normal load
   changes (a kettle, a cloud) are not mistaken for swinging. The learned value
   is kept across restarts.
@@ -722,14 +719,14 @@ fixed value (0.3–0.5 is a good start).
 
 ### Which option when?
 
-All options are optional and can be combined. The charts show the same
-example with and without each option: 8 kWp PV on a sunny day, a household
-with morning and evening peaks, a 10 kWh battery, from 18:00 until midnight
-of the next day. They are calculated with the SLEMS state of charge
-projection (hourly means), so they show how SLEMS plans; the real curves
-depend on your forecasts. Top: PV production and consumption (the same with
-and without the option); middle: total state of charge; bottom: grid power
-(+ import / − export); grey dashed without, coloured with the option.
+All options are optional and can be combined. The charts show the same example
+with and without each option: 8 kWp PV on a sunny day, a household with
+morning and evening peaks, a 10 kWh battery, from 18:00 until midnight of the
+next day. They are calculated with the SLEMS state of charge projection
+(hourly means), so they show how SLEMS plans; the real curves depend on your
+forecasts. Top: PV production and consumption (the same with and without the
+option); middle: total state of charge; bottom: grid power (+ import / −
+export); grey dashed without, coloured with the option.
 
 **Grid friendly charging** (on by default)
 
@@ -737,9 +734,9 @@ and without the option); middle: total state of charge; bottom: grid power
 
 Without it the batteries are full before noon and the whole midday peak goes
 to the grid (here 5.7 kW). With it they charge with the surplus above a
-feed-in limit and are still full in the afternoon; the peak drops to about
-4.4 kW. Useful whenever many PV systems feed in at the same time (grid,
-energy community). Switch it off if the batteries should be full as early as
+feed-in limit and are still full in the afternoon; the peak drops to about 4.4
+kW. Useful whenever many PV systems feed in at the same time (grid, energy
+community). Switch it off if the batteries should be full as early as
 possible, e.g. for backup power.
 
 **Night discharge**
@@ -749,46 +746,46 @@ possible, e.g. for backup power.
 Energy still in the batteries in the morning is fed in over night, down to a
 reserve that the PV forecast can refill the next day (here *Night discharge
 reserve* 10 %: about 2.9 kWh are fed in over night, and 3.2 kWh less at noon,
-because the batteries have more room for the PV). Useful if the batteries
-are still well charged in the morning (large battery, low night consumption,
+because the batteries have more room for the PV). Useful if the batteries are
+still well charged in the morning (large battery, low night consumption,
 summer):
 
 - In an **energy community** your energy is more likely to find a buyer at
   night: during the day most members produce themselves, at night they
   consume. Night discharge shifts part of your surplus from noon to the night.
-- It works well together with the **feed-in cap**: the batteries start the
-  day with room for the energy above the limit, so SLEMS rarely has to feed in
+- It works well together with the **feed-in cap**: the batteries start the day
+  with room for the energy above the limit, so SLEMS rarely has to feed in
   shortly before the peak.
 
 The energy fed in at night passes the battery twice (charge and discharge
-losses, about 10 %), and less energy is left for a power outage until the
-next charge. Switch it off if the batteries are meant as a backup supply.
+losses, about 10 %), and less energy is left for a power outage until the next
+charge. Switch it off if the batteries are meant as a backup supply.
 
 **Import peak shaving** (useful on days with little PV, e.g. in winter)
 
 ![Import peak shaving](docs/images/peak_shaving_en.svg)
 
-Without it the battery covers everything until it is empty in the evening;
-the morning peak then comes from the grid in full (here 2.1 kW). With it,
-below the state of charge threshold the battery only covers the power above
-the import limit: the base load comes from the grid, the battery keeps its
-energy for the peaks (here 1.5 kW at most). Some peaks become higher than
-without (here at 19:00, 1.5 instead of 0.4 kW, because the battery no longer
-covers everything), but none goes above the import limit, so the highest peak
-drops. Useful with a power based tariff
-or grid fee, or if the grid connection is weak. Somewhat more energy comes
-from the grid (here 1 kWh), but it is still in the battery at the end: the
-peaks are lower, the energy balance stays about the same.
+Without it the battery covers everything until it is empty in the evening; the
+morning peak then comes from the grid in full (here 2.1 kW). With it, below
+the state of charge threshold the battery only covers the power above the
+import limit: the base load comes from the grid, the battery keeps its energy
+for the peaks (here 1.5 kW at most). Some peaks become higher than without
+(here at 19:00, 1.5 instead of 0.4 kW, because the battery no longer covers
+everything), but none goes above the import limit, so the highest peak drops.
+Useful with a power based tariff or grid fee, or if the grid connection is
+weak. Somewhat more energy comes from the grid (here 1 kWh), but it is still
+in the battery at the end: the peaks are lower, the energy balance stays about
+the same.
 
 **Feed-in cap** (if the feed-in is limited, e.g. to 60 % of the peak power)
 
 ![Feed-in cap](docs/images/feed_in_cap_en.svg)
 
-Without it the batteries are full at noon and the inverter curtails
-everything above the limit (red, here 7.2 kWh at a limit of 45 %). With it SLEMS keeps enough
-room free; here the night discharge makes the room and the batteries absorb
-the energy above the limit. Needed whenever your grid operator limits the
-feed-in; it takes precedence over the other options.
+Without it the batteries are full at noon and the inverter curtails everything
+above the limit (red, here 7.2 kWh at a limit of 45 %). With it SLEMS keeps
+enough room free; here the night discharge makes the room and the batteries
+absorb the energy above the limit. Needed whenever your grid operator limits
+the feed-in; it takes precedence over the other options.
 
 ### Grid friendly charging
 
@@ -803,43 +800,43 @@ peak:
   friendly charging buffer* included; default 1 kWh, a larger buffer lowers
   the limit and makes the batteries full earlier and more reliably when the
   forecast is too optimistic). Without a limit the overview tile shows the
-  reason: *off* (grid friendly charging switched off), *none – charge at
-  once* (the surplus is not enough) or *no forecast*; the sensor then has no
-  value and the reason in its attribute `reason`.
+  reason: *off* (grid friendly charging switched off), *none – charge at once*
+  (the surplus is not enough) or *no forecast*; the sensor then has no value
+  and the reason in its attribute `reason`.
 - The batteries only charge with the surplus above this limit; below it the
-  power goes to the consumers or to the grid. The highest hours of the day
-  are cut, wherever the clouds put them.
-- The limit is recalculated continuously from the current state of charge
-  and the remaining forecast. If charging falls behind (e.g. more clouds
-  than forecast), the limit drops by itself.
+  power goes to the consumers or to the grid. The highest hours of the day are
+  cut, wherever the clouds put them.
+- The limit is recalculated continuously from the current state of charge and
+  the remaining forecast. If charging falls behind (e.g. more clouds than
+  forecast), the limit drops by itself.
 - The PV forecast is corrected with today's actual production (diagnostic
-  sensor *PV forecast correction*: the ratio of the production to the
-  forecast until now, 50–120 %). A morning says little about the whole day
-  (fog, a hill shading the first hours), so the ratio is applied with a
-  weight: the current hour at 80 %, fading out over two hours, and the rest
-  of the day only once 15 % of the day's forecast energy has passed, fully
-  from 50 % on (attributes of the sensor). After a restart SLEMS takes the
-  production so far from the statistics of the PV sensor, so nothing is lost.
+  sensor *PV forecast correction*: the ratio of the production to the forecast
+  until now, 50–120 %). A morning says little about the whole day (fog, a hill
+  shading the first hours), so the ratio is applied with a weight: the current
+  hour at 80 %, fading out over two hours, and the rest of the day only once
+  15 % of the day's forecast energy has passed, fully from 50 % on (attributes
+  of the sensor). After a restart SLEMS takes the production so far from the
+  statistics of the PV sensor, so nothing is lost.
 - As long as the charge is not secured (state of charge below *Battery
   priority below state of charge* or the forecast is not sufficient), SLEMS
   charges at once as before.
 
 How much of the peak can be absorbed depends on the battery size compared to
-the day's surplus: on a clear summer day with a large surplus a 10 kWh
-battery takes about the top kilowatt of the peak, on days with less surplus
-a much larger share.
+the day's surplus: on a clear summer day with a large surplus a 10 kWh battery
+takes about the top kilowatt of the peak, on days with less surplus a much
+larger share.
 
 ### Feed-in cap
 
 Some grid operators or regulations only allow a PV system to feed in a share
-of its peak power (e.g. 60 %); the inverter curtails everything above it.
-With *Feed-in cap* (switch, off by default) SLEMS stores that energy in the
+of its peak power (e.g. 60 %); the inverter curtails everything above it. With
+*Feed-in cap* (switch, off by default) SLEMS stores that energy in the
 batteries instead of losing it. The limit is *PV peak power* (kWp) × *Feed-in
 cap limit* (%), measured at the grid connection point (grid export, after the
 house consumption).
 
-- **Planning**: from the PV forecast in its finest resolution (15/30/60 min, so
-  short peaks are not averaged away) and the consumption forecast, SLEMS
+- **Planning**: from the PV forecast in its finest resolution (15/30/60 min,
+  so short peaks are not averaged away) and the consumption forecast, SLEMS
   calculates until the end of tomorrow how much energy lies above the limit
   and how much free space the batteries need for it. Several peaks per day
   (clouds in between) and peaks today and tomorrow are covered: a cloud dip or
@@ -861,44 +858,45 @@ house consumption).
   charge. The night discharge (if enabled) stops early enough to leave the
   space. If the house consumption and the night discharge are not enough,
   SLEMS feeds battery energy into the grid before the peak, as late as
-  possible: it is planned to be finished one hour before the peak with 70 %
-  of the possible power, never above the limit. For this it may exceed
-  *Maximum grid export while discharging*.
-- **Order during the peak**: the surplus above the limit goes to the
-  batteries (regardless of battery priority, battery share and grid friendly
-  charging), then to the consumers with the role *Supporting*, then to those
-  with *Normal*, and only the rest is curtailed. If the forecast shows that a
-  peak does not fit into the batteries (too small, or too late to make room,
-  with the buffers), SLEMS plans the supporting consumers from the start of
-  the peak for the part that does not fit: a consumer with little power
-  would otherwise only start when the batteries are full and could then take
-  far less than the surplus. With temperature sensors it plans them only as
-  far as their storage can still take energy. The feed-in cap takes precedence over grid friendly charging
-  (its feed-in limit never lies above the cap), night discharge and battery
-  priority; the peak shaving threshold stays a floor for feeding in.
+  possible: it is planned to be finished one hour before the peak with 70 % of
+  the possible power, never above the limit. For this it may exceed *Maximum
+  grid export while discharging*.
+- **Order during the peak**: the surplus above the limit goes to the batteries
+  (regardless of battery priority, battery share and grid friendly charging),
+  then to the consumers with the role *Supporting*, then to those with
+  *Normal*, and only the rest is curtailed. If the forecast shows that a peak
+  does not fit into the batteries (too small, or too late to make room, with
+  the buffers), SLEMS plans the supporting consumers from the start of the
+  peak for the part that does not fit: a consumer with little power would
+  otherwise only start when the batteries are full and could then take far
+  less than the surplus. With temperature sensors it plans them only as far as
+  their storage can still take energy. The feed-in cap takes precedence over
+  grid friendly charging (its feed-in limit never lies above the cap), night
+  discharge and battery priority; the peak shaving threshold stays a floor for
+  feeding in.
 - **Overview**: the tile *Feed-in cap* shows the next peak, the energy the
-  batteries have to absorb and, if needed, the energy to feed in before it
-  and by when. The day chart shows the *PV limit of the feed-in cap* as a grey
+  batteries have to absorb and, if needed, the energy to feed in before it and
+  by when. The day chart shows the *PV limit of the feed-in cap* as a grey
   dashed line: expected consumption + limit, the PV power above which the
   export would exceed the limit (the limit applies after the house
-  consumption, so the line follows the consumption forecast). The energy
-  above it is shown as a bar on that line; in red the part that is still
-  lost according to the plan, because the batteries are full or charge too
-  slowly (the reason is shown in the tooltip; consumers set to take surplus
-  above the limit are taken into account). The key figure *Curtailed* in the
-  simulation is the same energy.
-- **Warnings** (overview and notifications): batteries too small for
-  the space needed, not enough time or power left to feed in before the peak,
-  charge power too low for the surplus above the limit, and feed-in above the
-  limit for more than 5 minutes. *Batteries too small* means the forecast
-  itself does not fit; if only the safety buffer does not fit completely, the
+  consumption, so the line follows the consumption forecast). The energy above
+  it is shown as a bar on that line; in red the part that is still lost
+  according to the plan, because the batteries are full or charge too slowly
+  (the reason is shown in the tooltip; consumers set to take surplus above the
+  limit are taken into account). The key figure *Curtailed* in the simulation
+  is the same energy.
+- **Warnings** (overview and notifications): batteries too small for the space
+  needed, not enough time or power left to feed in before the peak, charge
+  power too low for the surplus above the limit, and feed-in above the limit
+  for more than 5 minutes. *Batteries too small* means the forecast itself
+  does not fit; if only the safety buffer does not fit completely, the
   overview shows the note *forecast within the buffer zone* instead (no
   notification). Energy that does not fit into the batteries (too small, or
   too late to make room) does not count as a problem as far as the supporting
-  and normal consumers can take it during the peak; the overview then
-  shows the note *consumers take the rest* with the energy and the
-  consumers. Batteries left out of the planning (cell balancing,
-  communication paused, disabled, not responding) are named in the texts.
+  and normal consumers can take it during the peak; the overview then shows
+  the note *consumers take the rest* with the energy and the consumers.
+  Batteries left out of the planning (cell balancing, communication paused,
+  disabled, not responding) are named in the texts.
 
 Sensors: *Feed-in cap energy to absorb* (on the day of the next peak, with the
 peaks, the space needed, the export plan and the buffer as attributes) and
@@ -909,9 +907,9 @@ peaks, the space needed, the export plan and the buffer as attributes) and
 Each of these values has a switch *… automatic* (or *Use learned …*). SLEMS
 always learns, whatever the switch; it only decides what is used. Off, the
 value you set applies; on, SLEMS uses the learned value as soon as there is
-enough data, until then still yours. The settings show the learned value (*learned*)
-or the note that there is not enough data yet; the diagnostic sensor *Learned
-values in use* has all learned values as attributes.
+enough data, until then still yours. The settings show the learned value
+(*learned*) or the note that there is not enough data yet; the diagnostic
+sensor *Learned values in use* has all learned values as attributes.
 
 | Value | Learned from | Needs |
 |---|---|---|
@@ -925,7 +923,8 @@ values in use* has all learned values as attributes.
 
 ### Further settings (entities)
 
-- *Vacation* (switch) – the household is away; switch manually or by an automation.
+- *Vacation* (switch) – the household is away; switch manually or by an
+  automation.
 - *Battery priority below state of charge* (default 30 %), *Charge secured
   safety buffer* (default 1 kWh) and *Battery share when charge is secured*
   (default 75 %) – the batteries get all surplus until their charge is
@@ -946,33 +945,32 @@ values in use* has all learned values as attributes.
 - *Night discharge* (switch, off by default) and *Night discharge reserve*
   (default 25 % of tomorrow's forecast consumption) – over night the batteries
   discharge evenly down to the reserve (usable energy above the minimum state
-  of charge of the batteries) until PV production exceeds the
-  consumption again, ignoring the discharge grid target (the maximum grid
-  export still applies). If tomorrow's PV forecast cannot refill the batteries
-  from the reserve, a higher reserve is kept. Requires the consumption
-  forecast.
+  of charge of the batteries) until PV production exceeds the consumption
+  again, ignoring the discharge grid target (the maximum grid export still
+  applies). If tomorrow's PV forecast cannot refill the batteries from the
+  reserve, a higher reserve is kept. Requires the consumption forecast.
 - *Surplus averaging window* (0–300 s, default 5 s, 0 = off) – the grid power
   is averaged; the less favourable of average and current value is used, so
   the control does not overshoot with fluctuating PV.
 - *Import peak shaving* (switch) – off by default. When enabled and the total
   state of charge is at or below *Peak shaving state of charge threshold*, the
   batteries only discharge to keep the grid import below *Peak shaving grid
-  import limit*. The threshold is an absolute state of charge but cannot be set
-  below the minimum state of charge of the batteries; below 20 % the settings
-  show how much is left above the minimum. With *Automatic peak shaving limit*
-  SLEMS calculates the import limit itself: the lowest one for which the
-  expected energy above it, until PV refills the batteries (the forecast
-  surplus adds up to the energy back to the threshold, so a little surplus on a
-  rainy day does not count), fits into the
-  usable energy above the minimum state of charge minus *Peak shaving safety
-  reserve* (default 20 %). The expected energy comes from the 5 minute
-  statistics of the house consumption of the last days, so short peaks such as
-  an oven are included; the limit is recalculated continuously and rises when
-  more is used than expected. Above the threshold it is calculated as if the
-  threshold were reached, and during the day for the coming evening and night,
-  so it shows the limit that will apply. In the settings
-  the import limit then shows the calculated value (read only); the sensor
-  *Peak shaving import limit in effect* shows the limit used.
+  import limit*. The threshold is an absolute state of charge but cannot be
+  set below the minimum state of charge of the batteries; below 20 % the
+  settings show how much is left above the minimum. With *Automatic peak
+  shaving limit* SLEMS calculates the import limit itself: the lowest one for
+  which the expected energy above it, until PV refills the batteries (the
+  forecast surplus adds up to the energy back to the threshold, so a little
+  surplus on a rainy day does not count), fits into the usable energy above
+  the minimum state of charge minus *Peak shaving safety reserve* (default 20
+  %). The expected energy comes from the 5 minute statistics of the house
+  consumption of the last days, so short peaks such as an oven are included;
+  the limit is recalculated continuously and rises when more is used than
+  expected. Above the threshold it is calculated as if the threshold were
+  reached, and during the day for the coming evening and night, so it shows
+  the limit that will apply. In the settings the import limit then shows the
+  calculated value (read only); the sensor *Peak shaving import limit in
+  effect* shows the limit used.
 
 ## Language
 
@@ -980,9 +978,9 @@ SLEMS is available in English and German. Home Assistant uses two different
 language settings:
 
 - **Entity names** (e.g. *House consumption*, *Operating mode*, also the key
-  figures in the dashboard) follow the **server language** under
-  *Settings → System → General*. They are set when the integration loads, so
-  reload SLEMS after changing it.
+  figures in the dashboard) follow the **server language** under *Settings →
+  System → General*. They are set when the integration loads, so reload SLEMS
+  after changing it.
 - Dialogs, menus, states (e.g. *Simulation (read-only)*) and the texts of the
   dashboard follow the language in the **user profile**.
 
@@ -1008,4 +1006,5 @@ See [developers.md](developers.md).
 ## License
 
 GPL-3.0, see [LICENSE](LICENSE). The Marstek Venus register map and control
-sequence are based on [Omnibattery](https://github.com/ffunes/Omnibattery) (GPL-3.0).
+sequence are based on [Omnibattery](https://github.com/ffunes/Omnibattery)
+(GPL-3.0).
