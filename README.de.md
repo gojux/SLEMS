@@ -21,6 +21,49 @@ wunderbares Wort für ein sehr interessantes Tier) und *EMS*
 > Modell, der Anbindung (Modbus, lokale API, Home-Assistant-Integration) und
 > ob du testen könntest.
 
+## Inhalt
+
+- [Warum SLEMS?](#warum-slems)
+- [Funktionen](#funktionen)
+- [Installation](#installation)
+  - [HACS (benutzerdefiniertes Repository)](#hacs-benutzerdefiniertes-repository)
+  - [Manuell](#manuell)
+- [Einrichtung](#einrichtung)
+  - [PV-Prognose](#pv-prognose)
+  - [Wetter (optional)](#wetter-optional)
+  - [Verbrauchsprognose](#verbrauchsprognose)
+- [Batterien](#batterien)
+  - [Aufteilung auf die Batterien](#aufteilung-auf-die-batterien)
+  - [Wirkungsgrad der Batterie](#wirkungsgrad-der-batterie)
+  - [Umstieg von einer anderen Batterie-Integration](#umstieg-von-einer-anderen-batterie-integration)
+  - [Zell-Delta und aktiver Zellausgleich](#zell-delta-und-aktiver-zellausgleich)
+  - [Firmware-Updates und Batterie-Menü](#firmware-updates-und-batterie-menü)
+  - [Grenzen und Schutz der Batterien](#grenzen-und-schutz-der-batterien)
+- [Verbraucher](#verbraucher)
+  - [Temperaturfühler des Speichers](#temperaturfühler-des-speichers)
+  - [Einsatz in der Einspeisebegrenzung](#einsatz-in-der-einspeisebegrenzung)
+  - [Tagesziel](#tagesziel)
+- [Dashboard](#dashboard)
+  - [Übersicht](#übersicht)
+  - [Reiter Batterien](#reiter-batterien)
+  - [Reiter Verbraucher](#reiter-verbraucher)
+  - [Simulation](#simulation)
+  - [Reiter Einstellungen](#reiter-einstellungen)
+  - [Bedienung des Dashboards](#bedienung-des-dashboards)
+- [Betrieb und Regelung](#betrieb-und-regelung)
+  - [Betriebsmodus](#betriebsmodus)
+  - [So funktioniert die Regelung](#so-funktioniert-die-regelung)
+  - [Welche Option wann?](#welche-option-wann)
+  - [Netzdienliches Laden](#netzdienliches-laden)
+  - [Einspeisebegrenzung](#einspeisebegrenzung)
+  - [Gelernte Werte](#gelernte-werte)
+  - [Weitere Einstellungen (Entities)](#weitere-einstellungen-entities)
+  - [Probleme und Benachrichtigungen](#probleme-und-benachrichtigungen)
+- [Sprache](#sprache)
+- [Roadmap](#roadmap)
+- [Entwicklung](#entwicklung)
+- [Lizenz](#lizenz)
+
 ## Warum SLEMS?
 
 Die meisten Speichersteuerungen reagieren auf den Moment: Sie halten die
@@ -84,32 +127,52 @@ spezialisiert; evcc ergänzt SLEMS gut (siehe [Roadmap](#roadmap)).
 
 ## Funktionen
 
-| Funktion | Status |
+| Einrichtung | Status |
 |---|---|
 | Beliebig viele Batterien, jederzeit hinzufügen, bearbeiten, entfernen | ✅ |
-| Marstek Venus E 3.0 über Modbus TCP | ✅ |
-| Batterie aus vorhandenen Entities: nur lesend (z. B. solange Omnibattery steuert) oder gesteuert über Sollwert, Lade-/Entladeleistung oder Skript, Entities aus dem Gerät vorgeschlagen | ✅ (Steuerung experimentell) |
 | Smart Meter, PV-Leistung und Wetter frei wählbar | ✅ |
-| PV-Prognose aus beliebiger Solarprognose-Integration (Forecast.Solar, Solcast, …) | ✅ |
-| Verbraucher mit eigenen Leistungs-/Energiesensoren, im oder außerhalb des Smart Meters | ✅ Konfiguration |
-| Wärmepumpe als Verbrauchertyp (wetterabhängige Prognose) | ✅ Konfiguration |
 | Betriebsmodus *Aus / Simulation (nur lesend) / Aktiv* | ✅ |
 | Urlaubsschalter | ✅ |
-| Bezugsspitzen abfangen bei niedrigem Ladezustand (manuell aktivierbar) | ✅ |
+
+| Prognosen | Status |
+|---|---|
+| PV-Prognose aus beliebiger Solarprognose-Integration (Forecast.Solar, Solcast, …) | ✅ |
 | Verbrauchsprognose heute/morgen (Historie + Wetter, Wärmepumpe temperaturabhängig) | ✅ |
-| Netzdienliches Laden: PV-Einspeisespitzen abfangen | ✅ |
-| Einspeisebegrenzung: PV-Energie über einer Einspeisegrenze speichern, rechtzeitig Platz schaffen | ✅ |
-| Verteilung des Überschusses auf Batterien und Verbraucher (Priorität, Aufteilung, Mindestlaufzeit/-pause) | ✅ |
+
+| Batterien | Status |
+|---|---|
+| Marstek Venus E 3.0 über Modbus TCP | ✅ |
+| Batterie aus vorhandenen Entities: nur lesend (z. B. solange Omnibattery steuert) oder gesteuert über Sollwert, Lade-/Entladeleistung oder Skript, Entities aus dem Gerät vorgeschlagen | ✅ (Steuerung experimentell) |
 | Wirkungsgrad der Batterie (Batteriezähler, gelernt oder manuell) | ✅ |
-| Gemittelter Netzüberschuss (0–300 s) | ✅ |
-| Ziel-Netzüberschuss beim Laden/Entladen, maximale Einspeisung beim Entladen | ✅ |
-| Nachtentladung bis zu einer prognosebasierten Reserve | ✅ |
 | Aufteilung auf Batterien nach Wirkungsgrad, Wechsel mit sanftem Übergang | ✅ |
-| Echtzeit-Regelung von Batterien und Verbrauchern (Betriebsmodus *Aktiv*) | ✅ |
-| Zell-Delta und aktiver Zellausgleich (Marstek Venus E 3.0) | ✅ (noch nicht am echten Gerät getestet) |
 | Grenzen je Batterie: minimaler/maximaler Ladezustand, Grenze Lade-/Entladeleistung (z. B. 800 W), Ladebegrenzung nach Temperatur | ✅ |
 | Erkennung von Batterien, die die vorgegebene Leistung nicht liefern, Bestätigung der Sollwerte | ✅ |
+| Zell-Delta und aktiver Zellausgleich (Marstek Venus E 3.0) | ✅ (noch nicht am echten Gerät getestet) |
 | Regelmäßige Vollladung zur SoC-Kalibrierung der LFP-Zellen (immer eine Batterie, aus dem Überschuss, beim Entladen geschont) | ✅ |
+
+| Verbraucher | Status |
+|---|---|
+| Verbraucher mit eigenen Leistungs-/Energiesensoren, im oder außerhalb des Smart Meters | ✅ |
+| Wärmepumpe als Verbrauchertyp (wetterabhängige Prognose) | ✅ |
+| Steuerung von Verbrauchern: Ein/Aus oder Leistungssollwert, Priorität, Mindestlaufzeit/-pause, externe Sperre | ✅ |
+| Verbraucher mit eigenem Thermostat: Pausen erkannt, ihre Leistung geht solange an die Batterien | ✅ |
+| Temperaturfühler eines Speichers: gelernte Energie pro Grad, noch aufnehmbare Energie | ✅ |
+| Einsatz eines Verbrauchers in der Einspeisebegrenzung (unterstützend, normal, nie) | ✅ |
+| Tagesziele: Laufzeit, Freigabezeit, Energie oder Temperatur, mit Frist und Quelle (Überschuss, Batterie, Netz) | ✅ |
+
+| Planung und Regelung | Status |
+|---|---|
+| Verteilung des Überschusses auf Batterien und Verbraucher (Priorität, Aufteilung, Mindestlaufzeit/-pause) | ✅ |
+| Echtzeit-Regelung von Batterien und Verbrauchern (Betriebsmodus *Aktiv*) | ✅ |
+| Gemittelter Netzüberschuss (0–300 s) | ✅ |
+| Ziel-Netzüberschuss beim Laden/Entladen, maximale Einspeisung beim Entladen | ✅ |
+| Netzdienliches Laden: PV-Einspeisespitzen abfangen | ✅ |
+| Einspeisebegrenzung: PV-Energie über einer Einspeisegrenze speichern, rechtzeitig Platz schaffen | ✅ |
+| Nachtentladung bis zu einer prognosebasierten Reserve | ✅ |
+| Bezugsspitzen abfangen bei niedrigem Ladezustand (manuell aktivierbar) | ✅ |
+
+| Dashboard | Status |
+|---|---|
 | Dashboard (Seitenleiste): Energiefluss, Kennzahlen, Tagesdiagramm mit Prognose und Plan, Batterien, Verbraucher, Einstellungen | ✅ |
 | Simulation im Dashboard: Tagesplan mit anderen Einstellungen im Vergleich zum aktuellen (heute oder morgen) | ✅ |
 
@@ -134,7 +197,7 @@ Home-Assistant-Konfiguration kopieren und Home Assistant neu starten.
 
 Voraussetzung: Home Assistant 2026.9 oder neuer.
 
-## Konfiguration
+## Einrichtung
 
 1. *Einstellungen → Geräte & Dienste → Integration hinzufügen → SLEMS*.
 2. Die Netzleistungs-Entity deines Smart Meters wählen (positiv = Bezug,
@@ -222,200 +285,7 @@ eine Änderung oft später als PV und Batterien; ein kurzzeitig negatives
 Ergebnis wird daher durch den letzten gültigen Wert ersetzt (höchstens 30
 Sekunden, danach unbekannt).
 
-### Verbraucher
-
-Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
-
-- **Im Smart Meter enthalten**: aktivieren, wenn der Verbraucher hinter dem
-  Smart Meter hängt (sein Verbrauch ist bereits in der Netzleistung
-  enthalten). Für Verbraucher an einer separaten Versorgung deaktivieren.
-- **Im Energiefluss anzeigen** (Standard: an): aus blendet die Box des
-  Verbrauchers im Energiefluss des Dashboards aus; sein Verbrauch zählt weiter
-  im Haus, und die Verbraucherkarte zeigt ihn weiterhin.
-- **Typ**: *Wärmepumpe* (Heizung und Warmwasser, wetterabhängige Prognose),
-  *Heizpatrone* (z. B. Warmwasser im Sommer) oder *Sonstiges*. Wärmepumpe und
-  Heizpatrone dürfen gleichzeitig laufen.
-- **Steuerung**: keine (nur Messung), Ein/Aus über einen Schalter oder eine
-  Leistungsvorgabe über eine Number-Entity in W. Für gesteuerte Verbraucher
-  kann eine Entity für eine externe Sperre gewählt werden (SLEMS steuert den
-  Verbraucher nicht, solange ein Schalter oder Binärsensor eingeschaltet ist
-  oder ein Water Heater in der Betriebsart *off* steht), dazu eine Priorität
-  (1 = höchste) und optional eine Mindestlaufzeit und Mindestpause. Bei
-  Ein/Aus-Verbrauchern reicht für die Leistung im eingeschalteten Zustand eine
-  grobe Schätzung, wenn *Gelernte Werte verwenden* an ist; lieber zu niedrig
-  als zu hoch, weil SLEMS nur lernt, während es den Verbraucher betreibt.
-- **Thermostat taktet selbst**: für Verbraucher, die ihr eigener Thermostat
-  während der Ansteuerung ein- und ausschaltet (z. B. ein Heizstab, der am
-  Heizelement misst). Normalerweise gilt ein Verbraucher, der trotz Vorgabe
-  nichts abnimmt, 15 Minuten als gesättigt und behält seine letzte Vorgabe.
-  Mit dieser Option steuert SLEMS ihn weiter: In einer Pause (keine Leistung
-  für 2 Reaktionszeiten, 10–60 s) bekommen die Batterien seine nicht genutzte
-  Leistung, und sobald er wieder abnimmt, bekommt er sie zurück (angezeigt als
-  *Thermostat-Pause*).
-- **Steuerung aktiv** (Schalter je steuerbarem Verbraucher, auch auf seiner
-  Karte im Dashboard): aus bedeutet, SLEMS misst den Verbraucher nur. Beim
-  Ausschalten im Betriebsmodus *Aktiv* setzt SLEMS ihn einmal auf 0 W (bzw.
-  aus); danach lässt SLEMS ihn in Ruhe und plant ihn wie eine ungesteuerte
-  Last.
-- **Temperaturfühler des Speichers** (optional, bis zu zwei, z. B. der Fühler
-  eines Boilers am Heizstab und einer weiter oben): SLEMS lernt aus dem Mittel
-  der Fühler (und für jeden Fühler einzeln), wie viel Energie der Speicher je
-  Grad aufnimmt, ab welcher Temperatur der Thermostat zu takten beginnt, wie
-  hoch die mittlere Leistung beim Takten ist und wann er voll ist. Welcher
-  Fühler den Thermostat schaltet und wo sie sitzen, spielt keine Rolle. Ab
-  drei Heizläufen und zwei Taktbeginnen zeigt die Verbraucherkarte, wie viel
-  der Speicher noch aufnehmen kann, und die Einspeisebegrenzung plant den
-  Verbraucher nur mit 80 % davon ein. Seine Box im Energiefluss zeigt die
-  Temperatur des für das Tagesziel gewählten Fühlers (standardmäßig den
-  Mittelwert).
-- **Einspeisebegrenzung – Einsatz** (Auswahl je gesteuertem Verbraucher, auf
-  seiner Karte im Dashboard unter *Einspeisebegrenzung*, solange sie an ist):
-  *Unterstützend* – bekommt bei aktiver Einspeisebegrenzung keinen sonstigen
-  Überschuss, nur den Überschuss über der Grenze, den die Batterien nicht
-  aufnehmen können; zeigt die Prognose, dass eine Spitze nicht in die
-  Batterien passt, läuft er ab Beginn der Spitze, damit seine Leistung über
-  die ganze Spitze genutzt wird. *Normal* (Standard) – Überschuss wie ohne
-  Einspeisebegrenzung; über der Grenze nimmt er, was Batterien und
-  unterstützende Verbraucher nicht schaffen, bevor abgeregelt wird. *Nie* –
-  Überschuss wie ohne Einspeisebegrenzung, nie den Überschuss über der Grenze.
-  Innerhalb eines Einsatzes entscheidet die Priorität. Wirkt nur, solange
-  *Steuerung aktiv* an ist (sonst ausgegraut). Siehe *Einspeisebegrenzung*.
-- **Tagesziel** (je gesteuertem Verbraucher, auf seiner Karte unter
-  *Tagesziel*): *Laufzeit* (Zeit, in der er Leistung zieht), *Freigabezeit*
-  (Zeit, in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung
-  wie einen Luftentfeuchter mit Hygrostat), *Energie* (kWh) oder *Temperatur*
-  (mit Temperaturfühlern: Mindest- und Zieltemperatur seines Speichers; mit
-  zwei Fühlern wählt *Fühler* den Mittelwert, Fühler 1 oder Fühler 2, in der
-  Reihenfolge der Konfiguration des Verbrauchers). Gezählt von Frist (*Bis*,
-  Standard 22:00, auch über Mitternacht) zu Frist und zuerst aus dem
-  Überschuss erfüllt. *Frühester Beginn* (Laufzeit, Freigabezeit, Energie):
-  Vorher schaltet SLEMS den Verbraucher nicht ein, auch nicht mit Überschuss
-  (z. B. ein Luftentfeuchter erst ab 10:00); die späteste Startzeit liegt nie
-  davor. *Quelle* bestimmt, was den Rest rechtzeitig decken darf: *Nur
-  Überschuss* (Standard; das Ziel kann verfehlt werden, dann meldet es eine
-  Benachrichtigung), *Überschuss + Batterie* (ab der spätesten Startzeit läuft
-  der Verbraucher unabhängig vom Überschuss, solange die Batterien liefern
-  können, ein leistungsgeregelter höchstens mit ihrer Entladeleistung) oder
-  *Überschuss + Batterie + Netz*. Die späteste Startzeit ist die Frist minus
-  Restzeit × 1,2 minus 10 Minuten. *Vor der Batterie, wenn knapp*: Der
-  Verbraucher bekommt den Überschuss vor den Batterien, wenn der
-  prognostizierte Überschuss bis zur Frist für den Rest seines Ziels plus das
-  Füllen der Batterien knapp ist. Temperatur: Unter der Mindesttemperatur
-  bekommt er den Überschuss immer vor den Batterien (ab der spätesten
-  Startzeit erzwungen, geschätzt mit der gelernten Energie pro Grad, sonst 2
-  Stunden vor der Frist); ab der Zieltemperatur ist er für den Rest des Tages
-  aus; wird später am Tag eine höhere Zieltemperatur eingestellt, heizt er
-  weiter. Ein Temperaturziel gilt für den Kalendertag: Nach der Frist bleibt
-  der Verbraucher bis Mitternacht aus (*wartet bis 00:00*), auch mit
-  Überschuss. Die Karte zeigt den Fortschritt, z. B. *1,5 / 4 h · bis 22:00 ·
-  erzwungen ab 19:30*, und die Chips *Vorrang* oder *erzwungen*, solange sie
-  gelten. Mit einer Quelle über den Überschuss hinaus rechnet die Planung den
-  erzwungenen Lauf ab der spätesten Startzeit als zusätzlichen Verbrauch ein
-  (Tagesdiagramm, Tooltip *davon Tagesziele*, Ladezustandsprognose und
-  Nachtentladung), so als deckte der Überschuss nichts mehr; der geplante Lauf
-  schrumpft, sobald der Überschuss das Ziel füllt.
-
-**Wirkungsgrad der Batterie** (Gesamtwirkungsgrad, AC zu AC), je Batterie aus
-einer von drei Quellen:
-
-- *Batteriezähler* (empfohlen für die Marstek Venus E 3.0 und für Batterien
-  aus Entities mit Energiezählern): aus den Gesamtzählern der Batterie für
-  Laden und Entladen und ihrem Ladezustand: (entladen + gespeichert) /
-  geladen. Die Batterie zählt selbst, schnell und über ihre ganze
-  Betriebszeit; der Wert ist daher sofort genau und stabil. Einzige Annahme
-  ist eine leere Batterie zu Beginn der Zähler; ihr Einfluss verschwindet nach
-  wenigen Zyklen.
-- *Gelernt*: SLEMS summiert die gemessene Batterieleistung selbst (alle 5
-  Sekunden) ab dem Start von SLEMS. Das zählt erst nach etwa drei vollen
-  Ladezyklen (bis dahin gilt der Startwert), und kurze Leistungsspitzen
-  zwischen zwei Abfragen gehen verloren. Empfohlen für Batterien ohne eigene
-  Zähler.
-- *Manuell*: ein fester Wert, z. B. aus dem Datenblatt.
-
-Der Wirkungsgrad wird überall dort verwendet, wo Energie umgerechnet wird: ob
-der PV-Überschuss die Batterien füllt (gesicherte Ladung), beim netzdienlichen
-Laden, bei der Nachtentladung und in der Ladezustands-Prognose. Er entscheidet
-**nicht**, wie viele Batterien laufen: Dafür lernt SLEMS je Batterie eine
-eigene Verlustkurve aus dem Unterschied von AC- und DC-Leistung bei jeder
-Leistung (fester Verlust eines laufenden Wechselrichters plus mit der Leistung
-steigende Verluste). Daraus berechnet die Aufteilung die Anzahl Batterien mit
-dem geringsten Gesamtverlust: bei kleiner Leistung eine Batterie, oberhalb des
-Break-even-Punkts mehrere (siehe *Batterien* unten). Das funktioniert mit
-jeder Wirkungsgrad-Quelle, aber nur für Batterien, die AC- und DC-Leistung
-melden (Marstek Venus E 3.0).
-
-### Dashboard
-
-SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
-
-- **Übersicht**: Energiefluss zwischen Netz, PV, Haus, jeder Batterie (mit
-  ihrem Ladezustand) und den Verbrauchern; die animierten Punkte laufen in
-  Flussrichtung, je höher die Leistung, desto schneller und auf einer dickeren
-  Linie. Kennzahlen (Status: zuerst Probleme – Smart Meter ohne Werte,
-  Batterie nicht lesbar oder reagiert nicht –, sonst der Betriebsmodus;
-  Strategie, Ladezustand, gespeicherte Energie und Kapazität, Einspeisegrenze,
-  Prognosen) und das Prognose-Diagramm: *Heute* zeigt PV- und
-  Verbrauchsprognose (gestrichelt), die bisher gemessenen Werte
-  (durchgezogen), die erwartete und die gemessene Einspeisung ins Netz (blau;
-  die erwartete aus dem Plan, einschließlich Nachtentladung, höchstens bis zur
-  Einspeisebegrenzung), das geplante Laden der Batterien (helle Balken) und
-  das gemessene Laden (kräftige Balken), dazu den prognostizierten
-  Gesamt-Ladezustand (gestrichelt) und den gemessenen (durchgezogen) mit ihrer
-  Skala in % rechts. *Morgen* zeigt Prognosen, geplantes Laden und Ladezustand
-  des nächsten Tages, fortgeführt aus der Prognose von heute. Die Prognose
-  folgt der Planung: Laden nur mit dem geplanten Überschuss, Defizite aus den
-  Batterien, Bezugsspitzen abfangen und Nachtentladung, falls aktiviert. Beim
-  Überfahren erscheinen die Werte einer halben Stunde (am Handy durch
-  Antippen, Tippen daneben schließt sie); ein Klick auf einen Eintrag der
-  Legende blendet diese Kurve aus oder ein (die Skala folgt den angezeigten
-  Kurven; der Browser merkt sich die Auswahl; *PV über der Grenze* der
-  Einspeisebegrenzung ist ausgeblendet, bis man es einschaltet); *Tabelle
-  anzeigen* schaltet auf eine Tabelle um. Das Diagramm zeigt die mittlere
-  Leistung je halbe Stunde in kW.
-- **Batterien**: Ladezustand, gespeicherte Energie und Kapazität (kWh),
-  netzseitige Leistung (AC) mit Richtung, die Vorgabe von SLEMS, Wirkungsgrad,
-  Status und der Schalter *Aktiviert* jeder Batterie (das Deaktivieren muss
-  bestätigt werden), das Zell-Delta mit seinem Status, eine Empfehlung für den
-  aktiven Zellausgleich und die Phase eines laufenden Ausgleichs.
-- **Verbraucher**: eine Karte je Verbraucher, zugeklappt mit den wichtigen
-  Werten (gemessene und geplante Leistung, Fortschritt des Tagesziels),
-  aufgeklappt über *Einstellungen anzeigen* (der Browser merkt sich die
-  Auswahl). Gemessene und geplante Leistung, gesperrt/gesättigt, die gelernten
-  Reaktionszeiten beim Ein- und Ausschalten (eigener Sensor und am Zähler; das
-  Einschalten enthält eine Anlaufverzögerung des Geräts, z. B. eines
-  Kompressors) und der Schalter *Steuerung aktiv*.
-- **Simulation**: andere Einstellungen ausprobieren, ohne etwas zu ändern.
-  Neben dem Tagesdiagramm (heute ab jetzt oder morgen) lassen sich
-  netzdienliches Laden, Nachtentladung, Bezugsspitzen abfangen und
-  Einspeisebegrenzung ein- und ausschalten; ihre Werte erscheinen wie in den
-  Einstellungen unter dem jeweiligen Schalter. Auch die Batterien (Kapazität,
-  minimaler/maximaler Ladezustand, Lade- und Entladeleistung), der
-  Sicherheitspuffer der Nachtentladung, die maximale Einspeisung beim Entladen
-  und die PV- und Verbrauchsprognose (±%) lassen sich ändern. SLEMS rechnet
-  die Tagespläne wie die echten, ab dem aktuellen Ladezustand mit den
-  aktuellen Prognosen; der Plan mit den aktuellen Einstellungen ist zum
-  Vergleich grau gepunktet, darunter stehen Kennzahlen nebeneinander
-  (Einspeisung, Netzbezug, höchster Bezug und höchste Einspeisung, abgeregelte
-  Energie, Ladezustand um Mitternacht). Nichts davon wird gespeichert oder für
-  die Regelung verwendet; jeder Besuch beginnt mit den aktuellen
-  Einstellungen. *Heute* wird ab jetzt simuliert (die Werte davor sind
-  gemessen); am Nachmittag schlägt ein Hinweis *Morgen* für einen ganzen
-  simulierten Tag vor. Von SLEMS gesteuerte Verbraucher und der
-  Batterievorrang (er wirkt in der Echtzeit-Verteilung) werden nicht
-  simuliert.
-- **Einstellungen**: alle Einstellwerte gruppiert und direkt änderbar; die
-  Karte *Regelung* zeigt auch die gelernten Werte (aktuelle Regelverstärkung,
-  Aktualisierungsintervall des Smart Meters, Reaktionszeit der Batterie).
-
-Ein Klick auf einen Wert (Kachel, Kasten im Energiefluss, Zeile einer Karte)
-öffnet den Home-Assistant-Dialog der zugehörigen Entity mit Verlauf und
-Einstellungen.
-
-Das Dashboard folgt der Sprache und dem hellen/dunklen Design von Home
-Assistant und funktioniert auch am Handy (bei wenig Platz stehen die Batterien
-im Energiefluss untereinander).
-
-### Batterien
+## Batterien
 
 - **Marstek Venus E 3.0**: Host/IP, Port (502) und Modbus Unit-ID. Die
   Batterie akzeptiert nur **eine** Modbus-TCP-Verbindung. Lass nie zwei
@@ -489,6 +359,8 @@ Modus-Option für Automatik oder ein Freigabe-Skript. *Standby*: die Batterie
 bleibt bei 0 W stehen, bis etwas anderes sie übernimmt; eine Venus bleibt
 dafür im RS485-Steuermodus.
 
+### Aufteilung auf die Batterien
+
 Bei mehreren Batterien entscheidet SLEMS, wie viele und welche laufen: Bei
 kleiner Leistung ist meist eine einzelne Batterie effizienter, bei großer das
 Aufteilen. Beim Entladen läuft die Batterie mit dem höchsten Ladezustand, beim
@@ -505,6 +377,37 @@ weiter gemessen (ihre Leistung gehört zur Energiebilanz), aber weder
 eingeplant noch gesteuert und zählt nicht zum Gesamt-Ladezustand. Entlädt sie
 im Modus *Aktiv* gerade, übernehmen die anderen Batterien innerhalb von 5
 Sekunden, bevor sie an ihre eigene Logik zurückgegeben wird.
+
+### Wirkungsgrad der Batterie
+
+Gesamtwirkungsgrad (AC zu AC), je Batterie aus
+einer von drei Quellen:
+
+- *Batteriezähler* (empfohlen für die Marstek Venus E 3.0 und für Batterien
+  aus Entities mit Energiezählern): aus den Gesamtzählern der Batterie für
+  Laden und Entladen und ihrem Ladezustand: (entladen + gespeichert) /
+  geladen. Die Batterie zählt selbst, schnell und über ihre ganze
+  Betriebszeit; der Wert ist daher sofort genau und stabil. Einzige Annahme
+  ist eine leere Batterie zu Beginn der Zähler; ihr Einfluss verschwindet nach
+  wenigen Zyklen.
+- *Gelernt*: SLEMS summiert die gemessene Batterieleistung selbst (alle 5
+  Sekunden) ab dem Start von SLEMS. Das zählt erst nach etwa drei vollen
+  Ladezyklen (bis dahin gilt der Startwert), und kurze Leistungsspitzen
+  zwischen zwei Abfragen gehen verloren. Empfohlen für Batterien ohne eigene
+  Zähler.
+- *Manuell*: ein fester Wert, z. B. aus dem Datenblatt.
+
+Der Wirkungsgrad wird überall dort verwendet, wo Energie umgerechnet wird: ob
+der PV-Überschuss die Batterien füllt (gesicherte Ladung), beim netzdienlichen
+Laden, bei der Nachtentladung und in der Ladezustands-Prognose. Er entscheidet
+**nicht**, wie viele Batterien laufen: Dafür lernt SLEMS je Batterie eine
+eigene Verlustkurve aus dem Unterschied von AC- und DC-Leistung bei jeder
+Leistung (fester Verlust eines laufenden Wechselrichters plus mit der Leistung
+steigende Verluste). Daraus berechnet die Aufteilung die Anzahl Batterien mit
+dem geringsten Gesamtverlust: bei kleiner Leistung eine Batterie, oberhalb des
+Break-even-Punkts mehrere (siehe *Aufteilung auf die Batterien*). Das funktioniert mit
+jeder Wirkungsgrad-Quelle, aber nur für Batterien, die AC- und DC-Leistung
+melden (Marstek Venus E 3.0).
 
 ### Umstieg von einer anderen Batterie-Integration
 
@@ -668,30 +571,211 @@ alle 60 s) ihre Steuerregister zurück; ein nicht bestätigter Befehl zählt
 ebenfalls. Der Binärsensor *Reagiert nicht* und das Dashboard zeigen eine
 ausgeschlossene Batterie.
 
-### Probleme und Benachrichtigungen
+## Verbraucher
 
-Laufende Probleme erscheinen unter *Einstellungen → Reparaturen* und
-verschwinden von selbst, sobald sie behoben sind:
+Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
 
-- eine Batterie reagiert nicht (ausgeschlossen, siehe oben),
-- eine Batterie kann seit mehr als 5 Minuten nicht gelesen werden,
-- der Smart Meter meldet nicht, während SLEMS im Betriebsmodus *Aktiv* ist.
+- **Im Smart Meter enthalten**: aktivieren, wenn der Verbraucher hinter dem
+  Smart Meter hängt (sein Verbrauch ist bereits in der Netzleistung
+  enthalten). Für Verbraucher an einer separaten Versorgung deaktivieren.
+- **Im Energiefluss anzeigen** (Standard: an): aus blendet die Box des
+  Verbrauchers im Energiefluss des Dashboards aus; sein Verbrauch zählt weiter
+  im Haus, und die Verbraucherkarte zeigt ihn weiterhin.
+- **Typ**: *Wärmepumpe* (Heizung und Warmwasser, wetterabhängige Prognose),
+  *Heizpatrone* (z. B. Warmwasser im Sommer) oder *Sonstiges*. Wärmepumpe und
+  Heizpatrone dürfen gleichzeitig laufen.
+- **Steuerung**: keine (nur Messung), Ein/Aus über einen Schalter oder eine
+  Leistungsvorgabe über eine Number-Entity in W. Für gesteuerte Verbraucher
+  kann eine Entity für eine externe Sperre gewählt werden (SLEMS steuert den
+  Verbraucher nicht, solange ein Schalter oder Binärsensor eingeschaltet ist
+  oder ein Water Heater in der Betriebsart *off* steht), dazu eine Priorität
+  (1 = höchste) und optional eine Mindestlaufzeit und Mindestpause. Bei
+  Ein/Aus-Verbrauchern reicht für die Leistung im eingeschalteten Zustand eine
+  grobe Schätzung, wenn *Gelernte Werte verwenden* an ist; lieber zu niedrig
+  als zu hoch, weil SLEMS nur lernt, während es den Verbraucher betreibt.
+- **Thermostat taktet selbst**: für Verbraucher, die ihr eigener Thermostat
+  während der Ansteuerung ein- und ausschaltet (z. B. ein Heizstab, der am
+  Heizelement misst). Normalerweise gilt ein Verbraucher, der trotz Vorgabe
+  nichts abnimmt, 15 Minuten als gesättigt und behält seine letzte Vorgabe.
+  Mit dieser Option steuert SLEMS ihn weiter: In einer Pause (keine Leistung
+  für 2 Reaktionszeiten, 10–60 s) bekommen die Batterien seine nicht genutzte
+  Leistung, und sobald er wieder abnimmt, bekommt er sie zurück (angezeigt als
+  *Thermostat-Pause*).
+- **Steuerung aktiv** (Schalter je steuerbarem Verbraucher, auch auf seiner
+  Karte im Dashboard): aus bedeutet, SLEMS misst den Verbraucher nur. Beim
+  Ausschalten im Betriebsmodus *Aktiv* setzt SLEMS ihn einmal auf 0 W (bzw.
+  aus); danach lässt SLEMS ihn in Ruhe und plant ihn wie eine ungesteuerte
+  Last.
 
-Das Dashboard zeigt sie ebenfalls: ein roter Hinweis auf der Batteriekarte
-(*nicht lesbar*, *reagiert nicht*), im Energiefluss und für den Smart Meter
-oben in der Übersicht. Das Ende eines aktiven Zellausgleichs (abgeschlossen,
-nach 24 Stunden oder weil die Batterie nicht lesbar war) erzeugt eine
-Benachrichtigung mit dem Zell-Delta vorher und nachher und der Dauer; ein
-selbst abgebrochener Ausgleich nicht. Für eine Fehlermeldung speichert
-*Einstellungen → Geräte & Dienste → SLEMS → ⋮ → Diagnosedaten herunterladen*
-(oder dasselbe bei einem Batterie-Gerät) die Konfiguration und den internen
-Zustand als Datei: Messwerte, Pläne, Grenzen der Batterien, die letzten
-Registerwerte, den Stand der Zell-Delta-Messung und eines Zellausgleichs. IP-
-und MAC-Adressen werden entfernt. Die Warnungen der Einspeisebegrenzung
-(Batterien zu klein, zu wenig Zeit für Platz, Ladeleistung zu gering,
-Einspeisung über der Grenze, siehe *Einspeisebegrenzung*) sind ebenfalls
-Benachrichtigungen; sie verschwinden von selbst, sobald das Problem behoben
-ist.
+### Temperaturfühler des Speichers
+
+Optional, bis zu zwei, z. B. der Fühler eines Boilers am Heizstab und einer
+weiter oben.
+
+- SLEMS lernt aus dem Mittel der Fühler (und für jeden Fühler einzeln), wie
+  viel Energie der Speicher je Grad aufnimmt, ab welcher Temperatur der
+  Thermostat zu takten beginnt, wie hoch die mittlere Leistung beim Takten ist
+  und wann er voll ist. Welcher Fühler den Thermostat schaltet und wo sie
+  sitzen, spielt keine Rolle.
+- Ab drei Heizläufen und zwei Taktbeginnen zeigt die Verbraucherkarte, wie
+  viel der Speicher noch aufnehmen kann, und die Einspeisebegrenzung plant den
+  Verbraucher nur mit 80 % davon ein.
+- Seine Box im Energiefluss zeigt die Temperatur des für das Tagesziel
+  gewählten Fühlers (standardmäßig den Mittelwert).
+
+### Einsatz in der Einspeisebegrenzung
+
+Auswahl je gesteuertem Verbraucher, auf seiner Karte im Dashboard unter
+*Einspeisebegrenzung*, solange sie an ist. Innerhalb eines Einsatzes
+entscheidet die Priorität. Wirkt nur, solange *Steuerung aktiv* an ist (sonst
+ausgegraut). Siehe *Einspeisebegrenzung*.
+
+- *Unterstützend*: bekommt bei aktiver Einspeisebegrenzung keinen sonstigen
+  Überschuss, nur den Überschuss über der Grenze, den die Batterien nicht
+  aufnehmen können; zeigt die Prognose, dass eine Spitze nicht in die
+  Batterien passt, läuft er ab Beginn der Spitze, damit seine Leistung über
+  die ganze Spitze genutzt wird.
+- *Normal* (Standard): Überschuss wie ohne Einspeisebegrenzung; über der
+  Grenze nimmt er, was Batterien und unterstützende Verbraucher nicht
+  schaffen, bevor abgeregelt wird.
+- *Nie*: Überschuss wie ohne Einspeisebegrenzung, nie den Überschuss über der
+  Grenze.
+
+### Tagesziel
+
+Je gesteuertem Verbraucher, auf seiner Karte unter *Tagesziel*.
+
+- **Art**: *Laufzeit* (Zeit, in der er Leistung zieht), *Freigabezeit* (Zeit,
+  in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung wie
+  einen Luftentfeuchter mit Hygrostat), *Energie* (kWh) oder *Temperatur* (mit
+  Temperaturfühlern: Mindest- und Zieltemperatur seines Speichers; mit zwei
+  Fühlern wählt *Fühler* den Mittelwert, Fühler 1 oder Fühler 2, in der
+  Reihenfolge der Konfiguration des Verbrauchers).
+- **Zeitraum**: gezählt von Frist (*Bis*, Standard 22:00, auch über
+  Mitternacht) zu Frist und zuerst aus dem Überschuss erfüllt.
+- **Frühester Beginn** (Laufzeit, Freigabezeit, Energie): Vorher schaltet
+  SLEMS den Verbraucher nicht ein, auch nicht mit Überschuss (z. B. ein
+  Luftentfeuchter erst ab 10:00); die späteste Startzeit liegt nie davor.
+- **Quelle** bestimmt, was den Rest rechtzeitig decken darf:
+  - *Nur Überschuss* (Standard; das Ziel kann verfehlt werden, dann meldet es
+    eine Benachrichtigung),
+  - *Überschuss + Batterie* (ab der spätesten Startzeit läuft der Verbraucher
+    unabhängig vom Überschuss, solange die Batterien liefern können, ein
+    leistungsgeregelter höchstens mit ihrer Entladeleistung),
+  - *Überschuss + Batterie + Netz*.
+
+  Die späteste Startzeit ist die Frist minus Restzeit × 1,2 minus 10 Minuten.
+- **Vor der Batterie, wenn knapp**: Der Verbraucher bekommt den Überschuss vor
+  den Batterien, wenn der prognostizierte Überschuss bis zur Frist für den
+  Rest seines Ziels plus das Füllen der Batterien knapp ist.
+- **Temperatur**: Unter der Mindesttemperatur bekommt er den Überschuss immer
+  vor den Batterien (ab der spätesten Startzeit erzwungen, geschätzt mit der
+  gelernten Energie pro Grad, sonst 2 Stunden vor der Frist); ab der
+  Zieltemperatur ist er für den Rest des Tages aus; wird später am Tag eine
+  höhere Zieltemperatur eingestellt, heizt er weiter. Ein Temperaturziel gilt
+  für den Kalendertag: Nach der Frist bleibt der Verbraucher bis Mitternacht
+  aus (*wartet bis 00:00*), auch mit Überschuss.
+- **Anzeige**: Die Karte zeigt den Fortschritt, z. B. *1,5 / 4 h · bis 22:00 ·
+  erzwungen ab 19:30*, und die Chips *Vorrang* oder *erzwungen*, solange sie
+  gelten.
+- **Planung**: Mit einer Quelle über den Überschuss hinaus rechnet die Planung
+  den erzwungenen Lauf ab der spätesten Startzeit als zusätzlichen Verbrauch
+  ein (Tagesdiagramm, Tooltip *davon Tagesziele*, Ladezustandsprognose und
+  Nachtentladung), so als deckte der Überschuss nichts mehr; der geplante Lauf
+  schrumpft, sobald der Überschuss das Ziel füllt.
+
+## Dashboard
+
+SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
+
+### Übersicht
+
+- **Energiefluss** zwischen Netz, PV, Haus, jeder Batterie (mit ihrem
+  Ladezustand) und den Verbrauchern; die animierten Punkte laufen in
+  Flussrichtung, je höher die Leistung, desto schneller und auf einer dickeren
+  Linie.
+- **Kennzahlen**: Status (zuerst Probleme – Smart Meter ohne Werte, Batterie
+  nicht lesbar oder reagiert nicht –, sonst der Betriebsmodus), Strategie,
+  Ladezustand, gespeicherte Energie und Kapazität, Einspeisegrenze, Prognosen.
+- **Prognose-Diagramm** (mittlere Leistung je halbe Stunde in kW):
+  - *Heute* zeigt PV- und Verbrauchsprognose (gestrichelt), die bisher
+    gemessenen Werte (durchgezogen), die erwartete und die gemessene
+    Einspeisung ins Netz (blau; die erwartete aus dem Plan, einschließlich
+    Nachtentladung, höchstens bis zur Einspeisebegrenzung), das geplante Laden
+    der Batterien (helle Balken) und das gemessene Laden (kräftige Balken),
+    dazu den prognostizierten Gesamt-Ladezustand (gestrichelt) und den
+    gemessenen (durchgezogen) mit ihrer Skala in % rechts.
+  - *Morgen* zeigt Prognosen, geplantes Laden und Ladezustand des nächsten
+    Tages, fortgeführt aus der Prognose von heute.
+  - Die Prognose folgt der Planung: Laden nur mit dem geplanten Überschuss,
+    Defizite aus den Batterien, Bezugsspitzen abfangen und Nachtentladung,
+    falls aktiviert.
+  - Beim Überfahren erscheinen die Werte einer halben Stunde (am Handy durch
+    Antippen, Tippen daneben schließt sie); ein Klick auf einen Eintrag der
+    Legende blendet diese Kurve aus oder ein (die Skala folgt den angezeigten
+    Kurven; der Browser merkt sich die Auswahl; *PV über der Grenze* der
+    Einspeisebegrenzung ist ausgeblendet, bis man es einschaltet); *Tabelle
+    anzeigen* schaltet auf eine Tabelle um.
+
+### Reiter Batterien
+
+Ladezustand, gespeicherte Energie und Kapazität (kWh), netzseitige Leistung
+(AC) mit Richtung, die Vorgabe von SLEMS, Wirkungsgrad, Status und der
+Schalter *Aktiviert* jeder Batterie (das Deaktivieren muss bestätigt werden),
+das Zell-Delta mit seinem Status, eine Empfehlung für den aktiven
+Zellausgleich und die Phase eines laufenden Ausgleichs.
+
+### Reiter Verbraucher
+
+Eine Karte je Verbraucher, zugeklappt mit den wichtigen Werten (gemessene und
+geplante Leistung, Fortschritt des Tagesziels), aufgeklappt über
+*Einstellungen anzeigen* (der Browser merkt sich die Auswahl). Gemessene und
+geplante Leistung, gesperrt/gesättigt, die gelernten Reaktionszeiten beim Ein-
+und Ausschalten (eigener Sensor und am Zähler; das Einschalten enthält eine
+Anlaufverzögerung des Geräts, z. B. eines Kompressors) und der Schalter
+*Steuerung aktiv*.
+
+### Simulation
+
+Andere Einstellungen ausprobieren, ohne etwas zu ändern.
+
+- **Was sich ändern lässt**: Neben dem Tagesdiagramm (heute ab jetzt oder
+  morgen) lassen sich netzdienliches Laden, Nachtentladung, Bezugsspitzen
+  abfangen und Einspeisebegrenzung ein- und ausschalten; ihre Werte erscheinen
+  wie in den Einstellungen unter dem jeweiligen Schalter. Auch die Batterien
+  (Kapazität, minimaler/maximaler Ladezustand, Lade- und Entladeleistung), der
+  Sicherheitspuffer der Nachtentladung, die maximale Einspeisung beim Entladen
+  und die PV- und Verbrauchsprognose (±%) lassen sich ändern.
+- **Ergebnis**: SLEMS rechnet die Tagespläne wie die echten, ab dem aktuellen
+  Ladezustand mit den aktuellen Prognosen; der Plan mit den aktuellen
+  Einstellungen ist zum Vergleich grau gepunktet, darunter stehen Kennzahlen
+  nebeneinander (Einspeisung, Netzbezug, höchster Bezug und höchste
+  Einspeisung, abgeregelte Energie, Ladezustand um Mitternacht).
+- **Nichts davon wird gespeichert** oder für die Regelung verwendet; jeder
+  Besuch beginnt mit den aktuellen Einstellungen.
+- *Heute* wird ab jetzt simuliert (die Werte davor sind gemessen); am
+  Nachmittag schlägt ein Hinweis *Morgen* für einen ganzen simulierten Tag
+  vor.
+- Von SLEMS gesteuerte Verbraucher und der Batterievorrang (er wirkt in der
+  Echtzeit-Verteilung) werden nicht simuliert.
+
+### Reiter Einstellungen
+
+Alle Einstellwerte gruppiert und direkt änderbar; die Karte *Regelung* zeigt
+auch die gelernten Werte (aktuelle Regelverstärkung, Aktualisierungsintervall
+des Smart Meters, Reaktionszeit der Batterie).
+
+### Bedienung des Dashboards
+
+Ein Klick auf einen Wert (Kachel, Kasten im Energiefluss, Zeile einer Karte)
+öffnet den Home-Assistant-Dialog der zugehörigen Entity mit Verlauf und
+Einstellungen.
+
+Das Dashboard folgt der Sprache und dem hellen/dunklen Design von Home
+Assistant und funktioniert auch am Handy (bei wenig Platz stehen die Batterien
+im Energiefluss untereinander).
+
+## Betrieb und Regelung
 
 ### Betriebsmodus
 
@@ -1029,6 +1113,31 @@ alle gelernten Werte als Attribute.
   Nacht; sie zeigt damit die Grenze, die dann gilt. In den Einstellungen zeigt
   die Bezugsgrenze dann den berechneten Wert (nur Anzeige); der Sensor
   *Wirksame Bezugsgrenze Spitzenabfang* zeigt die verwendete Grenze.
+
+### Probleme und Benachrichtigungen
+
+Laufende Probleme erscheinen unter *Einstellungen → Reparaturen* und
+verschwinden von selbst, sobald sie behoben sind:
+
+- eine Batterie reagiert nicht (ausgeschlossen, siehe oben),
+- eine Batterie kann seit mehr als 5 Minuten nicht gelesen werden,
+- der Smart Meter meldet nicht, während SLEMS im Betriebsmodus *Aktiv* ist.
+
+Das Dashboard zeigt sie ebenfalls: ein roter Hinweis auf der Batteriekarte
+(*nicht lesbar*, *reagiert nicht*), im Energiefluss und für den Smart Meter
+oben in der Übersicht. Das Ende eines aktiven Zellausgleichs (abgeschlossen,
+nach 24 Stunden oder weil die Batterie nicht lesbar war) erzeugt eine
+Benachrichtigung mit dem Zell-Delta vorher und nachher und der Dauer; ein
+selbst abgebrochener Ausgleich nicht. Für eine Fehlermeldung speichert
+*Einstellungen → Geräte & Dienste → SLEMS → ⋮ → Diagnosedaten herunterladen*
+(oder dasselbe bei einem Batterie-Gerät) die Konfiguration und den internen
+Zustand als Datei: Messwerte, Pläne, Grenzen der Batterien, die letzten
+Registerwerte, den Stand der Zell-Delta-Messung und eines Zellausgleichs. IP-
+und MAC-Adressen werden entfernt. Die Warnungen der Einspeisebegrenzung
+(Batterien zu klein, zu wenig Zeit für Platz, Ladeleistung zu gering,
+Einspeisung über der Grenze, siehe *Einspeisebegrenzung*) sind ebenfalls
+Benachrichtigungen; sie verschwinden von selbst, sobald das Problem behoben
+ist.
 
 ## Sprache
 
