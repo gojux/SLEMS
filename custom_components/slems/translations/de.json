@@ -66,6 +66,13 @@
             "model": "Modell"
           }
         },
+        "search": {
+          "title": "Marstek Venus im Netz",
+          "description": "{count} Batterie(n) gefunden (Ladezustand in Klammern). Bereits hinzugefügte Batterien und solche, deren Modbus-Verbindung eine andere Integration hält, fehlen in der Liste.",
+          "data": {
+            "host": "Batterie"
+          }
+        },
         "marstek_venus_e3": {
           "title": "Marstek Venus E 3.0",
           "description": "Anbindung über Modbus TCP (LAN). Die Batterie akzeptiert nur eine Modbus-Verbindung: Betreibe nicht gleichzeitig eine andere Integration an derselben Batterie.",
@@ -79,45 +86,121 @@
             "max_discharge_power_w": "Maximale Entladeleistung",
             "skip_connection_test": "Verbindungstest überspringen",
             "efficiency_mode": "Quelle des Wirkungsgrads",
-            "round_trip_efficiency_pct": "Gesamtwirkungsgrad"
+            "round_trip_efficiency_pct": "Gesamtwirkungsgrad",
+            "release_state": "Zustand, wenn SLEMS die Batterie freigibt"
           },
           "data_description": {
             "skip_connection_test": "Ohne Verbindungstest speichern, z. B. solange eine andere Integration die Modbus-Verbindung belegt.",
             "efficiency_mode": "Batteriezähler (empfohlen): aus den Gesamtzählern der Batterie für Laden und Entladen; sofort genau, weil die Batterie ihre ganze Betriebszeit mitzählt. Gelernt: aus der von SLEMS gemessenen Leistung; braucht erst etwa drei volle Ladezyklen. Manuell: fester Wert.",
-            "round_trip_efficiency_pct": "Entnommene / eingespeicherte Energie (AC). Im manuellen Modus fester Wert, sonst Startwert, bis genug Messdaten vorliegen."
+            "round_trip_efficiency_pct": "Entnommene / eingespeicherte Energie (AC). Im manuellen Modus fester Wert, sonst Startwert, bis genug Messdaten vorliegen.",
+            "release_state": "Automatik: die eigene Logik der Batterie übernimmt wieder (z. B. ihre Nulleinspeisung). Standby: die Batterie bleibt bei 0 W stehen, bis etwas anderes sie übernimmt. Gilt, wenn SLEMS die Steuerung beendet, z. B. im Betriebsmodus Aus, ohne Werte des Smart Meters oder wenn die Batterie aus SLEMS entfernt wird."
+          }
+        },
+        "ha_device": {
+          "title": "Batterie aus vorhandenen Entities",
+          "description": "Wähle das Gerät der Batterie in Home Assistant: SLEMS schlägt in den nächsten Schritten seine Entities vor, du prüfst und korrigierst sie. Leer lassen, um alle Entities selbst zu wählen.",
+          "data": {
+            "device": "Gerät"
           }
         },
         "ha_entities": {
-          "title": "Batterie aus vorhandenen Entities (nur lesend)",
-          "description": "SLEMS liest diese Batterie nur und sendet nie Befehle. Geeignet für den Simulationsmodus, solange eine andere Integration die Batterie steuert.",
+          "title": "Batterie aus vorhandenen Entities",
+          "description": "Aus dem Gerät vorgeschlagene Entities sind eingetragen; bitte prüfen. Nur lesen: SLEMS sendet nie Befehle (z. B. solange eine andere Integration die Batterie steuert). Steuern: die eigene Regelung der Batterie (z. B. Nulleinspeisung) in ihrer Integration ausschalten, sonst regeln beide gleichzeitig.",
           "data": {
             "name": "Name",
             "soc_entity": "Ladezustand",
             "power_entity": "Batterieleistung",
             "power_inverted": "Vorzeichen der Leistung umkehren",
+            "battery_control": "Steuerung",
+            "battery_temperature_entity": "Batterietemperatur",
+            "max_cell_voltage_entity": "Höchste Zellspannung",
+            "min_cell_voltage_entity": "Niedrigste Zellspannung",
+            "charged_energy_entity": "Insgesamt geladene Energie",
+            "discharged_energy_entity": "Insgesamt entladene Energie"
+          },
+          "data_description": {
+            "power_entity": "Pflicht, wenn SLEMS die Batterie steuert: sie geht in die für die Regelung verfügbare Leistung ein.",
+            "power_inverted": "SLEMS erwartet positiv = Laden. Aktivieren, wenn der Sensor Entladen positiv meldet.",
+            "battery_control": "Sollwert: eine Number-Entity mit der Leistung mit Vorzeichen. Getrennt: je eine Number für Laden und Entladen, optional eine Modus-Auswahl. Skript: ein Skript erhält die Leistung als Variable power_w (+Laden / -Entladen).",
+            "battery_temperature_entity": "Optional: ermöglicht die Ladebegrenzung nach Temperatur.",
+            "max_cell_voltage_entity": "Optional, zusammen mit der niedrigsten Zellspannung: sanftes Laden nahe voll, Zell-Delta und Zellausgleich (LFP-Zellen).",
+            "charged_energy_entity": "Optional, zusammen mit der entladenen Energie: Wirkungsgrad aus den Batteriezählern."
+          }
+        },
+        "ha_setpoint": {
+          "title": "Steuerung über Sollwert",
+          "data": {
+            "setpoint_entity": "Sollwert (Number, W)",
+            "setpoint_inverted": "Vorzeichen des Sollwerts umkehren",
+            "remote_entity": "Fernsteuerung (optional)"
+          },
+          "data_description": {
+            "setpoint_inverted": "SLEMS schreibt positiv = Laden. Aktivieren, wenn die Entity Entladen positiv erwartet.",
+            "remote_entity": "Schalter oder Auswahl, die die Batterie in die Fernsteuerung versetzt; wird vor dem ersten Sollwert eingeschaltet und bei Freigabe an die Automatik wieder aus."
+          }
+        },
+        "ha_split": {
+          "title": "Steuerung über Lade- und Entladeleistung",
+          "data": {
+            "charge_entity": "Ladeleistung (Number, W)",
+            "discharge_entity": "Entladeleistung (Number, W)",
+            "mode_entity": "Modus (optional)",
+            "remote_entity": "Fernsteuerung (optional)"
+          },
+          "data_description": {
+            "mode_entity": "Auswahl, die zwischen Laden, Entladen und Standby umschaltet (z. B. ein Force-Modus); die Optionen werden im nächsten Schritt zugeordnet.",
+            "remote_entity": "Schalter oder Auswahl, die die Batterie in die Fernsteuerung versetzt; wird vor dem ersten Sollwert eingeschaltet und bei Freigabe an die Automatik wieder aus."
+          }
+        },
+        "ha_script": {
+          "title": "Steuerung über Skript",
+          "description": "Das Leistungs-Skript wird mit jedem Sollwert gestartet und erhält die Variable power_w (W, +Laden / -Entladen, 0 = Standby).",
+          "data": {
+            "power_script": "Leistungs-Skript",
+            "release_script": "Freigabe-Skript (optional)"
+          },
+          "data_description": {
+            "release_script": "Gibt die Batterie an ihre eigene Logik zurück (Zustand bei Freigabe Automatik)."
+          }
+        },
+        "ha_options": {
+          "title": "Optionen der Auswahl-Entities",
+          "description": "Welche Option was bedeutet. Leer gelassene Optionen werden nicht verwendet.",
+          "data": {
+            "mode_charge": "Modus: Laden",
+            "mode_discharge": "Modus: Entladen",
+            "mode_standby": "Modus: Standby",
+            "mode_auto": "Modus: Automatik",
+            "remote_on": "Fernsteuerung: an",
+            "remote_off": "Fernsteuerung: aus"
+          }
+        },
+        "ha_limits": {
+          "title": "Grenzen und Verhalten",
+          "data": {
             "capacity_wh": "Nutzbare Kapazität",
             "max_charge_power_w": "Maximale Ladeleistung",
             "max_discharge_power_w": "Maximale Entladeleistung",
             "efficiency_mode": "Quelle des Wirkungsgrads",
-            "round_trip_efficiency_pct": "Gesamtwirkungsgrad"
+            "round_trip_efficiency_pct": "Gesamtwirkungsgrad",
+            "release_state": "Zustand, wenn SLEMS die Batterie freigibt",
+            "min_command_interval_s": "Mindestabstand zwischen Befehlen",
+            "keepalive_s": "Sollwert wiederholen alle"
           },
           "data_description": {
-            "power_inverted": "SLEMS erwartet positiv = Laden. Aktivieren, wenn der Sensor Entladen positiv meldet.",
-            "efficiency_mode": "Gelernt (empfohlen): aus der gemessenen Batterieleistung; braucht etwa drei volle Ladezyklen, bis dahin gilt der Startwert. Manuell: fester Wert.",
-            "round_trip_efficiency_pct": "Entnommene / eingespeicherte Energie (AC). Im manuellen Modus fester Wert, sonst Startwert, bis genug Messdaten vorliegen."
-          }
-        },
-        "search": {
-          "title": "Marstek Venus im Netz",
-          "description": "{count} Batterie(n) gefunden (Ladezustand in Klammern). Bereits hinzugefügte Batterien und solche, deren Modbus-Verbindung eine andere Integration hält, fehlen in der Liste.",
-          "data": {
-            "host": "Batterie"
+            "efficiency_mode": "Batteriezähler: aus der insgesamt geladenen und entladenen Energie. Gelernt (empfohlen ohne Zähler): aus der gemessenen Batterieleistung; braucht etwa drei volle Ladezyklen, bis dahin gilt der Startwert. Manuell: fester Wert.",
+            "round_trip_efficiency_pct": "Entnommene / eingespeicherte Energie (AC). Im manuellen Modus fester Wert, sonst Startwert, bis genug Messdaten vorliegen.",
+            "release_state": "Automatik: die eigene Logik der Batterie übernimmt wieder (z. B. ihre Nulleinspeisung). Standby: die Batterie bleibt bei 0 W stehen, bis etwas anderes sie übernimmt. Gilt, wenn SLEMS die Steuerung beendet, z. B. im Betriebsmodus Aus, ohne Werte des Smart Meters oder wenn die Batterie aus SLEMS entfernt wird.",
+            "min_command_interval_s": "Für Integrationen mit begrenzter Befehlsrate (oft über eine Cloud); 0 = keine Begrenzung.",
+            "keepalive_s": "Manche Batterien fallen ohne neue Befehle auf ihre eigene Logik zurück; 0 = Standard von SLEMS (60 s)."
           }
         }
       },
       "error": {
         "cannot_connect": "Keine Verbindung zur Batterie möglich.",
-        "none_found": "Im Netz wurde keine Marstek Venus gefunden. Adresse von Hand eingeben (siehe README: IP-Adresse finden); andere Integrationen, die die Batterie verwenden, vorher stoppen."
+        "none_found": "Im Netz wurde keine Marstek Venus gefunden. Adresse von Hand eingeben (siehe README: IP-Adresse finden); andere Integrationen, die die Batterie verwenden, vorher stoppen.",
+        "power_required": "SLEMS braucht die Batterieleistung, um die Batterie zu steuern.",
+        "no_auto_release": "Automatik braucht eine Fernsteuerungs-Entity, eine Modus-Option für Automatik oder ein Freigabe-Skript; sonst Standby wählen."
       },
       "abort": {
         "reconfigure_successful": "Batterie aktualisiert."
@@ -185,7 +268,7 @@
     "model": {
       "options": {
         "marstek_venus_e3": "Marstek Venus E 3.0 (Modbus TCP)",
-        "ha_entities": "Vorhandene Home-Assistant-Entities (nur lesend)"
+        "ha_entities": "Vorhandene Home-Assistant-Entities (lesen oder steuern)"
       }
     },
     "consumer_type": {
@@ -212,6 +295,20 @@
     "search": {
       "options": {
         "manual": "Adresse von Hand eingeben"
+      }
+    },
+    "battery_control": {
+      "options": {
+        "none": "Nur lesen",
+        "setpoint": "Sollwert (eine Number)",
+        "split": "Getrennte Lade- und Entladeleistung",
+        "script": "Skript"
+      }
+    },
+    "release_state": {
+      "options": {
+        "auto": "Automatik (eigene Logik der Batterie)",
+        "standby": "Standby (0 W)"
       }
     }
   },

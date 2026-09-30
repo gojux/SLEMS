@@ -14,14 +14,13 @@ from ..const import (
     CONF_MAX_DISCHARGE_POWER_W,
     CONF_MODEL,
     CONF_PORT,
-    CONF_POWER_ENTITY,
-    CONF_POWER_INVERTED,
-    CONF_SOC_ENTITY,
+    CONF_RELEASE_STATE,
     CONF_UNIT_ID,
     BatteryModel,
+    ReleaseState,
 )
 from .base import BatteryCapabilities, BatteryDriver, BatteryDriverError, BatteryTelemetry
-from .ha_entities import HomeAssistantEntityDriver
+from .ha_entities import EntityBatteryConfig, HomeAssistantEntityDriver
 from .marstek_venus_e3 import MarstekVenusE3Driver
 
 __all__ = [
@@ -44,15 +43,8 @@ def create_driver(hass: HomeAssistant, data: Mapping[str, Any]) -> BatteryDriver
             capacity_wh=data[CONF_CAPACITY_WH],
             max_charge_power_w=data[CONF_MAX_CHARGE_POWER_W],
             max_discharge_power_w=data[CONF_MAX_DISCHARGE_POWER_W],
+            release_state=ReleaseState(data.get(CONF_RELEASE_STATE, ReleaseState.AUTO)),
         )
     if model is BatteryModel.HA_ENTITIES:
-        return HomeAssistantEntityDriver(
-            hass,
-            data[CONF_SOC_ENTITY],
-            data.get(CONF_POWER_ENTITY),
-            power_inverted=data.get(CONF_POWER_INVERTED, False),
-            capacity_wh=data[CONF_CAPACITY_WH],
-            max_charge_power_w=data[CONF_MAX_CHARGE_POWER_W],
-            max_discharge_power_w=data[CONF_MAX_DISCHARGE_POWER_W],
-        )
+        return HomeAssistantEntityDriver(hass, EntityBatteryConfig.from_data(data))
     raise ValueError(f"Unsupported battery model: {model}")

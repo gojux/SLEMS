@@ -74,6 +74,16 @@ class BatteryDriver(ABC):
         """True if the driver talks to the battery itself (the communication can be paused)."""
         return False
 
+    @property
+    def min_command_interval_s(self) -> float:
+        """Shortest time between two set points (e.g. rate limited cloud APIs)."""
+        return 0.0
+
+    @property
+    def keepalive_s(self) -> float | None:
+        """Interval of complete rewrites of the set point; None: the controller's default."""
+        return None
+
     async def read_device_info(self) -> dict[str, str]:
         """Firmware versions and other static device information (may be empty)."""
         return {}

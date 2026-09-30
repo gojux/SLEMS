@@ -21,6 +21,7 @@ services:
     depends_on:
       - venus-sim-1
       - venus-sim-2
+      - venus-sim-3
     restart: unless-stopped
 
   # Two simulated Marstek Venus E 3.0 batteries (host names venus-sim-1/2, port 502).
@@ -33,6 +34,13 @@ services:
     <<: *venus-sim
     environment:
       SIM_INITIAL_SOC: "75"
+
+  # Controlled through Home Assistant entities (Modbus and template entities in
+  # dev/config/configuration.yaml), like a battery behind another integration.
+  venus-sim-3:
+    <<: *venus-sim
+    environment:
+      SIM_INITIAL_SOC: "55"
 
   # Test runner using the same Python and Home Assistant version as production.
   # Usage: docker compose run --rm tests

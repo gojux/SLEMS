@@ -2,6 +2,7 @@
 
 import pytest
 
+from custom_components.slems.const import ReleaseState
 from custom_components.slems.drivers.base import BatteryDriverError
 from custom_components.slems.drivers.marstek_venus_e3 import (
     FORCE_CHARGE,
@@ -114,6 +115,19 @@ async def test_release_control_returns_to_internal_logic() -> None:
     assert link.registers[REG_FORCE_MODE] == FORCE_NONE
     assert link.registers[REG_SET_CHARGE_POWER] == 0
     assert link.registers[REG_RS485_CONTROL] == RS485_DISABLE
+
+
+async def test_release_to_standby_keeps_remote_control() -> None:
+    link = FakeLink()
+    driver = MarstekVenusE3Driver(
+        "host", 502, 1, capacity_wh=5120, max_charge_power_w=2500,
+        max_discharge_power_w=2500, release_state=ReleaseState.STANDBY, link=link,
+    )
+    await driver.apply_power(1000)
+    await driver.release_control()
+    assert link.registers[REG_FORCE_MODE] == FORCE_NONE
+    assert link.registers[REG_SET_CHARGE_POWER] == 0
+    assert link.registers[REG_RS485_CONTROL] == RS485_ENABLE
 
 
 def test_power_limits_are_capped_to_hardware() -> None:

@@ -14,8 +14,9 @@ Der Name setzt sich aus *[Slug](https://en.wikipedia.org/wiki/Sea_slug)* (ein wu
 interessantes Tier) und *EMS* (Energiemanagementsystem) zusammen.
 
 > **Unterstützte Batterien:** SLEMS steuert derzeit die **Marstek Venus E 3.0**
-> (Modbus TCP). Andere Batterien lassen sich über ihre Home-Assistant-Entities
-> nur lesend einbinden (Planung und Simulation, keine Steuerung). Wenn du
+> (Modbus TCP) direkt. Andere Batterien lassen sich über die Entities ihrer
+> Home-Assistant-Integration einbinden, nur lesend oder gesteuert
+> (experimentell). Wenn du
 > SLEMS mit einer anderen Batterie nutzen möchtest, erstelle bitte ein
 > [Issue](https://github.com/gojux/SLEMS/issues) mit dem Modell, der
 > Anbindung (Modbus, lokale API, Home-Assistant-Integration) und ob du testen
@@ -76,8 +77,8 @@ plant voraus und regelt genau:
   ohne etwas zu ändern.
 
 **Wann (heute) eine andere Lösung besser passt:** viele verschiedene
-Batteriemarken (SLEMS unterstützt derzeit die Marstek Venus E 3.0 und nur
-lesende Batterien aus vorhandenen Entities), Laden aus dem Netz nach
+Batteriemarken (SLEMS spricht nur die Marstek Venus E 3.0 direkt an; andere
+Batterien steuert es über die Entities ihrer Integration, das ist gröber), Laden aus dem Netz nach
 dynamischen Tarifen oder das Laden von Elektroautos. Omnibattery deckt viele
 Batteriemodelle ab, evcc ist auf das Laden von E-Autos spezialisiert; evcc
 ergänzt SLEMS gut (siehe [Roadmap](#roadmap)).
@@ -88,7 +89,7 @@ ergänzt SLEMS gut (siehe [Roadmap](#roadmap)).
 |---|---|
 | Beliebig viele Batterien, jederzeit hinzufügen, bearbeiten, entfernen | ✅ |
 | Marstek Venus E 3.0 über Modbus TCP | ✅ |
-| Nur lesende Batterie aus vorhandenen Entities (z. B. solange Omnibattery steuert) | ✅ |
+| Batterie aus vorhandenen Entities: nur lesend (z. B. solange Omnibattery steuert) oder gesteuert über Sollwert, Lade-/Entladeleistung oder Skript, Entities aus dem Gerät vorgeschlagen | ✅ (Steuerung experimentell) |
 | Smart Meter, PV-Leistung und Wetter frei wählbar | ✅ |
 | PV-Prognose aus beliebiger Solarprognose-Integration (Forecast.Solar, Solcast, …) | ✅ |
 | Verbraucher mit eigenen Leistungs-/Energiesensoren, im oder außerhalb des Smart Meters | ✅ Konfiguration |
@@ -318,7 +319,8 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
 **Wirkungsgrad der Batterie** (Gesamtwirkungsgrad, AC zu AC), je Batterie
 aus einer von drei Quellen:
 
-- *Batteriezähler* (empfohlen für die Marstek Venus E 3.0): aus den
+- *Batteriezähler* (empfohlen für die Marstek Venus E 3.0 und für Batterien
+  aus Entities mit Energiezählern): aus den
   Gesamtzählern der Batterie für Laden und Entladen und ihrem Ladezustand:
   (entladen + gespeichert) / geladen. Die Batterie zählt selbst, schnell und
   über ihre ganze Betriebszeit; der Wert ist daher sofort genau und stabil.
@@ -328,7 +330,7 @@ aus einer von drei Quellen:
   5 Sekunden) ab dem Start von SLEMS. Das zählt erst nach etwa drei vollen
   Ladezyklen (bis dahin gilt der Startwert), und kurze Leistungsspitzen
   zwischen zwei Abfragen gehen verloren. Empfohlen für Batterien ohne eigene
-  Zähler (nur lesende Batterien aus vorhandenen Entities).
+  Zähler.
 - *Manuell*: ein fester Wert, z. B. aus dem Datenblatt.
 
 Der Wirkungsgrad wird überall dort verwendet, wo Energie umgerechnet wird: ob
@@ -447,10 +449,47 @@ Batterien im Energiefluss untereinander).
   Batterien). Beim Hinzufügen prüft SLEMS die Verbindung, indem es den
   Ladezustand liest; andere Integrationen, die die Batterie verwenden, vorher
   stoppen.
-- **Vorhandene Home-Assistant-Entities (nur lesend)**: Ladezustand und
-  Leistung einer Batterie, die von etwas anderem gesteuert wird. SLEMS sendet
-  an eine solche Batterie nie Befehle. So kann SLEMS im Simulationsmodus
-  parallel zu einer bestehenden Batterie-Integration laufen.
+- **Vorhandene Home-Assistant-Entities** (Steuerung: experimentell): jede
+  Batterie, die eine andere Integration in Home Assistant einbindet. Zuerst
+  das Gerät der Batterie wählen: SLEMS schlägt seine Entities vor
+  (Ladezustand, Leistung, Sollwerte, Modus, optional Temperatur,
+  Zellspannungen und Energiezähler); bitte prüfen und korrigieren. Ohne Gerät
+  wählst du alles selbst.
+  - **Nur lesen**: SLEMS sendet nie Befehle, z. B. um SLEMS im
+    Simulationsmodus parallel zu einer bestehenden Batterie-Integration
+    laufen zu lassen.
+  - **Sollwert**: eine Number-Entity mit der Leistung mit Vorzeichen (+Laden /
+    −Entladen, Vorzeichen umkehrbar).
+  - **Getrennte Lade- und Entladeleistung**: je eine Number, optional eine
+    Modus-Auswahl (Laden / Entladen / Standby / Automatik, die Optionen werden
+    im nächsten Schritt zugeordnet).
+  - **Skript**: ein eigenes Skript erhält die Leistung als Variable `power_w`
+    (W, +Laden / −Entladen, 0 = Standby); optional ein Freigabe-Skript. Damit
+    lassen sich auch Batterien steuern, die über Aktionen (Dienste) bedient
+    werden.
+
+  Optional wird ein Schalter oder eine Auswahl für die *Fernsteuerung* vor dem
+  ersten Sollwert eingeschaltet. Zum Steuern ist der Sensor der
+  Batterieleistung Pflicht. *Mindestabstand zwischen Befehlen* passt für
+  Integrationen mit begrenzter Befehlsrate (oft über eine Cloud), *Sollwert
+  wiederholen alle* für Batterien, die ohne neue Befehle auf ihre eigene Logik
+  zurückfallen. Die eigene Regelung der Batterie (z. B. ihre Nulleinspeisung)
+  in ihrer Integration ausschalten, sonst regeln beide gleichzeitig. Batterien
+  über eine Cloud reagieren langsamer als eine Venus über Modbus; SLEMS lernt
+  ihre Reaktionszeit, die Regelung ist aber gröber. Mit Zellspannungen nutzt
+  SLEMS sanftes Laden nahe voll, das Zell-Delta und den Zellausgleich wie bei
+  einer Venus (LFP-Zellen). Diese Steuerung ist bisher nur mit simulierten
+  Entities getestet; Erfahrungen mit echten Geräten bitte als
+  [Issue](https://github.com/gojux/SLEMS/issues) melden.
+
+**Zustand bei Freigabe**: in welchem Zustand SLEMS die Batterie lässt, wenn es
+die Steuerung beendet, z. B. im Betriebsmodus *Aus*, ohne Werte des Smart
+Meters oder wenn die Batterie aus SLEMS entfernt wird. *Automatik* (Standard):
+die eigene Logik der Batterie übernimmt wieder (z. B. ihre Nulleinspeisung);
+bei einer Batterie aus Entities braucht das eine Fernsteuerungs-Entity, eine
+Modus-Option für Automatik oder ein Freigabe-Skript. *Standby*: die Batterie
+bleibt bei 0 W stehen, bis etwas anderes sie übernimmt; eine Venus bleibt
+dafür im RS485-Steuermodus.
 
 Bei mehreren Batterien entscheidet SLEMS, wie viele und welche laufen: Bei
 kleiner Leistung ist meist eine einzelne Batterie effizienter, bei großer das

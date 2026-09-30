@@ -33,6 +33,7 @@ Safety:
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterable
 from enum import StrEnum
 import logging
 import time
@@ -54,7 +55,7 @@ from .response import (
     MeterCadence,
     StepResponse,
 )
-from .util import state_as_float
+from .util import clamp_to_entity, state_as_float
 
 if TYPE_CHECKING:
     from .coordinator import BatteryRuntime, SlemsCoordinator, SystemSnapshot
@@ -293,6 +294,15 @@ class RealTimeController:
         self.request()
 
     @callback
+    async def async_release(self, batteries: Iterable[BatteryRuntime]) -> None:
+        """Hand batteries back to their own logic from outside a control cycle.
+
+        Waits for a running cycle, so it cannot send a set point after the release.
+        """
+        async with self._lock:
+            for battery in batteries:
+                await self._coordinator.async_release_battery(battery)
+
     def shutdown(self) -> None:
         if self._pending is not None:
             self._pending()
@@ -469,7 +479,11 @@ class RealTimeController:
             target = round(snapshot.distribution.power_w.get(battery.subentry_id, 0.0))
             latest = self._latest_command(battery.subentry_id)
             last_refresh = self._battery_refreshed.get(battery.subentry_id, 0.0)
-            refresh = now - last_refresh >= BATTERY_KEEPALIVE_S
+            refresh = now - last_refresh >= (battery.driver.keepalive_s or BATTERY_KEEPALIVE_S)
+            history = self._battery_history.get(battery.subentry_id)
+            if history and now - history[-1][0] < battery.driver.min_command_interval_s:
+                new_total += latest
+                continue
             if latest is not None and not refresh:
                 same_direction = (latest > 0) == (target > 0) and (latest < 0) == (target < 0)
                 if abs(latest - target) < BATTERY_DEADBAND_W and same_direction:
@@ -514,7 +528,9 @@ class RealTimeController:
                 continue
             target = round(target)
             previous = self._balancing_commands.get(battery_id)
-            refresh = previous is None or now - previous[1] >= BATTERY_KEEPALIVE_S
+            refresh = previous is None or now - previous[1] >= (
+                battery.driver.keepalive_s or BATTERY_KEEPALIVE_S
+            )
             if previous is not None and not refresh:
                 same_direction = (previous[0] > 0) == (target > 0) and (previous[0] < 0) == (target < 0)
                 if abs(previous[0] - target) < BATTERY_DEADBAND_W and same_direction:
@@ -564,7 +580,7 @@ class RealTimeController:
                 )
             else:
                 current = state_as_float(state)
-                value = _clamp_to_entity(target, state)
+                value = clamp_to_entity(target, state)
                 if current is not None and abs(current - value) < CONSUMER_DEADBAND_W and (
                     value != 0 or current == 0
                 ):
@@ -611,7 +627,7 @@ class RealTimeController:
             await self._hass.services.async_call(
                 domain,
                 "set_value",
-                {ATTR_ENTITY_ID: consumer.control_entity_id, "value": _clamp_to_entity(0, state)},
+                {ATTR_ENTITY_ID: consumer.control_entity_id, "value": clamp_to_entity(0, state)},
             )
 
     def _check_resting(self, subentry_id: str, snapshot: SystemSnapshot, now: float) -> None:
@@ -655,18 +671,6 @@ class RealTimeController:
             _LOGGER.debug("Consumer %s saturated (draws %.0f W)", subentry_id, measured)
             self._saturated_until[subentry_id] = now + SATURATION_HOLD_S
             del self._consumer_commands[subentry_id]
-
-
-def _clamp_to_entity(value: float, state) -> float:
-    """Keep a set point within the min/max/step of a number entity."""
-    minimum = state.attributes.get("min")
-    maximum = state.attributes.get("max")
-    step = state.attributes.get("step") or 1
-    if minimum is not None:
-        value = max(float(minimum), value)
-    if maximum is not None:
-        value = min(float(maximum), value)
-    return round(value / step) * step
 
 
 def seen_consumer_power(

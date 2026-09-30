@@ -92,12 +92,13 @@ custom_components/slems/
   switch.py          vacation, import peak shaving
   number.py          numeric runtime settings (averaging window, allocation, peak shaving)
   binary_sensor.py   battery charge secured
-  util.py            unit conversion of HA states
+  util.py            unit conversion of HA states, clamping to number entities
+  entity_match.py    suggests the entities of a battery device per role (config flow)
   drivers/
     base.py          BatteryDriver contract (read_telemetry, apply_power, release_control)
     marstek_venus_e3.py
     modbus_client.py Modbus TCP link with Venus firmware quirks
-    ha_entities.py   read-only battery backed by HA entities
+    ha_entities.py   battery backed by HA entities (read-only, set point, split, script)
 ```
 
 Runtime settings (operating mode, vacation, peak shaving) live in
@@ -1007,6 +1008,46 @@ CH395 can be sent from the simulator container to test it.
    `extra_telemetry_keys`; matching sensors in `BATTERY_EXTRA_SENSORS` are then
    created automatically.
 
+### Batteries from Home Assistant entities
+
+`drivers/ha_entities.py`, configured by `EntityBatteryConfig.from_data`
+(subentry keys in `const.py`, control type `BatteryControl`):
+
+- **Telemetry**: SoC (required), power (required when controlled, because it
+  is part of `available_power_w`), optional temperature, highest/lowest cell
+  voltage (mV converted to V) and energy counters (kWh) as `extra` keys of the
+  Venus (`internal_temperature`, `max_cell_voltage`, ...), so the temperature
+  limit, top taper, cell delta/balancing and the counter efficiency work
+  unchanged.
+- **Commands**: `setpoint` writes one number (optionally inverted, kW
+  converted, `clamp_to_entity`); `split` writes the stopping direction to 0
+  first, then the other number, then the mode option; `script` calls
+  `script.turn_on` with `variables: {power_w}`. A remote control entity
+  (switch or select with on/off options) is switched on before commands.
+  Unchanged values are not written again unless `refresh`. Service calls are
+  not blocking; an unavailable entity fails the command (`BatteryDriverError`).
+- **Timing**: `BatteryDriver.min_command_interval_s` (the controller keeps
+  the previous set point until it passed) and `keepalive_s` (replaces
+  `BATTERY_KEEPALIVE_S` for that battery).
+- **Release** (`ReleaseState`, also for the Venus): `auto` hands the battery
+  to its own logic (Venus: RS485 control off; entities: mode option
+  automatic, remote control off or release script), `standby` leaves it at
+  0 W (Venus: RS485 control stays on). The config flow only offers `auto`
+  when `can_release_to_auto`. Removing a battery reloads the entry;
+  `async_shutdown` releases the batteries of the old state in active mode,
+  so a removed battery gets its release state too (HA's delete dialog of a
+  subentry cannot ask).
+- **Config flow**: `ha_device` (optional device) → `_suggest_from_device`
+  (`entity_match.match_battery_entities`, scores per role on domain,
+  device class, unit, EN/DE words; capacity and power limits from the capacity
+  sensor and the number min/max) → `ha_entities` → `ha_setpoint` /
+  `ha_split` / `ha_script` → `ha_options` (select options, suggested) →
+  `ha_limits`. `_entity_battery_data` drops the keys of other control types.
+- **Dev instance**: `venus-sim-3` is controlled only through Modbus and
+  template entities (`dev/config/configuration.yaml`: template numbers for
+  charge/discharge power, template select for the force mode, Modbus switch
+  for RS485 control), like a Venus behind another integration.
+
 ### Other batteries (Omnibattery drivers)
 
 Omnibattery (GPL-3.0 like SLEMS, so its code may be used with attribution)
@@ -1045,7 +1086,7 @@ Open points before other brands:
   after the model is extended.
 
 Until then any battery with SoC and power entities in Home Assistant can be
-added read-only (`ha_entities`) for simulation and planning.
+added through its entities (`ha_entities`), read-only or controlled.
 
 ## Consumption forecast
 
@@ -1381,3 +1422,6 @@ repository (otherwise its *brands* check fails).
 | 2026-09-29 | A temperature target applies to the calendar day: from midnight to the deadline, then the consumer waits (off, also with surplus) until midnight; temperatures in that time count for no day. Otherwise a storage that reached its target before the deadline heated again right after it, when the next period began. |
 | 2026-09-29 | The battery group is full only when every battery is full, and full batteries add no charge power: with the mean SoC one battery at 98.4 % among full ones switched the group between full and not full with each SoC step, and the heating rod between its allocation and a quarter of it. |
 | 2026-09-29 | A resting consumer (thermostat pause) counts at its command in the controller cycle: its restart appeared at the grid meter up to 5 s before its own sensor, as new house load, and SLEMS cut it back to almost nothing. |
+| 2026-09-30 | Batteries from HA entities can be controlled (experimental): set point, separate charge/discharge power with optional mode select, or a script with `power_w`; entities are suggested from the chosen device and confirmed in the flow. It reaches every battery with an HA integration without a driver per brand; direct drivers stay for batteries where precision matters (Venus). |
+| 2026-09-30 | State when released per controllable battery (automatic or standby), also for the Venus; default automatic. It is a setting, because HA's delete dialog of a subentry cannot ask, and it applies to every release (mode off, meter failure, removal). |
+| 2026-09-30 | Releases from outside the control cycle (operating mode, *Enabled* switch, manual communication pause, unload) go through `RealTimeController.async_release` and wait for the controller lock: a cycle still running (e.g. a Venus confirming its set point) otherwise sent a set point right after the release. |

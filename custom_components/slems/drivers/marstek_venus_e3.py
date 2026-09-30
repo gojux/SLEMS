@@ -14,6 +14,7 @@ import asyncio
 from dataclasses import dataclass
 import logging
 
+from ..const import ReleaseState
 from .base import (
     BatteryCapabilities,
     BatteryDriver,
@@ -114,8 +115,10 @@ class MarstekVenusE3Driver(BatteryDriver):
         capacity_wh: float,
         max_charge_power_w: int,
         max_discharge_power_w: int,
+        release_state: ReleaseState = ReleaseState.AUTO,
         link: ModbusTcpLink | None = None,
     ) -> None:
+        self._release_state = release_state
         self._link = link or ModbusTcpLink(
             host,
             port,
@@ -286,7 +289,8 @@ class MarstekVenusE3Driver(BatteryDriver):
         await self._link.write(REG_SET_DISCHARGE_POWER, 0)
         await self._link.write(REG_SET_CHARGE_POWER, 0)
         await self._link.write(REG_FORCE_MODE, FORCE_NONE)
-        await self._link.write(REG_RS485_CONTROL, RS485_DISABLE)
+        if self._release_state is ReleaseState.AUTO:
+            await self._link.write(REG_RS485_CONTROL, RS485_DISABLE)
 
     @classmethod
     async def probe(cls, host: str, port: int, unit_id: int) -> bool:

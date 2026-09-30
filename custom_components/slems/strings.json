@@ -66,6 +66,13 @@
             "model": "Model"
           }
         },
+        "search": {
+          "title": "Marstek Venus in the network",
+          "description": "{count} battery/batteries found (state of charge in brackets). Batteries already added and batteries whose Modbus connection is held by another integration are not listed.",
+          "data": {
+            "host": "Battery"
+          }
+        },
         "marstek_venus_e3": {
           "title": "Marstek Venus E 3.0",
           "description": "Connection via Modbus TCP (LAN). The battery accepts only one Modbus connection: do not run another integration on the same battery at the same time.",
@@ -79,45 +86,121 @@
             "max_discharge_power_w": "Maximum discharge power",
             "skip_connection_test": "Skip connection test",
             "efficiency_mode": "Efficiency source",
-            "round_trip_efficiency_pct": "Round trip efficiency"
+            "round_trip_efficiency_pct": "Round trip efficiency",
+            "release_state": "State when SLEMS releases the battery"
           },
           "data_description": {
             "skip_connection_test": "Save without testing the connection, e.g. while another integration still holds the Modbus connection.",
             "efficiency_mode": "Battery counters (recommended): from the lifetime charge and discharge counters of the battery; accurate at once, because the battery counts its whole operating time. Learned: from the battery power measured by SLEMS; needs about three full charge cycles first. Manual: fixed value.",
-            "round_trip_efficiency_pct": "Energy out / energy in (AC). Fixed value in manual mode, otherwise used until enough data has been measured."
+            "round_trip_efficiency_pct": "Energy out / energy in (AC). Fixed value in manual mode, otherwise used until enough data has been measured.",
+            "release_state": "Automatic: the battery's own logic takes over again (e.g. its zero export). Standby: the battery stays idle at 0 W until something else takes it over. Applies when SLEMS stops controlling it, e.g. in operating mode Off, without smart meter values or when the battery is removed from SLEMS."
+          }
+        },
+        "ha_device": {
+          "title": "Battery from existing entities",
+          "description": "Choose the device of the battery in Home Assistant: SLEMS suggests its entities in the next steps, you check and correct them. Leave empty to choose all entities by hand.",
+          "data": {
+            "device": "Device"
           }
         },
         "ha_entities": {
-          "title": "Battery from existing entities (read-only)",
-          "description": "SLEMS only reads this battery and never sends commands. Suitable for simulation mode while another integration controls the battery.",
+          "title": "Battery from existing entities",
+          "description": "Entities suggested from the device are filled in; check them. Only read-only: SLEMS never sends commands (e.g. while another integration controls the battery). Controlled: switch off the battery's own control logic (e.g. zero export) in its integration, otherwise both control at the same time.",
           "data": {
             "name": "Name",
             "soc_entity": "State of charge",
             "power_entity": "Battery power",
             "power_inverted": "Invert power sign",
+            "battery_control": "Control",
+            "battery_temperature_entity": "Battery temperature",
+            "max_cell_voltage_entity": "Highest cell voltage",
+            "min_cell_voltage_entity": "Lowest cell voltage",
+            "charged_energy_entity": "Total charged energy",
+            "discharged_energy_entity": "Total discharged energy"
+          },
+          "data_description": {
+            "power_entity": "Required when SLEMS controls the battery: it is part of the power available for control.",
+            "power_inverted": "SLEMS expects positive = charging. Enable if the sensor reports discharging as positive.",
+            "battery_control": "Set point: one number entity with the signed power. Separate: one number for charging and one for discharging, optionally a mode select. Script: a script receives the power as variable power_w (+charge / -discharge).",
+            "battery_temperature_entity": "Optional: enables the temperature charge limit.",
+            "max_cell_voltage_entity": "Optional, together with the lowest cell voltage: gentle charging near the top, cell delta and cell balancing (LFP cells).",
+            "charged_energy_entity": "Optional, together with the discharged energy: efficiency from the battery counters."
+          }
+        },
+        "ha_setpoint": {
+          "title": "Control by set point",
+          "data": {
+            "setpoint_entity": "Set point (number, W)",
+            "setpoint_inverted": "Invert set point sign",
+            "remote_entity": "Remote control (optional)"
+          },
+          "data_description": {
+            "setpoint_inverted": "SLEMS writes positive = charging. Enable if the entity expects discharging as positive.",
+            "remote_entity": "Switch or select that puts the battery into remote control; switched on before the first set point and off again when released to automatic."
+          }
+        },
+        "ha_split": {
+          "title": "Control by charge and discharge power",
+          "data": {
+            "charge_entity": "Charge power (number, W)",
+            "discharge_entity": "Discharge power (number, W)",
+            "mode_entity": "Mode (optional)",
+            "remote_entity": "Remote control (optional)"
+          },
+          "data_description": {
+            "mode_entity": "Select that switches between charging, discharging and standby (e.g. a force mode); the options are assigned in the next step.",
+            "remote_entity": "Switch or select that puts the battery into remote control; switched on before the first set point and off again when released to automatic."
+          }
+        },
+        "ha_script": {
+          "title": "Control by script",
+          "description": "The power script is started with every set point and receives the variable power_w (W, +charge / -discharge, 0 = standby).",
+          "data": {
+            "power_script": "Power script",
+            "release_script": "Release script (optional)"
+          },
+          "data_description": {
+            "release_script": "Hands the battery back to its own logic (release state Automatic)."
+          }
+        },
+        "ha_options": {
+          "title": "Options of the selects",
+          "description": "Which option means what. Options left empty are not used.",
+          "data": {
+            "mode_charge": "Mode: charging",
+            "mode_discharge": "Mode: discharging",
+            "mode_standby": "Mode: standby",
+            "mode_auto": "Mode: automatic",
+            "remote_on": "Remote control: on",
+            "remote_off": "Remote control: off"
+          }
+        },
+        "ha_limits": {
+          "title": "Limits and behaviour",
+          "data": {
             "capacity_wh": "Usable capacity",
             "max_charge_power_w": "Maximum charge power",
             "max_discharge_power_w": "Maximum discharge power",
             "efficiency_mode": "Efficiency source",
-            "round_trip_efficiency_pct": "Round trip efficiency"
+            "round_trip_efficiency_pct": "Round trip efficiency",
+            "release_state": "State when SLEMS releases the battery",
+            "min_command_interval_s": "Minimum time between commands",
+            "keepalive_s": "Repeat set point every"
           },
           "data_description": {
-            "power_inverted": "SLEMS expects positive = charging. Enable if the sensor reports discharging as positive.",
-            "efficiency_mode": "Learned (recommended): from the measured battery power; needs about three full charge cycles, until then the start value is used. Manual: fixed value.",
-            "round_trip_efficiency_pct": "Energy out / energy in (AC). Fixed value in manual mode, otherwise used until enough data has been measured."
-          }
-        },
-        "search": {
-          "title": "Marstek Venus in the network",
-          "description": "{count} battery/batteries found (state of charge in brackets). Batteries already added and batteries whose Modbus connection is held by another integration are not listed.",
-          "data": {
-            "host": "Battery"
+            "efficiency_mode": "Battery counters: from the total charged and discharged energy. Learned (recommended without counters): from the measured battery power; needs about three full charge cycles, until then the start value is used. Manual: fixed value.",
+            "round_trip_efficiency_pct": "Energy out / energy in (AC). Fixed value in manual mode, otherwise used until enough data has been measured.",
+            "release_state": "Automatic: the battery's own logic takes over again (e.g. its zero export). Standby: the battery stays idle at 0 W until something else takes it over. Applies when SLEMS stops controlling it, e.g. in operating mode Off, without smart meter values or when the battery is removed from SLEMS.",
+            "min_command_interval_s": "For integrations with a rate limit (often cloud based); 0 = no limit.",
+            "keepalive_s": "Some batteries fall back to their own logic without new commands; 0 = SLEMS default (60 s)."
           }
         }
       },
       "error": {
         "cannot_connect": "Cannot connect to the battery.",
-        "none_found": "No Marstek Venus found in the network. Enter the address by hand (see README: finding the IP address); stop other integrations using the battery first."
+        "none_found": "No Marstek Venus found in the network. Enter the address by hand (see README: finding the IP address); stop other integrations using the battery first.",
+        "power_required": "SLEMS needs the battery power to control the battery.",
+        "no_auto_release": "Automatic needs a remote control entity, a mode option for automatic or a release script; otherwise choose standby."
       },
       "abort": {
         "reconfigure_successful": "Battery updated."
@@ -185,7 +268,7 @@
     "model": {
       "options": {
         "marstek_venus_e3": "Marstek Venus E 3.0 (Modbus TCP)",
-        "ha_entities": "Existing Home Assistant entities (read-only)"
+        "ha_entities": "Existing Home Assistant entities (read or control)"
       }
     },
     "consumer_type": {
@@ -212,6 +295,20 @@
     "search": {
       "options": {
         "manual": "Enter the address by hand"
+      }
+    },
+    "battery_control": {
+      "options": {
+        "none": "Read only",
+        "setpoint": "Set point (one number)",
+        "split": "Separate charge and discharge power",
+        "script": "Script"
+      }
+    },
+    "release_state": {
+      "options": {
+        "auto": "Automatic (battery's own logic)",
+        "standby": "Standby (0 W)"
       }
     }
   },

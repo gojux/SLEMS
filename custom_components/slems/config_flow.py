@@ -27,9 +27,35 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import selector
+from homeassistant.helpers import device_registry as dr, entity_registry as er, selector
 
 from .const import (
+    CONF_BATTERY_CONTROL,
+    CONF_BATTERY_TEMPERATURE_ENTITY,
+    CONF_CHARGE_ENTITY,
+    CONF_CHARGED_ENERGY_ENTITY,
+    CONF_DEVICE,
+    CONF_DISCHARGE_ENTITY,
+    CONF_DISCHARGED_ENERGY_ENTITY,
+    CONF_KEEPALIVE_S,
+    CONF_MAX_CELL_VOLTAGE_ENTITY,
+    CONF_MIN_CELL_VOLTAGE_ENTITY,
+    CONF_MIN_COMMAND_INTERVAL_S,
+    CONF_MODE_AUTO,
+    CONF_MODE_CHARGE,
+    CONF_MODE_DISCHARGE,
+    CONF_MODE_ENTITY,
+    CONF_MODE_STANDBY,
+    CONF_POWER_SCRIPT,
+    CONF_RELEASE_SCRIPT,
+    CONF_RELEASE_STATE,
+    CONF_REMOTE_ENTITY,
+    CONF_REMOTE_OFF,
+    CONF_REMOTE_ON,
+    CONF_SETPOINT_ENTITY,
+    CONF_SETPOINT_INVERTED,
+    BatteryControl,
+    ReleaseState,
     CONF_BLOCK_ENTITY,
     CONF_SHOW_IN_FLOW,
     CONF_THERMOSTAT_CYCLES,
@@ -79,8 +105,18 @@ from .const import (
     EfficiencyMode,
 )
 from .discovery import async_find_batteries
+from .drivers.ha_entities import EntityBatteryConfig
 from .drivers.marstek_venus_e3 import HARDWARE_MAX_POWER_W, MarstekVenusE3Driver
+from .entity_match import (
+    CAPACITY,
+    EntityInfo,
+    match_battery_entities,
+    suggest_control,
+    suggest_mode_options,
+    suggest_remote_options,
+)
 from .pv_forecast import async_forecast_provider_entries
+from .util import state_as_kwh
 
 # Venus E 3.0 usable capacity.
 DEFAULT_CAPACITY_WH = 5120
@@ -94,6 +130,49 @@ _ENERGY_SENSOR = selector.EntitySelector(
 _BATTERY_SENSOR = selector.EntitySelector(
     selector.EntitySelectorConfig(domain="sensor", device_class=SensorDeviceClass.BATTERY)
 )
+
+
+_NUMBER_ENTITY = selector.EntitySelector(
+    selector.EntitySelectorConfig(domain=["number", "input_number"])
+)
+_SELECT_ENTITY = selector.EntitySelector(
+    selector.EntitySelectorConfig(domain=["select", "input_select"])
+)
+_REMOTE_ENTITY = selector.EntitySelector(
+    selector.EntitySelectorConfig(domain=["switch", "input_boolean", "select", "input_select"])
+)
+_SCRIPT_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="script"))
+_TEMPERATURE_SENSOR = selector.EntitySelector(
+    selector.EntitySelectorConfig(domain="sensor", device_class=SensorDeviceClass.TEMPERATURE)
+)
+_VOLTAGE_SENSOR = selector.EntitySelector(
+    selector.EntitySelectorConfig(domain="sensor", device_class=SensorDeviceClass.VOLTAGE)
+)
+_SECONDS = selector.NumberSelector(
+    selector.NumberSelectorConfig(
+        min=0, max=600, step=1, unit_of_measurement="s", mode=selector.NumberSelectorMode.BOX
+    )
+)
+
+# Keys of the control types; data of the other types is dropped on saving.
+_CONTROL_KEYS: dict[BatteryControl, tuple[str, ...]] = {
+    BatteryControl.SETPOINT: (CONF_SETPOINT_ENTITY, CONF_SETPOINT_INVERTED),
+    BatteryControl.SPLIT: (
+        CONF_CHARGE_ENTITY, CONF_DISCHARGE_ENTITY, CONF_MODE_ENTITY,
+        CONF_MODE_CHARGE, CONF_MODE_DISCHARGE, CONF_MODE_STANDBY, CONF_MODE_AUTO,
+    ),
+    BatteryControl.SCRIPT: (CONF_POWER_SCRIPT, CONF_RELEASE_SCRIPT),
+}
+_REMOTE_KEYS = (CONF_REMOTE_ENTITY, CONF_REMOTE_ON, CONF_REMOTE_OFF)
+_CONTROLLED_KEYS = (CONF_RELEASE_STATE, CONF_MIN_COMMAND_INTERVAL_S, CONF_KEEPALIVE_S)
+
+
+def _release_state_selector() -> selector.SelectSelector:
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=[state.value for state in ReleaseState], translation_key=CONF_RELEASE_STATE
+        )
+    )
 
 
 def _watts(maximum: int) -> selector.NumberSelector:
@@ -224,6 +303,8 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         self._model: BatteryModel | None = None
         self._found: list[tuple[str, float]] = []
         self._host: str | None = None
+        # Battery from HA entities: data collected over the steps.
+        self._data: dict[str, Any] = {}
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -262,7 +343,10 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             if self.source == SOURCE_RECONFIGURE:
                 return await self.async_step_marstek_venus_e3(user_input)
             return await self.async_step_search()
-        return await self.async_step_ha_entities(user_input)
+        if self.source == SOURCE_RECONFIGURE:
+            self._data = dict(self._defaults(None))
+            return await self.async_step_ha_entities()
+        return await self.async_step_ha_device()
 
     async def async_step_search(
         self, user_input: dict[str, Any] | None = None
@@ -327,6 +411,10 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                     selector.NumberSelectorConfig(min=1, max=247, mode=selector.NumberSelectorMode.BOX)
                 ),
                 **self._limits_schema(defaults, HARDWARE_MAX_POWER_W, list(EfficiencyMode)),
+                vol.Required(
+                    CONF_RELEASE_STATE,
+                    default=defaults.get(CONF_RELEASE_STATE, ReleaseState.AUTO.value),
+                ): _release_state_selector(),
                 vol.Optional(CONF_SKIP_CONNECTION_TEST, default=False): selector.BooleanSelector(),
             }
         )
@@ -334,35 +422,255 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             step_id="marstek_venus_e3", data_schema=schema, errors=errors
         )
 
+    async def async_step_ha_device(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Pick the battery's device; its entities are suggested for the next steps."""
+        if user_input is not None:
+            if device_id := user_input.get(CONF_DEVICE):
+                self._data = _suggest_from_device(self.hass, device_id)
+            return await self.async_step_ha_entities()
+        return self.async_show_form(
+            step_id="ha_device",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_DEVICE): selector.DeviceSelector(
+                        selector.DeviceSelectorConfig(
+                            entity=[
+                                selector.EntityFilterSelectorConfig(
+                                    domain="sensor", device_class=SensorDeviceClass.BATTERY
+                                )
+                            ]
+                        )
+                    )
+                }
+            ),
+        )
+
     async def async_step_ha_entities(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
-        """Read-only battery backed by existing entities."""
+        """Sensors of the battery and the way SLEMS controls it."""
+        errors: dict[str, str] = {}
         if user_input is not None:
-            return self._async_finish(user_input)
+            self._data = _merge(self._data, user_input, _ENTITY_STEP_KEYS)
+            control = BatteryControl(self._data[CONF_BATTERY_CONTROL])
+            if control is not BatteryControl.NONE and not self._data.get(CONF_POWER_ENTITY):
+                errors[CONF_POWER_ENTITY] = "power_required"
+            elif control is BatteryControl.SETPOINT:
+                return await self.async_step_ha_setpoint()
+            elif control is BatteryControl.SPLIT:
+                return await self.async_step_ha_split()
+            elif control is BatteryControl.SCRIPT:
+                return await self.async_step_ha_script()
+            else:
+                return await self.async_step_ha_limits()
 
-        defaults = self._defaults(None)
-        power_key = (
-            vol.Optional(CONF_POWER_ENTITY, description={"suggested_value": defaults[CONF_POWER_ENTITY]})
-            if CONF_POWER_ENTITY in defaults
-            else vol.Optional(CONF_POWER_ENTITY)
-        )
+        data = self._data
         schema = vol.Schema(
             {
-                vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "Battery")): str,
+                vol.Required(CONF_NAME, default=data.get(CONF_NAME, "Battery")): str,
                 vol.Required(
-                    CONF_SOC_ENTITY, default=defaults.get(CONF_SOC_ENTITY, vol.UNDEFINED)
+                    CONF_SOC_ENTITY, default=data.get(CONF_SOC_ENTITY, vol.UNDEFINED)
                 ): _BATTERY_SENSOR,
-                power_key: _POWER_SENSOR,
+                _optional(CONF_POWER_ENTITY, data): _POWER_SENSOR,
                 vol.Required(
-                    CONF_POWER_INVERTED, default=defaults.get(CONF_POWER_INVERTED, False)
+                    CONF_POWER_INVERTED, default=data.get(CONF_POWER_INVERTED, False)
                 ): selector.BooleanSelector(),
-                **self._limits_schema(
-                    defaults, 100_000, [EfficiencyMode.LEARNED, EfficiencyMode.MANUAL]
+                vol.Required(
+                    CONF_BATTERY_CONTROL,
+                    default=data.get(CONF_BATTERY_CONTROL, BatteryControl.NONE.value),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[control.value for control in BatteryControl],
+                        translation_key=CONF_BATTERY_CONTROL,
+                    )
                 ),
+                _optional(CONF_BATTERY_TEMPERATURE_ENTITY, data): _TEMPERATURE_SENSOR,
+                _optional(CONF_MAX_CELL_VOLTAGE_ENTITY, data): _VOLTAGE_SENSOR,
+                _optional(CONF_MIN_CELL_VOLTAGE_ENTITY, data): _VOLTAGE_SENSOR,
+                _optional(CONF_CHARGED_ENERGY_ENTITY, data): _ENERGY_SENSOR,
+                _optional(CONF_DISCHARGED_ENERGY_ENTITY, data): _ENERGY_SENSOR,
             }
         )
-        return self.async_show_form(step_id="ha_entities", data_schema=schema)
+        return self.async_show_form(
+            step_id="ha_entities",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_ha_setpoint(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """One number entity with the signed power."""
+        if user_input is not None:
+            self._data = _merge(
+                self._data, user_input, (CONF_SETPOINT_ENTITY, CONF_SETPOINT_INVERTED, CONF_REMOTE_ENTITY)
+            )
+            return await self._async_step_after_control()
+        data = self._data
+        return self.async_show_form(
+            step_id="ha_setpoint",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_SETPOINT_ENTITY, default=data.get(CONF_SETPOINT_ENTITY, vol.UNDEFINED)
+                    ): _NUMBER_ENTITY,
+                    vol.Required(
+                        CONF_SETPOINT_INVERTED, default=data.get(CONF_SETPOINT_INVERTED, False)
+                    ): selector.BooleanSelector(),
+                    _optional(CONF_REMOTE_ENTITY, data): _REMOTE_ENTITY,
+                }
+            ),
+        )
+
+    async def async_step_ha_split(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Numbers for charging and discharging, optionally a mode select."""
+        if user_input is not None:
+            self._data = _merge(
+                self._data,
+                user_input,
+                (CONF_CHARGE_ENTITY, CONF_DISCHARGE_ENTITY, CONF_MODE_ENTITY, CONF_REMOTE_ENTITY),
+            )
+            return await self._async_step_after_control()
+        data = self._data
+        return self.async_show_form(
+            step_id="ha_split",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_CHARGE_ENTITY, default=data.get(CONF_CHARGE_ENTITY, vol.UNDEFINED)
+                    ): _NUMBER_ENTITY,
+                    vol.Required(
+                        CONF_DISCHARGE_ENTITY, default=data.get(CONF_DISCHARGE_ENTITY, vol.UNDEFINED)
+                    ): _NUMBER_ENTITY,
+                    _optional(CONF_MODE_ENTITY, data): _SELECT_ENTITY,
+                    _optional(CONF_REMOTE_ENTITY, data): _REMOTE_ENTITY,
+                }
+            ),
+        )
+
+    async def async_step_ha_script(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Scripts that receive the power (``power_w``) and release the battery."""
+        if user_input is not None:
+            self._data = _merge(self._data, user_input, (CONF_POWER_SCRIPT, CONF_RELEASE_SCRIPT))
+            return await self.async_step_ha_limits()
+        data = self._data
+        return self.async_show_form(
+            step_id="ha_script",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_POWER_SCRIPT, default=data.get(CONF_POWER_SCRIPT, vol.UNDEFINED)
+                    ): _SCRIPT_ENTITY,
+                    _optional(CONF_RELEASE_SCRIPT, data): _SCRIPT_ENTITY,
+                }
+            ),
+        )
+
+    async def _async_step_after_control(self) -> SubentryFlowResult:
+        if self._option_fields():
+            return await self.async_step_ha_options()
+        return await self.async_step_ha_limits()
+
+    def _option_fields(self) -> dict[str, list[str]]:
+        """Option fields (key -> options of the select) for the chosen selects."""
+        data = self._data
+        fields: dict[str, list[str]] = {}
+        control = BatteryControl(data[CONF_BATTERY_CONTROL])
+        mode = data.get(CONF_MODE_ENTITY) if control is BatteryControl.SPLIT else None
+        if mode and (options := _select_options(self.hass, mode)):
+            for key in (CONF_MODE_CHARGE, CONF_MODE_DISCHARGE, CONF_MODE_STANDBY, CONF_MODE_AUTO):
+                fields[key] = options
+        remote = data.get(CONF_REMOTE_ENTITY)
+        if remote and remote.split(".", 1)[0] in ("select", "input_select"):
+            if options := _select_options(self.hass, remote):
+                fields[CONF_REMOTE_ON] = options
+                fields[CONF_REMOTE_OFF] = options
+        return fields
+
+    async def async_step_ha_options(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Which option of the mode / remote control select means what."""
+        fields = self._option_fields()
+        if user_input is not None:
+            self._data = _merge(self._data, user_input, tuple(fields))
+            return await self.async_step_ha_limits()
+        data = self._data
+        mode = data.get(CONF_MODE_ENTITY)
+        if mode and CONF_MODE_CHARGE in fields and not any(
+            key in data for key in (CONF_MODE_CHARGE, CONF_MODE_DISCHARGE)
+        ):
+            data.update(suggest_mode_options(fields[CONF_MODE_CHARGE]))
+        if CONF_REMOTE_ON in fields and CONF_REMOTE_ON not in data:
+            data.update(suggest_remote_options(fields[CONF_REMOTE_ON]))
+        schema: dict = {}
+        for key, options in fields.items():
+            field = (
+                vol.Required(key, default=data.get(key, vol.UNDEFINED))
+                if key in (CONF_REMOTE_ON, CONF_REMOTE_OFF)
+                else _optional(key, data)
+            )
+            schema[field] = selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=options, mode=selector.SelectSelectorMode.DROPDOWN
+                )
+            )
+        return self.async_show_form(step_id="ha_options", data_schema=vol.Schema(schema))
+
+    async def async_step_ha_limits(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Capacity, power limits, efficiency and, if controlled, release and timing."""
+        data = self._data
+        control = BatteryControl(data.get(CONF_BATTERY_CONTROL, BatteryControl.NONE))
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            candidate = _entity_battery_data({**data, **user_input})
+            if (
+                control is not BatteryControl.NONE
+                and candidate.get(CONF_RELEASE_STATE) == ReleaseState.AUTO
+                and not EntityBatteryConfig.from_data(_battery_data(candidate, BatteryModel.HA_ENTITIES)).can_release_to_auto
+            ):
+                errors[CONF_RELEASE_STATE] = "no_auto_release"
+            else:
+                return self._async_finish(candidate)
+            data = {**data, **user_input}
+
+        modes = [EfficiencyMode.LEARNED, EfficiencyMode.MANUAL]
+        if data.get(CONF_CHARGED_ENERGY_ENTITY) and data.get(CONF_DISCHARGED_ENERGY_ENTITY):
+            modes.insert(0, EfficiencyMode.BATTERY_COUNTERS)
+        if data.get(CONF_EFFICIENCY_MODE) not in [mode.value for mode in modes]:
+            data.pop(CONF_EFFICIENCY_MODE, None)
+        schema: dict = self._limits_schema(data, 100_000, modes)
+        if control is not BatteryControl.NONE:
+            auto = EntityBatteryConfig.from_data(
+                _battery_data({**_LIMIT_PLACEHOLDERS, **data}, BatteryModel.HA_ENTITIES)
+            ).can_release_to_auto
+            default_release = ReleaseState.AUTO if auto else ReleaseState.STANDBY
+            schema.update(
+                {
+                    vol.Required(
+                        CONF_RELEASE_STATE,
+                        default=data.get(CONF_RELEASE_STATE, default_release.value),
+                    ): _release_state_selector(),
+                    vol.Required(
+                        CONF_MIN_COMMAND_INTERVAL_S,
+                        default=data.get(CONF_MIN_COMMAND_INTERVAL_S, 0),
+                    ): _SECONDS,
+                    vol.Required(
+                        CONF_KEEPALIVE_S, default=data.get(CONF_KEEPALIVE_S, 60)
+                    ): _SECONDS,
+                }
+            )
+        return self.async_show_form(
+            step_id="ha_limits", data_schema=vol.Schema(schema), errors=errors
+        )
 
     @staticmethod
     def _limits_schema(
@@ -442,6 +750,131 @@ async def _async_battery_hosts(hass: HomeAssistant, entry: ConfigEntry) -> set[s
             continue
         result |= {info[4][0] for info in infos}
     return result
+
+
+# Fields of the entities step (a cleared optional field is left out of the input).
+_ENTITY_STEP_KEYS = (
+    CONF_NAME,
+    CONF_SOC_ENTITY,
+    CONF_POWER_ENTITY,
+    CONF_POWER_INVERTED,
+    CONF_BATTERY_CONTROL,
+    CONF_BATTERY_TEMPERATURE_ENTITY,
+    CONF_MAX_CELL_VOLTAGE_ENTITY,
+    CONF_MIN_CELL_VOLTAGE_ENTITY,
+    CONF_CHARGED_ENERGY_ENTITY,
+    CONF_DISCHARGED_ENERGY_ENTITY,
+)
+# Stand-ins for the limits while they are not entered yet.
+_LIMIT_PLACEHOLDERS = {
+    CONF_CAPACITY_WH: 0,
+    CONF_MAX_CHARGE_POWER_W: 0,
+    CONF_MAX_DISCHARGE_POWER_W: 0,
+    CONF_ROUND_TRIP_EFFICIENCY_PCT: DEFAULT_ROUND_TRIP_EFFICIENCY_PCT,
+}
+
+
+def _merge(data: dict[str, Any], user_input: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+    """Take the fields ``keys`` of a step; fields missing in the input were cleared."""
+    result = {key: value for key, value in data.items() if key not in keys}
+    result.update({key: value for key, value in user_input.items() if value not in (None, "")})
+    return result
+
+
+def _entity_battery_data(data: dict[str, Any]) -> dict[str, Any]:
+    """Data of a battery from HA entities without the keys of other control types."""
+    control = BatteryControl(data.get(CONF_BATTERY_CONTROL, BatteryControl.NONE))
+    result = {key: value for key, value in data.items() if value not in (None, "")}
+    for other, keys in _CONTROL_KEYS.items():
+        if other is not control:
+            for key in keys:
+                result.pop(key, None)
+    if control in (BatteryControl.NONE, BatteryControl.SCRIPT):
+        for key in _REMOTE_KEYS:
+            result.pop(key, None)
+    if control is BatteryControl.NONE:
+        for key in _CONTROLLED_KEYS:
+            result.pop(key, None)
+    if not result.get(CONF_MODE_ENTITY):
+        for key in (CONF_MODE_CHARGE, CONF_MODE_DISCHARGE, CONF_MODE_STANDBY, CONF_MODE_AUTO):
+            result.pop(key, None)
+    remote = result.get(CONF_REMOTE_ENTITY)
+    if not remote or remote.split(".", 1)[0] not in ("select", "input_select"):
+        result.pop(CONF_REMOTE_ON, None)
+        result.pop(CONF_REMOTE_OFF, None)
+    result.pop(CONF_DEVICE, None)
+    return result
+
+
+def _select_options(hass: HomeAssistant, entity_id: str) -> list[str]:
+    state = hass.states.get(entity_id)
+    return list(state.attributes.get("options") or []) if state else []
+
+
+def _device_entities(hass: HomeAssistant, device_id: str) -> list[EntityInfo]:
+    """The enabled entities of a device as the matcher sees them."""
+    infos = []
+    for entry in er.async_entries_for_device(er.async_get(hass), device_id):
+        if entry.disabled_by is not None:
+            continue
+        state = hass.states.get(entry.entity_id)
+        attributes = state.attributes if state else {}
+        infos.append(
+            EntityInfo.create(
+                entry.entity_id,
+                entry.translation_key,
+                entry.original_name,
+                entry.name,
+                device_class=entry.device_class or entry.original_device_class
+                or attributes.get("device_class"),
+                unit=attributes.get("unit_of_measurement") or entry.unit_of_measurement,
+                state_class=attributes.get("state_class"),
+                options=tuple(attributes.get("options") or ()),
+                minimum=attributes.get("min"),
+                maximum=attributes.get("max"),
+                state=state.state if state else None,
+            )
+        )
+    return infos
+
+
+def _suggest_from_device(hass: HomeAssistant, device_id: str) -> dict[str, Any]:
+    """Form data suggested from the entities of a device."""
+    infos = _device_entities(hass, device_id)
+    by_id = {info.entity_id: info for info in infos}
+    matches = match_battery_entities(infos)
+    data: dict[str, Any] = {
+        key: value for key, value in matches.items() if key != CAPACITY
+    }
+    data[CONF_BATTERY_CONTROL] = suggest_control(matches).value
+    if device := dr.async_get(hass).async_get(device_id):
+        data[CONF_NAME] = device.name_by_user or device.name or "Battery"
+    if capacity := matches.get(CAPACITY):
+        kwh = state_as_kwh(hass.states.get(capacity))
+        if kwh:
+            data[CONF_CAPACITY_WH] = round(kwh * 1000)
+
+    def watts(value: float | None, info: EntityInfo) -> int | None:
+        if value is None:
+            return None
+        return round(abs(value) * (1000 if info.unit == "kW" else 1))
+
+    charge = by_id.get(matches.get(CONF_CHARGE_ENTITY, ""))
+    discharge = by_id.get(matches.get(CONF_DISCHARGE_ENTITY, ""))
+    setpoint = by_id.get(matches.get(CONF_SETPOINT_ENTITY, ""))
+    if charge is not None and (value := watts(charge.maximum, charge)):
+        data[CONF_MAX_CHARGE_POWER_W] = value
+    elif setpoint is not None and (value := watts(setpoint.maximum, setpoint)):
+        data[CONF_MAX_CHARGE_POWER_W] = value
+    if discharge is not None and (value := watts(discharge.maximum, discharge)):
+        data[CONF_MAX_DISCHARGE_POWER_W] = value
+    elif setpoint is not None and (value := watts(setpoint.minimum, setpoint)):
+        data[CONF_MAX_DISCHARGE_POWER_W] = value
+    if mode := by_id.get(matches.get(CONF_MODE_ENTITY, "")):
+        data.update(suggest_mode_options(mode.options))
+    if remote := by_id.get(matches.get(CONF_REMOTE_ENTITY, "")):
+        data.update(suggest_remote_options(remote.options))
+    return data
 
 
 def _battery_data(user_input: dict[str, Any], model: BatteryModel) -> dict[str, Any]:

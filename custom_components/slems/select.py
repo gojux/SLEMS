@@ -63,7 +63,7 @@ class OperatingModeSelect(SlemsSystemEntity, SelectEntity, RestoreEntity):
         previous = settings.operating_mode
         settings.operating_mode = mode
         if previous is OperatingMode.ACTIVE and mode is not OperatingMode.ACTIVE:
-            await self.coordinator.async_release_batteries()
+            await self.coordinator.controller.async_release(self.coordinator.batteries)
         self.coordinator.controller.request()
         # Also refresh the other entities (control status, plans) right away.
         self.coordinator.async_update_listeners()

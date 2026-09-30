@@ -13,8 +13,9 @@ The name is a combination of *[Slug](https://en.wikipedia.org/wiki/Sea_slug)* (a
 animal) and *EMS* (energy management system).
 
 > **Supported batteries:** SLEMS currently controls the **Marstek Venus E 3.0**
-> (Modbus TCP). Other batteries can be added read-only through their Home
-> Assistant entities (planning and simulation, no control). If you would like
+> (Modbus TCP) directly. Other batteries can be added through the entities of
+> their Home Assistant integration, read-only or controlled (experimental).
+> If you would like
 > to use SLEMS with another battery, please
 > [open an issue](https://github.com/gojux/SLEMS/issues) with the model and
 > how it is connected (Modbus, local API, Home Assistant integration), and
@@ -73,8 +74,8 @@ ahead and controls precisely:
   state of charge with the current plan, without changing anything.
 
 **When another solution fits better (today):** many different battery brands
-(SLEMS currently supports the Marstek Venus E 3.0 and read-only batteries from
-existing entities), charging from the grid by dynamic tariffs or electric
+(SLEMS talks directly only to the Marstek Venus E 3.0; other batteries are
+controlled through the entities of their integration, which is coarser), charging from the grid by dynamic tariffs or electric
 vehicle charging. Omnibattery covers many battery models, evcc specialises in
 EV charging; evcc complements SLEMS well (see [roadmap](#roadmap)).
 
@@ -84,7 +85,7 @@ EV charging; evcc complements SLEMS well (see [roadmap](#roadmap)).
 |---|---|
 | Any number of batteries, added/edited/removed at any time | ✅ |
 | Marstek Venus E 3.0 via Modbus TCP | ✅ |
-| Read-only battery from existing entities (e.g. while Omnibattery is in control) | ✅ |
+| Battery from existing entities: read-only (e.g. while Omnibattery is in control) or controlled by set point, charge/discharge power or script, entities suggested from the device | ✅ (control experimental) |
 | Smart meter, PV power and weather entity freely selectable | ✅ |
 | PV forecast from any solar forecast integration (Forecast.Solar, Solcast, …) | ✅ |
 | Consumers with own power/energy sensors, inside or outside the smart meter | ✅ configuration |
@@ -303,7 +304,8 @@ Every consumer needs its own power **and** energy sensor.
 **Battery efficiency** (round trip, AC to AC), one of three sources per
 battery:
 
-- *Battery counters* (recommended for the Marstek Venus E 3.0): from the
+- *Battery counters* (recommended for the Marstek Venus E 3.0 and for batteries
+  from entities with energy counters): from the
   lifetime charge and discharge counters of the battery and its state of
   charge: (discharged + stored) / charged. The battery counts itself, fast and
   over its whole operating time, so the value is accurate at once and stable.
@@ -313,7 +315,7 @@ battery:
   seconds) from the start of SLEMS. It only counts after about three full
   charge cycles (until then the start value applies), and short power peaks
   between two polls are missed. Recommended for batteries without their own
-  counters (read-only batteries from existing entities).
+  counters.
 - *Manual*: a fixed value, e.g. from the data sheet.
 
 The efficiency is used where energy is converted: whether the PV surplus will
@@ -422,10 +424,42 @@ flow are shown one below the other).
   tell several batteries apart). When adding the battery, SLEMS checks the
   connection by reading its state of charge; stop other integrations using
   the battery first.
-- **Existing Home Assistant entities (read-only)**: state of charge and power
-  sensors of a battery that is controlled by something else. SLEMS never sends
-  commands to such a battery. This allows running SLEMS in simulation mode side
-  by side with an existing battery integration.
+- **Existing Home Assistant entities** (control: experimental): any battery
+  that another integration brings into Home Assistant. First choose the
+  battery's device: SLEMS suggests its entities (state of charge, power,
+  set points, mode, optional temperature, cell voltages and energy counters);
+  check and correct them. Leave the device empty to choose everything by hand.
+  - **Read only**: SLEMS never sends commands, e.g. to run SLEMS in
+    simulation mode side by side with an existing battery integration.
+  - **Set point**: one number entity with the signed power (+charge /
+    −discharge, sign can be inverted).
+  - **Separate charge and discharge power**: one number each, optionally a
+    mode select (charge / discharge / standby / automatic, the options are
+    assigned in the next step).
+  - **Script**: a script of yours receives the power as variable `power_w`
+    (W, +charge / −discharge, 0 = standby); optionally a release script.
+    This covers batteries controlled through actions (services).
+
+  Optionally a *remote control* switch or select is switched on before the
+  first set point. For controlling, the battery power sensor is required.
+  *Minimum time between commands* suits integrations with a rate limit (often
+  cloud based), *Repeat set point every* batteries that fall back to their own
+  logic without new commands. Switch off the battery's own control (e.g. its
+  zero export) in its integration, otherwise both control at the same time.
+  Batteries behind a cloud react slower than a Venus over Modbus; SLEMS learns
+  their response time, but the control is coarser. With cell voltages SLEMS
+  uses gentle charging near the top, the cell delta and cell balancing as for
+  a Venus (LFP cells). This control has only been tested with simulated
+  entities so far; please report your experience with real devices in an
+  [issue](https://github.com/gojux/SLEMS/issues).
+
+**State when released**: what SLEMS leaves the battery in when it stops
+controlling it, e.g. in operating mode *Off*, without smart meter values or
+when the battery is removed from SLEMS. *Automatic* (default): the battery's
+own logic takes over again (e.g. its zero export); for a battery from entities
+this needs a remote control entity, a mode option for automatic or a release
+script. *Standby*: the battery stays idle at 0 W until something else takes it
+over; a Venus stays in RS485 control mode for this.
 
 With several batteries SLEMS decides how many run and which: at low power a
 single battery is usually more efficient, at high power sharing is. When

@@ -49,3 +49,15 @@ def state_as_kwh(state: State | None) -> float | None:
         return None
     unit = state.attributes.get("unit_of_measurement", UnitOfEnergy.KILO_WATT_HOUR)
     return value * _ENERGY_FACTORS.get(unit, 1.0)
+
+
+def clamp_to_entity(value: float, state: State) -> float:
+    """Keep a set point within the min/max/step of a number entity."""
+    minimum = state.attributes.get("min")
+    maximum = state.attributes.get("max")
+    step = state.attributes.get("step") or 1
+    if minimum is not None:
+        value = max(float(minimum), value)
+    if maximum is not None:
+        value = min(float(maximum), value)
+    return round(value / step) * step

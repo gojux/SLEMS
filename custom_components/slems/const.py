@@ -39,6 +39,31 @@ CONF_POWER_ENTITY: Final = "power_entity"
 CONF_POWER_INVERTED: Final = "power_inverted"
 CONF_EFFICIENCY_MODE: Final = "efficiency_mode"
 CONF_ROUND_TRIP_EFFICIENCY_PCT: Final = "round_trip_efficiency_pct"
+CONF_RELEASE_STATE: Final = "release_state"
+# Battery backed by Home Assistant entities: optional sensors and control.
+CONF_DEVICE: Final = "device"
+CONF_BATTERY_CONTROL: Final = "battery_control"
+CONF_SETPOINT_ENTITY: Final = "setpoint_entity"
+CONF_SETPOINT_INVERTED: Final = "setpoint_inverted"
+CONF_CHARGE_ENTITY: Final = "charge_entity"
+CONF_DISCHARGE_ENTITY: Final = "discharge_entity"
+CONF_MODE_ENTITY: Final = "mode_entity"
+CONF_MODE_CHARGE: Final = "mode_charge"
+CONF_MODE_DISCHARGE: Final = "mode_discharge"
+CONF_MODE_STANDBY: Final = "mode_standby"
+CONF_MODE_AUTO: Final = "mode_auto"
+CONF_REMOTE_ENTITY: Final = "remote_entity"
+CONF_REMOTE_ON: Final = "remote_on"
+CONF_REMOTE_OFF: Final = "remote_off"
+CONF_POWER_SCRIPT: Final = "power_script"
+CONF_RELEASE_SCRIPT: Final = "release_script"
+CONF_BATTERY_TEMPERATURE_ENTITY: Final = "battery_temperature_entity"
+CONF_MAX_CELL_VOLTAGE_ENTITY: Final = "max_cell_voltage_entity"
+CONF_MIN_CELL_VOLTAGE_ENTITY: Final = "min_cell_voltage_entity"
+CONF_CHARGED_ENERGY_ENTITY: Final = "charged_energy_entity"
+CONF_DISCHARGED_ENERGY_ENTITY: Final = "discharged_energy_entity"
+CONF_MIN_COMMAND_INTERVAL_S: Final = "min_command_interval_s"
+CONF_KEEPALIVE_S: Final = "keepalive_s"
 
 # Used until a learned value is reliable, and as manual default.
 DEFAULT_ROUND_TRIP_EFFICIENCY_PCT: Final = 88
@@ -108,9 +133,31 @@ class BatteryModel(StrEnum):
     """Supported battery models (driver keys)."""
 
     MARSTEK_VENUS_E3 = "marstek_venus_e3"
-    # Read-only battery backed by existing Home Assistant entities. Allows running
-    # SLEMS in simulation mode while another integration still controls the device.
+    # Battery backed by existing Home Assistant entities: read-only (e.g. while
+    # another integration still controls the device) or controlled through them.
     HA_ENTITIES = "ha_entities"
+
+
+class BatteryControl(StrEnum):
+    """How SLEMS commands a battery backed by Home Assistant entities."""
+
+    # Read-only.
+    NONE = "none"
+    # One number entity, +charge / -discharge (or inverted).
+    SETPOINT = "setpoint"
+    # One number for charging and one for discharging, optionally a mode select.
+    SPLIT = "split"
+    # A script receives the signed power as variable ``power_w``.
+    SCRIPT = "script"
+
+
+class ReleaseState(StrEnum):
+    """State a battery is left in when SLEMS stops controlling it."""
+
+    # The battery's own logic (e.g. its zero export) takes over.
+    AUTO = "auto"
+    # The battery stays idle at 0 W.
+    STANDBY = "standby"
 
 
 class EfficiencyMode(StrEnum):

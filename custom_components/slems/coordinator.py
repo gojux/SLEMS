@@ -1150,7 +1150,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         detected firmware update nothing is sent any more.
         """
         if reason == "manual" and battery.driver.capabilities.controllable:
-            await self.async_release_battery(battery)
+            await self.controller.async_release([battery])
         await battery.driver.close()
         battery.paused_until = (
             dt_util.utcnow().timestamp() + self.settings.communication_pause_min * 60
@@ -2299,7 +2299,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         await super().async_shutdown()
         await self._store.async_save(self._data_to_store())
         if self.settings.operating_mode is OperatingMode.ACTIVE:
-            await self.async_release_batteries()
+            await self.controller.async_release(self.batteries)
         for battery in self.batteries:
             await battery.driver.close()
 
