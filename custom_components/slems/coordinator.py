@@ -660,8 +660,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         for subentry_id, data in (stored.get(TARGETS_STORE_KEY) or {}).items():
             if subentry_id in self.target_progress:
                 self.target_progress[subentry_id] = TargetProgress.from_dict(data)
-        if gain := (stored.get(CONTROL_STORE_KEY) or {}).get("gain"):
+        control = stored.get(CONTROL_STORE_KEY) or {}
+        if gain := control.get("gain"):
             self.controller.gain_adapter.reset(gain)
+        if response := control.get("battery_response_s"):
+            self.controller.battery_response.response_s = response
         for battery in self.batteries:
             data = stored.get(battery.subentry_id) or {}
             if integrator := data.get("integrator"):
@@ -800,7 +803,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         data[TARGETS_STORE_KEY] = {
             subentry_id: progress.as_dict() for subentry_id, progress in self.target_progress.items()
         }
-        data[CONTROL_STORE_KEY] = {"gain": self.controller.gain_adapter.gain}
+        data[CONTROL_STORE_KEY] = {
+            "gain": self.controller.gain_adapter.gain,
+            "battery_response_s": self.controller.battery_response.response_s,
+        }
         data[PV_ACCURACY_STORE_KEY] = self.pv_accuracy.as_dict()
         data[MORNING_GAP_STORE_KEY] = self.morning_gap.as_dict()
         return data

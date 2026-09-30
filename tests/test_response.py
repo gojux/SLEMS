@@ -29,12 +29,23 @@ def test_step_response_ignores_small_and_disturbed_steps() -> None:
     response.sample(1, 100)
     assert response.response_s is None
     response.command(10, 0, -800)
-    response.command(11, 0, 50)  # another command interferes
+    response.command(11, 0, 50)  # a correction the other way hides the step
     response.sample(12, -800)
     assert response.response_s is None
     response.command(20, 0, 800)
     response.sample(60, 800)  # nothing within the maximum time
     assert response.response_s is None
+
+
+def test_small_corrections_the_same_way_keep_the_measurement() -> None:
+    response = StepResponse(default_s=3.0)
+    # The damped control follows the 1000 W step with smaller ones the same way.
+    response.command(0.0, -1000, 1000)
+    response.command(1.0, -800, 200)
+    response.command(2.0, -700, 100)
+    response.sample(1.5, -950)
+    response.sample(2.4, -300)
+    assert response.response_s == pytest.approx(2.4)
 
 
 def test_switching_on_and_off_learned_apart() -> None:

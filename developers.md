@@ -223,7 +223,8 @@ sends commands.
 - **Learned timing** (`response.py`, moving averages):
   meter cadence from every report of the grid meter (also unchanged values,
   `EVENT_STATE_REPORTED`); battery response time from commands with ≥ 300 W
-  change until the meter moved 60 % of it; consumer response times
+  change until the meter moved 60 % of it (smaller corrections the same way
+  keep the measurement, one the other way ends it; stored with the gain); consumer response times
   (`DirectionalResponse`) from commands with ≥ 100 W change until the
   consumer's own power sensor moved 60 % (at the meter ≥ 300 W), switching on
   and off learned apart, each measured up to 5 min (`CONSUMER_MAX_RESPONSE_S`):
@@ -1442,3 +1443,4 @@ repository (otherwise its *brands* check fails).
 | 2026-09-30 | Releases from outside the control cycle (operating mode, *Enabled* switch, manual communication pause, unload) go through `RealTimeController.async_release` and wait for the controller lock: a cycle still running (e.g. a Venus confirming its set point) otherwise sent a set point right after the release. |
 | 2026-09-30 | Daily targets in the planning also with their surplus part: after the planned charging each target takes the surplus left in its window, so the expected feed-in no longer contains energy the consumers will take; shown summed as *Consumers (planned)*. Batteries first, because until the charge is secured the allocation gives the surplus to them; with a secured charge the consumers get a share earlier, but the batteries end up full either way. The card shows the energy still needed; for temperature targets only with the learned energy per kelvin. |
 | 2026-09-30 | Temperature target: below the minimum a reached target is open again (`TargetProgress.track_temperature`): up to the minimum with priority, then with the surplus up to the target. Only reheating to the minimum would keep the consumer off above it and export the afternoon surplus; the minimum as reset threshold still keeps it from starting at every small loss. The temperature flags belong to the sensor choice (`TargetProgress.temperature_sensor`); another choice starts the target open. A storage that reached its target and then lost the hot water stayed off for the rest of the day. |
+| 2026-09-30 | Battery response time: smaller corrections the same way no longer end a pending measurement, and the learned value is stored. The damped control follows every step with a smaller one within a second, so with a smart meter reporting every second the value was hardly ever learned and it was lost with every restart (3 s default meanwhile). |

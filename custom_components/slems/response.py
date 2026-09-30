@@ -82,8 +82,11 @@ class StepResponse:
     def command(self, timestamp: float, baseline: float | None, change: float) -> None:
         """A command changes the measured value by ``change`` (sign included)."""
         if baseline is None or abs(change) < self._min_step_w:
-            # Small or unmeasurable steps would disturb a pending measurement.
-            if self._pending is not None and abs(change) > 0:
+            # A small correction the same way (the damped control follows a
+            # step with those) keeps a pending measurement; one the other way
+            # would hide the step.
+            pending = self._pending
+            if pending is not None and change * pending.change < 0:
                 self._pending = None
             return
         self._pending = _PendingStep(timestamp, baseline, change)
