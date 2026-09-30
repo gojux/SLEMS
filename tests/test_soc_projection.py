@@ -7,6 +7,7 @@ import pytest
 from homeassistant.util import dt as dt_util
 
 from custom_components.slems.allocation import BatteryGroup
+from custom_components.slems.consumer_targets import SurplusDemand
 from custom_components.slems.soc_projection import ProjectionSettings, project_soc
 
 
@@ -150,3 +151,19 @@ def test_charging_held_back_by_the_feed_in_cap_is_made_up_later() -> None:
     result = project_soc(now, group, pv, consumption, None, settings(), None, 0.0, cap)
     assert result.soc_pct[at(11)] < 80
     assert result.soc_pct[at(14)] == pytest.approx(100)
+
+
+def test_daily_target_takes_the_surplus_left_after_charging() -> None:
+    pv, consumption = forecasts()
+    now = at(6)
+    # Almost full: the batteries take little, the rest would be exported.
+    without = project_soc(now, battery(95), pv, consumption, None, settings(), None)
+    demand = SurplusDemand(energy_wh=3000, power_w=2000, start=at(6), end=at(18))
+    result = project_soc(now, battery(95), pv, consumption, None, settings(), None, demands=[demand])
+    assert sum(result.consumer_w.values()) == pytest.approx(3000)
+    assert max(result.consumer_w.values()) <= 2000
+    # Only from the surplus: nothing before the PV exceeds the consumption.
+    assert all(hour >= at(8) for hour in result.consumer_w)
+    # The export drops by what the consumer takes, the charging stays.
+    assert sum(result.grid_w.values()) == pytest.approx(sum(without.grid_w.values()) + 3000)
+    assert result.soc_pct == without.soc_pct

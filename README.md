@@ -10,7 +10,7 @@ friendly way, e.g. by shifting the charging time so that the daily feed-in
 peak is absorbed, based on forecasts of consumption and PV production.
 
 The name is a combination of *[Slug](https://en.wikipedia.org/wiki/Sea_slug)*
-(a wonderful word for a very interesting animal) and *EMS* (energy management
+(a funny word for a very interesting animal) and *EMS* (energy management
 system).
 
 ![SLEMS overview: energy flow, key figures and the forecast and plan chart of the day](docs/images/dashboard_overview_en.png)
@@ -647,14 +647,29 @@ Per controlled consumer, on its card under *Daily target*.
   target temperature it is off for the rest of the day; if a higher target
   temperature is set later in the day, it heats on. A temperature target
   applies to the calendar day: after the deadline the consumer stays off until
-  midnight (*waits until 00:00*), also with surplus.
+  midnight (*waits until 00:00*), also with surplus. If the temperature falls
+  below the minimum again (e.g. after drawing hot water), the target is open
+  again: up to the minimum with priority, then with the surplus up to the
+  target. Choosing another sensor starts the target open again.
 - **Display**: the card shows the progress, e.g. *1.5 / 4 h · until 22:00 ·
-  forced from 19:30*, and the chips *priority* or *forced* while they apply.
+  forced from 19:30 · about 2.3 kWh to go*, and the chips *priority* or
+  *forced* while they apply. The energy still needed is exact for an energy
+  target; for a runtime or enabled time it is the remaining time at full power
+  (less if the consumer's own thermostat stops it earlier); for a temperature
+  target it is the way up to the target temperature with the learned energy
+  per degree (*energy still being learned* until then; heat losses are left
+  out).
 - **Planning**: with a source beyond the surplus the planning counts the
-  forced run as extra consumption from the latest start on (day chart, tooltip
-  *of which daily targets*, state of charge forecast and night discharge), as
-  if the surplus covered nothing more; the planned run shrinks as the surplus
-  fills the target.
+  forced run as extra consumption from the latest start on, as if the surplus
+  covered nothing more; the planned run shrinks as the surplus fills the
+  target. The rest of the target the planning expects from the surplus: hour
+  by hour it takes what is left after charging the batteries, in order of
+  priority, from now (or the earliest start) until the deadline and at most at
+  the consumer's power; the expected feed-in drops by it. Both appear in the
+  day chart as *Consumers (planned)* and in the consumption forecast, the state
+  of charge forecast and the night discharge. A consumer with the role
+  *Supporting* is left out of the surplus part while the feed-in cap is on:
+  the feed-in cap plans it with the surplus above the limit.
 
 ## Dashboard
 
@@ -674,8 +689,10 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar.
     far (solid), the expected and the measured feed-in into the grid (blue;
     the expected one from the plan, including night discharge, at most the
     feed-in cap), the planned battery charging (light bars) and the measured
-    charging (solid bars), plus the projected total state of charge (dashed)
-    and the measured one (solid) with their scale in % on the right.
+    charging (solid bars), the planned load of the consumers' daily targets
+    (pink, dashed; part of the consumption forecast), plus the projected total
+    state of charge (dashed) and the measured one (solid) with their scale in %
+    on the right.
   - *Tomorrow* shows the forecasts, planned charging and state of charge of
     the next day, continued from today's projection.
   - The projection follows the planning: charging only with the planned
@@ -730,8 +747,9 @@ Try other settings without changing anything.
   current settings.
 - *Today* is simulated from now on (the values before are measured); in the
   afternoon a note suggests *Tomorrow* for a whole simulated day.
-- Consumers controlled by SLEMS and the battery priority (which acts in the
-  real-time distribution) are not simulated.
+- The daily targets of the consumers are planned as in the real plan;
+  otherwise consumers controlled by SLEMS and the battery priority (which acts
+  in the real-time distribution) are not simulated.
 
 ### Settings tab
 

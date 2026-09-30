@@ -133,8 +133,11 @@ from .consumer_targets import (
     TargetProgress,
     TargetSettings,
     TargetState,
+    SurplusDemand,
+    energy_to_target,
     evaluate,
     forced_load,
+    surplus_demand,
     target_temperature,
     window_start,
 )
@@ -622,6 +625,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # Local hour start -> Wh of the forced runs the targets may still need
         # (extra load in the planning, see consumer_targets.forced_load).
         self.target_load: dict[datetime, float] = {}
+        # Energy (Wh) each target still needs, and the parts expected from the
+        # surplus in order of priority (see consumer_targets.surplus_demand).
+        self.target_energy_wh: dict[str, float | None] = {}
+        self.target_demands: list[SurplusDemand] = []
         # Battery due for its regular full charge (see full_charge), batteries
         # resting after it (monotonic end) and the last full charge seen.
         self.full_charge_battery: str | None = None
@@ -1717,6 +1724,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 result.feed_in_limit_w,
                 balancing_wh,
                 cap,
+                self.target_demands,
             )
         pv_power = power_lookup(self._pv_native(snapshot, wall_now))
         result.day_plan = self._day_plan(
@@ -1876,15 +1884,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         temperature = target_temperature(settings, state.temperature_c, state.temperatures_c)
         start = window_start(settings, progress.end) if progress.end is not None else None
         # Temperatures between the deadline and midnight belong to no day.
+        if settings.type is TargetType.TEMPERATURE:
+            progress.use_sensor(settings.sensor)
         if (
             settings.type is TargetType.TEMPERATURE
             and temperature is not None
             and (start is None or local_now >= start)
         ):
-            if temperature >= settings.min_temp_c:
-                progress.min_reached = True
-            if temperature >= settings.target_temp_c:
-                progress.mark_done(settings.target_temp_c)
+            progress.track_temperature(settings, temperature)
         if result == "missed" and end is not None:
             self.config_entry.async_create_background_task(
                 self.hass,
@@ -1920,13 +1927,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         load: float | None,
         wall_now: datetime,
     ) -> None:
-        """Mode of every consumer's daily target for this plan, and the load of
-        the forced runs they may still need."""
+        """Mode of every consumer's daily target for this plan, the load of the
+        forced runs they may still need and the part expected from the surplus."""
         consumption = snapshot.consumption_forecast
         local_now = dt_util.as_local(wall_now)
         self.target_states = {}
         self.target_load = {}
-        for consumer in map(self.effective_consumer, self.consumers):
+        self.target_energy_wh = {}
+        self.target_demands = []
+        consumers = sorted(map(self.effective_consumer, self.consumers), key=lambda c: c.priority)
+        for consumer in consumers:
             settings = self.consumer_targets[consumer.subentry_id]
             if settings.type is TargetType.NONE or not consumer.controllable:
                 continue
@@ -1943,6 +1953,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     )
                 )
             thermal = self.thermal_learners.get(consumer.subentry_id)
+            temperature = (
+                target_temperature(settings, state.temperature_c, state.temperatures_c)
+                if state
+                else None
+            )
+            wh_per_k = self._target_wh_per_k(settings, thermal)
+            energy = energy_to_target(
+                settings, progress, power_w=power, temperature_c=temperature, wh_per_k=wh_per_k
+            )
+            self.target_energy_wh[consumer.subentry_id] = energy
             # The batteries must deliver an on/off consumer's full power, a
             # power controlled one at least its minimum (it is then limited).
             needed = power if consumer.control_mode is ControlMode.SWITCH else max(consumer.min_power_w or 0, 1.0)
@@ -1951,12 +1971,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 progress,
                 dt_util.as_local(wall_now),
                 power_w=power,
-                temperature_c=(
-                    target_temperature(settings, state.temperature_c, state.temperatures_c)
-                    if state
-                    else None
-                ),
-                wh_per_k=self._target_wh_per_k(settings, thermal),
+                temperature_c=temperature,
+                wh_per_k=wh_per_k,
                 expected_surplus_wh=surplus,
                 battery_need_wh=battery.energy_to_full_wh if battery else 0.0,
                 battery_can_supply=battery is not None and battery.max_discharge_w >= needed,
@@ -1967,14 +1983,28 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             forced_w = power
             if settings.source is TargetSource.BATTERY:
                 forced_w = min(power, battery.max_discharge_w) if battery is not None else 0.0
-            for hour, wh in forced_load(
+            forced = forced_load(
                 settings,
                 self.target_states[consumer.subentry_id],
                 local_now,
                 power_w=forced_w,
-                wh_per_k=self._target_wh_per_k(settings, thermal),
-            ).items():
+                wh_per_k=wh_per_k,
+            )
+            for hour, wh in forced.items():
                 self.target_load[hour] = self.target_load.get(hour, 0.0) + wh
+            demand = surplus_demand(
+                settings,
+                self.target_states[consumer.subentry_id],
+                local_now,
+                energy_wh=energy,
+                forced_wh=sum(forced.values()),
+                power_w=power,
+            )
+            # A supporting consumer only takes the surplus above the feed-in
+            # cap's limit; the cap plan counts it there.
+            supporting = self.settings.feed_in_cap and self.cap_mode(consumer.subentry_id) is CapMode.SUPPORT
+            if demand is not None and not supporting:
+                self.target_demands.append(demand)
 
     @staticmethod
     def _target_wh_per_k(settings: TargetSettings, thermal: ThermalLearner | None) -> float | None:
@@ -2151,18 +2181,24 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         planned = projection.planned_charge_w if projection else {}
         soc = projection.soc_pct if projection else {}
         grid = projection.grid_w if projection else {}
+        from_surplus = projection.consumer_w if projection else {}
         rows = []
         for hour in range(24):
             start = day_start + timedelta(hours=hour)
+            # Daily targets: forced runs (already in the consumption) and the
+            # part the projection expects from the surplus.
+            consumers = (target_load or {}).get(start, 0.0) + from_surplus.get(start, 0.0)
             rows.append(
                 {
                     "start": start.isoformat(),
                     "pv_wh": round(pv_hourly.get(start, 0.0)),
                     "consumption_wh": (
-                        round(consumption_hourly[start]) if start in consumption_hourly else None
+                        round(consumption_hourly[start] + from_surplus.get(start, 0.0))
+                        if start in consumption_hourly
+                        else None
                     ),
-                    # Part of it: forced runs of the consumers' daily targets.
-                    "target_wh": round(target_load[start]) if target_load and start in target_load else None,
+                    # Part of it: planned load of the consumers' daily targets.
+                    "consumer_wh": round(consumers) if consumers else None,
                     "planned_charge_w": round(planned[start]) if start in planned else None,
                     "soc_pct": round(soc[start], 1) if start in soc else None,
                     # Expected grid power (+ import / − export) from the projection.

@@ -27,7 +27,9 @@ does.
 enabled time and energy only with its priority option and when the forecast
 surplus until the deadline is short for the rest of the target plus filling
 the batteries. Below the minimum temperature always. From the target
-temperature on the consumer is off for the rest of the day (*done*).
+temperature on the consumer is off for the rest of the day (*done*), unless
+the temperature falls below the minimum again: then the target is open again.
+The target counts for the sensor chosen when it was reached.
 """
 
 from __future__ import annotations
@@ -123,6 +125,8 @@ class TargetProgress:
     min_reached: bool = False
     done: bool = False
     done_target_c: float | None = None
+    # Sensor choice (``TargetSensor`` value) the temperature flags apply to.
+    temperature_sensor: str | None = None
     # "met" / "missed" of the last period.
     last_result: str | None = None
     # The previous sample: its state applies until this one.
@@ -169,15 +173,38 @@ class TargetProgress:
         self.min_reached = self.done = False
         self.done_target_c = None
 
+    def use_sensor(self, sensor: TargetSensor) -> None:
+        """Temperature flags of another sensor do not count: a new choice starts open."""
+        if self.temperature_sensor is not None and self.temperature_sensor != sensor.value:
+            self.min_reached = self.done = False
+            self.done_target_c = None
+        self.temperature_sensor = sensor.value
+
+    def track_temperature(self, settings: TargetSettings, temperature_c: float) -> None:
+        """Note a temperature of the period: minimum and target reached.
+
+        Below the minimum again (e.g. after drawing hot water) the target is
+        open again, so the surplus fills the storage up to it once more.
+        """
+        if temperature_c < settings.min_temp_c:
+            self.done = False
+            self.done_target_c = None
+            return
+        self.min_reached = True
+        if temperature_c >= settings.target_temp_c:
+            self.mark_done(settings.target_temp_c)
+
     def mark_done(self, target_c: float) -> None:
         """The target temperature ``target_c`` was reached in this period."""
         self.done = True
         self.done_target_c = max(target_c, self.done_target_c or target_c)
 
     def done_for(self, settings: TargetSettings) -> bool:
-        """Reached the target temperature that is set now."""
-        return self.done and (
-            self.done_target_c is None or settings.target_temp_c <= self.done_target_c
+        """Reached the target temperature that is set now, with the sensor chosen now."""
+        return (
+            self.done
+            and (self.done_target_c is None or settings.target_temp_c <= self.done_target_c)
+            and self.temperature_sensor in (None, settings.sensor.value)
         )
 
     def met(self, settings: TargetSettings) -> bool:
@@ -194,6 +221,7 @@ class TargetProgress:
             "min_reached": self.min_reached,
             "done": self.done,
             "done_target_c": self.done_target_c,
+            "temperature_sensor": self.temperature_sensor,
             "last_result": self.last_result,
         }
 
@@ -209,6 +237,7 @@ class TargetProgress:
             min_reached=data.get("min_reached", False),
             done=data.get("done", False),
             done_target_c=data.get("done_target_c"),
+            temperature_sensor=data.get("temperature_sensor"),
             last_result=data.get("last_result"),
         )
 
@@ -265,9 +294,11 @@ def evaluate(
             return TargetState(TargetMode.WAITING, end=end)
         if temperature_c is None:
             return TargetState(TargetMode.SURPLUS, end=end)
-        if progress.done_for(settings) or temperature_c >= settings.target_temp_c:
-            return TargetState(TargetMode.DONE, end=end)
+        # Below the minimum it heats in any case; a reached target is open
+        # again then (see TargetProgress.track_temperature).
         if temperature_c >= settings.min_temp_c:
+            if progress.done_for(settings) or temperature_c >= settings.target_temp_c:
+                return TargetState(TargetMode.DONE, end=end)
             return TargetState(TargetMode.SURPLUS, end=end)
         missing_k = settings.min_temp_c - temperature_c
         if wh_per_k and power_w > 0:
@@ -300,6 +331,78 @@ def evaluate(
     if settings.priority and expected_surplus_wh < energy + battery_need_wh:
         return TargetState(TargetMode.BOOST, missing, latest, end)
     return TargetState(TargetMode.SURPLUS, missing, latest, end)
+
+
+def energy_to_target(
+    settings: TargetSettings,
+    progress: TargetProgress,
+    *,
+    power_w: float,
+    temperature_c: float | None,
+    wh_per_k: float | None,
+) -> float | None:
+    """Energy (Wh) the consumer still needs for its target, None when not known.
+
+    Exact for an energy target; for a runtime or enabled time the remaining
+    time at ``power_w`` (less if its own thermostat stops it earlier); for a
+    temperature target up to the target temperature with the learned energy
+    per kelvin (heat losses left out).
+    """
+    if settings.type is TargetType.NONE:
+        return None
+    if settings.type is TargetType.TEMPERATURE:
+        # Reached and not below the minimum again (see track_temperature).
+        if temperature_c is not None and (
+            temperature_c >= settings.target_temp_c
+            or (progress.done_for(settings) and temperature_c >= settings.min_temp_c)
+        ):
+            return 0.0
+        if temperature_c is None or not wh_per_k:
+            return None
+        return (settings.target_temp_c - temperature_c) * wh_per_k
+    missing = max(0.0, remaining(settings, progress))
+    if settings.type is TargetType.ENERGY:
+        return missing
+    return missing / 3600 * power_w if power_w > 0 else None
+
+
+@dataclass(frozen=True)
+class SurplusDemand:
+    """Energy a daily target takes from the surplus between ``start`` and ``end``."""
+
+    energy_wh: float
+    power_w: float
+    start: datetime
+    end: datetime
+
+
+def surplus_demand(
+    settings: TargetSettings,
+    state: TargetState,
+    local_now: datetime,
+    *,
+    energy_wh: float | None,
+    forced_wh: float,
+    power_w: float,
+) -> SurplusDemand | None:
+    """Part of the target the planning expects from the surplus.
+
+    What the forced run (``forced_wh``, see ``forced_load``) does not cover,
+    from now (or the earliest start) until the deadline at most at ``power_w``.
+    """
+    if (
+        energy_wh is None
+        or state.mode in (TargetMode.NONE, TargetMode.DONE)
+        or state.end is None
+        or power_w <= 0
+    ):
+        return None
+    rest = energy_wh - forced_wh
+    earliest = window_start(settings, state.end)
+    start = max(local_now, earliest) if earliest is not None else local_now
+    if rest <= 0 or start >= state.end:
+        return None
+    return SurplusDemand(rest, power_w, start, state.end)
 
 
 def forced_load(

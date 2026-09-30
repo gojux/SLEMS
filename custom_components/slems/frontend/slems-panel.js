@@ -65,7 +65,7 @@ const STRINGS = {
     pvForecast: "PV forecast",
     pvActual: "PV measured",
     consumptionForecast: "Consumption forecast",
-    targetLoad: "of which daily targets",
+    consumerForecast: "Consumers (planned)",
     consumptionActual: "Consumption measured",
     plannedCharge: "Planned charging",
     actualCharge: "Charging measured",
@@ -169,6 +169,8 @@ const STRINGS = {
     targetUntil: "until {time}",
     targetLatest: "forced from {time}",
     targetDone: "reached",
+    targetEnergy: "about {energy} to go",
+    targetEnergyLearning: "energy still being learned",
     targetForced: "running forced",
     targetBoost: "before the batteries",
     targetMinShort: "min.",
@@ -243,7 +245,7 @@ const STRINGS = {
     capLostReasons: { full: "batteries full", charge_power: "charge power too low" },
     simulation: "Simulation",
     simIntro:
-      "Try other settings: the chart and the key figures show how today and tomorrow would look, calculated from the current state of charge and the current forecasts. Nothing here is saved or used by SLEMS; grey dotted: the plan with the current settings. Consumers controlled by SLEMS are not simulated.",
+      "Try other settings: the chart and the key figures show how today and tomorrow would look, calculated from the current state of charge and the current forecasts. Nothing here is saved or used by SLEMS; grey dotted: the plan with the current settings. The daily targets of the consumers are planned as in the real plan; otherwise consumers controlled by SLEMS are not simulated.",
     simToday: "Simulation: today",
     simTomorrow: "Simulation: tomorrow (expected)",
     simReset: "Reset to the current settings",
@@ -398,7 +400,7 @@ const STRINGS = {
     pvForecast: "PV-Prognose",
     pvActual: "PV gemessen",
     consumptionForecast: "Verbrauchsprognose",
-    targetLoad: "davon Tagesziele",
+    consumerForecast: "Verbraucher (geplant)",
     consumptionActual: "Verbrauch gemessen",
     plannedCharge: "Geplantes Laden",
     actualCharge: "Laden gemessen",
@@ -502,6 +504,8 @@ const STRINGS = {
     targetUntil: "bis {time}",
     targetLatest: "erzwungen ab {time}",
     targetDone: "erreicht",
+    targetEnergy: "noch ca. {energy}",
+    targetEnergyLearning: "Energie wird noch gelernt",
     targetForced: "läuft erzwungen",
     targetBoost: "vor der Batterie",
     targetMinShort: "min.",
@@ -576,7 +580,7 @@ const STRINGS = {
     capLostReasons: { full: "Batterien voll", charge_power: "Ladeleistung zu gering" },
     simulation: "Simulation",
     simIntro:
-      "Probiere andere Einstellungen aus: Diagramm und Kennzahlen zeigen, wie heute und morgen aussehen würden, gerechnet ab dem aktuellen Ladezustand mit den aktuellen Prognosen. Nichts davon wird gespeichert oder von SLEMS verwendet; grau gepunktet: der Plan mit den aktuellen Einstellungen. Von SLEMS gesteuerte Verbraucher werden nicht simuliert.",
+      "Probiere andere Einstellungen aus: Diagramm und Kennzahlen zeigen, wie heute und morgen aussehen würden, gerechnet ab dem aktuellen Ladezustand mit den aktuellen Prognosen. Nichts davon wird gespeichert oder von SLEMS verwendet; grau gepunktet: der Plan mit den aktuellen Einstellungen. Die Tagesziele der Verbraucher gehen wie in der echten Planung ein; sonst werden von SLEMS gesteuerte Verbraucher nicht simuliert.",
     simToday: "Simulation: heute",
     simTomorrow: "Simulation: morgen (erwartet)",
     simReset: "Auf aktuelle Einstellungen zurücksetzen",
@@ -2046,8 +2050,8 @@ class SlemsPanel extends HTMLElement {
           // Forecasts with one value per hour are drawn at the middle of the hour.
           pvHourly: !row.pv_half_w || row.pv_half_w[0] === row.pv_half_w[1],
           consumptionForecast: row.consumption_wh,
-          // Part of it: forced runs of the consumers' daily targets.
-          targetLoad: row.target_wh || null,
+          // Part of it: planned load of the consumers' daily targets.
+          consumerForecast: row.consumer_wh || null,
           plannedCharge: row.planned_charge_w,
           // With the feed-in cap the inverter curtails the export above the limit.
           exportForecast: exportOf(row),
@@ -2154,6 +2158,7 @@ class SlemsPanel extends HTMLElement {
     return `<div class="legend">
       ${item("pvForecast", c.pv, t.pvForecast, "dash")}${item("pvActual", c.pv, t.pvActual, "solid")}
       ${item("consumptionForecast", c.house, t.consumptionForecast, "dash")}${item("consumptionActual", c.house, t.consumptionActual, "solid")}
+      ${item("consumerForecast", c.consumer, t.consumerForecast, "dash")}
       ${item("exportForecast", c.grid, t.exportForecast, "dash")}${item("exportActual", c.grid, t.exportActual, "solid")}
       ${item("plannedCharge", `${c.battery}66`, t.plannedCharge, "bar")}${item("actualCharge", c.battery, t.actualCharge, "bar")}
       ${item("socForecast", c.battery, t.socForecast, "dash")}${item("socActual", c.battery, t.socActual, "solid")}
@@ -2180,7 +2185,7 @@ class SlemsPanel extends HTMLElement {
     const shown = (key) => !this._hiddenSeries.has(key);
     // The scale follows the series shown.
     const scaled = [
-      "pvForecast", "consumptionForecast", "plannedCharge", "actualCharge", "pvActual", "consumptionActual",
+      "pvForecast", "consumptionForecast", "consumerForecast", "plannedCharge", "actualCharge", "pvActual", "consumptionActual",
       "exportForecast", "exportActual", "exportCompare",
     ].filter(shown);
     const values = rows.flatMap((r) => scaled.map((key) => r[key]));
@@ -2250,6 +2255,7 @@ class SlemsPanel extends HTMLElement {
     // instead of two, so the line has no steps.
     const hourlyKeys = {
       consumptionForecast: () => true,
+      consumerForecast: () => true,
       capLine: () => true,
       exportForecast: () => true,
       exportCompare: () => true,
@@ -2294,6 +2300,7 @@ class SlemsPanel extends HTMLElement {
         ${hourLines}${gridLines.join("")}${hourTicks}${bars}${capBars}${capLine}
         ${path("pvForecast", c.pv, true)}${path("pvActual", c.pv, false)}
         ${path("consumptionForecast", c.house, true)}${path("consumptionActual", c.house, false)}
+        ${path("consumerForecast", c.consumer, true)}
         ${path("exportCompare", c.muted, COMPARE_DASH)}${path("exportForecast", c.grid, true)}${path("exportActual", c.grid, false)}
         ${socLines.join("")}
         ${showNow ? `<line x1="${x(nowHour)}" x2="${x(nowHour)}" y1="${pad.top}" y2="${plotBottom}" stroke="${c.muted}" stroke-dasharray="2 3"/>
@@ -2310,12 +2317,12 @@ class SlemsPanel extends HTMLElement {
     const cap = rows.some((r) => r.capLine !== null && r.capLine !== undefined);
     return `<div class="table-wrap"><table>
       <thead><tr><th>${t.hour}</th><th>${t.pvForecast}</th><th>${t.pvActual}</th><th>${t.consumptionForecast}</th>
-      <th>${t.consumptionActual}</th><th>${t.exportForecast}</th><th>${t.exportActual}</th><th>${t.plannedCharge}</th><th>${t.actualCharge}</th><th>${t.socForecast}</th><th>${t.socActual}</th>
+      <th>${t.consumptionActual}</th><th>${t.consumerForecast}</th><th>${t.exportForecast}</th><th>${t.exportActual}</th><th>${t.plannedCharge}</th><th>${t.actualCharge}</th><th>${t.socForecast}</th><th>${t.socActual}</th>
       ${cap ? `<th>${t.capLine}</th><th>${t.capExcess}</th><th>${t.capCurtailed}</th>` : ""}</tr></thead>
       <tbody>${rows
         .map(
           (r) => `<tr><td>${slotTime(r.slot)}</td><td>${cell(r.pvForecast)}</td><td>${cell(r.pvActual)}</td>
-          <td>${cell(r.consumptionForecast)}</td><td>${cell(r.consumptionActual)}</td><td>${cell(r.exportForecast)}</td><td>${cell(r.exportActual)}</td><td>${cell(r.plannedCharge)}</td><td>${cell(r.actualCharge)}</td>
+          <td>${cell(r.consumptionForecast)}</td><td>${cell(r.consumptionActual)}</td><td>${cell(r.consumerForecast)}</td><td>${cell(r.exportForecast)}</td><td>${cell(r.exportActual)}</td><td>${cell(r.plannedCharge)}</td><td>${cell(r.actualCharge)}</td>
           <td>${percent(r.socForecast)}</td><td>${percent(r.socActual)}</td>${
             cap ? `<td>${cell(r.capLine)}</td><td>${cell(r.capExcess)}</td><td>${cell(r.capCurtailed)}</td>` : ""
           }</tr>`
@@ -2365,9 +2372,8 @@ class SlemsPanel extends HTMLElement {
     const v = (key) => (this._hiddenSeries.has(key) ? null : row[key]);
     tooltip.innerHTML = `<div class="tt-title">${slotTime(slot)}–${slotTime(slot + 1)}</div>
       ${entry(c.pv, t.pvForecast, v("pvForecast"))}${entry(c.pv, t.pvActual, v("pvActual"))}
-      ${entry(c.house, t.consumptionForecast, v("consumptionForecast"))}${
-        v("consumptionForecast") !== null && row.targetLoad ? entry(c.house, t.targetLoad, row.targetLoad) : ""
-      }${entry(c.house, t.consumptionActual, v("consumptionActual"))}
+      ${entry(c.house, t.consumptionForecast, v("consumptionForecast"))}${entry(c.house, t.consumptionActual, v("consumptionActual"))}
+      ${entry(c.consumer, t.consumerForecast, v("consumerForecast"))}
       ${entry(c.grid, t.exportForecast, v("exportForecast"))}${entry(c.grid, t.exportActual, v("exportActual"))}
       ${entry(c.battery, t.plannedCharge, v("plannedCharge"))}${entry(c.battery, t.actualCharge, v("actualCharge"))}
       ${percentEntry(c.battery, t.socForecast, v("socForecast"))}${percentEntry(c.battery, t.socActual, v("socActual"))}
@@ -2825,6 +2831,11 @@ class SlemsPanel extends HTMLElement {
       parts.push(`${number(attrs.target_got ?? 0)} / ${number(attrs.target_goal)} ${attrs.target_unit}`);
     }
     parts.push(t.targetUntil.replace("{time}", clock(attrs.target_deadline)));
+    const energy = attrs.target_energy_wh;
+    if (mode !== "done" && energy > 0) parts.push(t.targetEnergy.replace("{energy}", `${number(energy / 1000)} kWh`));
+    else if (mode !== "done" && attrs.target_type === "temperature" && (energy === null || energy === undefined)) {
+      parts.push(t.targetEnergyLearning);
+    }
     if (mode === "done") parts.push(t.targetDone);
     else if (mode === "waiting") parts.push(t.targetWaiting.replace("{time}", clock(attrs.target_earliest)));
     else if (mode === "forced") parts.push(t.targetForced);

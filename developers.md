@@ -654,7 +654,22 @@ heat pumps are left out (their consumption is in the heat pump model;
 controllable consumers are subtracted from the base load, so nothing is
 counted twice). `_with_target_load` adds it to the hourly consumption for
 the SoC projection, the night discharge (real plan and projection) and the
-day plan (`consumption_wh`, part `target_wh` for the tooltip).
+day plan.
+
+`energy_to_target` is the energy the target still needs (energy target:
+exact; runtime/enabled time: remaining time × full power; temperature: (target
+temperature − current) × energy per kelvin, None until learned); attribute
+`target_energy_wh` for the card. `surplus_demand` is the part the forced run
+does not cover, from now (or the earliest start) until the deadline at the
+full power; `coordinator.target_demands` holds them in order of priority
+(not for heat pumps, not for supporting consumers while the feed-in cap is
+on: the cap plan counts them). `project_soc(..., demands=...)` lets them take,
+per hour, the surplus left after the planned charging (`_take_surplus`,
+`SocProjection.consumer_w`), which lowers the expected grid export; the SoC
+is unchanged, the batteries charge first. Day plan rows: `consumption_wh`
+includes both, `consumer_wh` is the planned consumer part (chart series
+*Consumers (planned)*). The feed-in cap plan keeps its own consumer model
+(`CapConsumer`).
 
 Supporting consumers with temperature sensors (`CONF_TEMPERATURE_ENTITY`,
 `CONF_TEMPERATURE_2_ENTITY`, their mean in `ConsumerState.temperature_c`):
@@ -1425,3 +1440,5 @@ repository (otherwise its *brands* check fails).
 | 2026-09-30 | Batteries from HA entities can be controlled (experimental): set point, separate charge/discharge power with optional mode select, or a script with `power_w`; entities are suggested from the chosen device and confirmed in the flow. It reaches every battery with an HA integration without a driver per brand; direct drivers stay for batteries where precision matters (Venus). |
 | 2026-09-30 | State when released per controllable battery (automatic or standby), also for the Venus; default automatic. It is a setting, because HA's delete dialog of a subentry cannot ask, and it applies to every release (mode off, meter failure, removal). |
 | 2026-09-30 | Releases from outside the control cycle (operating mode, *Enabled* switch, manual communication pause, unload) go through `RealTimeController.async_release` and wait for the controller lock: a cycle still running (e.g. a Venus confirming its set point) otherwise sent a set point right after the release. |
+| 2026-09-30 | Daily targets in the planning also with their surplus part: after the planned charging each target takes the surplus left in its window, so the expected feed-in no longer contains energy the consumers will take; shown summed as *Consumers (planned)*. Batteries first, because until the charge is secured the allocation gives the surplus to them; with a secured charge the consumers get a share earlier, but the batteries end up full either way. The card shows the energy still needed; for temperature targets only with the learned energy per kelvin. |
+| 2026-09-30 | Temperature target: below the minimum a reached target is open again (`TargetProgress.track_temperature`): up to the minimum with priority, then with the surplus up to the target. Only reheating to the minimum would keep the consumer off above it and export the afternoon surplus; the minimum as reset threshold still keeps it from starting at every small loss. The temperature flags belong to the sensor choice (`TargetProgress.temperature_sensor`); another choice starts the target open. A storage that reached its target and then lost the hot water stayed off for the rest of the day. |

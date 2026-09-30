@@ -6,14 +6,16 @@ import pytest
 
 from homeassistant.util import dt as dt_util
 
-from custom_components.slems.const import TargetSource, TargetType
+from custom_components.slems.const import TargetSensor, TargetSource, TargetType
 from custom_components.slems.consumer_targets import (
     TargetMode,
     TargetProgress,
     TargetSettings,
+    energy_to_target,
     evaluate,
     forced_load,
     period_end,
+    surplus_demand,
 )
 
 
@@ -127,6 +129,42 @@ def test_temperature_target() -> None:
     assert state(settings, progress, local(12), temperature_c=50).mode is TargetMode.DONE
 
 
+def test_below_the_minimum_the_target_is_open_again() -> None:
+    settings = TargetSettings(type=TargetType.TEMPERATURE, min_temp_c=40, target_temp_c=55)
+    progress = TargetProgress(end=local(18))
+    progress.track_temperature(settings, 55)
+    assert progress.done and progress.min_reached
+    # Cooling a little: still reached, nothing needed.
+    progress.track_temperature(settings, 50)
+    assert state(settings, progress, local(12), temperature_c=50).mode is TargetMode.DONE
+    assert energy_to_target(settings, progress, power_w=3000, temperature_c=50, wh_per_k=200) == 0
+    # Hot water drawn: below the minimum it heats with priority, and the target is open again.
+    below = state(settings, progress, local(12), temperature_c=28, wh_per_k=200, power_w=3000)
+    assert below.mode is TargetMode.BOOST
+    progress.track_temperature(settings, 28)
+    assert not progress.done and progress.min_reached
+    assert energy_to_target(settings, progress, power_w=3000, temperature_c=28, wh_per_k=200) == 5400
+    # Above the minimum again: the surplus fills it up to the target.
+    assert state(settings, progress, local(12), temperature_c=41).mode is TargetMode.SURPLUS
+
+
+def test_another_sensor_starts_open() -> None:
+    settings = TargetSettings(type=TargetType.TEMPERATURE, min_temp_c=40, target_temp_c=55)
+    progress = TargetProgress(end=local(18))
+    progress.use_sensor(settings.sensor)
+    progress.mark_done(55)
+    progress.min_reached = True
+    assert progress.done_for(settings)
+    other = TargetSettings(
+        type=TargetType.TEMPERATURE, min_temp_c=40, target_temp_c=55, sensor=TargetSensor.SECOND
+    )
+    # Not reached for the new choice right away, and the flags are reset with the next poll.
+    assert not progress.done_for(other)
+    progress.use_sensor(other.sensor)
+    assert not progress.done and not progress.min_reached
+    assert TargetProgress.from_dict(progress.as_dict()).temperature_sensor == "second"
+
+
 def test_temperature_target_waits_after_the_deadline_until_midnight() -> None:
     settings = TargetSettings(
         type=TargetType.TEMPERATURE, min_temp_c=40, target_temp_c=55,
@@ -211,3 +249,37 @@ def test_earliest_start() -> None:
     # Switched off: no restriction.
     settings.earliest_enabled = False
     assert state(settings, progress, local(9)).mode is TargetMode.SURPLUS
+
+
+def test_energy_to_target() -> None:
+    runtime = TargetSettings(type=TargetType.RUNTIME, hours=2.0)
+    progress = TargetProgress(end=local(22), runtime_s=1800)
+    assert energy_to_target(runtime, progress, power_w=2000, temperature_c=None, wh_per_k=None) == 3000
+    energy = TargetSettings(type=TargetType.ENERGY, energy_kwh=3.0)
+    assert energy_to_target(
+        energy, TargetProgress(end=local(22), energy_wh=1000), power_w=0, temperature_c=None, wh_per_k=None
+    ) == 2000
+    temperature = TargetSettings(type=TargetType.TEMPERATURE, min_temp_c=40, target_temp_c=55)
+    progress = TargetProgress(end=local(18))
+    # Up to the target temperature with the learned energy per kelvin.
+    assert energy_to_target(temperature, progress, power_w=2000, temperature_c=45, wh_per_k=200) == 2000
+    # Not known before the energy per kelvin is learned, 0 once reached.
+    assert energy_to_target(temperature, progress, power_w=2000, temperature_c=45, wh_per_k=None) is None
+    done = TargetProgress(end=local(18), done=True)
+    assert energy_to_target(temperature, done, power_w=2000, temperature_c=45, wh_per_k=None) == 0
+
+
+def test_surplus_demand_is_what_the_forced_run_leaves() -> None:
+    settings = TargetSettings(type=TargetType.RUNTIME, hours=2.0)
+    progress = TargetProgress(end=local(22))
+    now = local(9)
+    current = state(settings, progress, now, power_w=2000)
+    demand = surplus_demand(settings, current, now, energy_wh=4000, forced_wh=0, power_w=2000)
+    assert (demand.energy_wh, demand.start, demand.end) == (4000, now, local(22))
+    # A forced run covering everything leaves nothing for the surplus.
+    assert surplus_demand(settings, current, now, energy_wh=4000, forced_wh=4000, power_w=2000) is None
+    earliest = TargetSettings(type=TargetType.RUNTIME, hours=2.0, earliest_enabled=True, earliest=time(11, 0))
+    demand = surplus_demand(
+        earliest, state(earliest, progress, now, power_w=2000), now, energy_wh=4000, forced_wh=0, power_w=2000
+    )
+    assert demand.start == local(11)

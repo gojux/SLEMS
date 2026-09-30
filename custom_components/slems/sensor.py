@@ -880,6 +880,12 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
                 target.latest_start.isoformat() if target and target.latest_start else None
             ),
             "target_last_result": progress.last_result,
+            # Energy still needed for the target (Wh), None when not known.
+            "target_energy_wh": (
+                None
+                if (energy := coordinator.target_energy_wh.get(subentry_id)) is None
+                else round(energy)
+            ),
         }
 
 

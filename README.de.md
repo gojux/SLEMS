@@ -10,7 +10,7 @@ durch Verschieben des Ladezeitpunkts, damit die tägliche Einspeisespitze
 abgefangen wird. Grundlage dafür sind Prognosen für Verbrauch und PV-Ertrag.
 
 Der Name setzt sich aus *[Slug](https://en.wikipedia.org/wiki/Sea_slug)* (ein
-wunderbares Wort für ein sehr interessantes Tier) und *EMS*
+lustiges Wort für ein sehr interessantes Tier) und *EMS*
 (Energiemanagementsystem) zusammen.
 
 ![SLEMS-Übersicht: Energiefluss, Kennzahlen und das Diagramm mit Prognose und Plan des Tages](docs/images/dashboard_overview_de.png)
@@ -676,15 +676,31 @@ Je gesteuertem Verbraucher, auf seiner Karte unter *Tagesziel*.
   Zieltemperatur ist er für den Rest des Tages aus; wird später am Tag eine
   höhere Zieltemperatur eingestellt, heizt er weiter. Ein Temperaturziel gilt
   für den Kalendertag: Nach der Frist bleibt der Verbraucher bis Mitternacht
-  aus (*wartet bis 00:00*), auch mit Überschuss.
+  aus (*wartet bis 00:00*), auch mit Überschuss. Fällt die Temperatur wieder
+  unter das Minimum (z. B. nach Warmwasserentnahme), ist das Ziel wieder
+  offen: bis zum Minimum mit Vorrang, danach mit dem Überschuss bis zum Ziel.
+  Wird ein anderer Fühler gewählt, gilt das Ziel wieder als offen.
 - **Anzeige**: Die Karte zeigt den Fortschritt, z. B. *1,5 / 4 h · bis 22:00 ·
-  erzwungen ab 19:30*, und die Chips *Vorrang* oder *erzwungen*, solange sie
-  gelten.
+  erzwungen ab 19:30 · noch ca. 2,3 kWh*, und die Chips *Vorrang* oder
+  *erzwungen*, solange sie gelten. Die noch benötigte Energie ist bei einem
+  Energieziel genau; bei Laufzeit oder Freigabezeit ist es die Restzeit mit
+  voller Leistung (weniger, wenn der eigene Thermostat früher abschaltet); bei
+  einem Temperaturziel der Weg bis zur Zieltemperatur mit der gelernten
+  Energie pro Grad (bis dahin *Energie wird noch gelernt*; Wärmeverluste
+  bleiben unberücksichtigt).
 - **Planung**: Mit einer Quelle über den Überschuss hinaus rechnet die Planung
   den erzwungenen Lauf ab der spätesten Startzeit als zusätzlichen Verbrauch
-  ein (Tagesdiagramm, Tooltip *davon Tagesziele*, Ladezustandsprognose und
-  Nachtentladung), so als deckte der Überschuss nichts mehr; der geplante Lauf
-  schrumpft, sobald der Überschuss das Ziel füllt.
+  ein, so als deckte der Überschuss nichts mehr; der geplante Lauf schrumpft,
+  sobald der Überschuss das Ziel füllt. Den Rest des Ziels erwartet die
+  Planung aus dem Überschuss: Stunde für Stunde nimmt der Verbraucher, was nach
+  dem Laden der Batterien übrig bleibt, in der Reihenfolge der Priorität, ab
+  jetzt (oder dem frühesten Beginn) bis zur Frist und höchstens mit seiner
+  Leistung; die erwartete Einspeisung sinkt entsprechend. Beides erscheint im
+  Tagesdiagramm als *Verbraucher (geplant)* und geht in Verbrauchsprognose,
+  Ladezustandsprognose und Nachtentladung ein. Ein Verbraucher mit dem Einsatz
+  *Unterstützend* bleibt beim Überschuss-Teil außen vor, solange die
+  Einspeisebegrenzung an ist: Sie plant ihn mit dem Überschuss über der
+  Grenze ein.
 
 ## Dashboard
 
@@ -704,9 +720,11 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
     gemessenen Werte (durchgezogen), die erwartete und die gemessene
     Einspeisung ins Netz (blau; die erwartete aus dem Plan, einschließlich
     Nachtentladung, höchstens bis zur Einspeisebegrenzung), das geplante Laden
-    der Batterien (helle Balken) und das gemessene Laden (kräftige Balken),
-    dazu den prognostizierten Gesamt-Ladezustand (gestrichelt) und den
-    gemessenen (durchgezogen) mit ihrer Skala in % rechts.
+    der Batterien (helle Balken) und das gemessene Laden (kräftige Balken), die
+    geplante Last der Tagesziele der Verbraucher (rosa, gestrichelt; Teil der
+    Verbrauchsprognose), dazu den prognostizierten Gesamt-Ladezustand
+    (gestrichelt) und den gemessenen (durchgezogen) mit ihrer Skala in %
+    rechts.
   - *Morgen* zeigt Prognosen, geplantes Laden und Ladezustand des nächsten
     Tages, fortgeführt aus der Prognose von heute.
   - Die Prognose folgt der Planung: Laden nur mit dem geplanten Überschuss,
@@ -764,8 +782,9 @@ Andere Einstellungen ausprobieren, ohne etwas zu ändern.
 - *Heute* wird ab jetzt simuliert (die Werte davor sind gemessen); am
   Nachmittag schlägt ein Hinweis *Morgen* für einen ganzen simulierten Tag
   vor.
-- Von SLEMS gesteuerte Verbraucher und der Batterievorrang (er wirkt in der
-  Echtzeit-Verteilung) werden nicht simuliert.
+- Die Tagesziele der Verbraucher gehen wie in der echten Planung ein; sonst
+  werden von SLEMS gesteuerte Verbraucher und der Batterievorrang (er wirkt in
+  der Echtzeit-Verteilung) nicht simuliert.
 
 ### Reiter Einstellungen
 

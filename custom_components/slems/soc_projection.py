@@ -22,13 +22,18 @@ simplified way:
   stays free. From the planned export start the batteries feed in until they
   have that space; the night discharge target leaves it free.
 
-Controllable consumers (they run on surplus), grid targets and batteries in
-active cell balancing are left out.
+* Daily targets of consumers (see consumer_targets): forced runs are part of
+  the consumption; the part expected from the surplus takes what is left
+  after charging, in order of priority, within its window and at most at the
+  consumer's power, before it is exported.
+
+Other controllable consumers (they run on surplus), grid targets and batteries
+in active cell balancing are left out.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -36,6 +41,7 @@ from datetime import datetime, timedelta
 from homeassistant.util import dt as dt_util
 
 from .allocation import BatteryGroup
+from .consumer_targets import SurplusDemand
 from .feed_in_cap import CapPlan
 from .grid_friendly import feed_in_limit, planned_charging, remaining_surplus_by_hour
 from .night_discharge import plan_night_discharge
@@ -68,6 +74,8 @@ class SocProjection:
     soc_pct: dict[datetime, float] = field(default_factory=dict)
     planned_charge_w: dict[datetime, float] = field(default_factory=dict)
     grid_w: dict[datetime, float] = field(default_factory=dict)
+    # Mean power of the consumers' daily targets taken from the surplus.
+    consumer_w: dict[datetime, float] = field(default_factory=dict)
 
 
 def project_soc(
@@ -80,6 +88,7 @@ def project_soc(
     today_limit_w: float | None,
     today_extra_wh: float = 0.0,
     cap: CapPlan | None = None,
+    demands: Sequence[SurplusDemand] = (),
 ) -> SocProjection:
     """Project until the end of tomorrow.
 
@@ -87,6 +96,8 @@ def project_soc(
     consumption forecast ``load_w`` is assumed to stay. ``today_extra_wh`` is
     charged today by batteries outside the group (it lowers the surplus left
     for the group). ``cap`` is the plan of the feed-in cap, None when off.
+    ``demands`` are the parts of the daily targets expected from the surplus,
+    in order of priority.
     """
     result = SocProjection()
     capacity = battery.capacity_wh
@@ -98,6 +109,8 @@ def project_soc(
     end = dt_util.start_of_local_day(local_now) + timedelta(days=2)
     stored = battery.soc_pct / 100 * capacity
     full = battery.full_soc_pct / 100 * capacity
+    # Energy each demand still takes.
+    left = [demand.energy_wh for demand in demands]
 
     def charge_plan(hour: datetime, start: datetime) -> dict[datetime, float]:
         day_end = dt_util.start_of_local_day(hour) + timedelta(days=1)
@@ -135,6 +148,11 @@ def project_soc(
                 charge = min(charge, max(0.0, full - stored) / (share * efficiency))
             result.planned_charge_w[hour] = charge
             stored = min(max(stored, full), stored + charge * share * efficiency)
+            consumers = _take_surplus(
+                demands, left, max(0.0, pv_w - load - charge) * share, start, hour + PERIOD
+            )
+            if consumers > 0:
+                result.consumer_w[hour] = consumers / share
         else:
             stored = _discharge(
                 stored, load - pv_w, share, start, battery, pv, consumption, settings, cap
@@ -154,9 +172,30 @@ def project_soc(
         # Battery AC power from the change of the stored energy (losses on the AC side).
         change = (stored - stored_before) / share
         battery_ac = change / efficiency if change > 0 else change * efficiency
-        result.grid_w[hour] = load - pv_w + battery_ac
+        result.grid_w[hour] = load + result.consumer_w.get(hour, 0.0) - pv_w + battery_ac
         hour += PERIOD
     return result
+
+
+def _take_surplus(
+    demands: Sequence[SurplusDemand],
+    left: list[float],
+    surplus_wh: float,
+    start: datetime,
+    end: datetime,
+) -> float:
+    """Energy the demands take from ``surplus_wh`` between ``start`` and ``end``."""
+    taken = 0.0
+    for index, demand in enumerate(demands):
+        overlap = (min(end, demand.end) - max(start, demand.start)) / PERIOD
+        if overlap <= 0 or left[index] <= 0:
+            continue
+        wh = min(surplus_wh - taken, demand.power_w * overlap, left[index])
+        if wh <= 0:
+            break
+        left[index] -= wh
+        taken += wh
+    return taken
 
 
 def _discharge(
