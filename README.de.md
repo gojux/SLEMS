@@ -218,6 +218,14 @@ werden addiert. SLEMS verwendet die feinste Auflösung, die der Anbieter
 liefert (z. B. 15 oder 30 Minuten). Forecast.Solar kennzeichnet jede Periode
 mit ihrem Ende; SLEMS berücksichtigt das.
 
+**Empfehlung: [Helios Forecast](https://github.com/ReikanYsora/Helios-Forecast)**
+(Open Source, ohne Konto und API-Schlüssel, lokal gerechnet mit Wetterdaten von
+Open-Meteo). Es lernt aus der Erzeugung der eigenen PV-Anlage, auch
+Abschattung durch Bäume oder Berge, Verschmutzung und eine um ein paar Grad
+abweichende Ausrichtung, und nutzt dafür gleich die vorhandenen
+Langzeitstatistiken des Energiesensors. Es liefert eine Prognose für das
+Energie-Dashboard in 15-Minuten-Schritten und ist in SLEMS direkt auswählbar.
+
 ### Wetter (optional)
 
 Die Wetter-Entity verbessert die Verbrauchsprognose, besonders bei einer

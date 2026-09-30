@@ -213,6 +213,14 @@ dashboard can be selected, e.g. Forecast.Solar or Solcast. Several entries
 finest resolution the provider delivers (e.g. 15 or 30 minutes).
 Forecast.Solar marks each period by its end; SLEMS takes this into account.
 
+**Recommendation: [Helios Forecast](https://github.com/ReikanYsora/Helios-Forecast)**
+(open source, no account or API key, computed locally with weather data from
+Open-Meteo). It learns from the production of your own PV system, including
+shading by trees or mountains, soiling and an orientation that is a few
+degrees off, and uses the existing long-term statistics of your energy sensor
+right away. It provides a forecast for the energy dashboard in 15 minute
+steps, so it can be selected in SLEMS directly.
+
 ### Weather (optional)
 
 The weather entity improves the consumption forecast, especially for a heat
