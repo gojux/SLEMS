@@ -13,6 +13,8 @@ The name is a combination of *[Slug](https://en.wikipedia.org/wiki/Sea_slug)*
 (a wonderful word for a very interesting animal) and *EMS* (energy management
 system).
 
+![SLEMS overview: energy flow, key figures and the forecast and plan chart of the day](docs/images/dashboard_overview_en.png)
+
 > **Supported batteries:** SLEMS currently controls the **Marstek Venus E
 > 3.0** (Modbus TCP) directly. Other batteries can be added through the
 > entities of their Home Assistant integration, read-only or controlled
@@ -687,6 +689,8 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar.
 
 ### Batteries tab
 
+![Batteries tab: one card per battery with state of charge, power, set point and cell delta](docs/images/dashboard_batteries_en.png)
+
 State of charge, stored energy and capacity (kWh), power on the grid side (AC)
 with its direction, the SLEMS set point, efficiency, state and the *Enabled*
 switch of every battery (disabling asks for confirmation), the cell delta with
@@ -694,6 +698,8 @@ its balance status, a recommendation for active cell balancing and the phase
 of a running one.
 
 ### Consumers tab
+
+![Consumers tab: heat pump measured only, heating rod with its settings and daily target](docs/images/dashboard_consumers_en.png)
 
 One card per consumer, collapsed to the important values (measured and
 planned power, progress of the daily target) and expanded with *Show
@@ -703,6 +709,8 @@ blocked/saturated state, the learned response times for switching on and off
 device, e.g. a compressor) and the *Control active* switch.
 
 ### Simulation
+
+![Simulation: day plan without the feed-in cap compared with the current settings](docs/images/dashboard_simulation_en.png)
 
 Try other settings without changing anything.
 

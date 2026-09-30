@@ -13,6 +13,8 @@ Der Name setzt sich aus *[Slug](https://en.wikipedia.org/wiki/Sea_slug)* (ein
 wunderbares Wort für ein sehr interessantes Tier) und *EMS*
 (Energiemanagementsystem) zusammen.
 
+![SLEMS-Übersicht: Energiefluss, Kennzahlen und das Diagramm mit Prognose und Plan des Tages](docs/images/dashboard_overview_de.png)
+
 > **Unterstützte Batterien:** SLEMS steuert derzeit die **Marstek Venus E
 > 3.0** (Modbus TCP) direkt. Andere Batterien lassen sich über die Entities
 > ihrer Home-Assistant-Integration einbinden, nur lesend oder gesteuert
@@ -719,6 +721,8 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
 
 ### Reiter Batterien
 
+![Reiter Batterien: eine Karte je Batterie mit Ladezustand, Leistung, Vorgabe und Zell-Delta](docs/images/dashboard_batteries_de.png)
+
 Ladezustand, gespeicherte Energie und Kapazität (kWh), netzseitige Leistung
 (AC) mit Richtung, die Vorgabe von SLEMS, Wirkungsgrad, Status und der
 Schalter *Aktiviert* jeder Batterie (das Deaktivieren muss bestätigt werden),
@@ -726,6 +730,8 @@ das Zell-Delta mit seinem Status, eine Empfehlung für den aktiven
 Zellausgleich und die Phase eines laufenden Ausgleichs.
 
 ### Reiter Verbraucher
+
+![Reiter Verbraucher: Wärmepumpe nur gemessen, Heizstab mit Einstellungen und Tagesziel](docs/images/dashboard_consumers_de.png)
 
 Eine Karte je Verbraucher, zugeklappt mit den wichtigen Werten (gemessene und
 geplante Leistung, Fortschritt des Tagesziels), aufgeklappt über
@@ -736,6 +742,8 @@ Anlaufverzögerung des Geräts, z. B. eines Kompressors) und der Schalter
 *Steuerung aktiv*.
 
 ### Simulation
+
+![Simulation: Tagesplan ohne Einspeisebegrenzung im Vergleich zu den aktuellen Einstellungen](docs/images/dashboard_simulation_de.png)
 
 Andere Einstellungen ausprobieren, ohne etwas zu ändern.
 
