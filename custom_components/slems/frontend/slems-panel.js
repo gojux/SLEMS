@@ -1082,14 +1082,19 @@ class SlemsPanel extends HTMLElement {
     return [...(a.problems || []), ...(a.limit_exceeded ? ["limit_exceeded"] : [])];
   }
 
+  /** Time of day of an ISO timestamp. */
+  _time(iso) {
+    if (!iso) return "–";
+    return new Date(iso).toLocaleTimeString(this._hass?.locale?.language, { hour: "2-digit", minute: "2-digit" });
+  }
+
   /** Time of an ISO timestamp; with the weekday when it is not today. */
   _clock(iso) {
     if (!iso) return "–";
     const date = new Date(iso);
-    const language = this._hass?.locale?.language;
-    const time = date.toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" });
+    const time = this._time(iso);
     if (date.toDateString() === new Date().toDateString()) return time;
-    return `${date.toLocaleDateString(language, { weekday: "short" })} ${time}`;
+    return `${date.toLocaleDateString(this._hass?.locale?.language, { weekday: "short" })} ${time}`;
   }
 
   /** Overview tile of the feed-in cap: energy to absorb and export before the peak. */
@@ -1103,7 +1108,7 @@ class SlemsPanel extends HTMLElement {
     if (!a.peak_start) {
       value = t.capNoPeak.replace("{limit}", this._watts(a.limit_w));
     } else {
-      label += ` ${this._clock(a.peak_start)}–${this._clock(a.peak_end).split(" ").pop()}`;
+      label += ` ${this._clock(a.peak_start)}–${this._time(a.peak_end)}`;
       const parts = [t.capAbsorb.replace("{absorb}", this._kwh((this._number(energy) || 0) * 1000))];
       if (a.export_needed_kwh >= 0.05) {
         parts.push(
