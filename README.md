@@ -891,6 +891,11 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar.
     series (the scale follows the series shown; the browser keeps the choice;
     *PV above the limit* of the feed-in cap is hidden until switched on);
     *Show table* switches to a table.
+- **Price chart** (only with a [tariff](#tariffs-optional)), below the
+  forecast chart on the same time axis: per quarter hour the price of an
+  imported kWh with the current tariff and the feed-in credit (ct/kWh incl.
+  VAT, with time windows and dynamic prices, without fixed fees) and the
+  market price if market prices are fetched, with its source.
 
 ### Batteries tab
 
@@ -1362,9 +1367,13 @@ Possible extensions:
 - Batteries with an availability (e.g. "car plugged in") and a reserve until
   a time of day: the basis for a car supplying the house (V2H).
 - Learned presence of the car for the planning.
-- Dynamic electricity tariffs (charging from the grid at low or negative
-  prices, feeding in at high ones) and further battery models via the driver
-  interface.
+- Price-aware control in addition to the current rules, building on the
+  tariffs and market prices: charging from the grid in cheap or negative
+  hours, the night discharge into expensive hours, daily targets of the
+  consumers in cheap windows; then a tariff comparison that includes it.
+- SLEMS records its own quarter-hour values of import and feed-in for the
+  tariffs.
+- Further battery models via the driver interface.
 
 ## Development
 

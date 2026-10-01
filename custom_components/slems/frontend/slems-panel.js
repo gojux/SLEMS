@@ -311,6 +311,12 @@ const STRINGS = {
     tariffSum: "Total",
     tariffToDate: "to date",
     tariffDiff: "vs. current",
+    priceTitle: "Electricity prices",
+    priceHint: "ct/kWh incl. VAT, without fixed fees; the market price without fees and taxes.",
+    priceImport: "Import ({tariff})",
+    priceExport: "Feed-in credit",
+    priceSpot: "Market price",
+    priceTime: "Time",
     tariffCurrent: "current",
     tariffSource: "Market prices: {source}",
     tariffUnpriced: "* Part of the energy has no market price yet and is not included.",
@@ -702,6 +708,12 @@ const STRINGS = {
     tariffSum: "Summe",
     tariffToDate: "bis heute",
     tariffDiff: "ggü. aktuell",
+    priceTitle: "Strompreise",
+    priceHint: "ct/kWh inkl. USt., ohne Grundgebühren; der Börsenpreis ohne Gebühren und Steuern.",
+    priceImport: "Bezug ({tariff})",
+    priceExport: "Einspeisevergütung",
+    priceSpot: "Börsenpreis",
+    priceTime: "Zeit",
     tariffCurrent: "aktuell",
     tariffSource: "Börsenpreise: {source}",
     tariffUnpriced: "* Für einen Teil der Energie gibt es noch keinen Börsenpreis; er ist nicht enthalten.",
@@ -1025,6 +1037,8 @@ class SlemsPanel extends HTMLElement {
     this._sim = { form: null, result: null, serial: 0, timer: null, requested: false };
     // Tariff comparison (slems/tariff_comparison), loaded once per visit of the tab.
     this._tariffs = { result: null, requested: false };
+    // Prices of the day shown (slems/price_chart): day, result, time of the request.
+    this._prices = { day: null, result: null, at: 0, loading: false };
     // Series of the day chart switched off in its legend (kept in the browser).
     this._hiddenSeries = new Set(DEFAULT_HIDDEN_SERIES);
     try {
@@ -1830,18 +1844,24 @@ class SlemsPanel extends HTMLElement {
       },
       { passive: true }
     );
-    content.addEventListener("pointermove", (event) => this._onChartHover(event));
+    content.addEventListener("pointermove", (event) => {
+      this._onChartHover(event);
+      this._onPriceHover(event);
+    });
     // Touch: a tap (or a horizontal drag) on the chart shows the hour and keeps
     // it; a tap elsewhere hides it. The mouse hides it when leaving the chart.
     content.addEventListener("pointerdown", (event) => {
       if (event.pointerType === "mouse") return;
       if (event.target.closest?.("svg.chart")) this._onChartHover(event);
       else this._hideTooltip();
+      if (event.target.closest?.("svg.price-chart")) this._onPriceHover(event);
+      else this._hidePriceTip();
     });
     content.addEventListener(
       "pointerleave",
       (event) => {
         if (event.pointerType === "mouse" && event.target.matches?.("svg.chart")) this._hideTooltip();
+        if (event.pointerType === "mouse" && event.target.matches?.("svg.price-chart")) this._hidePriceTip();
       },
       true
     );
@@ -1900,6 +1920,7 @@ class SlemsPanel extends HTMLElement {
           <section class="card"><div id="tiles" class="tiles"></div></section>
         </div>
         <section class="card"><div id="daychart"></div></section>
+        <div id="pricechart"></div>
         <section class="card"><div id="accuracy"></div></section>`;
     }
     if (this._tab === "simulation") {
@@ -1948,6 +1969,7 @@ class SlemsPanel extends HTMLElement {
     );
     this._fetchStats(false);
     this._renderDayChart();
+    this._renderPriceChart();
     this._renderAccuracy();
   }
 
@@ -2721,6 +2743,217 @@ class SlemsPanel extends HTMLElement {
     this.shadowRoot?.getElementById("crosshair")?.setAttribute("visibility", "hidden");
   }
 
+  // --- price chart ----------------------------------------------------------------
+  //
+  // Below the day chart, on the same time axis: the price of a kWh with the
+  // current tariff per quarter hour (import, feed-in credit) and the market
+  // price. Only shown when a tariff exists.
+
+  async _loadPrices(day) {
+    const state = this._prices;
+    state.loading = true;
+    try {
+      const result = await this._hass.callWS({ type: `${DOMAIN}/price_chart`, day });
+      Object.assign(state, { day, result, at: Date.now() });
+    } catch (err) {
+      console.error("SLEMS: prices failed", err);
+      Object.assign(state, { day, result: { available: false }, at: Date.now() });
+    }
+    state.loading = false;
+    this._sections.pricechart = undefined;
+    this._queueRender();
+  }
+
+  _renderPriceChart() {
+    const state = this._prices;
+    const day = this._chartDay;
+    // New prices for another day, every 15 minutes and after midnight.
+    const stale =
+      state.day !== day ||
+      Date.now() - state.at > 15 * 60 * 1000 ||
+      (state.result?.slots?.length && !state.result.slots[0].start.startsWith(this._localDate(day)));
+    if (stale && !state.loading && this._hass) this._loadPrices(day);
+    const result = state.day === day ? state.result : null;
+    if (!result?.available) {
+      this._setSection("pricechart", "");
+      return;
+    }
+    const t = this._t;
+    const slots = result.slots.map((slot) => ({
+      ...slot,
+      hour: Number(slot.start.slice(11, 13)) + Number(slot.start.slice(14, 16)) / 60,
+    }));
+    this._priceData = slots;
+    const has = (key) => slots.some((slot) => slot[key] !== null && slot[key] !== undefined);
+    const c = this._colors;
+    const series = [
+      ["import", c.house, t.priceImport.replace("{tariff}", result.tariff), false],
+      ["export", c.grid, t.priceExport, false],
+      ["spot", c.muted, t.priceSpot, true],
+    ].filter(([key]) => has(key));
+    this._priceSeries = series;
+    const legend = `<div class="legend">${series
+      .map(
+        ([, color, label, dashed]) =>
+          `<span class="legend-item"><svg width="22" height="10"><line x1="1" y1="5" x2="21" y2="5" stroke="${color}" stroke-width="2" stroke-linecap="round"${
+            dashed ? ' stroke-dasharray="4 3"' : ""
+          }/></svg>${escapeHtml(label)}</span>`
+      )
+      .join("")}</div>`;
+    const body = this._showTable
+      ? this._priceTable(slots, series)
+      : this._priceSvg(slots, series) + `<div class="tooltip" id="pricetip" hidden></div>`;
+    const source = result.attribution
+      ? `<p class="hint">${escapeHtml(t.tariffSource.replace("{source}", result.attribution))}</p>`
+      : "";
+    this._setSection(
+      "pricechart",
+      `<section class="card"><h2>${escapeHtml(t.priceTitle)}</h2><span class="hint">${escapeHtml(t.priceHint)}</span>
+        ${legend}${body}${source}</section>`
+    );
+  }
+
+  /** Local date (YYYY-MM-DD) of today or tomorrow. */
+  _localDate(day) {
+    const date = new Date();
+    if (day === "tomorrow") date.setDate(date.getDate() + 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }
+
+  _priceNumber(value) {
+    const language = this._hass?.locale?.language || "en";
+    return `${new Intl.NumberFormat(language, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value)} ct`;
+  }
+
+  _priceSvg(slots, series) {
+    const c = this._colors;
+    // The same margins as the day chart, so the hours are aligned.
+    const geometry = this._chartGeometry;
+    const available = this.shadowRoot.getElementById("pricechart")?.clientWidth || 720;
+    const width = geometry?.width || Math.max(280, Math.round(available));
+    const pad = { left: geometry?.pad.left ?? 52, right: geometry?.pad.right ?? 22, top: 10, bottom: 26 };
+    const height = width < 500 ? 150 : 180;
+    const plotW = width - pad.left - pad.right;
+    const plotH = height - pad.top - pad.bottom;
+    const values = slots.flatMap((slot) => series.map(([key]) => slot[key])).filter((v) => v !== null && v !== undefined);
+    const low = Math.min(0, ...values);
+    const high = Math.max(1, ...values);
+    const step = niceStep((high - low) / 4);
+    const bottom = Math.floor(low / step) * step;
+    const top = Math.ceil(high / step) * step;
+    const x = (hour) => pad.left + (hour / 24) * plotW;
+    const y = (value) => pad.top + plotH - ((value - bottom) / (top - bottom)) * plotH;
+    this._priceGeometry = { pad, plotW, width };
+    const gridLines = [];
+    for (let v = bottom; v <= top + step / 2; v += step) {
+      gridLines.push(`<line x1="${pad.left}" x2="${width - pad.right}" y1="${y(v)}" y2="${y(v)}" stroke="${
+        Math.abs(v) < step / 2 ? c.axis : c.grid_line
+      }" stroke-width="1"/><text x="${pad.left - 6}" y="${y(v) + 4}" text-anchor="end" class="tick">${escapeHtml(this._priceNumber(v))}</text>`);
+    }
+    const labelled = width < 500 ? [0, 6, 12, 18, 24] : [0, 3, 6, 9, 12, 15, 18, 21, 24];
+    const hourTicks = labelled
+      .map((h) => `<text x="${x(h)}" y="${height - 8}" text-anchor="middle" class="tick">${String(h).padStart(2, "0")}:00</text>`)
+      .join("");
+    const hourLines = labelled
+      .map((h) => `<line x1="${x(h)}" x2="${x(h)}" y1="${pad.top}" y2="${pad.top + plotH}" stroke="${c.grid_line}" stroke-width="1"/>`)
+      .join("");
+    // A step per quarter hour; a gap where a price is missing.
+    const stepLine = (key, color, dashed) => {
+      const parts = [];
+      let open = false;
+      slots.forEach((slot, index) => {
+        const value = slot[key];
+        if (value === null || value === undefined) {
+          open = false;
+          return;
+        }
+        const next = slots[index + 1];
+        const end = next && next.hour > slot.hour ? next.hour : slot.hour + 0.25;
+        const yv = y(value).toFixed(1);
+        parts.push(open ? `V${yv}` : `M${x(slot.hour).toFixed(1)} ${yv}`, `H${x(end).toFixed(1)}`);
+        open = true;
+      });
+      return `<path d="${parts.join(" ")}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"${
+        dashed ? ' stroke-dasharray="4 3"' : ""
+      }/>`;
+    };
+    // The market price first, so the tariff prices are drawn on top.
+    const lines = [...series].reverse().map(([key, color, , dashed]) => stepLine(key, color, dashed)).join("");
+    let now = "";
+    if (this._chartDay === "today") {
+      const date = new Date();
+      const nx = x(date.getHours() + date.getMinutes() / 60);
+      now = `<line x1="${nx}" x2="${nx}" y1="${pad.top}" y2="${pad.top + plotH}" stroke="${c.muted}" stroke-width="1" stroke-dasharray="2 3"/>`;
+    }
+    return `<svg class="price-chart" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${escapeHtml(this._t.priceTitle)}">
+      ${gridLines.join("")}${hourLines}${now}${lines}${hourTicks}
+      <line id="pricecross" x1="0" x2="0" y1="${pad.top}" y2="${pad.top + plotH}" stroke="${c.muted}" visibility="hidden"/></svg>`;
+  }
+
+  _priceTable(slots, series) {
+    const t = this._t;
+    // Hourly means, as in the table of the day chart.
+    const hours = new Map();
+    for (const slot of slots) {
+      const hour = Math.floor(slot.hour);
+      const entry = hours.get(hour) || {};
+      for (const [key] of series) {
+        if (slot[key] === null || slot[key] === undefined) continue;
+        (entry[key] ||= []).push(slot[key]);
+      }
+      hours.set(hour, entry);
+    }
+    const mean = (list) => (list?.length ? this._priceNumber(list.reduce((a, b) => a + b, 0) / list.length) : "–");
+    return `<div class="table-wrap"><table><thead><tr><th>${escapeHtml(t.priceTime)}</th>${series
+      .map(([, , label]) => `<th>${escapeHtml(label)}</th>`)
+      .join("")}</tr></thead><tbody>${[...hours.entries()]
+      .map(
+        ([hour, entry]) =>
+          `<tr><td>${String(hour).padStart(2, "0")}:00</td>${series.map(([key]) => `<td>${escapeHtml(mean(entry[key]))}</td>`).join("")}</tr>`
+      )
+      .join("")}</tbody></table></div>`;
+  }
+
+  _onPriceHover(event) {
+    const svg = event.target.closest?.("svg.price-chart");
+    if (!svg || !this._priceData || !this._priceGeometry) return;
+    const { pad, plotW, width } = this._priceGeometry;
+    const rect = svg.getBoundingClientRect();
+    const viewX = ((event.clientX - rect.left) / rect.width) * width;
+    const hour = ((viewX - pad.left) / plotW) * 24;
+    const slot = [...this._priceData].reverse().find((s) => s.hour <= hour);
+    const tooltip = this.shadowRoot.getElementById("pricetip");
+    const cross = this.shadowRoot.getElementById("pricecross");
+    if (!slot || hour >= 24 || !tooltip || !cross) {
+      this._hidePriceTip();
+      return;
+    }
+    const cx = pad.left + ((slot.hour + 0.125) / 24) * plotW;
+    cross.setAttribute("x1", cx);
+    cross.setAttribute("x2", cx);
+    cross.setAttribute("visibility", "visible");
+    const time = (h) => `${String(Math.floor(h) % 24).padStart(2, "0")}:${String(Math.round((h % 1) * 60)).padStart(2, "0")}`;
+    tooltip.innerHTML = `<div class="tt-title">${time(slot.hour)}–${time(slot.hour + 0.25)}</div>${this._priceSeries
+      .map(([key, color, label]) =>
+        slot[key] === null || slot[key] === undefined
+          ? ""
+          : `<div><span class="swatch" style="background:${color}"></span>${escapeHtml(label)}<b>${escapeHtml(this._priceNumber(slot[key]))}</b></div>`
+      )
+      .join("")}`;
+    tooltip.hidden = false;
+    const card = this.shadowRoot.getElementById("pricechart").getBoundingClientRect();
+    const left = (cx / width) * rect.width + (rect.left - card.left);
+    const flip = left > card.width * 0.6;
+    tooltip.style.left = `${flip ? left - tooltip.offsetWidth - 12 : left + 12}px`;
+    tooltip.style.top = `${Math.max(0, Math.min(event.clientY - card.top + 12, card.height - tooltip.offsetHeight - 8))}px`;
+  }
+
+  _hidePriceTip() {
+    const tooltip = this.shadowRoot?.getElementById("pricetip");
+    if (tooltip) tooltip.hidden = true;
+    this.shadowRoot?.getElementById("pricecross")?.setAttribute("visibility", "hidden");
+  }
+
   // --- simulation ------------------------------------------------------------------
   //
   // Day plans with other settings, calculated by SLEMS (slems/simulate) from
@@ -3462,6 +3695,7 @@ class SlemsPanel extends HTMLElement {
     if (dayButton) {
       this._chartDay = dayButton.dataset.action === "day-today" ? "today" : "tomorrow";
       this._sections.daychart = undefined;
+      this._sections.pricechart = undefined;
       this._render();
       return;
     }
@@ -3732,8 +3966,10 @@ const STYLE = `
   .chart-wrap { position: relative; }
   .chart { display: block; max-width: 100%; }
   .chart .tick { font-size: 11px; fill: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
-  #daychart { position: relative; }
+  #daychart, #pricechart { position: relative; }
   svg.chart { touch-action: pan-y; }
+  svg.price-chart { display: block; max-width: 100%; touch-action: pan-y; margin-top: 8px; }
+  #pricechart:empty, #tariffs:empty { display: none; }
   .tooltip { position: absolute; z-index: 2; pointer-events: none; background: var(--card-background-color);
     border: 1px solid var(--divider-color); border-radius: 8px; padding: 8px 10px; font-size: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.15); min-width: 180px; }

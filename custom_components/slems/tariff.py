@@ -260,15 +260,12 @@ def compute_bill(
                 bill.import_kwh += kwh
             else:
                 bill.export_kwh += kwh
-            chosen: dict[str, TariffItem] = {}
-            for item in tariff.active_items(local.date()):
-                if item.side is side and item.unit.per_kwh and item.in_window(local):
-                    other = chosen.get(item.name)
-                    if other is None or item.specificity > other.specificity:
-                        chosen[item.name] = item
+            spot = market_prices.get(hour)
             unpriced = False
-            for item in chosen.values():
-                price = item.ct_per_kwh(_market_ct(item, hour, local, market_prices, monthly))
+            for item in _chosen_items(tariff, side, local):
+                price = item.ct_per_kwh(
+                    _market_ct(item, local, None if spot is None else spot / 10, monthly.get((local.year, local.month)))
+                )
                 if price is None:
                     unpriced = True
                     continue
@@ -282,21 +279,45 @@ def compute_bill(
     return bill
 
 
+def _chosen_items(tariff: Tariff, side: Side, local: datetime) -> list[TariffItem]:
+    """The kWh items of a side in effect at ``local``: per name the most specific."""
+    chosen: dict[str, TariffItem] = {}
+    for item in tariff.active_items(local.date()):
+        if item.side is side and item.unit.per_kwh and item.in_window(local):
+            other = chosen.get(item.name)
+            if other is None or item.specificity > other.specificity:
+                chosen[item.name] = item
+    return list(chosen.values())
+
+
 def _market_ct(
-    item: TariffItem,
-    hour: datetime,
-    local: datetime,
-    market_prices: Mapping[datetime, float],
-    monthly: Mapping[tuple[int, int], float],
+    item: TariffItem, local: datetime, spot_ct: float | None, month_ct: float | None
 ) -> float | None:
-    """Market price (ct/kWh) a dynamic item refers to in this hour."""
+    """Market price (ct/kWh) a dynamic item refers to at ``local``."""
     if item.unit is Unit.SPOT:
-        price = market_prices.get(hour)
-        return None if price is None else price / 10
+        return spot_ct
     if item.unit is Unit.MARKET_MONTH:
         entered = dict(item.month_prices).get(f"{local.year:04d}-{local.month:02d}")
-        return entered if entered is not None else monthly.get((local.year, local.month))
+        return entered if entered is not None else month_ct
     return None
+
+
+def kwh_price(
+    tariff: Tariff, side: Side, local: datetime, spot_ct: float | None, month_ct: float | None
+) -> float | None:
+    """Price of a kWh at ``local`` in ct incl. VAT, without yearly items.
+
+    Import: what a kWh costs; export: what a kWh earns (credit minus the
+    per kWh costs of the feed-in). None if a market price is missing.
+    """
+    total = 0.0
+    for item in _chosen_items(tariff, side, local):
+        price = item.ct_per_kwh(_market_ct(item, local, spot_ct, month_ct))
+        if price is None:
+            return None
+        sign = -1.0 if side is Side.EXPORT and item.group is Group.ENERGY else 1.0
+        total += sign * price * (1 + tariff.vat(side, item.group) / 100)
+    return total if side is Side.IMPORT else -total
 
 
 def monthly_market_prices(

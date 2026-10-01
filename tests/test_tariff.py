@@ -201,3 +201,19 @@ def test_month_prices_parsing_and_description() -> None:
     item = TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.SPOT, 1.5, factor_pct=10.0)
     assert _describe_item(item, "en") == "Energy: spot price × 1.1 + 1.5 ct/kWh (Import, energy)"
     assert TariffItem.from_dict(item.as_dict()) == item
+
+
+def test_kwh_price_per_quarter_hour() -> None:
+    from custom_components.slems.tariff import kwh_price
+
+    tariff = example()
+    summer = date(2026, 6, 1)
+    noon = local(summer, 12)
+    # Energy 20 − 2 ct, grid 4 ct at noon in summer, levy 1 ct; 20 % VAT; no yearly items.
+    assert kwh_price(tariff, Side.IMPORT, noon, None, None) == pytest.approx(23 * 1.2)
+    assert kwh_price(tariff, Side.IMPORT, local(summer, 20), None, None) == pytest.approx(27 * 1.2)
+    # Feed-in: the credit of 6 ct (no VAT).
+    assert kwh_price(tariff, Side.EXPORT, noon, None, None) == pytest.approx(6.0)
+    spot = Tariff("S", Role.CURRENT, (TariffItem("E", Side.IMPORT, Group.ENERGY, Unit.SPOT, 1.0),), {})
+    assert kwh_price(spot, Side.IMPORT, noon, None, None) is None
+    assert kwh_price(spot, Side.IMPORT, noon, -3.0, None) == pytest.approx(-2.0)

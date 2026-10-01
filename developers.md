@@ -235,6 +235,15 @@ and priced with each tariff (`compute_bill` in the executor, dynamic items with
 the stored hourly market prices). The result is cached for 10 minutes on the
 coordinator; a changed tariff reloads the entry and so starts without cache.
 
+### Price chart
+
+`price_chart.py` (websocket `slems/price_chart`, `day` today / tomorrow): per
+quarter hour of the local day (iterated in UTC, so clock changes give 92 / 100
+slots) `tariff.kwh_price` of the first current tariff for import and export
+(incl. VAT, without yearly items) and the stored market price. The panel draws
+it below the day chart with the margins of the day chart
+(`_chartGeometry`), so the hours line up.
+
 ### Night discharge
 
 `night_discharge.py`, optional (switch, off by default). Without it the

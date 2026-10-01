@@ -937,6 +937,11 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
     Kurven; der Browser merkt sich die Auswahl; *PV über der Grenze* der
     Einspeisebegrenzung ist ausgeblendet, bis man es einschaltet); *Tabelle
     anzeigen* schaltet auf eine Tabelle um.
+- **Preisdiagramm** (nur mit einem [Tarif](#tarife-optional)), unter dem
+  Prognose-Diagramm auf derselben Zeitachse: je Viertelstunde der Preis einer
+  bezogenen kWh mit dem aktuellen Tarif und die Einspeisevergütung (ct/kWh
+  inkl. USt., mit Zeitfenstern und dynamischen Preisen, ohne Grundgebühren)
+  und der Börsenpreis, wenn Börsenpreise abgerufen werden, mit seiner Quelle.
 
 ### Reiter Batterien
 
@@ -1436,9 +1441,14 @@ Mögliche Erweiterungen:
 - Batterien mit Verfügbarkeit (z. B. „Auto angesteckt“) und einer Reserve bis
   zu einer Uhrzeit: Grundlage für ein Auto, das das Haus versorgt (V2H).
 - Gelernte Anwesenheit des Autos für die Planung.
-- Dynamische Stromtarife (Laden aus dem Netz bei niedrigen oder negativen
-  Preisen, Rückspeisen bei hohen) und weitere Batteriemodelle über die
-  Treiber-Schnittstelle.
+- Preisbewusste Steuerung zusätzlich zu den bestehenden Regeln, aufbauend auf
+  den Tarifen und Börsenpreisen: Laden aus dem Netz in günstigen oder
+  negativen Stunden, die Nachtentladung in teure Stunden, Tagesziele der
+  Verbraucher in günstige Fenster; danach ein Tarifvergleich, der das
+  einbezieht.
+- SLEMS zeichnet eigene Viertelstundenwerte von Bezug und Einspeisung für die
+  Tarife auf.
+- Weitere Batteriemodelle über die Treiber-Schnittstelle.
 
 ## Entwicklung
 
