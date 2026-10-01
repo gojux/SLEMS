@@ -87,7 +87,14 @@ from .const import (
     OperatingMode,
 )
 from .controller import ControlStatus, RealTimeController
-from .consumers import ConsumerConfig, ConsumerState, RuntimeTracker, read_consumer_state
+from .consumers import (
+    ConsumerConfig,
+    ConsumerState,
+    RuntimeTracker,
+    active_phases,
+    amps_for,
+    read_consumer_state,
+)
 from .drivers import BatteryDriver, BatteryDriverError, BatteryTelemetry
 from .battery_distribution import (
     LEAVE_RAMP_S,
@@ -791,10 +798,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 for c in included
                 if c.consumer_type is ConsumerType.HEAT_PUMP
             ),
+            # A wallbox charges when a car is there: never part of the house
+            # forecast, even if it is only measured.
             controllable=tuple(
                 c.power_entity_id
                 for c in included
-                if c.controllable and c.consumer_type is not ConsumerType.HEAT_PUMP
+                if (c.controllable or c.consumer_type is ConsumerType.WALLBOX)
+                and c.consumer_type is not ConsumerType.HEAT_PUMP
             ),
             temperature=config.get(CONF_OUTDOOR_TEMPERATURE_ENTITY)
             or own(f"{entry_id}_outdoor_temperature"),
@@ -1773,13 +1783,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         return self.settings.surplus_average_window_s
 
     def effective_consumer(self, consumer: ConsumerConfig) -> ConsumerConfig:
-        """The consumer with its learned power and thermostat behaviour, if switched on.
+        """The consumer with its active phases (current control) and, if switched on,
+        its learned power and thermostat behaviour.
 
         On/off: the learned power replaces the nominal power. Power controlled:
         the maximum power is capped at the learned highest power, so no power
         is planned that the device does not take (never raised above the
         configured maximum, never below the minimum power).
         """
+        if consumer.control_mode is ControlMode.CURRENT:
+            consumer = consumer.with_phases(active_phases(self.hass, consumer))
         if consumer.subentry_id not in self.consumer_learning:
             return consumer
         learner = self.consumer_learners[consumer.subentry_id]
@@ -1923,7 +1936,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             grid_load, budget_load = self._support_loads()
             until = next_refill(wall_now, pv_hourly, consumption_hourly) if consumption_hourly else None
             if consumption_hourly and any(
-                support is BatterySupport.AUTO for support in self.battery_support.values()
+                self.support_of(c.subentry_id) is BatterySupport.AUTO for c in self.consumers
             ):
                 result.support_budget_wh = self._support_budget(
                     snapshot,
@@ -1982,7 +1995,20 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         return result
 
     def support_of(self, subentry_id: str) -> BatterySupport:
-        return self.battery_support.get(subentry_id, BatterySupport.ALWAYS)
+        """Battery support of a consumer; a wallbox defaults to automatic."""
+        if (support := self.battery_support.get(subentry_id)) is not None:
+            return support
+        consumer = next((c for c in self.consumers if c.subentry_id == subentry_id), None)
+        if consumer is not None and consumer.consumer_type is ConsumerType.WALLBOX:
+            return BatterySupport.AUTO
+        return BatterySupport.ALWAYS
+
+    def consumer_current(self, consumer: ConsumerConfig, power_w: float) -> tuple[int, int] | None:
+        """(amperes, phases) a current controlled consumer gets for ``power_w``."""
+        if consumer.control_mode is not ControlMode.CURRENT:
+            return None
+        phases = active_phases(self.hass, consumer)
+        return amps_for(power_w, consumer.voltage_v, phases), phases
 
     def _update_unsupported(self, snapshot: SystemSnapshot) -> float:
         """Consumers the batteries must not cover right now (see battery_support).

@@ -40,7 +40,7 @@ import time
 from typing import TYPE_CHECKING
 
 from homeassistant.const import ATTR_ENTITY_ID, STATE_ON
-from homeassistant.core import CALLBACK_TYPE, callback
+from homeassistant.core import CALLBACK_TYPE, State, callback
 from homeassistant.helpers.event import async_call_later
 
 from .adaptive_gain import AdaptiveGain
@@ -48,6 +48,7 @@ from .battery_distribution import LEAVE_RAMP_S
 from .delivery_monitor import Action
 from .drivers import BatteryDriverError
 from .const import ControlMode, OperatingMode
+from .consumers import amps_for
 from .response import (
     DEFAULT_BATTERY_RESPONSE_S,
     DEFAULT_CONSUMER_RESPONSE_S,
@@ -584,6 +585,10 @@ class RealTimeController:
                     "turn_on" if want_on else "turn_off",
                     {ATTR_ENTITY_ID: consumer.control_entity_id},
                 )
+            elif consumer.control_mode is ControlMode.CURRENT:
+                if not await self._async_apply_current(consumer, target, state):
+                    self._device_commands[subentry_id] = target
+                    continue
             else:
                 current = state_as_float(state)
                 value = clamp_to_entity(target, state)
@@ -611,6 +616,53 @@ class RealTimeController:
                 subentry_id, DirectionalResponse(DEFAULT_CONSUMER_RESPONSE_S)
             ).command(now, self._last_grid_w, target - self._consumer_before[subentry_id])
 
+    async def _async_apply_current(
+        self, consumer: ConsumerConfig, target_w: float, state: State
+    ) -> bool:
+        """Current set point (A) and start/stop of a current controlled consumer.
+
+        Below its minimum current it is stopped: through the start entity, or
+        with the lowest current the number entity takes (0 A if allowed).
+        Returns True if a command was sent.
+        """
+        amps = amps_for(target_w, consumer.voltage_v, consumer.phases)
+        run = target_w > 0 and amps >= consumer.min_current_a
+        sent = False
+        if run or not consumer.start_entity_id:
+            value = clamp_to_entity(min(amps, consumer.max_current_a) if run else 0, state)
+            if state_as_float(state) != value:
+                await self._hass.services.async_call(
+                    consumer.control_entity_id.split(".", 1)[0],
+                    "set_value",
+                    {ATTR_ENTITY_ID: consumer.control_entity_id, "value": value},
+                )
+                sent = True
+        if consumer.start_entity_id:
+            sent = await self._async_set_start(consumer, run) or sent
+        return sent
+
+    async def _async_set_start(self, consumer: ConsumerConfig, run: bool) -> bool:
+        """Switch the start entity (switch, or select with the on / off option)."""
+        entity_id = consumer.start_entity_id
+        state = self._hass.states.get(entity_id)
+        if state is None:
+            return False
+        domain = entity_id.split(".", 1)[0]
+        if domain in ("select", "input_select"):
+            option = consumer.start_on if run else consumer.start_off
+            if not option or state.state == option:
+                return False
+            await self._hass.services.async_call(
+                domain, "select_option", {ATTR_ENTITY_ID: entity_id, "option": option}
+            )
+            return True
+        if (state.state == STATE_ON) == run:
+            return False
+        await self._hass.services.async_call(
+            domain, "turn_on" if run else "turn_off", {ATTR_ENTITY_ID: entity_id}
+        )
+        return True
+
     async def async_release_consumer(self, consumer: ConsumerConfig) -> None:
         """Set a consumer to 0 W / off once; SLEMS leaves it alone afterwards."""
         subentry_id = consumer.subentry_id
@@ -629,6 +681,8 @@ class RealTimeController:
                 await self._hass.services.async_call(
                     domain, "turn_off", {ATTR_ENTITY_ID: consumer.control_entity_id}
                 )
+        elif consumer.control_mode is ControlMode.CURRENT:
+            await self._async_apply_current(consumer, 0.0, state)
         else:
             await self._hass.services.async_call(
                 domain,

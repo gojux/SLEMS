@@ -41,12 +41,16 @@ docker compose down
 
 `dev/config/configuration.yaml` provides simulated measurements driven by
 `input_number` sliders. The smart meter is a closed loop: house load + heat
-pump + heating rod − PV − AC power of both simulated batteries, updated every
+pump + heating rod + wallbox − PV − AC power of the simulated batteries, updated every
 second. The AC power is read by the HA Modbus integration from a read-only
 port of the simulators (5020) every second, so the loop behaves like a real
 installation with a fast meter. Further: PV, a heat pump (power + energy) and a
 heating rod controlled via `input_number.sim_heating_rod_setpoint` that can be
-blocked via `input_boolean.sim_heating_rod_blocked`. For a PV forecast add the
+blocked via `input_boolean.sim_heating_rod_blocked`, and a wallbox
+(`sensor.wallbox_power` = `input_number.sim_wallbox_current` × 230 V ×
+`input_number.sim_wallbox_phases` while `input_boolean.sim_wallbox_enabled`
+and `input_boolean.sim_car_connected` are on) for a consumer with current
+control (start/stop entity: the enable switch). For a PV forecast add the
 Forecast.Solar integration in the dev instance (no account needed).
 
 `dev/seed_statistics.py` imports 60 days of synthetic hourly statistics (see
@@ -1483,3 +1487,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-01 | Bad weather mode: grid friendly charging and night discharge off until the evening, the target grid surplus stays (it is the margin of the control, not a planning choice). The evening comes from the forecast (end of the last hour with PV above consumption), not from the measured power: with passing clouds the PV falls below the consumption many times a day. Switched on after the evening it covers the next day, since the user switches it on the evening before a rainy day. The end follows new forecasts only through a surplus hour, so a forecast without the past hours does not stretch it. |
 | 2026-10-01 | Cell balancing: a refused charge no longer lowers the retry voltage step by step; the next leg starts again from the top window (3.49 V, or 10 mV below the refusal voltage). On the real Venus the retry voltage had sunk to 3.40 V: every leg then discharged out of the window and charged back with 95 W for hours, so the run measured only a few times a day, while the BMS only bleeds within the window. |
 | 2026-10-01 | Battery support per consumer (always / automatic / never, `battery_support.py`): in a deficit the batteries leave the power of unsupported consumers to the grid (`allocate(unsupported=…)`), the house stays covered; peak shaving and the night discharge power are unchanged. The budget of *automatic* is the lowest projected stored energy until the next charge from PV, from a projection without night discharge and without the loads it is for, minus minimum SoC, morning reserve and safety buffer (and the peak shaving threshold). Without night discharge in that projection, energy the night discharge would export may go to the consumers; the night discharge then plans from the lower state of charge. The budget is recomputed every update instead of being counted down. The night discharge reserve was renamed *morning reserve*: it covers mornings with a late PV takeover and now serves both. First step towards a wallbox (an EV charging from the batteries only with what they can spare). |
+| 2026-10-01 | Current control (A) for wallboxes and evcc loadpoints, consumer type *wallbox*. Planned in watts (current range × voltage × active phases, from a phases entity if given), sent as whole amperes rounded down. Start/stop through a switch or a select with on/off options, since the maximum current of an evcc loadpoint cannot go below its minimum current (stopping is its charge mode); without one, the lowest current the entity takes, and evcc decides in its PV mode. Checked against evcc 0.316 and ha-evcc 2026.9 (number entities for min/max current, select for mode and phases, sensor for active phases). The minimum pause of a consumer now only counts after SLEMS really switched it off: after every start the first "off" started the pause, so a wallbox (5 min pause) waited five minutes after each restart. |

@@ -100,6 +100,24 @@ CONF_TEMPERATURE_ENTITY: Final = "temperature_entity"
 CONF_TEMPERATURE_2_ENTITY: Final = "temperature_2_entity"
 # Shown as a box in the energy flow of the dashboard.
 CONF_SHOW_IN_FLOW: Final = "show_in_flow"
+# Current control (A), e.g. a wallbox or the maximum current of an evcc loadpoint.
+CONF_MIN_CURRENT_A: Final = "min_current_a"
+CONF_MAX_CURRENT_A: Final = "max_current_a"
+CONF_PHASES: Final = "phases"
+CONF_PHASES_ENTITY: Final = "phases_entity"
+CONF_VOLTAGE_V: Final = "voltage_v"
+# Optional start/stop: a switch, or a select with the options for on and off
+# (e.g. the charge mode of an evcc loadpoint).
+CONF_START_ENTITY: Final = "start_entity"
+CONF_START_ON: Final = "start_on"
+CONF_START_OFF: Final = "start_off"
+DEFAULT_MIN_CURRENT_A: Final = 6
+DEFAULT_MAX_CURRENT_A: Final = 16
+DEFAULT_PHASES: Final = 3
+DEFAULT_VOLTAGE_V: Final = 230
+# Defaults of a wallbox: minimum runtime and pause (minutes).
+WALLBOX_MIN_ON_MINUTES: Final = 5
+WALLBOX_MIN_OFF_MINUTES: Final = 5
 CONF_PRIORITY: Final = "priority"
 CONF_MIN_ON_MINUTES: Final = "min_on_minutes"
 CONF_MIN_OFF_MINUTES: Final = "min_off_minutes"
@@ -188,6 +206,8 @@ class ConsumerType(StrEnum):
     HEAT_PUMP = "heat_pump"
     # Electric heating rod, e.g. in the hot water tank.
     HEATING_ROD = "heating_rod"
+    # Charging an electric vehicle.
+    WALLBOX = "wallbox"
     OTHER = "other"
 
 
@@ -200,6 +220,8 @@ class ControlMode(StrEnum):
     SWITCH = "switch"
     # Continuous power set point via a number entity (W).
     POWER = "power"
+    # Current set point via a number entity (A), with the phases and voltage.
+    CURRENT = "current"
 
 
 class TargetType(StrEnum):

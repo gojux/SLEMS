@@ -43,6 +43,7 @@ system).
   - [Firmware updates and battery menu](#firmware-updates-and-battery-menu)
   - [Battery limits and protection](#battery-limits-and-protection)
 - [Consumers](#consumers)
+  - [Current control](#current-control)
   - [Temperature sensors of the storage](#temperature-sensors-of-the-storage)
   - [Battery support](#battery-support)
   - [Role in the feed-in cap](#role-in-the-feed-in-cap)
@@ -620,10 +621,14 @@ Every consumer needs its own power **and** energy sensor.
   the energy flow of the dashboard; its consumption still counts in the house,
   and the consumer card still shows it.
 - **Type**: *heat pump* (heating and hot water, forecast from the weather),
-  *heating rod* (e.g. hot water in summer) or *other*. Heat pump and heating
-  rod may run at the same time.
-- **Control**: none (measurement only), on/off via a switch, or a power set
-  point via a number entity in W. For controlled consumers an entity can be
+  *heating rod* (e.g. hot water in summer), *wallbox* (electric vehicle) or
+  *other*. Heat pump and heating rod may run at the same time. A wallbox is
+  never part of the house consumption forecast (also when only measured);
+  its defaults are current control, 6–16 A, 3 phases, 5 minutes minimum
+  runtime and pause and battery support *automatic*.
+- **Control**: none (measurement only), on/off via a switch, a power set
+  point via a number entity in W, or a [current set point](#current-control)
+  in A. For controlled consumers an entity can be
   selected that blocks them externally (SLEMS leaves the consumer alone while
   a switch or binary sensor is on, or while a water heater is in operation
   mode *off*), a priority (1 = highest) and optionally a minimum runtime and a
@@ -641,6 +646,30 @@ Every consumer needs its own power **and** energy sensor.
   the dashboard): off means SLEMS only measures the consumer. Switching it off
   in operating mode *active* sets it to 0 W (or off) once; afterwards SLEMS
   leaves it alone and plans it like an uncontrolled load.
+
+### Current control
+
+For wallboxes and evcc loadpoints: SLEMS plans in watts and sends whole
+amperes, rounded down so the charging stays within the planned power.
+
+- **Minimum / maximum current** (default 6 / 16 A): below the minimum the
+  consumer is stopped. Its power range is current × voltage × phases (3
+  phases: 4.1–11 kW, 1 phase: 1.4–3.7 kW); one ampere is 230 W per phase.
+- **Phases** fixed (1 or 3) or an **entity of the active phases** (1 or 3,
+  e.g. of a wallbox or evcc loadpoint switching phases itself); the power
+  range follows it. SLEMS does not switch phases itself.
+- **Voltage** (default 230 V per phase).
+- **Start/stop entity** (optional): a switch, or a select with the options
+  for on and off (asked in the next step), e.g. the charge mode of an evcc
+  loadpoint (*fast* / *off*). Without it SLEMS stops by setting the lowest
+  current the control entity takes (0 A if allowed).
+- With evcc ([ha-evcc](https://github.com/marq24/ha-evcc)): the control
+  entity is the maximum current of the loadpoint, the phases entity its
+  active phases. Without a start/stop entity evcc decides itself when to
+  start and stop (e.g. in its PV mode) and SLEMS only caps the current; with
+  the charge mode as start/stop entity SLEMS controls the charging fully, so
+  its battery support and forecasts decide. The card shows the planned power
+  with amperes and phases, e.g. *4,140 W (6 A, 3 phases)*.
 
 ### Temperature sensors of the storage
 

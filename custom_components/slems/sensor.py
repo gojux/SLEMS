@@ -845,7 +845,12 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
         state = data.consumers.get(self.consumer.subentry_id)
         controller = self.coordinator.controller
         subentry_id = self.consumer.subentry_id
+        planned = data.allocation.consumer_power_w.get(subentry_id) if data.allocation else None
+        current = self.coordinator.consumer_current(self.consumer, planned or 0.0)
         return {
+            # Current control: the planned power as amperes and the active phases.
+            "current_a": current[0] if current else None,
+            "phases": current[1] if current else None,
             "blocked": state.blocked if state else None,
             "saturated": self.consumer.subentry_id in data.saturated,
             "resting": self.consumer.subentry_id in data.resting,

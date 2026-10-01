@@ -308,10 +308,16 @@
             "min_off_minutes": "Mindestpause",
             "thermostat_cycles": "Thermostat taktet selbst",
             "temperature_entity": "Temperaturfühler des Speichers",
-            "temperature_2_entity": "Zweiter Temperaturfühler"
+            "temperature_2_entity": "Zweiter Temperaturfühler",
+            "min_current_a": "Mindeststrom",
+            "max_current_a": "Höchststrom",
+            "phases": "Phasen",
+            "phases_entity": "Entity der aktiven Phasen",
+            "voltage_v": "Spannung",
+            "start_entity": "Start/Stopp-Entity"
           },
           "data_description": {
-            "control_entity": "Schalter für Ein/Aus-Verbraucher, Number-Entity in W für leistungsgeregelte Verbraucher.",
+            "control_entity": "Schalter für Ein/Aus-Verbraucher, Number-Entity in W für leistungsgeregelte, in A für stromgeregelte Verbraucher (z. B. Ladestrom einer Wallbox oder Höchststrom eines evcc-Ladepunkts).",
             "nominal_power_w": "Eine grobe Schätzung reicht, wenn *Gelernte Werte verwenden* an ist: SLEMS misst dann die tatsächliche Leistung, während es den Verbraucher betreibt (Betriebsmodus Aktiv), und verwendet sie nach etwa 30 Messwerten. Lieber etwas zu niedrig als zu hoch schätzen: Zu hoch wartet SLEMS auf mehr Überschuss und schaltet den Verbraucher womöglich nie ein, dann wird auch nichts gelernt.",
             "block_entity": "Solange der Verbraucher gesperrt ist (z. B. vom Gerät oder einer Automation), steuert SLEMS ihn nicht: ein Water Heater bei Betriebsart „off“, andere Entities, solange sie „on“ sind.",
             "priority": "1 = höchste Priorität bei der Verteilung von Überschuss.",
@@ -319,7 +325,21 @@
             "min_off_minutes": "Optional. Nach dem Ausschalten durch SLEMS bleibt der Verbraucher mindestens so lange aus.",
             "thermostat_cycles": "Ein, wenn der eigene Thermostat den Verbraucher während der Ansteuerung ein- und ausschaltet (z. B. ein Heizstab, der die Temperatur am Heizelement misst). SLEMS behält dann in den Pausen die Vorgabe bei und gibt die nicht genutzte Leistung den Batterien, statt den Verbraucher als gesättigt zu behandeln.",
             "temperature_entity": "Optional, z. B. der Fühler des Boilers am Heizstab. SLEMS lernt aus dem Mittel der Fühler, wie viel Energie der Speicher je Grad aufnimmt und ab welcher Temperatur der Thermostat taktet, und plant den Verbraucher bei der Einspeisebegrenzung nur so weit ein, wie er noch Energie aufnehmen kann.",
-            "temperature_2_entity": "Optional, z. B. ein Fühler weiter oben im Boiler; macht die Schätzung genauer."
+            "temperature_2_entity": "Optional, z. B. ein Fühler weiter oben im Boiler; macht die Schätzung genauer.",
+            "min_current_a": "Unter diesem Strom wird der Verbraucher gestoppt (Fahrzeuge: meist 6 A).",
+            "max_current_a": "Höchster Strom, den SLEMS vorgibt.",
+            "phases": "Phasen, mit denen der Verbraucher lädt, wenn keine Entity die aktiven nennt.",
+            "phases_entity": "Optional. Sensor mit der Zahl der aktiven Phasen (1 oder 3), z. B. eines evcc-Ladepunkts oder einer Wallbox, die selbst umschaltet; der Leistungsbereich folgt ihm.",
+            "voltage_v": "Spannung je Phase.",
+            "start_entity": "Optional. Schalter, oder eine Auswahl (dann werden als Nächstes die Optionen für ein und aus abgefragt, z. B. der Lademodus eines evcc-Ladepunkts: Schnell / Aus). Ohne sie stoppt SLEMS, indem es den kleinsten Strom setzt, den die Steuer-Entity zulässt (0 A, wenn erlaubt); bei evcc mit seinem Mindeststrom entscheidet evcc dann selbst über Start und Stopp."
+          }
+        },
+        "start_options": {
+          "title": "Optionen für Start und Stopp",
+          "description": "Optionen von {entity}, die den Verbraucher starten und stoppen.",
+          "data": {
+            "start_on": "Option für ein",
+            "start_off": "Option für aus"
           }
         }
       },
@@ -339,14 +359,16 @@
       "options": {
         "heat_pump": "Wärmepumpe (Heizung und Warmwasser)",
         "heating_rod": "Heizpatrone",
-        "other": "Sonstiges"
+        "other": "Sonstiges",
+        "wallbox": "Wallbox (Elektroauto)"
       }
     },
     "control_mode": {
       "options": {
         "none": "Keine (nur Messung)",
         "switch": "Ein/Aus (Schalter)",
-        "power": "Leistungsvorgabe (Number)"
+        "power": "Leistungsvorgabe (Number)",
+        "current": "Stromvorgabe (A)"
       }
     },
     "efficiency_mode": {
@@ -380,6 +402,12 @@
         "auto": "Automatisch",
         "normal": "Wie gelesen",
         "inverted": "Umgekehrt"
+      }
+    },
+    "phases": {
+      "options": {
+        "1": "1 Phase",
+        "3": "3 Phasen"
       }
     }
   },

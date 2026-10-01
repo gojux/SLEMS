@@ -80,6 +80,7 @@ const STRINGS = {
     noData: "No forecast available yet",
     soc: "State of charge",
     planned: "Planned",
+    currentDetail: (amps, phases) => `${amps} A, ${phases} ${phases === 1 ? "phase" : "phases"}`,
     storedEnergy: "Stored energy",
     menu: "Menu",
     enableBattery: "Enable",
@@ -455,6 +456,7 @@ const STRINGS = {
     noData: "Noch keine Prognose verfügbar",
     soc: "Ladezustand",
     planned: "Geplant",
+    currentDetail: (amps, phases) => `${amps} A, ${phases} ${phases === 1 ? "Phase" : "Phasen"}`,
     storedEnergy: "Gespeichert",
     menu: "Menü",
     enableBattery: "Aktivieren",
@@ -938,6 +940,9 @@ const PEAK_SHAVING_NOTE_PCT = 20;
 
 // Smallest width of a battery box in the energy flow before they are stacked.
 const MIN_FLOW_BOX_W = 130;
+
+// Icon of a consumer in the energy flow by its type.
+const CONSUMER_ICONS = { heat_pump: "mdi:heat-pump", heating_rod: "mdi:water-boiler", wallbox: "mdi:ev-station" };
 
 // SLEMS icon (copy of assets/icon.svg) in the crossing of the energy flow lines.
 const ICON_URL = new URL("slems-icon.svg", import.meta.url).href;
@@ -2026,7 +2031,7 @@ class SlemsPanel extends HTMLElement {
       nodes.push({
         id: `consumer-${consumer.id}`,
         role: "consumer",
-        icon: consumer.type === "heat_pump" ? "mdi:heat-pump" : consumer.type === "heating_rod" ? "mdi:water-boiler" : "mdi:power-plug",
+        icon: CONSUMER_ICONS[consumer.type] || "mdi:power-plug",
         title: consumer.name,
         power: this._powerW(this._hass.states[consumer.power_entity]),
         entity: consumer.power_entity,
@@ -3059,13 +3064,21 @@ class SlemsPanel extends HTMLElement {
             <div class="card-head"><h2>${escapeHtml(c.name)}</h2><div class="chips">${chips}${control ? this._toggle(control, t.controlActive) : ""}</div></div>
             <dl>
               ${this._row(t.measured, escapeHtml(this._format(measured)), c.power_entity)}
-              ${planned ? this._row(t.planned, escapeHtml(this._format(planned)), planned.entity_id) : ""}
+              ${planned ? this._row(t.planned, escapeHtml(this._plannedText(planned)), planned.entity_id) : ""}
               ${progress}
               ${supportRow}
             </dl>${details}${toggle}</section>`;
         })
         .join("")
     );
+  }
+
+  /** Planned power of a consumer; with current control also "(6 A, 3 phases)". */
+  _plannedText(planned) {
+    const a = planned.attributes || {};
+    const text = this._format(planned);
+    if (a.current_a === null || a.current_a === undefined || !this._number(planned)) return text;
+    return `${text} (${this._t.currentDetail(a.current_a, a.phases)})`;
   }
 
   /** "Automatic · budget 2.3 kWh · the batteries do not cover it" for a consumer's battery support. */

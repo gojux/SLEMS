@@ -308,10 +308,16 @@
             "min_off_minutes": "Minimum pause",
             "thermostat_cycles": "Thermostat cycles by itself",
             "temperature_entity": "Temperature sensor of the storage",
-            "temperature_2_entity": "Second temperature sensor"
+            "temperature_2_entity": "Second temperature sensor",
+            "min_current_a": "Minimum current",
+            "max_current_a": "Maximum current",
+            "phases": "Phases",
+            "phases_entity": "Active phases entity",
+            "voltage_v": "Voltage",
+            "start_entity": "Start/stop entity"
           },
           "data_description": {
-            "control_entity": "Switch for on/off consumers, number entity in W for power controlled consumers.",
+            "control_entity": "Switch for on/off consumers, number entity in W for power controlled ones, in A for current controlled ones (e.g. the charging current of a wallbox or the maximum current of an evcc loadpoint).",
             "nominal_power_w": "A rough estimate is enough if *Use learned values* is on: SLEMS then measures the real power while it runs the consumer (operating mode active) and uses it after about 30 samples. Rather estimate a little too low than too high: too high, SLEMS waits for a larger surplus and may never switch the consumer on, so nothing is learned.",
             "block_entity": "SLEMS does not control the consumer while it is blocked (e.g. by the device or an automation): a water heater while its operation mode is \"off\", other entities while they are \"on\".",
             "priority": "1 = highest priority when distributing surplus power.",
@@ -319,7 +325,21 @@
             "min_off_minutes": "Optional. Once switched off by SLEMS, the consumer stays off at least this long.",
             "thermostat_cycles": "On if the consumer's own thermostat switches it on and off while it is commanded (e.g. a heating rod that measures the temperature at the element). SLEMS then keeps its command during the pauses and gives the unused power to the batteries instead of treating the consumer as saturated.",
             "temperature_entity": "Optional, e.g. the sensor of the boiler at the heating rod. SLEMS learns from the mean of the sensors how much energy the storage takes per degree and from which temperature the thermostat cycles, and plans the consumer for the feed-in cap only as far as it can still take energy.",
-            "temperature_2_entity": "Optional, e.g. a sensor higher up in the boiler; makes the estimate more accurate."
+            "temperature_2_entity": "Optional, e.g. a sensor higher up in the boiler; makes the estimate more accurate.",
+            "min_current_a": "Below this current the consumer is stopped (vehicles: usually 6 A).",
+            "max_current_a": "Highest current SLEMS sets.",
+            "phases": "Phases the consumer charges with when no entity tells the active ones.",
+            "phases_entity": "Optional. Sensor with the number of active phases (1 or 3), e.g. of an evcc loadpoint or a wallbox that switches phases itself; the power range follows it.",
+            "voltage_v": "Voltage per phase.",
+            "start_entity": "Optional. Switch, or a select (then the options for on and off are asked next, e.g. the charge mode of an evcc loadpoint: fast / off). Without it SLEMS stops by setting the lowest current the control entity takes (0 A if allowed); with evcc and its minimum current evcc then decides itself when to start and stop."
+          }
+        },
+        "start_options": {
+          "title": "Options for start and stop",
+          "description": "Options of {entity} that start and stop the consumer.",
+          "data": {
+            "start_on": "Option for on",
+            "start_off": "Option for off"
           }
         }
       },
@@ -339,14 +359,16 @@
       "options": {
         "heat_pump": "Heat pump (heating and hot water)",
         "heating_rod": "Heating rod",
-        "other": "Other"
+        "other": "Other",
+        "wallbox": "Wallbox (electric vehicle)"
       }
     },
     "control_mode": {
       "options": {
         "none": "None (measurement only)",
         "switch": "On/off (switch)",
-        "power": "Power set point (number)"
+        "power": "Power set point (number)",
+        "current": "Current set point (A)"
       }
     },
     "efficiency_mode": {
@@ -380,6 +402,12 @@
         "auto": "Automatic",
         "normal": "As read",
         "inverted": "Inverted"
+      }
+    },
+    "phases": {
+      "options": {
+        "1": "1 phase",
+        "3": "3 phases"
       }
     }
   },

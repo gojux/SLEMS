@@ -33,6 +33,20 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er, 
 from modbus_connection import ModbusTcpParams
 
 from .const import (
+    CONF_MAX_CURRENT_A,
+    CONF_MIN_CURRENT_A,
+    CONF_PHASES,
+    CONF_PHASES_ENTITY,
+    CONF_START_ENTITY,
+    CONF_START_OFF,
+    CONF_START_ON,
+    CONF_VOLTAGE_V,
+    DEFAULT_MAX_CURRENT_A,
+    DEFAULT_MIN_CURRENT_A,
+    DEFAULT_PHASES,
+    DEFAULT_VOLTAGE_V,
+    WALLBOX_MIN_OFF_MINUTES,
+    WALLBOX_MIN_ON_MINUTES,
     CONF_GRID_MODBUS,
     CONF_GRID_MODBUS_HOST,
     CONF_GRID_MODBUS_INTERVAL_S,
@@ -1207,9 +1221,15 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
     async def async_step_control(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
-        """Control entity, power range, external block and priority."""
+        """Control entity, power or current range, external block and priority."""
         if user_input is not None:
+            # Cleared optional fields must not keep their old value.
+            for key in (CONF_PHASES_ENTITY, CONF_START_ENTITY, CONF_START_ON, CONF_START_OFF):
+                self._data.pop(key, None)
             self._data.update(user_input)
+            start = user_input.get(CONF_START_ENTITY)
+            if start and start.split(".", 1)[0] in ("select", "input_select"):
+                return await self.async_step_start_options()
             return self._async_finish()
 
         defaults = self._existing()
@@ -1227,8 +1247,54 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
             )
             defaults = {k: v for k, v in defaults.items() if k in keep}
 
+        wallbox = ConsumerType(self._data[CONF_CONSUMER_TYPE]) is ConsumerType.WALLBOX
+        if wallbox and CONF_MIN_ON_MINUTES not in defaults:
+            defaults = {
+                **defaults,
+                CONF_MIN_ON_MINUTES: WALLBOX_MIN_ON_MINUTES,
+                CONF_MIN_OFF_MINUTES: WALLBOX_MIN_OFF_MINUTES,
+            }
         fields: dict = {}
-        if mode is ControlMode.SWITCH:
+        if mode is ControlMode.CURRENT:
+            amperes = selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=125, step=1, unit_of_measurement="A",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            )
+            fields[
+                vol.Required(CONF_CONTROL_ENTITY, default=defaults.get(CONF_CONTROL_ENTITY, vol.UNDEFINED))
+            ] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["number", "input_number"])
+            )
+            fields[
+                vol.Required(CONF_MIN_CURRENT_A, default=defaults.get(CONF_MIN_CURRENT_A, DEFAULT_MIN_CURRENT_A))
+            ] = amperes
+            fields[
+                vol.Required(CONF_MAX_CURRENT_A, default=defaults.get(CONF_MAX_CURRENT_A, DEFAULT_MAX_CURRENT_A))
+            ] = amperes
+            fields[
+                vol.Required(CONF_PHASES, default=str(defaults.get(CONF_PHASES, DEFAULT_PHASES)))
+            ] = selector.SelectSelector(
+                selector.SelectSelectorConfig(options=["1", "3"], translation_key=CONF_PHASES)
+            )
+            fields[_optional(CONF_PHASES_ENTITY, defaults)] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["sensor", "number", "input_number"])
+            )
+            fields[
+                vol.Required(CONF_VOLTAGE_V, default=defaults.get(CONF_VOLTAGE_V, DEFAULT_VOLTAGE_V))
+            ] = selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=100, max=400, step=1, unit_of_measurement="V",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            )
+            fields[_optional(CONF_START_ENTITY, defaults)] = selector.EntitySelector(
+                selector.EntitySelectorConfig(
+                    domain=["switch", "input_boolean", "select", "input_select"]
+                )
+            )
+        elif mode is ControlMode.SWITCH:
             fields[
                 vol.Required(CONF_CONTROL_ENTITY, default=defaults.get(CONF_CONTROL_ENTITY, vol.UNDEFINED))
             ] = selector.EntitySelector(
@@ -1277,6 +1343,31 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
         )
         return self.async_show_form(step_id="control", data_schema=vol.Schema(fields))
 
+    async def async_step_start_options(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Options of a select start entity for on and off (e.g. evcc: fast / off)."""
+        if user_input is not None:
+            self._data.update(user_input)
+            return self._async_finish()
+        entity_id = self._data[CONF_START_ENTITY]
+        state = self.hass.states.get(entity_id)
+        options = list(state.attributes.get("options", [])) if state else []
+        defaults = self._existing()
+        option = selector.SelectSelector(
+            selector.SelectSelectorConfig(options=options, custom_value=not options)
+        )
+        return self.async_show_form(
+            step_id="start_options",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_START_ON, default=defaults.get(CONF_START_ON, vol.UNDEFINED)): option,
+                    vol.Required(CONF_START_OFF, default=defaults.get(CONF_START_OFF, vol.UNDEFINED)): option,
+                }
+            ),
+            description_placeholders={"entity": entity_id},
+        )
+
     def _async_finish(self) -> SubentryFlowResult:
         data = dict(self._data)
         title = data.pop(CONF_NAME)
@@ -1287,9 +1378,14 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
             CONF_PRIORITY,
             CONF_MIN_ON_MINUTES,
             CONF_MIN_OFF_MINUTES,
+            CONF_PHASES,
+            CONF_VOLTAGE_V,
         ):
             if key in data:
                 data[key] = int(data[key])
+        for key in (CONF_MIN_CURRENT_A, CONF_MAX_CURRENT_A):
+            if key in data:
+                data[key] = float(data[key])
         if self.source == SOURCE_RECONFIGURE:
             return self.async_update_and_abort(
                 self._get_entry(), self._get_reconfigure_subentry(), title=title, data=data

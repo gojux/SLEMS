@@ -42,9 +42,30 @@ input_number:
     unit_of_measurement: W
     initial: 0
 
+  # Simulated wallbox, controlled by SLEMS through its current (A).
+  sim_wallbox_current:
+    name: Wallbox charging current
+    min: 0
+    max: 16
+    step: 1
+    unit_of_measurement: A
+    initial: 6
+  sim_wallbox_phases:
+    name: Wallbox active phases
+    min: 1
+    max: 3
+    step: 1
+    initial: 3
+
 input_boolean:
   sim_heating_rod_blocked:
     name: Heating rod externally blocked
+  # Start/stop of the simulated wallbox (SLEMS) and whether a car is plugged in.
+  sim_wallbox_enabled:
+    name: Wallbox charging enabled
+  sim_car_connected:
+    name: Car connected
+    initial: true
 
 template:
   # Closed loop: the grid power results from load, PV and the AC power of the
@@ -64,6 +85,7 @@ template:
           {{ (states('input_number.sim_house_load') | float(0)
               + states('sensor.heat_pump_power') | float(0)
               + states('sensor.heating_rod_power') | float(0)
+              + states('sensor.wallbox_power') | float(0)
               - states('input_number.sim_pv_power') | float(0)
               - states('sensor.sim_venus_1_ac_power') | float(0)
               - states('sensor.sim_venus_2_ac_power') | float(0)
@@ -104,6 +126,16 @@ template:
               address: 42010
               value: "{{ ['Stop', 'Charge', 'Discharge'].index(option) }}"
   - sensor:
+      - name: Wallbox power
+        unique_id: sim_wallbox_power
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        state: >-
+          {{ (states('input_number.sim_wallbox_current') | float(0) * 230
+              * states('input_number.sim_wallbox_phases') | float(0))
+             if is_state('input_boolean.sim_wallbox_enabled', 'on')
+                and is_state('input_boolean.sim_car_connected', 'on') else 0 }}
       - name: PV power
         unique_id: sim_pv_power
         unit_of_measurement: W
@@ -130,6 +162,12 @@ sensor:
     source: sensor.heat_pump_power
     name: Heat pump energy
     unique_id: sim_heat_pump_energy
+    unit_prefix: k
+    method: left
+  - platform: integration
+    source: sensor.wallbox_power
+    name: Wallbox energy
+    unique_id: sim_wallbox_energy
     unit_prefix: k
     method: left
   - platform: integration

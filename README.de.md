@@ -43,6 +43,7 @@ lustiges Wort für ein sehr interessantes Tier) und *EMS*
   - [Firmware-Updates und Batterie-Menü](#firmware-updates-und-batterie-menü)
   - [Grenzen und Schutz der Batterien](#grenzen-und-schutz-der-batterien)
 - [Verbraucher](#verbraucher)
+  - [Stromvorgabe](#stromvorgabe)
   - [Temperaturfühler des Speichers](#temperaturfühler-des-speichers)
   - [Batterie-Unterstützung](#batterie-unterstützung)
   - [Einsatz in der Einspeisebegrenzung](#einsatz-in-der-einspeisebegrenzung)
@@ -647,10 +648,14 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   Verbrauchers im Energiefluss des Dashboards aus; sein Verbrauch zählt weiter
   im Haus, und die Verbraucherkarte zeigt ihn weiterhin.
 - **Typ**: *Wärmepumpe* (Heizung und Warmwasser, wetterabhängige Prognose),
-  *Heizpatrone* (z. B. Warmwasser im Sommer) oder *Sonstiges*. Wärmepumpe und
-  Heizpatrone dürfen gleichzeitig laufen.
-- **Steuerung**: keine (nur Messung), Ein/Aus über einen Schalter oder eine
-  Leistungsvorgabe über eine Number-Entity in W. Für gesteuerte Verbraucher
+  *Heizpatrone* (z. B. Warmwasser im Sommer), *Wallbox* (Elektroauto) oder
+  *Sonstiges*. Wärmepumpe und Heizpatrone dürfen gleichzeitig laufen. Eine
+  Wallbox gehört nie zur Prognose des Hausverbrauchs (auch nur gemessen); ihre
+  Vorgaben sind Stromvorgabe, 6–16 A, 3 Phasen, 5 Minuten Mindestlaufzeit und
+  Mindestpause und Batterie-Unterstützung *Automatisch*.
+- **Steuerung**: keine (nur Messung), Ein/Aus über einen Schalter, eine
+  Leistungsvorgabe über eine Number-Entity in W oder eine
+  [Stromvorgabe](#stromvorgabe) in A. Für gesteuerte Verbraucher
   kann eine Entity für eine externe Sperre gewählt werden (SLEMS steuert den
   Verbraucher nicht, solange ein Schalter oder Binärsensor eingeschaltet ist
   oder ein Water Heater in der Betriebsart *off* steht), dazu eine Priorität
@@ -671,6 +676,32 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   Ausschalten im Betriebsmodus *Aktiv* setzt SLEMS ihn einmal auf 0 W (bzw.
   aus); danach lässt SLEMS ihn in Ruhe und plant ihn wie eine ungesteuerte
   Last.
+
+### Stromvorgabe
+
+Für Wallboxen und evcc-Ladepunkte: SLEMS plant in Watt und sendet ganze
+Ampere, abgerundet, damit die Ladung im geplanten Rahmen bleibt.
+
+- **Mindest- / Höchststrom** (Standard 6 / 16 A): unter dem Mindeststrom wird
+  der Verbraucher gestoppt. Sein Leistungsbereich ist Strom × Spannung ×
+  Phasen (3 Phasen: 4,1–11 kW, 1 Phase: 1,4–3,7 kW); ein Ampere sind 230 W je
+  Phase.
+- **Phasen** fest (1 oder 3) oder eine **Entity der aktiven Phasen** (1 oder
+  3, z. B. einer Wallbox oder eines evcc-Ladepunkts, der selbst umschaltet);
+  der Leistungsbereich folgt ihr. SLEMS schaltet die Phasen nicht selbst um.
+- **Spannung** (Standard 230 V je Phase).
+- **Start/Stopp-Entity** (optional): ein Schalter oder eine Auswahl mit den
+  Optionen für ein und aus (im nächsten Schritt abgefragt), z. B. der
+  Lademodus eines evcc-Ladepunkts (*Schnell* / *Aus*). Ohne sie stoppt SLEMS,
+  indem es den kleinsten Strom setzt, den die Steuer-Entity zulässt (0 A,
+  wenn erlaubt).
+- Mit evcc ([ha-evcc](https://github.com/marq24/ha-evcc)): Steuer-Entity ist
+  der Höchststrom des Ladepunkts, Phasen-Entity seine aktiven Phasen. Ohne
+  Start/Stopp-Entity entscheidet evcc selbst über Start und Stopp (z. B. im
+  PV-Modus), und SLEMS begrenzt nur den Strom; mit dem Lademodus als
+  Start/Stopp-Entity steuert SLEMS das Laden vollständig, dann entscheiden
+  seine Batterie-Unterstützung und Prognosen. Die Karte zeigt die geplante
+  Leistung mit Ampere und Phasen, z. B. *4.140 W (6 A, 3 Phasen)*.
 
 ### Temperaturfühler des Speichers
 

@@ -1,9 +1,18 @@
-"""Configured consumers and their measured state."""
+"""Configured consumers and their measured state.
+
+A consumer with current control (A) is planned in watts like a power
+controlled one: its power range is the current range × voltage × the active
+phases (fixed, or from a phases entity, e.g. of a wallbox or an evcc
+loadpoint that switches between one and three phases itself). The planned
+power is sent as whole amperes, rounded down so the charging stays within
+the power planned for it.
+"""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+import math
 from typing import Any
 
 from homeassistant.const import STATE_OFF, STATE_ON
@@ -16,18 +25,30 @@ from .const import (
     CONF_CONTROL_MODE,
     CONF_ENERGY_ENTITY,
     CONF_INCLUDED_IN_METER,
+    CONF_MAX_CURRENT_A,
     CONF_MAX_POWER_W,
+    CONF_MIN_CURRENT_A,
     CONF_MIN_OFF_MINUTES,
     CONF_MIN_ON_MINUTES,
     CONF_MIN_POWER_W,
     CONF_NOMINAL_POWER_W,
+    CONF_PHASES,
+    CONF_PHASES_ENTITY,
     CONF_POWER_ENTITY,
     CONF_PRIORITY,
     CONF_SHOW_IN_FLOW,
+    CONF_START_ENTITY,
+    CONF_START_OFF,
+    CONF_START_ON,
     CONF_TEMPERATURE_2_ENTITY,
     CONF_TEMPERATURE_ENTITY,
     CONF_THERMOSTAT_CYCLES,
+    CONF_VOLTAGE_V,
+    DEFAULT_MAX_CURRENT_A,
+    DEFAULT_MIN_CURRENT_A,
+    DEFAULT_PHASES,
     DEFAULT_PRIORITY,
+    DEFAULT_VOLTAGE_V,
     ConsumerType,
     ControlMode,
 )
@@ -68,10 +89,31 @@ class ConsumerConfig:
     temperature_entity_ids: tuple[str, ...] = ()
     # Shown as a box in the energy flow of the dashboard.
     show_in_flow: bool = True
+    # Current control: range (A), phases (fixed or from an entity), voltage.
+    min_current_a: float = DEFAULT_MIN_CURRENT_A
+    max_current_a: float = DEFAULT_MAX_CURRENT_A
+    phases: int = DEFAULT_PHASES
+    phases_entity_id: str | None = None
+    voltage_v: float = DEFAULT_VOLTAGE_V
+    # Optional start/stop entity (switch, or select with the on / off option).
+    start_entity_id: str | None = None
+    start_on: str | None = None
+    start_off: str | None = None
 
     @property
     def controllable(self) -> bool:
         return self.control_mode is not ControlMode.NONE and bool(self.control_entity_id)
+
+    def with_phases(self, phases: int) -> ConsumerConfig:
+        """A current controlled consumer with ``phases`` active: its power range follows."""
+        if self.control_mode is not ControlMode.CURRENT:
+            return self
+        return replace(
+            self,
+            phases=phases,
+            min_power_w=round(self.min_current_a * self.voltage_v * phases),
+            max_power_w=round(self.max_current_a * self.voltage_v * phases),
+        )
 
     @classmethod
     def from_subentry(
@@ -100,7 +142,35 @@ class ConsumerConfig:
                 for entity_id in (data.get(CONF_TEMPERATURE_ENTITY), data.get(CONF_TEMPERATURE_2_ENTITY))
                 if entity_id
             ),
-        )
+            min_current_a=data.get(CONF_MIN_CURRENT_A, DEFAULT_MIN_CURRENT_A),
+            max_current_a=data.get(CONF_MAX_CURRENT_A, DEFAULT_MAX_CURRENT_A),
+            phases=int(data.get(CONF_PHASES, DEFAULT_PHASES)),
+            phases_entity_id=data.get(CONF_PHASES_ENTITY),
+            voltage_v=data.get(CONF_VOLTAGE_V, DEFAULT_VOLTAGE_V),
+            start_entity_id=data.get(CONF_START_ENTITY),
+            start_on=data.get(CONF_START_ON),
+            start_off=data.get(CONF_START_OFF),
+        ).with_phases(int(data.get(CONF_PHASES, DEFAULT_PHASES)))
+
+
+def amps_for(power_w: float, voltage_v: float, phases: int) -> int:
+    """Whole amperes for ``power_w``, rounded down (never above the planned power)."""
+    if power_w <= 0 or voltage_v <= 0 or phases <= 0:
+        return 0
+    return math.floor(power_w / (voltage_v * phases) + 1e-6)
+
+
+def active_phases(hass: HomeAssistant, consumer: ConsumerConfig) -> int:
+    """Phases in use: from the phases entity (1-3), otherwise the configured number."""
+    if consumer.phases_entity_id:
+        state = hass.states.get(consumer.phases_entity_id)
+        try:
+            value = round(float(state.state)) if state is not None else None
+        except ValueError:
+            value = None
+        if value is not None and 1 <= value <= 3:
+            return value
+    return consumer.phases
 
 
 @dataclass
@@ -167,7 +237,10 @@ class RuntimeTracker:
 
     def update(self, subentry_id: str, is_on: bool, now: float) -> None:
         previous = self._states.get(subentry_id)
-        if previous is None or previous[0] != is_on:
+        if previous is None and not is_on:
+            # Off since before the start: no pause to wait for.
+            self._states[subentry_id] = (False, -math.inf)
+        elif previous is None or previous[0] != is_on:
             self._states[subentry_id] = (is_on, now)
 
     def must_stay_on(self, consumer: ConsumerConfig, now: float) -> bool:
