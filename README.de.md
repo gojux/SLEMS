@@ -729,7 +729,9 @@ Je gesteuertem Verbraucher, auf seiner Karte unter *Tagesziel*.
   Wird ein anderer Fühler gewählt, gilt das Ziel wieder als offen.
 - **Anzeige**: Die Karte zeigt den Fortschritt, z. B. *1,5 / 4 h · bis 22:00 ·
   erzwungen ab 19:30 · noch ca. 2,3 kWh*, und die Chips *Vorrang* oder
-  *erzwungen*, solange sie gelten. Die noch benötigte Energie ist bei einem
+  *erzwungen*, solange sie gelten; die Box des Verbrauchers im Energiefluss
+  trägt dasselbe Abzeichen, und die Kachel Strategie nennt ihn (*Vorrang vor
+  den Batterien: …*), weil die Batterien dann nur bekommen, was übrig bleibt. Die noch benötigte Energie ist bei einem
   Energieziel genau; bei Laufzeit oder Freigabezeit ist es die Restzeit mit
   voller Leistung (weniger, wenn der eigene Thermostat früher abschaltet); bei
   einem Temperaturziel der Weg bis zur Zieltemperatur mit der gelernten

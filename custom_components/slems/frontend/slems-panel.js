@@ -178,6 +178,7 @@ const STRINGS = {
     targetMinShort: "min.",
     targetGoalTemp: "target",
     targetBoostChip: "priority",
+    priorityConsumers: "Before the batteries: {names}",
     targetForcedChip: "forced",
     storageCapacity: "Storage left",
     storageLearning: "learning ({runs}/3 heating runs, {marks}/2 thermostat cycles)",
@@ -546,6 +547,7 @@ const STRINGS = {
     targetMinShort: "min.",
     targetGoalTemp: "Ziel",
     targetBoostChip: "Vorrang",
+    priorityConsumers: "Vorrang vor den Batterien: {names}",
     targetForcedChip: "erzwungen",
     storageCapacity: "Speicherreserve",
     storageLearning: "lernt noch ({runs}/3 Heizläufe, {marks}/2 Taktbeginne)",
@@ -1885,14 +1887,27 @@ class SlemsPanel extends HTMLElement {
             ? `<button class="info" data-action="toggle-hint" data-key="${key}" title="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}"><ha-icon icon="mdi:information-outline"></ha-icon></button>`
             : "";
           const open = hint && this._openHints.has(key) ? `<span class="setting-hint">${escapeHtml(hint)}</span>` : "";
+          const priority = key === "allocation_strategy" ? this._priorityText() : "";
           return `<div class="tile" data-more-info="${s.entity_id}"><span class="label">${escapeHtml(this._name(s))}${info}</span>
-                  <span class="value">${escapeHtml(this._tileValue(s))}</span>${open}</div>`;
+                  <span class="value">${escapeHtml(this._tileValue(s))}</span>${priority ? `<span class="sub">${escapeHtml(priority)}</span>` : ""}${open}</div>`;
         })
         .join("")
     );
     this._fetchStats(false);
     this._renderDayChart();
     this._renderAccuracy();
+  }
+
+  /** Daily target mode ("boost" / "forced") of a consumer whose target goes before the batteries. */
+  _priorityMode(consumer) {
+    const mode = this._state("planned_power", consumer.device_id)?.attributes?.target_mode;
+    return mode === "boost" || mode === "forced" ? mode : null;
+  }
+
+  /** "Before the batteries: ELWA 2" while daily targets take the surplus first. */
+  _priorityText() {
+    const names = (this._config.consumers || []).filter((c) => this._priorityMode(c)).map((c) => c.name);
+    return names.length ? this._t.priorityConsumers.replace("{names}", names.join(", ")) : "";
   }
 
   /** Grid export today: measured until now plus the export the plan still expects. */
@@ -1989,6 +2004,7 @@ class SlemsPanel extends HTMLElement {
         entity: consumer.power_entity,
         // Temperature of its storage (the sensor chosen for the daily target).
         detail: this._consumerTemperature(consumer),
+        badge: { boost: t.targetBoostChip, forced: t.targetForcedChip }[this._priorityMode(consumer)] || "",
       });
     }
     return nodes;
@@ -2056,6 +2072,7 @@ class SlemsPanel extends HTMLElement {
         <div class="fbox-head">
           <span class="fbox-icon"><ha-icon icon="${n.icon}"></ha-icon></span>
           <span class="fbox-title">${escapeHtml(n.title)}</span>
+          ${n.role === "consumer" ? `<span class="fbox-badge" data-field="badge" hidden></span>` : ""}
         </div>
         <div class="fbox-value" data-field="value">–</div>
         ${n.role === "battery" ? `<div class="fbox-soc"><div class="bar"><div data-field="socbar"></div></div><span data-field="soc">–</span></div>` : ""}
@@ -2089,6 +2106,11 @@ class SlemsPanel extends HTMLElement {
     const shown = n.role === "grid" || n.role === "battery" ? Math.abs(n.power ?? 0) : n.power;
     set("value", n.power === null ? "–" : this._watts(shown));
     set("detail", n.detail || "");
+    const badge = element.querySelector('[data-field="badge"]');
+    if (badge) {
+      set("badge", n.badge || "");
+      badge.hidden = !n.badge;
+    }
     if (n.role === "battery") {
       set("soc", n.soc === null ? "–" : `${Math.round(n.soc)} %`);
       const bar = element.querySelector('[data-field="socbar"]');
@@ -3494,6 +3516,9 @@ const STYLE = `
   /* Up to two lines, so longer consumer names stay readable in narrow boxes. */
   .fbox-title { font-size: 12px; line-height: 1.25; color: var(--secondary-text-color); overflow: hidden;
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+  .fbox-badge { margin-left: auto; flex-shrink: 0; font-size: 11px; line-height: 1; padding: 3px 6px; border-radius: 8px;
+    color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); font-weight: 500; }
+  .fbox-badge[hidden] { display: none; }
   .fbox-value { font-size: 20px; font-weight: 500; margin-top: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .fbox-detail { font-size: 12px; color: var(--secondary-text-color); min-height: 16px; margin-top: auto; }
   .fbox-soc { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; }

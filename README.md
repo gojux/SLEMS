@@ -698,7 +698,9 @@ Per controlled consumer, on its card under *Daily target*.
   target. Choosing another sensor starts the target open again.
 - **Display**: the card shows the progress, e.g. *1.5 / 4 h · until 22:00 ·
   forced from 19:30 · about 2.3 kWh to go*, and the chips *priority* or
-  *forced* while they apply. The energy still needed is exact for an energy
+  *forced* while they apply; the consumer's box in the energy flow carries
+  the same badge, and the strategy tile lists it (*Before the batteries:
+  …*), since the batteries then only get what is left. The energy still needed is exact for an energy
   target; for a runtime or enabled time it is the remaining time at full power
   (less if the consumer's own thermostat stops it earlier); for a temperature
   target it is the way up to the target temperature with the learned energy
