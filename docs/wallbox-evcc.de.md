@@ -7,6 +7,35 @@ wird, mit SLEMS. evcc kennt die Wallbox und das Fahrzeug, SLEMS entscheidet, wie
 viel Leistung das Auto bekommt und woher sie kommt: aus dem PV-Überschuss, aus den
 Batterien (nur so weit sie es sich leisten können) oder aus dem Netz.
 
+## Was bringt die Verbindung?
+
+evcc allein lädt das Auto gut mit PV-Überschuss, kennt aber die Pläne von SLEMS
+nicht. Zusammen:
+
+- **Batterie und Auto regeln nicht gegeneinander.** Ohne Abstimmung sieht evcc
+  das Laden der Hausbatterie als Überschuss oder ihr Entladen als Bezug, und
+  zwei Regler kämpfen um dieselben Watt. Mit SLEMS gibt es einen Regler am
+  Netzanschluss, der den Überschuss auf Batterien, Auto und andere Verbraucher
+  verteilt.
+- **Erst die Batterie, dann das Auto, wenn es sich ausgeht.** SLEMS weiß aus der
+  PV-Prognose, ob die Batterien heute noch voll werden. Ist das gesichert,
+  bekommt das Auto seinen Anteil; sonst haben die Batterien Vorrang. evcc allein
+  arbeitet nur mit festen Ladezustands-Schwellen.
+- **Die Batterie hilft nur mit Energie, die sie übrig hat.** Mit der
+  Batterie-Unterstützung *Automatisch* lädt das Auto aus der Batterie nur so
+  viel, wie bis zur nächsten PV-Ladung übrig bleibt, und das Haus kommt trotzdem
+  durch die Nacht. Den Rest liefert das Netz.
+- **Tagesziele mit Prognose.** Z. B. „10 kWh bis 7:00“: SLEMS lädt zuerst mit
+  Überschuss und erst so spät wie nötig aus dem Netz, was noch fehlt.
+- **Mittagsspitzen abfangen.** Bei einer Einspeisebegrenzung nimmt das
+  angesteckte Auto die Spitzen auf, bevor PV abgeregelt wird.
+- **Alles in einem Bild.** Energiefluss, Tagesdiagramm und Prognosen von SLEMS
+  zeigen die Wallbox mit; ihre Ladungen verfälschen die Prognose des
+  Hausverbrauchs nicht.
+
+evcc bleibt dabei für das zuständig, was es am besten kann: die Wallbox selbst,
+das Fahrzeug, die Umschaltung zwischen 1 und 3 Phasen.
+
 > Getestet mit evcc 0.316 und einer Demo-Wallbox, noch nicht mit einer echten
 > Wallbox. Rückmeldungen bitte als [Issue](https://github.com/gojux/SLEMS/issues).
 

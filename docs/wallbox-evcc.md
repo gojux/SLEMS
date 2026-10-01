@@ -7,6 +7,36 @@ evcc knows the wallbox and the vehicle; SLEMS decides how much power the car get
 and where it comes from: the PV surplus, the batteries (only as far as they can
 spare it) or the grid.
 
+## What does the connection bring?
+
+evcc on its own charges the car well from the PV surplus, but it does not know
+the plans of SLEMS. Together:
+
+- **Battery and car do not work against each other.** Without coordination evcc
+  sees the home battery charging as surplus or its discharging as import, and
+  two controllers fight over the same watts. With SLEMS there is one controller
+  at the grid connection that shares the surplus between batteries, car and
+  other consumers.
+- **The battery first, then the car if it works out.** From the PV forecast SLEMS
+  knows whether the batteries will still be full today. Once that is secured the
+  car gets its share; otherwise the batteries go first. evcc alone only works
+  with fixed state of charge thresholds.
+- **The battery only helps with energy it can spare.** With battery support
+  *automatic* the car charges from the battery only as much as is left until
+  the next charge from PV, and the house still gets through the night. The grid
+  delivers the rest.
+- **Daily targets with a forecast.** E.g. "10 kWh by 07:00": SLEMS charges from
+  the surplus first and only as late as needed from the grid what is still
+  missing.
+- **Absorbing midday peaks.** With a feed-in cap the plugged-in car takes the
+  peaks before PV is curtailed.
+- **Everything in one picture.** The energy flow, day chart and forecasts of
+  SLEMS include the wallbox; its charging does not distort the forecast of the
+  house consumption.
+
+evcc stays in charge of what it does best: the wallbox itself, the vehicle and
+switching between 1 and 3 phases.
+
 > Tested with evcc 0.316 and a demo charger, not yet with a real wallbox. Please
 > report your experience in an [issue](https://github.com/gojux/SLEMS/issues).
 
