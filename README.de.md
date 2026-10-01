@@ -517,8 +517,9 @@ lässt sich nur im Betriebsmodus *Aktiv* starten:
 4. Sonst entlädt sie mit 200 W bis zur Wiederholspannung (3,49 V) und
    wiederholt ab Schritt 3. Verweigert das BMS das Laden (weniger als 30 W
    statt 95 W, z. B. weil es bei etwa 3,55 V voll meldet), misst sie nicht
-   (das Delta unter 3,60 V ist kleiner und nicht vergleichbar), entlädt, und
-   die Wiederholspannung sinkt in Schritten von 10 mV (bis 3,40 V).
+   (das Delta unter 3,60 V ist kleiner und nicht vergleichbar), entlädt bis zur
+   Wiederholspannung (3,49 V oder 10 mV unter der Spannung, bei der es
+   verweigert hat) und versucht es erneut.
 5. Sie entlädt mit 200 W bis 3,48 V und endet, wenn das Delta im normalen
    Bereich liegt (höchstens 190 mV), wenn es 6 Stunden lang nicht um 2 mV
    gesunken ist oder nach 24 Stunden.

@@ -25,8 +25,10 @@ window):
    ``TOP_ZONE_V``.
 2. CHARGE: charge with ``TOP_CHARGE_W`` until ``CHARGE_STOP_V``. If the BMS
    refuses charging (``REJECTION_SAMPLES`` samples below ``REFUSED_BELOW_W`` after
-   ``CHARGE_ENGAGE_GRACE_S``), the retry voltage is lowered by
-   ``RESUME_STEP_V`` (not below ``MIN_RESUME_V``).
+   ``CHARGE_ENGAGE_GRACE_S``), the retry voltage is ``TOP_ZONE_V``, or
+   ``RESUME_STEP_V`` below the highest cell if the BMS refused below it (not
+   below ``MIN_RESUME_V``); refusals do not lower it further, since a deeper
+   discharge only makes the legs longer.
    The refused leg gives no measurement (the delta below the charge stop
    voltage is smaller and not comparable).
 3. WAIT_MEASURE (only after reaching ``CHARGE_STOP_V``): idle for
@@ -329,7 +331,10 @@ class CellBalancer:
     def from_dict(cls, data: dict, max_charge_w: float) -> CellBalancer:
         balancer = cls(max_charge_w, data["started_at"])
         balancer.phase = BalancingPhase(data["phase"])
-        balancer.retry_voltage = data["retry_voltage"]
+        # A discharge leg ends at its stored voltage; any other phase starts
+        # the next leg from the top window.
+        if balancer.phase is BalancingPhase.DISCHARGE:
+            balancer.retry_voltage = data["retry_voltage"]
         balancer.last_delta_mv = data["last_delta_mv"]
         balancer.initial_delta_mv = data.get("initial_delta_mv")
         balancer.end_reason = data.get("end_reason")
@@ -402,13 +407,10 @@ class CellBalancer:
                     self._rejections = self._rejections + 1 if power_w < REFUSED_BELOW_W else 0
                 if self._rejections < REJECTION_SAMPLES:
                     return BalancingStep(TOP_CHARGE_W, self.phase)
-                # The BMS refuses charging: retry from a lower voltage.
+                # The BMS refuses charging: retry from the top window, at
+                # least a little below the voltage it refused at.
                 self.retry_voltage = round(
-                    max(
-                        MIN_RESUME_V,
-                        min(self.retry_voltage - RESUME_STEP_V, max_cell_v - RESUME_STEP_V),
-                    ),
-                    3,
+                    max(MIN_RESUME_V, min(TOP_ZONE_V, max_cell_v - RESUME_STEP_V)), 3
                 )
                 self._enter(BalancingPhase.DISCHARGE, now)
 

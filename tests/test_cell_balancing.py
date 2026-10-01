@@ -184,16 +184,38 @@ def test_run_ends_without_progress() -> None:
     assert (restored.best_delta_mv, restored.best_at) == (220.0, balancer.best_at)
 
 
-def test_rejected_charge_lowers_retry_voltage() -> None:
+def refuse(balancer: CellBalancer, start: float, max_cell_v: float) -> None:
+    """Charge commanded, the BMS refuses (power stays 0)."""
+    for t in range(0, 40, 5):
+        balancer.step(start + t, START + start + t, max_cell_v, max_cell_v - 0.1, 0)
+
+
+def test_rejected_charge_retries_from_the_top_window() -> None:
     balancer = CellBalancer(max_charge_w=2500, started_at=START)
     balancer.step(0, START, 3.50, 3.40, 0)  # enters CHARGE directly (above top zone)
     assert balancer.phase is BalancingPhase.CHARGE
-    for t in range(15, 40, 5):  # BMS refuses: power stays 0
-        balancer.step(t, START + t, 3.55, 3.45, 0)
+    refuse(balancer, 15, 3.55)
     # No measurement below the charge stop voltage: discharge and retry.
     assert balancer.phase is BalancingPhase.DISCHARGE
     assert balancer.last_delta_mv is None
-    assert balancer.retry_voltage == 3.48
+    assert balancer.retry_voltage == 3.49
+    # Back in the window it charges again; further refusals do not go deeper.
+    balancer.step(100, START + 100, 3.488, 3.39, -200)
+    assert balancer.phase is BalancingPhase.CHARGE
+    refuse(balancer, 110, 3.55)
+    assert balancer.retry_voltage == 3.49
+    # Refused below the top window: a little below that voltage.
+    balancer.step(200, START + 200, 3.47, 3.38, -200)
+    refuse(balancer, 210, 3.47)
+    assert balancer.retry_voltage == 3.46
+
+
+def test_restored_run_retries_from_the_top_window() -> None:
+    balancer = CellBalancer(max_charge_w=2500, started_at=START)
+    data = balancer.as_dict() | {"phase": "charge", "retry_voltage": 3.40}
+    assert CellBalancer.from_dict(data, 2500).retry_voltage == 3.49
+    data["phase"] = "discharge"
+    assert CellBalancer.from_dict(data, 2500).retry_voltage == 3.40
 
 
 def test_refusal_with_standby_draw() -> None:

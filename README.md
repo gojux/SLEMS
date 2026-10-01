@@ -498,8 +498,9 @@ in operating mode *active*:
 4. Otherwise it discharges with 200 W to the retry voltage (3.49 V) and
    repeats from step 3. If the BMS refuses to charge (less than 30 W instead
    of 95 W, e.g. because it reports full at about 3.55 V), it does not measure
-   (the delta below 3.60 V is smaller and not comparable), discharges and
-   lowers the retry voltage in steps of 10 mV (down to 3.40 V).
+   (the delta below 3.60 V is smaller and not comparable), discharges to the
+   retry voltage (3.49 V, or 10 mV below the voltage it refused at) and tries
+   again.
 5. It discharges with 200 W to 3.48 V and ends when the delta is in the normal
    range (at most 190 mV), when it has not fallen by 2 mV for 6 hours, or
    after 24 hours.
