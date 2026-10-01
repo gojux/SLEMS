@@ -12,6 +12,12 @@ controlled through the entities of the battery's own integration:
 
 An optional remote control entity (switch or select) is switched on before the
 first set point and off again when the battery is released to its automatic.
+
+Every service call waits until the battery's integration has finished it (at
+most ``SERVICE_TIMEOUT_S``): a rejected or hanging call is a communication
+error, and with ``split`` the direction that stops is really stopped before the
+other one starts. A script is called directly (``script.<name>``) so it runs
+to its end; it should finish quickly.
 """
 
 from __future__ import annotations
@@ -29,7 +35,6 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant, State
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util.unit_conversion import TemperatureConverter
 
 from ..const import (
@@ -65,7 +70,14 @@ from ..const import (
     BatteryControl,
     ReleaseState,
 )
-from ..util import clamp_to_entity, state_as_float, state_as_kwh, state_as_watts
+from ..util import (
+    ServiceCallError,
+    async_call_service,
+    clamp_to_entity,
+    state_as_float,
+    state_as_kwh,
+    state_as_watts,
+)
 from .base import BatteryCapabilities, BatteryDriver, BatteryDriverError, BatteryTelemetry
 
 _LOGGER = logging.getLogger(__name__)
@@ -282,9 +294,8 @@ class HomeAssistantEntityDriver(BatteryDriver):
                     await self._select(config.mode_entity_id, config.mode_auto, True)
             if auto:
                 await self._remote(on=False, refresh=True)
-        except BatteryDriverError as err:
-            _LOGGER.warning("Releasing the battery failed: %s", err)
         finally:
+            # A failure is raised to the coordinator, which tries again.
             self._written.clear()
 
     # --- entity access ---------------------------------------------------------
@@ -302,11 +313,12 @@ class HomeAssistantEntityDriver(BatteryDriver):
         if not refresh and self._written.get(entity_id) == key:
             return
         try:
-            await self._hass.services.async_call(
-                _domain(entity_id), service, {ATTR_ENTITY_ID: entity_id, **data}
+            await async_call_service(
+                self._hass, _domain(entity_id), service, {ATTR_ENTITY_ID: entity_id, **data}
             )
-        except HomeAssistantError as err:
-            raise BatteryDriverError(f"{entity_id}: {err}") from err
+        except ServiceCallError as err:
+            self._written.pop(entity_id, None)
+            raise BatteryDriverError(str(err)) from err
         self._written[entity_id] = key
 
     async def _set_watts(self, entity_id: str | None, watts: float, refresh: bool) -> None:
@@ -340,15 +352,14 @@ class HomeAssistantEntityDriver(BatteryDriver):
         await self._call(entity_id, "turn_on" if on else "turn_off", on, {}, refresh)
 
     async def _run_script(self, entity_id: str | None, power: int) -> None:
+        """Run a script and wait until it is done (so its errors count)."""
         self._state(entity_id)
         try:
-            await self._hass.services.async_call(
-                "script",
-                "turn_on",
-                {ATTR_ENTITY_ID: entity_id, "variables": {"power_w": power}},
+            await async_call_service(
+                self._hass, "script", entity_id.split(".", 1)[1], {"power_w": power}
             )
-        except HomeAssistantError as err:
-            raise BatteryDriverError(f"{entity_id}: {err}") from err
+        except ServiceCallError as err:
+            raise BatteryDriverError(str(err)) from err
 
 
 def _domain(entity_id: str) -> str:

@@ -6,6 +6,8 @@ themselves when the problem is gone:
 * a battery does not deliver the commanded power and is excluded
   (``delivery_monitor``),
 * a battery could not be read for ``UNREADABLE_AFTER_S``,
+* a battery could not be handed back to its own logic for
+  ``RELEASE_FAILED_AFTER_S`` (it may still run with the last set point),
 * the grid meter is stale in operating mode active (the batteries follow their
   own logic meanwhile),
 * the grid power over Modbus is configured but has not been available for
@@ -42,6 +44,7 @@ if TYPE_CHECKING:
     from .coordinator import BatteryRuntime, SlemsCoordinator, SystemSnapshot
 
 UNREADABLE_AFTER_S = 300.0
+RELEASE_FAILED_AFTER_S = 300.0
 CAP_EXCEEDED_AFTER_S = 300.0
 GRID_STALE_ISSUE = "grid_meter_stale"
 GRID_MODBUS_ISSUE = "grid_modbus_unavailable"
@@ -72,6 +75,10 @@ def _unreadable_issue(battery: BatteryRuntime) -> str:
     return f"battery_unreadable_{battery.subentry_id}"
 
 
+def _release_issue(battery: BatteryRuntime) -> str:
+    return f"battery_release_failed_{battery.subentry_id}"
+
+
 class ProblemReporter:
     """Keeps the repair issues of one SLEMS entry in line with the current state."""
 
@@ -91,13 +98,20 @@ class ProblemReporter:
         # Feed-in cap problems are notifications; issues with their ids are removed.
         possible = {GRID_STALE_ISSUE, GRID_MODBUS_ISSUE, *CAP_NOTIFICATIONS.values()}
         for battery in coordinator.batteries:
-            possible |= {_not_responding_issue(battery), _unreadable_issue(battery)}
+            possible |= {
+                _not_responding_issue(battery),
+                _unreadable_issue(battery),
+                _release_issue(battery),
+            }
             placeholders = {"name": battery.name}
             if battery.not_responding:
                 wanted[_not_responding_issue(battery)] = ("battery_not_responding", placeholders)
             since = battery.unreadable_since
             if since is not None and now - since >= UNREADABLE_AFTER_S:
                 wanted[_unreadable_issue(battery)] = ("battery_unreadable", placeholders)
+            pending = battery.release_pending_since
+            if pending is not None and now - pending >= RELEASE_FAILED_AFTER_S:
+                wanted[_release_issue(battery)] = ("battery_release_failed", placeholders)
         if (
             coordinator.settings.operating_mode is OperatingMode.ACTIVE
             and coordinator.controller.status is ControlStatus.GRID_STALE

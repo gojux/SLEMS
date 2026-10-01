@@ -33,7 +33,8 @@ class FakeHass:
         self.calls: list[tuple[str, str, dict]] = []
         self.states = SimpleNamespace(get=states.get)
 
-        async def call(domain, service, data):
+        async def call(domain, service, data, blocking=False):
+            assert blocking
             self.calls.append((domain, service, data))
 
         self.services = SimpleNamespace(async_call=call)
@@ -152,3 +153,37 @@ async def test_current_through_a_select_with_ampere_options() -> None:
     control = controller(hass)
     await control._async_apply_current(config, 0, hass.states.get("select.evcc_garage_max_current"))
     assert hass.calls[-1][2]["option"] == "6"
+
+
+def test_clamp_stays_within_the_bounds() -> None:
+    from custom_components.slems.util import clamp_to_entity
+
+    # Bounds not on the step grid: never outside them.
+    assert clamp_to_entity(100, state(0, min=0.5, max=10.5, step=1)) == 10
+    assert clamp_to_entity(0, state(0, min=0.5, max=10.5, step=1)) == 1
+    # No step fits: the bound itself.
+    assert clamp_to_entity(5, state(0, min=2.2, max=2.8, step=1)) == 2.8
+    assert clamp_to_entity(7.4, state(0, min=0, max=16, step=1)) == 7
+
+
+def test_nan_and_inf_are_no_values() -> None:
+    from custom_components.slems.util import state_as_float
+
+    assert state_as_float(state("nan")) is None
+    assert state_as_float(state("inf")) is None
+    assert state_as_float(state("12.5")) == 12.5
+
+
+async def test_no_cycle_after_shutdown() -> None:
+    hass = FakeHass({})
+    control = controller(hass)
+    control._shut_down = False
+    control._pending = None
+    control._ramp_timer = None
+    cancelled = []
+    control._ramp_timer = lambda: cancelled.append("ramp")
+    control.shutdown()
+    assert cancelled == ["ramp"]
+    # request() returns before looking at anything else.
+    control.request()
+    assert control._pending is None

@@ -368,7 +368,9 @@ replaced by the last valid value (for at most 30 seconds, then unknown).
     assigned in the next step).
   - **Script**: a script of yours receives the power as variable `power_w` (W,
     +charge / −discharge, 0 = standby); optionally a release script. This
-    covers batteries controlled through actions (services).
+    covers batteries controlled through actions (services). SLEMS waits until
+    the script is done (at most 10 seconds) so its errors are noticed; keep
+    it short (no waits).
 
   Optionally a *remote control* switch or select is switched on before the
   first set point. For controlling, the battery power sensor is required.
@@ -1254,6 +1256,9 @@ when they are solved:
 
 - a battery does not respond (excluded, see above),
 - a battery could not be read for more than 5 minutes,
+- a battery could not be handed back to its own logic for more than 5
+  minutes (it may still run with the last set point; SLEMS keeps trying,
+  every release is confirmed by reading the battery back),
 - the smart meter does not report while SLEMS is in operating mode *active*,
 - the smart meter could not be read over Modbus for more than 5 minutes
   (SLEMS uses the entity meanwhile).

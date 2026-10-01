@@ -976,6 +976,10 @@
     "grid_modbus_unavailable": {
       "title": "Smart Meter per Modbus nicht erreichbar",
       "description": "SLEMS kann die Netzleistung nicht per Modbus lesen ({error}) und nutzt bis dahin die Smart-Meter-Entity. Verbindung, Proxy und die Einstellungen unter Optionen prüfen."
+    },
+    "battery_release_failed": {
+      "title": "{name} konnte nicht freigegeben werden",
+      "description": "SLEMS konnte {name} nicht an ihre eigene Logik zurückgeben, z. B. weil die Verbindung unterbrochen ist. Die Batterie läuft womöglich noch mit dem letzten Sollwert weiter. SLEMS versucht es laufend erneut; prüfe die Verbindung oder die Batterie (z. B. in ihrer App)."
     }
   }
 }

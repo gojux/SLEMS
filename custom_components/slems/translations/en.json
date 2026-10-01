@@ -976,6 +976,10 @@
     "grid_modbus_unavailable": {
       "title": "Smart meter over Modbus not reachable",
       "description": "SLEMS cannot read the grid power over Modbus ({error}) and uses the smart meter entity meanwhile. Check the connection, the proxy and the settings in the options."
+    },
+    "battery_release_failed": {
+      "title": "{name} could not be released",
+      "description": "SLEMS could not hand {name} back to its own logic, e.g. because the connection is interrupted. The battery may still run with the last set point. SLEMS keeps trying; check the connection or the battery (e.g. in its app)."
     }
   }
 }

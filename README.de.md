@@ -379,7 +379,8 @@ Sekunden, danach unbekannt).
   - **Skript**: ein eigenes Skript erhält die Leistung als Variable `power_w`
     (W, +Laden / −Entladen, 0 = Standby); optional ein Freigabe-Skript. Damit
     lassen sich auch Batterien steuern, die über Aktionen (Dienste) bedient
-    werden.
+    werden. SLEMS wartet, bis das Skript fertig ist (höchstens 10 Sekunden),
+    damit Fehler auffallen; es sollte daher kurz sein (ohne Wartezeiten).
 
   Optional wird ein Schalter oder eine Auswahl für die *Fernsteuerung* vor dem
   ersten Sollwert eingeschaltet. Zum Steuern ist der Sensor der
@@ -1319,6 +1320,10 @@ verschwinden von selbst, sobald sie behoben sind:
 
 - eine Batterie reagiert nicht (ausgeschlossen, siehe oben),
 - eine Batterie kann seit mehr als 5 Minuten nicht gelesen werden,
+- eine Batterie konnte seit mehr als 5 Minuten nicht an ihre eigene Logik
+  zurückgegeben werden (sie läuft womöglich noch mit dem letzten Sollwert;
+  SLEMS versucht es laufend erneut, jede Freigabe wird durch Zurücklesen
+  bestätigt),
 - der Smart Meter meldet nicht, während SLEMS im Betriebsmodus *Aktiv* ist,
 - der Smart Meter kann seit mehr als 5 Minuten nicht per Modbus gelesen werden
   (SLEMS nutzt bis dahin die Entity).

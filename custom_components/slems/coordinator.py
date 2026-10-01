@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
+import asyncio
 import logging
 import time
 
@@ -180,6 +181,9 @@ STORAGE_VERSION = 1
 STORAGE_SAVE_DELAY_S = 600
 # Start, phase changes and end of a balancing run are saved sooner.
 BALANCING_SAVE_DELAY_S = 5
+# Releases tried when SLEMS unloads, and the wait between them.
+SHUTDOWN_RELEASE_ATTEMPTS = 3
+SHUTDOWN_RELEASE_WAIT_S = 2.0
 DEVICE_INFO_INTERVAL_S = 6 * 3600
 # Store key of the controller data (next to the per battery subentry ids).
 CONTROL_STORE_KEY = "control"
@@ -222,6 +226,9 @@ class BatteryRuntime:
     balancing_result: str | None = None
     # Monotonic time of the first failed read since the last successful one.
     unreadable_since: float | None = None
+    # Monotonic time since a release (hand back to its own logic) is
+    # outstanding: it failed and is tried again until it succeeds.
+    release_pending_since: float | None = None
     # Communication paused (e.g. for a firmware update) until this wall clock
     # time (UNIX timestamp); nothing is read or sent meanwhile.
     paused_until: float | None = None
@@ -1066,6 +1073,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 if battery.communication_paused:
                     continue
                 self.resume_communication(battery)
+            if battery.release_pending_since is not None and not self.controls(battery):
+                await self.async_release_battery(battery)
             try:
                 telemetry = await battery.driver.read_telemetry()
             except BatteryDriverError as err:
@@ -2676,13 +2685,39 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         for battery in self.batteries:
             await self.async_release_battery(battery)
 
-    async def async_release_battery(self, battery: BatteryRuntime) -> None:
-        """Hand one battery back to its internal logic."""
-        if battery.driver.capabilities.controllable:
-            try:
-                await battery.driver.release_control()
-            except BatteryDriverError as err:
-                _LOGGER.debug("Battery %s not released: %s", battery.name, err)
+    async def async_release_battery(self, battery: BatteryRuntime) -> bool:
+        """Hand one battery back to its internal logic; True if that is confirmed.
+
+        A failed release stays outstanding and is tried again with every
+        update while SLEMS does not control the battery (see
+        ``release_pending_since``).
+        """
+        if not battery.driver.capabilities.controllable:
+            battery.release_pending_since = None
+            return True
+        try:
+            await battery.driver.release_control()
+        except BatteryDriverError as err:
+            if battery.release_pending_since is None:
+                battery.release_pending_since = time.monotonic()
+                _LOGGER.warning("Battery %s not released, trying again: %s", battery.name, err)
+            else:
+                _LOGGER.debug("Battery %s still not released: %s", battery.name, err)
+            return False
+        if battery.release_pending_since is not None:
+            _LOGGER.info("Battery %s released", battery.name)
+        battery.release_pending_since = None
+        return True
+
+    def controls(self, battery: BatteryRuntime) -> bool:
+        """Whether SLEMS sends set points to the battery right now."""
+        return (
+            self.settings.operating_mode is OperatingMode.ACTIVE
+            and self.controller.status is ControlStatus.ACTIVE
+            and battery.driver.capabilities.controllable
+            and not battery.communication_paused
+            and (battery.participating or battery.balancing_requested)
+        )
 
     async def async_shutdown(self) -> None:
         """Save learned data and close all battery connections."""
@@ -2691,6 +2726,19 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         await self._store.async_save(self._data_to_store())
         if self.settings.operating_mode is OperatingMode.ACTIVE:
             await self.controller.async_release(self.batteries)
+            # After the unload nothing tries again: a few attempts now.
+            for _ in range(SHUTDOWN_RELEASE_ATTEMPTS - 1):
+                pending = [b for b in self.batteries if b.release_pending_since is not None]
+                if not pending:
+                    break
+                await asyncio.sleep(SHUTDOWN_RELEASE_WAIT_S)
+                for battery in pending:
+                    await self.async_release_battery(battery)
+            for battery in self.batteries:
+                if battery.release_pending_since is not None:
+                    _LOGGER.warning(
+                        "Battery %s could not be handed back to its own logic", battery.name
+                    )
         for battery in self.batteries:
             await battery.driver.close()
 

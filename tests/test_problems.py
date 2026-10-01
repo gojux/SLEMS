@@ -35,7 +35,8 @@ def coordinator(batteries) -> SimpleNamespace:
 
 def test_first_update_removes_issues_of_removed_batteries() -> None:
     kept = SimpleNamespace(
-        subentry_id="kept", name="Kept", not_responding=True, unreadable_since=None
+        subentry_id="kept", name="Kept", not_responding=True, unreadable_since=None,
+        release_pending_since=None,
     )
     registry = FakeIssues(
         {
@@ -54,3 +55,23 @@ def test_first_update_removes_issues_of_removed_batteries() -> None:
         (DOMAIN, "battery_not_responding_kept"),
         ("other", "battery_not_responding_removed"),
     }
+
+
+def test_outstanding_release_becomes_a_repair_issue() -> None:
+    battery = SimpleNamespace(
+        subentry_id="b1", name="Venus", not_responding=False, unreadable_since=None,
+        release_pending_since=100.0,
+    )
+    registry = FakeIssues(set())
+    reporter = problems.ProblemReporter(None, coordinator([battery]))
+    with (
+        patch.object(problems, "ir", registry),
+        patch.object(reporter, "_update_cap_notifications", lambda *_: None),
+    ):
+        reporter.update(200.0)
+        assert (DOMAIN, "battery_release_failed_b1") not in registry.issues
+        reporter.update(100.0 + problems.RELEASE_FAILED_AFTER_S)
+        assert (DOMAIN, "battery_release_failed_b1") in registry.issues
+        battery.release_pending_since = None
+        reporter.update(1000.0)
+        assert (DOMAIN, "battery_release_failed_b1") not in registry.issues

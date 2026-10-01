@@ -24,9 +24,10 @@ class FakeHass:
         self.states = SimpleNamespace(get=self._states.get)
         self.services = SimpleNamespace(async_call=self._call)
 
-    async def _call(self, domain: str, service: str, data: dict) -> None:
+    async def _call(self, domain: str, service: str, data: dict, blocking: bool = False) -> None:
+        assert blocking, "SLEMS waits for every service call"
         self.calls.append((domain, service, data))
-        state = self._states.get(data["entity_id"])
+        state = self._states.get(data.get("entity_id"))
         if state is None:
             return
         if service == "set_value":
@@ -182,11 +183,28 @@ async def test_script_receives_the_power_and_releases() -> None:
         release_script="script.release",
     )
     await battery.apply_power(-700)
-    assert fake.calls[-1] == (
-        "script", "turn_on", {"entity_id": "script.power", "variables": {"power_w": -700}}
-    )
+    # Called directly, so SLEMS waits until the script is done.
+    assert fake.calls[-1] == ("script", "power", {"power_w": -700})
     await battery.release_control()
-    assert fake.calls[-1][2]["entity_id"] == "script.release"
+    assert fake.calls[-1][:2] == ("script", "release")
+
+
+async def test_failed_service_call_is_a_communication_error() -> None:
+    from homeassistant.exceptions import HomeAssistantError
+
+    fake = hass()
+    battery = driver(
+        fake, control=BatteryControl.SPLIT,
+        charge_entity_id="number.charge", discharge_entity_id="number.discharge",
+    )
+
+    async def failing(domain, service, data, blocking=False):
+        raise HomeAssistantError("device did not answer")
+
+    fake.services.async_call = failing
+    assert not await battery.apply_power(800)
+    with pytest.raises(BatteryDriverError):
+        await battery.release_control()
 
 
 async def test_unavailable_entity_fails_the_command() -> None:

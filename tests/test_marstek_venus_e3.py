@@ -171,3 +171,40 @@ async def test_complete_write_is_confirmed_by_read_back() -> None:
 
     link.write = ignore_rs485
     assert not await driver.apply_power(-900, refresh=True)
+
+
+async def test_failed_release_is_reported() -> None:
+    from custom_components.slems.drivers import BatteryDriverError
+
+    class FailingLink(FakeLink):
+        async def write(self, address: int, value: int) -> bool:
+            self.writes.append((address, value))
+            return False
+
+    link = FailingLink({REG_FORCE_MODE: 1, REG_RS485_CONTROL: RS485_ENABLE})
+    with pytest.raises(BatteryDriverError):
+        await make_driver(link).release_control()
+
+
+async def test_release_is_confirmed_by_reading_back() -> None:
+    from custom_components.slems.drivers import BatteryDriverError
+
+    class StuckLink(FakeLink):
+        """Accepts the writes, but the battery stays in forced mode."""
+
+        async def write(self, address: int, value: int) -> bool:
+            self.writes.append((address, value))
+            if address != REG_FORCE_MODE:
+                self.registers[address] = value
+            return True
+
+    link = StuckLink({REG_FORCE_MODE: 2, REG_RS485_CONTROL: RS485_ENABLE})
+    with pytest.raises(BatteryDriverError, match="not confirmed"):
+        await make_driver(link).release_control()
+
+
+async def test_release_reconnects_first() -> None:
+    link = FakeLink({REG_FORCE_MODE: 1, REG_RS485_CONTROL: RS485_ENABLE})
+    link.connected = False
+    await make_driver(link).release_control()
+    assert link.connected and link.registers[REG_FORCE_MODE] == FORCE_NONE

@@ -116,5 +116,7 @@ class BatteryDriver(ABC):
         """Hand control back to the battery's internal logic.
 
         Called when SLEMS stops controlling the battery (mode change, unload).
-        Read-only drivers have nothing to release.
+        Read-only drivers have nothing to release. Raises
+        ``BatteryDriverError`` if the battery could not be released for sure;
+        the coordinator then tries again.
         """

@@ -1,6 +1,10 @@
-"""Helpers for reading Home Assistant states."""
+"""Helpers for reading Home Assistant states and calling services."""
 
 from __future__ import annotations
+
+import asyncio
+import math
+from typing import Any
 
 from homeassistant.const import (
     STATE_UNAVAILABLE,
@@ -8,7 +12,30 @@ from homeassistant.const import (
     UnitOfEnergy,
     UnitOfPower,
 )
-from homeassistant.core import State
+from homeassistant.core import HomeAssistant, State
+from homeassistant.exceptions import HomeAssistantError
+import voluptuous as vol
+
+# A service call SLEMS waits for (a write to another integration's device)
+# fails after this long, so a hanging integration does not stall the control.
+SERVICE_TIMEOUT_S = 10.0
+
+
+class ServiceCallError(Exception):
+    """A service call failed, was rejected or did not finish in time."""
+
+
+async def async_call_service(
+    hass: HomeAssistant, domain: str, service: str, data: dict[str, Any]
+) -> None:
+    """Call a service and wait until it is done (raises ``ServiceCallError``)."""
+    try:
+        async with asyncio.timeout(SERVICE_TIMEOUT_S):
+            await hass.services.async_call(domain, service, data, blocking=True)
+    except TimeoutError as err:
+        raise ServiceCallError(f"{domain}.{service}: no answer within {SERVICE_TIMEOUT_S:.0f} s") from err
+    except (HomeAssistantError, vol.Invalid) as err:
+        raise ServiceCallError(f"{domain}.{service}: {err}") from err
 
 _POWER_FACTORS: dict[str, float] = {
     UnitOfPower.WATT: 1.0,
@@ -28,9 +55,11 @@ def state_as_float(state: State | None) -> float | None:
     if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
         return None
     try:
-        return float(state.state)
+        value = float(state.state)
     except ValueError:
         return None
+    # "nan" and "inf" parse as floats but are no measurement.
+    return value if math.isfinite(value) else None
 
 
 def state_as_watts(state: State | None) -> float | None:
@@ -56,8 +85,14 @@ def clamp_to_entity(value: float, state: State) -> float:
     minimum = state.attributes.get("min")
     maximum = state.attributes.get("max")
     step = state.attributes.get("step") or 1
-    if minimum is not None:
-        value = max(float(minimum), value)
-    if maximum is not None:
-        value = min(float(maximum), value)
-    return round(value / step) * step
+    low = float(minimum) if minimum is not None else -math.inf
+    high = float(maximum) if maximum is not None else math.inf
+    value = min(high, max(low, value))
+    rounded = round(value / step) * step
+    # A step outside the range (bounds not on the step grid) goes one step inwards;
+    # if no step fits into the range, the bound itself.
+    if rounded > high:
+        rounded -= step
+    elif rounded < low:
+        rounded += step
+    return rounded if low <= rounded <= high else value

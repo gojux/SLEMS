@@ -57,7 +57,7 @@ from .response import (
     MeterCadence,
     StepResponse,
 )
-from .util import clamp_to_entity, state_as_float
+from .util import ServiceCallError, async_call_service, clamp_to_entity, state_as_float
 
 if TYPE_CHECKING:
     from .coordinator import BatteryRuntime, SlemsCoordinator, SystemSnapshot
@@ -103,6 +103,8 @@ class RealTimeController:
         self._lock = asyncio.Lock()
         self._last_run = 0.0
         self._pending: CALLBACK_TYPE | None = None
+        self._ramp_timer: CALLBACK_TYPE | None = None
+        self._shut_down = False
         self._pending_at = 0.0
         self._rerun = False
         # battery id -> [(monotonic time, commanded power)], oldest first
@@ -228,6 +230,8 @@ class RealTimeController:
     @callback
     def request(self) -> None:
         """Ask for a control cycle as soon as the control interval allows."""
+        if self._shut_down:
+            return
         if not self._active:
             self.status = ControlStatus.INACTIVE
             # Batteries were released; the next activation must send again.
@@ -300,6 +304,7 @@ class RealTimeController:
 
     @callback
     def _on_ramp_timer(self, _now) -> None:
+        self._ramp_timer = None
         self.request()
 
     @callback
@@ -313,14 +318,20 @@ class RealTimeController:
                 await self._coordinator.async_release_battery(battery)
 
     def shutdown(self) -> None:
-        if self._pending is not None:
-            self._pending()
-            self._pending = None
+        """No further cycles: after the unload releases the batteries, nothing may
+        send a set point any more."""
+        self._shut_down = True
+        for cancel in (self._pending, self._ramp_timer):
+            if cancel is not None:
+                cancel()
+        self._pending = self._ramp_timer = None
 
     # --- control cycle --------------------------------------------------------
 
     async def _async_run(self) -> None:
         async with self._lock:
+            if self._shut_down:
+                return
             self._last_run = time.monotonic()
             try:
                 await self._async_cycle()
@@ -397,7 +408,11 @@ class RealTimeController:
             # at the end of the ramp, then the release.
             end = min(leaving)
             due = min(start + RAMP_STEP_S, end) if start < end else time.monotonic()
-            async_call_later(self._hass, max(0.05, due - time.monotonic()), self._on_ramp_timer)
+            if self._ramp_timer is not None:
+                self._ramp_timer()
+            self._ramp_timer = async_call_later(
+                self._hass, max(0.05, due - time.monotonic()), self._on_ramp_timer
+            )
 
     def _grid_stale(self) -> bool:
         age = self._coordinator.grid_age_s()
@@ -409,17 +424,17 @@ class RealTimeController:
     async def _apply(battery: BatteryRuntime, power: int, refresh: bool) -> bool:
         """Send a set point; an unreachable battery counts as a failed write."""
         try:
-            return await battery.driver.apply_power(power, refresh=refresh)
+            sent = await battery.driver.apply_power(power, refresh=refresh)
         except BatteryDriverError as err:
             _LOGGER.debug("Battery %s: set point not sent: %s", battery.name, err)
             return False
+        if sent:
+            # Controlled again: an outstanding release is obsolete.
+            battery.release_pending_since = None
+        return sent
 
-    @staticmethod
-    async def _release(battery: BatteryRuntime) -> None:
-        try:
-            await battery.driver.release_control()
-        except BatteryDriverError as err:
-            _LOGGER.debug("Battery %s: not released: %s", battery.name, err)
+    async def _release(self, battery: BatteryRuntime) -> None:
+        await self._coordinator.async_release_battery(battery)
 
     def _latest_command(self, battery_id: str) -> float | None:
         history = self._battery_history.get(battery_id)
@@ -580,13 +595,17 @@ class RealTimeController:
                 if (state.state == STATE_ON) == want_on:
                     self._device_commands[subentry_id] = target
                     continue
-                await self._hass.services.async_call(
+                if not await self._call(
                     domain,
                     "turn_on" if want_on else "turn_off",
                     {ATTR_ENTITY_ID: consumer.control_entity_id},
-                )
+                ):
+                    continue
             elif consumer.control_mode is ControlMode.CURRENT:
-                if not await self._async_apply_current(consumer, target, state):
+                sent = await self._async_apply_current(consumer, target, state)
+                if sent is None:
+                    continue
+                if not sent:
                     self._device_commands[subentry_id] = target
                     continue
             else:
@@ -597,11 +616,12 @@ class RealTimeController:
                 ):
                     self._device_commands[subentry_id] = current
                     continue
-                await self._hass.services.async_call(
+                if not await self._call(
                     domain,
                     "set_value",
                     {ATTR_ENTITY_ID: consumer.control_entity_id, "value": value},
-                )
+                ):
+                    continue
             measured = snapshot.consumers[subentry_id].power_w
             # The power the meter still shows until the command arrives there.
             self._consumer_before[subentry_id] = self.consumer_power_seen(subentry_id, measured, now)
@@ -618,12 +638,13 @@ class RealTimeController:
 
     async def _async_apply_current(
         self, consumer: ConsumerConfig, target_w: float, state: State
-    ) -> bool:
+    ) -> bool | None:
         """Current set point (A) and start/stop of a current controlled consumer.
 
         Below its minimum current it is stopped: through the start entity, or
         with the lowest current the number entity takes (0 A if allowed).
-        Returns True if a command was sent.
+        Returns True if a command was sent, False if none was needed and None
+        if one failed.
         """
         amps = amps_for(target_w, consumer.voltage_v, consumer.phases)
         run = target_w > 0 and amps >= consumer.min_current_a
@@ -635,27 +656,35 @@ class RealTimeController:
                 # Ampere options (e.g. the maximum current of ha-evcc).
                 option = current_option(state, wanted)
                 if option is not None and option != state.state:
-                    await self._hass.services.async_call(
+                    if not await self._call(
                         domain,
                         "select_option",
                         {ATTR_ENTITY_ID: consumer.control_entity_id, "option": option},
-                    )
+                    ):
+                        return None
                     sent = True
             else:
                 value = clamp_to_entity(wanted, state)
                 if state_as_float(state) != value:
-                    await self._hass.services.async_call(
+                    if not await self._call(
                         domain,
                         "set_value",
                         {ATTR_ENTITY_ID: consumer.control_entity_id, "value": value},
-                    )
+                    ):
+                        return None
                     sent = True
         if consumer.start_entity_id:
-            sent = await self._async_set_start(consumer, run) or sent
+            started = await self._async_set_start(consumer, run)
+            if started is None:
+                return None
+            sent = started or sent
         return sent
 
-    async def _async_set_start(self, consumer: ConsumerConfig, run: bool) -> bool:
-        """Switch the start entity (switch, or select with the on / off option)."""
+    async def _async_set_start(self, consumer: ConsumerConfig, run: bool) -> bool | None:
+        """Switch the start entity (switch, or select with the on / off option).
+
+        Returns True if a command was sent, False if none was needed and None
+        if it failed."""
         entity_id = consumer.start_entity_id
         state = self._hass.states.get(entity_id)
         if state is None:
@@ -665,15 +694,23 @@ class RealTimeController:
             option = consumer.start_on if run else consumer.start_off
             if not option or state.state == option:
                 return False
-            await self._hass.services.async_call(
+            return await self._call(
                 domain, "select_option", {ATTR_ENTITY_ID: entity_id, "option": option}
-            )
-            return True
+            ) or None
         if (state.state == STATE_ON) == run:
             return False
-        await self._hass.services.async_call(
+        return await self._call(
             domain, "turn_on" if run else "turn_off", {ATTR_ENTITY_ID: entity_id}
-        )
+        ) or None
+
+    async def _call(self, domain: str, service: str, data: dict) -> bool:
+        """Call a service for a consumer and wait for it; False if it failed
+        (the command is not recorded and sent again in the next cycle)."""
+        try:
+            await async_call_service(self._hass, domain, service, data)
+        except ServiceCallError as err:
+            _LOGGER.warning("Consumer command failed: %s", err)
+            return False
         return True
 
     async def async_release_consumer(self, consumer: ConsumerConfig) -> None:
@@ -691,13 +728,11 @@ class RealTimeController:
         domain = consumer.control_entity_id.split(".", 1)[0]
         if consumer.control_mode is ControlMode.SWITCH:
             if state.state == STATE_ON:
-                await self._hass.services.async_call(
-                    domain, "turn_off", {ATTR_ENTITY_ID: consumer.control_entity_id}
-                )
+                await self._call(domain, "turn_off", {ATTR_ENTITY_ID: consumer.control_entity_id})
         elif consumer.control_mode is ControlMode.CURRENT:
             await self._async_apply_current(consumer, 0.0, state)
         else:
-            await self._hass.services.async_call(
+            await self._call(
                 domain,
                 "set_value",
                 {ATTR_ENTITY_ID: consumer.control_entity_id, "value": clamp_to_entity(0, state)},

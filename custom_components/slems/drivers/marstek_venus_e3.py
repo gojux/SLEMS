@@ -284,13 +284,28 @@ class MarstekVenusE3Driver(BatteryDriver):
 
     async def release_control(self) -> None:
         self._written.clear()
-        if not self._link.connected:
-            return
-        await self._link.write(REG_SET_DISCHARGE_POWER, 0)
-        await self._link.write(REG_SET_CHARGE_POWER, 0)
-        await self._link.write(REG_FORCE_MODE, FORCE_NONE)
+        await self._ensure_connected()
+        writes = [
+            (REG_SET_DISCHARGE_POWER, 0),
+            (REG_SET_CHARGE_POWER, 0),
+            (REG_FORCE_MODE, FORCE_NONE),
+        ]
         if self._release_state is ReleaseState.AUTO:
-            await self._link.write(REG_RS485_CONTROL, RS485_DISABLE)
+            writes.append((REG_RS485_CONTROL, RS485_DISABLE))
+        failed = [register for register, value in writes if not await self._link.write(register, value)]
+        if failed:
+            raise BatteryDriverError(f"release: writing {failed} failed")
+        # Read back: only a battery out of forced mode is released.
+        mode = await self._link.read(REG_FORCE_MODE, 1)
+        control = await self._link.read(REG_RS485_CONTROL, 1)
+        if mode is None or control is None:
+            raise BatteryDriverError("release: control registers could not be read back")
+        if mode[0] != FORCE_NONE or (
+            self._release_state is ReleaseState.AUTO and control[0] != RS485_DISABLE
+        ):
+            raise BatteryDriverError(
+                f"release not confirmed: force mode {mode[0]}, RS485 {control[0]:#x}"
+            )
 
     @classmethod
     async def probe(cls, host: str, port: int, unit_id: int) -> bool:
