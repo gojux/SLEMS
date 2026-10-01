@@ -162,6 +162,17 @@ def _system(coordinator: SlemsCoordinator) -> dict:
             "meter_interval_s": controller.meter.interval_s,
             "battery_response_s": controller.battery_response.response_s,
             "grid_source": coordinator.grid_source,
+            "support_budget_wh": coordinator.support_budget.budget_wh,
+            "support_budget_used_up": coordinator.support_budget.used_up,
+            "battery_support": {
+                consumer.name: coordinator.support_of(consumer.subentry_id).value
+                for consumer in coordinator.consumers
+            },
+            "unsupported": [
+                consumer.name
+                for consumer in coordinator.consumers
+                if consumer.subentry_id in coordinator.unsupported
+            ],
             "grid_meter": coordinator.grid_meter.diagnostics(time.monotonic())
             if coordinator.grid_meter
             else coordinator.grid_meter_error,

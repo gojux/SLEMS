@@ -353,3 +353,27 @@ def test_forced_from_the_batteries_only_limited() -> None:
     forced = replace(ROD, forced=True, forced_max_w=2500)
     result = allocate(0, battery(60), [forced], SETTINGS, expected_surplus_wh=None)
     assert result.consumer_power_w["rod"] == 2500
+
+
+def test_unsupported_consumer_runs_from_the_grid() -> None:
+    forced = replace(PUMP, forced=True)
+    # House 300 W, forced pump 500 W: the batteries only cover the house.
+    result = allocate(-300, battery(60), [forced], SETTINGS, None, unsupported=frozenset({"pump"}))
+    assert result.consumer_power_w["pump"] == 500
+    assert result.battery_power_w == -300
+    # A measured consumer SLEMS does not control: its power is in the house load.
+    measured = allocate(-1300, battery(60), [], SETTINGS, None, unsupported_measured_w=1000)
+    assert measured.battery_power_w == -300
+    # Never below zero: the batteries do not charge from the grid for it.
+    small = allocate(-200, battery(60), [], SETTINGS, None, unsupported_measured_w=1000)
+    assert small.battery_power_w == 0
+
+
+def test_unsupported_keeps_peak_shaving_and_night_discharge() -> None:
+    settings = AllocationSettings(**{**SETTINGS.__dict__, "peak_shaving": True})
+    low = allocate(-4000, battery(15), [], settings, None, unsupported_measured_w=2000)
+    assert low.battery_power_w == -1000
+    # Night discharge keeps its planned power; the house part shrinks.
+    night = allocate(-1300, battery(80), [], SETTINGS, None, night_discharge_w=600, unsupported_measured_w=1000)
+    assert night.strategy is Strategy.NIGHT_DISCHARGE
+    assert night.battery_power_w == -600

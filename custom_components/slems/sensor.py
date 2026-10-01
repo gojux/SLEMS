@@ -519,7 +519,16 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         suggested_display_precision=2,
         value_fn=_stored_energy_kwh,
-        attributes_fn=lambda s, c: {"capacity_kwh": _capacity_kwh(s, c)},
+        attributes_fn=lambda s, c: {
+            "capacity_kwh": _capacity_kwh(s, c),
+            # Energy the batteries can spare for consumers on battery support
+            # "automatic" (see battery_support).
+            "support_budget_kwh": (
+                None
+                if c.support_budget.budget_wh is None
+                else round(c.support_budget.budget_wh / 1000, 2)
+            ),
+        },
     ),
 )
 

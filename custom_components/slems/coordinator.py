@@ -119,6 +119,7 @@ from .forecast import (
 )
 from .forecast.accuracy import PvAccuracyTracker
 from .bad_weather import BadWeatherMode
+from .battery_support import BatterySupport, SupportBudget, next_refill, support_budget_wh
 from .grid_filter import GridPowerFilter
 from .grid_meter import ModbusGridMeter
 from .learning import (
@@ -540,6 +541,9 @@ class ForecastPlan:
     peak_threshold_pct: float = 0.0
     peak_limit_w: float = 0.0
     projection: SocProjection | None = None
+    # Energy the batteries can spare for consumers on battery support
+    # "automatic" (see battery_support); None without such a consumer.
+    support_budget_wh: float | None = None
     day_plan: list[dict] = field(default_factory=list)
     day_plan_tomorrow: list[dict] = field(default_factory=list)
 
@@ -626,6 +630,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.grid_meter: ModbusGridMeter | None = None
         self.grid_meter_error: str | None = None
         self.bad_weather = BadWeatherMode()
+        # Battery support per consumer (restored by its select entity) and the
+        # budget of the consumers on "automatic".
+        self.battery_support: dict[str, BatterySupport] = {}
+        self.support_budget = SupportBudget()
+        # Consumers whose power the batteries do not cover right now.
+        self.unsupported: frozenset[str] = frozenset()
         self.pv_accuracy = PvAccuracyTracker()
         # Monotonic time since the export is above the feed-in cap.
         self.cap_exceeded_since: float | None = None
@@ -646,6 +656,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # Local hour start -> Wh of the forced runs the targets may still need
         # (extra load in the planning, see consumer_targets.forced_load).
         self.target_load: dict[datetime, float] = {}
+        # The same per consumer with the source "grid" (battery support applies).
+        self.target_load_grid: dict[str, dict[datetime, float]] = {}
         # Energy (Wh) each target still needs, and the parts expected from the
         # surplus in order of priority (see consumer_targets.surplus_demand).
         self.target_energy_wh: dict[str, float | None] = {}
@@ -1562,6 +1574,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         ):
             self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
         forecast_plan = self.forecast_plan(snapshot, battery, wall_now, load, settings, balancing_wh)
+        self.support_budget.update(forecast_plan.support_budget_wh)
         cap = forecast_plan.cap
         snapshot.feed_in_cap = cap
         snapshot.feed_in_limit_w = forecast_plan.feed_in_limit_w
@@ -1618,6 +1631,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if cap is not None
             else None
         )
+        unsupported_measured_w = self._update_unsupported(snapshot)
         allocation = allocate(
             snapshot.available_power_w,
             battery,
@@ -1636,6 +1650,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             snapshot.night_discharge.power_w if snapshot.night_discharge else None,
             snapshot.feed_in_limit_w,
             cap_control,
+            unsupported=self.unsupported,
+            unsupported_measured_w=unsupported_measured_w,
         )
         # Resting consumers draw nothing: the batteries take their allocation.
         # Counted at their command (controller cycle), that command is not in
@@ -1885,13 +1901,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if pv_forecast is None:
             return result
         if battery is not None:
-            result.projection = project_soc(
-                wall_now,
-                battery,
-                pv_hourly,
-                consumption_hourly,
-                load,
-                ProjectionSettings(
+            projection_settings = ProjectionSettings(
                     grid_friendly_charging=settings.grid_friendly_charging,
                     # Like the feed-in limit: only with grid friendly charging.
                     charge_buffer_wh=(
@@ -1909,11 +1919,43 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     night_reserve_pct=self.night_reserve_pct(settings),
                     discharge_max_grid_export_w=settings.discharge_max_grid_export_w,
                     bad_weather_until=self.bad_weather.until,
-                ),
+                )
+            grid_load, budget_load = self._support_loads()
+            until = next_refill(wall_now, pv_hourly, consumption_hourly) if consumption_hourly else None
+            if consumption_hourly and any(
+                support is BatterySupport.AUTO for support in self.battery_support.values()
+            ):
+                result.support_budget_wh = self._support_budget(
+                    snapshot,
+                    battery,
+                    wall_now,
+                    load,
+                    pv_hourly,
+                    consumption_hourly,
+                    grid_load,
+                    budget_load,
+                    until,
+                    settings,
+                    replace(projection_settings, night_discharge=False),
+                    result.feed_in_limit_w,
+                    balancing_wh,
+                    cap,
+                )
+            result.projection = project_soc(
+                wall_now,
+                battery,
+                pv_hourly,
+                consumption_hourly,
+                load,
+                projection_settings,
                 result.feed_in_limit_w,
                 balancing_wh,
                 cap,
                 self.target_demands,
+                grid_load=grid_load,
+                budget_load=budget_load,
+                budget_wh=result.support_budget_wh,
+                budget_until=until,
             )
         pv_power = power_lookup(self._pv_native(snapshot, wall_now))
         result.day_plan = self._day_plan(
@@ -1938,6 +1980,103 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             target_load=self.target_load,
         )
         return result
+
+    def support_of(self, subentry_id: str) -> BatterySupport:
+        return self.battery_support.get(subentry_id, BatterySupport.ALWAYS)
+
+    def _update_unsupported(self, snapshot: SystemSnapshot) -> float:
+        """Consumers the batteries must not cover right now (see battery_support).
+
+        Sets ``unsupported`` and returns the measured power of those SLEMS does
+        not control right now (blocked, control off or measured only).
+        """
+        unsupported: set[str] = set()
+        measured_w = 0.0
+        for consumer in self.consumers:
+            subentry_id = consumer.subentry_id
+            support = self.support_of(subentry_id)
+            if not consumer.included_in_meter or support is BatterySupport.ALWAYS:
+                continue
+            if support is BatterySupport.AUTO and self.support_budget.available:
+                continue
+            # A forced run with the source "battery" may use the batteries.
+            state = self.target_states.get(subentry_id)
+            if (
+                state is not None
+                and state.mode is TargetMode.FORCED
+                and self.consumer_targets[subentry_id].source is TargetSource.BATTERY
+            ):
+                continue
+            unsupported.add(subentry_id)
+            if not snapshot.is_controllable_now(subentry_id):
+                measured = snapshot.consumers.get(subentry_id)
+                measured_w += max(0.0, (measured.power_w or 0.0) if measured else 0.0)
+        self.unsupported = frozenset(unsupported)
+        return measured_w
+
+    def _support_loads(self) -> tuple[dict[datetime, float], dict[datetime, float]]:
+        """Forced runs (source "grid") of consumers on battery support never / automatic."""
+        grid: dict[datetime, float] = {}
+        auto: dict[datetime, float] = {}
+        for subentry_id, load in self.target_load_grid.items():
+            target = {BatterySupport.NEVER: grid, BatterySupport.AUTO: auto}.get(
+                self.support_of(subentry_id)
+            )
+            if target is None:
+                continue
+            for hour, wh in load.items():
+                target[hour] = target.get(hour, 0.0) + wh
+        return grid, auto
+
+    def _support_budget(
+        self,
+        snapshot: SystemSnapshot,
+        battery: BatteryGroup,
+        wall_now: datetime,
+        load: float | None,
+        pv_hourly: dict[datetime, float],
+        consumption_hourly: dict[datetime, float],
+        grid_load: dict[datetime, float],
+        budget_load: dict[datetime, float],
+        until: datetime | None,
+        settings: ControlSettings,
+        projection_settings: ProjectionSettings,
+        feed_in_limit_w: float | None,
+        balancing_wh: float,
+        cap: CapPlan | None,
+    ) -> float:
+        """Energy the batteries can spare for consumers on "automatic" (see battery_support)."""
+        # The house without the loads the budget is for (and without the ones
+        # the grid covers anyway), without night discharge.
+        house = {
+            hour: wh - grid_load.get(hour, 0.0) - budget_load.get(hour, 0.0)
+            for hour, wh in consumption_hourly.items()
+        }
+        projection = project_soc(
+            wall_now,
+            battery,
+            pv_hourly,
+            house,
+            load,
+            projection_settings,
+            feed_in_limit_w,
+            balancing_wh,
+            cap,
+            self.target_demands,
+        )
+        capacity = battery.capacity_wh
+        floor = battery.min_soc_pct / 100 * capacity
+        if settings.peak_shaving:
+            floor = max(floor, projection_settings.peak_shaving_soc_threshold_pct / 100 * capacity)
+        refill_day = dt_util.as_local(until).date() if until is not None else None
+        day_consumption = sum(
+            wh for hour, wh in consumption_hourly.items() if dt_util.as_local(hour).date() == refill_day
+        )
+        floor += self.night_reserve_pct(settings) / 100 * day_consumption
+        floor += self.secured_buffer_wh(settings, *self._next_day_energy(snapshot, wall_now))
+        return support_budget_wh(
+            battery.soc_pct / 100 * capacity, projection.soc_pct, capacity, until, floor
+        )
 
     @staticmethod
     def _pv_native(snapshot: SystemSnapshot, wall_now: datetime) -> PvForecast:
@@ -2122,6 +2261,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         local_now = dt_util.as_local(wall_now)
         self.target_states = {}
         self.target_load = {}
+        self.target_load_grid = {}
         self.target_energy_wh = {}
         self.target_demands = []
         consumers = sorted(map(self.effective_consumer, self.consumers), key=lambda c: c.priority)
@@ -2181,6 +2321,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             )
             for hour, wh in forced.items():
                 self.target_load[hour] = self.target_load.get(hour, 0.0) + wh
+            if forced and settings.source is TargetSource.GRID:
+                self.target_load_grid[consumer.subentry_id] = forced
             demand = surplus_demand(
                 settings,
                 self.target_states[consumer.subentry_id],

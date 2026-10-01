@@ -426,6 +426,14 @@
           "first": "Fühler 1",
           "second": "Fühler 2"
         }
+      },
+      "battery_support": {
+        "name": "Batterie-Unterstützung",
+        "state": {
+          "always": "Immer",
+          "auto": "Automatisch",
+          "never": "Nie"
+        }
       }
     },
     "sensor": {
@@ -696,7 +704,7 @@
         "name": "Gelernte Werte verwenden"
       },
       "night_reserve_auto": {
-        "name": "Reserve Nachtentladung automatisch"
+        "name": "Morgenreserve automatisch"
       },
       "regular_full_charge": {
         "name": "Regelmäßige Vollladung"
@@ -740,7 +748,7 @@
         "name": "Maximale Einspeisung beim Entladen"
       },
       "night_reserve": {
-        "name": "Reserve Nachtentladung"
+        "name": "Morgenreserve"
       },
       "rotation_soc_threshold": {
         "name": "Schwelle Batteriewechsel"
@@ -803,7 +811,7 @@
         "name": "Puffer der Einspeisebegrenzung"
       },
       "night_reserve_coverage": {
-        "name": "Deckung der Reserve Nachtentladung"
+        "name": "Deckung der Morgenreserve"
       },
       "full_charge_interval": {
         "name": "Vollladung spätestens alle"

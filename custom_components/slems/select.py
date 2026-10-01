@@ -1,4 +1,4 @@
-"""Select platform: global operating mode; role in the feed-in cap and daily target of each consumer."""
+"""Select platform: global operating mode; battery support, role in the feed-in cap and daily target of each consumer."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
+from .battery_support import BatterySupport
 from .const import LEGACY_CAP_MODES, CapMode, OperatingMode, TargetSensor, TargetSource, TargetType
 from .consumers import ConsumerConfig
 from .coordinator import SlemsConfigEntry, SlemsCoordinator
@@ -19,10 +20,16 @@ async def async_setup_entry(
     entry: SlemsConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the operating mode and the feed-in cap mode of every controllable consumer."""
+    """Set up the operating mode and the options of the consumers."""
     coordinator = entry.runtime_data
     async_add_entities([OperatingModeSelect(coordinator)])
     for consumer in coordinator.consumers:
+        # The batteries can only cover consumers behind the smart meter.
+        if consumer.included_in_meter:
+            async_add_entities(
+                [ConsumerBatterySupportSelect(coordinator, consumer)],
+                config_subentry_id=consumer.subentry_id,
+            )
         if consumer.controllable:
             async_add_entities(
                 [
@@ -96,6 +103,43 @@ class ConsumerCapModeSelect(SlemsConsumerEntity, SelectEntity, RestoreEntity):
     async def async_select_option(self, option: str) -> None:
         self.coordinator.consumer_cap_modes[self.consumer.subentry_id] = CapMode(option)
         self.async_write_ha_state()
+
+
+class ConsumerBatterySupportSelect(SlemsConsumerEntity, SelectEntity, RestoreEntity):
+    """How far the batteries may cover the consumer (see battery_support)."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_options = [support.value for support in BatterySupport]
+
+    def __init__(self, coordinator: SlemsCoordinator, consumer: ConsumerConfig) -> None:
+        super().__init__(coordinator, consumer, "battery_support")
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in self._attr_options:
+            self.coordinator.battery_support[self.consumer.subentry_id] = BatterySupport(
+                last_state.state
+            )
+
+    @property
+    def current_option(self) -> str:
+        return self.coordinator.support_of(self.consumer.subentry_id).value
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        budget = self.coordinator.support_budget.budget_wh
+        return {
+            # The batteries may cover the consumer right now.
+            "battery_covers": self.consumer.subentry_id not in self.coordinator.unsupported,
+            "budget_kwh": None if budget is None else round(budget / 1000, 2),
+        }
+
+    async def async_select_option(self, option: str) -> None:
+        self.coordinator.battery_support[self.consumer.subentry_id] = BatterySupport(option)
+        self.coordinator.controller.request()
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
 
 
 class _TargetSelect(SlemsConsumerEntity, SelectEntity, RestoreEntity):

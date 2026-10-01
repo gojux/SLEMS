@@ -185,6 +185,18 @@ uses the configured value, which is also the start value of the other modes
 until 3 full cycles of throughput exist. Charge and discharge efficiency are
 each √RTE.
 
+### Battery support
+
+`battery_support.py`, per consumer behind the meter (select `battery_support`,
+default *always*). `SlemsCoordinator._update_unsupported` collects the
+consumers the batteries must not cover right now (*never*; *automatic* while
+`SupportBudget` is used up; not a forced run with the source *battery*):
+controllable ones by id (their planned power), the others by measured power.
+`forecast_plan` computes the budget (`_support_budget`, only with a consumer
+on *automatic*) and passes the forced runs with the source *grid* of
+*never* / *automatic* consumers to the projection (`grid_load`,
+`budget_load`).
+
 ### Night discharge
 
 `night_discharge.py`, optional (switch, off by default). Without it the
@@ -1470,3 +1482,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-01 | Grid power optionally read directly from a SunSpec meter over Modbus (`grid_meter.py`), through the shared connection of the HA Modbus backend (`async_get_unit`) instead of an own one. SolarEdge Modbus Multi updates the entity about once per second, so it misses most of the meter's changes (measured for an hour with a diagnosis integration over a Modbus proxy at 0.2 s: entity 2495 changes missed, direct read 478; mean delay behind the fastest path 547 ms against 150 ms). The HA backend is as fast as an own connection (round trip and median delay equal) and needs no rework once the inverter integration shares its connection; until then it points to the proxy. HA 2026.9 is the minimum version anyway. Each read is limited to 1 s, since the shared connection has a timeout of 10 s. The entity stays required (history, forecasts, fallback). |
 | 2026-10-01 | Bad weather mode: grid friendly charging and night discharge off until the evening, the target grid surplus stays (it is the margin of the control, not a planning choice). The evening comes from the forecast (end of the last hour with PV above consumption), not from the measured power: with passing clouds the PV falls below the consumption many times a day. Switched on after the evening it covers the next day, since the user switches it on the evening before a rainy day. The end follows new forecasts only through a surplus hour, so a forecast without the past hours does not stretch it. |
 | 2026-10-01 | Cell balancing: a refused charge no longer lowers the retry voltage step by step; the next leg starts again from the top window (3.49 V, or 10 mV below the refusal voltage). On the real Venus the retry voltage had sunk to 3.40 V: every leg then discharged out of the window and charged back with 95 W for hours, so the run measured only a few times a day, while the BMS only bleeds within the window. |
+| 2026-10-01 | Battery support per consumer (always / automatic / never, `battery_support.py`): in a deficit the batteries leave the power of unsupported consumers to the grid (`allocate(unsupported=…)`), the house stays covered; peak shaving and the night discharge power are unchanged. The budget of *automatic* is the lowest projected stored energy until the next charge from PV, from a projection without night discharge and without the loads it is for, minus minimum SoC, morning reserve and safety buffer (and the peak shaving threshold). Without night discharge in that projection, energy the night discharge would export may go to the consumers; the night discharge then plans from the lower state of charge. The budget is recomputed every update instead of being counted down. The night discharge reserve was renamed *morning reserve*: it covers mornings with a late PV takeover and now serves both. First step towards a wallbox (an EV charging from the batteries only with what they can spare). |

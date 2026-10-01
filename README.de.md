@@ -44,6 +44,7 @@ lustiges Wort für ein sehr interessantes Tier) und *EMS*
   - [Grenzen und Schutz der Batterien](#grenzen-und-schutz-der-batterien)
 - [Verbraucher](#verbraucher)
   - [Temperaturfühler des Speichers](#temperaturfühler-des-speichers)
+  - [Batterie-Unterstützung](#batterie-unterstützung)
   - [Einsatz in der Einspeisebegrenzung](#einsatz-in-der-einspeisebegrenzung)
   - [Tagesziel](#tagesziel)
 - [Dashboard](#dashboard)
@@ -687,6 +688,42 @@ weiter oben.
 - Seine Box im Energiefluss zeigt die Temperatur des für das Tagesziel
   gewählten Fühlers (standardmäßig den Mittelwert).
 
+### Batterie-Unterstützung
+
+Auswahl je Verbraucher hinter dem Smart Meter (auch nur gemessene), auf seiner
+Karte unter *Einstellungen anzeigen*: wie weit die Batterien ihn decken
+dürfen, wenn kein PV-Überschuss da ist.
+
+- **Immer** (Standard): wie jede andere Last.
+- **Nie**: Seine Leistung kommt immer aus dem Netz; die Batterien decken nur
+  den Rest des Hauses.
+- **Automatisch**: Die Batterien decken ihn nur mit der Energie, die sie übrig
+  haben, dem *Spielraum*: die niedrigste gespeicherte Energie bis zur nächsten
+  Ladung aus PV (aus der Prognose von Hausverbrauch und PV, ohne
+  Nachtentladung) minus minimalem Ladezustand, *Morgenreserve* und
+  Sicherheitspuffer; mit Bezugsspitzen-Kappung auch deren SoC-Schwelle. „Bis
+  zur nächsten Ladung“ heißt nachts bis zum kommenden Morgen, während eines
+  Überschusses bis zum Morgen nach der kommenden Nacht. Der Spielraum wird
+  laufend aus dem aktuellen Ladezustand neu berechnet und schrumpft, solange
+  die Batterien den Verbraucher decken; ist er aufgebraucht, läuft der
+  Verbraucher aus dem Netz, bis wieder 0,2 kWh Spielraum da sind. Mehrere
+  Verbraucher auf Automatisch teilen sich den Spielraum. Energie, die die
+  Nachtentladung einspeisen würde, dürfen sie stattdessen nutzen.
+
+Der PV-Überschuss ist nicht betroffen, die Bezugsspitzen-Kappung deckt Spitzen
+weiter, und ein Zwangslauf eines Tagesziels mit der Quelle *Batterie* darf die
+Batterien nutzen. Die Zwangsläufe von Tageszielen mit der Quelle *Netz*
+folgen der Einstellung auch im Prognose-Diagramm (bei Automatisch bis zur
+nächsten Ladung aus PV; spätere werden wie *Immer* geplant); nur gemessene
+Verbraucher stecken in der Verbrauchsprognose, bei ihnen wirkt die Einstellung
+nur in der Regelung. Die Karte zeigt die Einstellung mit dem Spielraum und ob
+die Batterien den Verbraucher gerade decken; läuft er deshalb aus dem Netz,
+trägt seine Box im Energiefluss das Abzeichen *Netz*. Der Spielraum ist auch
+das Attribut `support_budget_kwh` von *Gespeicherte Energie gesamt*.
+
+Nützlich für Lasten, die abends die Batterien leeren würden: Sauna,
+Durchlauferhitzer, Heizstab mit Quelle *Netz*, später eine Wallbox.
+
 ### Einsatz in der Einspeisebegrenzung
 
 Auswahl je gesteuertem Verbraucher, auf seiner Karte im Dashboard unter
@@ -991,7 +1028,7 @@ voll sein sollen, z. B. für die Notstromversorgung.
 
 Energie, die morgens noch in den Batterien ist, wird über Nacht eingespeist,
 bis auf eine Reserve, die die PV-Prognose am nächsten Tag wieder auffüllen
-kann (hier *Reserve Nachtentladung* 10 %: etwa 2,9 kWh werden über Nacht
+kann (hier *Morgenreserve* 10 %: etwa 2,9 kWh werden über Nacht
 eingespeist und mittags 3,2 kWh weniger, weil die Batterien mehr Platz für die
 PV haben). Sinnvoll, wenn die Batterien morgens noch gut geladen sind (große
 Batterie, wenig Verbrauch in der Nacht, Sommer):
@@ -1173,7 +1210,7 @@ alle gelernten Werte als Attribute.
 | Ziel-Netzüberschuss beim Laden und Entladen | wie weit die Netzleistung Richtung Bezug schwankt, während die Batterien regeln; das Ziel hält das Netz 90 % der Zeit auf der Einspeiseseite (20–1000 W) | etwas Regelbetrieb im Modus *Aktiv* |
 | Regelintervall und Mittelungsfenster | dem gelernten Meldeintervall des Smart Meters (0,8 × und 3 ×) | einige Meldungen des Zählers |
 | Nutzbare Kapazität (je Batterie, *Gelernte Kapazität verwenden*) | Lade- und Entladevorgängen über mindestens 20 % Ladezustand: DC-Energie / Änderung des Ladezustands (Vorgänge mit einem Sprung des Ladezustands werden verworfen), Median der letzten zehn | drei Vorgänge |
-| Reserve Nachtentladung (*Deckung der Reserve Nachtentladung* bestimmt, wie vorsichtig; nur sichtbar, solange die Reserve automatisch ist) | der Morgenlücke: Energie, die das Haus zwischen der geplanten Übernahme durch die PV (Ende der Nachtentladung) und der tatsächlichen (PV deckt den Verbrauch 15 Minuten lang) aus Batterie oder Netz brauchte, in % des prognostizierten Tagesverbrauchs; die Reserve deckt den gewählten Anteil der Morgen (90 % = 9 von 10), über 100 % die größte Lücke mal dem Wert (110 % = 10 % mehr als der schlechteste Morgen) | 14 gemessene Morgen (gemessen wird auch bei ausgeschalteter Nachtentladung) |
+| Morgenreserve (*Deckung der Morgenreserve* bestimmt, wie vorsichtig; nur sichtbar, solange die Reserve automatisch ist) | der Morgenlücke: Energie, die das Haus zwischen der geplanten Übernahme durch die PV (Ende der Nachtentladung) und der tatsächlichen (PV deckt den Verbrauch 15 Minuten lang) aus Batterie oder Netz brauchte, in % des prognostizierten Tagesverbrauchs; die Reserve deckt den gewählten Anteil der Morgen (90 % = 9 von 10), über 100 % die größte Lücke mal dem Wert (110 % = 10 % mehr als der schlechteste Morgen) | 14 gemessene Morgen (gemessen wird auch bei ausgeschalteter Nachtentladung) |
 | Leistung und Thermostat eines Verbrauchers (je Verbraucher, *Gelernte Werte verwenden*) | der Leistung im eingeschalteten Zustand (Ein/Aus-Verbraucher: ersetzt die Nennleistung; leistungsgeregelte Verbraucher: die Höchstleistung, gemessen bei einer Vorgabe ab 90 % der maximalen Leistung, begrenzt die maximale Leistung) und Pausen des eigenen Thermostats trotz Vorgabe von 30 s bis 10 min (dann wie *Thermostat taktet selbst*; längere Pausen, z. B. ein Luftentfeuchter bei erreichter Zielfeuchte, zählen nicht) | 30 Messwerte, zwei Pausen |
 
 ### Weitere Einstellungen (Entities)
@@ -1199,8 +1236,11 @@ alle gelernten Werte als Attribute.
   einspeisen; das Maximum schaltet die Grenze ab. Liegt sie unter dem
   *Ziel-Netzüberschuss beim Entladen*, gilt sie (das Dashboard zeigt einen
   Hinweis).
-- *Nachtentladung* (Schalter, standardmäßig aus) und *Reserve Nachtentladung*
-  (Standard 25 % des prognostizierten Verbrauchs von morgen): Über Nacht
+- *Morgenreserve* (Standard 25 % des prognostizierten Verbrauchs von morgen):
+  Energie, die morgens über dem minimalen Ladezustand bleiben soll, für
+  Morgen, an denen die PV später übernimmt als prognostiziert; genutzt von der
+  Nachtentladung und der [Batterie-Unterstützung](#batterie-unterstützung).
+- *Nachtentladung* (Schalter, standardmäßig aus): Über Nacht
   entladen die Batterien gleichmäßig bis zur Reserve (nutzbare Energie über
   dem minimalen Ladezustand der Batterien), bis die PV-Erzeugung den Verbrauch
   wieder übersteigt; der Ziel-Netzüberschuss beim Entladen wird dabei

@@ -93,6 +93,10 @@ def project_soc(
     today_extra_wh: float = 0.0,
     cap: CapPlan | None = None,
     demands: Sequence[SurplusDemand] = (),
+    grid_load: Mapping[datetime, float] | None = None,
+    budget_load: Mapping[datetime, float] | None = None,
+    budget_wh: float | None = None,
+    budget_until: datetime | None = None,
 ) -> SocProjection:
     """Project until the end of tomorrow.
 
@@ -101,7 +105,11 @@ def project_soc(
     charged today by batteries outside the group (it lowers the surplus left
     for the group). ``cap`` is the plan of the feed-in cap, None when off.
     ``demands`` are the parts of the daily targets expected from the surplus,
-    in order of priority.
+    in order of priority. Battery support (see battery_support): in a deficit
+    ``grid_load`` (Wh per hour, part of ``consumption``) comes from the grid,
+    ``budget_load`` from the batteries only while ``budget_wh`` (stored
+    energy) lasts, until ``budget_until``; later, or without a budget, the
+    batteries cover it.
     """
     result = SocProjection()
     capacity = battery.capacity_wh
@@ -115,6 +123,7 @@ def project_soc(
     full = battery.full_soc_pct / 100 * capacity
     # Energy each demand still takes.
     left = [demand.energy_wh for demand in demands]
+    budget_left = budget_wh
 
     def charge_plan(hour: datetime, start: datetime) -> dict[datetime, float]:
         day_end = dt_util.start_of_local_day(hour) + timedelta(days=1)
@@ -163,8 +172,24 @@ def project_soc(
             if consumers > 0:
                 result.consumer_w[hour] = consumers / share
         else:
+            deficit = load - pv_w
+            unsupported = (grid_load or {}).get(hour, 0.0)
+            auto = (budget_load or {}).get(hour, 0.0)
+            if auto and budget_left is not None and (budget_until is None or hour < budget_until):
+                covered = min(auto, budget_left * efficiency / share)
+                budget_left -= covered * share / efficiency
+                unsupported += auto - covered
             stored = _discharge(
-                stored, load - pv_w, share, start, battery, pv, consumption, settings, cap, demands
+                stored,
+                deficit - min(deficit, unsupported),
+                share,
+                start,
+                battery,
+                pv,
+                consumption,
+                settings,
+                cap,
+                demands,
             )
         if (
             cap is not None

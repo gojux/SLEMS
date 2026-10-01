@@ -194,3 +194,28 @@ def test_bad_weather_mode_until_the_evening() -> None:
     # No grid friendly charging: the morning surplus is charged at once.
     assert normal.planned_charge_w[at(8, day=1)] == 0
     assert result.planned_charge_w[at(8, day=1)] > 0
+
+
+def test_battery_support_loads() -> None:
+    pv, consumption = forecasts()
+    # A forced run of 2 kWh at 20:00 (part of the consumption).
+    consumption[at(20)] += 2000
+    base = project_soc(at(18), battery(80), pv, consumption, None, settings(), None)
+    never = project_soc(
+        at(18), battery(80), pv, consumption, None, settings(), None, grid_load={at(20): 2000}
+    )
+    # From the grid: the batteries only cover the house (400 W).
+    assert base.soc_pct[at(20)] == pytest.approx(never.soc_pct[at(20)] - 20)
+    assert never.grid_w[at(20)] == pytest.approx(2000)
+    # Automatic with 500 Wh budget: a quarter from the batteries.
+    auto = project_soc(
+        at(18), battery(80), pv, consumption, None, settings(), None,
+        budget_load={at(20): 2000}, budget_wh=500, budget_until=at(8, day=1),
+    )
+    assert auto.soc_pct[at(20)] == pytest.approx(never.soc_pct[at(20)] - 5)
+    # Beyond the budget's horizon the batteries cover it.
+    late = project_soc(
+        at(18), battery(80), pv, consumption, None, settings(), None,
+        budget_load={at(20): 2000}, budget_wh=500, budget_until=at(19),
+    )
+    assert late.soc_pct[at(20)] == pytest.approx(base.soc_pct[at(20)])

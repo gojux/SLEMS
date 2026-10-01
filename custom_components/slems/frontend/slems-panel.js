@@ -153,6 +153,11 @@ const STRINGS = {
     capSection: "Feed-in cap",
     capRole: "Role",
     targetSection: "Daily target",
+    batterySupport: "Battery support",
+    supportBudget: "budget {kwh}",
+    supportFromGrid: "the batteries do not cover it",
+    supportFromBattery: "the batteries cover it",
+    gridBadge: "grid",
     targetKind: "Kind",
     targetHours: "Hours",
     targetEnergy: "Energy",
@@ -362,7 +367,7 @@ const STRINGS = {
       discharge_max_grid_export:
         "Hard limit of the grid export while batteries discharge. 0 W: never feed battery energy into the grid. To switch the limit off, set it to the maximum.",
       night_reserve:
-        "Energy that should remain in the batteries above their minimum state of charge when the night discharge ends (in the morning, when PV production exceeds the consumption). In % of the forecast consumption of the coming day, not of the state of charge. Example: 14 kWh forecast, 25 % → 3.5 kWh stay. If the PV forecast cannot refill the batteries from there, more energy stays.",
+        "Energy that should remain in the batteries above their minimum state of charge in the morning, when PV production exceeds the consumption: for mornings when PV takes over later than forecast. In % of the forecast consumption of the coming day, not of the state of charge. Example: 14 kWh forecast, 25 % → 3.5 kWh stay. The night discharge does not go below it (more stays if the PV forecast cannot refill the batteries from there), and consumers on battery support \"automatic\" do not use it.",
     },
     cellDelta: "Cell delta",
     cellDeltaHint: "live, meaningful only near full charge",
@@ -405,6 +410,7 @@ const STRINGS = {
       temperature: "Temperature charge limit",
       feedInCap: "Feed-in cap",
       gridFriendly: "Grid friendly charging",
+      reserve: "Morning reserve",
       night: "Night discharge",
       peak: "Import peak shaving",
       rotation: "Several batteries",
@@ -522,6 +528,11 @@ const STRINGS = {
     capSection: "Einspeisebegrenzung",
     capRole: "Einsatz",
     targetSection: "Tagesziel",
+    batterySupport: "Batterie-Unterstützung",
+    supportBudget: "Spielraum {kwh}",
+    supportFromGrid: "Batterie deckt ihn nicht",
+    supportFromBattery: "Batterie deckt ihn",
+    gridBadge: "Netz",
     targetKind: "Art",
     targetHours: "Stunden",
     targetEnergy: "Energie",
@@ -731,7 +742,7 @@ const STRINGS = {
       discharge_max_grid_export:
         "Harte Grenze der Einspeisung, solange Batterien entladen. 0 W: nie Batterieenergie einspeisen. Zum Abschalten der Grenze auf das Maximum stellen.",
       night_reserve:
-        "Energie, die am Ende der Nachtentladung (morgens, wenn die PV-Erzeugung den Verbrauch übersteigt) über dem minimalen Ladezustand in den Batterien bleiben soll. In % des prognostizierten Verbrauchs des kommenden Tages, nicht des Ladezustands. Beispiel: 14 kWh Prognose, 25 % → 3,5 kWh bleiben. Reicht die PV-Prognose nicht, um die Batterien von dort wieder zu füllen, bleibt mehr Energie.",
+        "Energie, die morgens, wenn die PV-Erzeugung den Verbrauch übersteigt, über dem minimalen Ladezustand in den Batterien bleiben soll: für Morgen, an denen die PV später übernimmt als prognostiziert. In % des prognostizierten Verbrauchs des kommenden Tages, nicht des Ladezustands. Beispiel: 14 kWh Prognose, 25 % → 3,5 kWh bleiben. Die Nachtentladung geht nicht darunter (es bleibt mehr, wenn die PV-Prognose die Batterien von dort nicht wieder füllen kann), und Verbraucher mit Batterie-Unterstützung „Automatisch“ nutzen sie nicht.",
     },
     cellDelta: "Zell-Delta",
     cellDeltaHint: "live, nur nahe Vollladung aussagekräftig",
@@ -774,6 +785,7 @@ const STRINGS = {
       temperature: "Ladebegrenzung nach Temperatur",
       feedInCap: "Einspeisebegrenzung",
       gridFriendly: "Netzdienliches Laden",
+      reserve: "Morgenreserve",
       night: "Nachtentladung",
       peak: "Bezugsspitzen abfangen",
       rotation: "Mehrere Batterien",
@@ -847,7 +859,9 @@ const SETTING_GROUPS = [
     ],
   ],
   ["gridFriendly", ["grid_friendly_charging", "grid_friendly_buffer_auto", "grid_friendly_buffer"]],
-  ["night", ["night_discharge", "night_reserve_auto", "night_reserve", "night_reserve_coverage"]],
+  // Used by the night discharge and the battery support of the consumers.
+  ["reserve", ["night_reserve_auto", "night_reserve", "night_reserve_coverage"]],
+  ["night", ["night_discharge"]],
   [
     "peak",
     [
@@ -1904,6 +1918,20 @@ class SlemsPanel extends HTMLElement {
     return mode === "boost" || mode === "forced" ? mode : null;
   }
 
+  /** Badge of a consumer in the energy flow: priority of its daily target, or "grid"
+   *  while it runs from the grid because the batteries must not cover it. */
+  _consumerBadge(consumer, gridW) {
+    const t = this._t;
+    const priority = { boost: t.targetBoostChip, forced: t.targetForcedChip }[this._priorityMode(consumer)];
+    if (priority) return priority;
+    const support = this._state("battery_support", consumer.device_id);
+    const power = this._powerW(this._hass.states[consumer.power_entity]);
+    if (support && support.attributes?.battery_covers === false && (power ?? 0) >= 50 && (gridW ?? 0) > 10) {
+      return t.gridBadge;
+    }
+    return "";
+  }
+
   /** "Before the batteries: ELWA 2" while daily targets take the surplus first. */
   _priorityText() {
     const names = (this._config.consumers || []).filter((c) => this._priorityMode(c)).map((c) => c.name);
@@ -2004,7 +2032,7 @@ class SlemsPanel extends HTMLElement {
         entity: consumer.power_entity,
         // Temperature of its storage (the sensor chosen for the daily target).
         detail: this._consumerTemperature(consumer),
-        badge: { boost: t.targetBoostChip, forced: t.targetForcedChip }[this._priorityMode(consumer)] || "",
+        badge: this._consumerBadge(consumer, grid),
       });
     }
     return nodes;
@@ -3006,6 +3034,11 @@ class SlemsPanel extends HTMLElement {
           // Collapsed: the important values; expanded: all settings too.
           const expanded = this._expandedConsumers.has(c.id);
           const targetType = this._state("target_type", c.device_id)?.state;
+          const support = this._state("battery_support", c.device_id);
+          const supportRow =
+            support && support.state !== "always"
+              ? this._row(t.batterySupport, escapeHtml(this._supportText(support)), support.entity_id)
+              : "";
           const progress =
             c.controllable && targetType && targetType !== "none"
               ? this._row(t.targetProgress, escapeHtml(this._targetText(attrs, this._state("target_source", c.device_id)?.state)), planned?.entity_id)
@@ -3016,9 +3049,9 @@ class SlemsPanel extends HTMLElement {
               ${c.controllable ? this._row(t.gridResponseTime, gridResponse, planned?.entity_id) : ""}
             </dl>${
               settings.length ? `<div class="settings card-setting">${settings.map((st) => this._control(st)).join("")}</div>` : ""
-            }${capSection}${c.controllable ? this._targetSection(c) : ""}`
+            }${support ? `<div class="settings card-setting">${this._control(support, { label: t.batterySupport })}</div>` : ""}${capSection}${c.controllable ? this._targetSection(c) : ""}`
             : "";
-          const toggle = c.controllable
+          const toggle = c.controllable || support
             ? `<button class="link card-toggle" data-action="toggle-consumer" data-id="${c.id}" aria-expanded="${expanded}">
                 <ha-icon icon="${expanded ? "mdi:chevron-up" : "mdi:chevron-down"}"></ha-icon>${expanded ? t.hideSettings : t.showSettings}</button>`
             : "";
@@ -3028,10 +3061,23 @@ class SlemsPanel extends HTMLElement {
               ${this._row(t.measured, escapeHtml(this._format(measured)), c.power_entity)}
               ${planned ? this._row(t.planned, escapeHtml(this._format(planned)), planned.entity_id) : ""}
               ${progress}
+              ${supportRow}
             </dl>${details}${toggle}</section>`;
         })
         .join("")
     );
+  }
+
+  /** "Automatic · budget 2.3 kWh · the batteries do not cover it" for a consumer's battery support. */
+  _supportText(support) {
+    const t = this._t;
+    const a = support.attributes || {};
+    const parts = [this._format(support)];
+    if (support.state === "auto" && a.budget_kwh !== null && a.budget_kwh !== undefined) {
+      parts.push(t.supportBudget.replace("{kwh}", this._kwh(a.budget_kwh * 1000)));
+    }
+    parts.push(a.battery_covers ? t.supportFromBattery : t.supportFromGrid);
+    return parts.join(" · ");
   }
 
   /** Settings of a consumer's daily target (only the ones of its kind). */

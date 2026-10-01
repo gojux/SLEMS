@@ -44,6 +44,7 @@ system).
   - [Battery limits and protection](#battery-limits-and-protection)
 - [Consumers](#consumers)
   - [Temperature sensors of the storage](#temperature-sensors-of-the-storage)
+  - [Battery support](#battery-support)
   - [Role in the feed-in cap](#role-in-the-feed-in-cap)
   - [Daily target](#daily-target)
 - [Dashboard](#dashboard)
@@ -656,6 +657,42 @@ higher up.
 - Its box in the energy flow shows the temperature of the sensor chosen for
   the daily target (the mean by default).
 
+### Battery support
+
+Select per consumer behind the smart meter (also measured only ones), on its
+card under *Show settings*: how far the batteries may cover it when there is
+no PV surplus.
+
+- **Always** (default): like any other load.
+- **Never**: its power always comes from the grid; the batteries cover only
+  the rest of the house.
+- **Automatic**: the batteries cover it only with the energy they can spare,
+  the *budget*: the lowest stored energy until the next charge from PV (from
+  the forecast of house consumption and PV, without night discharge) minus
+  the minimum state of charge, the *morning reserve* and the safety buffer;
+  with import peak shaving also its SoC threshold. "Until the next charge"
+  is the coming morning at night and the morning after the coming night
+  during a surplus. The budget is computed anew from the current state of
+  charge all the time and shrinks while the batteries cover the consumer;
+  once used up the consumer runs from the grid until the budget is back at
+  0.2 kWh. Several consumers on automatic share the budget. Energy the night
+  discharge would feed in may go to them instead.
+
+The PV surplus is not affected, import peak shaving still covers peaks, and a
+forced run of a daily target with the source *battery* may use the batteries.
+The forced runs of daily targets with the source *grid* follow the setting in
+the forecast chart as well (on automatic until the next charge from PV;
+later ones are planned like *always*); measured only consumers are part of the
+consumption forecast, there the setting acts only in the control. The card
+shows the setting with the budget and whether the batteries cover the
+consumer right now; while it runs from the grid for this reason, its box in
+the energy flow carries the badge *grid*. The budget is also the attribute
+`support_budget_kwh` of *Stored energy total*.
+
+Useful for loads that would empty the batteries in the evening: a sauna, an
+instantaneous water heater, a heating rod with the source *grid*, later a
+wallbox.
+
 ### Role in the feed-in cap
 
 Select per controlled consumer, on its card in the dashboard under *Feed-in
@@ -942,8 +979,8 @@ possible, e.g. for backup power.
 ![Night discharge](docs/images/night_discharge_en.svg)
 
 Energy still in the batteries in the morning is fed in over night, down to a
-reserve that the PV forecast can refill the next day (here *Night discharge
-reserve* 10 %: about 2.9 kWh are fed in over night, and 3.2 kWh less at noon,
+reserve that the PV forecast can refill the next day (here *Morning reserve*
+10 %: about 2.9 kWh are fed in over night, and 3.2 kWh less at noon,
 because the batteries have more room for the PV). Useful if the batteries are
 still well charged in the morning (large battery, low night consumption,
 summer):
@@ -1116,7 +1153,7 @@ sensor *Learned values in use* has all learned values as attributes.
 | Grid surplus targets while charging and discharging | how far the grid power swings towards import while the batteries control it; the target keeps the grid on the export side 90 % of the time (20–1000 W) | some controlling in operating mode *active* |
 | Control interval and surplus averaging window | the learned report interval of the smart meter (0.8 × and 3 ×) | a few meter reports |
 | Usable capacity (per battery, *Use learned capacity*) | charge and discharge legs over at least 20 % state of charge: DC energy / change of the state of charge (legs with a jump of the state of charge are discarded), median of the last ten | three legs |
-| Night discharge reserve (*Night discharge reserve coverage* sets how cautious; shown only while the reserve is automatic) | the morning gap: energy the house needed from battery or grid between the planned takeover of PV (end of the night discharge) and the real one (PV covering the consumption for 15 minutes), in % of the day's forecast consumption; the reserve covers the chosen share of the mornings (90 % = 9 of 10), above 100 % the largest gap times the value (110 % = 10 % more than the worst morning) | 14 measured mornings (also measured while the night discharge is off) |
+| Morning reserve (*Morning reserve coverage* sets how cautious; shown only while the reserve is automatic) | the morning gap: energy the house needed from battery or grid between the planned takeover of PV (end of the night discharge) and the real one (PV covering the consumption for 15 minutes), in % of the day's forecast consumption; the reserve covers the chosen share of the mornings (90 % = 9 of 10), above 100 % the largest gap times the value (110 % = 10 % more than the worst morning) | 14 measured mornings (also measured while the night discharge is off) |
 | Power and thermostat of a consumer (per consumer, *Use learned values*) | the power while switched on (on/off consumers: replaces the nominal power; power controlled consumers: the highest power, measured while commanded at ≥ 90 % of the maximum power, caps the maximum power) and pauses of its own thermostat while it is commanded, lasting 30 s to 10 min (then treated like *thermostat cycles by itself*; longer pauses, e.g. a dehumidifier at its target humidity, do not count) | 30 samples, two pauses |
 
 ### Further settings (entities)
@@ -1140,8 +1177,11 @@ sensor *Learned values in use* has all learned values as attributes.
   more export than this. 0 W means never feeding battery energy into the grid,
   the maximum switches the limit off. Below the *grid surplus target while
   discharging* it wins (the dashboard shows a note).
-- *Night discharge* (switch, off by default) and *Night discharge reserve*
-  (default 25 % of tomorrow's forecast consumption) – over night the batteries
+- *Morning reserve* (default 25 % of tomorrow's forecast consumption): energy
+  that should remain above the minimum state of charge in the morning, for
+  mornings when PV takes over later than forecast; used by the night
+  discharge and the [battery support](#battery-support).
+- *Night discharge* (switch, off by default) – over night the batteries
   discharge evenly down to the reserve (usable energy above the minimum state
   of charge of the batteries) until PV production exceeds the consumption
   again, ignoring the discharge grid target (the maximum grid export still

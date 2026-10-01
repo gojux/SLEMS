@@ -426,6 +426,14 @@
           "first": "Sensor 1",
           "second": "Sensor 2"
         }
+      },
+      "battery_support": {
+        "name": "Battery support",
+        "state": {
+          "always": "Always",
+          "auto": "Automatic",
+          "never": "Never"
+        }
       }
     },
     "sensor": {
@@ -696,7 +704,7 @@
         "name": "Use learned values"
       },
       "night_reserve_auto": {
-        "name": "Automatic night discharge reserve"
+        "name": "Automatic morning reserve"
       },
       "regular_full_charge": {
         "name": "Regular full charge"
@@ -740,7 +748,7 @@
         "name": "Maximum grid export while discharging"
       },
       "night_reserve": {
-        "name": "Night discharge reserve"
+        "name": "Morning reserve"
       },
       "rotation_soc_threshold": {
         "name": "Battery rotation threshold"
@@ -803,7 +811,7 @@
         "name": "Feed-in cap buffer"
       },
       "night_reserve_coverage": {
-        "name": "Night discharge reserve coverage"
+        "name": "Morning reserve coverage"
       },
       "full_charge_interval": {
         "name": "Full charge at the latest every"

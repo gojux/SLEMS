@@ -31,6 +31,11 @@ Night discharge (optional, see night_discharge): outside a surplus the
 batteries discharge at least with the planned night power, ignoring the
 discharge grid target but still respecting the maximum grid export.
 
+Battery support (see battery_support): the power of consumers that must not
+draw from the batteries right now (``unsupported``) is left to the grid in a
+deficit; the batteries cover only the rest. Import peak shaving still covers
+the import above its limit.
+
 Daily targets of consumers (see consumer_targets): a consumer short of its
 target gets the surplus before the batteries (boost); from its latest start
 on it runs at full power regardless of the surplus (forced), the batteries
@@ -213,8 +218,15 @@ def allocate(
     night_discharge_w: float | None = None,
     feed_in_limit_w: float | None = None,
     cap: CapControl | None = None,
+    unsupported: frozenset[str] = frozenset(),
+    unsupported_measured_w: float = 0.0,
 ) -> Allocation:
-    """Distribute ``available_w`` between batteries and consumers."""
+    """Distribute ``available_w`` between batteries and consumers.
+
+    ``unsupported`` are controllable consumers whose planned power the
+    batteries must not cover, ``unsupported_measured_w`` the measured power of
+    such consumers that SLEMS does not control right now.
+    """
     ordered = sorted(consumers, key=lambda c: (c.priority, c.subentry_id))
     consumer_power = {c.subentry_id: 0.0 for c in ordered}
 
@@ -230,6 +242,9 @@ def allocate(
         elif consumer.must_stay_on:
             consumer_power[consumer.subentry_id] = consumer.minimum_running_power_w
     remaining = available_w - sum(consumer_power.values())
+    unsupported_w = unsupported_measured_w + sum(
+        power for subentry_id, power in consumer_power.items() if subentry_id in unsupported
+    )
 
     charge_secured = battery is not None and _charge_secured(
         battery, settings, expected_surplus_wh
@@ -243,7 +258,7 @@ def allocate(
         and (cap_export > 0 or (night_discharge_w and remaining <= settings.charge_grid_target_w))
         and not _peak_shaving_active(battery, settings)
     ):
-        normal = max(0.0, discharge_target - remaining)
+        normal = max(0.0, discharge_target - remaining - unsupported_w)
         discharge = min(
             max(normal, night_discharge_w or 0.0, cap_export),
             max_export - remaining,
@@ -261,7 +276,7 @@ def allocate(
                 charge_secured=charge_secured,
             )
     if remaining < discharge_target:
-        allocation = _cover_deficit(remaining, discharge_target, battery, settings)
+        allocation = _cover_deficit(remaining, discharge_target, battery, settings, unsupported_w)
         allocation.consumer_power_w = consumer_power
         allocation.charge_secured = charge_secured
         return allocation
@@ -345,6 +360,7 @@ def _cover_deficit(
     grid_target_w: float,
     battery: BatteryGroup | None,
     settings: AllocationSettings,
+    unsupported_w: float = 0.0,
 ) -> Allocation:
     if battery is None:
         return Allocation(strategy=Strategy.SELF_CONSUMPTION)
@@ -353,7 +369,7 @@ def _cover_deficit(
         discharge = max(0.0, grid_import - settings.peak_shaving_grid_limit_w)
         strategy = Strategy.PEAK_SHAVING
     else:
-        discharge = grid_target_w - remaining_w
+        discharge = max(0.0, grid_target_w - remaining_w - unsupported_w)
         strategy = Strategy.SELF_CONSUMPTION
     return Allocation(
         strategy=strategy, battery_power_w=-min(discharge, battery.max_discharge_w)
