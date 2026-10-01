@@ -65,6 +65,8 @@ class ProjectionSettings:
     night_reserve_pct: float
     # Grid export caused by discharging (night discharge) at most.
     discharge_max_grid_export_w: float = math.inf
+    # Until then neither grid friendly charging nor night discharge (bad weather mode).
+    bad_weather_until: datetime | None = None
 
 
 @dataclass
@@ -124,7 +126,7 @@ def project_soc(
         if hour == first_hour:
             # Still the current state of charge: the controller's limit.
             limit = today_limit_w
-        elif settings.grid_friendly_charging:
+        elif settings.grid_friendly_charging and not _bad_weather(settings, hour):
             # Like the controller later: from the state of charge of that hour.
             limit = feed_in_limit(surplus, needed, battery.max_charge_w)
             if limit is not None and cap is not None:
@@ -205,6 +207,10 @@ def _take_surplus(
     return taken
 
 
+def _bad_weather(settings: ProjectionSettings, moment: datetime) -> bool:
+    return settings.bad_weather_until is not None and moment < settings.bad_weather_until
+
+
 def _discharge(
     stored: float,
     deficit_w: float,
@@ -227,7 +233,7 @@ def _discharge(
         return min(stored, max(floor, stored - power * share / efficiency))
     power = min(deficit_w, battery.max_discharge_w)
     after = min(stored, max(floor, stored - power * share / efficiency))
-    if not settings.night_discharge or consumption is None:
+    if not settings.night_discharge or consumption is None or _bad_weather(settings, start):
         return after
     plan = plan_night_discharge(
         start,

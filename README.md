@@ -55,6 +55,7 @@ system).
   - [Using the dashboard](#using-the-dashboard)
 - [Operation and control](#operation-and-control)
   - [Operating mode](#operating-mode)
+  - [Bad weather mode](#bad-weather-mode)
   - [How the control works](#how-the-control-works)
   - [Which option when?](#which-option-when)
   - [Grid friendly charging](#grid-friendly-charging)
@@ -723,7 +724,12 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar.
 
 - **Energy flow** between grid, PV, house, every battery (with its state of
   charge) and the consumers; the animated dots run in the direction of the
-  flow, faster and on a thicker line the higher the power.
+  flow, faster and on a thicker line the higher the power. The SLEMS logo in
+  the middle opens a menu: the [bad weather mode](#bad-weather-mode) and the
+  *control details* (status, control gain, control interval and averaging
+  window, source and update interval of the smart meter, with Modbus its
+  round trip, errors and the time on the entity today, and the battery
+  response times).
 - **Key figures**: status (problems first – smart meter without values,
   battery unreadable or not responding – otherwise the operating mode),
   strategy, state of charge, feed-in limit, stored energy and capacity,
@@ -826,6 +832,24 @@ The entity *SLEMS Operating mode* switches between:
   because the smart meter did not report for a while (60 s or ten update
   intervals; the batteries then follow their own logic until the meter is
   back).
+
+### Bad weather mode
+
+When bad weather is coming, the switch *Bad weather mode* (also in the menu
+of the SLEMS logo in the energy flow) stores as much of today's surplus as
+possible:
+
+- The batteries charge every surplus at once instead of charging grid
+  friendly, and the night discharge is off.
+- The target grid surplus, the feed-in cap and the battery limits stay.
+- It ends by itself in the evening: at the end of the last hour in which the
+  PV forecast is above the consumption forecast (without such an hour at the
+  end of the PV production), recomputed with every new forecast. Switched on
+  after that moment, e.g. in the evening before a rainy day, it lasts until
+  the evening of the next day, so the night discharge of this night is off as
+  well. The attribute `until` shows the end.
+- While it is on, the logo carries a rain cloud; the forecast chart and the
+  expected export follow it.
 
 ### How the control works
 

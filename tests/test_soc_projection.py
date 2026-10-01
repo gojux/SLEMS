@@ -180,3 +180,17 @@ def test_after_the_night_discharge_the_limit_follows_the_lower_state_of_charge()
     # limit is computed from it (as the controller does), so they get full.
     assert result.soc_pct[at(7)] < 50
     assert max(result.soc_pct[at(hour)] for hour in range(8, 17)) == pytest.approx(100)
+
+
+def test_bad_weather_mode_until_the_evening() -> None:
+    pv, consumption = forecasts()
+    mode = settings(grid_friendly_charging=True, night_discharge=True, bad_weather_until=at(17, day=1))
+    normal = project_soc(at(22), battery(80), pv, consumption, None, settings(
+        grid_friendly_charging=True, night_discharge=True), None)
+    result = project_soc(at(22), battery(80), pv, consumption, None, mode, None)
+    # No night discharge: the night only takes the consumption.
+    assert normal.soc_pct[at(7, day=1)] < result.soc_pct[at(7, day=1)]
+    assert result.soc_pct[at(7, day=1)] == pytest.approx(80 - 10 * 4)  # 22:00-08:00 × 400 W
+    # No grid friendly charging: the morning surplus is charged at once.
+    assert normal.planned_charge_w[at(8, day=1)] == 0
+    assert result.planned_charge_w[at(8, day=1)] > 0

@@ -27,6 +27,8 @@ import logging
 import statistics
 import time
 
+from homeassistant.util import dt as dt_util
+
 _LOGGER = logging.getLogger(__name__)
 
 type Reader = Callable[[int, int], Awaitable[list[int]]]
@@ -181,6 +183,10 @@ class ModbusGridMeter:
         self.last_error: str | None = None
         self._failures = 0
         self._round_trips: deque[float] = deque(maxlen=ROUND_TRIPS_KEPT)
+        # Time today without a fresh value (the entity was the source).
+        self.fallback_s = 0.0
+        self._fallback_day = None
+        self._last_poll: float | None = None
 
     @property
     def fresh_s(self) -> float:
@@ -199,6 +205,12 @@ class ModbusGridMeter:
     async def poll(self) -> bool:
         """Read the power once; True if a value arrived."""
         start = time.monotonic()
+        today = dt_util.now().date()
+        if self._fallback_day != today:
+            self._fallback_day, self.fallback_s = today, 0.0
+        elif self._last_poll is not None and not self.fresh(self._last_poll):
+            self.fallback_s += start - self._last_poll
+        self._last_poll = start
         try:
             value = await asyncio.wait_for(
                 read_power(self._read, self.power_register), READ_TIMEOUT_S
@@ -253,4 +265,6 @@ class ModbusGridMeter:
             "last_error": self.last_error,
             "round_trip_median_ms": round(statistics.median(trips) * 1000) if trips else None,
             "round_trip_p95_ms": round(trips[int(0.95 * (len(trips) - 1))] * 1000) if trips else None,
+            "round_trip_max_ms": round(trips[-1] * 1000) if trips else None,
+            "fallback_today_s": round(self.fallback_s),
         }

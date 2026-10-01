@@ -353,6 +353,13 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         device_class=SensorDeviceClass.ENUM,
         options=[status.value for status in ControlStatus],
         value_fn=lambda _, c: c.controller.status.value,
+        attributes_fn=lambda _, c: {
+            "control_interval_s": c.control_interval_s,
+            "average_window_s": c.average_window_s,
+            "timing_auto": c.settings.timing_auto,
+            "gain_auto": c.settings.auto_gain,
+            "gain_setting": c.settings.control_gain,
+        },
     ),
     SystemSensorDescription(
         key="control_gain_current",
@@ -370,7 +377,10 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda _, c: c.controller.meter.interval_s,
-        attributes_fn=lambda _, c: {"source": c.grid_source},
+        attributes_fn=lambda _, c: {
+            "source": c.grid_source,
+            "modbus": c.grid_meter.diagnostics(time.monotonic()) if c.grid_meter else None,
+        },
     ),
     SystemSensorDescription(
         key="battery_response_time",
@@ -694,7 +704,7 @@ class SystemSensor(SlemsSystemEntity, SensorEntity):
 
     entity_description: SystemSensorDescription
     _unrecorded_attributes = frozenset(
-        {"day_plan", "day_plan_tomorrow", "days", "peaks", "exported_today_kwh"}
+        {"day_plan", "day_plan_tomorrow", "days", "peaks", "exported_today_kwh", "modbus"}
     )
 
     def __init__(

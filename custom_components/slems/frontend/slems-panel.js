@@ -206,7 +206,35 @@ const STRINGS = {
       disabled: "off",
       no_forecast: "no forecast",
       not_enough_surplus: "none – charge at once",
+      bad_weather: "off (bad weather mode)",
     },
+    controlMenu: "Control",
+    badWeather: "Bad weather mode",
+    badWeatherUntil: "Bad weather mode until {time}",
+    badWeatherOff: "End bad weather mode (until {time})",
+    badWeatherTitle: "Switch on bad weather mode?",
+    badWeatherText:
+      "Until the evening (the end of the last hour in which the PV forecast is above the consumption) the batteries store every surplus at once instead of charging grid friendly, and the night discharge is off. The target grid surplus, the feed-in cap and the battery limits stay. Switched on after that moment, it lasts until the evening of the next day. It ends by itself.",
+    badWeatherConfirm: "Switch on",
+    controlDetails: "Control details",
+    sectionControl: "Control",
+    sectionMeter: "Smart meter",
+    sectionBatteries: "Battery response time",
+    controlStatus: "Status",
+    gainCurrent: "Current control gain",
+    gainSetting: "Control gain (setting)",
+    controlInterval: "Control interval",
+    averageWindow: "Surplus averaging window",
+    automatic: "automatic",
+    fixed: "fixed",
+    meterSource: "Source",
+    meterInterval: "Update interval",
+    meterAge: "Age of the last value",
+    roundTrip: "Round trip (median / p95 / max)",
+    meterErrors: "Errors",
+    meterFallback: "Entity used today",
+    allBatteries: "All batteries",
+    notLearned: "not learned yet",
     exportBelowTarget:
       "The maximum grid export while discharging ({limit}) is below the grid surplus target while discharging ({target}): the batteries control to {limit}.",
     feedInCap: "Feed-in cap",
@@ -546,7 +574,35 @@ const STRINGS = {
       disabled: "aus",
       no_forecast: "keine Prognose",
       not_enough_surplus: "keine – sofort laden",
+      bad_weather: "aus (Schlechtwetter-Modus)",
     },
+    controlMenu: "Regelung",
+    badWeather: "Schlechtwetter-Modus",
+    badWeatherUntil: "Schlechtwetter-Modus bis {time}",
+    badWeatherOff: "Schlechtwetter-Modus beenden (bis {time})",
+    badWeatherTitle: "Schlechtwetter-Modus einschalten?",
+    badWeatherText:
+      "Bis zum Abend (Ende der letzten Stunde, in der die PV-Prognose über dem Verbrauch liegt) speichern die Batterien jeden Überschuss sofort, statt netzdienlich zu laden, und die Nachtentladung ist aus. Ziel-Netzüberschuss, Einspeisebegrenzung und die Grenzen der Batterien bleiben. Nach diesem Zeitpunkt eingeschaltet, gilt er bis zum Abend des nächsten Tages. Er endet von selbst.",
+    badWeatherConfirm: "Einschalten",
+    controlDetails: "Details der Regelung",
+    sectionControl: "Regelung",
+    sectionMeter: "Smart Meter",
+    sectionBatteries: "Reaktionszeit Batterien",
+    controlStatus: "Status",
+    gainCurrent: "Aktuelle Regelverstärkung",
+    gainSetting: "Regelverstärkung (Einstellung)",
+    controlInterval: "Regelintervall",
+    averageWindow: "Mittelungsfenster Überschuss",
+    automatic: "automatisch",
+    fixed: "fest",
+    meterSource: "Quelle",
+    meterInterval: "Aktualisierungsintervall",
+    meterAge: "Alter des letzten Werts",
+    roundTrip: "Antwortzeit (Median / p95 / max)",
+    meterErrors: "Fehler",
+    meterFallback: "Heute über die Entity",
+    allBatteries: "Alle Batterien",
+    notLearned: "noch nicht gelernt",
     exportBelowTarget:
       "Die maximale Einspeisung beim Entladen ({limit}) liegt unter dem Ziel-Netzüberschuss beim Entladen ({target}): Die Batterien regeln auf {limit}.",
     feedInCap: "Einspeisebegrenzung",
@@ -1351,6 +1407,19 @@ class SlemsPanel extends HTMLElement {
       case "menu-resume":
         this._hass.callService("switch", "turn_off", { entity_id: entityId });
         break;
+      case "hub-bad-weather-on":
+        this._confirm(t.badWeatherTitle, t.badWeatherText, t.badWeatherConfirm, () =>
+          this._hass.callService("switch", "turn_on", { entity_id: entityId })
+        , false);
+        break;
+      case "hub-bad-weather-off":
+        this._hass.callService("switch", "turn_off", { entity_id: entityId });
+        break;
+      case "hub-details":
+        this._detailsDevice = "control";
+        this._renderDetails();
+        this.shadowRoot.getElementById("details").showModal();
+        break;
       case "menu-details":
         this._detailsDevice = item.dataset.device;
         this._renderDetails();
@@ -1375,6 +1444,10 @@ class SlemsPanel extends HTMLElement {
     const deviceId = this._detailsDevice;
     const dialog = this.shadowRoot?.getElementById("details");
     if (!deviceId || !dialog) return;
+    if (deviceId === "control") {
+      this._renderControlDetails();
+      return;
+    }
     const t = this._t;
     const battery = (this._config.batteries || []).find((b) => b.device_id === deviceId);
     const s = (key) => this._state(key, deviceId);
@@ -1422,6 +1495,65 @@ class SlemsPanel extends HTMLElement {
     this.shadowRoot.getElementById("details-body").innerHTML = rows.length
       ? rows.map(([label, value, entityId]) => this._row(label, escapeHtml(String(value)), entityId)).join("")
       : `<dd class="muted">${t.noDetails}</dd>`;
+  }
+
+  /** Details dialog of the control: timing, smart meter (Modbus statistics), battery response. */
+  _renderControlDetails() {
+    const t = this._t;
+    const language = this._hass.locale?.language || "en";
+    const num = (value, digits) =>
+      new Intl.NumberFormat(language, { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(value);
+    const seconds = (value) => (value === null || value === undefined ? undefined : `${num(value, 1)} s`);
+    const ms = (value) => (value === null || value === undefined ? "–" : `${num(value, 0)} ms`);
+    const mode = (auto) => ` (${auto ? t.automatic : t.fixed})`;
+    const status = this._state("control_status");
+    const a = status?.attributes || {};
+    const gain = this._state("control_gain_current");
+    const meter = this._state("meter_interval");
+    const modbus = meter?.attributes?.modbus;
+    const response = this._state("battery_response_time");
+    const perBattery = response?.attributes?.per_battery || {};
+    const section = (title) => `<dt class="dl-section">${escapeHtml(title)}</dt>`;
+    const rows = (list) =>
+      list
+        .filter(([, value]) => value !== undefined && value !== null && value !== "")
+        .map(([label, value, entityId]) => this._row(escapeHtml(label), escapeHtml(String(value)), entityId))
+        .join("");
+    const control = rows([
+      [t.controlStatus, status && this._format(status), status?.entity_id],
+      [t.gainCurrent, gain && this._format(gain), gain?.entity_id],
+      [t.gainSetting, a.gain_setting !== undefined ? num(a.gain_setting, 2) + mode(a.gain_auto) : undefined],
+      [t.controlInterval, a.control_interval_s !== undefined ? seconds(a.control_interval_s) + mode(a.timing_auto) : undefined],
+      [t.averageWindow, a.average_window_s !== undefined ? seconds(a.average_window_s) + mode(a.timing_auto) : undefined],
+    ]);
+    const meterRows = rows([
+      [t.meterSource, meter?.attributes?.source === "modbus" ? "Modbus" : meter ? "Entity" : undefined, meter?.entity_id],
+      [t.meterInterval, seconds(this._number(meter)), meter?.entity_id],
+      ...(modbus
+        ? [
+            [t.meterAge, seconds(modbus.age_s)],
+            [t.roundTrip, `${ms(modbus.round_trip_median_ms)} / ${ms(modbus.round_trip_p95_ms)} / ${ms(modbus.round_trip_max_ms)}`],
+            [t.meterErrors, modbus.last_error ? `${modbus.errors} (${modbus.last_error})` : `${modbus.errors}`],
+            [t.meterFallback, this._duration(modbus.fallback_today_s)],
+          ]
+        : []),
+    ]);
+    const batteryRows = rows([
+      [t.allBatteries, seconds(this._number(response)) ?? t.notLearned, response?.entity_id],
+      ...(this._config.batteries || []).map((battery) => [battery.name, seconds(perBattery[battery.id]) ?? t.notLearned]),
+    ]);
+    this.shadowRoot.getElementById("details-title").textContent = t.controlDetails;
+    this.shadowRoot.getElementById("details-close").textContent = t.close;
+    this.shadowRoot.getElementById("details-body").innerHTML =
+      section(t.sectionControl) + control + section(t.sectionMeter) + meterRows + section(t.sectionBatteries) + batteryRows;
+  }
+
+  /** "1 h 5 min" / "5 min" / "40 s" for a duration in seconds. */
+  _duration(totalSeconds) {
+    const s = Math.round(totalSeconds ?? 0);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return h ? `${h} h ${m} min` : m ? `${m} min` : `${s} s`;
   }
 
   /** Energy the storage of a consumer can still take, or how far the learning is. */
@@ -1884,7 +2016,37 @@ class SlemsPanel extends HTMLElement {
       this._flowObserver.observe(this._flowRoot);
     }
     for (const node of nodes) this._updateFlowNode(node);
+    this._updateHub();
     this._layoutFlow();
+  }
+
+  /** Logo in the energy flow: menu button, bad weather badge and the menu itself. */
+  _updateHub() {
+    const button = this._flowRoot?.querySelector(".hub-button");
+    if (!button) return;
+    const t = this._t;
+    const badWeather = this._state("bad_weather");
+    const active = badWeather?.state === "on";
+    const until = this._clock(badWeather?.attributes?.until);
+    const label = active ? t.badWeatherUntil.replace("{time}", until) : t.controlMenu;
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.querySelector(".hub-badge").hidden = !active;
+    const open = this._openMenu === "hub";
+    button.setAttribute("aria-expanded", String(open));
+    const item = (action, text, attrs = "") => `<button class="menu-item" data-action="${action}"${attrs}>${escapeHtml(text)}</button>`;
+    const items = [];
+    if (badWeather) {
+      items.push(
+        active
+          ? item("hub-bad-weather-off", t.badWeatherOff.replace("{time}", until), ` data-entity="${badWeather.entity_id}"`)
+          : item("hub-bad-weather-on", t.badWeather, ` data-entity="${badWeather.entity_id}"`)
+      );
+    }
+    items.push(item("hub-details", t.controlDetails));
+    const html = open ? `<div class="menu" role="menu">${items.join("")}</div>` : "";
+    const slot = this._flowRoot.querySelector(".hub-menu");
+    if (slot.innerHTML !== html) slot.innerHTML = html;
   }
 
   _flowSkeleton(nodes) {
@@ -1906,7 +2068,11 @@ class SlemsPanel extends HTMLElement {
         <svg class="flow-lines" aria-hidden="true"></svg>
         <div class="fcell top">${byRole("pv")}</div>
         <div class="fcell left">${byRole("grid")}</div>
-        <div class="fcell center"><img class="hub" data-node="hub" src="${ICON_URL}" alt="SLEMS"></div>
+        <div class="fcell center"><div class="menu-wrap hub-wrap">
+          <button class="hub-button" data-action="battery-menu" data-device="hub" aria-expanded="false">
+            <img class="hub" data-node="hub" src="${ICON_URL}" alt="SLEMS">
+            <span class="hub-badge" hidden><ha-icon icon="mdi:weather-pouring"></ha-icon></span>
+          </button><div class="hub-menu"></div></div></div>
         <div class="fcell right">${byRole("house")}</div>
         <div class="fcell batteries">${byRole("battery")}</div>
         ${hasConsumers ? `<div class="fcell consumers">${byRole("consumer")}</div>` : ""}
@@ -3303,6 +3469,16 @@ const STYLE = `
   @keyframes fdash { to { stroke-dashoffset: -12; } }
   @media (prefers-reduced-motion: reduce) { .fline { animation: none; stroke-dasharray: none; } }
   .hub { width: 60px; height: 60px; display: block; }
+  .hub-wrap { display: inline-block; }
+  .hub-button { position: relative; background: none; border: none; padding: 0; cursor: pointer; border-radius: 14px; line-height: 0; }
+  .hub-button:hover, .hub-button[aria-expanded="true"] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 35%, transparent); }
+  .hub-badge { position: absolute; top: -8px; right: -10px; width: 26px; height: 26px; border-radius: 50%; display: flex;
+    align-items: center; justify-content: center; background: var(--info-color, #039be5); color: #fff;
+    border: 2px solid var(--card-background-color); }
+  .hub-badge[hidden] { display: none; }
+  .hub-badge ha-icon { --mdc-icon-size: 16px; }
+  .hub-wrap .menu { left: 50%; right: auto; transform: translateX(-50%); text-align: left; }
+  #details dt.dl-section { grid-column: 1 / -1; font-weight: 500; margin-top: 12px; color: var(--primary-text-color); }
   @media (max-width: 500px) { .hub { width: 45px; height: 45px; } }
   .fbox { --accent: var(--divider-color); background: var(--card-background-color); border: 1px solid var(--divider-color);
     border-radius: 12px; padding: 10px 12px; min-width: 0; width: 100%; max-width: 170px; min-height: 104px;

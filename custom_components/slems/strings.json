@@ -706,6 +706,9 @@
       },
       "target_earliest_enabled": {
         "name": "Daily target earliest start"
+      },
+      "bad_weather": {
+        "name": "Bad weather mode"
       }
     },
     "number": {

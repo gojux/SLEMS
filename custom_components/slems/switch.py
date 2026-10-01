@@ -48,6 +48,7 @@ async def async_setup_entry(
         SettingSwitch(coordinator, key, attribute)
         for key, attribute in SETTING_SWITCHES.items()
     )
+    async_add_entities([BadWeatherSwitch(coordinator)])
     for battery in coordinator.batteries:
         entities: list[SwitchEntity] = [
             BatteryEnabledSwitch(coordinator, battery),
@@ -98,6 +99,32 @@ class SettingSwitch(SlemsSystemEntity, SwitchEntity, RestoreEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self._set(False)
+        self.async_write_ha_state()
+
+
+class BadWeatherSwitch(SlemsSystemEntity, SwitchEntity):
+    """Bad weather mode until the evening (see bad_weather); stored by the coordinator."""
+
+    _attr_icon = "mdi:weather-pouring"
+
+    def __init__(self, coordinator: SlemsCoordinator) -> None:
+        super().__init__(coordinator, "bad_weather")
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.bad_weather.active(dt_util.now())
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        mode = self.coordinator.bad_weather
+        return {"until": mode.until.isoformat() if mode.active(dt_util.now()) else None}
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self.coordinator.set_bad_weather(True)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self.coordinator.set_bad_weather(False)
         self.async_write_ha_state()
 
 

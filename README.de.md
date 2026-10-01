@@ -55,6 +55,7 @@ lustiges Wort für ein sehr interessantes Tier) und *EMS*
   - [Bedienung des Dashboards](#bedienung-des-dashboards)
 - [Betrieb und Regelung](#betrieb-und-regelung)
   - [Betriebsmodus](#betriebsmodus)
+  - [Schlechtwetter-Modus](#schlechtwetter-modus)
   - [So funktioniert die Regelung](#so-funktioniert-die-regelung)
   - [Welche Option wann?](#welche-option-wann)
   - [Netzdienliches Laden](#netzdienliches-laden)
@@ -757,7 +758,12 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
 - **Energiefluss** zwischen Netz, PV, Haus, jeder Batterie (mit ihrem
   Ladezustand) und den Verbrauchern; die animierten Punkte laufen in
   Flussrichtung, je höher die Leistung, desto schneller und auf einer dickeren
-  Linie.
+  Linie. Das SLEMS-Logo in der Mitte öffnet ein Menü: den
+  [Schlechtwetter-Modus](#schlechtwetter-modus) und die *Details der
+  Regelung* (Status, Regelverstärkung, Regelintervall und Mittelungsfenster,
+  Quelle und Aktualisierungsintervall des Smart Meters, bei Modbus mit
+  Antwortzeit, Fehlern und der Zeit über die Entity heute, und die
+  Reaktionszeiten der Batterien).
 - **Kennzahlen**: Status (zuerst Probleme – Smart Meter ohne Werte, Batterie
   nicht lesbar oder reagiert nicht –, sonst der Betriebsmodus), Strategie,
   Ladezustand, gespeicherte Energie und Kapazität, Einspeisegrenze, Prognosen
@@ -867,6 +873,25 @@ Die Entity *SLEMS Betriebsmodus* schaltet zwischen:
   pausiert, weil der Smart Meter eine Weile nichts gemeldet hat (60 s bzw.
   zehn Aktualisierungsintervalle; die Batterien folgen dann ihrer eigenen
   Logik, bis der Zähler wieder meldet).
+
+### Schlechtwetter-Modus
+
+Kommt schlechtes Wetter, speichert der Schalter *Schlechtwetter-Modus* (auch
+im Menü des SLEMS-Logos im Energiefluss) möglichst viel des heutigen
+Überschusses:
+
+- Die Batterien laden jeden Überschuss sofort, statt netzdienlich zu laden,
+  und die Nachtentladung ist aus.
+- Ziel-Netzüberschuss, Einspeisebegrenzung und die Grenzen der Batterien
+  bleiben.
+- Er endet von selbst am Abend: am Ende der letzten Stunde, in der die
+  PV-Prognose über der Verbrauchsprognose liegt (ohne eine solche Stunde am
+  Ende der PV-Produktion), mit jeder neuen Prognose nachgeführt. Nach diesem
+  Zeitpunkt eingeschaltet, z. B. am Abend vor einem Regentag, gilt er bis zum
+  Abend des nächsten Tages; auch die Nachtentladung dieser Nacht entfällt
+  dann. Das Attribut `until` zeigt das Ende.
+- Solange er an ist, trägt das Logo eine Regenwolke; Prognose-Diagramm und
+  erwartete Einspeisung berücksichtigen ihn.
 
 ### So funktioniert die Regelung
 

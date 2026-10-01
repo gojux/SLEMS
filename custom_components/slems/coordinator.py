@@ -118,6 +118,7 @@ from .forecast import (
     async_statistic_means,
 )
 from .forecast.accuracy import PvAccuracyTracker
+from .bad_weather import BadWeatherMode
 from .grid_filter import GridPowerFilter
 from .grid_meter import ModbusGridMeter
 from .learning import (
@@ -624,6 +625,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # or not available (then grid_meter_error says why).
         self.grid_meter: ModbusGridMeter | None = None
         self.grid_meter_error: str | None = None
+        self.bad_weather = BadWeatherMode()
         self.pv_accuracy = PvAccuracyTracker()
         # Monotonic time since the export is above the feed-in cap.
         self.cap_exceeded_since: float | None = None
@@ -682,6 +684,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         control = stored.get(CONTROL_STORE_KEY) or {}
         if gain := control.get("gain"):
             self.controller.gain_adapter.reset(gain)
+        self.bad_weather.restore(control.get("bad_weather"))
         # Response times learned with another grid source contain its delay.
         if control.get("grid_source", "entity") == self.grid_source_configured:
             if response := control.get("battery_response_s"):
@@ -883,6 +886,22 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._integrate_export(grid, time.monotonic())
         return grid
 
+    def set_bad_weather(self, on: bool) -> None:
+        """Switch the bad weather mode on (until the evening, see bad_weather) or off."""
+        if on:
+            data = self.data
+            now = dt_util.now()
+            consumption = data.consumption_forecast if data is not None else None
+            self.bad_weather.switch_on(
+                now,
+                hourly(self._pv_native(data, now)) if data and data.pv_forecast else None,
+                self._with_target_load(consumption.total) if consumption is not None else None,
+            )
+        else:
+            self.bad_weather.switch_off()
+        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self.hass.async_create_task(self.async_request_refresh())
+
     def _integrate_export(self, grid_w: float | None, now: float) -> None:
         """Add up today's grid export from the grid values (restarts at midnight)."""
         today = dt_util.now().date()
@@ -958,6 +977,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             "battery_response_s": self.controller.battery_response.response_s,
             "battery_responses": self.controller.battery_responses.as_dict(),
             "grid_source": self.grid_source_configured,
+            "bad_weather": self.bad_weather.as_dict(),
         }
         data[PV_ACCURACY_STORE_KEY] = self.pv_accuracy.as_dict()
         data[MORNING_GAP_STORE_KEY] = self.morning_gap.as_dict()
@@ -1535,6 +1555,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         settings = self.settings
         # The daily targets first: their forced runs are a load in the plans.
         self._target_states(snapshot, battery, pv_forecast, load, wall_now)
+        if self.bad_weather.update(
+            wall_now,
+            hourly(pv_forecast) if pv_forecast is not None else None,
+            self._with_target_load(consumption.total) if consumption else None,
+        ):
+            self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
         forecast_plan = self.forecast_plan(snapshot, battery, wall_now, load, settings, balancing_wh)
         cap = forecast_plan.cap
         snapshot.feed_in_cap = cap
@@ -1555,6 +1581,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         snapshot.night_discharge = None
         if (
             settings.night_discharge
+            and not self.bad_weather.active(wall_now)
             and battery is not None
             and snapshot.pv_forecast is not None
             and snapshot.consumption_forecast is not None
@@ -1830,6 +1857,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         result.cap = cap
         if not settings.grid_friendly_charging:
             result.feed_in_limit_reason = "disabled"
+        elif self.bad_weather.active(wall_now):
+            result.feed_in_limit_reason = "bad_weather"
         elif battery is None or pv_forecast is None:
             result.feed_in_limit_reason = "no_forecast"
         else:
@@ -1879,6 +1908,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     night_discharge=settings.night_discharge,
                     night_reserve_pct=self.night_reserve_pct(settings),
                     discharge_max_grid_export_w=settings.discharge_max_grid_export_w,
+                    bad_weather_until=self.bad_weather.until,
                 ),
                 result.feed_in_limit_w,
                 balancing_wh,

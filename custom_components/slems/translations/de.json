@@ -706,6 +706,9 @@
       },
       "target_earliest_enabled": {
         "name": "Tagesziel frühester Beginn"
+      },
+      "bad_weather": {
+        "name": "Schlechtwetter-Modus"
       }
     },
     "number": {
