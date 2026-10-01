@@ -184,6 +184,7 @@ spezialisiert; evcc ergänzt SLEMS gut (siehe [Roadmap](#roadmap)).
 |---|---|
 | Dashboard (Seitenleiste): Energiefluss, Kennzahlen, Tagesdiagramm mit Prognose und Plan, Batterien, Verbraucher, Einstellungen | ✅ |
 | Simulation im Dashboard: Tagesplan mit anderen Einstellungen im Vergleich zum aktuellen (heute oder morgen) | ✅ |
+| Tarife wie auf der Rechnung (Zeitfenster, Umsatzsteuer je Gruppe) mit Prüfung gegen eine Rechnung; Börsenpreise (APG, SMARD, Energy-Charts) nur mit Zustimmung; monatlicher Tarifvergleich | ✅ |
 
 ## Installation
 
@@ -985,6 +986,16 @@ Andere Einstellungen ausprobieren, ohne etwas zu ändern.
 - Die Tagesziele der Verbraucher gehen wie in der echten Planung ein; sonst
   werden von SLEMS gesteuerte Verbraucher und der Batterievorrang (er wirkt in
   der Echtzeit-Verteilung) nicht simuliert.
+
+**Tarifvergleich**: Mit [Tarifen](#tarife-optional) zeigt der Reiter
+Simulation für jeden Monat des letzten Jahres (und den laufenden Monat bis
+heute) den aufgezeichneten Netzbezug und die Einspeisung und was sie mit jedem
+Tarif inklusive Umsatzsteuer gekostet hätten, abzüglich der
+Einspeisevergütung, dazu die Differenz jedes Vergleichstarifs zum aktuellen.
+Es ist ein passiver Vergleich: die aufgezeichnete Energie anders bepreist,
+nicht das, was SLEMS mit einem anderen Tarif anders gemacht hätte (z. B. die
+Batterien in günstigen Stunden laden). Dynamische Tarife nutzen die
+gespeicherten Börsenpreise; Energie ohne Börsenpreis wird markiert.
 
 ### Reiter Einstellungen
 

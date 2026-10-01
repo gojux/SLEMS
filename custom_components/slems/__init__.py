@@ -27,6 +27,7 @@ from .efficiency import EfficiencyTracker
 from .panel import async_register_panel, async_unregister_panel
 from .problems import async_remove_issues
 from .simulation import async_register_websocket
+from .tariff_comparison import async_register_websocket as async_register_tariff_websocket
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -77,6 +78,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_register_panel(hass, entry)
     async_register_websocket(hass)
+    async_register_tariff_websocket(hass)
     # The switch and select restored consent and source when their platforms were set up.
     coordinator.market_prices.start()
     return True

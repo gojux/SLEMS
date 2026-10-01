@@ -56,10 +56,10 @@ class PriceSource(StrEnum):
 
 
 ATTRIBUTION = {
-    PriceSource.APG: "Day-ahead prices: Austrian Power Grid AG (transparency.apg.at)",
-    PriceSource.SMARD: "Day-ahead prices: Bundesnetzagentur | SMARD.de (CC BY 4.0)",
-    PriceSource.ENERGY_CHARTS_AT: "Day-ahead prices: Energy-Charts.info (Fraunhofer ISE)",
-    PriceSource.ENERGY_CHARTS_DE_LU: "Day-ahead prices: Energy-Charts.info (Fraunhofer ISE)",
+    PriceSource.APG: "Austrian Power Grid AG (transparency.apg.at)",
+    PriceSource.SMARD: "Bundesnetzagentur | SMARD.de (CC BY 4.0)",
+    PriceSource.ENERGY_CHARTS_AT: "Energy-Charts.info (Fraunhofer ISE)",
+    PriceSource.ENERGY_CHARTS_DE_LU: "Energy-Charts.info (Fraunhofer ISE)",
 }
 
 

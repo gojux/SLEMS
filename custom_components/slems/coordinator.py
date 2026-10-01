@@ -642,6 +642,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.problems = ProblemReporter(hass, self)
         # Day-ahead prices, fetched only when the user switches it on.
         self.market_prices = MarketPrices(hass, entry.entry_id)
+        # Last tariff comparison for the dashboard: (monotonic time, result).
+        self.tariff_comparison_cache: tuple[float, dict] | None = None
         # Grid power read over Modbus (see grid_meter); None if not configured
         # or not available (then grid_meter_error says why).
         self.grid_meter: ModbusGridMeter | None = None

@@ -227,6 +227,14 @@ tomorrow) and checks every hour at :17, the next day from 13:00. Dynamic
 tariff units `spot` and `market_month` use the hourly means; the monthly
 market price is the mean weighted by the export unless entered per month.
 
+### Tariff comparison
+
+`tariff_comparison.py` (websocket `slems/tariff_comparison`): the hourly
+import / export of the last 12 months (`energy_history`) split per local month
+and priced with each tariff (`compute_bill` in the executor, dynamic items with
+the stored hourly market prices). The result is cached for 10 minutes on the
+coordinator; a changed tariff reloads the entry and so starts without cache.
+
 ### Night discharge
 
 `night_discharge.py`, optional (switch, off by default). Without it the
@@ -1518,3 +1526,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-01 | Release and service calls hardened after an external code review. A release is confirmed (Venus: every write checked and the force mode / RS485 register read back; entity batteries: blocking calls) and stays outstanding until it succeeds (`BatteryRuntime.release_pending_since`, retried every update while SLEMS does not control the battery, three attempts at unload, repair issue after 5 minutes). Before, a failed release went unnoticed and was not tried again while the grid meter stayed stale, so a battery could keep its last set point. All service calls to other integrations wait for the result with a 10 s timeout (`util.async_call_service`): before, errors were never seen and with separate charge/discharge entities the stopping direction was not guaranteed to stop first. Scripts are called directly so SLEMS waits for them. The ramp timer is kept and cancelled at shutdown, and no cycle starts after it. `clamp_to_entity` stays within min/max when they are not on the step grid; NaN and infinite states count as unknown. |
 | 2026-10-01 | Tariffs as bill lines (`tariff.py`, subentry type `tariff`) instead of a fixed price per kWh: Austrian grid tariffs now have reduced prices in time windows (noon in summer), yearly items are charged per day, and VAT differs between the sides of a bill (e.g. none on feed-in energy). Entered like the bill and checked against it with the recorded hourly energy, so the user does not have to derive effective prices. Values only live in the user's Home Assistant; tests and docs use made-up tariffs. First part of dynamic tariffs (next: market prices with the user's consent, tariff comparison in the simulation, price chart). |
 | 2026-10-01 | Day-ahead prices only with the user's consent (switch, off by default): SLEMS must not contact services on the internet on its own. APG for Austria (official, data since 2023), SMARD for Germany (official, CC BY 4.0) and Energy-Charts for both as an alternative; no automatic fallback to another service than the one chosen. Prices are cached for a year, so comparisons and the check need no requests. The feed-in "monthly market price" is approximated by the export-weighted mean (as published market prices of PV feed-in are, but only on websites without an API); published values can be entered per month. |
+| 2026-10-01 | Tariff comparison as a passive comparison in the simulation tab: the recorded energy priced with each tariff per month. Simulating what the control would have done with another tariff would need price-aware planning, which does not exist yet; the label says so, so a dynamic tariff is not judged by a comparison that leaves out its main advantage. |

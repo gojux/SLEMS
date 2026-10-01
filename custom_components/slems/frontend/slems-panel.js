@@ -302,6 +302,21 @@ const STRINGS = {
     simMetricsTomorrow: "Key figures tomorrow",
     simCurrent: "Current settings",
     simSimulated: "Simulation",
+    tariffTitle: "Tariff comparison",
+    tariffHint:
+      "What your recorded grid import and feed-in would have cost with each tariff, including VAT; feed-in credits are deducted. A passive comparison: it does not include what SLEMS would have done differently with another tariff (e.g. charging the batteries in cheap hours).",
+    tariffMonth: "Month",
+    tariffImport: "Import",
+    tariffExport: "Feed-in",
+    tariffSum: "Total",
+    tariffToDate: "to date",
+    tariffDiff: "vs. current",
+    tariffCurrent: "current",
+    tariffSource: "Market prices: {source}",
+    tariffUnpriced: "* Part of the energy has no market price yet and is not included.",
+    tariffNoPrices: "Dynamic tariffs need market prices: switch on “Fetch market prices” on the SLEMS device.",
+    tariffGridPower: "Without energy counters the import and feed-in come from the hourly mean of the grid power (less exact); they can be chosen in the SLEMS options.",
+    tariffEmpty: "No recorded energy yet.",
     mExport: "Feed-in",
     mImport: "Grid import",
     mMaxImport: "Highest import",
@@ -678,6 +693,21 @@ const STRINGS = {
     simMetricsTomorrow: "Kennzahlen morgen",
     simCurrent: "Aktuelle Einstellungen",
     simSimulated: "Simulation",
+    tariffTitle: "Tarifvergleich",
+    tariffHint:
+      "Was dein aufgezeichneter Netzbezug und deine Einspeisung mit jedem Tarif gekostet hätten, inklusive Umsatzsteuer; die Einspeisevergütung ist abgezogen. Ein passiver Vergleich: Er berücksichtigt nicht, was SLEMS mit einem anderen Tarif anders gemacht hätte (z. B. die Batterien in günstigen Stunden laden).",
+    tariffMonth: "Monat",
+    tariffImport: "Bezug",
+    tariffExport: "Einspeisung",
+    tariffSum: "Summe",
+    tariffToDate: "bis heute",
+    tariffDiff: "ggü. aktuell",
+    tariffCurrent: "aktuell",
+    tariffSource: "Börsenpreise: {source}",
+    tariffUnpriced: "* Für einen Teil der Energie gibt es noch keinen Börsenpreis; er ist nicht enthalten.",
+    tariffNoPrices: "Dynamische Tarife brauchen Börsenpreise: Am SLEMS-Gerät „Börsenpreise abrufen“ einschalten.",
+    tariffGridPower: "Ohne Energiezähler stammen Bezug und Einspeisung aus dem Stundenmittel der Netzleistung (ungenauer); die Zähler lassen sich in den SLEMS-Optionen wählen.",
+    tariffEmpty: "Noch keine aufgezeichnete Energie.",
     mExport: "Einspeisung",
     mImport: "Netzbezug",
     mMaxImport: "Höchster Bezug",
@@ -993,6 +1023,8 @@ class SlemsPanel extends HTMLElement {
     this._showTable = false;
     // Simulation tab: form values, last result (see _simulate).
     this._sim = { form: null, result: null, serial: 0, timer: null, requested: false };
+    // Tariff comparison (slems/tariff_comparison), loaded once per visit of the tab.
+    this._tariffs = { result: null, requested: false };
     // Series of the day chart switched off in its legend (kept in the browser).
     this._hiddenSeries = new Set(DEFAULT_HIDDEN_SERIES);
     try {
@@ -1767,6 +1799,7 @@ class SlemsPanel extends HTMLElement {
         if (tab === "simulation" && this._tab !== "simulation") {
           // Starts with the real settings on every visit.
           this._sim = { form: null, result: null, serial: this._sim.serial + 1, timer: null, requested: false };
+          this._tariffs = { result: null, requested: false };
         }
         this._tab = tab;
         this._sections = {};
@@ -1875,6 +1908,7 @@ class SlemsPanel extends HTMLElement {
           <div class="sim-main">
             <section class="card"><div id="simnote"></div><div id="daychart"></div></section>
             <section class="card"><div id="simmetrics"></div></section>
+            <div id="tariffs"></div>
           </div>
           <section class="card sim-side"><div id="simintro"></div><div id="simcontrols"></div></section>
         </div>`;
@@ -2730,6 +2764,7 @@ class SlemsPanel extends HTMLElement {
   _renderSimulation() {
     const t = this._t;
     const sim = this._sim;
+    this._renderTariffs();
     if (!sim.result) {
       if (!sim.requested) {
         sim.requested = true;
@@ -2791,6 +2826,94 @@ class SlemsPanel extends HTMLElement {
             <td class="${changed ? "changed" : ""}">${escapeHtml(format(simulated[key]))}</td></tr>`;
         })
         .join("")}</tbody></table></div>`;
+  }
+
+  // Passive comparison of the recorded months with each tariff (see tariff_comparison.py).
+
+  async _loadTariffs() {
+    try {
+      this._tariffs.result = await this._hass.callWS({ type: `${DOMAIN}/tariff_comparison` });
+    } catch (err) {
+      console.error("SLEMS: tariff comparison failed", err);
+      this._tariffs.result = { tariffs: [], months: [] };
+    }
+    this._sections.tariffs = undefined;
+    this._queueRender();
+  }
+
+  _renderTariffs() {
+    const state = this._tariffs;
+    if (!state.requested && this._hass) {
+      state.requested = true;
+      this._loadTariffs();
+    }
+    const result = state.result;
+    if (!result?.tariffs?.length) {
+      this._setSection("tariffs", "");
+      return;
+    }
+    const t = this._t;
+    const language = this._hass?.locale?.language || "en";
+    const money = new Intl.NumberFormat(language, { style: "currency", currency: "EUR" });
+    const energy = new Intl.NumberFormat(language, { maximumFractionDigits: 0 });
+    const signed = (value) => (value > 0 ? "+" : value < 0 ? "−" : "±") + money.format(Math.abs(value));
+    const tariffs = result.tariffs;
+    const current = tariffs.find((tariff) => tariff.role === "current");
+    const others = current ? tariffs.filter((tariff) => tariff !== current) : [];
+    const today = new Date();
+    const thisMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+    let unpriced = false;
+    const sums = { import_kwh: 0, export_kwh: 0, costs: {} };
+    const cell = (month, tariff) => {
+      const cost = month.costs[tariff.id];
+      if (!cost) return "<td>–</td>";
+      const mark = cost.unpriced_kwh > 0 ? "*" : "";
+      if (mark) unpriced = true;
+      return `<td>${escapeHtml(money.format(cost.total))}${mark}</td>`;
+    };
+    const diffCell = (month, tariff) => {
+      const cost = month.costs[tariff.id];
+      const base = month.costs[current.id];
+      if (!cost || !base) return "<td>–</td>";
+      const diff = cost.total - base.total;
+      return `<td class="${diff < 0 ? "cheaper" : ""}">${escapeHtml(signed(diff))}</td>`;
+    };
+    const monthLabel = (month) => {
+      const [year, number] = month.split("-").map(Number);
+      const label = new Date(year, number - 1, 1).toLocaleDateString(language, { month: "short", year: "numeric" });
+      return month === thisMonth ? `${label} (${t.tariffToDate})` : label;
+    };
+    for (const month of result.months) {
+      sums.import_kwh += month.import_kwh || 0;
+      sums.export_kwh += month.export_kwh || 0;
+      for (const [id, cost] of Object.entries(month.costs)) {
+        sums.costs[id] = { total: (sums.costs[id]?.total || 0) + cost.total, unpriced_kwh: (sums.costs[id]?.unpriced_kwh || 0) + cost.unpriced_kwh };
+      }
+    }
+    const row = (label, month, extraClass = "") =>
+      `<tr class="${extraClass}"><td>${escapeHtml(label)}</td>
+        <td>${escapeHtml(energy.format(month.import_kwh || 0))}</td><td>${escapeHtml(energy.format(month.export_kwh || 0))}</td>
+        ${tariffs.map((tariff) => cell(month, tariff)).join("")}
+        ${others.map((tariff) => diffCell(month, tariff)).join("")}</tr>`;
+    const head = `<tr><th>${escapeHtml(t.tariffMonth)}</th><th>${escapeHtml(t.tariffImport)} (kWh)</th><th>${escapeHtml(t.tariffExport)} (kWh)</th>
+      ${tariffs.map((tariff) => `<th>${escapeHtml(tariff === current ? `${tariff.name} (${t.tariffCurrent})` : tariff.name)}</th>`).join("")}
+      ${others.map((tariff) => `<th>${escapeHtml(tariff.name)} ${escapeHtml(t.tariffDiff)}</th>`).join("")}</tr>`;
+    const body = result.months.length
+      ? [...result.months].reverse().map((month) => row(monthLabel(month.month), month)).join("") +
+        row(t.tariffSum, sums, "sum")
+      : `<tr><td colspan="${3 + tariffs.length + others.length}" class="empty">${escapeHtml(t.tariffEmpty)}</td></tr>`;
+    const notes = [
+      unpriced ? t.tariffUnpriced : "",
+      tariffs.some((tariff) => tariff.dynamic) && !result.market_prices ? t.tariffNoPrices : "",
+      result.energy_counters === false ? t.tariffGridPower : "",
+      result.attribution ? t.tariffSource.replace("{source}", result.attribution) : "",
+    ].filter(Boolean);
+    this._setSection(
+      "tariffs",
+      `<section class="card"><h2>${escapeHtml(t.tariffTitle)}</h2><p class="hint">${escapeHtml(t.tariffHint)}</p>
+        <div class="table-wrap"><table class="tariff-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>
+        ${notes.map((note) => `<p class="hint">${escapeHtml(note)}</p>`).join("")}</section>`
+    );
   }
 
   /** Input for a simulation value; entity keys take name, unit and limits from the real setting. */
@@ -3500,6 +3623,9 @@ const STYLE = `
   .sim-group:first-child h3 { margin-top: 8px; }
   .sim-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
   .sim-metrics td.changed { font-weight: 600; }
+  .tariff-table th { white-space: normal; vertical-align: bottom; }
+  .tariff-table tr.sum td { font-weight: 600; border-top: 1px solid var(--divider-color); }
+  .tariff-table td.cheaper { font-weight: 600; }
   .sim-note { margin: 0 0 12px; }
   .sim-metrics th { white-space: normal; }
   @media (max-width: 500px) {

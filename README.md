@@ -182,6 +182,7 @@ complements SLEMS well (see [roadmap](#roadmap)).
 |---|---|
 | Dashboard (sidebar panel): energy flow, key figures, daily forecast and plan chart, batteries, consumers, settings | ✅ |
 | Simulation in the dashboard: day plan with other settings compared with the current one (today or tomorrow) | ✅ |
+| Tariffs as on the bill (time windows, VAT per group) with a check against a bill; day-ahead prices (APG, SMARD, Energy-Charts) only with consent; monthly tariff comparison | ✅ |
 
 ## Installation
 
@@ -937,6 +938,15 @@ Try other settings without changing anything.
 - The daily targets of the consumers are planned as in the real plan;
   otherwise consumers controlled by SLEMS and the battery priority (which acts
   in the real-time distribution) are not simulated.
+
+**Tariff comparison**: with [tariffs](#tariffs-optional) the simulation tab
+shows per month of the last year (and the current month to date) the recorded
+grid import and feed-in and what they cost with each tariff including VAT,
+minus the feed-in credit, plus the difference of each comparison tariff to the
+current one. It is a passive comparison: the recorded energy priced
+differently, not what SLEMS would have done with another tariff (e.g. charging
+the batteries in cheap hours). Dynamic tariffs use the stored market prices;
+energy without a market price is marked.
 
 ### Settings tab
 
