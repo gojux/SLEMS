@@ -235,6 +235,17 @@ def hourly_means(prices: Mapping[int, float], start: datetime, end: datetime) ->
     return {dt_util.utc_from_timestamp(hour): total / count for hour, (total, count) in sums.items()}
 
 
+def period_means(prices: Mapping[int, float], lengths: Mapping[datetime, int]) -> dict[datetime, float]:
+    """Mean price (€/MWh) of each period (start -> length in s) with prices."""
+    means = {}
+    for start, length in lengths.items():
+        first = int(start.timestamp())
+        values = [prices[slot] for slot in range(first - first % SLOT_S, first + length, SLOT_S) if slot in prices]
+        if values:
+            means[start] = sum(values) / len(values)
+    return means
+
+
 class MarketPrices:
     """The cached prices of the chosen source and their regular update."""
 
@@ -314,6 +325,9 @@ class MarketPrices:
 
     def hourly_means(self, start: datetime, end: datetime) -> dict[datetime, float]:
         return hourly_means(self.prices, start, end)
+
+    def period_means(self, lengths: Mapping[datetime, int]) -> dict[datetime, float]:
+        return period_means(self.prices, lengths)
 
     @callback
     def _on_time(self, _now: datetime) -> None:

@@ -1626,7 +1626,8 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         entry = self._get_entry()
         config = entry.options or entry.data
         zone = dt_util.get_default_time_zone()
-        imported, exported = await async_grid_energy(
+        coordinator = getattr(entry, "runtime_data", None)
+        energy = await async_grid_energy(
             self.hass,
             datetime.combine(start, time(), zone),
             datetime.combine(end + timedelta(days=1), time(), zone),
@@ -1634,15 +1635,13 @@ class TariffSubentryFlow(ConfigSubentryFlow):
             export_entity=config.get(CONF_GRID_EXPORT_ENERGY_ENTITY),
             grid_power_entity=config[CONF_GRID_POWER_ENTITY],
             grid_inverted=config.get(CONF_GRID_POWER_INVERTED, False),
+            quarters=coordinator.grid_quarters if coordinator is not None else None,
         )
         tariff = tariff_from_data(self._title, self._data)
         market = None
-        if tariff.dynamic and (coordinator := getattr(entry, "runtime_data", None)) is not None:
-            market = coordinator.market_prices.hourly_means(
-                datetime.combine(start, time(), zone),
-                datetime.combine(end + timedelta(days=1), time(), zone),
-            )
-        bill = compute_bill(tariff, start, end, imported, exported, market)
+        if tariff.dynamic and coordinator is not None:
+            market = coordinator.market_prices.period_means(energy.lengths)
+        bill = compute_bill(tariff, start, end, energy.imported, energy.exported, market)
         language = self.hass.config.language
         words = _CHECK_WORDS["de" if language.startswith("de") else "en"]
         lines = [

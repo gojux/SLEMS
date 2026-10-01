@@ -125,7 +125,7 @@ async def async_tariff_comparison(hass: HomeAssistant, entry: SlemsConfigEntry) 
         first = month_start(today, MONTHS - 1)
         start = datetime.combine(first, time(), zone)
         end = datetime.combine(today + timedelta(days=1), time(), zone)
-        imported, exported = await async_grid_energy(
+        energy = await async_grid_energy(
             hass,
             start,
             end,
@@ -133,13 +133,15 @@ async def async_tariff_comparison(hass: HomeAssistant, entry: SlemsConfigEntry) 
             export_entity=config.get(CONF_GRID_EXPORT_ENERGY_ENTITY),
             grid_power_entity=config[CONF_GRID_POWER_ENTITY],
             grid_inverted=config.get(CONF_GRID_POWER_INVERTED, False),
+            quarters=coordinator.grid_quarters,
         )
         prices = coordinator.market_prices
-        market = prices.hourly_means(start, end) if any(t.dynamic for t in tariffs.values()) else {}
+        market = prices.period_means(energy.lengths) if any(t.dynamic for t in tariffs.values()) else {}
         result["months"] = await hass.async_add_executor_job(
-            compare, tariffs, first, today, imported, exported, market
+            compare, tariffs, first, today, energy.imported, energy.exported, market
         )
-        result["energy_counters"] = bool(config.get(CONF_GRID_IMPORT_ENERGY_ENTITY))
+        # Hours only known from the hourly mean of the grid power (less exact).
+        result["power_hours"] = energy.hours_from_power
         if market:
             result["attribution"] = prices.attribution
         result["market_prices"] = prices.enabled

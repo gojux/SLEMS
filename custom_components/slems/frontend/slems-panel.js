@@ -321,7 +321,7 @@ const STRINGS = {
     tariffSource: "Market prices: {source}",
     tariffUnpriced: "* Part of the energy has no market price yet and is not included.",
     tariffNoPrices: "Dynamic tariffs need market prices: switch on “Fetch market prices” on the SLEMS device.",
-    tariffGridPower: "Without energy counters the import and feed-in come from the hourly mean of the grid power (less exact); they can be chosen in the SLEMS options.",
+    tariffGridPower: "Hours before SLEMS recorded import and feed-in per quarter hour come from the hourly mean of the grid power (less exact) without energy counters; they can be chosen in the SLEMS options.",
     tariffEmpty: "No recorded energy yet.",
     mExport: "Feed-in",
     mImport: "Grid import",
@@ -718,7 +718,7 @@ const STRINGS = {
     tariffSource: "Börsenpreise: {source}",
     tariffUnpriced: "* Für einen Teil der Energie gibt es noch keinen Börsenpreis; er ist nicht enthalten.",
     tariffNoPrices: "Dynamische Tarife brauchen Börsenpreise: Am SLEMS-Gerät „Börsenpreise abrufen“ einschalten.",
-    tariffGridPower: "Ohne Energiezähler stammen Bezug und Einspeisung aus dem Stundenmittel der Netzleistung (ungenauer); die Zähler lassen sich in den SLEMS-Optionen wählen.",
+    tariffGridPower: "Stunden, bevor SLEMS Bezug und Einspeisung je Viertelstunde aufgezeichnet hat, stammen ohne Energiezähler aus dem Stundenmittel der Netzleistung (ungenauer); die Zähler lassen sich in den SLEMS-Optionen wählen.",
     tariffEmpty: "Noch keine aufgezeichnete Energie.",
     mExport: "Einspeisung",
     mImport: "Netzbezug",
@@ -3138,7 +3138,7 @@ class SlemsPanel extends HTMLElement {
     const notes = [
       unpriced ? t.tariffUnpriced : "",
       tariffs.some((tariff) => tariff.dynamic) && !result.market_prices ? t.tariffNoPrices : "",
-      result.energy_counters === false ? t.tariffGridPower : "",
+      result.power_hours > 0 ? t.tariffGridPower : "",
       result.attribution ? t.tariffSource.replace("{source}", result.attribution) : "",
     ].filter(Boolean);
     this._setSection(

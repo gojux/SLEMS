@@ -258,10 +258,16 @@ tariff the way your bill shows it; the values stay in your Home Assistant.
    *valid from*. On the feed-in side the energy price is your credit.
 3. *Check against a bill*: enter its period and amounts; SLEMS computes the
    period with the tariff and your recorded grid import and export and shows
-   both amounts and the deviation, per side and group. For exact values
-   choose the energy counters of your smart meter (*Grid import energy (counter)* /
-   *Grid export energy (counter)*) in the SLEMS options; otherwise SLEMS uses the hourly
-   mean of the grid power.
+   both amounts and the deviation, per side and group.
+
+Where the energy comes from: SLEMS records grid import and feed-in per
+quarter hour itself from every grid value (kept for 400 days), so import and
+feed-in within an hour do not cancel out and dynamic prices apply per quarter
+hour. For exact totals choose the energy counters of your smart meter
+(*Grid import energy (counter)* / *Grid export energy (counter)*) in the SLEMS
+options: the recorded quarter hours are then scaled to the counter of each
+hour. Hours before the recording use the counters, without counters the
+hourly mean of the grid power (less exact).
 
 **Dynamic tariffs and market prices.** A line can also follow the day-ahead
 market: *spot price (hourly)* or *monthly market price*, each as market price
@@ -1371,8 +1377,6 @@ Possible extensions:
   tariffs and market prices: charging from the grid in cheap or negative
   hours, the night discharge into expensive hours, daily targets of the
   consumers in cheap windows; then a tariff comparison that includes it.
-- SLEMS records its own quarter-hour values of import and feed-in for the
-  tariffs.
 - Further battery models via the driver interface.
 
 ## Development

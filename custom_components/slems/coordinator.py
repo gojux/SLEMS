@@ -17,6 +17,7 @@ from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_state_report_event,
     async_track_time_change,
+    async_track_time_interval,
 )
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -130,6 +131,7 @@ from .bad_weather import BadWeatherMode
 from .battery_support import BatterySupport, SupportBudget, next_refill, support_budget_wh
 from .grid_filter import GridPowerFilter
 from .grid_meter import ModbusGridMeter
+from .grid_quarters import GridQuarters
 from .market_prices import MarketPrices
 from .learning import (
     CapacityLearner,
@@ -182,6 +184,8 @@ STORAGE_VERSION = 1
 STORAGE_SAVE_DELAY_S = 600
 # Start, phase changes and end of a balancing run are saved sooner.
 BALANCING_SAVE_DELAY_S = 5
+# The recorded quarter hours are saved this often (a restart loses at most this).
+QUARTERS_SAVE_INTERVAL = timedelta(minutes=15)
 # Releases tried when SLEMS unloads, and the wait between them.
 SHUTDOWN_RELEASE_ATTEMPTS = 3
 SHUTDOWN_RELEASE_WAIT_S = 2.0
@@ -642,6 +646,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.problems = ProblemReporter(hass, self)
         # Day-ahead prices, fetched only when the user switches it on.
         self.market_prices = MarketPrices(hass, entry.entry_id)
+        # Grid import / export per quarter hour (see grid_quarters), own store.
+        self.grid_quarters = GridQuarters()
+        self._quarters_store: Store[dict] = Store(
+            hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.grid_quarters"
+        )
         # Last tariff comparison for the dashboard: (monotonic time, result).
         self.tariff_comparison_cache: tuple[float, dict] | None = None
         # Grid power read over Modbus (see grid_meter); None if not configured
@@ -699,6 +708,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         """Restore learned data and follow the grid meter."""
         stored = await self._store.async_load() or {}
         await self.market_prices.async_load()
+        self.grid_quarters = GridQuarters.from_dict(await self._quarters_store.async_load())
         self.pv_accuracy.restore(stored.get(PV_ACCURACY_STORE_KEY))
         self.morning_gap = MorningGapLearner.from_dict(stored.get(MORNING_GAP_STORE_KEY))
         consumers = {c.subentry_id: c for c in self.consumers}
@@ -746,6 +756,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
         self.config_entry.async_on_unload(
             async_track_state_report_event(self.hass, grid_entity, self._on_grid_report)
+        )
+        self.config_entry.async_on_unload(
+            async_track_time_interval(self.hass, self._async_save_quarters, QUARTERS_SAVE_INTERVAL)
         )
         # The forecast is refitted every hour; the first run must not delay setup.
         self.config_entry.async_on_unload(
@@ -947,6 +960,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if last_time is not None and last_grid is not None and now - last_time < 300:
             energy += max(0.0, -last_grid) * (now - last_time) / 3600
         self._export_day = (day, energy, now, grid_w)
+        self.grid_quarters.add(grid_w, time.time())
+
+    async def _async_save_quarters(self, _now: datetime) -> None:
+        await self._quarters_store.async_save(self._quarters_to_store())
+
+    def _quarters_to_store(self) -> dict:
+        self.grid_quarters.prune(time.time())
+        return self.grid_quarters.as_dict()
 
     async def _async_restore_export_today(self) -> None:
         """Take today's grid export until now from the recorder (5 minute means)."""
@@ -2730,6 +2751,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.controller.shutdown()
         await super().async_shutdown()
         await self.market_prices.async_stop()
+        await self._quarters_store.async_save(self._quarters_to_store())
         await self._store.async_save(self._data_to_store())
         if self.settings.operating_mode is OperatingMode.ACTIVE:
             await self.controller.async_release(self.batteries)

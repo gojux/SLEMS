@@ -266,10 +266,16 @@ Home Assistant.
 3. *Mit einer Rechnung vergleichen*: Zeitraum und Beträge der Rechnung
    eingeben; SLEMS rechnet den Zeitraum mit dem Tarif und deinem
    aufgezeichneten Netzbezug und deiner Einspeisung nach und zeigt beide
-   Beträge und die Abweichung, je Seite und Gruppe. Für genaue Werte in den
-   SLEMS-Optionen die Energiezähler des Smart Meters wählen (*Netzbezug (Zähler)* /
-   *Netzeinspeisung (Zähler)*); sonst nutzt SLEMS das Stundenmittel der
-   Netzleistung.
+   Beträge und die Abweichung, je Seite und Gruppe.
+
+Woher die Energie kommt: SLEMS zeichnet Netzbezug und Einspeisung aus jedem
+Netzwert selbst je Viertelstunde auf (400 Tage lang), damit sich Bezug und
+Einspeisung innerhalb einer Stunde nicht aufheben und dynamische Preise je
+Viertelstunde gelten. Für genaue Summen in den SLEMS-Optionen die
+Energiezähler des Smart Meters wählen (*Netzbezug (Zähler)* /
+*Netzeinspeisung (Zähler)*): Die aufgezeichneten Viertelstunden werden dann auf
+den Zähler jeder Stunde skaliert. Stunden vor der Aufzeichnung nutzen die
+Zähler, ohne Zähler das Stundenmittel der Netzleistung (ungenauer).
 
 **Dynamische Tarife und Börsenpreise.** Ein Posten kann auch dem
 Day-Ahead-Markt folgen: *Börsenpreis (stündlich)* oder *Monatsmarktpreis*,
@@ -1446,8 +1452,6 @@ Mögliche Erweiterungen:
   negativen Stunden, die Nachtentladung in teure Stunden, Tagesziele der
   Verbraucher in günstige Fenster; danach ein Tarifvergleich, der das
   einbezieht.
-- SLEMS zeichnet eigene Viertelstundenwerte von Bezug und Einspeisung für die
-  Tarife auf.
 - Weitere Batteriemodelle über die Treiber-Schnittstelle.
 
 ## Entwicklung

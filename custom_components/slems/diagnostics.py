@@ -18,6 +18,7 @@ from typing import Any
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntry
+from homeassistant.util import dt as dt_util
 
 from .const import CONF_HOST, DOMAIN
 from .coordinator import BatteryRuntime, SlemsConfigEntry, SlemsCoordinator
@@ -154,8 +155,22 @@ def _system(coordinator: SlemsCoordinator) -> dict:
             "day_plan": data.day_plan,
             "day_plan_tomorrow": data.day_plan_tomorrow,
         }
+    quarters = coordinator.grid_quarters
+    market = coordinator.market_prices
     return {
         "settings": _plain(coordinator.settings),
+        "grid_quarters": {
+            "recorded": len(quarters.covered),
+            "complete": sum(1 for slot in quarters.covered if quarters.complete(slot)),
+            "first": dt_util.utc_from_timestamp(min(quarters.covered)).isoformat() if quarters.covered else None,
+        },
+        "market_prices": {
+            "enabled": market.enabled,
+            "source": market.source.value,
+            "quarter_hours": len(market.prices),
+            "last_update": market.last_update.isoformat() if market.last_update else None,
+            "error": market.last_error,
+        },
         "controller": {
             "status": _plain(controller.status),
             "gain": controller.gain,

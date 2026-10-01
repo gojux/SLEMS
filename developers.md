@@ -235,6 +235,20 @@ and priced with each tariff (`compute_bill` in the executor, dynamic items with
 the stored hourly market prices). The result is cached for 10 minutes on the
 coordinator; a changed tariff reloads the entry and so starts without cache.
 
+### Recorded quarter hours
+
+`grid_quarters.py`: every grid value (entity or Modbus, via
+`_integrate_export`) counts until the next one, at most 300 s, split at the
+quarter hour boundaries of the wall clock into import and export. A quarter
+counts with 90 % coverage. Kept for 400 days in its own store
+(`slems.<entry>.grid_quarters`, dense arrays), saved every 15 minutes and at
+unload (`Store.async_delay_save` would restart its timer with every value).
+`energy_history.async_grid_energy` uses an hour per quarter when all four are
+complete, scaled to the hourly change of the energy counters if configured;
+otherwise the hour from the counters or the hourly mean of the grid power.
+`GridEnergy.lengths` says the length of every period, so
+`MarketPrices.period_means` gives the matching market price.
+
 ### Price chart
 
 `price_chart.py` (websocket `slems/price_chart`, `day` today / tomorrow): per
@@ -1536,3 +1550,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-01 | Tariffs as bill lines (`tariff.py`, subentry type `tariff`) instead of a fixed price per kWh: Austrian grid tariffs now have reduced prices in time windows (noon in summer), yearly items are charged per day, and VAT differs between the sides of a bill (e.g. none on feed-in energy). Entered like the bill and checked against it with the recorded hourly energy, so the user does not have to derive effective prices. Values only live in the user's Home Assistant; tests and docs use made-up tariffs. First part of dynamic tariffs (next: market prices with the user's consent, tariff comparison in the simulation, price chart). |
 | 2026-10-01 | Day-ahead prices only with the user's consent (switch, off by default): SLEMS must not contact services on the internet on its own. APG for Austria (official, data since 2023), SMARD for Germany (official, CC BY 4.0) and Energy-Charts for both as an alternative; no automatic fallback to another service than the one chosen. Prices are cached for a year, so comparisons and the check need no requests. The feed-in "monthly market price" is approximated by the export-weighted mean (as published market prices of PV feed-in are, but only on websites without an API); published values can be entered per month. |
 | 2026-10-01 | Tariff comparison as a passive comparison in the simulation tab: the recorded energy priced with each tariff per month. Simulating what the control would have done with another tariff would need price-aware planning, which does not exist yet; the label says so, so a dynamic tariff is not judged by a comparison that leaves out its main advantage. |
+| 2026-10-02 | SLEMS records grid import and export per quarter hour from its own grid values instead of relying on statistics only: the hourly mean of the grid power nets import and export within an hour, the counters' long-term statistics are hourly, while bills with dynamic prices are per quarter hour. With counters the quarters only give the split within the hour and the counter the total, so a less exact sampling of the grid power does not change the billed energy. |

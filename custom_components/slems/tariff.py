@@ -223,8 +223,9 @@ def compute_bill(
 ) -> Bill:
     """Bill for the days ``start`` to ``end`` (both included).
 
-    ``import_wh`` / ``export_wh`` map hour starts (any time zone) to the energy
-    of that hour, ``market_prices`` to the day-ahead price in €/MWh.
+    ``import_wh`` / ``export_wh`` map period starts (hours or quarter hours,
+    any time zone) to the energy of that period, ``market_prices`` the same
+    starts to the day-ahead price in €/MWh.
     """
     market_prices = market_prices or {}
     monthly = monthly_market_prices(export_wh, market_prices)
