@@ -58,7 +58,7 @@ def _panel_config(hass: HomeAssistant, entry: SlemsConfigEntry) -> dict:
     coordinator = entry.runtime_data
 
     def device_id(subentry_id: str) -> str | None:
-        device = devices.async_get_device(identifiers={(DOMAIN, subentry_id)})
+        device = devices.async_get_device_by_identifier((DOMAIN, subentry_id), entry.entry_id)
         return device.id if device else None
 
     return {
