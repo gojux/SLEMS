@@ -2,7 +2,7 @@
 
 import pytest
 
-from custom_components.slems.response import MeterCadence, StepResponse
+from custom_components.slems.response import BatteryResponses, MeterCadence, StepResponse
 
 
 def test_meter_cadence() -> None:
@@ -67,3 +67,33 @@ def test_switching_on_and_off_learned_apart() -> None:
     response.command(3010, 0, -300)
     response.sample(3100, 300)
     assert response.learned(True) == pytest.approx(120)
+
+
+def test_battery_responses_learn_from_own_steps() -> None:
+    responses = BatteryResponses()
+    # Shared step: no battery learns.
+    responses.command(0.0, 0.0, {"a": 400, "b": 400})
+    responses.sample(1.0, 800)
+    assert responses.learned("a") is None and responses.learned("b") is None
+    # Battery a makes the step mostly alone.
+    responses.command(10.0, 0.0, {"a": 900, "b": 100})
+    responses.sample(10.6, 300)
+    responses.sample(11.2, 900)
+    assert responses.learned("a") == pytest.approx(1.2)
+    assert responses.learned("b") is None
+    # Restored after a restart.
+    restored = BatteryResponses()
+    restored.restore(responses.as_dict())
+    assert restored.learned("a") == pytest.approx(1.2)
+
+
+def test_battery_responses_shared_step_ends_a_pending_measurement() -> None:
+    responses = BatteryResponses()
+    responses.command(0.0, 0.0, {"a": 1000})
+    # A small correction the same way keeps it pending.
+    responses.command(0.5, 200.0, {"a": 100})
+    # Another battery's large step would hide the end of a's step.
+    responses.command(0.8, 400.0, {"b": 800})
+    responses.sample(1.5, 1600)
+    assert responses.learned("a") is None
+    assert responses.learned("b") == pytest.approx(0.7)

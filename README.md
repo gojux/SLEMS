@@ -838,7 +838,7 @@ Diagnostic sensors show what SLEMS has learned:
 |---|---|
 | *Current control gain* | gain used right now |
 | *Smart meter update interval* | how often the smart meter reports |
-| *Battery response time* | time from a battery command until the smart meter shows it |
+| *Battery response time* | time from a battery command until the smart meter shows it, for all batteries together; per battery (from steps it makes mostly alone) in *Details* of the battery, used by the control once learned |
 | *Planned power* of a consumer, attribute `response_time_s` | time from a command until the consumer's own power sensor reacts |
 
 Switch the automatic adjustment off only if the gain keeps changing

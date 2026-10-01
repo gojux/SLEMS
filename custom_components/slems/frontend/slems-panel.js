@@ -113,6 +113,8 @@ const STRINGS = {
     fullChargeOverdue: "Not fully charged for a long time",
     fullChargeOverdueText: "{name} was last full {days} days ago. Without enough PV SLEMS charges it first at the next opportunity.",
     topDeltaMeasured: "Cell delta last measured",
+    responseTime: "Response time",
+    responseNotLearned: "not learned yet (all batteries: {value})",
     automatic: "automatic",
     learned: "learned",
     learnedWaiting: "Not enough data to learn yet; this value applies.",
@@ -449,6 +451,8 @@ const STRINGS = {
     fullChargeOverdue: "Lange nicht voll geladen",
     fullChargeOverdueText: "{name} war zuletzt vor {days} Tagen voll. Fehlt die PV, lädt SLEMS sie bei der nächsten Gelegenheit zuerst.",
     topDeltaMeasured: "Zell-Delta zuletzt gemessen",
+    responseTime: "Reaktionszeit",
+    responseNotLearned: "noch nicht gelernt (alle Batterien: {value})",
     automatic: "automatisch",
     learned: "gelernt",
     learnedWaiting: "Noch zu wenig Daten zum Lernen; dieser Wert gilt.",
@@ -1360,6 +1364,11 @@ class SlemsPanel extends HTMLElement {
     const info = firmware?.attributes || {};
     const device = this._hass.devices?.[deviceId];
     const stored = s("stored_energy");
+    const response = this._state("battery_response_time");
+    const seconds = (v) =>
+      `${new Intl.NumberFormat(this._hass.locale?.language || "en", { maximumFractionDigits: 1, minimumFractionDigits: 1 }).format(v)} s`;
+    const ownResponse = response?.attributes?.per_battery?.[battery?.id];
+    const joint = this._number(response);
     const rows = [
       [t.model, device?.model],
       [t.deviceName, info.device_name],
@@ -1380,6 +1389,15 @@ class SlemsPanel extends HTMLElement {
       [t.totalDischarged, s("total_discharging_energy") && this._format(s("total_discharging_energy")), s("total_discharging_energy")?.entity_id],
       [t.lastFullCharge, this._moment(s("last_full_charge")?.state), s("last_full_charge")?.entity_id],
       [t.topDeltaMeasured, this._moment(s("top_cell_delta")?.attributes?.measured_at), s("top_cell_delta")?.entity_id],
+      [
+        t.responseTime,
+        ownResponse !== undefined
+          ? seconds(ownResponse)
+          : joint !== null
+            ? t.responseNotLearned.replace("{value}", seconds(joint))
+            : undefined,
+        response?.entity_id,
+      ],
     ].filter(([, value]) => value !== undefined && value !== null && value !== "");
     this.shadowRoot.getElementById("details-title").textContent = `${t.details}: ${battery?.name ?? ""}`;
     this.shadowRoot.getElementById("details-close").textContent = t.close;

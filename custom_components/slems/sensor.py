@@ -379,6 +379,7 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda _, c: c.controller.battery_response.response_s,
+        attributes_fn=lambda _, c: {"per_battery": c.controller.battery_responses.as_dict()},
     ),
     SystemSensorDescription(
         key="night_discharge_target_soc",

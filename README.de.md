@@ -880,7 +880,7 @@ Diagnose-Sensoren zeigen, was SLEMS gelernt hat:
 |---|---|
 | *Aktuelle Regelverstärkung* | die gerade verwendete Verstärkung |
 | *Aktualisierungsintervall Smart Meter* | wie oft der Smart Meter meldet |
-| *Reaktionszeit Batterie* | Zeit von einem Batteriebefehl, bis der Smart Meter ihn zeigt |
+| *Reaktionszeit Batterie* | Zeit von einem Batteriebefehl, bis der Smart Meter ihn zeigt, für alle Batterien gemeinsam; je Batterie (aus Schritten, die sie weitgehend allein macht) unter *Details* der Batterie, von der Regelung genutzt, sobald gelernt |
 | *Geplante Leistung* eines Verbrauchers, Attribut `response_time_s` | Zeit von einem Befehl, bis der eigene Leistungssensor des Verbrauchers reagiert |
 
 Die Automatik nur ausschalten, wenn sich die Verstärkung ständig deutlich

@@ -161,6 +161,10 @@ def _system(coordinator: SlemsCoordinator) -> dict:
             "gain": controller.gain,
             "meter_interval_s": controller.meter.interval_s,
             "battery_response_s": controller.battery_response.response_s,
+            "battery_response_by_battery_s": {
+                battery.name: controller.battery_responses.learned(battery.subentry_id)
+                for battery in coordinator.batteries
+            },
         },
         "cap_exceeded_for_s": _ago(coordinator.cap_exceeded_since, time.monotonic()),
         "snapshot": _plain(snapshot),

@@ -4,7 +4,10 @@
   grid meter (also reports without a value change).
 * Battery response time: time from a battery command until the grid meter
   shows most of the commanded change. The controller uses it to know which
-  commands the current meter value already contains.
+  commands the current meter value already contains. Learned for all
+  batteries together and for each battery from the steps it makes mostly
+  alone (``BatteryResponses``); the batteries' own telemetry is read too
+  rarely for that.
 * Consumer response times: time from a consumer command until the consumer's
   own power sensor (and the grid meter) shows most of the change, separately
   for switching on and off (``DirectionalResponse``): switching on includes
@@ -27,6 +30,9 @@ MIN_STEP_W = 300.0
 MAX_RESPONSE_S = 30.0
 # Consumers may start several minutes after the command (compressor delay).
 CONSUMER_MAX_RESPONSE_S = 300.0
+
+# Share of a step one battery must carry for the step to count as its own.
+OWN_STEP_SHARE = 0.8
 
 DEFAULT_METER_INTERVAL_S = 2.0
 DEFAULT_BATTERY_RESPONSE_S = 3.0
@@ -108,6 +114,64 @@ class StepResponse:
         if moved >= ARRIVED_RATIO:
             self.response_s = _ema(self.response_s, max(0.1, elapsed))
             self._pending = None
+
+
+class BatteryResponses:
+    """Response time of each battery, learned at the grid meter.
+
+    A step counts for a battery when it carries at least ``OWN_STEP_SHARE`` of
+    the moved power; a larger step shared by several batteries ends all
+    pending measurements. Most steps are shared, so a battery can stay
+    unlearned for a long time.
+    """
+
+    def __init__(self) -> None:
+        self.learners: dict[str, StepResponse] = {}
+
+    def command(self, timestamp: float, baseline: float | None, changes: dict[str, float]) -> None:
+        """The batteries' commanded powers changed by ``changes`` (battery id -> W)."""
+        total = sum(changes.values())
+        moved = sum(abs(change) for change in changes.values())
+        if moved < MIN_STEP_W:
+            # Small corrections: each pending measurement decides by direction.
+            for learner in self.learners.values():
+                learner.command(timestamp, baseline, total)
+            return
+        own = next(
+            (
+                battery_id
+                for battery_id, change in changes.items()
+                if abs(change) >= OWN_STEP_SHARE * moved and change * total > 0
+            ),
+            None,
+        )
+        for battery_id, learner in self.learners.items():
+            if battery_id != own:
+                learner.cancel()
+        if own is not None:
+            self.learners.setdefault(own, StepResponse(DEFAULT_BATTERY_RESPONSE_S)).command(
+                timestamp, baseline, total
+            )
+
+    def sample(self, timestamp: float, value: float) -> None:
+        for learner in self.learners.values():
+            learner.sample(timestamp, value)
+
+    def learned(self, battery_id: str) -> float | None:
+        learner = self.learners.get(battery_id)
+        return learner.response_s if learner else None
+
+    def as_dict(self) -> dict[str, float]:
+        return {
+            battery_id: learner.response_s
+            for battery_id, learner in self.learners.items()
+            if learner.response_s is not None
+        }
+
+    def restore(self, data: dict[str, float]) -> None:
+        for battery_id, response_s in data.items():
+            learner = self.learners.setdefault(battery_id, StepResponse(DEFAULT_BATTERY_RESPONSE_S))
+            learner.response_s = response_s
 
 
 class DirectionalResponse:

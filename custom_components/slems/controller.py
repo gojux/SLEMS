@@ -51,6 +51,7 @@ from .const import ControlMode, OperatingMode
 from .response import (
     DEFAULT_BATTERY_RESPONSE_S,
     DEFAULT_CONSUMER_RESPONSE_S,
+    BatteryResponses,
     DirectionalResponse,
     MeterCadence,
     StepResponse,
@@ -129,6 +130,7 @@ class RealTimeController:
         self._last_grid_w: float | None = None
         self.meter = MeterCadence()
         self.battery_response = StepResponse(DEFAULT_BATTERY_RESPONSE_S)
+        self.battery_responses = BatteryResponses()
         self.consumer_response: dict[str, DirectionalResponse] = {}
         self.gain_adapter = AdaptiveGain(coordinator.settings.control_gain)
         self.status = ControlStatus.INACTIVE
@@ -146,6 +148,7 @@ class RealTimeController:
         self._last_grid_w = grid_w
         now = time.monotonic()
         self.battery_response.sample(now, grid_w)
+        self.battery_responses.sample(now, grid_w)
         for learner in self.consumer_grid_response.values():
             learner.sample(now, grid_w)
 
@@ -157,6 +160,11 @@ class RealTimeController:
             state = snapshot.consumers.get(subentry_id)
             if state is not None and state.power_w is not None:
                 learner.sample(now, state.power_w)
+
+    def battery_response_s(self, battery_id: str) -> float:
+        """Time until the grid meter shows a command of this battery."""
+        learned = self.battery_responses.learned(battery_id)
+        return learned if learned is not None else self.battery_response.value
 
     @property
     def gain(self) -> float:
@@ -352,11 +360,11 @@ class RealTimeController:
                     # Back to its own logic until it is retried.
                     await self._release(battery)
 
-        seen_before = start - self.battery_response.value
         seen = {
             battery_id: power
             for battery_id in self._battery_history
-            if (power := self._seen_command(battery_id, seen_before)) is not None
+            if (power := self._seen_command(battery_id, start - self.battery_response_s(battery_id)))
+            is not None
         }
         latest_total = sum(
             power
@@ -469,7 +477,7 @@ class RealTimeController:
             return target - (abs(latest) if latest is not None else 0.0)
 
         new_total = 0.0
-        changed = False
+        changes: dict[str, float] = {}
         # Batteries that reduce their power are written first: while power
         # moves between batteries, the short gap between the writes then
         # causes a little import instead of feeding battery energy into the grid.
@@ -495,16 +503,17 @@ class RealTimeController:
                 if refresh:
                     self._battery_refreshed[battery.subentry_id] = now
                 new_total += target
-                changed = True
+                changes[battery.subentry_id] = target - (latest or 0.0)
             else:
                 if battery.delivery.record_comm_failure(now) is not Action.NONE:
                     self.request()
                 if latest is not None:
                     new_total += latest
-        if not changed:
+        if not changes:
             return None
         # The grid power moves by the change of the battery power.
         self.battery_response.command(now, self._last_grid_w, new_total - previous_total)
+        self.battery_responses.command(now, self._last_grid_w, changes)
         return new_total
 
     async def _async_apply_balancing(self) -> None:

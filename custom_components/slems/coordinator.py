@@ -665,6 +665,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self.controller.gain_adapter.reset(gain)
         if response := control.get("battery_response_s"):
             self.controller.battery_response.response_s = response
+        self.controller.battery_responses.restore(control.get("battery_responses") or {})
         for battery in self.batteries:
             data = stored.get(battery.subentry_id) or {}
             if integrator := data.get("integrator"):
@@ -806,6 +807,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         data[CONTROL_STORE_KEY] = {
             "gain": self.controller.gain_adapter.gain,
             "battery_response_s": self.controller.battery_response.response_s,
+            "battery_responses": self.controller.battery_responses.as_dict(),
         }
         data[PV_ACCURACY_STORE_KEY] = self.pv_accuracy.as_dict()
         data[MORNING_GAP_STORE_KEY] = self.morning_gap.as_dict()
