@@ -135,3 +135,20 @@ def test_minimum_pause_only_after_a_real_stop() -> None:
     tracker.update("wb", False, 500.0)
     assert tracker.must_stay_off(config, 600.0)
     assert not tracker.must_stay_off(config, 801.0)
+
+
+async def test_current_through_a_select_with_ampere_options() -> None:
+    # ha-evcc: the maximum current of a loadpoint is a select (6 … 32 A).
+    config = wallbox(control_entity="select.evcc_garage_max_current")
+    options = [str(a) for a in range(6, 33)]
+    hass = FakeHass({"select.evcc_garage_max_current": state("16", options=options)})
+    control = controller(hass)
+    await control._async_apply_current(config, 9000, hass.states.get("select.evcc_garage_max_current"))
+    assert hass.calls == [
+        ("select", "select_option", {"entity_id": "select.evcc_garage_max_current", "option": "13"})
+    ]
+    # Stop without start entity: the lowest option (evcc decides itself).
+    hass = FakeHass({"select.evcc_garage_max_current": state("13", options=options)})
+    control = controller(hass)
+    await control._async_apply_current(config, 0, hass.states.get("select.evcc_garage_max_current"))
+    assert hass.calls[-1][2]["option"] == "6"

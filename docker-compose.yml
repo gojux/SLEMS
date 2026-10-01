@@ -52,6 +52,18 @@ services:
       - ./dev/sunspec_meter:/sim:ro
     restart: unless-stopped
 
+  # evcc for the wallbox guide (docs/wallbox-evcc.md), configured in its web UI
+  # on http://localhost:7070; its data stays in dev/evcc (not committed). Host
+  # network, so evcc and the browser both reach Home Assistant on
+  # localhost:8123. Start with: docker compose --profile evcc up -d evcc
+  evcc:
+    image: evcc/evcc:0.316.1
+    profiles: ["evcc"]
+    network_mode: host
+    volumes:
+      - ./dev/evcc:/root/.evcc
+    restart: unless-stopped
+
   # Test runner using the same Python and Home Assistant version as production.
   # Usage: docker compose run --rm tests
   tests:

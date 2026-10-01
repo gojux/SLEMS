@@ -290,7 +290,7 @@
             "control_mode": "Control"
           },
           "data_description": {
-            "consumer_type": "Heat pump consumption is forecast from the weather; a heating rod is typically used for hot water in summer.",
+            "consumer_type": "Heat pump consumption is forecast from the weather; a heating rod is typically used for hot water in summer. A wallbox is never part of the house consumption forecast; the next step defaults to current control, 6–16 A and 5 minutes minimum runtime and pause, and its battery support to automatic.",
             "included_in_meter": "Enable if the consumer is behind the smart meter, i.e. its consumption is already part of the measured grid power.",
             "show_in_flow": "Shows the consumer as its own box in the energy flow of the dashboard. Off: its consumption still counts in the house; the consumer card shows it."
           }
@@ -317,7 +317,7 @@
             "start_entity": "Start/stop entity"
           },
           "data_description": {
-            "control_entity": "Switch for on/off consumers, number entity in W for power controlled ones, in A for current controlled ones (e.g. the charging current of a wallbox or the maximum current of an evcc loadpoint).",
+            "control_entity": "Switch for on/off consumers, number entity in W for power controlled ones, in A for current controlled ones (e.g. the charging current of a wallbox); with current control also a select with ampere options (e.g. *Max. charging current* of an evcc loadpoint in ha-evcc).",
             "nominal_power_w": "A rough estimate is enough if *Use learned values* is on: SLEMS then measures the real power while it runs the consumer (operating mode active) and uses it after about 30 samples. Rather estimate a little too low than too high: too high, SLEMS waits for a larger surplus and may never switch the consumer on, so nothing is learned.",
             "block_entity": "SLEMS does not control the consumer while it is blocked (e.g. by the device or an automation): a water heater while its operation mode is \"off\", other entities while they are \"on\".",
             "priority": "1 = highest priority when distributing surplus power.",
@@ -331,7 +331,7 @@
             "phases": "Phases the consumer charges with when no entity tells the active ones.",
             "phases_entity": "Optional. Sensor with the number of active phases (1 or 3), e.g. of an evcc loadpoint or a wallbox that switches phases itself; the power range follows it.",
             "voltage_v": "Voltage per phase.",
-            "start_entity": "Optional. Switch, or a select (then the options for on and off are asked next, e.g. the charge mode of an evcc loadpoint: fast / off). Without it SLEMS stops by setting the lowest current the control entity takes (0 A if allowed); with evcc and its minimum current evcc then decides itself when to start and stop."
+            "start_entity": "Optional. Switch, or a select (then the options for on and off are asked next, e.g. the mode of an evcc loadpoint: now / off). Without it SLEMS stops by setting the lowest current the control entity takes (0 A if allowed); with evcc and its minimum current evcc then decides itself when to start and stop."
           }
         },
         "start_options": {
@@ -671,6 +671,9 @@
       },
       "storage_capacity": {
         "name": "Storage capacity left"
+      },
+      "battery_power_discharge_positive": {
+        "name": "Battery power total (discharge positive)"
       }
     },
     "switch": {

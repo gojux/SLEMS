@@ -166,7 +166,7 @@ spezialisiert; evcc ergänzt SLEMS gut (siehe [Roadmap](#roadmap)).
 | Einsatz eines Verbrauchers in der Einspeisebegrenzung (unterstützend, normal, nie) | ✅ |
 | Tagesziele: Laufzeit, Freigabezeit, Energie oder Temperatur, mit Frist und Quelle (Überschuss, Batterie, Netz) | ✅ |
 | Batterie-Unterstützung je Verbraucher (immer, automatisch mit der Energie, die die Batterien übrig haben, nie) | ✅ |
-| Wallbox / evcc-Ladepunkt: Stromvorgabe in A mit Phasen, Start/Stopp | ✅ (noch nicht mit einer echten Wallbox getestet) |
+| Wallbox / evcc-Ladepunkt: Stromvorgabe in A mit Phasen, Start/Stopp ([Anleitung](docs/wallbox-evcc.de.md)) | ✅ (noch nicht mit einer echten Wallbox getestet) |
 
 | Planung und Regelung | Status |
 |---|---|
@@ -694,11 +694,15 @@ Ampere, abgerundet, damit die Ladung im geplanten Rahmen bleibt.
 - **Spannung** (Standard 230 V je Phase).
 - **Start/Stopp-Entity** (optional): ein Schalter oder eine Auswahl mit den
   Optionen für ein und aus (im nächsten Schritt abgefragt), z. B. der
-  Lademodus eines evcc-Ladepunkts (*Schnell* / *Aus*). Ohne sie stoppt SLEMS,
+  Modus eines evcc-Ladepunkts (*now* / *off*). Ohne sie stoppt SLEMS,
   indem es den kleinsten Strom setzt, den die Steuer-Entity zulässt (0 A,
   wenn erlaubt).
+- Die Steuer-Entity ist eine Number-Entity in A oder eine Auswahl mit
+  Ampere-Optionen.
 - Mit evcc ([ha-evcc](https://github.com/marq24/ha-evcc)): Steuer-Entity ist
-  der Höchststrom des Ladepunkts, Phasen-Entity seine aktiven Phasen. Ohne
+  der *Max. Ladestrom* des Ladepunkts (eine Auswahl), Phasen-Entity seine
+  aktiven Phasen. Schritt für Schritt mit Screenshots:
+  [Wallbox mit evcc anbinden](docs/wallbox-evcc.de.md). Ohne
   Start/Stopp-Entity entscheidet evcc selbst über Start und Stopp (z. B. im
   PV-Modus), und SLEMS begrenzt nur den Strom; mit dem Lademodus als
   Start/Stopp-Entity steuert SLEMS das Laden vollständig, dann entscheiden
@@ -1358,9 +1362,8 @@ behalten die Sprache, in der sie angelegt wurden; nur die angezeigten Namen
 
 Mögliche Erweiterungen:
 
-- Anleitung „Wallbox und evcc“: welche SLEMS-Werte evcc liest (Batterie nur
-  lesend), passende evcc-Einstellungen und der Ladepunkt als Verbraucher mit
-  Stromvorgabe. Rückmeldungen von Nutzern mit Wallbox sind willkommen.
+- Rückmeldungen von Nutzern mit einer echten Wallbox zur
+  [evcc-Anleitung](docs/wallbox-evcc.de.md).
 - Batterien mit Verfügbarkeit (z. B. „Auto angesteckt“) und einer Reserve bis
   zu einer Uhrzeit: Grundlage für ein Auto, das das Haus versorgt (V2H).
 - Gelernte Anwesenheit des Autos für die Planung.

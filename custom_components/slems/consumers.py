@@ -5,7 +5,8 @@ controlled one: its power range is the current range × voltage × the active
 phases (fixed, or from a phases entity, e.g. of a wallbox or an evcc
 loadpoint that switches between one and three phases itself). The planned
 power is sent as whole amperes, rounded down so the charging stays within
-the power planned for it.
+the power planned for it, to a number entity or a select with ampere
+options (the maximum current of an evcc loadpoint in ha-evcc).
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ import math
 from typing import Any
 
 from homeassistant.const import STATE_OFF, STATE_ON
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
 
 from .const import (
     CONF_BLOCK_ENTITY,
@@ -158,6 +159,22 @@ def amps_for(power_w: float, voltage_v: float, phases: int) -> int:
     if power_w <= 0 or voltage_v <= 0 or phases <= 0:
         return 0
     return math.floor(power_w / (voltage_v * phases) + 1e-6)
+
+
+def current_option(state: State, amps: float) -> str | None:
+    """Option of a select with ampere options: the highest not above ``amps``,
+    else the lowest (None without numeric options)."""
+    options: list[tuple[float, str]] = []
+    for option in state.attributes.get("options", []):
+        try:
+            options.append((float(option), option))
+        except (TypeError, ValueError):
+            continue
+    if not options:
+        return None
+    options.sort()
+    below = [option for value, option in options if value <= amps + 1e-6]
+    return below[-1] if below else options[0][1]
 
 
 def active_phases(hass: HomeAssistant, consumer: ConsumerConfig) -> int:

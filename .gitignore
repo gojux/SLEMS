@@ -12,3 +12,4 @@ dev/config/*
 .idea/
 .vscode/
 .DS_Store
+dev/evcc/

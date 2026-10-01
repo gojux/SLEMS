@@ -1265,7 +1265,7 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
             fields[
                 vol.Required(CONF_CONTROL_ENTITY, default=defaults.get(CONF_CONTROL_ENTITY, vol.UNDEFINED))
             ] = selector.EntitySelector(
-                selector.EntitySelectorConfig(domain=["number", "input_number"])
+                selector.EntitySelectorConfig(domain=["number", "input_number", "select", "input_select"])
             )
             fields[
                 vol.Required(CONF_MIN_CURRENT_A, default=defaults.get(CONF_MIN_CURRENT_A, DEFAULT_MIN_CURRENT_A))

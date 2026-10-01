@@ -164,7 +164,7 @@ complements SLEMS well (see [roadmap](#roadmap)).
 | Role of a consumer in the feed-in cap (supporting, normal, never) | ✅ |
 | Daily targets: runtime, enabled time, energy or temperature, with deadline and source (surplus, batteries, grid) | ✅ |
 | Battery support per consumer (always, automatic with the energy the batteries can spare, never) | ✅ |
-| Wallbox / evcc loadpoint: current set point in A with phases, start/stop | ✅ (not yet tested with a real wallbox) |
+| Wallbox / evcc loadpoint: current set point in A with phases, start/stop ([guide](docs/wallbox-evcc.md)) | ✅ (not yet tested with a real wallbox) |
 
 | Planning and control | Status |
 |---|---|
@@ -662,12 +662,15 @@ amperes, rounded down so the charging stays within the planned power.
   range follows it. SLEMS does not switch phases itself.
 - **Voltage** (default 230 V per phase).
 - **Start/stop entity** (optional): a switch, or a select with the options
-  for on and off (asked in the next step), e.g. the charge mode of an evcc
-  loadpoint (*fast* / *off*). Without it SLEMS stops by setting the lowest
+  for on and off (asked in the next step), e.g. the mode of an evcc
+  loadpoint (*now* / *off*). Without it SLEMS stops by setting the lowest
   current the control entity takes (0 A if allowed).
+- The control entity is a number entity in A or a select with ampere
+  options.
 - With evcc ([ha-evcc](https://github.com/marq24/ha-evcc)): the control
-  entity is the maximum current of the loadpoint, the phases entity its
-  active phases. Without a start/stop entity evcc decides itself when to
+  entity is the maximum charging current of the loadpoint (a select), the
+  phases entity its active phases. Step by step with screenshots:
+  [Connecting a wallbox with evcc](docs/wallbox-evcc.md). Without a start/stop entity evcc decides itself when to
   start and stop (e.g. in its PV mode) and SLEMS only caps the current; with
   the charge mode as start/stop entity SLEMS controls the charging fully, so
   its battery support and forecasts decide. The card shows the planned power
@@ -1292,9 +1295,8 @@ language of their creation; only the displayed names change.
 
 Possible extensions:
 
-- Guide "Wallbox and evcc": which SLEMS values evcc reads (battery read
-  only), matching evcc settings and the loadpoint as a consumer with current
-  control. Feedback from users with a wallbox is welcome.
+- Feedback from users with a real wallbox on the
+  [evcc guide](docs/wallbox-evcc.md).
 - Batteries with an availability (e.g. "car plugged in") and a reserve until
   a time of day: the basis for a car supplying the house (V2H).
 - Learned presence of the car for the planning.

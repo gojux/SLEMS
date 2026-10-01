@@ -446,6 +446,11 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
     SystemSensorDescription(
         **_power("battery_power_total"), value_fn=lambda s, _: s.battery_power_w
     ),
+    # The same with discharging positive, as evcc expects it for a battery.
+    SystemSensorDescription(
+        **_power("battery_power_discharge_positive"),
+        value_fn=lambda s, _: None if s.battery_power_w is None else -s.battery_power_w,
+    ),
     SystemSensorDescription(
         key="battery_soc_total",
         translation_key="battery_soc_total",

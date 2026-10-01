@@ -48,7 +48,7 @@ from .battery_distribution import LEAVE_RAMP_S
 from .delivery_monitor import Action
 from .drivers import BatteryDriverError
 from .const import ControlMode, OperatingMode
-from .consumers import amps_for
+from .consumers import amps_for, current_option
 from .response import (
     DEFAULT_BATTERY_RESPONSE_S,
     DEFAULT_CONSUMER_RESPONSE_S,
@@ -629,14 +629,27 @@ class RealTimeController:
         run = target_w > 0 and amps >= consumer.min_current_a
         sent = False
         if run or not consumer.start_entity_id:
-            value = clamp_to_entity(min(amps, consumer.max_current_a) if run else 0, state)
-            if state_as_float(state) != value:
-                await self._hass.services.async_call(
-                    consumer.control_entity_id.split(".", 1)[0],
-                    "set_value",
-                    {ATTR_ENTITY_ID: consumer.control_entity_id, "value": value},
-                )
-                sent = True
+            wanted = min(amps, consumer.max_current_a) if run else 0
+            domain = consumer.control_entity_id.split(".", 1)[0]
+            if domain in ("select", "input_select"):
+                # Ampere options (e.g. the maximum current of ha-evcc).
+                option = current_option(state, wanted)
+                if option is not None and option != state.state:
+                    await self._hass.services.async_call(
+                        domain,
+                        "select_option",
+                        {ATTR_ENTITY_ID: consumer.control_entity_id, "option": option},
+                    )
+                    sent = True
+            else:
+                value = clamp_to_entity(wanted, state)
+                if state_as_float(state) != value:
+                    await self._hass.services.async_call(
+                        domain,
+                        "set_value",
+                        {ATTR_ENTITY_ID: consumer.control_entity_id, "value": value},
+                    )
+                    sent = True
         if consumer.start_entity_id:
             sent = await self._async_set_start(consumer, run) or sent
         return sent
