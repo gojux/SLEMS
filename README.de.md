@@ -339,6 +339,12 @@ Sekunden, danach unbekannt).
   beim Laden negativ, wie es das Energie-Dashboard von Home Assistant für die
   Batterieleistung erwartet.
 
+  **Fernsteuerung**: Die Venus folgt Sollwerten nur, solange ihre
+  Fernsteuerung an ist; die Registerliste von Marstek nennt sie *RS485
+  control mode*. Trotz des Namens braucht sie kein RS485-Kabel: SLEMS
+  steuert die Venus über das LAN (Modbus TCP) und schaltet die Fernsteuerung
+  selbst ein und aus; einzustellen ist nichts.
+
   **Suche**: Beim Hinzufügen einer Venus sucht SLEMS zuerst im Netz von Home
   Assistant nach Batterien (TCP-Port 502, dann ein Probe-Lesen des
   Ladezustands; wenige Sekunden) und bietet die gefundenen an; bereits
@@ -382,8 +388,11 @@ Sekunden, danach unbekannt).
     werden. SLEMS wartet, bis das Skript fertig ist (höchstens 10 Sekunden),
     damit Fehler auffallen; es sollte daher kurz sein (ohne Wartezeiten).
 
-  Optional wird ein Schalter oder eine Auswahl für die *Fernsteuerung* vor dem
-  ersten Sollwert eingeschaltet. Zum Steuern ist der Sensor der
+  Optional wird ein Schalter oder eine Auswahl für die *Fernsteuerung* (z. B.
+  *Manuelle Batteriesteuerung* bei Omnibattery) vor dem ersten Sollwert
+  eingeschaltet und bei der Freigabe an die *Automatik* wieder aus, damit die
+  Batterie wieder selbst regelt; leer lassen, wenn du sie selbst schaltest.
+  Zum Steuern ist der Sensor der
   Batterieleistung Pflicht. *Mindestabstand zwischen Befehlen* passt für
   Integrationen mit begrenzter Befehlsrate (oft über eine Cloud), *Sollwert
   wiederholen alle* für Batterien, die ohne neue Befehle auf ihre eigene Logik
@@ -417,7 +426,7 @@ die eigene Logik der Batterie übernimmt wieder (z. B. ihre Nulleinspeisung);
 bei einer Batterie aus Entities braucht das eine Fernsteuerungs-Entity, eine
 Modus-Option für Automatik oder ein Freigabe-Skript. *Standby*: die Batterie
 bleibt bei 0 W stehen, bis etwas anderes sie übernimmt; eine Venus bleibt
-dafür im RS485-Steuermodus.
+dafür in der Fernsteuerung.
 
 ### Aufteilung auf die Batterien
 

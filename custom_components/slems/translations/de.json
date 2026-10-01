@@ -200,7 +200,7 @@
           },
           "data_description": {
             "setpoint_inverted": "SLEMS schreibt positiv = Laden. Aktivieren, wenn die Entity Entladen positiv erwartet.",
-            "remote_entity": "Schalter oder Auswahl, die die Batterie in die Fernsteuerung versetzt; wird vor dem ersten Sollwert eingeschaltet und bei Freigabe an die Automatik wieder aus."
+            "remote_entity": "Schalter oder Auswahl, die die Batterie unter externe Steuerung stellt (z. B. *Manuelle Batteriesteuerung* bei Omnibattery). SLEMS schaltet sie vor dem ersten Sollwert ein und bei der Freigabe an die *Automatik* wieder aus, damit die Batterie wieder selbst regelt (z. B. ihre Nulleinspeisung). Ohne sie ist *Automatik* nur mit einer Modus-Option für Automatik möglich; leer lassen, wenn du sie selbst schaltest, und bei Freigabe *Standby* wählen."
           }
         },
         "ha_split": {
@@ -213,7 +213,7 @@
           },
           "data_description": {
             "mode_entity": "Auswahl, die zwischen Laden, Entladen und Standby umschaltet (z. B. ein Force-Modus); die Optionen werden im nächsten Schritt zugeordnet.",
-            "remote_entity": "Schalter oder Auswahl, die die Batterie in die Fernsteuerung versetzt; wird vor dem ersten Sollwert eingeschaltet und bei Freigabe an die Automatik wieder aus."
+            "remote_entity": "Schalter oder Auswahl, die die Batterie unter externe Steuerung stellt (z. B. *Manuelle Batteriesteuerung* bei Omnibattery). SLEMS schaltet sie vor dem ersten Sollwert ein und bei der Freigabe an die *Automatik* wieder aus, damit die Batterie wieder selbst regelt (z. B. ihre Nulleinspeisung). Ohne sie ist *Automatik* nur mit einer Modus-Option für Automatik möglich; leer lassen, wenn du sie selbst schaltest, und bei Freigabe *Standby* wählen."
           }
         },
         "ha_script": {

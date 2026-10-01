@@ -200,7 +200,7 @@
           },
           "data_description": {
             "setpoint_inverted": "SLEMS writes positive = charging. Enable if the entity expects discharging as positive.",
-            "remote_entity": "Switch or select that puts the battery into remote control; switched on before the first set point and off again when released to automatic."
+            "remote_entity": "Switch or select that puts the battery under external control (e.g. *Manual battery control* of Omnibattery). SLEMS switches it on before the first set point and off when it releases the battery to *Automatic*, so the battery controls itself again (e.g. its zero export). Without it, *Automatic* is only possible with a mode option for automatic; leave it empty if you switch it yourself and choose *Standby* when released."
           }
         },
         "ha_split": {
@@ -213,7 +213,7 @@
           },
           "data_description": {
             "mode_entity": "Select that switches between charging, discharging and standby (e.g. a force mode); the options are assigned in the next step.",
-            "remote_entity": "Switch or select that puts the battery into remote control; switched on before the first set point and off again when released to automatic."
+            "remote_entity": "Switch or select that puts the battery under external control (e.g. *Manual battery control* of Omnibattery). SLEMS switches it on before the first set point and off when it releases the battery to *Automatic*, so the battery controls itself again (e.g. its zero export). Without it, *Automatic* is only possible with a mode option for automatic; leave it empty if you switch it yourself and choose *Standby* when released."
           }
         },
         "ha_script": {

@@ -331,6 +331,12 @@ replaced by the last valid value (for at most 30 seconds, then unknown).
   *AC power* is positive when discharging and negative when charging, as the
   Home Assistant energy dashboard expects for battery power.
 
+  **Remote control**: the Venus only follows set points while its remote
+  control is on; Marstek's register list calls it *RS485 control mode*.
+  Despite the name it does not need an RS485 cable: SLEMS controls the Venus
+  over the LAN (Modbus TCP) and switches the remote control on and off
+  itself; there is nothing to set up.
+
   **Search**: when adding a Venus, SLEMS first searches the network of Home
   Assistant for batteries (TCP port 502, then a test read of the state of
   charge; a few seconds) and offers the ones found; batteries already added
@@ -372,8 +378,10 @@ replaced by the last valid value (for at most 30 seconds, then unknown).
     the script is done (at most 10 seconds) so its errors are noticed; keep
     it short (no waits).
 
-  Optionally a *remote control* switch or select is switched on before the
-  first set point. For controlling, the battery power sensor is required.
+  Optionally a *remote control* switch or select (e.g. *Manual battery
+  control* of Omnibattery) is switched on before the first set point and off
+  when SLEMS releases the battery to *Automatic*, so it controls itself again;
+  leave it empty if you switch it yourself. For controlling, the battery power sensor is required.
   *Minimum time between commands* suits integrations with a rate limit (often
   cloud based), *Repeat set point every* batteries that fall back to their own
   logic without new commands. Switch off the battery's own control (e.g. its
@@ -404,7 +412,7 @@ when the battery is removed from SLEMS. *Automatic* (default): the battery's
 own logic takes over again (e.g. its zero export); for a battery from entities
 this needs a remote control entity, a mode option for automatic or a release
 script. *Standby*: the battery stays idle at 0 W until something else takes it
-over; a Venus stays in RS485 control mode for this.
+over; a Venus keeps its remote control on for this.
 
 ### Distribution between batteries
 
