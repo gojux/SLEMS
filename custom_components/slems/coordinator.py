@@ -130,6 +130,7 @@ from .bad_weather import BadWeatherMode
 from .battery_support import BatterySupport, SupportBudget, next_refill, support_budget_wh
 from .grid_filter import GridPowerFilter
 from .grid_meter import ModbusGridMeter
+from .market_prices import MarketPrices
 from .learning import (
     CapacityLearner,
     ConsumerLearner,
@@ -639,6 +640,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.forecaster = ConsumptionForecaster(hass, self._forecast_sources())
         self.controller = RealTimeController(self)
         self.problems = ProblemReporter(hass, self)
+        # Day-ahead prices, fetched only when the user switches it on.
+        self.market_prices = MarketPrices(hass, entry.entry_id)
         # Grid power read over Modbus (see grid_meter); None if not configured
         # or not available (then grid_meter_error says why).
         self.grid_meter: ModbusGridMeter | None = None
@@ -693,6 +696,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     async def _async_setup(self) -> None:
         """Restore learned data and follow the grid meter."""
         stored = await self._store.async_load() or {}
+        await self.market_prices.async_load()
         self.pv_accuracy.restore(stored.get(PV_ACCURACY_STORE_KEY))
         self.morning_gap = MorningGapLearner.from_dict(stored.get(MORNING_GAP_STORE_KEY))
         consumers = {c.subentry_id: c for c in self.consumers}
@@ -2723,6 +2727,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         """Save learned data and close all battery connections."""
         self.controller.shutdown()
         await super().async_shutdown()
+        await self.market_prices.async_stop()
         await self._store.async_save(self._data_to_store())
         if self.settings.operating_mode is OperatingMode.ACTIVE:
             await self.controller.async_release(self.batteries)

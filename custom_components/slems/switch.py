@@ -48,7 +48,7 @@ async def async_setup_entry(
         SettingSwitch(coordinator, key, attribute)
         for key, attribute in SETTING_SWITCHES.items()
     )
-    async_add_entities([BadWeatherSwitch(coordinator)])
+    async_add_entities([BadWeatherSwitch(coordinator), MarketPricesSwitch(coordinator)])
     for battery in coordinator.batteries:
         entities: list[SwitchEntity] = [
             BatteryEnabledSwitch(coordinator, battery),
@@ -125,6 +125,33 @@ class BadWeatherSwitch(SlemsSystemEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self.coordinator.set_bad_weather(False)
+        self.async_write_ha_state()
+
+
+class MarketPricesSwitch(SlemsSystemEntity, SwitchEntity, RestoreEntity):
+    """Consent to fetch day-ahead prices from the internet (off until switched on)."""
+
+    _attr_icon = "mdi:cash-clock"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator: SlemsCoordinator) -> None:
+        super().__init__(coordinator, "market_prices")
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if (last_state := await self.async_get_last_state()) is not None:
+            self.coordinator.market_prices.set_enabled(last_state.state == STATE_ON)
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.market_prices.enabled
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self.coordinator.market_prices.set_enabled(True)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self.coordinator.market_prices.set_enabled(False)
         self.async_write_ha_state()
 
 

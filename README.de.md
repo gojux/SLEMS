@@ -270,6 +270,24 @@ Home Assistant.
    *Netzeinspeisung (Zähler)*); sonst nutzt SLEMS das Stundenmittel der
    Netzleistung.
 
+**Dynamische Tarife und Börsenpreise.** Ein Posten kann auch dem
+Day-Ahead-Markt folgen: *Börsenpreis (stündlich)* oder *Monatsmarktpreis*,
+jeweils als Marktpreis × (1 + Aufschlag in %) + Preis in ct/kWh, z. B.
+„Börsenpreis × 1,05 + 1,2 ct“ oder „Monatsmarktpreis − 0,5 ct“ für die
+Einspeisung. Veröffentlichte Monatsmarktpreise lassen sich je Monat eintragen
+(z. B. „2026-08: 7,1“); Monate ohne Wert nutzen das Mittel der Börsenpreise,
+gewichtet mit deiner Einspeisung.
+
+SLEMS ruft Börsenpreise erst aus dem Internet ab, wenn du *Börsenpreise
+abrufen* einschaltest (standardmäßig aus). *Preisquelle* wählt woher: APG
+(Österreich), SMARD der Bundesnetzagentur (Deutschland/Luxemburg) oder
+Energy-Charts des Fraunhofer ISE (beide Zonen); voreingestellt nach dem in
+Home Assistant eingestellten Land. SLEMS lädt dann einmal die letzten
+12 Monate, speichert sie lokal und holt nach der Day-Ahead-Auktion (ab 13 Uhr)
+den nächsten Tag. Der Sensor *Börsenpreis* zeigt den Preis der aktuellen
+Viertelstunde in ct/kWh ohne Gebühren und Steuern, mit der Quelle als
+Quellenangabe.
+
 ### PV-Prognose
 
 Auswählbar ist jede Integration, die eine Solarprognose für das

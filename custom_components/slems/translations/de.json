@@ -401,6 +401,8 @@
             "group": "Gruppe",
             "unit": "Einheit",
             "price": "Preis",
+            "factor_pct": "Aufschlag auf den Börsenpreis",
+            "month_prices": "Monatsmarktpreise",
             "valid_from": "Gültig ab",
             "months": "Nur in Monaten",
             "weekdays": "Nur an Wochentagen",
@@ -409,7 +411,9 @@
             "delete": "Diesen Posten entfernen"
           },
           "data_description": {
-            "price": "ct/kWh oder €/Jahr wie auf der Rechnung; ein Rabatt ist negativ. Auf der Einspeiseseite ist der Energiepreis die Vergütung, die du bekommst.",
+            "price": "ct/kWh oder €/Jahr wie auf der Rechnung; ein Rabatt ist negativ. Auf der Einspeiseseite ist der Energiepreis die Vergütung, die du bekommst. Bei Börsenpreis und Monatsmarktpreis: der feste Aufschlag in ct/kWh (negativ: Abzug).",
+            "factor_pct": "Nur bei Börsenpreis und Monatsmarktpreis: Preis = Börsenpreis × (1 + Prozent) + Preis. Z. B. −10 % für eine Vergütung von 90 % des Marktpreises.",
+            "month_prices": "Optional, nur beim Monatsmarktpreis: veröffentlichte Werte in ct/kWh, z. B. „2026-01: 8,5; 2026-02: 7,9“. Monate ohne Wert: Mittel der Börsenpreise, gewichtet mit deiner Einspeisung.",
             "valid_from": "Optional. Bei einer Preisänderung: den Posten mit dem neuen Preis und diesem Datum noch einmal anlegen.",
             "months": "Optional, z. B. für einen günstigeren Sommerpreis.",
             "time_from": "Optional, mit „Nur bis“: ein Zeitfenster am Tag (Ortszeit), z. B. ein günstigerer Netzpreis zu Mittag. Ein Posten mit Fenster ersetzt in seinem Fenster den gleichnamigen Posten."
@@ -428,7 +432,8 @@
       },
       "error": {
         "time_window_incomplete": "Beide Zeiten des Fensters angeben oder keine.",
-        "period_invalid": "Das Ende darf nicht vor dem Beginn liegen."
+        "period_invalid": "Das Ende darf nicht vor dem Beginn liegen.",
+        "month_prices_invalid": "Monatsmarktpreise im Format „2026-01: 8,5; 2026-02: 7,9“ angeben."
       },
       "abort": {
         "reconfigure_successful": "Der Tarif wurde gespeichert."
@@ -519,7 +524,9 @@
     "tariff_unit": {
       "options": {
         "kwh": "ct/kWh",
-        "year": "€/Jahr"
+        "year": "€/Jahr",
+        "spot": "Börsenpreis (stündlich)",
+        "market_month": "Monatsmarktpreis"
       }
     },
     "tariff_months": {
@@ -600,6 +607,15 @@
           "always": "Immer",
           "auto": "Automatisch",
           "never": "Nie"
+        }
+      },
+      "price_source": {
+        "name": "Preisquelle",
+        "state": {
+          "apg": "APG (Österreich)",
+          "smard": "SMARD (Deutschland/Luxemburg)",
+          "energy_charts_at": "Energy-Charts (Österreich)",
+          "energy_charts_de_lu": "Energy-Charts (Deutschland/Luxemburg)"
         }
       }
     },
@@ -813,6 +829,9 @@
       },
       "battery_power_discharge_positive": {
         "name": "Batterieleistung gesamt (Entladen positiv)"
+      },
+      "market_price": {
+        "name": "Börsenpreis"
       }
     },
     "switch": {
@@ -887,6 +906,9 @@
       },
       "bad_weather": {
         "name": "Schlechtwetter-Modus"
+      },
+      "market_prices": {
+        "name": "Börsenpreise abrufen"
       }
     },
     "number": {

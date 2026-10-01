@@ -155,6 +155,8 @@ from .tariff import (
     TariffItem,
     Unit,
     compute_bill,
+    format_month_prices,
+    parse_month_prices,
     tariff_from_data,
     vat_data,
 )
@@ -1531,8 +1533,14 @@ class TariffSubentryFlow(ConfigSubentryFlow):
             if user_input.get("delete") and self._edit_index is not None:
                 del self._items[self._edit_index]
                 return await self.async_step_items()
-            item = _item_from_input(user_input)
-            if (item.time_from is None) != (item.time_to is None):
+            try:
+                item = _item_from_input(user_input)
+            except ValueError:
+                item = None
+                errors["month_prices"] = "month_prices_invalid"
+            if item is None:
+                pass
+            elif (item.time_from is None) != (item.time_to is None):
                 errors["base"] = "time_window_incomplete"
             else:
                 if self._edit_index is None:
@@ -1540,9 +1548,13 @@ class TariffSubentryFlow(ConfigSubentryFlow):
                 else:
                     self._items[self._edit_index] = item.as_dict()
                 return await self.async_step_items()
-        current = (
-            self._items[self._edit_index] if self._edit_index is not None else {}
-        ) if user_input is None else user_input
+        current = dict(
+            (self._items[self._edit_index] if self._edit_index is not None else {})
+            if user_input is None
+            else user_input
+        )
+        if isinstance(current.get("month_prices"), dict):
+            current["month_prices"] = format_month_prices(sorted(current["month_prices"].items())) or None
         schema: dict = {
             vol.Required("name", default=current.get("name", vol.UNDEFINED)): str,
             vol.Required("side", default=current.get("side", Side.IMPORT.value)): _tariff_select(
@@ -1557,6 +1569,12 @@ class TariffSubentryFlow(ConfigSubentryFlow):
             vol.Required("price", default=current.get("price", vol.UNDEFINED)): selector.NumberSelector(
                 selector.NumberSelectorConfig(min=-10_000, max=10_000, step="any", mode=selector.NumberSelectorMode.BOX)
             ),
+            vol.Optional("factor_pct", default=current.get("factor_pct") or 0.0): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=-100, max=1000, step="any", unit_of_measurement="%", mode=selector.NumberSelectorMode.BOX
+                )
+            ),
+            _optional("month_prices", current): selector.TextSelector(),
             _optional("valid_from", current): selector.DateSelector(),
             vol.Optional("months", default=[str(m) for m in current.get("months") or []]): _tariff_select(
                 [str(m) for m in range(1, 13)], "tariff_months", multiple=True
@@ -1618,13 +1636,23 @@ class TariffSubentryFlow(ConfigSubentryFlow):
             grid_inverted=config.get(CONF_GRID_POWER_INVERTED, False),
         )
         tariff = tariff_from_data(self._title, self._data)
-        bill = compute_bill(tariff, start, end, imported, exported)
+        market = None
+        if tariff.dynamic and (coordinator := getattr(entry, "runtime_data", None)) is not None:
+            market = coordinator.market_prices.hourly_means(
+                datetime.combine(start, time(), zone),
+                datetime.combine(end + timedelta(days=1), time(), zone),
+            )
+        bill = compute_bill(tariff, start, end, imported, exported, market)
         language = self.hass.config.language
+        words = _CHECK_WORDS["de" if language.startswith("de") else "en"]
         lines = [
             _check_line(language, Side.IMPORT, bill.import_kwh, bill.side_gross(tariff, Side.IMPORT), import_amount),
             _check_line(language, Side.EXPORT, bill.export_kwh, -bill.side_gross(tariff, Side.EXPORT), export_amount),
         ]
-        return {"text": "\n\n".join(lines) + "\n\n" + _check_groups(language, bill.groups)}
+        text = "\n\n".join(lines) + "\n\n" + _check_groups(language, bill.groups)
+        if bill.unpriced_kwh > 0:
+            text += "\n\n" + words["unpriced"].format(kwh=_number(language, bill.unpriced_kwh, 1))
+        return {"text": text}
 
     async def async_step_finish(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         data = {key: self._data[key] for key in ("role", "vat", "items")}
@@ -1650,15 +1678,27 @@ def _item_from_input(user_input: dict[str, Any]) -> TariffItem:
         weekdays=frozenset(int(d) for d in user_input.get("weekdays") or ()),
         time_from=clock(user_input.get("time_from")),
         time_to=clock(user_input.get("time_to")),
+        factor_pct=float(user_input.get("factor_pct") or 0.0),
+        month_prices=parse_month_prices(user_input.get("month_prices") or ""),
     )
 
 
 def _describe_item(item: TariffItem, language: str) -> str:
     """'Grid: 6 ct/kWh (import, grid) · M 4,5,6 · 10:00–16:00'."""
     words = _CHECK_WORDS["de" if language.startswith("de") else "en"]
-    unit = "ct/kWh" if item.unit is Unit.KWH else "€/a"
-    price = _number(language, item.price, 4).rstrip("0").rstrip(",.")
-    parts = [f"{item.name}: {price} {unit} ({words[item.side]}, {words[item.group]})"]
+
+    def short(value: float) -> str:
+        return _number(language, value, 4).rstrip("0").rstrip(",.")
+
+    if item.unit.dynamic:
+        price = words[item.unit]
+        if item.factor_pct:
+            price += f" × {short(1 + item.factor_pct / 100)}"
+        if item.price:
+            price += f" {'+' if item.price > 0 else '−'} {short(abs(item.price))} ct/kWh"
+    else:
+        price = f"{short(item.price)} {'ct/kWh' if item.unit is Unit.KWH else '€/a'}"
+    parts = [f"{item.name}: {price} ({words[item.side]}, {words[item.group]})"]
     if item.months:
         parts.append(f"{words['months']} {_ranges(item.months, 1)}")
     if item.weekdays:
@@ -1675,11 +1715,15 @@ _CHECK_WORDS = {
         Side.IMPORT: "Bezug", Side.EXPORT: "Einspeisung", "computed": "berechnet", "bill": "Rechnung",
         Group.ENERGY: "Energie", Group.GRID: "Netz", Group.LEVIES: "Abgaben", "net": "netto",
         "months": "Monate", "weekdays": "Wochentage",
+        Unit.SPOT: "Börsenpreis", Unit.MARKET_MONTH: "Monatsmarktpreis",
+        "unpriced": "{kwh} kWh ohne Börsenpreis nicht berechnet (Börsenpreise abrufen einschalten oder warten, bis sie geladen sind).",
     },
     "en": {
         Side.IMPORT: "Import", Side.EXPORT: "Export", "computed": "computed", "bill": "bill",
         Group.ENERGY: "energy", Group.GRID: "grid", Group.LEVIES: "levies", "net": "net",
         "months": "months", "weekdays": "weekdays",
+        Unit.SPOT: "spot price", Unit.MARKET_MONTH: "monthly market price",
+        "unpriced": "{kwh} kWh without a market price not computed (switch on fetching the market prices or wait until they are loaded).",
     },
 }
 

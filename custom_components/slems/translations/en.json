@@ -401,6 +401,8 @@
             "group": "Group",
             "unit": "Unit",
             "price": "Price",
+            "factor_pct": "Share on top of the market price",
+            "month_prices": "Monthly market prices",
             "valid_from": "Valid from",
             "months": "Only in months",
             "weekdays": "Only on weekdays",
@@ -409,7 +411,9 @@
             "delete": "Remove this line"
           },
           "data_description": {
-            "price": "ct/kWh or €/year as on the bill; a discount is negative. On the feed-in side the energy price is the credit you get.",
+            "price": "ct/kWh or €/year as on the bill; a discount is negative. On the feed-in side the energy price is the credit you get. For spot price and monthly market price: the fixed markup in ct/kWh (negative: deduction).",
+            "factor_pct": "Only for spot price and monthly market price: price = market price × (1 + percent) + price. E.g. −10 % for a credit of 90 % of the market price.",
+            "month_prices": "Optional, only for the monthly market price: published values in ct/kWh, e.g. \"2026-01: 8.5; 2026-02: 7.9\". Months without a value: mean of the spot prices weighted by your feed-in.",
             "valid_from": "Optional. For a price change: add the line again with the new price and this date.",
             "months": "Optional, e.g. for a reduced summer price.",
             "time_from": "Optional, with \"Only until\": a time window of the day (local time), e.g. a reduced grid price at noon. A line with a window replaces the line of the same name in its window."
@@ -428,7 +432,8 @@
       },
       "error": {
         "time_window_incomplete": "Enter both times of the window or none.",
-        "period_invalid": "The end must not be before the start."
+        "period_invalid": "The end must not be before the start.",
+        "month_prices_invalid": "Enter the monthly market prices as \"2026-01: 8.5; 2026-02: 7.9\"."
       },
       "abort": {
         "reconfigure_successful": "The tariff was saved."
@@ -519,7 +524,9 @@
     "tariff_unit": {
       "options": {
         "kwh": "ct/kWh",
-        "year": "€/year"
+        "year": "€/year",
+        "spot": "Spot price (hourly)",
+        "market_month": "Monthly market price"
       }
     },
     "tariff_months": {
@@ -600,6 +607,15 @@
           "always": "Always",
           "auto": "Automatic",
           "never": "Never"
+        }
+      },
+      "price_source": {
+        "name": "Price source",
+        "state": {
+          "apg": "APG (Austria)",
+          "smard": "SMARD (Germany/Luxembourg)",
+          "energy_charts_at": "Energy-Charts (Austria)",
+          "energy_charts_de_lu": "Energy-Charts (Germany/Luxembourg)"
         }
       }
     },
@@ -813,6 +829,9 @@
       },
       "battery_power_discharge_positive": {
         "name": "Battery power total (discharge positive)"
+      },
+      "market_price": {
+        "name": "Market price"
       }
     },
     "switch": {
@@ -887,6 +906,9 @@
       },
       "bad_weather": {
         "name": "Bad weather mode"
+      },
+      "market_prices": {
+        "name": "Fetch market prices"
       }
     },
     "number": {

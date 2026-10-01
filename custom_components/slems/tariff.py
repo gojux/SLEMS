@@ -5,8 +5,12 @@ A tariff is a list of items, each as a line of a bill:
 * ``side``: ``import`` (consumption bill) or ``export`` (feed-in credit),
 * ``group``: ``energy``, ``grid`` or ``levies`` (the VAT rate is per side and
   group, e.g. no VAT on the feed-in energy but on its grid items),
-* ``unit``: ``kwh`` (price in ct/kWh for the energy in its time window) or
-  ``year`` (€ per year, charged per day: price × days / 365),
+* ``unit``: ``kwh`` (price in ct/kWh for the energy in its time window),
+  ``year`` (€ per year, charged per day: price × days / 365), ``spot`` (the
+  day-ahead price of the hour) or ``market_month`` (a monthly market price:
+  entered per month, else the mean day-ahead price of the month weighted by
+  the export, which approximates the market price of PV feed-in); for the
+  last two the price is spot × (1 + ``factor_pct`` / 100) + ``price`` ct/kWh,
 * optional time window (months, weekdays, hours ``from`` – ``to`` local time,
   e.g. a reduced grid price at noon in summer) and ``valid_from`` (a later
   version of the same item replaces it from that date).
@@ -47,6 +51,16 @@ class Group(StrEnum):
 class Unit(StrEnum):
     KWH = "kwh"
     YEAR = "year"
+    SPOT = "spot"
+    MARKET_MONTH = "market_month"
+
+    @property
+    def per_kwh(self) -> bool:
+        return self is not Unit.YEAR
+
+    @property
+    def dynamic(self) -> bool:
+        return self in (Unit.SPOT, Unit.MARKET_MONTH)
 
 
 class Role(StrEnum):
@@ -60,7 +74,7 @@ class TariffItem:
     side: Side
     group: Group
     unit: Unit
-    # ct/kWh or €/year.
+    # ct/kWh or €/year; for dynamic units the markup in ct/kWh.
     price: float
     valid_from: date | None = None
     # Empty: every month / weekday (1 = January, 0 = Monday).
@@ -69,6 +83,10 @@ class TariffItem:
     # Local time of day [time_from, time_to); None: the whole day.
     time_from: time | None = None
     time_to: time | None = None
+    # Dynamic units: share of the market price in % on top (negative: less).
+    factor_pct: float = 0.0
+    # Market price per month ("2026-01", ct/kWh), e.g. as published.
+    month_prices: tuple[tuple[str, float], ...] = ()
 
     @property
     def specificity(self) -> int:
@@ -103,7 +121,17 @@ class TariffItem:
             "weekdays": sorted(self.weekdays),
             "time_from": self.time_from.strftime("%H:%M") if self.time_from else None,
             "time_to": self.time_to.strftime("%H:%M") if self.time_to else None,
+            "factor_pct": self.factor_pct,
+            "month_prices": dict(self.month_prices),
         }
+
+    def ct_per_kwh(self, market_ct: float | None) -> float | None:
+        """Price of a kWh; for dynamic units from the market price (None: unknown)."""
+        if not self.unit.dynamic:
+            return self.price
+        if market_ct is None:
+            return None
+        return market_ct * (1 + self.factor_pct / 100) + self.price
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> TariffItem:
@@ -121,6 +149,8 @@ class TariffItem:
             weekdays=frozenset(int(d) for d in data.get("weekdays") or ()),
             time_from=clock(data.get("time_from")),
             time_to=clock(data.get("time_to")),
+            factor_pct=float(data.get("factor_pct") or 0.0),
+            month_prices=tuple(sorted((str(k), float(v)) for k, v in (data.get("month_prices") or {}).items())),
         )
 
 
@@ -147,6 +177,10 @@ class Tariff:
                 latest[key] = item
         return list(latest.values())
 
+    @property
+    def dynamic(self) -> bool:
+        return any(item.unit.dynamic for item in self.items)
+
 
 @dataclass
 class Bill:
@@ -159,6 +193,8 @@ class Bill:
     vat: float = 0.0
     import_kwh: float = 0.0
     export_kwh: float = 0.0
+    # Energy whose dynamic price was unknown (no market price for its hour).
+    unpriced_kwh: float = 0.0
 
     @property
     def net(self) -> float:
@@ -183,12 +219,15 @@ def compute_bill(
     end: date,
     import_wh: Mapping[datetime, float],
     export_wh: Mapping[datetime, float],
+    market_prices: Mapping[datetime, float] | None = None,
 ) -> Bill:
     """Bill for the days ``start`` to ``end`` (both included).
 
     ``import_wh`` / ``export_wh`` map hour starts (any time zone) to the energy
-    of that hour.
+    of that hour, ``market_prices`` to the day-ahead price in €/MWh.
     """
+    market_prices = market_prices or {}
+    monthly = monthly_market_prices(export_wh, market_prices)
     bill = Bill()
     sign = {
         (side, group): (-1.0 if side is Side.EXPORT and group is Group.ENERGY else 1.0)
@@ -223,17 +262,82 @@ def compute_bill(
                 bill.export_kwh += kwh
             chosen: dict[str, TariffItem] = {}
             for item in tariff.active_items(local.date()):
-                if item.side is side and item.unit is Unit.KWH and item.in_window(local):
+                if item.side is side and item.unit.per_kwh and item.in_window(local):
                     other = chosen.get(item.name)
                     if other is None or item.specificity > other.specificity:
                         chosen[item.name] = item
+            unpriced = False
             for item in chosen.values():
-                add(item, kwh * item.price / 100, kwh)
+                price = item.ct_per_kwh(_market_ct(item, hour, local, market_prices, monthly))
+                if price is None:
+                    unpriced = True
+                    continue
+                add(item, kwh * price / 100, kwh)
+            if unpriced:
+                bill.unpriced_kwh += kwh
 
     bill.vat = sum(
         amount * tariff.vat(side, group) / 100 for (side, group), amount in bill.groups.items()
     )
     return bill
+
+
+def _market_ct(
+    item: TariffItem,
+    hour: datetime,
+    local: datetime,
+    market_prices: Mapping[datetime, float],
+    monthly: Mapping[tuple[int, int], float],
+) -> float | None:
+    """Market price (ct/kWh) a dynamic item refers to in this hour."""
+    if item.unit is Unit.SPOT:
+        price = market_prices.get(hour)
+        return None if price is None else price / 10
+    if item.unit is Unit.MARKET_MONTH:
+        entered = dict(item.month_prices).get(f"{local.year:04d}-{local.month:02d}")
+        return entered if entered is not None else monthly.get((local.year, local.month))
+    return None
+
+
+def monthly_market_prices(
+    export_wh: Mapping[datetime, float], market_prices: Mapping[datetime, float]
+) -> dict[tuple[int, int], float]:
+    """Mean day-ahead price (ct/kWh) per local month, weighted by the export.
+
+    A month without export uses the plain mean.
+    """
+    sums: dict[tuple[int, int], list[float]] = {}
+    for hour, price in market_prices.items():
+        local = dt_util.as_local(hour)
+        weight = max(0.0, export_wh.get(hour, 0.0))
+        total = sums.setdefault((local.year, local.month), [0.0, 0.0, 0.0, 0.0])
+        total[0] += price * weight
+        total[1] += weight
+        total[2] += price
+        total[3] += 1
+    return {
+        month: (weighted / weight if weight > 0 else plain / count) / 10
+        for month, (weighted, weight, plain, count) in sums.items()
+    }
+
+
+def parse_month_prices(text: str) -> tuple[tuple[str, float], ...]:
+    """'2026-01: 8.5; 2026-02: 7,9' -> (("2026-01", 8.5), ("2026-02", 7.9))."""
+    prices: dict[str, float] = {}
+    for part in text.replace("\n", ";").split(";"):
+        if not part.strip():
+            continue
+        month, _, value = part.partition(":")
+        month = month.strip()
+        year, _, number = month.partition("-")
+        if not (len(year) == 4 and year.isdigit() and number.isdigit() and 1 <= int(number) <= 12):
+            raise ValueError(month)
+        prices[f"{int(year):04d}-{int(number):02d}"] = float(value.strip().replace(",", "."))
+    return tuple(sorted(prices.items()))
+
+
+def format_month_prices(prices: Iterable[tuple[str, float]]) -> str:
+    return "; ".join(f"{month}: {price:g}" for month, price in prices)
 
 
 def _day_in_window(item: TariffItem, day: date) -> bool:

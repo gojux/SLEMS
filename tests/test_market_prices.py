@@ -1,0 +1,110 @@
+"""Tests for the day-ahead prices (made-up values in the format of the sources)."""
+
+from datetime import date, datetime, time, timedelta
+
+import pytest
+
+from homeassistant.util import dt as dt_util
+
+from custom_components.slems.market_prices import (
+    PriceError,
+    PriceSource,
+    day_bounds,
+    day_runs,
+    default_source,
+    hourly_means,
+    missing_days,
+    parse_apg,
+    parse_energy_charts,
+    parse_smard,
+    quarter_slots,
+    smard_weeks,
+)
+
+
+@pytest.fixture(autouse=True)
+def vienna() -> None:
+    dt_util.set_default_time_zone(dt_util.get_time_zone("Europe/Vienna"))
+
+
+def apg_rows(count: int) -> dict:
+    return {
+        "ResponseData": {
+            "ValueRows": [
+                {"DF": "x", "TF": "x", "V": [{"V": float(index)}, {"V": None}, {"V": float(index)}]}
+                for index in range(count)
+            ]
+        }
+    }
+
+
+def test_apg_rows_follow_the_local_day_also_when_the_clock_changes() -> None:
+    # The clock goes back: 25 hours, the rows "2A" / "2B" are only labels.
+    day = date(2026, 10, 25)
+    prices = parse_apg(day, apg_rows(100))
+    start, end = day_bounds(day)
+    assert end - start == 25 * 3600
+    assert prices[start] == 0 and prices[end - 900] == 99
+    # Spring: 23 hours.
+    assert len(parse_apg(date(2026, 3, 29), apg_rows(92))) == 92
+    with pytest.raises(PriceError):
+        parse_apg(day, apg_rows(96))
+    assert parse_apg(day, {"ResponseData": {"ValueRows": []}}) == {}
+    with pytest.raises(PriceError):
+        parse_apg(day, {"Message": "Invalid request"})
+
+
+def test_hourly_prices_fill_their_quarter_hours() -> None:
+    start = 1_767_225_600  # an hour start
+    slots = quarter_slots([(start, 50.0), (start + 3600, 60.0)])
+    assert [slots[start + i * 900] for i in range(8)] == [50.0] * 4 + [60.0] * 4
+    # A gap (no price) stays a gap.
+    slots = quarter_slots([(start, 50.0), (start + 900, None), (start + 1800, 40.0)])
+    assert start + 900 not in slots and slots[start + 1800] == 40.0
+
+
+def test_smard_and_energy_charts_payloads() -> None:
+    start = 1_767_225_600
+    smard = {"series": [[start * 1000, 12.5], [(start + 900) * 1000, 13.0], [(start + 1800) * 1000, None]]}
+    assert parse_smard(smard) == {start: 12.5, start + 900: 13.0}
+    charts = {"unix_seconds": [start, start + 3600], "price": [-5.0, 20.0], "unit": "EUR / MWh"}
+    slots = parse_energy_charts(charts)
+    assert slots[start + 2700] == -5.0 and slots[start + 3600 + 2700] == 20.0
+    with pytest.raises(PriceError):
+        parse_energy_charts({"price": []})
+
+
+def test_smard_weeks_overlapping_the_period() -> None:
+    week = 7 * 86400
+    weeks = [w * 1000 for w in (0, week, 2 * week, 3 * week)]
+    assert smard_weeks(weeks, week + 10, 2 * week + 10) == [week * 1000, 2 * week * 1000]
+    # The last file covers a week.
+    assert smard_weeks(weeks, 3 * week + 5, 3 * week + 100) == [3 * week * 1000]
+
+
+def test_missing_days_and_runs() -> None:
+    first = date(2026, 5, 1)
+    prices: dict[int, float] = {}
+    for offset in (0, 3):
+        start, end = day_bounds(first + timedelta(days=offset))
+        prices.update({slot: 1.0 for slot in range(start, end, 900)})
+    missing = missing_days(prices, first, first + timedelta(days=4))
+    assert missing == [first + timedelta(days=d) for d in (1, 2, 4)]
+    assert day_runs(missing) == [
+        (first + timedelta(days=1), first + timedelta(days=2)),
+        (first + timedelta(days=4), first + timedelta(days=4)),
+    ]
+
+
+def test_hourly_means() -> None:
+    hour = datetime.combine(date(2026, 5, 1), time(12), dt_util.get_default_time_zone())
+    start = int(hour.timestamp())
+    prices = {start: 10.0, start + 900: 20.0, start + 1800: 30.0, start + 2700: 40.0, start + 3600: 5.0}
+    means = hourly_means(prices, hour, hour + timedelta(hours=1))
+    assert means == {dt_util.as_utc(hour): 25.0}
+
+
+def test_default_source_by_country() -> None:
+    assert default_source("AT") is PriceSource.APG
+    assert default_source("DE") is PriceSource.SMARD
+    assert default_source(None) is PriceSource.SMARD

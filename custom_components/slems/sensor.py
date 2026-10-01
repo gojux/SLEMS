@@ -663,6 +663,7 @@ async def async_setup_entry(
         ConsumptionForecastSensor(coordinator, key, day_offset)
         for key, day_offset in (("consumption_forecast_today", 0), ("consumption_forecast_tomorrow", 1))
     )
+    async_add_entities([MarketPriceSensor(coordinator)])
     for battery in coordinator.batteries:
         extra_keys = battery.driver.extra_telemetry_keys
         descriptions = BATTERY_SENSORS + tuple(
@@ -922,6 +923,40 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
                 if (energy := coordinator.target_energy_wh.get(subentry_id)) is None
                 else round(energy)
             ),
+        }
+
+
+class MarketPriceSensor(SlemsSystemEntity, SensorEntity):
+    """Day-ahead price of the current quarter hour (ct/kWh, without fees and VAT)."""
+
+    _attr_native_unit_of_measurement = "ct/kWh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 2
+    _attr_icon = "mdi:cash-clock"
+
+    def __init__(self, coordinator: SlemsCoordinator) -> None:
+        super().__init__(coordinator, "market_price")
+
+    @property
+    def attribution(self) -> str:
+        return self.coordinator.market_prices.attribution
+
+    @property
+    def available(self) -> bool:
+        return super().available and self.coordinator.market_prices.enabled
+
+    @property
+    def native_value(self) -> float | None:
+        price = self.coordinator.market_prices.price_at(dt_util.utcnow())
+        return None if price is None else round(price / 10, 3)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        prices = self.coordinator.market_prices
+        return {
+            "source": prices.source.value,
+            "last_update": prices.last_update.isoformat() if prices.last_update else None,
+            "error": prices.last_error,
         }
 
 

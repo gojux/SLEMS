@@ -262,6 +262,22 @@ tariff the way your bill shows it; the values stay in your Home Assistant.
    *Grid export energy (counter)*) in the SLEMS options; otherwise SLEMS uses the hourly
    mean of the grid power.
 
+**Dynamic tariffs and market prices.** A line can also follow the day-ahead
+market: *spot price (hourly)* or *monthly market price*, each as market price
+× (1 + share in %) + price in ct/kWh, e.g. "spot × 1.05 + 1.2 ct" or
+"monthly market price − 0.5 ct" for the feed-in. Published monthly market
+prices can be entered per month (e.g. "2026-08: 7.1"); months without a value
+use the mean of the spot prices weighted by your feed-in.
+
+SLEMS only fetches market prices from the internet once you switch on
+*Fetch market prices* (off by default). *Price source* selects where from:
+APG (Austria), SMARD of the Bundesnetzagentur (Germany/Luxembourg) or
+Energy-Charts of Fraunhofer ISE (both zones); the default follows the country
+set in Home Assistant. SLEMS then loads the last 12 months once, stores them
+locally and fetches the next day after the day-ahead auction (from 13:00).
+The sensor *Market price* shows the price of the current quarter hour in
+ct/kWh without fees and VAT, with the source as attribution.
+
 ### PV forecast
 
 Every integration that provides a solar forecast for the Home Assistant energy

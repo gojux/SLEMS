@@ -77,6 +77,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_register_panel(hass, entry)
     async_register_websocket(hass)
+    # The switch and select restored consent and source when their platforms were set up.
+    coordinator.market_prices.start()
     return True
 
 

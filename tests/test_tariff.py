@@ -151,3 +151,53 @@ def test_item_description_compresses_months() -> None:
         "Grid: 3.5 ct/kWh (Import, grid) · months 4–9 · weekdays 1–5 · 10:00–16:00"
     )
     assert _describe_item(item, "de").startswith("Grid: 3,5 ct/kWh (Bezug, Netz) · Monate 4–9")
+
+
+def test_spot_price_with_share_and_markup() -> None:
+    from custom_components.slems.tariff import parse_month_prices
+
+    items = (
+        TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.SPOT, 1.5, factor_pct=10.0),
+        TariffItem("Feed-in", Side.EXPORT, Group.ENERGY, Unit.MARKET_MONTH, -0.5,
+                   month_prices=parse_month_prices("2026-06: 8")),
+    )
+    tariff = Tariff("Dynamic", Role.COMPARISON, items, {})
+    assert tariff.dynamic
+    june, july = date(2026, 6, 1), date(2026, 7, 1)
+    noon, evening = dt_util.as_utc(local(june, 12)), dt_util.as_utc(local(june, 20))
+    market = {noon: 50.0, evening: 150.0}
+    bill = compute_bill(tariff, june, june, {noon: 1000, evening: 1000}, {noon: 2000}, market)
+    # Import: 5 ct × 1.1 + 1.5 and 15 ct × 1.1 + 1.5.
+    assert bill.groups[(Side.IMPORT, Group.ENERGY)] == pytest.approx((7.0 + 18.0) / 100)
+    # Feed-in: the entered market price of June 8 ct − 0.5 ct, a credit.
+    assert bill.lines[(Side.EXPORT, "Feed-in")] == pytest.approx(-2 * 0.075)
+    # July without an entered value: the mean weighted by the feed-in.
+    j1, j2 = dt_util.as_utc(local(july, 11)), dt_util.as_utc(local(july, 13))
+    bill = compute_bill(
+        tariff, july, july, {}, {j1: 3000, j2: 1000}, {j1: 40.0, j2: 80.0, dt_util.as_utc(local(july, 20)): 200.0}
+    )
+    assert bill.lines[(Side.EXPORT, "Feed-in")] == pytest.approx(-4 * (5.0 - 0.5) / 100)
+
+
+def test_hours_without_market_price_are_reported() -> None:
+    tariff = Tariff("T", Role.CURRENT, (
+        TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.SPOT, 0.0),
+        TariffItem("Grid", Side.IMPORT, Group.GRID, Unit.KWH, 8.0),
+    ), {})
+    day = date(2026, 6, 1)
+    bill = compute_bill(tariff, day, day, {dt_util.as_utc(local(day, 12)): 2000}, {}, {})
+    assert bill.unpriced_kwh == pytest.approx(2)
+    assert bill.groups == {(Side.IMPORT, Group.GRID): pytest.approx(0.16)}
+
+
+def test_month_prices_parsing_and_description() -> None:
+    from custom_components.slems.config_flow import _describe_item
+    from custom_components.slems.tariff import format_month_prices, parse_month_prices
+
+    assert parse_month_prices("2026-1: 8,5;\n2026-02: 7.9") == (("2026-01", 8.5), ("2026-02", 7.9))
+    assert format_month_prices(parse_month_prices("2026-02: 7.9; 2026-01: 8.5")) == "2026-01: 8.5; 2026-02: 7.9"
+    with pytest.raises(ValueError):
+        parse_month_prices("January: 8")
+    item = TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.SPOT, 1.5, factor_pct=10.0)
+    assert _describe_item(item, "en") == "Energy: spot price × 1.1 + 1.5 ct/kWh (Import, energy)"
+    assert TariffItem.from_dict(item.as_dict()) == item

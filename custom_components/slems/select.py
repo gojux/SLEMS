@@ -13,6 +13,7 @@ from .const import LEGACY_CAP_MODES, CapMode, OperatingMode, TargetSensor, Targe
 from .consumers import ConsumerConfig
 from .coordinator import SlemsConfigEntry, SlemsCoordinator
 from .entity import SlemsConsumerEntity, SlemsSystemEntity
+from .market_prices import PriceSource
 
 
 async def async_setup_entry(
@@ -22,7 +23,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up the operating mode and the options of the consumers."""
     coordinator = entry.runtime_data
-    async_add_entities([OperatingModeSelect(coordinator)])
+    async_add_entities([OperatingModeSelect(coordinator), PriceSourceSelect(coordinator)])
     for consumer in coordinator.consumers:
         # The batteries can only cover consumers behind the smart meter.
         if consumer.included_in_meter:
@@ -74,6 +75,31 @@ class OperatingModeSelect(SlemsSystemEntity, SelectEntity, RestoreEntity):
         self.coordinator.controller.request()
         # Also refresh the other entities (control status, plans) right away.
         self.coordinator.async_update_listeners()
+
+
+class PriceSourceSelect(SlemsSystemEntity, SelectEntity, RestoreEntity):
+    """Where the day-ahead prices come from (default by the country of Home Assistant)."""
+
+    _attr_options = [source.value for source in PriceSource]
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:database-arrow-down"
+
+    def __init__(self, coordinator: SlemsCoordinator) -> None:
+        super().__init__(coordinator, "price_source")
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in self._attr_options:
+            self.coordinator.market_prices.set_source(PriceSource(last_state.state))
+
+    @property
+    def current_option(self) -> str:
+        return self.coordinator.market_prices.source.value
+
+    async def async_select_option(self, option: str) -> None:
+        self.coordinator.market_prices.set_source(PriceSource(option))
+        self.async_write_ha_state()
 
 
 class ConsumerCapModeSelect(SlemsConsumerEntity, SelectEntity, RestoreEntity):
