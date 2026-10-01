@@ -149,7 +149,7 @@ spezialisiert; evcc ergänzt SLEMS gut (siehe [Roadmap](#roadmap)).
 | Aufteilung auf Batterien nach Wirkungsgrad, Wechsel mit sanftem Übergang | ✅ |
 | Grenzen je Batterie: minimaler/maximaler Ladezustand, Grenze Lade-/Entladeleistung (z. B. 800 W), Ladebegrenzung nach Temperatur | ✅ |
 | Erkennung von Batterien, die die vorgegebene Leistung nicht liefern, Bestätigung der Sollwerte | ✅ |
-| Zell-Delta und aktiver Zellausgleich (Marstek Venus E 3.0) | ✅ (noch nicht am echten Gerät getestet) |
+| Zell-Delta und aktiver Zellausgleich (Marstek Venus E 3.0) | ✅ |
 | Regelmäßige Vollladung zur SoC-Kalibrierung der LFP-Zellen (immer eine Batterie, aus dem Überschuss, beim Entladen geschont) | ✅ |
 
 | Verbraucher | Status |
@@ -469,18 +469,26 @@ lässt sich nur im Betriebsmodus *Aktiv* starten:
    entladen die anderen Batterien, um die 95 W auszugleichen.
 3. Sie lädt mit 95 W, bis die höchste Zelle 3,60 V erreicht, ist 60 Sekunden
    im Standby und misst das Zell-Delta.
-4. Über 30 mV entlädt sie mit 200 W bis zur Wiederholspannung (3,49 V) und
+4. Sonst entlädt sie mit 200 W bis zur Wiederholspannung (3,49 V) und
    wiederholt ab Schritt 3. Verweigert das BMS das Laden (weniger als 30 W
-   statt 95 W, z. B. weil es bei etwa 3,55 V voll meldet), wartet sie im
-   Standby, misst, und die Wiederholspannung sinkt in Schritten von 10 mV (bis
-   3,40 V).
-5. Bei höchstens 30 mV entlädt sie mit 200 W bis 3,48 V und endet.
+   statt 95 W, z. B. weil es bei etwa 3,55 V voll meldet), misst sie nicht
+   (das Delta unter 3,60 V ist kleiner und nicht vergleichbar), entlädt, und
+   die Wiederholspannung sinkt in Schritten von 10 mV (bis 3,40 V).
+5. Sie entlädt mit 200 W bis 3,48 V und endet, wenn das Delta im normalen
+   Bereich liegt (höchstens 190 mV), wenn es 6 Stunden lang nicht um 2 mV
+   gesunken ist oder nach 24 Stunden.
+
+Das BMS gleicht die hohen Zellen passiv aus, nur wenige mV pro Tag; ein Lauf
+senkt ein großes Delta schrittweise, erreicht aber nicht die 0 mV eines
+Laborladegeräts. Liegt die letzte Messung schon im normalen Bereich, weist das
+Dashboard vor dem Start darauf hin.
 
 Die Entladung der ausgleichenden Batterie wird eingespeist; die anderen
 Batterien speichern sie nicht (sie laden nur weiter, wenn sie ohnehin laden).
 Ihre erwartete Ladung fließt in den erwarteten PV-Überschuss und das
-netzdienliche Laden ein. Der Lauf endet spätestens nach 24 Stunden und sofort,
-wenn die Batterie nicht gelesen werden kann; außerhalb des Betriebsmodus
+netzdienliche Laden ein. Mit einem Fehler endet er, wenn die Batterie nicht
+gelesen werden kann oder die Abschlussentladung 2 Stunden nach den 24 Stunden
+noch nicht fertig ist; außerhalb des Betriebsmodus
 *Aktiv* pausiert er, und nach einem Neustart von Home Assistant läuft er
 weiter. Zum Ende wird die Batterie an ihre eigene Logik zurückgegeben und
 kehrt danach in die normale Planung zurück. Der Sensor *Phase Zellausgleich*
@@ -1163,8 +1171,9 @@ verschwinden von selbst, sobald sie behoben sind:
 
 Das Dashboard zeigt sie ebenfalls: ein roter Hinweis auf der Batteriekarte
 (*nicht lesbar*, *reagiert nicht*), im Energiefluss und für den Smart Meter
-oben in der Übersicht. Das Ende eines aktiven Zellausgleichs (abgeschlossen,
-nach 24 Stunden oder weil die Batterie nicht lesbar war) erzeugt eine
+oben in der Übersicht. Das Ende eines aktiven Zellausgleichs (im normalen
+Bereich, ohne weiteren Fortschritt, nach 24 Stunden oder mit einem Fehler)
+erzeugt eine
 Benachrichtigung mit dem Zell-Delta vorher und nachher und der Dauer; ein
 selbst abgebrochener Ausgleich nicht. Für eine Fehlermeldung speichert
 *Einstellungen → Geräte & Dienste → SLEMS → ⋮ → Diagnosedaten herunterladen*

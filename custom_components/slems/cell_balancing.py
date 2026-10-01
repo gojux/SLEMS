@@ -27,12 +27,19 @@ window):
    refuses charging (``REJECTION_SAMPLES`` samples below ``REFUSED_BELOW_W`` after
    ``CHARGE_ENGAGE_GRACE_S``), the retry voltage is lowered by
    ``RESUME_STEP_V`` (not below ``MIN_RESUME_V``).
-3. WAIT_MEASURE: idle for ``MEASUREMENT_WAIT_S``, then measure the delta.
-4. Delta above ``TARGET_DELTA_V``: DISCHARGE with ``DISCHARGE_W`` down to the
-   retry voltage and continue with CHARGE; otherwise FINAL_DISCHARGE with
-   ``DISCHARGE_W`` down to ``FINAL_DISCHARGE_V``, then DONE.
+   The refused leg gives no measurement (the delta below the charge stop
+   voltage is smaller and not comparable).
+3. WAIT_MEASURE (only after reaching ``CHARGE_STOP_V``): idle for
+   ``MEASUREMENT_WAIT_S``, then measure the delta.
+4. Delta above ``TARGET_DELTA_V`` and still improving: DISCHARGE with
+   ``DISCHARGE_W`` down to the retry voltage and continue with CHARGE.
+   Otherwise FINAL_DISCHARGE with ``DISCHARGE_W`` down to
+   ``FINAL_DISCHARGE_V``, then DONE: the delta is in the normal range
+   (*target*), it did not fall by ``PROGRESS_MV`` for ``STALL_S``
+   (*no_progress*), or the run reached ``MAX_RUN_S`` (*max_time*).
 
-A run ends with an error after ``MAX_RUN_S`` or on invalid telemetry. While
+A run ends with an error on invalid telemetry or when even the final
+discharge does not finish within ``FINAL_GRACE_S`` after ``MAX_RUN_S``. While
 it is paused (SLEMS not in operating mode active, battery still ramping out)
 the timers of the current leg start again on resume.
 """
@@ -45,7 +52,12 @@ from enum import StrEnum
 TOP_ZONE_V = 3.49
 CHARGE_STOP_V = 3.60
 FINAL_DISCHARGE_V = 3.48
-TARGET_DELTA_V = 0.03
+# Below the green limit of the status (200 mV) with a margin: Marstek cells
+# show 170-180 mV at the top from the factory, lower is hardly reachable.
+TARGET_DELTA_V = 0.19
+# The run ends once the delta did not fall by PROGRESS_MV for STALL_S.
+PROGRESS_MV = 2.0
+STALL_S = 6 * 3600.0
 MIN_RESUME_V = 3.40
 RESUME_STEP_V = 0.01
 TOP_CHARGE_W = 95
@@ -60,6 +72,7 @@ IDLE_POWER_W = 25.0
 # (at standby the DC power is slightly negative).
 REFUSED_BELOW_W = 30.0
 MAX_RUN_S = 24 * 3600.0
+FINAL_GRACE_S = 2 * 3600.0
 
 # The BMS ended the charge (top measurement without reaching CHARGE_STOP_V).
 BMS_FULL_SOC_PCT = 99.5
@@ -286,6 +299,11 @@ class CellBalancer:
         # Top measurement before the start (for the final report).
         self.initial_delta_mv: float | None = None
         self.error: str | None = None
+        # Why the run ended normally: "target", "no_progress" or "max_time".
+        self.end_reason: str | None = None
+        # Lowest delta measured in this run and when it last improved (wall clock).
+        self.best_delta_mv: float | None = None
+        self.best_at: float | None = None
         # Monotonic start of the current leg; None until the next step.
         self._leg_started: float | None = None
         self._rejections = 0
@@ -302,6 +320,9 @@ class CellBalancer:
             "last_delta_mv": self.last_delta_mv,
             "initial_delta_mv": self.initial_delta_mv,
             "started_at": self.started_at,
+            "end_reason": self.end_reason,
+            "best_delta_mv": self.best_delta_mv,
+            "best_at": self.best_at,
         }
 
     @classmethod
@@ -311,6 +332,9 @@ class CellBalancer:
         balancer.retry_voltage = data["retry_voltage"]
         balancer.last_delta_mv = data["last_delta_mv"]
         balancer.initial_delta_mv = data.get("initial_delta_mv")
+        balancer.end_reason = data.get("end_reason")
+        balancer.best_delta_mv = data.get("best_delta_mv")
+        balancer.best_at = data.get("best_at")
         return balancer
 
     def pause(self) -> None:
@@ -346,12 +370,18 @@ class CellBalancer:
         """
         if self.finished:
             return BalancingStep(0.0, self.phase)
-        if wall_now - self.started_at >= MAX_RUN_S:
+        if wall_now - self.started_at >= MAX_RUN_S + FINAL_GRACE_S:
             return self._fail("timeout", now)
         if max_cell_v is None or min_cell_v is None or power_w is None:
             return self._fail("telemetry", now)
         if self._leg_started is None:
             self._leg_started = now
+        if (
+            wall_now - self.started_at >= MAX_RUN_S
+            and self.phase is not BalancingPhase.FINAL_DISCHARGE
+        ):
+            self.end_reason = "max_time"
+            self._enter(BalancingPhase.FINAL_DISCHARGE, now)
 
         if self.phase is BalancingPhase.PRE_TOP_CHARGE:
             refused = (
@@ -380,21 +410,23 @@ class CellBalancer:
                     ),
                     3,
                 )
-                self._enter(
-                    BalancingPhase.WAIT_MEASURE if max_cell_v >= TOP_ZONE_V else BalancingPhase.DISCHARGE,
-                    now,
-                )
+                self._enter(BalancingPhase.DISCHARGE, now)
 
         if self.phase is BalancingPhase.WAIT_MEASURE:
             if self._measure_since is None:
                 self._measure_since = now
             if now - self._measure_since < MEASUREMENT_WAIT_S:
                 return BalancingStep(0.0, self.phase)
-            delta_v = max_cell_v - min_cell_v
-            self.last_delta_mv = round(delta_v * 1000, 1)
+            delta_mv = round((max_cell_v - min_cell_v) * 1000, 1)
+            self.last_delta_mv = delta_mv
+            if self.best_delta_mv is None or delta_mv <= self.best_delta_mv - PROGRESS_MV:
+                self.best_delta_mv, self.best_at = delta_mv, wall_now
+            if delta_mv <= TARGET_DELTA_V * 1000:
+                self.end_reason = "target"
+            elif self.best_at is not None and wall_now - self.best_at >= STALL_S:
+                self.end_reason = "no_progress"
             self._enter(
-                BalancingPhase.FINAL_DISCHARGE if delta_v <= TARGET_DELTA_V else BalancingPhase.DISCHARGE,
-                now,
+                BalancingPhase.FINAL_DISCHARGE if self.end_reason else BalancingPhase.DISCHARGE, now
             )
 
         if self.phase is BalancingPhase.DISCHARGE:

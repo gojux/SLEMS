@@ -347,7 +347,8 @@ const STRINGS = {
     balancing: "cell balancing",
     startBalancingTitle: "Start cell balancing for {name}?",
     startBalancingText:
-      "The battery leaves the normal control: it charges into the top voltage range (from the PV surplus, at least 95 W; without surplus the other batteries cover it), stands by for a measurement, discharges a little and repeats until the cell delta is at most 30 mV (usually many hours, at most 24 h). Its discharge is fed into the grid unless the other batteries charge anyway.",
+      "The battery leaves the normal control: it charges into the top voltage range (from the PV surplus, at least 95 W; without surplus the other batteries cover it), stands by for a measurement, discharges a little and repeats until the cell delta is in the normal range (below 190 mV) or has not fallen for 6 hours, at most 24 h. The BMS equalises only a few mV per day. Its discharge is fed into the grid unless the other batteries charge anyway.",
+    balancingNotNeeded: "The last measurement ({delta} mV) is in the normal range; cell balancing is hardly needed.",
     startBalancingConfirm: "Start",
     balancingNeedsActive: "Cell balancing can only be started in operating mode active.",
     balancingNeedsEnabled: "Cell balancing needs an enabled battery.",
@@ -356,7 +357,7 @@ const STRINGS = {
     balancingResults: {
       done: "completed",
       cancelled: "cancelled",
-      timeout: "stopped after 24 h",
+      timeout: "stopped: final discharge not finished",
       telemetry: "stopped: battery could not be read",
     },
     cancel: "Cancel",
@@ -682,7 +683,8 @@ const STRINGS = {
     balancing: "Zellausgleich",
     startBalancingTitle: "Zellausgleich für {name} starten?",
     startBalancingText:
-      "Die Batterie verlässt die normale Steuerung: Sie lädt bis in den oberen Spannungsbereich (aus dem PV-Überschuss, mindestens mit 95 W; ohne Überschuss gleichen die anderen Batterien aus), ist für eine Messung im Standby, entlädt etwas und wiederholt das, bis das Zell-Delta höchstens 30 mV beträgt (meist viele Stunden, höchstens 24 h). Ihre Entladung wird eingespeist, außer die anderen Batterien laden ohnehin.",
+      "Die Batterie verlässt die normale Steuerung: Sie lädt bis in den oberen Spannungsbereich (aus dem PV-Überschuss, mindestens mit 95 W; ohne Überschuss gleichen die anderen Batterien aus), ist für eine Messung im Standby, entlädt etwas und wiederholt das, bis das Zell-Delta im normalen Bereich liegt (unter 190 mV) oder 6 Stunden lang nicht mehr gesunken ist, höchstens 24 h. Das BMS gleicht nur wenige mV pro Tag aus. Ihre Entladung wird eingespeist, außer die anderen Batterien laden ohnehin.",
+    balancingNotNeeded: "Die letzte Messung ({delta} mV) liegt im normalen Bereich; ein Zellausgleich ist kaum nötig.",
     startBalancingConfirm: "Starten",
     balancingNeedsActive: "Der Zellausgleich kann nur im Betriebsmodus „Aktiv“ gestartet werden.",
     balancingNeedsEnabled: "Der Zellausgleich braucht eine aktivierte Batterie.",
@@ -691,7 +693,7 @@ const STRINGS = {
     balancingResults: {
       done: "abgeschlossen",
       cancelled: "abgebrochen",
-      timeout: "nach 24 h beendet",
+      timeout: "beendet: Abschlussentladung nicht fertig",
       telemetry: "beendet: Batterie nicht lesbar",
     },
     cancel: "Abbrechen",
@@ -839,6 +841,8 @@ const COMPARE_DASH = "1 4";
 
 // localStorage keys of the day chart series hidden via the legend and of the
 // series hidden by default that were switched on.
+// Top cell delta below which balancing is hardly needed (green status limit).
+const BALANCING_NORMAL_MV = 200;
 const HIDDEN_SERIES_KEY = "slems-hidden-series";
 // localStorage key of the consumer cards shown with all their settings.
 const EXPANDED_CONSUMERS_KEY = "slems-expanded-consumers";
@@ -1238,7 +1242,7 @@ class SlemsPanel extends HTMLElement {
       items.push(
         balancing.state === "on"
           ? item("balancing-off", t.cancelBalancing, ` data-entity="${balancing.entity_id}"`)
-          : item("balancing-on", t.startBalancing, ` data-entity="${balancing.entity_id}" data-name="${name}"${blocked ? ` disabled title="${escapeHtml(blocked)}"` : ""}`)
+          : item("balancing-on", t.startBalancing, ` data-entity="${balancing.entity_id}" data-name="${name}" data-delta="${escapeHtml(s("top_cell_delta")?.state ?? "")}"${blocked ? ` disabled title="${escapeHtml(blocked)}"` : ""}`)
       );
     }
     items.push(item("menu-details", t.details, ` data-device="${battery.device_id}"`));
@@ -2691,7 +2695,7 @@ class SlemsPanel extends HTMLElement {
       action = `<div class="suggestion" title="${escapeHtml(text)}">
           <ha-icon icon="mdi:scale-unbalanced"></ha-icon>
           <span class="suggestion-text"><b>${t.balancingSuggested}</b><span>${escapeHtml(text)}</span></span>
-          ${hint}<button class="primary" data-action="balancing-on" data-entity="${switchState.entity_id}" data-name="${escapeHtml(battery.name)}"${disabled}>${t.startBalancing}</button>
+          ${hint}<button class="primary" data-action="balancing-on" data-entity="${switchState.entity_id}" data-name="${escapeHtml(battery.name)}" data-delta="${escapeHtml(top?.state ?? "")}"${disabled}>${t.startBalancing}</button>
         </div>`;
     }
     const result = t.balancingResults[phase?.attributes?.last_result];
@@ -3010,9 +3014,15 @@ class SlemsPanel extends HTMLElement {
         this._hass.callService("switch", "turn_off", { entity_id: entityId });
       } else {
         const t = this._t;
+        // The last top measurement in the normal range: balancing is hardly needed.
+        const delta = parseFloat(balancingButton.dataset.delta);
+        const notNeeded =
+          Number.isFinite(delta) && delta < BALANCING_NORMAL_MV
+            ? `${t.balancingNotNeeded.replace("{delta}", Math.round(delta))} `
+            : "";
         this._confirm(
           t.startBalancingTitle.replace("{name}", balancingButton.dataset.name),
-          t.startBalancingText,
+          notNeeded + t.startBalancingText,
           t.startBalancingConfirm,
           () => this._hass.callService("switch", "turn_on", { entity_id: entityId }),
           false

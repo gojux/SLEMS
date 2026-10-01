@@ -778,7 +778,7 @@
       "message": "Cell balancing of {name} finished"
     },
     "balancing_done_message": {
-      "message": "Cell delta at the top of charge: {before} mV → {after} mV. Duration: {duration}. The battery is back in normal operation."
+      "message": "{ending}. Cell delta at the top of the charge: {before} mV → {after} mV. Duration: {duration}. The battery is back in normal operation."
     },
     "balancing_stopped_title": {
       "message": "Cell balancing of {name} stopped"
@@ -787,7 +787,7 @@
       "message": "The cell balancing was stopped: {reason}. Cell delta: {before} mV → {after} mV. Duration: {duration}."
     },
     "balancing_reason_timeout": {
-      "message": "maximum duration of 24 hours reached"
+      "message": "the final discharge did not finish within 26 hours"
     },
     "balancing_reason_telemetry": {
       "message": "the battery could not be read"
@@ -836,6 +836,15 @@
     },
     "battery_missing_unreadable": {
       "message": "{name} (cannot be read)"
+    },
+    "balancing_end_target": {
+      "message": "The cell delta is in the normal range"
+    },
+    "balancing_end_no_progress": {
+      "message": "The cell delta did not fall any more for 6 hours"
+    },
+    "balancing_end_max_time": {
+      "message": "The maximum duration of 24 hours was reached"
     }
   },
   "issues": {

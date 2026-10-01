@@ -1235,6 +1235,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     balancer.initial_delta_mv,
                     balancer.last_delta_mv,
                     dt_util.utcnow().timestamp() - balancer.started_at,
+                    balancer.end_reason,
                 ),
                 "slems balancing notification",
             )

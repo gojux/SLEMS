@@ -147,7 +147,7 @@ complements SLEMS well (see [roadmap](#roadmap)).
 | Distribution between batteries by efficiency, rotation with smooth transition | ✅ |
 | Battery limits: minimum/maximum SoC, charge/discharge power limit (e.g. 800 W), temperature charge limit | ✅ |
 | Detection of batteries that do not deliver the commanded power, confirmation of set points | ✅ |
-| Cell delta and active cell balancing (Marstek Venus E 3.0) | ✅ (not yet tested on a real device) |
+| Cell delta and active cell balancing (Marstek Venus E 3.0) | ✅ |
 | Regular full charge for the SoC calibration of LFP cells (one battery at a time, from the surplus, spared when discharging) | ✅ |
 
 | Consumers | Status |
@@ -452,18 +452,25 @@ in operating mode *active*:
    other batteries discharge to cover the 95 W.
 3. It charges with 95 W until the highest cell reaches 3.60 V, stands by for
    60 seconds and measures the cell delta.
-4. Above 30 mV it discharges with 200 W to the retry voltage (3.49 V) and
+4. Otherwise it discharges with 200 W to the retry voltage (3.49 V) and
    repeats from step 3. If the BMS refuses to charge (less than 30 W instead
-   of 95 W, e.g. because it reports full at about 3.55 V), it stands by,
-   measures, and the retry voltage is lowered in steps of 10 mV (down to 3.40
-   V).
-5. At 30 mV or less it discharges with 200 W to 3.48 V and ends.
+   of 95 W, e.g. because it reports full at about 3.55 V), it does not measure
+   (the delta below 3.60 V is smaller and not comparable), discharges and
+   lowers the retry voltage in steps of 10 mV (down to 3.40 V).
+5. It discharges with 200 W to 3.48 V and ends when the delta is in the normal
+   range (at most 190 mV), when it has not fallen by 2 mV for 6 hours, or
+   after 24 hours.
+
+The BMS bleeds the high cells passively, only a few mV per day; a run lowers
+a large delta step by step but does not reach the 0 mV of a lab charger. If
+the last measurement is already in the normal range, the dashboard says so
+before the start.
 
 The discharge of the balancing battery is fed into the grid; the other
 batteries do not store it (they keep charging only if they charge anyway). Its
 expected charge is taken into account in the expected PV surplus and in grid
-friendly charging. The run ends after 24 hours at the latest, and at once if
-the battery cannot be read; it pauses outside operating mode *active* and
+friendly charging. It stops with an error if the battery cannot be read or the
+final discharge has not finished 2 hours after the 24 hours; it pauses outside operating mode *active* and
 continues after a restart of Home Assistant. When it ends, the battery is
 handed back to its own logic and then returns to the normal planning. The
 sensor *Cell balancing phase* shows the phase and the result of the last run.
@@ -1107,8 +1114,8 @@ when they are solved:
 
 The dashboard also shows them: a red note on the battery card (*cannot be
 read*, *not responding*), in the energy flow and, for the smart meter, at the
-top of the overview. The end of an active cell balancing run (finished, after
-24 hours or because the battery could not be read) creates a notification with
+top of the overview. The end of an active cell balancing run (in the normal
+range, without further progress, after 24 hours or with an error) creates a notification with
 the cell delta before and after and the duration; cancelling it yourself does
 not.
 

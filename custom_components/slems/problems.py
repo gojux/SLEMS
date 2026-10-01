@@ -188,6 +188,7 @@ class ProblemReporter:
         initial_delta_mv: float | None,
         final_delta_mv: float | None,
         duration_s: float,
+        end_reason: str | None = None,
     ) -> None:
         """Notification about the end of a cell balancing run."""
         text = await self._texts()
@@ -203,7 +204,8 @@ class ProblemReporter:
         }
         if result == "done":
             title = text("balancing_done_title", **placeholders)
-            message = text("balancing_done_message", **placeholders)
+            ending = text(f"balancing_end_{end_reason or 'target'}")
+            message = text("balancing_done_message", ending=ending, **placeholders)
         else:
             title = text("balancing_stopped_title", **placeholders)
             reason = text(f"balancing_reason_{result}")

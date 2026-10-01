@@ -778,7 +778,7 @@
       "message": "Zellausgleich von {name} abgeschlossen"
     },
     "balancing_done_message": {
-      "message": "Zell-Delta am oberen Ladeende: {before} mV → {after} mV. Dauer: {duration}. Die Batterie ist wieder im normalen Betrieb."
+      "message": "{ending}. Zell-Delta am oberen Ladeende: {before} mV → {after} mV. Dauer: {duration}. Die Batterie ist wieder im normalen Betrieb."
     },
     "balancing_stopped_title": {
       "message": "Zellausgleich von {name} beendet"
@@ -787,7 +787,7 @@
       "message": "Der Zellausgleich wurde beendet: {reason}. Zell-Delta: {before} mV → {after} mV. Dauer: {duration}."
     },
     "balancing_reason_timeout": {
-      "message": "maximale Dauer von 24 Stunden erreicht"
+      "message": "die Abschlussentladung wurde nicht innerhalb von 26 Stunden fertig"
     },
     "balancing_reason_telemetry": {
       "message": "die Batterie konnte nicht gelesen werden"
@@ -836,6 +836,15 @@
     },
     "battery_missing_unreadable": {
       "message": "{name} (nicht lesbar)"
+    },
+    "balancing_end_target": {
+      "message": "Das Zell-Delta liegt im normalen Bereich"
+    },
+    "balancing_end_no_progress": {
+      "message": "Das Zell-Delta ist 6 Stunden lang nicht mehr gesunken"
+    },
+    "balancing_end_max_time": {
+      "message": "Die maximale Dauer von 24 Stunden wurde erreicht"
     }
   },
   "issues": {

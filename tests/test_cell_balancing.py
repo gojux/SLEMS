@@ -1,7 +1,9 @@
 """Tests for cell monitoring and active cell balancing."""
 
 from custom_components.slems.cell_balancing import (
+    FINAL_GRACE_S,
     MAX_RUN_S,
+    STALL_S,
     TOP_CHARGE_W,
     BalancingPhase,
     CellBalancer,
@@ -131,15 +133,16 @@ def test_monitor_ignores_plateau_knee_and_load() -> None:
 class Battery:
     """Very small battery: max cell voltage follows the power."""
 
-    def __init__(self, voltage: float, delta: float) -> None:
+    def __init__(self, voltage: float, delta: float, bleed: float = 5e-6) -> None:
         self.voltage = voltage
         self.delta = delta
+        self.bleed = bleed
 
     def apply(self, power: float, seconds: float) -> None:
         self.voltage += power * seconds * 2e-6
         # The BMS bleeds the high cell while in the top window.
         if self.voltage >= 3.49:
-            self.delta = max(0.0, self.delta - seconds * 5e-6)
+            self.delta = max(0.0, self.delta - seconds * self.bleed)
 
 
 def run(balancer: CellBalancer, battery: Battery, limit: int = 20000) -> list[BalancingPhase]:
@@ -158,13 +161,27 @@ def run(balancer: CellBalancer, battery: Battery, limit: int = 20000) -> list[Ba
 
 def test_full_run_until_balanced() -> None:
     balancer = CellBalancer(max_charge_w=2500, started_at=START)
-    battery = Battery(3.35, 0.06)
+    battery = Battery(3.35, 0.25)
     phases = run(balancer, battery)
     assert phases[0] is BalancingPhase.PRE_TOP_CHARGE
     assert BalancingPhase.DISCHARGE in phases  # at least one retry
     assert phases[-1] is BalancingPhase.DONE
-    assert balancer.last_delta_mv <= 30
+    assert balancer.end_reason == "target"
+    assert balancer.last_delta_mv <= 190
     assert battery.voltage <= 3.48
+
+
+def test_run_ends_without_progress() -> None:
+    balancer = CellBalancer(max_charge_w=2500, started_at=START)
+    battery = Battery(3.35, 0.22, bleed=0.0)
+    phases = run(balancer, battery)
+    assert phases[-1] is BalancingPhase.DONE
+    assert balancer.end_reason == "no_progress"
+    assert balancer.last_delta_mv == 220.0
+    assert balancer.best_at is not None and balancer.best_at - START < STALL_S
+    restored = CellBalancer.from_dict(balancer.as_dict(), 2500)
+    assert restored.end_reason == "no_progress"
+    assert (restored.best_delta_mv, restored.best_at) == (220.0, balancer.best_at)
 
 
 def test_rejected_charge_lowers_retry_voltage() -> None:
@@ -173,7 +190,9 @@ def test_rejected_charge_lowers_retry_voltage() -> None:
     assert balancer.phase is BalancingPhase.CHARGE
     for t in range(15, 40, 5):  # BMS refuses: power stays 0
         balancer.step(t, START + t, 3.55, 3.45, 0)
-    assert balancer.phase is BalancingPhase.WAIT_MEASURE
+    # No measurement below the charge stop voltage: discharge and retry.
+    assert balancer.phase is BalancingPhase.DISCHARGE
+    assert balancer.last_delta_mv is None
     assert balancer.retry_voltage == 3.48
 
 
@@ -184,7 +203,7 @@ def test_refusal_with_standby_draw() -> None:
     assert balancer.phase is BalancingPhase.CHARGE
     for t in range(15, 40, 5):
         balancer.step(t, START + t, 3.549, 3.47, -13)
-    assert balancer.phase is BalancingPhase.WAIT_MEASURE
+    assert balancer.phase is BalancingPhase.DISCHARGE
 
 
 def test_invalid_telemetry_stops_the_run() -> None:
@@ -204,23 +223,34 @@ def test_initial_climb_uses_surplus_with_minimum() -> None:
 def test_run_stops_after_max_duration() -> None:
     balancer = CellBalancer(max_charge_w=2500, started_at=START)
     balancer.step(0, START, 3.35, 3.33, 0)
-    step = balancer.step(10, START + MAX_RUN_S, 3.40, 3.36, 95)
+    # After the maximum duration the run ends normally with the final discharge.
+    step = balancer.step(10, START + MAX_RUN_S, 3.55, 3.36, 95)
+    assert step.phase is BalancingPhase.FINAL_DISCHARGE and step.power_w < 0
+    assert balancer.end_reason == "max_time" and balancer.error is None
+    assert balancer.step(15, START + MAX_RUN_S + 5, 3.47, 3.36, -800).phase is BalancingPhase.DONE
+
+
+def test_unfinished_final_discharge_is_an_error() -> None:
+    balancer = CellBalancer(max_charge_w=2500, started_at=START)
+    balancer.step(0, START, 3.35, 3.33, 0)
+    balancer.step(10, START + MAX_RUN_S, 3.55, 3.36, 95)
+    step = balancer.step(20, START + MAX_RUN_S + FINAL_GRACE_S, 3.55, 3.36, 0)
     assert step.phase is BalancingPhase.ERROR and step.power_w == 0
     assert balancer.error == "timeout"
 
 
 def test_restored_run_measures_again_after_restart() -> None:
     balancer = CellBalancer(max_charge_w=2500, started_at=START)
-    balancer.step(0, START, 3.61, 3.50, 95)  # PRE_TOP -> CHARGE -> WAIT_MEASURE
+    balancer.step(0, START, 3.61, 3.39, 95)  # PRE_TOP -> CHARGE -> WAIT_MEASURE
     assert balancer.phase is BalancingPhase.WAIT_MEASURE
-    balancer.step(50, START + 50, 3.58, 3.52, 0)
+    balancer.step(50, START + 50, 3.58, 3.36, 0)
     restored = CellBalancer.from_dict(balancer.as_dict(), 2500)
     assert restored.phase is BalancingPhase.WAIT_MEASURE
     assert restored.started_at == START
     # New monotonic clock after the restart: the 60 s rest starts again.
-    assert restored.step(1, START + 60, 3.58, 3.52, 0).phase is BalancingPhase.WAIT_MEASURE
-    step = restored.step(62, START + 121, 3.58, 3.52, 0)
-    assert step.phase is BalancingPhase.DISCHARGE and restored.last_delta_mv == 60.0
+    assert restored.step(1, START + 60, 3.58, 3.36, 0).phase is BalancingPhase.WAIT_MEASURE
+    step = restored.step(62, START + 121, 3.58, 3.36, 0)
+    assert step.phase is BalancingPhase.DISCHARGE and restored.last_delta_mv == 220.0
 
 
 def test_pause_restarts_the_measurement_rest() -> None:
