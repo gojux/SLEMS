@@ -167,3 +167,16 @@ def test_daily_target_takes_the_surplus_left_after_charging() -> None:
     # The export drops by what the consumer takes, the charging stays.
     assert sum(result.grid_w.values()) == pytest.approx(sum(without.grid_w.values()) + 3000)
     assert result.soc_pct == without.soc_pct
+
+
+def test_after_the_night_discharge_the_limit_follows_the_lower_state_of_charge() -> None:
+    pv, consumption = forecasts()
+    # At midnight the controller's limit only fills the batteries from 77 %.
+    result = project_soc(
+        at(0), battery(77), pv, consumption, None,
+        settings(grid_friendly_charging=True, night_discharge=True), today_limit_w=3000,
+    )
+    # The night discharge lowers the state of charge by the morning; later the
+    # limit is computed from it (as the controller does), so they get full.
+    assert result.soc_pct[at(7)] < 50
+    assert max(result.soc_pct[at(hour)] for hour in range(8, 17)) == pytest.approx(100)

@@ -1426,6 +1426,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 if cap is not None
                 else None,
                 full_wh=battery.full_soc_pct / 100 * battery.capacity_wh,
+                max_charge_w=battery.max_charge_w,
+                demands=self.target_demands,
             )
         cap_control = (
             CapControl(

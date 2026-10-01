@@ -1123,7 +1123,10 @@ alle gelernten Werte als Attribute.
   wieder übersteigt; der Ziel-Netzüberschuss beim Entladen wird dabei
   ignoriert (die maximale Einspeisung gilt weiter). Reicht die PV-Prognose für
   morgen nicht, um die Batterien von der Reserve aus wieder zu füllen, bleibt
-  eine höhere Reserve. Benötigt die Verbrauchsprognose.
+  eine höhere Reserve; beim Nachladen zählt je Stunde höchstens die
+  Ladeleistung der Batterien, und der Überschuss, den Tagesziele von
+  Verbrauchern an dem Tag voraussichtlich nehmen, muss daneben Platz haben.
+  Benötigt die Verbrauchsprognose.
 - *Mittelungsfenster Überschuss* (0–300 s, Standard 5 s, 0 = aus): Die
   Netzleistung wird gemittelt; es gilt der ungünstigere Wert aus Mittelwert
   und aktuellem Wert, damit die Regelung bei schwankender PV nicht

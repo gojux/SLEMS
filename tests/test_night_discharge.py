@@ -6,6 +6,7 @@ import pytest
 
 from homeassistant.util import dt as dt_util
 
+from custom_components.slems.consumer_targets import SurplusDemand
 from custom_components.slems.night_discharge import plan_night_discharge
 from custom_components.slems.pv_forecast import hourly
 
@@ -38,6 +39,7 @@ def plan(
     min_wh: float = 0.0,
     max_target=None,
     full_wh: float | None = None,
+    **extra,
 ):
     pv, consumption = _forecasts(pv_per_hour)
     return plan_night_discharge(
@@ -53,6 +55,7 @@ def plan(
         min_wh=min_wh,
         max_target=max_target,
         full_wh=full_wh,
+        **extra,
     )
 
 
@@ -105,3 +108,16 @@ def test_not_applicable_while_pv_exceeds_consumption() -> None:
 def test_half_hour_periods_are_summed() -> None:
     start = _day().replace(hour=10)
     assert hourly({start: 100, start + timedelta(minutes=30): 150}) == {start: 250}
+
+
+def test_refill_limited_by_charge_power_and_daily_targets() -> None:
+    # Surplus 8 h x 1 kWh = 8 kWh, minus 1 kWh buffer: 7 kWh -> target 3 kWh.
+    assert plan(80, 1400).target_wh == pytest.approx(3000)
+    # The batteries take only 500 W: 4 kWh - 1 kWh -> target 7 kWh.
+    assert plan(80, 1400, max_charge_w=500).target_wh == pytest.approx(7000)
+    # A daily target takes 3 kWh of the surplus that day: 5 kWh - 1 kWh -> 6 kWh.
+    demand = SurplusDemand(3000, 2000, _day(1).replace(hour=8), _day(1).replace(hour=18))
+    assert plan(80, 1400, demands=[demand]).target_wh == pytest.approx(6000)
+    # One the surplus covers besides the refill changes nothing.
+    small = SurplusDemand(500, 2000, _day(1).replace(hour=8), _day(1).replace(hour=18))
+    assert plan(80, 1400, max_charge_w=500, demands=[small]).target_wh == pytest.approx(7000)

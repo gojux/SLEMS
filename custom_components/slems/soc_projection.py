@@ -8,8 +8,10 @@ simplified way:
   the surplus above the feed-in limit, until the batteries are full plus the
   safety buffer (see ``grid_friendly``). Like the controller, the charging is
   planned again every hour from the projected state of charge, so charging
-  held back (feed-in cap) is made up later; today's feed-in limit is the one
-  the controller uses.
+  held back (feed-in cap) is made up later. The feed-in limit is the
+  controller's in the current hour and, like the controller does later, from
+  the projected state of charge in the hours after (e.g. lower after a night
+  discharge).
 * Hours with a deficit: the batteries cover it. With import peak shaving at
   low state of charge only the import above the limit; with night discharge
   at least the planned night discharge, the extra part not below its target
@@ -119,15 +121,20 @@ def project_soc(
         surplus = [(power, hours) for _, power, hours in by_hour]
         if hour.date() == today:
             needed += today_extra_wh
+        if hour == first_hour:
+            # Still the current state of charge: the controller's limit.
             limit = today_limit_w
         elif settings.grid_friendly_charging:
+            # Like the controller later: from the state of charge of that hour.
             limit = feed_in_limit(surplus, needed, battery.max_charge_w)
+            if limit is not None and cap is not None:
+                limit = min(limit, cap.limit_w)
         else:
             limit = None
         charges = planned_charging(surplus, limit, battery.max_charge_w, needed)
         return {start: charge for (start, _, _), charge in zip(by_hour, charges, strict=True)}
 
-    hour = local_now.replace(minute=0, second=0, microsecond=0)
+    hour = first_hour = local_now.replace(minute=0, second=0, microsecond=0)
     while hour < end:
         start = max(hour, local_now)
         share = (hour + PERIOD - start) / PERIOD
@@ -155,7 +162,7 @@ def project_soc(
                 result.consumer_w[hour] = consumers / share
         else:
             stored = _discharge(
-                stored, load - pv_w, share, start, battery, pv, consumption, settings, cap
+                stored, load - pv_w, share, start, battery, pv, consumption, settings, cap, demands
             )
         if (
             cap is not None
@@ -208,6 +215,7 @@ def _discharge(
     consumption: Mapping[datetime, float] | None,
     settings: ProjectionSettings,
     cap: CapPlan | None = None,
+    demands: Sequence[SurplusDemand] = (),
 ) -> float:
     """Stored energy after covering ``deficit_w`` for ``share`` of an hour."""
     capacity = battery.capacity_wh
@@ -236,6 +244,8 @@ def _discharge(
         if cap is not None
         else None,
         full_wh=battery.full_soc_pct / 100 * capacity,
+        max_charge_w=battery.max_charge_w,
+        demands=demands,
     )
     if plan is None:
         return after

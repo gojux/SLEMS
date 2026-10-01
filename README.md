@@ -1069,7 +1069,10 @@ sensor *Learned values in use* has all learned values as attributes.
   of charge of the batteries) until PV production exceeds the consumption
   again, ignoring the discharge grid target (the maximum grid export still
   applies). If tomorrow's PV forecast cannot refill the batteries from the
-  reserve, a higher reserve is kept. Requires the consumption forecast.
+  reserve, a higher reserve is kept; the refill counts per hour at most the
+  charge power of the batteries, and the surplus that daily targets of
+  consumers are expected to take that day must fit besides it. Requires the
+  consumption forecast.
 - *Surplus averaging window* (0–300 s, default 5 s, 0 = off) – the grid power
   is averaged; the less favourable of average and current value is used, so
   the control does not overshoot with fluctuating PV.

@@ -6,7 +6,9 @@ forecast consumption again (the batteries start charging). The target is the
 reserve (a percentage of tomorrow's forecast daily consumption) above the
 minimum SoC of the batteries, raised to the
 level from which tomorrow's forecast PV surplus (minus a safety buffer,
-including charge losses) can still fill the batteries.
+including charge losses) can still fill the batteries. Per hour the batteries
+take at most their charge power, and the part of the daily targets expected
+from the surplus must fit besides the refill.
 
 With the feed-in cap the target is lowered so that the batteries have the
 free space the cap needs when PV takes over (``max_target``).
@@ -17,12 +19,13 @@ time, so deviations correct themselves.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from homeassistant.util import dt as dt_util
 
+from .consumer_targets import SurplusDemand
 from .pv_forecast import hourly
 
 PERIOD = timedelta(hours=1)
@@ -80,6 +83,8 @@ def plan_night_discharge(
     min_wh: float = 0.0,
     max_target: Callable[[datetime], float] | None = None,
     full_wh: float | None = None,
+    max_charge_w: float | None = None,
+    demands: Sequence[SurplusDemand] = (),
 ) -> NightDischargePlan | None:
     """Plan the night discharge; None if not applicable right now.
 
@@ -87,7 +92,9 @@ def plan_night_discharge(
     the minimum SoC of the batteries: it cannot be used, so the reserve comes
     on top of it. ``max_target`` gives the highest stored energy allowed at
     a moment (feed-in cap), ``full_wh`` the stored energy at the maximum SoC
-    (default: the capacity). Not applicable while PV already
+    (default: the capacity), ``max_charge_w`` the charge power of the
+    batteries (AC) and ``demands`` the parts of the daily targets expected
+    from the surplus. Not applicable while PV already
     exceeds consumption, or if no crossover is found within the lookahead.
     """
     pv_forecast = hourly(pv_forecast)
@@ -101,14 +108,19 @@ def plan_night_discharge(
     daily_consumption = sum(
         wh for start, wh in consumption_forecast.items() if day_start <= start < day_end
     )
-    surplus = 0.0
+    surplus = chargeable = 0.0
     start = crossover
     while start < day_end:
-        surplus += max(0.0, _energy(pv_forecast, start) - _energy(consumption_forecast, start))
+        hour_surplus = max(0.0, _energy(pv_forecast, start) - _energy(consumption_forecast, start))
+        surplus += hour_surplus
+        chargeable += hour_surplus if max_charge_w is None else min(hour_surplus, max_charge_w)
         start += PERIOD
+    # Daily targets taking surplus that day: what is left besides the refill
+    # must cover them, otherwise the refill is short by the difference.
+    demand = sum(d.energy_wh for d in demands if d.end > crossover and d.start < day_end)
 
     reserve = reserve_pct_of_consumption / 100 * daily_consumption
-    rechargeable = max(0.0, surplus - buffer_wh) * charge_efficiency
+    rechargeable = max(0.0, min(chargeable, surplus - demand) - buffer_wh) * charge_efficiency
     full = capacity_wh if full_wh is None else full_wh
     target = min(full, max(min_wh + reserve, full - rechargeable, 0.0))
     if max_target is not None:
