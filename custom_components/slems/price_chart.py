@@ -30,16 +30,46 @@ def _round(value: float | None) -> float | None:
     return None if value is None else round(value, 3)
 
 
+def _month_ct(tariff: Tariff, prices: MarketPrices, day: date, end: datetime) -> float | None:
+    """Mean market price (ct/kWh) of the month of ``day`` until ``end``, if the tariff uses it."""
+    if not any(item.unit is Unit.MARKET_MONTH for item in tariff.items):
+        return None
+    zone = dt_util.get_default_time_zone()
+    means = prices.hourly_means(datetime.combine(month_start(day), time(), zone), end)
+    return sum(means.values()) / len(means) / 10 if means else None
+
+
+def hourly_import_prices(
+    tariff: Tariff, prices: MarketPrices, start: datetime, end: datetime
+) -> dict[datetime, float | None]:
+    """Import price (ct/kWh incl. VAT) per local hour start, the mean of its quarters.
+
+    None for an hour with a quarter without price (missing market price).
+    """
+    first = dt_util.as_local(start).replace(minute=0, second=0, microsecond=0)
+    month_ct = _month_ct(tariff, prices, first.date(), end)
+    result: dict[datetime, float | None] = {}
+    moment = dt_util.as_utc(first)
+    end = dt_util.as_utc(end)
+    while moment < end:
+        values = []
+        for quarter in range(4):
+            slot = moment + timedelta(seconds=quarter * SLOT_S)
+            spot = prices.price_at(slot)
+            values.append(
+                kwh_price(tariff, Side.IMPORT, dt_util.as_local(slot), None if spot is None else spot / 10, month_ct)
+            )
+        result[dt_util.as_local(moment)] = None if None in values else sum(values) / len(values)
+        moment += timedelta(hours=1)
+    return result
+
+
 def day_prices(tariff: Tariff, prices: MarketPrices, day: date) -> list[dict[str, Any]]:
     """Quarter hours of the local ``day`` with import, export and spot price (ct/kWh)."""
     zone = dt_util.get_default_time_zone()
     start = datetime.combine(day, time(), zone)
     end = datetime.combine(day + timedelta(days=1), time(), zone)
-    month_ct = None
-    if any(item.unit is Unit.MARKET_MONTH for item in tariff.items):
-        means = prices.hourly_means(datetime.combine(month_start(day), time(), zone), end)
-        if means:
-            month_ct = sum(means.values()) / len(means) / 10
+    month_ct = _month_ct(tariff, prices, day, end)
     has_export = any(item.side is Side.EXPORT and item.unit.per_kwh for item in tariff.items)
     slots = []
     # In UTC, so a day with a clock change has 92 or 100 quarter hours.

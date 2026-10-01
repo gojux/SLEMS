@@ -126,6 +126,17 @@ SETTING_NUMBERS: tuple[SettingNumberDescription, ...] = (
         entity_category=EntityCategory.CONFIG,
     ),
     _percentage("night_reserve", "night_reserve_pct"),
+    SettingNumberDescription(
+        key="price_min_gain",
+        translation_key="price_min_gain",
+        attribute="price_min_gain_ct",
+        native_unit_of_measurement="ct/kWh",
+        native_min_value=0,
+        native_max_value=50,
+        native_step=0.1,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+    ),
     _percentage("night_reserve_coverage", "night_reserve_coverage_pct", 50, 200),
     _percentage("rotation_soc_threshold", "rotation_soc_threshold_pct", 1, 50),
     SettingNumberDescription(

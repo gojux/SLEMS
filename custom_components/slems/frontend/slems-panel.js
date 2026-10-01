@@ -184,6 +184,7 @@ const STRINGS = {
     targetMinShort: "min.",
     targetGoalTemp: "target",
     targetBoostChip: "priority",
+    priceHoldText: "Batteries cover the hours from {price}; grid in {hours} cheaper hours until {until}",
     priorityConsumers: "Before the batteries: {names}",
     targetForcedChip: "forced",
     storageCapacity: "Storage left",
@@ -341,6 +342,10 @@ const STRINGS = {
     peakShavingNote:
       "Below the threshold only {usable} above the minimum state of charge ({min}) are left for peaks, about {kwh} kWh.",
     settingHints: {
+      price_control:
+        "Needs a tariff. If the stored energy does not last for every hour until PV refills the batteries, they cover the hours with the highest import price and keep their energy in the cheaper ones (the house draws from the grid there). The grid import stays the same, it only moves to cheaper hours.",
+      price_min_gain:
+        "Keep the energy only in hours that are cheaper by at least this much than the hours it is kept for (forecasts are uncertain).",
       night_reserve_auto:
         "Learns the reserve from the mornings: every day SLEMS measures how much energy the house needed from battery or grid between the moment PV should have taken over (end of the night discharge as planned) and the moment it really did (PV covering the consumption for 15 minutes), in % of the day's forecast consumption. Needs 14 measured mornings; the measurement also runs while the night discharge is off.",
       night_reserve_coverage:
@@ -437,6 +442,7 @@ const STRINGS = {
       peak: "Import peak shaving",
       rotation: "Several batteries",
       fullCharge: "Regular full charge",
+      price: "Prices",
     },
   },
   de: {
@@ -581,6 +587,7 @@ const STRINGS = {
     targetMinShort: "min.",
     targetGoalTemp: "Ziel",
     targetBoostChip: "Vorrang",
+    priceHoldText: "Batterien decken die Stunden ab {price}; Netz in {hours} günstigeren Stunden bis {until}",
     priorityConsumers: "Vorrang vor den Batterien: {names}",
     targetForcedChip: "erzwungen",
     storageCapacity: "Speicherreserve",
@@ -738,6 +745,10 @@ const STRINGS = {
     peakShavingNote:
       "Unter der Schwelle bleiben nur {usable} über dem minimalen Ladezustand ({min}) für Spitzen, etwa {kwh} kWh.",
     settingHints: {
+      price_control:
+        "Braucht einen Tarif. Reicht die gespeicherte Energie nicht für alle Stunden, bis die PV die Batterien wieder füllt, decken sie die Stunden mit dem höchsten Bezugspreis und halten ihre Energie in den günstigeren zurück (dort bezieht das Haus aus dem Netz). Der Netzbezug bleibt gleich, er wandert nur in günstigere Stunden.",
+      price_min_gain:
+        "Energie nur in Stunden zurückhalten, die mindestens um so viel günstiger sind als die Stunden, für die sie gehalten wird (Prognosen sind unsicher).",
       night_reserve_auto:
         "Lernt die Reserve aus den Morgen: Jeden Tag misst SLEMS, wie viel Energie das Haus zwischen dem Zeitpunkt, an dem die PV hätte übernehmen sollen (Ende der Nachtentladung laut Plan), und dem, an dem sie es wirklich tat (PV deckt den Verbrauch 15 Minuten lang), aus Batterie oder Netz brauchte, in % des prognostizierten Tagesverbrauchs. Braucht 14 gemessene Morgen; gemessen wird auch, wenn die Nachtentladung aus ist.",
       night_reserve_coverage:
@@ -834,6 +845,7 @@ const STRINGS = {
       peak: "Bezugsspitzen abfangen",
       rotation: "Mehrere Batterien",
       fullCharge: "Regelmäßige Vollladung",
+      price: "Preise",
     },
   },
 };
@@ -906,6 +918,8 @@ const SETTING_GROUPS = [
   // Used by the night discharge and the battery support of the consumers.
   ["reserve", ["night_reserve_auto", "night_reserve", "night_reserve_coverage"]],
   ["night", ["night_discharge"]],
+  // Needs a tariff (SLEMS integration page); market prices only with consent.
+  ["price", ["price_control", "price_min_gain", "market_prices", "price_source"]],
   [
     "peak",
     [
@@ -1996,7 +2010,18 @@ class SlemsPanel extends HTMLElement {
   /** "Before the batteries: ELWA 2" while daily targets take the surplus first. */
   _priorityText() {
     const names = (this._config.consumers || []).filter((c) => this._priorityMode(c)).map((c) => c.name);
-    return names.length ? this._t.priorityConsumers.replace("{names}", names.join(", ")) : "";
+    const parts = names.length ? [this._t.priorityConsumers.replace("{names}", names.join(", "))] : [];
+    // Price hold: which hours the batteries keep their energy for.
+    const a = this._state("allocation_strategy")?.attributes || {};
+    if (a.price_hold_hours?.length && a.price_hold_until) {
+      parts.push(
+        this._t.priceHoldText
+          .replace("{price}", this._priceNumber(a.price_covered_from_ct))
+          .replace("{hours}", a.price_hold_hours.length)
+          .replace("{until}", this._time(a.price_hold_until))
+      );
+    }
+    return parts.join(" · ");
   }
 
   /** Grid export today: measured until now plus the export the plan still expects. */
@@ -3207,6 +3232,7 @@ class SlemsPanel extends HTMLElement {
       ${option(t.groups.gridFriendly, "grid_friendly_charging", "grid_friendly_charging",
         setting("grid_friendly_buffer_kwh", "grid_friendly_buffer"))}
       ${option(t.groups.night, "night_discharge", "night_discharge", setting("night_reserve_pct", "night_reserve"))}
+      ${option(t.groups.price, "price_control", "price_control", setting("price_min_gain_ct", "price_min_gain"))}
       ${option(t.groups.peak, "peak_shaving", "peak_shaving",
         setting("peak_shaving_auto", "peak_shaving_auto") +
           setting("peak_shaving_grid_limit_w", "peak_shaving_grid_limit", { disabled: s.peak_shaving_auto }) +

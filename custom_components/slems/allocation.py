@@ -31,6 +31,11 @@ Night discharge (optional, see night_discharge): outside a surplus the
 batteries discharge at least with the planned night power, ignoring the
 discharge grid target but still respecting the maximum grid export.
 
+Price hold (optional, see price_hold): in an hour whose energy is kept for
+more expensive hours the batteries cover no deficit (or only up to the power
+allotted to a partly covered hour), the house draws from the grid; import peak
+shaving still covers the import above its limit.
+
 Battery support (see battery_support): the power of consumers that must not
 draw from the batteries right now (``unsupported``) is left to the grid in a
 deficit; the batteries cover only the rest. Import peak shaving still covers
@@ -78,6 +83,7 @@ class Strategy(StrEnum):
     SELF_CONSUMPTION = "self_consumption"
     PEAK_SHAVING = "peak_shaving"
     NIGHT_DISCHARGE = "night_discharge"
+    PRICE_HOLD = "price_hold"
     GRID_FRIENDLY = "grid_friendly"
     FEED_IN_CAP = "feed_in_cap"
     IDLE = "idle"
@@ -220,8 +226,12 @@ def allocate(
     cap: CapControl | None = None,
     unsupported: frozenset[str] = frozenset(),
     unsupported_measured_w: float = 0.0,
+    discharge_limit_w: float | None = None,
 ) -> Allocation:
     """Distribute ``available_w`` between batteries and consumers.
+
+    ``discharge_limit_w``: the batteries cover a deficit with at most this
+    power (price hold; 0: they keep their energy).
 
     ``unsupported`` are controllable consumers whose planned power the
     batteries must not cover, ``unsupported_measured_w`` the measured power of
@@ -276,7 +286,9 @@ def allocate(
                 charge_secured=charge_secured,
             )
     if remaining < discharge_target:
-        allocation = _cover_deficit(remaining, discharge_target, battery, settings, unsupported_w)
+        allocation = _cover_deficit(
+            remaining, discharge_target, battery, settings, unsupported_w, discharge_limit_w
+        )
         allocation.consumer_power_w = consumer_power
         allocation.charge_secured = charge_secured
         return allocation
@@ -361,9 +373,16 @@ def _cover_deficit(
     battery: BatteryGroup | None,
     settings: AllocationSettings,
     unsupported_w: float = 0.0,
+    limit_w: float | None = None,
 ) -> Allocation:
     if battery is None:
         return Allocation(strategy=Strategy.SELF_CONSUMPTION)
+    if limit_w is not None and not _peak_shaving_active(battery, settings):
+        discharge = max(0.0, grid_target_w - remaining_w - unsupported_w)
+        return Allocation(
+            strategy=Strategy.PRICE_HOLD,
+            battery_power_w=-min(discharge, limit_w, battery.max_discharge_w),
+        )
     if _peak_shaving_active(battery, settings):
         grid_import = -remaining_w
         discharge = max(0.0, grid_import - settings.peak_shaving_grid_limit_w)

@@ -185,6 +185,7 @@ spezialisiert; evcc ergänzt SLEMS gut (siehe [Roadmap](#roadmap)).
 | Dashboard (Seitenleiste): Energiefluss, Kennzahlen, Tagesdiagramm mit Prognose und Plan, Batterien, Verbraucher, Einstellungen | ✅ |
 | Simulation im Dashboard: Tagesplan mit anderen Einstellungen im Vergleich zum aktuellen (heute oder morgen) | ✅ |
 | Tarife wie auf der Rechnung (Zeitfenster, Umsatzsteuer je Gruppe) mit Prüfung gegen eine Rechnung; Börsenpreise (APG, SMARD, Energy-Charts) nur mit Zustimmung; monatlicher Tarifvergleich | ✅ |
+| Preisbewusste Steuerung: gespeicherte Energie für die teuren Stunden halten | ✅ |
 
 ## Installation
 
@@ -294,6 +295,18 @@ Home Assistant eingestellten Land. SLEMS lädt dann einmal die letzten
 den nächsten Tag. Der Sensor *Börsenpreis* zeigt den Preis der aktuellen
 Viertelstunde in ct/kWh ohne Gebühren und Steuern, mit der Quelle als
 Quellenangabe.
+
+**Preisbewusste Steuerung** (Schalter, standardmäßig aus; braucht einen
+Tarif): Reicht die gespeicherte Energie nicht für alle Stunden, bis die PV die
+Batterien wieder füllt, decken sie die Stunden mit dem höchsten Bezugspreis
+des aktuellen Tarifs und halten ihre Energie in Stunden zurück, die um
+mindestens den *Mindestgewinn* (Standard 2 ct/kWh) günstiger sind; dort
+bezieht das Haus aus dem Netz. Der Netzbezug bleibt gleich, er wandert nur in
+günstigere Stunden – kein Laden aus dem Netz und keine Einspeisung aus den
+Batterien. Jeder zeitabhängige Preis zählt: Börsenpreise oder Zeitfenster
+eines festen Tarifs. Bezugsspitzen abfangen gilt weiter. Die Strategie zeigt
+*Für teure Stunden halten* mit den betroffenen Stunden, Tagesdiagramm und
+Simulation berücksichtigen es.
 
 ### PV-Prognose
 
@@ -1447,11 +1460,10 @@ Mögliche Erweiterungen:
 - Batterien mit Verfügbarkeit (z. B. „Auto angesteckt“) und einer Reserve bis
   zu einer Uhrzeit: Grundlage für ein Auto, das das Haus versorgt (V2H).
 - Gelernte Anwesenheit des Autos für die Planung.
-- Preisbewusste Steuerung zusätzlich zu den bestehenden Regeln, aufbauend auf
-  den Tarifen und Börsenpreisen: Laden aus dem Netz in günstigen oder
-  negativen Stunden, die Nachtentladung in teure Stunden, Tagesziele der
-  Verbraucher in günstige Fenster; danach ein Tarifvergleich, der das
-  einbezieht.
+- Mehr preisbewusste Steuerung zusätzlich zu den bestehenden Regeln:
+  Tagesziele der Verbraucher in günstige Fenster, Laden aus dem Netz in
+  günstigen oder negativen Stunden und Einspeisen aus den Batterien bei hohen
+  Preisen (beides optional); danach ein Tarifvergleich, der das einbezieht.
 - Weitere Batteriemodelle über die Treiber-Schnittstelle.
 
 ## Entwicklung

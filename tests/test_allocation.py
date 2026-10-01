@@ -377,3 +377,15 @@ def test_unsupported_keeps_peak_shaving_and_night_discharge() -> None:
     night = allocate(-1300, battery(80), [], SETTINGS, None, night_discharge_w=600, unsupported_measured_w=1000)
     assert night.strategy is Strategy.NIGHT_DISCHARGE
     assert night.battery_power_w == -600
+
+
+def test_price_hold_leaves_the_deficit_to_the_grid() -> None:
+    held = allocate(-800, battery(50), [], SETTINGS, None, discharge_limit_w=0.0)
+    assert held.strategy is Strategy.PRICE_HOLD
+    assert held.battery_power_w == 0
+    partly = allocate(-800, battery(50), [], SETTINGS, None, discharge_limit_w=300.0)
+    assert partly.battery_power_w == -300
+    # Peak shaving at low state of charge still covers the import above its limit.
+    peak = _with(peak_shaving=True)
+    shaved = allocate(-4000, battery(10), [], peak, None, discharge_limit_w=0.0)
+    assert shaved.strategy is Strategy.PEAK_SHAVING and shaved.battery_power_w == -1000

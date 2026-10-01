@@ -700,7 +700,8 @@
           "idle": "Standby",
           "night_discharge": "Nachtentladung",
           "grid_friendly": "Netzdienlich",
-          "feed_in_cap": "Einspeisebegrenzung"
+          "feed_in_cap": "Einspeisebegrenzung",
+          "price_hold": "Für teure Stunden halten"
         }
       },
       "expected_surplus_energy": {
@@ -909,6 +910,9 @@
       },
       "market_prices": {
         "name": "Börsenpreise abrufen"
+      },
+      "price_control": {
+        "name": "Preisbewusste Steuerung"
       }
     },
     "number": {
@@ -1019,6 +1023,9 @@
       },
       "target_max_temperature": {
         "name": "Zieltemperatur"
+      },
+      "price_min_gain": {
+        "name": "Mindestgewinn"
       }
     },
     "binary_sensor": {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 import asyncio
@@ -166,6 +167,9 @@ from .consumer_targets import (
     window_start,
 )
 from .night_discharge import NightDischargePlan, plan_night_discharge, pv_takeover
+from .price_chart import hourly_import_prices
+from .price_hold import PriceHold, plan_price_hold
+from .tariff_comparison import configured_tariffs
 from .peak_shaving import auto_limit, hours_until_refill
 from .pv_forecast import (
     PvForecast,
@@ -359,6 +363,10 @@ class ControlSettings:
     # batteries (reserve against a too optimistic forecast).
     grid_friendly_buffer_kwh: float = DEFAULT_GRID_FRIENDLY_BUFFER_KWH
     night_discharge: bool = False
+    # Keep the stored energy for the expensive hours (see price_hold); the
+    # import price must be lower by at least the minimum gain.
+    price_control: bool = False
+    price_min_gain_ct: float = 2.0
     # Night discharge reserve in % of tomorrow's forecast daily consumption.
     night_reserve_pct: float = DEFAULT_NIGHT_RESERVE_PCT
     # Learned from the morning gaps; share of the mornings it covers (above
@@ -445,6 +453,8 @@ class SystemSnapshot:
     # Current outdoor temperature of the weather entity (°C).
     outdoor_temperature_c: float | None = None
     night_discharge: NightDischargePlan | None = None
+    # Hours in which the batteries keep their energy (see price_hold).
+    price_hold: PriceHold | None = None
     # Feed-in cap plan, None when off or without forecasts.
     feed_in_cap: CapPlan | None = None
     # Buffer of the feed-in cap in effect: % and "manual" or "auto" (+ days).
@@ -563,6 +573,7 @@ class ForecastPlan:
     # Energy the batteries can spare for consumers on battery support
     # "automatic" (see battery_support); None without such a consumer.
     support_budget_wh: float | None = None
+    price_hold: PriceHold | None = None
     day_plan: list[dict] = field(default_factory=list)
     day_plan_tomorrow: list[dict] = field(default_factory=list)
 
@@ -651,6 +662,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._quarters_store: Store[dict] = Store(
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.grid_quarters"
         )
+        # Hourly import prices of the price hold: (quarter hour, end, prices update), prices.
+        self._import_price_cache: tuple[tuple, dict] | None = None
         # Last tariff comparison for the dashboard: (monotonic time, result).
         self.tariff_comparison_cache: tuple[float, dict] | None = None
         # Grid power read over Modbus (see grid_meter); None if not configured
@@ -1630,6 +1643,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         snapshot.peak_shaving_limit_w = peak_limit_w if settings.peak_shaving else None
         snapshot.day_plan = forecast_plan.day_plan
         snapshot.day_plan_tomorrow = forecast_plan.day_plan_tomorrow
+        snapshot.price_hold = forecast_plan.price_hold
+        price_limit_w = forecast_plan.price_hold.limit_w(wall_now) if forecast_plan.price_hold else None
 
         requests = [
             self._request(consumer, now, battery)
@@ -1693,11 +1708,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 discharge_grid_target_w=self.grid_target_w(settings, charging=False),
             ),
             snapshot.expected_surplus_wh,
-            snapshot.night_discharge.power_w if snapshot.night_discharge else None,
+            snapshot.night_discharge.power_w if snapshot.night_discharge and price_limit_w is None else None,
             snapshot.feed_in_limit_w,
             cap_control,
             unsupported=self.unsupported,
             unsupported_measured_w=unsupported_measured_w,
+            discharge_limit_w=price_limit_w,
         )
         # Resting consumers draw nothing: the batteries take their allocation.
         # Counted at their command (controller cycle), that command is not in
@@ -1971,6 +1987,19 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 )
             grid_load, budget_load = self._support_loads()
             until = next_refill(wall_now, pv_hourly, consumption_hourly) if consumption_hourly else None
+            if settings.price_control and consumption_hourly:
+                result.price_hold = self._price_hold(
+                    battery, wall_now, pv_hourly, consumption_hourly, grid_load, until, settings
+                )
+                if result.price_hold is not None:
+                    # Beyond the allowed discharge the grid covers the deficit.
+                    grid_load = {
+                        **grid_load,
+                        **{
+                            hour: max(0.0, consumption_hourly.get(hour, 0.0) - (pv_hourly or {}).get(hour, 0.0) - limit)
+                            for hour, limit in result.price_hold.limits_w.items()
+                        },
+                    }
             if consumption_hourly and any(
                 self.support_of(c.subentry_id) is BatterySupport.AUTO for c in self.consumers
             ):
@@ -2075,6 +2104,43 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 measured_w += max(0.0, (measured.power_w or 0.0) if measured else 0.0)
         self.unsupported = frozenset(unsupported)
         return measured_w
+
+    def _price_hold(
+        self,
+        battery: BatteryGroup,
+        wall_now: datetime,
+        pv_hourly: Mapping[datetime, float] | None,
+        consumption_hourly: Mapping[datetime, float],
+        grid_load: Mapping[datetime, float],
+        until: datetime | None,
+        settings: ControlSettings,
+    ) -> PriceHold | None:
+        """Hours in which the batteries keep their energy for more expensive ones."""
+        if until is None:
+            return None
+        prices = self._import_prices(wall_now, until)
+        if prices is None:
+            return None
+        deficits = {
+            hour: max(0.0, wh - (pv_hourly or {}).get(hour, 0.0) - grid_load.get(hour, 0.0))
+            for hour, wh in consumption_hourly.items()
+        }
+        stored = battery.soc_pct / 100 * battery.capacity_wh
+        floor = battery.min_soc_pct / 100 * battery.capacity_wh
+        usable = max(0.0, stored - floor) * (battery.charge_efficiency or 1.0)
+        return plan_price_hold(wall_now, usable, deficits, prices, until, settings.price_min_gain_ct)
+
+    def _import_prices(self, wall_now: datetime, until: datetime) -> dict[datetime, float | None] | None:
+        """Import price per hour with the current tariff (kept per quarter hour); None without tariff."""
+        tariffs = configured_tariffs(self.config_entry)
+        if not tariffs:
+            return None
+        stamp = int(wall_now.timestamp())
+        key = (stamp - stamp % 900, until, self.market_prices.last_update)
+        if self._import_price_cache is None or self._import_price_cache[0] != key:
+            prices = hourly_import_prices(next(iter(tariffs.values())), self.market_prices, wall_now, until)
+            self._import_price_cache = (key, prices)
+        return self._import_price_cache[1]
 
     def _support_loads(self) -> tuple[dict[datetime, float], dict[datetime, float]]:
         """Forced runs (source "grid") of consumers on battery support never / automatic."""

@@ -249,6 +249,20 @@ otherwise the hour from the counters or the hourly mean of the grid power.
 `GridEnergy.lengths` says the length of every period, so
 `MarketPrices.period_means` gives the matching market price.
 
+### Price hold
+
+`price_hold.py`: until the next refill (`battery_support.next_refill`) the
+usable energy (above the minimum SoC, AC) against the hourly deficits
+(consumption incl. target load minus PV minus the grid load of battery
+support). If it does not last, the most expensive hours are covered (greedy
+by import price; `price_chart.hourly_import_prices` of the first current
+tariff, cached per quarter hour), the hours cheaper by the minimum gain are
+held (limit 0 W), and the partly covered hour gets its allotted mean power if
+a more expensive covered hour follows. `forecast_plan` adds the limits as
+grid load to the projection; `allocate(discharge_limit_w=…)` caps the deficit
+cover (strategy `price_hold`), the night discharge is off in such an hour,
+peak shaving stays. Without a price for every hour until the refill: no hold.
+
 ### Price chart
 
 `price_chart.py` (websocket `slems/price_chart`, `day` today / tomorrow): per
@@ -1551,3 +1565,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-01 | Day-ahead prices only with the user's consent (switch, off by default): SLEMS must not contact services on the internet on its own. APG for Austria (official, data since 2023), SMARD for Germany (official, CC BY 4.0) and Energy-Charts for both as an alternative; no automatic fallback to another service than the one chosen. Prices are cached for a year, so comparisons and the check need no requests. The feed-in "monthly market price" is approximated by the export-weighted mean (as published market prices of PV feed-in are, but only on websites without an API); published values can be entered per month. |
 | 2026-10-01 | Tariff comparison as a passive comparison in the simulation tab: the recorded energy priced with each tariff per month. Simulating what the control would have done with another tariff would need price-aware planning, which does not exist yet; the label says so, so a dynamic tariff is not judged by a comparison that leaves out its main advantage. |
 | 2026-10-02 | SLEMS records grid import and export per quarter hour from its own grid values instead of relying on statistics only: the hourly mean of the grid power nets import and export within an hour, the counters' long-term statistics are hourly, while bills with dynamic prices are per quarter hour. With counters the quarters only give the split within the hour and the counter the total, so a less exact sampling of the grid power does not change the billed energy. |
+| 2026-10-02 | Price aware control starts with moving the grid import that happens anyway into cheaper hours (price hold): no extra import, no export, no extra cycles, so it needs no wear costs and cannot make things worse than the forecast error. A greedy cover of the most expensive hours is optimal for a fixed amount of energy and linear prices; a full optimisation (dynamic programming) comes with charging from the grid. The minimum gain absorbs forecast errors; any time dependent import price of the tariff counts, with or without market prices. |

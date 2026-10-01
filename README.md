@@ -183,6 +183,7 @@ complements SLEMS well (see [roadmap](#roadmap)).
 | Dashboard (sidebar panel): energy flow, key figures, daily forecast and plan chart, batteries, consumers, settings | ✅ |
 | Simulation in the dashboard: day plan with other settings compared with the current one (today or tomorrow) | ✅ |
 | Tariffs as on the bill (time windows, VAT per group) with a check against a bill; day-ahead prices (APG, SMARD, Energy-Charts) only with consent; monthly tariff comparison | ✅ |
+| Price aware control: stored energy kept for the expensive hours | ✅ |
 
 ## Installation
 
@@ -284,6 +285,17 @@ set in Home Assistant. SLEMS then loads the last 12 months once, stores them
 locally and fetches the next day after the day-ahead auction (from 13:00).
 The sensor *Market price* shows the price of the current quarter hour in
 ct/kWh without fees and VAT, with the source as attribution.
+
+**Price aware control** (switch, off by default; needs a tariff): if the
+stored energy does not last for every hour until PV refills the batteries,
+they cover the hours with the highest import price of the current tariff and
+keep their energy in hours that are cheaper by at least the *minimum gain*
+(default 2 ct/kWh); there the house draws from the grid. The grid import
+stays the same, it only moves to cheaper hours – no charging from the grid
+and no feed-in from the batteries. Any time dependent price counts: market
+prices or time windows of a fixed tariff. Import peak shaving still applies.
+The strategy shows *Price hold* with the hours concerned, the day chart and
+the simulation include it.
 
 ### PV forecast
 
@@ -1373,10 +1385,10 @@ Possible extensions:
 - Batteries with an availability (e.g. "car plugged in") and a reserve until
   a time of day: the basis for a car supplying the house (V2H).
 - Learned presence of the car for the planning.
-- Price-aware control in addition to the current rules, building on the
-  tariffs and market prices: charging from the grid in cheap or negative
-  hours, the night discharge into expensive hours, daily targets of the
-  consumers in cheap windows; then a tariff comparison that includes it.
+- More price aware control in addition to the current rules: daily targets
+  of the consumers in cheap windows, charging from the grid in cheap or
+  negative hours and feeding in from the batteries at high prices (both
+  optional); then a tariff comparison that includes it.
 - Further battery models via the driver interface.
 
 ## Development

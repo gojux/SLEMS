@@ -346,6 +346,13 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         device_class=SensorDeviceClass.ENUM,
         options=[strategy.value for strategy in Strategy],
         value_fn=lambda s, _: s.allocation.strategy.value if s.allocation else None,
+        attributes_fn=lambda s, _: {
+            "price_hold_hours": sorted(hour.isoformat() for hour in s.price_hold.hold_hours)
+            if s.price_hold
+            else [],
+            "price_hold_until": s.price_hold.until.isoformat() if s.price_hold else None,
+            "price_covered_from_ct": round(s.price_hold.covered_from_ct, 2) if s.price_hold else None,
+        },
     ),
     SystemSensorDescription(
         key="control_status",

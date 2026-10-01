@@ -700,7 +700,8 @@
           "idle": "Idle",
           "night_discharge": "Night discharge",
           "grid_friendly": "Grid friendly",
-          "feed_in_cap": "Feed-in cap"
+          "feed_in_cap": "Feed-in cap",
+          "price_hold": "Price hold"
         }
       },
       "expected_surplus_energy": {
@@ -909,6 +910,9 @@
       },
       "market_prices": {
         "name": "Fetch market prices"
+      },
+      "price_control": {
+        "name": "Price aware control"
       }
     },
     "number": {
@@ -1019,6 +1023,9 @@
       },
       "target_max_temperature": {
         "name": "Target temperature"
+      },
+      "price_min_gain": {
+        "name": "Minimum gain"
       }
     },
     "binary_sensor": {
