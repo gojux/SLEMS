@@ -11,7 +11,8 @@
           "weather_entity": "Weather",
           "pv_forecast_entries": "PV forecast",
           "outdoor_temperature_entity": "Outdoor temperature",
-          "house_history_entity": "House consumption history"
+          "house_history_entity": "House consumption history",
+          "grid_modbus": "Also read the smart meter over Modbus"
         },
         "data_description": {
           "grid_power_entity": "Power at the grid connection point. Expected sign: positive = import, negative = export.",
@@ -20,12 +21,43 @@
           "weather_entity": "Optional. Improves the consumption forecast (e.g. heat pump demand).",
           "pv_forecast_entries": "Solar forecast integrations (e.g. Forecast.Solar, Solcast). Several entries, e.g. one per roof plane, are summed up.",
           "outdoor_temperature_entity": "Optional. Temperature sensor with history for the heat pump forecast. Without it, SLEMS records the temperature of the weather entity itself.",
-          "house_history_entity": "Optional. Power sensor of the house consumption with existing history (e.g. from another integration). Used for the time before SLEMS recorded its own values."
+          "house_history_entity": "Optional. Power sensor of the house consumption with existing history (e.g. from another integration). Used for the time before SLEMS recorded its own values.",
+          "grid_modbus": "Optional. Reads the grid power directly from a SunSpec meter (e.g. at a SolarEdge inverter, through a Modbus proxy) every fraction of a second. The control sees each value sooner than through the entity; the entity stays the fallback and the history."
+        }
+      },
+      "grid_modbus": {
+        "title": "Smart meter over Modbus",
+        "description": "Connects through the shared Modbus connection of Home Assistant. If the inverter integration keeps the inverter's only Modbus connection to itself, enter the Modbus proxy in front of it. SLEMS finds the meter in the SunSpec model chain.",
+        "data": {
+          "grid_modbus_host": "Host",
+          "grid_modbus_port": "Port",
+          "grid_modbus_unit_id": "Unit ID",
+          "grid_modbus_interval_s": "Polling interval",
+          "grid_modbus_sign": "Sign"
+        },
+        "data_description": {
+          "grid_modbus_unit_id": "SolarEdge: 1.",
+          "grid_modbus_interval_s": "0.5 s is enough for the control; shorter puts more load on the connection.",
+          "grid_modbus_sign": "Automatic: SLEMS compares a few values with the grid power entity (needs some import or export)."
+        }
+      },
+      "grid_meter": {
+        "title": "Choose the meter",
+        "description": "The inverter lists several meters. Choose the meter at the grid connection point; the current power helps to recognise it.",
+        "data": {
+          "grid_modbus_register": "Meter"
         }
       }
     },
     "abort": {
       "single_instance_allowed": "SLEMS is already configured."
+    },
+    "error": {
+      "grid_modbus_failed": "Reading over Modbus failed: {error}",
+      "no_sunspec": "The device reports no SunSpec model chain (register 40000, 0 or 50000).",
+      "no_meter": "The SunSpec model chain contains no meter (model 201 to 204).",
+      "sign_undecidable": "The grid power is too small to compare the sign (Modbus {modbus} W, entity {entity} W). Try again later or choose the sign.",
+      "sign_mismatch": "Modbus ({modbus} W) and entity ({entity} W) match with neither sign. Is the right meter chosen? Otherwise choose the sign."
     }
   },
   "options": {
@@ -39,7 +71,8 @@
           "weather_entity": "Weather",
           "pv_forecast_entries": "PV forecast",
           "outdoor_temperature_entity": "Outdoor temperature",
-          "house_history_entity": "House consumption history"
+          "house_history_entity": "House consumption history",
+          "grid_modbus": "Also read the smart meter over Modbus"
         },
         "data_description": {
           "grid_power_entity": "Power at the grid connection point. Expected sign: positive = import, negative = export.",
@@ -47,9 +80,40 @@
           "pv_forecast_entries": "Solar forecast integrations (e.g. Forecast.Solar, Solcast). Several entries, e.g. one per roof plane, are summed up.",
           "weather_entity": "Optional. Improves the consumption forecast (e.g. heat pump demand).",
           "outdoor_temperature_entity": "Optional. Temperature sensor with history for the heat pump forecast. Without it, SLEMS records the temperature of the weather entity itself.",
-          "house_history_entity": "Optional. Power sensor of the house consumption with existing history (e.g. from another integration). Used for the time before SLEMS recorded its own values."
+          "house_history_entity": "Optional. Power sensor of the house consumption with existing history (e.g. from another integration). Used for the time before SLEMS recorded its own values.",
+          "grid_modbus": "Optional. Reads the grid power directly from a SunSpec meter (e.g. at a SolarEdge inverter, through a Modbus proxy) every fraction of a second. The control sees each value sooner than through the entity; the entity stays the fallback and the history."
+        }
+      },
+      "grid_modbus": {
+        "title": "Smart meter over Modbus",
+        "description": "Connects through the shared Modbus connection of Home Assistant. If the inverter integration keeps the inverter's only Modbus connection to itself, enter the Modbus proxy in front of it. SLEMS finds the meter in the SunSpec model chain.",
+        "data": {
+          "grid_modbus_host": "Host",
+          "grid_modbus_port": "Port",
+          "grid_modbus_unit_id": "Unit ID",
+          "grid_modbus_interval_s": "Polling interval",
+          "grid_modbus_sign": "Sign"
+        },
+        "data_description": {
+          "grid_modbus_unit_id": "SolarEdge: 1.",
+          "grid_modbus_interval_s": "0.5 s is enough for the control; shorter puts more load on the connection.",
+          "grid_modbus_sign": "Automatic: SLEMS compares a few values with the grid power entity (needs some import or export)."
+        }
+      },
+      "grid_meter": {
+        "title": "Choose the meter",
+        "description": "The inverter lists several meters. Choose the meter at the grid connection point; the current power helps to recognise it.",
+        "data": {
+          "grid_modbus_register": "Meter"
         }
       }
+    },
+    "error": {
+      "grid_modbus_failed": "Reading over Modbus failed: {error}",
+      "no_sunspec": "The device reports no SunSpec model chain (register 40000, 0 or 50000).",
+      "no_meter": "The SunSpec model chain contains no meter (model 201 to 204).",
+      "sign_undecidable": "The grid power is too small to compare the sign (Modbus {modbus} W, entity {entity} W). Try again later or choose the sign.",
+      "sign_mismatch": "Modbus ({modbus} W) and entity ({entity} W) match with neither sign. Is the right meter chosen? Otherwise choose the sign."
     }
   },
   "config_subentries": {
@@ -309,6 +373,13 @@
       "options": {
         "auto": "Automatic (battery's own logic)",
         "standby": "Standby (0 W)"
+      }
+    },
+    "grid_modbus_sign": {
+      "options": {
+        "auto": "Automatic",
+        "normal": "As read",
+        "inverted": "Inverted"
       }
     }
   },
@@ -859,6 +930,10 @@
     "grid_meter_stale": {
       "title": "Smart meter does not report",
       "description": "The smart meter entity has not reported for a while. SLEMS handed the batteries back to their own logic and controls again as soon as the meter reports. Check the smart meter and its integration."
+    },
+    "grid_modbus_unavailable": {
+      "title": "Smart meter over Modbus not reachable",
+      "description": "SLEMS cannot read the grid power over Modbus ({error}) and uses the smart meter entity meanwhile. Check the connection, the proxy and the settings in the options."
     }
   }
 }

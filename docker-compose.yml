@@ -22,6 +22,7 @@ services:
       - venus-sim-1
       - venus-sim-2
       - venus-sim-3
+      - sunspec-meter
     restart: unless-stopped
 
   # Two simulated Marstek Venus E 3.0 batteries (host names venus-sim-1/2, port 502).
@@ -41,6 +42,15 @@ services:
     <<: *venus-sim
     environment:
       SIM_INITIAL_SOC: "55"
+
+  # SunSpec meter like at a SolarEdge inverter (host sunspec-meter, port 502),
+  # fed with the simulated grid power by Home Assistant through port 5021.
+  sunspec-meter:
+    image: python:3.13-alpine
+    command: ["python", "/sim/meter_sim.py"]
+    volumes:
+      - ./dev/sunspec_meter:/sim:ro
+    restart: unless-stopped
 
   # Test runner using the same Python and Home Assistant version as production.
   # Usage: docker compose run --rm tests

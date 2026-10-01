@@ -161,6 +161,10 @@ def _system(coordinator: SlemsCoordinator) -> dict:
             "gain": controller.gain,
             "meter_interval_s": controller.meter.interval_s,
             "battery_response_s": controller.battery_response.response_s,
+            "grid_source": coordinator.grid_source,
+            "grid_meter": coordinator.grid_meter.diagnostics(time.monotonic())
+            if coordinator.grid_meter
+            else coordinator.grid_meter_error,
             "battery_response_by_battery_s": {
                 battery.name: controller.battery_responses.learned(battery.subentry_id)
                 for battery in coordinator.batteries

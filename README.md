@@ -31,6 +31,7 @@ system).
   - [HACS (custom repository)](#hacs-custom-repository)
   - [Manual](#manual)
 - [Setup](#setup)
+  - [Smart meter over Modbus (optional)](#smart-meter-over-modbus-optional)
   - [PV forecast](#pv-forecast)
   - [Weather (optional)](#weather-optional)
   - [Consumption forecast](#consumption-forecast)
@@ -204,6 +205,34 @@ Requires Home Assistant 2026.9 or newer.
    optionally PV power, PV forecast and weather.
 3. On the SLEMS integration page choose **Add battery** for every battery and
    **Add consumer** for every consumer you want to measure or control.
+
+### Smart meter over Modbus (optional)
+
+The entity of the smart meter is updated once per polling cycle of its
+integration, often only about once per second, and then shows only a part of
+the meter's values. With *Also read the smart meter over Modbus* SLEMS reads
+the grid power directly from a SunSpec meter, e.g. the meter at a SolarEdge
+inverter, every 0.5 seconds (0.2 to 5 s). The control sees every value
+sooner; the gain is largest with fast batteries.
+
+- SLEMS uses the shared Modbus connection of Home Assistant. As long as the
+  inverter integration keeps the inverter's only Modbus TCP connection to
+  itself (e.g. SolarEdge Modbus Multi), enter a Modbus proxy in front of the
+  inverter as host. If the inverter integration shares its connection one
+  day, the inverter itself can be entered and the proxy is no longer needed.
+- SLEMS finds the meters in the SunSpec model chain; with several meters
+  (e.g. export+import and consumption) you choose the one at the grid
+  connection point, the current power of each helps to recognise it.
+- The sign is found automatically by comparing a few values with the grid
+  power entity; this needs some import or export (at least 100 W). Otherwise
+  choose it by hand.
+- The entity stays required: it is the history, the basis of the forecasts
+  and the fallback. While no Modbus value is newer than 3 intervals (at least
+  5 seconds), SLEMS uses the entity; after 5 minutes without Modbus a repair
+  issue appears. The sensor *Smart meter update interval* shows the source as
+  attribute `source`.
+- When the source is switched, the learned battery response times start
+  again, since they contain the delay of the old source.
 
 ### PV forecast
 
@@ -698,7 +727,8 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar.
 - **Key figures**: status (problems first – smart meter without values,
   battery unreadable or not responding – otherwise the operating mode),
   strategy, state of charge, feed-in limit, stored energy and capacity,
-  forecasts.
+  forecasts, and the *expected export today*: the export measured since
+  midnight plus the export the plan still expects (the blue line of the chart).
 - **Forecast chart** (mean power per half hour in kW):
   - *Today* shows PV and consumption forecast (dashed), the measured values so
     far (solid), the expected and the measured feed-in into the grid (blue;
@@ -837,7 +867,7 @@ Diagnostic sensors show what SLEMS has learned:
 | Sensor | Meaning |
 |---|---|
 | *Current control gain* | gain used right now |
-| *Smart meter update interval* | how often the smart meter reports |
+| *Smart meter update interval* | how often the smart meter reports; attribute `source`: Modbus or entity |
 | *Battery response time* | time from a battery command until the smart meter shows it, for all batteries together; per battery (from steps it makes mostly alone) in *Details* of the battery, used by the control once learned |
 | *Planned power* of a consumer, attribute `response_time_s` | time from a command until the consumer's own power sensor reacts |
 
@@ -1110,7 +1140,9 @@ when they are solved:
 
 - a battery does not respond (excluded, see above),
 - a battery could not be read for more than 5 minutes,
-- the smart meter does not report while SLEMS is in operating mode *active*.
+- the smart meter does not report while SLEMS is in operating mode *active*,
+- the smart meter could not be read over Modbus for more than 5 minutes
+  (SLEMS uses the entity meanwhile).
 
 The dashboard also shows them: a red note on the battery card (*cannot be
 read*, *not responding*), in the energy flow and, for the smart meter, at the

@@ -10,11 +10,13 @@ discovery).
 
 from __future__ import annotations
 
+import asyncio
 import socket
 from typing import Any
 
 import voluptuous as vol
 
+from homeassistant.components.modbus import async_get_temporary_unit
 from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.config_entries import (
     ConfigEntry,
@@ -28,8 +30,19 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er, selector
+from modbus_connection import ModbusTcpParams
 
 from .const import (
+    CONF_GRID_MODBUS,
+    CONF_GRID_MODBUS_HOST,
+    CONF_GRID_MODBUS_INTERVAL_S,
+    CONF_GRID_MODBUS_INVERTED,
+    CONF_GRID_MODBUS_PORT,
+    CONF_GRID_MODBUS_REGISTER,
+    CONF_GRID_MODBUS_SIGN,
+    CONF_GRID_MODBUS_UNIT_ID,
+    DEFAULT_GRID_MODBUS_INTERVAL_S,
+    DEFAULT_GRID_MODBUS_PORT,
     CONF_BATTERY_CONTROL,
     CONF_BATTERY_TEMPERATURE_ENTITY,
     CONF_CHARGE_ENTITY,
@@ -115,8 +128,18 @@ from .entity_match import (
     suggest_mode_options,
     suggest_remote_options,
 )
+from .grid_meter import (
+    Reader,
+    SignMismatchError,
+    SignUndecidableError,
+    SunSpecError,
+    SunSpecMeter,
+    detect_inversion,
+    find_meters,
+    read_power,
+)
 from .pv_forecast import async_forecast_provider_entries
-from .util import state_as_kwh
+from .util import state_as_kwh, state_as_watts
 
 # Venus E 3.0 usable capacity.
 DEFAULT_CAPACITY_WH = 5120
@@ -235,6 +258,9 @@ async def _async_system_schema(
                 CONF_GRID_POWER_INVERTED,
                 default=defaults.get(CONF_GRID_POWER_INVERTED, False),
             ): selector.BooleanSelector(),
+            vol.Required(
+                CONF_GRID_MODBUS, default=defaults.get(CONF_GRID_MODBUS, False)
+            ): selector.BooleanSelector(),
             optional(CONF_PV_POWER_ENTITY): _POWER_SENSOR,
             **forecast_field,
             optional(CONF_WEATHER_ENTITY): selector.EntitySelector(
@@ -250,16 +276,230 @@ async def _async_system_schema(
     )
 
 
-class SlemsConfigFlow(ConfigFlow, domain=DOMAIN):
+_GRID_MODBUS_KEYS = (
+    CONF_GRID_MODBUS_HOST,
+    CONF_GRID_MODBUS_PORT,
+    CONF_GRID_MODBUS_UNIT_ID,
+    CONF_GRID_MODBUS_INTERVAL_S,
+    CONF_GRID_MODBUS_SIGN,
+    CONF_GRID_MODBUS_REGISTER,
+    CONF_GRID_MODBUS_INVERTED,
+)
+GRID_MODBUS_TIMEOUT_S = 3.0
+# Readings compared with the grid entity to find the sign.
+SIGN_SAMPLES = 6
+SIGN_SAMPLE_S = 0.5
+
+
+def _with_timeout(read: Reader) -> Reader:
+    async def timed(address: int, count: int) -> list[int]:
+        return await asyncio.wait_for(read(address, count), GRID_MODBUS_TIMEOUT_S)
+
+    return timed
+
+
+def _meter_label(meter: SunSpecMeter, power: float | None) -> str:
+    name = " ".join(part for part in (meter.manufacturer, meter.model, meter.option) if part)
+    reading = f"{power:.0f} W" if power is not None else "–"
+    return f"{name or 'Meter'} (SunSpec {meter.model_id}, {reading})"
+
+
+class _GridModbusSteps:
+    """Steps for reading the grid power over Modbus, shared by config and options flow."""
+
+    hass: HomeAssistant
+    _system: dict[str, Any]
+    _meters: list[tuple[SunSpecMeter, float | None]]
+
+    def _async_finish_system(self) -> ConfigFlowResult:
+        raise NotImplementedError
+
+    async def _async_system_done(
+        self, user_input: dict[str, Any], previous: dict[str, Any]
+    ) -> ConfigFlowResult:
+        # The Modbus settings stay when it is switched off, as defaults for later.
+        self._system = {
+            **{key: previous[key] for key in _GRID_MODBUS_KEYS if key in previous},
+            **user_input,
+        }
+        if user_input.get(CONF_GRID_MODBUS):
+            return await self.async_step_grid_modbus()
+        return self._async_finish_system()
+
+    def _params(self) -> tuple[ModbusTcpParams, int]:
+        data = self._system
+        return (
+            ModbusTcpParams(host=data[CONF_GRID_MODBUS_HOST], port=data[CONF_GRID_MODBUS_PORT]),
+            data[CONF_GRID_MODBUS_UNIT_ID],
+        )
+
+    async def async_step_grid_modbus(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Connection of the SunSpec meter; finds the meters in the model chain."""
+        errors: dict[str, str] = {}
+        placeholders = {"error": "", "modbus": "", "entity": ""}
+        if user_input is not None:
+            self._system |= {
+                CONF_GRID_MODBUS_HOST: user_input[CONF_GRID_MODBUS_HOST].strip(),
+                CONF_GRID_MODBUS_PORT: int(user_input[CONF_GRID_MODBUS_PORT]),
+                CONF_GRID_MODBUS_UNIT_ID: int(user_input[CONF_GRID_MODBUS_UNIT_ID]),
+                CONF_GRID_MODBUS_INTERVAL_S: float(user_input[CONF_GRID_MODBUS_INTERVAL_S]),
+                CONF_GRID_MODBUS_SIGN: user_input[CONF_GRID_MODBUS_SIGN],
+            }
+            params, unit_id = self._params()
+            try:
+                async with async_get_temporary_unit(self.hass, params, unit_id) as unit:
+                    read = _with_timeout(unit.read_holding_registers)
+                    meters = await find_meters(read)
+                    self._meters = []
+                    for meter in meters:
+                        try:
+                            power = await read_power(read, meter.power_register)
+                        except Exception:  # noqa: BLE001 - only shown as a hint
+                            power = None
+                        self._meters.append((meter, power))
+            except SunSpecError:
+                errors["base"] = "no_sunspec"
+            except Exception as err:  # noqa: BLE001 - shown in the form
+                errors["base"] = "grid_modbus_failed"
+                placeholders["error"] = f"{type(err).__name__}: {err}"
+            else:
+                if not self._meters:
+                    errors["base"] = "no_meter"
+                elif len(self._meters) == 1:
+                    self._system[CONF_GRID_MODBUS_REGISTER] = self._meters[0][0].power_register
+                    return await self._async_check_sign()
+                else:
+                    return await self.async_step_grid_meter()
+        return self._show_grid_modbus(errors, placeholders)
+
+    def _show_grid_modbus(
+        self, errors: dict[str, str], placeholders: dict[str, str]
+    ) -> ConfigFlowResult:
+        data = self._system
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_GRID_MODBUS_HOST, default=data.get(CONF_GRID_MODBUS_HOST, vol.UNDEFINED)
+                ): str,
+                vol.Required(
+                    CONF_GRID_MODBUS_PORT,
+                    default=data.get(CONF_GRID_MODBUS_PORT, DEFAULT_GRID_MODBUS_PORT),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1, max=65535, mode=selector.NumberSelectorMode.BOX)
+                ),
+                vol.Required(
+                    CONF_GRID_MODBUS_UNIT_ID, default=data.get(CONF_GRID_MODBUS_UNIT_ID, 1)
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=0, max=247, mode=selector.NumberSelectorMode.BOX)
+                ),
+                vol.Required(
+                    CONF_GRID_MODBUS_INTERVAL_S,
+                    default=data.get(CONF_GRID_MODBUS_INTERVAL_S, DEFAULT_GRID_MODBUS_INTERVAL_S),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.2, max=5, step=0.1, unit_of_measurement="s",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Required(
+                    CONF_GRID_MODBUS_SIGN, default=data.get(CONF_GRID_MODBUS_SIGN, "auto")
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=["auto", "normal", "inverted"],
+                        translation_key="grid_modbus_sign",
+                    )
+                ),
+            }
+        )
+        return self.async_show_form(
+            step_id="grid_modbus",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders=placeholders,
+        )
+
+    async def async_step_grid_meter(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Choice between several meters."""
+        if user_input is not None:
+            self._system[CONF_GRID_MODBUS_REGISTER] = int(user_input[CONF_GRID_MODBUS_REGISTER])
+            return await self._async_check_sign()
+        options = [
+            selector.SelectOptionDict(
+                value=str(meter.power_register), label=_meter_label(meter, power)
+            )
+            for meter, power in self._meters
+        ]
+        current = str(self._system.get(CONF_GRID_MODBUS_REGISTER, options[0]["value"]))
+        if current not in {option["value"] for option in options}:
+            current = options[0]["value"]
+        return self.async_show_form(
+            step_id="grid_meter",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_GRID_MODBUS_REGISTER, default=current): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=options)
+                    )
+                }
+            ),
+        )
+
+    def _entity_grid(self) -> float | None:
+        grid = state_as_watts(self.hass.states.get(self._system[CONF_GRID_POWER_ENTITY]))
+        if grid is not None and self._system.get(CONF_GRID_POWER_INVERTED, False):
+            grid = -grid
+        return grid
+
+    async def _async_check_sign(self) -> ConfigFlowResult:
+        """Sign of the Modbus value: chosen, or found by comparing with the entity."""
+        sign = self._system[CONF_GRID_MODBUS_SIGN]
+        if sign != "auto":
+            self._system[CONF_GRID_MODBUS_INVERTED] = sign == "inverted"
+            return self._async_finish_system()
+        placeholders = {"error": "", "modbus": "–", "entity": "–"}
+        params, unit_id = self._params()
+        register = self._system[CONF_GRID_MODBUS_REGISTER]
+        pairs: list[tuple[float, float]] = []
+        try:
+            async with async_get_temporary_unit(self.hass, params, unit_id) as unit:
+                read = _with_timeout(unit.read_holding_registers)
+                for sample in range(SIGN_SAMPLES):
+                    if sample:
+                        await asyncio.sleep(SIGN_SAMPLE_S)
+                    modbus = await read_power(read, register)
+                    entity = self._entity_grid()
+                    if modbus is not None and entity is not None:
+                        pairs.append((modbus, entity))
+            if pairs:
+                placeholders["modbus"] = f"{pairs[-1][0]:.0f}"
+                placeholders["entity"] = f"{pairs[-1][1]:.0f}"
+            self._system[CONF_GRID_MODBUS_INVERTED] = detect_inversion(pairs)
+        except SignUndecidableError:
+            return self._show_grid_modbus({"base": "sign_undecidable"}, placeholders)
+        except SignMismatchError:
+            return self._show_grid_modbus({"base": "sign_mismatch"}, placeholders)
+        except Exception as err:  # noqa: BLE001 - shown in the form
+            placeholders["error"] = f"{type(err).__name__}: {err}"
+            return self._show_grid_modbus({"base": "grid_modbus_failed"}, placeholders)
+        return self._async_finish_system()
+
+
+class SlemsConfigFlow(_GridModbusSteps, ConfigFlow, domain=DOMAIN):
     """Initial setup of the SLEMS system."""
 
     VERSION = 1
+
+    def _async_finish_system(self) -> ConfigFlowResult:
+        return self.async_create_entry(title="SLEMS", data=self._system)
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
-            return self.async_create_entry(title="SLEMS", data=user_input)
+            return await self._async_system_done(user_input, {})
         return self.async_show_form(
             step_id="user", data_schema=await _async_system_schema(self.hass, {})
         )
@@ -280,17 +520,20 @@ class SlemsConfigFlow(ConfigFlow, domain=DOMAIN):
         }
 
 
-class SlemsOptionsFlow(OptionsFlow):
+class SlemsOptionsFlow(_GridModbusSteps, OptionsFlow):
     """Change the system settings (the update listener reloads the entry)."""
+
+    def _async_finish_system(self) -> ConfigFlowResult:
+        return self.async_create_entry(data=self._system)
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        if user_input is not None:
-            return self.async_create_entry(data=user_input)
         # Options fully replace the initial data, so a cleared optional field
         # does not fall back to the value from the first setup.
         current = dict(self.config_entry.options or self.config_entry.data)
+        if user_input is not None:
+            return await self._async_system_done(user_input, current)
         return self.async_show_form(
             step_id="init", data_schema=await _async_system_schema(self.hass, current)
         )

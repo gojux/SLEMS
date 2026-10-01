@@ -399,11 +399,8 @@ class RealTimeController:
             async_call_later(self._hass, max(0.05, due - time.monotonic()), self._on_ramp_timer)
 
     def _grid_stale(self) -> bool:
-        state = self._hass.states.get(self._coordinator.grid_entity_id)
-        if state is None or state_as_float(state) is None:
-            return True
-        age = time.time() - state.last_reported.timestamp()
-        return age > max(GRID_STALE_S, 10 * self.meter.value)
+        age = self._coordinator.grid_age_s()
+        return age is None or age > max(GRID_STALE_S, 10 * self.meter.value)
 
     # --- batteries ------------------------------------------------------------
 

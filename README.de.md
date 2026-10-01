@@ -31,6 +31,7 @@ lustiges Wort für ein sehr interessantes Tier) und *EMS*
   - [HACS (benutzerdefiniertes Repository)](#hacs-benutzerdefiniertes-repository)
   - [Manuell](#manuell)
 - [Einrichtung](#einrichtung)
+  - [Smart Meter per Modbus (optional)](#smart-meter-per-modbus-optional)
   - [PV-Prognose](#pv-prognose)
   - [Wetter (optional)](#wetter-optional)
   - [Verbrauchsprognose](#verbrauchsprognose)
@@ -208,6 +209,35 @@ Voraussetzung: Home Assistant 2026.9 oder neuer.
 3. Auf der Seite der SLEMS-Integration für jede Batterie **Batterie
    hinzufügen** und für jeden Verbraucher, der gemessen oder gesteuert werden
    soll, **Verbraucher hinzufügen** wählen.
+
+### Smart Meter per Modbus (optional)
+
+Die Entity des Smart Meters wird einmal pro Abfragedurchlauf ihrer
+Integration aktualisiert, oft nur etwa einmal pro Sekunde, und zeigt dann nur
+einen Teil der Zählerwerte. Mit *Smart Meter zusätzlich per Modbus lesen*
+liest SLEMS die Netzleistung direkt von einem SunSpec-Zähler, z. B. dem Zähler
+am SolarEdge-Wechselrichter, alle 0,5 Sekunden (0,2 bis 5 s). Die Regelung
+sieht jeden Wert früher; am meisten bringt das bei schnellen Batterien.
+
+- SLEMS nutzt die geteilte Modbus-Verbindung von Home Assistant. Solange die
+  Integration des Wechselrichters dessen einzige Modbus-TCP-Verbindung selbst
+  belegt (z. B. SolarEdge Modbus Multi), als Host einen Modbus-Proxy vor dem
+  Wechselrichter angeben. Teilt die Wechselrichter-Integration ihre Verbindung
+  eines Tages, lässt sich direkt der Wechselrichter eintragen, und der Proxy
+  wird nicht mehr gebraucht.
+- SLEMS findet die Zähler in der SunSpec-Modellkette; bei mehreren Zählern
+  (z. B. Einspeisung/Bezug und Verbrauch) wählst du den am Netzanschlusspunkt,
+  die aktuelle Leistung jedes Zählers hilft beim Erkennen.
+- Das Vorzeichen findet SLEMS selbst, indem es einige Werte mit der
+  Netzleistungs-Entity vergleicht; dafür braucht es etwas Bezug oder
+  Einspeisung (mindestens 100 W). Sonst lässt es sich von Hand wählen.
+- Die Entity bleibt Pflicht: Sie ist die Historie, die Grundlage der Prognosen
+  und die Rückfallebene. Solange kein Modbus-Wert neuer als 3 Intervalle
+  (mindestens 5 Sekunden) ist, nutzt SLEMS die Entity; nach 5 Minuten ohne
+  Modbus erscheint ein Reparaturhinweis. Der Sensor *Aktualisierungsintervall
+  Smart Meter* zeigt die Quelle im Attribut `source`.
+- Beim Wechsel der Quelle beginnen die gelernten Reaktionszeiten der
+  Batterien neu, weil sie die Verzögerung der alten Quelle enthalten.
 
 ### PV-Prognose
 
@@ -730,7 +760,10 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
   Linie.
 - **Kennzahlen**: Status (zuerst Probleme – Smart Meter ohne Werte, Batterie
   nicht lesbar oder reagiert nicht –, sonst der Betriebsmodus), Strategie,
-  Ladezustand, gespeicherte Energie und Kapazität, Einspeisegrenze, Prognosen.
+  Ladezustand, gespeicherte Energie und Kapazität, Einspeisegrenze, Prognosen
+  und die *erwartete Einspeisung heute*: die seit Mitternacht gemessene
+  Einspeisung plus die, die der Plan noch erwartet (die blaue Linie des
+  Diagramms).
 - **Prognose-Diagramm** (mittlere Leistung je halbe Stunde in kW):
   - *Heute* zeigt PV- und Verbrauchsprognose (gestrichelt), die bisher
     gemessenen Werte (durchgezogen), die erwartete und die gemessene
@@ -879,7 +912,7 @@ Diagnose-Sensoren zeigen, was SLEMS gelernt hat:
 | Sensor | Bedeutung |
 |---|---|
 | *Aktuelle Regelverstärkung* | die gerade verwendete Verstärkung |
-| *Aktualisierungsintervall Smart Meter* | wie oft der Smart Meter meldet |
+| *Aktualisierungsintervall Smart Meter* | wie oft der Smart Meter meldet; Attribut `source`: Modbus oder Entity |
 | *Reaktionszeit Batterie* | Zeit von einem Batteriebefehl, bis der Smart Meter ihn zeigt, für alle Batterien gemeinsam; je Batterie (aus Schritten, die sie weitgehend allein macht) unter *Details* der Batterie, von der Regelung genutzt, sobald gelernt |
 | *Geplante Leistung* eines Verbrauchers, Attribut `response_time_s` | Zeit von einem Befehl, bis der eigene Leistungssensor des Verbrauchers reagiert |
 
@@ -1167,7 +1200,9 @@ verschwinden von selbst, sobald sie behoben sind:
 
 - eine Batterie reagiert nicht (ausgeschlossen, siehe oben),
 - eine Batterie kann seit mehr als 5 Minuten nicht gelesen werden,
-- der Smart Meter meldet nicht, während SLEMS im Betriebsmodus *Aktiv* ist.
+- der Smart Meter meldet nicht, während SLEMS im Betriebsmodus *Aktiv* ist,
+- der Smart Meter kann seit mehr als 5 Minuten nicht per Modbus gelesen werden
+  (SLEMS nutzt bis dahin die Entity).
 
 Das Dashboard zeigt sie ebenfalls: ein roter Hinweis auf der Batteriekarte
 (*nicht lesbar*, *reagiert nicht*), im Energiefluss und für den Smart Meter

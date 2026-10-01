@@ -8,6 +8,7 @@ logger:
   default: info
   logs:
     custom_components.slems: debug
+    homeassistant.components.automation.feed_simulated_sunspec_meter: warning
 
 # Simulated measurements. Adjust the sliders to play with the values.
 input_number:
@@ -168,6 +169,21 @@ modbus:
         unit_of_measurement: W
         device_class: power
         scan_interval: 1
+  # Feed port of the simulated SunSpec meter (see the automation below).
+  - name: sunspec_meter_feed
+    type: tcp
+    host: sunspec-meter
+    port: 5021
+    sensors:
+      - name: Sim SunSpec meter power
+        unique_id: sim_sunspec_meter_power
+        device_address: 1
+        address: 40206
+        input_type: holding
+        data_type: int16
+        unit_of_measurement: W
+        device_class: power
+        scan_interval: 5
   # Control port of the third simulated Venus (see the template entities above).
   - name: venus_sim_3
     type: tcp
@@ -242,3 +258,19 @@ modbus:
         unit_of_measurement: W
         device_class: power
         scan_interval: 1
+
+# Feeds the simulated SunSpec meter (dev/sunspec_meter) with the grid power,
+# export positive like SolarEdge, for "read the smart meter over Modbus".
+automation sim:
+  - alias: Feed simulated SunSpec meter
+    mode: queued
+    triggers:
+      - trigger: state
+        entity_id: sensor.smart_meter_power
+    actions:
+      - action: modbus.write_register
+        data:
+          hub: sunspec_meter_feed
+          slave: 1
+          address: 40206
+          value: "{{ ((trigger.to_state.state | float(0) * -1) | int) % 65536 }}"

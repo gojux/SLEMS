@@ -276,6 +276,8 @@ const STRINGS = {
     exportCompare: "Feed-in (current settings)",
     socCompare: "State of charge (current settings)",
     status: "Status",
+    expectedExport: "Expected export today",
+    exportDetail: "{so_far} so far · {rest} kWh to come",
     tileHints: {
       feed_in_limit:
         "With grid friendly charging the batteries only charge with the surplus above this grid export. SLEMS recalculates it continuously from the PV and consumption forecasts so that the batteries are still full by the evening (buffer included): they absorb the midday peak instead of being full in the morning. \"off\": grid friendly charging is switched off. \"none – charge at once\": the expected surplus is not enough, the batteries charge at once.",
@@ -614,6 +616,8 @@ const STRINGS = {
     exportCompare: "Einspeisung (aktuelle Einstellungen)",
     socCompare: "Ladezustand (aktuelle Einstellungen)",
     status: "Status",
+    expectedExport: "Erwartete Einspeisung heute",
+    exportDetail: "bisher {so_far} · noch {rest} kWh",
     tileHints: {
       feed_in_limit:
         "Beim netzdienlichen Laden laden die Batterien nur mit dem Überschuss oberhalb dieser Einspeisung. SLEMS berechnet sie laufend aus PV- und Verbrauchsprognose so, dass die Batterien bis zum Abend trotzdem voll werden (Puffer eingerechnet): Sie fangen die Mittagsspitze ab, statt schon am Vormittag voll zu sein. „aus“: netzdienliches Laden ist ausgeschaltet. „keine – sofort laden“: Der erwartete Überschuss reicht nicht, die Batterien laden sofort.",
@@ -867,17 +871,31 @@ const MIN_FLOW_BOX_W = 130;
 const ICON_URL = new URL("slems-icon.svg", import.meta.url).href;
 
 // The first tile is the combined status (see _statusTile).
+// "expected_export" is computed in the panel (see _exportTile).
 const OVERVIEW_TILES = [
   "allocation_strategy",
   "battery_soc_total",
   "battery_energy_total",
   "feed_in_limit",
   "expected_surplus_energy",
+  "expected_export",
   "pv_forecast_today",
   "consumption_forecast_today",
   "pv_forecast_tomorrow",
   "consumption_forecast_tomorrow",
 ];
+
+/**
+ * Expected grid export (mean W) of a day plan row: the export of the
+ * projection, without the part above the feed-in cap (curtailed).
+ */
+function planExportW(row) {
+  if (row?.grid_w === null || row?.grid_w === undefined) return null;
+  return Math.min(
+    Math.max(0, -row.grid_w),
+    row.cap_line_wh === undefined ? Infinity : row.cap_line_wh - (row.consumption_wh ?? 0)
+  );
+}
 
 /** Selector that finds a control again after its section was drawn anew. */
 function focusSelector(element) {
@@ -1727,8 +1745,9 @@ class SlemsPanel extends HTMLElement {
       this._statusTile() +
       this._capTile() +
       OVERVIEW_TILES.map((key) => [key, this._state(key)])
-        .filter(([, s]) => s)
+        .filter(([key, s]) => s || key === "expected_export")
         .map(([key, s]) => {
+          if (key === "expected_export") return this._exportTile();
           const hint = t.tileHints[key];
           const info = hint
             ? `<button class="info" data-action="toggle-hint" data-key="${key}" title="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}"><ha-icon icon="mdi:information-outline"></ha-icon></button>`
@@ -1742,6 +1761,33 @@ class SlemsPanel extends HTMLElement {
     this._fetchStats(false);
     this._renderDayChart();
     this._renderAccuracy();
+  }
+
+  /** Grid export today: measured until now plus the export the plan still expects. */
+  _exportTile() {
+    const t = this._t;
+    const limit = this._state("feed_in_limit");
+    const plan = limit?.attributes?.day_plan || [];
+    const now = Date.now();
+    let restWh = null;
+    for (const row of plan) {
+      const start = new Date(row.start).getTime();
+      const end = start + 3600e3;
+      const exportW = planExportW(row);
+      if (end <= now || exportW === null) continue;
+      // The current hour: the plan holds the mean of its remaining part.
+      restWh = (restWh ?? 0) + exportW * (start < now ? (end - now) / 3600e3 : 1);
+    }
+    if (restWh === null) return "";
+    const soFar = limit.attributes.exported_today_kwh;
+    const language = this._hass?.locale?.language || "en";
+    const kwh = (value) => new Intl.NumberFormat(language, { maximumFractionDigits: 1, minimumFractionDigits: 1 }).format(value);
+    const total = (soFar ?? 0) + restWh / 1000;
+    const detail = t.exportDetail
+      .replace("{so_far}", soFar === null || soFar === undefined ? "–" : kwh(soFar))
+      .replace("{rest}", kwh(restWh / 1000));
+    return `<div class="tile" data-more-info="${limit.entity_id}"><span class="label">${escapeHtml(t.expectedExport)}</span>
+            <span class="value">${escapeHtml(kwh(total))} kWh</span><span class="sub">${escapeHtml(detail)}</span></div>`;
   }
 
   // --- energy flow ---------------------------------------------------------------
@@ -2052,13 +2098,7 @@ class SlemsPanel extends HTMLElement {
     const today = this._chartDay === "today";
     const plan = (today ? plans.today : plans.tomorrow) || [];
     const comparePlan = compare ? (today ? compare.today : compare.tomorrow) || [] : [];
-    const exportOf = (row) =>
-      row?.grid_w === null || row?.grid_w === undefined
-        ? null
-        : Math.min(
-            Math.max(0, -row.grid_w),
-            row.cap_line_wh === undefined ? Infinity : row.cap_line_wh - (row.consumption_wh ?? 0)
-          );
+    const exportOf = planExportW;
     // Half hours; all values are mean powers (W). The plan rows are hourly
     // (Wh per hour = mean W); PV and the feed-in cap also come per half hour.
     const perHalf = (wh) => (wh === null || wh === undefined ? null : wh * 2);
@@ -3246,6 +3286,7 @@ const STYLE = `
   .tile .problem-value ha-icon { --mdc-icon-size: 20px; flex: none; }
   .setting .readonly { font-variant-numeric: tabular-nums; color: var(--secondary-text-color); white-space: nowrap; }
   .tile .value { font-size: 18px; }
+  .tile .sub { font-size: 12px; color: var(--secondary-text-color); }
   .flow-root { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-areas: ". top ." "left center right" "batteries batteries consumers";
     row-gap: 44px; column-gap: 16px; align-items: center; padding: 4px 0 8px; }

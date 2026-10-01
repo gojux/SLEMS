@@ -370,6 +370,7 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda _, c: c.controller.meter.interval_s,
+        attributes_fn=lambda _, c: {"source": c.grid_source},
     ),
     SystemSensorDescription(
         key="battery_response_time",
@@ -397,11 +398,14 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
     SystemSensorDescription(
         **_power("feed_in_limit"),
         value_fn=lambda s, _: s.feed_in_limit_w,
-        attributes_fn=lambda s, _: {
+        attributes_fn=lambda s, c: {
             # disabled / no_forecast / not_enough_surplus; None with a limit
             "reason": s.feed_in_limit_reason,
             "day_plan": s.day_plan,
             "day_plan_tomorrow": s.day_plan_tomorrow,
+            "exported_today_kwh": (
+                None if c.exported_today_wh is None else _kwh(c.exported_today_wh)
+            ),
         },
     ),
     SystemSensorDescription(
@@ -689,7 +693,9 @@ class SystemSensor(SlemsSystemEntity, SensorEntity):
     """System level sensor."""
 
     entity_description: SystemSensorDescription
-    _unrecorded_attributes = frozenset({"day_plan", "day_plan_tomorrow", "days", "peaks"})
+    _unrecorded_attributes = frozenset(
+        {"day_plan", "day_plan_tomorrow", "days", "peaks", "exported_today_kwh"}
+    )
 
     def __init__(
         self, coordinator: SlemsCoordinator, description: SystemSensorDescription

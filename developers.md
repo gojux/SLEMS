@@ -36,6 +36,7 @@ docker compose down
 |---|---|
 | `homeassistant` | HA 2026.9.3 (same version as production) on <http://localhost:8123>. `custom_components/slems` is mounted read-only. |
 | `venus-sim-1`, `venus-sim-2` | Modbus TCP simulators of a Venus E 3.0 (`dev/venus_sim/simulator.py`), reachable as host `venus-sim-1` / `venus-sim-2`, port 502. |
+| `sunspec-meter` | SunSpec meter in the layout of a SolarEdge inverter with two meters (`dev/sunspec_meter/meter_sim.py`), host `sunspec-meter`, port 502, export positive. An automation of the dev instance writes the simulated grid power through port 5021 at every change of `sensor.smart_meter_power`. |
 | `tests` | pytest in an image based on the HA image, so Python and HA versions match production. It runs as root on the mounted repository, so it writes no bytecode and no pytest cache (they would be owned by root). |
 
 `dev/config/configuration.yaml` provides simulated measurements driven by
@@ -267,8 +268,20 @@ sends commands.
   with the first sample with power. A water heater as block entity blocks in operation mode `off`;
   its temperatures are not used (e.g. my-PV measures at the element and
   cycles).
+- **Grid power over Modbus** (`grid_meter.py`, optional): polls a SunSpec
+  meter (total power and scale factor in one request) through
+  `homeassistant.components.modbus.async_get_unit`, each read limited to 1 s.
+  Every value goes the way of an entity change (meter cadence, grid filter,
+  response learners, `request()`); while a Modbus value is fresh
+  (max(3 × interval, 5 s)) the entity's reports are ignored, otherwise the
+  entity is the source (`SlemsCoordinator.grid_power_w`, `grid_age_s`). After
+  3 failed reads in a row the polling backs off from 5 to 60 s. The config
+  flow walks the SunSpec model chain (`find_meters`) and finds the sign by
+  comparing with the entity (`detect_inversion`), both over
+  `async_get_temporary_unit`. The response times are stored with the source
+  they were learned with and not restored for another one.
 - **Grid meter stale** (no report within max(60 s, 10 × meter interval),
-  based on `last_reported`): all batteries are handed back to their internal logic until the meter reports
+  based on `last_reported`, or of the Modbus value while it is the source): all batteries are handed back to their internal logic until the meter reports
   again (status *grid meter stale*).
 - **Maximum export while discharging** is applied as hard limit on the
   current, unfiltered grid power (`limit_discharge_export`).
@@ -1447,3 +1460,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-01 | SoC projection: the controller's feed-in limit only in the current hour; later hours of today compute it from the projected state of charge (with the feed-in cap as ceiling), as the controller will. The limit from midnight (before the night discharge) planned too little charging, and the chart showed batteries not getting full. Night discharge: the refill counts per hour at most the charge power, and the surplus part of the daily targets must fit besides it (`min(chargeable, surplus − demands)`). |
 | 2026-10-01 | Cell balancing ends at a top delta of at most 190 mV (`TARGET_DELTA_V`), when it did not fall by 2 mV for 6 hours (`STALL_S`) or after 24 hours (`end_reason` target / no_progress / max_time); 24 hours is a normal end with the final discharge, an error only if that does not finish within 2 more hours. A refused charge leg gives no measurement. On a real Venus E 3.0 the delta fell from 168 to 164 mV in 16 hours: the BMS bleeds only a few mV per day, the former 30 mV target was unreachable, and refused legs measured at a lower voltage showed dips of about 110 mV. The start dialog says when the last measurement is already in the normal range. |
 | 2026-10-01 | Battery response time also per battery (`BatteryResponses`), learned at the grid meter from steps one battery carries for at least 80 % of the moved power; a larger shared step ends all pending measurements. The controller uses a battery's own value for which of its commands the meter already shows, the joint value until learned. The batteries' own power is read only every 5 s, too coarse for response times of about 1 s, and the joint value hides a slow battery as long as the others bring 60 % of a step. |
+| 2026-10-01 | Grid power optionally read directly from a SunSpec meter over Modbus (`grid_meter.py`), through the shared connection of the HA Modbus backend (`async_get_unit`) instead of an own one. SolarEdge Modbus Multi updates the entity about once per second, so it misses most of the meter's changes (measured for an hour with a diagnosis integration over a Modbus proxy at 0.2 s: entity 2495 changes missed, direct read 478; mean delay behind the fastest path 547 ms against 150 ms). The HA backend is as fast as an own connection (round trip and median delay equal) and needs no rework once the inverter integration shares its connection; until then it points to the proxy. HA 2026.9 is the minimum version anyway. Each read is limited to 1 s, since the shared connection has a timeout of 10 s. The entity stays required (history, forecasts, fallback). |

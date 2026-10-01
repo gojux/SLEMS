@@ -7,7 +7,9 @@ themselves when the problem is gone:
   (``delivery_monitor``),
 * a battery could not be read for ``UNREADABLE_AFTER_S``,
 * the grid meter is stale in operating mode active (the batteries follow their
-  own logic meanwhile).
+  own logic meanwhile),
+* the grid power over Modbus is configured but has not been available for
+  ``GRID_MODBUS_AFTER_S`` (SLEMS uses the entity meanwhile).
 
 Notifications (bell) for events: the end of an active cell balancing run,
 except when the user cancelled it. The problems of the feed-in cap come from
@@ -41,6 +43,8 @@ if TYPE_CHECKING:
 UNREADABLE_AFTER_S = 300.0
 CAP_EXCEEDED_AFTER_S = 300.0
 GRID_STALE_ISSUE = "grid_meter_stale"
+GRID_MODBUS_ISSUE = "grid_modbus_unavailable"
+GRID_MODBUS_AFTER_S = 300.0
 # Feed-in cap problem -> translation key of its notification.
 CAP_NOTIFICATIONS = {
     "battery_too_small": "feed_in_cap_battery_too_small",
@@ -84,7 +88,7 @@ class ProblemReporter:
         coordinator = self._coordinator
         wanted: dict[str, tuple[str, dict[str, str]]] = {}
         # Feed-in cap problems are notifications; issues with their ids are removed.
-        possible = {GRID_STALE_ISSUE, *CAP_NOTIFICATIONS.values()}
+        possible = {GRID_STALE_ISSUE, GRID_MODBUS_ISSUE, *CAP_NOTIFICATIONS.values()}
         for battery in coordinator.batteries:
             possible |= {_not_responding_issue(battery), _unreadable_issue(battery)}
             placeholders = {"name": battery.name}
@@ -98,6 +102,15 @@ class ProblemReporter:
             and coordinator.controller.status is ControlStatus.GRID_STALE
         ):
             wanted[GRID_STALE_ISSUE] = ("grid_meter_stale", {})
+        meter = coordinator.grid_meter
+        if coordinator.grid_meter_error is not None:
+            wanted[GRID_MODBUS_ISSUE] = (
+                "grid_modbus_unavailable", {"error": coordinator.grid_meter_error}
+            )
+        elif meter is not None and meter.unavailable_for(now) >= GRID_MODBUS_AFTER_S:
+            wanted[GRID_MODBUS_ISSUE] = (
+                "grid_modbus_unavailable", {"error": meter.last_error or "–"}
+            )
 
         for issue_id, (translation_key, placeholders) in wanted.items():
             if self._active is None or issue_id not in self._active:

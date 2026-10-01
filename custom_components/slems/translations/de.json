@@ -11,7 +11,8 @@
           "weather_entity": "Wetter",
           "pv_forecast_entries": "PV-Prognose",
           "outdoor_temperature_entity": "Außentemperatur",
-          "house_history_entity": "Historie Hausverbrauch"
+          "house_history_entity": "Historie Hausverbrauch",
+          "grid_modbus": "Smart Meter zusätzlich per Modbus lesen"
         },
         "data_description": {
           "grid_power_entity": "Leistung am Netzanschlusspunkt. Erwartetes Vorzeichen: positiv = Bezug, negativ = Einspeisung.",
@@ -20,12 +21,43 @@
           "weather_entity": "Optional. Verbessert die Verbrauchsprognose (z. B. Bedarf der Wärmepumpe).",
           "pv_forecast_entries": "Integrationen mit Solarprognose (z. B. Forecast.Solar, Solcast). Mehrere Einträge, z. B. einer je Dachfläche, werden addiert.",
           "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entity selbst auf.",
-          "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Wird für die Zeit verwendet, bevor SLEMS eigene Werte aufgezeichnet hat."
+          "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Wird für die Zeit verwendet, bevor SLEMS eigene Werte aufgezeichnet hat.",
+          "grid_modbus": "Optional. Liest die Netzleistung direkt von einem SunSpec-Zähler (z. B. am SolarEdge-Wechselrichter, über einen Modbus-Proxy) im Bruchteil einer Sekunde. Die Regelung sieht jeden Wert früher als über die Entity; die Entity bleibt Rückfallebene und Historie."
+        }
+      },
+      "grid_modbus": {
+        "title": "Smart Meter per Modbus",
+        "description": "Verbindung über die geteilte Modbus-Verbindung von Home Assistant. Belegt die Integration des Wechselrichters dessen einzige Modbus-Verbindung selbst, hier den Modbus-Proxy davor angeben. SLEMS sucht den Zähler in der SunSpec-Modellkette.",
+        "data": {
+          "grid_modbus_host": "Host",
+          "grid_modbus_port": "Port",
+          "grid_modbus_unit_id": "Unit-ID",
+          "grid_modbus_interval_s": "Abfrageintervall",
+          "grid_modbus_sign": "Vorzeichen"
+        },
+        "data_description": {
+          "grid_modbus_unit_id": "SolarEdge: 1.",
+          "grid_modbus_interval_s": "0,5 s reicht für die Regelung; kürzer belastet die Verbindung stärker.",
+          "grid_modbus_sign": "Automatisch: SLEMS vergleicht einige Werte mit der Netzleistungs-Entity (braucht etwas Netzbezug oder Einspeisung)."
+        }
+      },
+      "grid_meter": {
+        "title": "Zähler wählen",
+        "description": "Im Wechselrichter sind mehrere Zähler eingetragen. Den Zähler am Netzanschlusspunkt wählen; die aktuelle Leistung hilft beim Erkennen.",
+        "data": {
+          "grid_modbus_register": "Zähler"
         }
       }
     },
     "abort": {
       "single_instance_allowed": "SLEMS ist bereits eingerichtet."
+    },
+    "error": {
+      "grid_modbus_failed": "Modbus-Lesen fehlgeschlagen: {error}",
+      "no_sunspec": "Das Gerät meldet keine SunSpec-Modellkette (Register 40000, 0 oder 50000).",
+      "no_meter": "Die SunSpec-Modellkette enthält keinen Zähler (Modell 201 bis 204).",
+      "sign_undecidable": "Die Netzleistung ist zu klein, um das Vorzeichen zu vergleichen (Modbus {modbus} W, Entity {entity} W). Später erneut versuchen oder das Vorzeichen wählen.",
+      "sign_mismatch": "Modbus ({modbus} W) und Entity ({entity} W) passen mit keinem Vorzeichen zusammen. Ist der richtige Zähler gewählt? Sonst das Vorzeichen wählen."
     }
   },
   "options": {
@@ -39,7 +71,8 @@
           "weather_entity": "Wetter",
           "pv_forecast_entries": "PV-Prognose",
           "outdoor_temperature_entity": "Außentemperatur",
-          "house_history_entity": "Historie Hausverbrauch"
+          "house_history_entity": "Historie Hausverbrauch",
+          "grid_modbus": "Smart Meter zusätzlich per Modbus lesen"
         },
         "data_description": {
           "grid_power_entity": "Leistung am Netzanschlusspunkt. Erwartetes Vorzeichen: positiv = Bezug, negativ = Einspeisung.",
@@ -47,9 +80,40 @@
           "pv_forecast_entries": "Integrationen mit Solarprognose (z. B. Forecast.Solar, Solcast). Mehrere Einträge, z. B. einer je Dachfläche, werden addiert.",
           "weather_entity": "Optional. Verbessert die Verbrauchsprognose (z. B. Bedarf der Wärmepumpe).",
           "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entity selbst auf.",
-          "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Wird für die Zeit verwendet, bevor SLEMS eigene Werte aufgezeichnet hat."
+          "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Wird für die Zeit verwendet, bevor SLEMS eigene Werte aufgezeichnet hat.",
+          "grid_modbus": "Optional. Liest die Netzleistung direkt von einem SunSpec-Zähler (z. B. am SolarEdge-Wechselrichter, über einen Modbus-Proxy) im Bruchteil einer Sekunde. Die Regelung sieht jeden Wert früher als über die Entity; die Entity bleibt Rückfallebene und Historie."
+        }
+      },
+      "grid_modbus": {
+        "title": "Smart Meter per Modbus",
+        "description": "Verbindung über die geteilte Modbus-Verbindung von Home Assistant. Belegt die Integration des Wechselrichters dessen einzige Modbus-Verbindung selbst, hier den Modbus-Proxy davor angeben. SLEMS sucht den Zähler in der SunSpec-Modellkette.",
+        "data": {
+          "grid_modbus_host": "Host",
+          "grid_modbus_port": "Port",
+          "grid_modbus_unit_id": "Unit-ID",
+          "grid_modbus_interval_s": "Abfrageintervall",
+          "grid_modbus_sign": "Vorzeichen"
+        },
+        "data_description": {
+          "grid_modbus_unit_id": "SolarEdge: 1.",
+          "grid_modbus_interval_s": "0,5 s reicht für die Regelung; kürzer belastet die Verbindung stärker.",
+          "grid_modbus_sign": "Automatisch: SLEMS vergleicht einige Werte mit der Netzleistungs-Entity (braucht etwas Netzbezug oder Einspeisung)."
+        }
+      },
+      "grid_meter": {
+        "title": "Zähler wählen",
+        "description": "Im Wechselrichter sind mehrere Zähler eingetragen. Den Zähler am Netzanschlusspunkt wählen; die aktuelle Leistung hilft beim Erkennen.",
+        "data": {
+          "grid_modbus_register": "Zähler"
         }
       }
+    },
+    "error": {
+      "grid_modbus_failed": "Modbus-Lesen fehlgeschlagen: {error}",
+      "no_sunspec": "Das Gerät meldet keine SunSpec-Modellkette (Register 40000, 0 oder 50000).",
+      "no_meter": "Die SunSpec-Modellkette enthält keinen Zähler (Modell 201 bis 204).",
+      "sign_undecidable": "Die Netzleistung ist zu klein, um das Vorzeichen zu vergleichen (Modbus {modbus} W, Entity {entity} W). Später erneut versuchen oder das Vorzeichen wählen.",
+      "sign_mismatch": "Modbus ({modbus} W) und Entity ({entity} W) passen mit keinem Vorzeichen zusammen. Ist der richtige Zähler gewählt? Sonst das Vorzeichen wählen."
     }
   },
   "config_subentries": {
@@ -309,6 +373,13 @@
       "options": {
         "auto": "Automatik (eigene Logik der Batterie)",
         "standby": "Standby (0 W)"
+      }
+    },
+    "grid_modbus_sign": {
+      "options": {
+        "auto": "Automatisch",
+        "normal": "Wie gelesen",
+        "inverted": "Umgekehrt"
       }
     }
   },
@@ -859,6 +930,10 @@
     "grid_meter_stale": {
       "title": "Smart Meter meldet nicht",
       "description": "Die Smart-Meter-Entity hat länger keinen Wert gemeldet. SLEMS hat die Batterien an ihre eigene Logik übergeben und regelt wieder, sobald der Zähler meldet. Prüfe den Smart Meter und seine Integration."
+    },
+    "grid_modbus_unavailable": {
+      "title": "Smart Meter per Modbus nicht erreichbar",
+      "description": "SLEMS kann die Netzleistung nicht per Modbus lesen ({error}) und nutzt bis dahin die Smart-Meter-Entity. Verbindung, Proxy und die Einstellungen unter Optionen prüfen."
     }
   }
 }

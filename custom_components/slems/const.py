@@ -22,6 +22,17 @@ CONF_WEATHER_ENTITY: Final = "weather_entity"
 # Optional history sources for the consumption forecast.
 CONF_HOUSE_HISTORY_ENTITY: Final = "house_history_entity"
 CONF_OUTDOOR_TEMPERATURE_ENTITY: Final = "outdoor_temperature_entity"
+# Grid power additionally read from a SunSpec meter over Modbus (grid_meter).
+CONF_GRID_MODBUS: Final = "grid_modbus"
+CONF_GRID_MODBUS_HOST: Final = "grid_modbus_host"
+CONF_GRID_MODBUS_PORT: Final = "grid_modbus_port"
+CONF_GRID_MODBUS_UNIT_ID: Final = "grid_modbus_unit_id"
+CONF_GRID_MODBUS_INTERVAL_S: Final = "grid_modbus_interval_s"
+CONF_GRID_MODBUS_SIGN: Final = "grid_modbus_sign"
+CONF_GRID_MODBUS_REGISTER: Final = "grid_modbus_register"
+CONF_GRID_MODBUS_INVERTED: Final = "grid_modbus_inverted"
+DEFAULT_GRID_MODBUS_PORT: Final = 502
+DEFAULT_GRID_MODBUS_INTERVAL_S: Final = 0.5
 
 # --- battery subentry ---------------------------------------------------------
 SUBENTRY_TYPE_BATTERY: Final = "battery"

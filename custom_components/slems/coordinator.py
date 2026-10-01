@@ -7,8 +7,10 @@ from datetime import datetime, timedelta
 import logging
 import time
 
+from homeassistant.components.modbus import async_get_unit
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import (
     async_track_state_change_event,
@@ -20,6 +22,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.const import UnitOfTemperature
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import TemperatureConverter
+from modbus_connection import ModbusTcpParams
 
 from .allocation import (
     Allocation,
@@ -36,6 +39,13 @@ from .allocation import (
     remaining_pv_wh,
 )
 from .const import (
+    CONF_GRID_MODBUS,
+    CONF_GRID_MODBUS_HOST,
+    CONF_GRID_MODBUS_INTERVAL_S,
+    CONF_GRID_MODBUS_INVERTED,
+    CONF_GRID_MODBUS_PORT,
+    CONF_GRID_MODBUS_REGISTER,
+    CONF_GRID_MODBUS_UNIT_ID,
     CONF_GRID_POWER_ENTITY,
     CONF_GRID_POWER_INVERTED,
     CONF_HOUSE_HISTORY_ENTITY,
@@ -109,6 +119,7 @@ from .forecast import (
 )
 from .forecast.accuracy import PvAccuracyTracker
 from .grid_filter import GridPowerFilter
+from .grid_meter import ModbusGridMeter
 from .learning import (
     CapacityLearner,
     ConsumerLearner,
@@ -152,7 +163,7 @@ from .pv_forecast import (
     power_lookup,
 )
 from .soc_projection import ProjectionSettings, SocProjection, project_soc
-from .util import state_as_watts
+from .util import state_as_float, state_as_watts
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -599,12 +610,20 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._pv_day: tuple[object, float, float | None, float | None] | None = None
         # True once the integration covers a whole day since midnight.
         self._pv_complete = False
+        # Grid export today (Wh) from every grid value, like the PV energy:
+        # (day, energy, monotonic time and grid power of the last value).
+        self._export_day: tuple[object, float, float | None, float | None] | None = None
+        self._export_complete = False
         self._store: Store[dict] = Store(
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.efficiency"
         )
         self.forecaster = ConsumptionForecaster(hass, self._forecast_sources())
         self.controller = RealTimeController(self)
         self.problems = ProblemReporter(hass, self)
+        # Grid power read over Modbus (see grid_meter); None if not configured
+        # or not available (then grid_meter_error says why).
+        self.grid_meter: ModbusGridMeter | None = None
+        self.grid_meter_error: str | None = None
         self.pv_accuracy = PvAccuracyTracker()
         # Monotonic time since the export is above the feed-in cap.
         self.cap_exceeded_since: float | None = None
@@ -663,9 +682,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         control = stored.get(CONTROL_STORE_KEY) or {}
         if gain := control.get("gain"):
             self.controller.gain_adapter.reset(gain)
-        if response := control.get("battery_response_s"):
-            self.controller.battery_response.response_s = response
-        self.controller.battery_responses.restore(control.get("battery_responses") or {})
+        # Response times learned with another grid source contain its delay.
+        if control.get("grid_source", "entity") == self.grid_source_configured:
+            if response := control.get("battery_response_s"):
+                self.controller.battery_response.response_s = response
+            self.controller.battery_responses.restore(control.get("battery_responses") or {})
         for battery in self.batteries:
             data = stored.get(battery.subentry_id) or {}
             if integrator := data.get("integrator"):
@@ -683,6 +704,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
 
         grid_entity = self._config[CONF_GRID_POWER_ENTITY]
         self._add_grid_sample(self.hass.states.get(grid_entity))
+        if self._config.get(CONF_GRID_MODBUS):
+            self._start_grid_meter()
         self.config_entry.async_on_unload(
             async_track_state_change_event(self.hass, grid_entity, self._on_grid_change)
         )
@@ -706,6 +729,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
         self.config_entry.async_create_background_task(
             self.hass, self._async_restore_pv_today(), "slems pv energy today"
+        )
+        self.config_entry.async_create_background_task(
+            self.hass, self._async_restore_export_today(), "slems grid export today"
         )
 
     async def _on_forecast_time(self, _now: datetime) -> None:
@@ -760,8 +786,79 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             weather=config.get(CONF_WEATHER_ENTITY),
         )
 
+    @property
+    def grid_source_configured(self) -> str:
+        return "modbus" if self._config.get(CONF_GRID_MODBUS) else "entity"
+
+    @property
+    def grid_source(self) -> str:
+        """Where the grid power comes from right now: "modbus" or "entity"."""
+        meter = self.grid_meter
+        return "modbus" if meter is not None and meter.fresh(time.monotonic()) else "entity"
+
+    def _start_grid_meter(self) -> None:
+        config = self._config
+        try:
+            unit = async_get_unit(
+                self.hass,
+                self.config_entry,
+                ModbusTcpParams(
+                    host=config[CONF_GRID_MODBUS_HOST], port=config[CONF_GRID_MODBUS_PORT]
+                ),
+                config[CONF_GRID_MODBUS_UNIT_ID],
+            )
+        except HomeAssistantError as err:
+            self.grid_meter_error = str(err)
+            _LOGGER.warning("Grid meter over Modbus not available: %s", err)
+            return
+        self.grid_meter = ModbusGridMeter(
+            unit.read_holding_registers,
+            config[CONF_GRID_MODBUS_REGISTER],
+            config[CONF_GRID_MODBUS_INTERVAL_S],
+            config.get(CONF_GRID_MODBUS_INVERTED, False),
+            self._on_modbus_grid,
+        )
+        self.config_entry.async_create_background_task(
+            self.hass, self.grid_meter.run(), "slems grid meter"
+        )
+
+    @callback
+    def _on_modbus_grid(self, grid: float) -> None:
+        self.controller.observe_meter_report()
+        self._grid_filter.add(time.monotonic(), grid)
+        self._integrate_export(grid, time.monotonic())
+        self.controller.observe_grid(grid)
+        self.controller.request()
+
+    def _grid_from_entity(self) -> float | None:
+        grid = state_as_watts(self.hass.states.get(self._config[CONF_GRID_POWER_ENTITY]))
+        if grid is not None and self._config.get(CONF_GRID_POWER_INVERTED, False):
+            grid = -grid
+        return grid
+
+    def grid_power_w(self) -> float | None:
+        """Current grid power: from Modbus while fresh, otherwise from the entity."""
+        meter = self.grid_meter
+        if meter is not None and meter.fresh(time.monotonic()):
+            return meter.value
+        return self._grid_from_entity()
+
+    def grid_age_s(self) -> float | None:
+        """Age of the current grid power (None without a value)."""
+        meter = self.grid_meter
+        now = time.monotonic()
+        if meter is not None and meter.fresh(now):
+            return now - meter.updated
+        state = self.hass.states.get(self._config[CONF_GRID_POWER_ENTITY])
+        if state is None or state_as_float(state) is None:
+            return None
+        return time.time() - state.last_reported.timestamp()
+
     @callback
     def _on_grid_change(self, event: Event[EventStateChangedData]) -> None:
+        if self.grid_source == "modbus":
+            # The entity is only the fallback; its reports would mix the cadence.
+            return
         self.controller.observe_meter_report()
         grid = self._add_grid_sample(event.data["new_state"])
         if grid is not None:
@@ -771,7 +868,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     @callback
     def _on_grid_report(self, _event: Event) -> None:
         # Reported without a change of the value: only the cadence is new.
-        self.controller.observe_meter_report()
+        if self.grid_source == "entity":
+            self.controller.observe_meter_report()
+            if self._export_day is not None:
+                self._integrate_export(self._export_day[3], time.monotonic())
 
     def _add_grid_sample(self, state) -> float | None:
         grid = state_as_watts(state)
@@ -780,7 +880,56 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if self._config.get(CONF_GRID_POWER_INVERTED, False):
             grid = -grid
         self._grid_filter.add(time.monotonic(), grid)
+        self._integrate_export(grid, time.monotonic())
         return grid
+
+    def _integrate_export(self, grid_w: float | None, now: float) -> None:
+        """Add up today's grid export from the grid values (restarts at midnight)."""
+        today = dt_util.now().date()
+        day, energy, last_time, last_grid = self._export_day or (today, 0.0, None, None)
+        if day != today:
+            day, energy, last_time, last_grid = today, 0.0, None, None
+            self._export_complete = True
+        if last_time is not None and last_grid is not None and now - last_time < 300:
+            energy += max(0.0, -last_grid) * (now - last_time) / 3600
+        self._export_day = (day, energy, now, grid_w)
+
+    async def _async_restore_export_today(self) -> None:
+        """Take today's grid export until now from the recorder (5 minute means)."""
+        grid_entity = self._config[CONF_GRID_POWER_ENTITY]
+        wall_now = dt_util.now()
+        try:
+            means = await async_statistic_means(
+                self.hass,
+                [grid_entity],
+                dt_util.start_of_local_day(dt_util.as_local(wall_now)),
+                wall_now,
+                "5minute",
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("Grid statistics of today not available", exc_info=True)
+            return
+        sign = 1.0 if self._config.get(CONF_GRID_POWER_INVERTED, False) else -1.0
+        exported = {start: sign * mean for start, mean in means.get(grid_entity, {}).items()}
+        energy, covered_until = energy_from_means(exported, timedelta(minutes=5))
+        if covered_until is None:
+            return
+        # Bridge the minutes since the last statistics period with the current value.
+        grid_now = self.grid_power_w()
+        gap_h = max(0.0, (dt_util.now() - covered_until).total_seconds() / 3600)
+        energy += max(0.0, -(grid_now or 0.0)) * gap_h
+        self._export_day = (wall_now.date(), energy, time.monotonic(), grid_now)
+        self._export_complete = True
+        _LOGGER.debug("Grid export today restored from statistics: %.0f Wh", energy)
+
+    @property
+    def exported_today_wh(self) -> float | None:
+        """Grid export today, None if it is not known since midnight."""
+        if self._export_day is None or not self._export_complete:
+            return None
+        if self._export_day[0] != dt_util.now().date():
+            return 0.0
+        return self._export_day[1]
 
     def _data_to_store(self) -> dict:
         data: dict = {
@@ -808,6 +957,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             "gain": self.controller.gain_adapter.gain,
             "battery_response_s": self.controller.battery_response.response_s,
             "battery_responses": self.controller.battery_responses.as_dict(),
+            "grid_source": self.grid_source_configured,
         }
         data[PV_ACCURACY_STORE_KEY] = self.pv_accuracy.as_dict()
         data[MORNING_GAP_STORE_KEY] = self.morning_gap.as_dict()
@@ -821,9 +971,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             control_disabled=frozenset(self.consumer_control_disabled),
         )
 
-        grid = state_as_watts(self.hass.states.get(config[CONF_GRID_POWER_ENTITY]))
-        if grid is not None and config.get(CONF_GRID_POWER_INVERTED, False):
-            grid = -grid
+        grid = self.grid_power_w()
         snapshot.grid_power_w = grid
         self._grid_filter.window_s = self.average_window_s
         snapshot.grid_power_filtered_w = self._grid_filter.conservative(now)
@@ -2265,9 +2413,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             return None
         config = self._config
         now = time.monotonic()
-        grid = state_as_watts(self.hass.states.get(config[CONF_GRID_POWER_ENTITY]))
-        if grid is not None and config.get(CONF_GRID_POWER_INVERTED, False):
-            grid = -grid
+        grid = self.grid_power_w()
         batteries = {
             battery_id: replace(
                 telemetry,
