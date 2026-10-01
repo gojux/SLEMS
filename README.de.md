@@ -387,9 +387,23 @@ Sekunden, danach unbekannt).
   über eine Cloud reagieren langsamer als eine Venus über Modbus; SLEMS lernt
   ihre Reaktionszeit, die Regelung ist aber gröber. Mit Zellspannungen nutzt
   SLEMS sanftes Laden nahe voll, das Zell-Delta und den Zellausgleich wie bei
-  einer Venus (LFP-Zellen). Diese Steuerung ist bisher nur mit simulierten
-  Entities getestet; Erfahrungen mit echten Geräten bitte als
-  [Issue](https://github.com/gojux/SLEMS/issues) melden.
+  einer Venus (LFP-Zellen). Diese Steuerung ist mit simulierten Entities und
+  mit einer Marstek Venus E 3.0 über Omnibattery getestet; Erfahrungen mit
+  anderen Geräten bitte als [Issue](https://github.com/gojux/SLEMS/issues)
+  melden.
+
+  **Beispiel: eine Batterie über Omnibattery.** Für ein Batteriemodell, das
+  SLEMS nicht direkt unterstützt, kann
+  [Omnibattery](https://github.com/ffunes/Omnibattery) die Kommunikation und
+  SLEMS die Regelung übernehmen:
+  1. In Omnibattery für die Batterie *Manuelle Batteriesteuerung* einschalten,
+     damit ihre eigene Regelung stoppt.
+  2. In SLEMS die Batterie als *Vorhandene Home-Assistant-Entities* hinzufügen
+     und das Omnibattery-Gerät wählen. SLEMS schlägt die Entities vor
+     (Ladezustand, Leistung, Lade- und Entladeleistung, Betriebsmodus,
+     Zellspannungen, Zähler); diese prüfen.
+  3. Automationen, die die Batterie steuern, ausschalten, damit nur SLEMS
+     Sollwerte sendet.
 
 **Zustand bei Freigabe**: in welchem Zustand SLEMS die Batterie lässt, wenn es
 die Steuerung beendet, z. B. im Betriebsmodus *Aus*, ohne Werte des Smart

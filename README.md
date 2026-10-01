@@ -375,9 +375,22 @@ replaced by the last valid value (for at most 30 seconds, then unknown).
   Batteries behind a cloud react slower than a Venus over Modbus; SLEMS learns
   their response time, but the control is coarser. With cell voltages SLEMS
   uses gentle charging near the top, the cell delta and cell balancing as for
-  a Venus (LFP cells). This control has only been tested with simulated
-  entities so far; please report your experience with real devices in an
+  a Venus (LFP cells). This control has been tested with simulated entities
+  and with a Marstek Venus E 3.0 through Omnibattery; please report your
+  experience with other devices in an
   [issue](https://github.com/gojux/SLEMS/issues).
+
+  **Example: a battery through Omnibattery.** For a battery model SLEMS does
+  not support directly, [Omnibattery](https://github.com/ffunes/Omnibattery)
+  can do the communication and SLEMS the control:
+  1. In Omnibattery switch on *Manual battery control* for the battery, so its
+     own control stops.
+  2. In SLEMS add the battery as *Existing Home Assistant entities* and choose
+     the Omnibattery device. SLEMS suggests the entities (state of charge,
+     power, charge and discharge power, operating mode, cell voltages,
+     counters); check them.
+  3. Switch off automations that control the battery, so only SLEMS sends
+     set points.
 
 **State when released**: what SLEMS leaves the battery in when it stops
 controlling it, e.g. in operating mode *Off*, without smart meter values or
