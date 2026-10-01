@@ -165,6 +165,8 @@ spezialisiert; evcc ergänzt SLEMS gut (siehe [Roadmap](#roadmap)).
 | Temperaturfühler eines Speichers: gelernte Energie pro Grad, noch aufnehmbare Energie | ✅ |
 | Einsatz eines Verbrauchers in der Einspeisebegrenzung (unterstützend, normal, nie) | ✅ |
 | Tagesziele: Laufzeit, Freigabezeit, Energie oder Temperatur, mit Frist und Quelle (Überschuss, Batterie, Netz) | ✅ |
+| Batterie-Unterstützung je Verbraucher (immer, automatisch mit der Energie, die die Batterien übrig haben, nie) | ✅ |
+| Wallbox / evcc-Ladepunkt: Stromvorgabe in A mit Phasen, Start/Stopp | ✅ (noch nicht mit einer echten Wallbox getestet) |
 
 | Planung und Regelung | Status |
 |---|---|
@@ -1356,12 +1358,15 @@ behalten die Sprache, in der sie angelegt wurden; nur die angezeigten Namen
 
 Mögliche Erweiterungen:
 
-- Lastausschluss und evcc-Anbindung: große Verbraucher wie eine Wallbox werden
-  nicht aus den Batterien versorgt; ein evcc-Ladepunkt als steuerbarer oder
-  ausgeschlossener Verbraucher, damit beide nicht um denselben Überschuss
-  regeln.
+- Anleitung „Wallbox und evcc“: welche SLEMS-Werte evcc liest (Batterie nur
+  lesend), passende evcc-Einstellungen und der Ladepunkt als Verbraucher mit
+  Stromvorgabe. Rückmeldungen von Nutzern mit Wallbox sind willkommen.
+- Batterien mit Verfügbarkeit (z. B. „Auto angesteckt“) und einer Reserve bis
+  zu einer Uhrzeit: Grundlage für ein Auto, das das Haus versorgt (V2H).
+- Gelernte Anwesenheit des Autos für die Planung.
 - Dynamische Stromtarife (Laden aus dem Netz bei niedrigen oder negativen
-  Preisen) und weitere Batteriemodelle über die Treiber-Schnittstelle.
+  Preisen, Rückspeisen bei hohen) und weitere Batteriemodelle über die
+  Treiber-Schnittstelle.
 
 ## Entwicklung
 

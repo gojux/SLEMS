@@ -163,6 +163,8 @@ complements SLEMS well (see [roadmap](#roadmap)).
 | Temperature sensors of a storage: learned energy per degree, remaining capacity | ✅ |
 | Role of a consumer in the feed-in cap (supporting, normal, never) | ✅ |
 | Daily targets: runtime, enabled time, energy or temperature, with deadline and source (surplus, batteries, grid) | ✅ |
+| Battery support per consumer (always, automatic with the energy the batteries can spare, never) | ✅ |
+| Wallbox / evcc loadpoint: current set point in A with phases, start/stop | ✅ (not yet tested with a real wallbox) |
 
 | Planning and control | Status |
 |---|---|
@@ -1290,11 +1292,15 @@ language of their creation; only the displayed names change.
 
 Possible extensions:
 
-- Load exclusion and evcc connection: large loads such as a wallbox are not
-  covered by the batteries; an evcc load point as controllable or excluded
-  consumer, so both do not control the same surplus.
+- Guide "Wallbox and evcc": which SLEMS values evcc reads (battery read
+  only), matching evcc settings and the loadpoint as a consumer with current
+  control. Feedback from users with a wallbox is welcome.
+- Batteries with an availability (e.g. "car plugged in") and a reserve until
+  a time of day: the basis for a car supplying the house (V2H).
+- Learned presence of the car for the planning.
 - Dynamic electricity tariffs (charging from the grid at low or negative
-  prices) and further battery models via the driver interface.
+  prices, feeding in at high ones) and further battery models via the driver
+  interface.
 
 ## Development
 
