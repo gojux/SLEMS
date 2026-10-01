@@ -12,7 +12,9 @@
           "pv_forecast_entries": "PV forecast",
           "outdoor_temperature_entity": "Outdoor temperature",
           "house_history_entity": "House consumption history",
-          "grid_modbus": "Also read the smart meter over Modbus"
+          "grid_modbus": "Also read the smart meter over Modbus",
+          "grid_import_energy_entity": "Grid import energy (counter)",
+          "grid_export_energy_entity": "Grid export energy (counter)"
         },
         "data_description": {
           "grid_power_entity": "Power at the grid connection point. Expected sign: positive = import, negative = export.",
@@ -22,7 +24,9 @@
           "pv_forecast_entries": "Solar forecast integrations (e.g. Forecast.Solar, Solcast). Several entries, e.g. one per roof plane, are summed up.",
           "outdoor_temperature_entity": "Optional. Temperature sensor with history for the heat pump forecast. Without it, SLEMS records the temperature of the weather entity itself.",
           "house_history_entity": "Optional. Power sensor of the house consumption with existing history (e.g. from another integration). Used for the time before SLEMS recorded its own values.",
-          "grid_modbus": "Optional. Reads the grid power directly from a SunSpec meter (e.g. at a SolarEdge inverter, through a Modbus proxy) every fraction of a second. The control sees each value sooner than through the entity; the entity stays the fallback and the history."
+          "grid_modbus": "Optional. Reads the grid power directly from a SunSpec meter (e.g. at a SolarEdge inverter, through a Modbus proxy) every fraction of a second. The control sees each value sooner than through the entity; the entity stays the fallback and the history.",
+          "grid_import_energy_entity": "Optional. Energy counter of the smart meter for the import (kWh). Used for tariffs and bills; without it SLEMS uses the hourly mean of the grid power, which nets import and export within an hour.",
+          "grid_export_energy_entity": "Optional. Energy counter of the smart meter for the export (kWh)."
         }
       },
       "grid_modbus": {
@@ -72,7 +76,9 @@
           "pv_forecast_entries": "PV forecast",
           "outdoor_temperature_entity": "Outdoor temperature",
           "house_history_entity": "House consumption history",
-          "grid_modbus": "Also read the smart meter over Modbus"
+          "grid_modbus": "Also read the smart meter over Modbus",
+          "grid_import_energy_entity": "Grid import energy (counter)",
+          "grid_export_energy_entity": "Grid export energy (counter)"
         },
         "data_description": {
           "grid_power_entity": "Power at the grid connection point. Expected sign: positive = import, negative = export.",
@@ -81,7 +87,9 @@
           "weather_entity": "Optional. Improves the consumption forecast (e.g. heat pump demand).",
           "outdoor_temperature_entity": "Optional. Temperature sensor with history for the heat pump forecast. Without it, SLEMS records the temperature of the weather entity itself.",
           "house_history_entity": "Optional. Power sensor of the house consumption with existing history (e.g. from another integration). Used for the time before SLEMS recorded its own values.",
-          "grid_modbus": "Optional. Reads the grid power directly from a SunSpec meter (e.g. at a SolarEdge inverter, through a Modbus proxy) every fraction of a second. The control sees each value sooner than through the entity; the entity stays the fallback and the history."
+          "grid_modbus": "Optional. Reads the grid power directly from a SunSpec meter (e.g. at a SolarEdge inverter, through a Modbus proxy) every fraction of a second. The control sees each value sooner than through the entity; the entity stays the fallback and the history.",
+          "grid_import_energy_entity": "Optional. Energy counter of the smart meter for the import (kWh). Used for tariffs and bills; without it SLEMS uses the hourly mean of the grid power, which nets import and export within an hour.",
+          "grid_export_energy_entity": "Optional. Energy counter of the smart meter for the export (kWh)."
         }
       },
       "grid_modbus": {
@@ -346,6 +354,85 @@
       "abort": {
         "reconfigure_successful": "Consumer updated."
       }
+    },
+    "tariff": {
+      "entry_type": "Tariff",
+      "initiate_flow": {
+        "user": "Add tariff",
+        "reconfigure": "Edit tariff"
+      },
+      "step": {
+        "user": {
+          "title": "Tariff",
+          "description": "Enter the tariff as it appears on your bill: first name, role and VAT, then the lines one by one. Consumption and feed-in are two sides of the same tariff.",
+          "data": {
+            "name": "Name",
+            "role": "Role",
+            "vat_import": "VAT on the consumption bill",
+            "vat_export_energy": "VAT on the feed-in energy",
+            "vat_export_other": "VAT on other feed-in items"
+          },
+          "data_description": {
+            "role": "Current: the tariff you pay now. Comparison: e.g. a dynamic tariff to compare with in the simulation.",
+            "vat_export_energy": "Often 0 % for private PV systems."
+          }
+        },
+        "items": {
+          "title": "Lines of the bill",
+          "description": "{items}\n\n{check}",
+          "menu_options": {
+            "add_item": "Add line",
+            "edit_item": "Change or remove a line",
+            "check": "Check against a bill",
+            "finish": "Save"
+          }
+        },
+        "edit_item": {
+          "title": "Change a line",
+          "data": {
+            "item": "Line"
+          }
+        },
+        "item": {
+          "title": "Line of the bill",
+          "data": {
+            "name": "Name (as on the bill)",
+            "side": "Side",
+            "group": "Group",
+            "unit": "Unit",
+            "price": "Price",
+            "valid_from": "Valid from",
+            "months": "Only in months",
+            "weekdays": "Only on weekdays",
+            "time_from": "Only from",
+            "time_to": "Only until",
+            "delete": "Remove this line"
+          },
+          "data_description": {
+            "price": "ct/kWh or €/year as on the bill; a discount is negative. On the feed-in side the energy price is the credit you get.",
+            "valid_from": "Optional. For a price change: add the line again with the new price and this date.",
+            "months": "Optional, e.g. for a reduced summer price.",
+            "time_from": "Optional, with \"Only until\": a time window of the day (local time), e.g. a reduced grid price at noon. A line with a window replaces the line of the same name in its window."
+          }
+        },
+        "check": {
+          "title": "Check against a bill",
+          "description": "SLEMS computes the period of a bill with the tariff and your recorded grid import and export and shows the difference to the bill.",
+          "data": {
+            "start": "From",
+            "end": "Until (included)",
+            "import_amount": "Amount of the consumption bill (incl. VAT)",
+            "export_amount": "Credit of the feed-in bill (incl. VAT)"
+          }
+        }
+      },
+      "error": {
+        "time_window_incomplete": "Enter both times of the window or none.",
+        "period_invalid": "The end must not be before the start."
+      },
+      "abort": {
+        "reconfigure_successful": "The tariff was saved."
+      }
     }
   },
   "selector": {
@@ -408,6 +495,58 @@
       "options": {
         "1": "1 phase",
         "3": "3 phases"
+      }
+    },
+    "tariff_role": {
+      "options": {
+        "current": "Current tariff",
+        "comparison": "Comparison tariff"
+      }
+    },
+    "tariff_side": {
+      "options": {
+        "import": "Consumption",
+        "export": "Feed-in"
+      }
+    },
+    "tariff_group": {
+      "options": {
+        "energy": "Energy",
+        "grid": "Grid",
+        "levies": "Levies"
+      }
+    },
+    "tariff_unit": {
+      "options": {
+        "kwh": "ct/kWh",
+        "year": "€/year"
+      }
+    },
+    "tariff_months": {
+      "options": {
+        "1": "January",
+        "2": "February",
+        "3": "March",
+        "4": "April",
+        "5": "May",
+        "6": "June",
+        "7": "July",
+        "8": "August",
+        "9": "September",
+        "10": "October",
+        "11": "November",
+        "12": "December"
+      }
+    },
+    "tariff_weekdays": {
+      "options": {
+        "0": "Monday",
+        "1": "Tuesday",
+        "2": "Wednesday",
+        "3": "Thursday",
+        "4": "Friday",
+        "5": "Saturday",
+        "6": "Sunday"
       }
     }
   },

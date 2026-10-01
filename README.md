@@ -32,6 +32,7 @@ system).
   - [Manual](#manual)
 - [Setup](#setup)
   - [Smart meter over Modbus (optional)](#smart-meter-over-modbus-optional)
+  - [Tariffs (optional)](#tariffs-optional)
   - [PV forecast](#pv-forecast)
   - [Weather (optional)](#weather-optional)
   - [Consumption forecast](#consumption-forecast)
@@ -238,6 +239,28 @@ sooner; the gain is largest with fast batteries.
   attribute `source`.
 - When the source is switched, the learned battery response times start
   again, since they contain the delay of the old source.
+
+### Tariffs (optional)
+
+With *Add tariff* on the SLEMS integration page you enter your electricity
+tariff the way your bill shows it; the values stay in your Home Assistant.
+
+1. Name, role (*current tariff* or *comparison tariff*) and VAT: for the
+   consumption bill, for the feed-in energy (often 0 % for private PV) and for
+   the other feed-in items.
+2. The lines of the bill one by one: name, side (*consumption* or
+   *feed-in*), group (*energy*, *grid*, *levies*) and price in ct/kWh or
+   €/year (charged per day; a discount is negative). Optionally only in some
+   months, on some weekdays or in a time window of the day, e.g. a cheaper
+   grid price at noon in summer: a line with a window replaces the line of the
+   same name in its window. A price change is the same line again with
+   *valid from*. On the feed-in side the energy price is your credit.
+3. *Check against a bill*: enter its period and amounts; SLEMS computes the
+   period with the tariff and your recorded grid import and export and shows
+   both amounts and the deviation, per side and group. For exact values
+   choose the energy counters of your smart meter (*Grid import energy (counter)* /
+   *Grid export energy (counter)*) in the SLEMS options; otherwise SLEMS uses the hourly
+   mean of the grid power.
 
 ### PV forecast
 

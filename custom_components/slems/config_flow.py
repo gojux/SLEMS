@@ -11,6 +11,7 @@ discovery).
 from __future__ import annotations
 
 import asyncio
+from datetime import date, datetime, time, timedelta
 import socket
 from typing import Any
 
@@ -30,9 +31,13 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er, selector
+from homeassistant.util import dt as dt_util
 from modbus_connection import ModbusTcpParams
 
 from .const import (
+    CONF_GRID_EXPORT_ENERGY_ENTITY,
+    CONF_GRID_IMPORT_ENERGY_ENTITY,
+    SUBENTRY_TYPE_TARIFF,
     CONF_MAX_CURRENT_A,
     CONF_MIN_CURRENT_A,
     CONF_PHASES,
@@ -141,6 +146,17 @@ from .entity_match import (
     suggest_control,
     suggest_mode_options,
     suggest_remote_options,
+)
+from .energy_history import async_grid_energy
+from .tariff import (
+    Group,
+    Role,
+    Side,
+    TariffItem,
+    Unit,
+    compute_bill,
+    tariff_from_data,
+    vat_data,
 )
 from .grid_meter import (
     Reader,
@@ -286,6 +302,8 @@ async def _async_system_schema(
                 )
             ),
             optional(CONF_HOUSE_HISTORY_ENTITY): _POWER_SENSOR,
+            optional(CONF_GRID_IMPORT_ENERGY_ENTITY): _ENERGY_SENSOR,
+            optional(CONF_GRID_EXPORT_ENERGY_ENTITY): _ENERGY_SENSOR,
         }
     )
 
@@ -531,6 +549,7 @@ class SlemsConfigFlow(_GridModbusSteps, ConfigFlow, domain=DOMAIN):
         return {
             SUBENTRY_TYPE_BATTERY: BatterySubentryFlow,
             SUBENTRY_TYPE_CONSUMER: ConsumerSubentryFlow,
+            SUBENTRY_TYPE_TARIFF: TariffSubentryFlow,
         }
 
 
@@ -1391,3 +1410,322 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
                 self._get_entry(), self._get_reconfigure_subentry(), title=title, data=data
             )
         return self.async_create_entry(title=title, data=data)
+
+
+_TARIFF_VAT_FIELDS = {
+    "vat_import": ((Side.IMPORT, Group.ENERGY), (Side.IMPORT, Group.GRID), (Side.IMPORT, Group.LEVIES)),
+    "vat_export_energy": ((Side.EXPORT, Group.ENERGY),),
+    "vat_export_other": ((Side.EXPORT, Group.GRID), (Side.EXPORT, Group.LEVIES)),
+}
+_PERCENT = selector.NumberSelector(
+    selector.NumberSelectorConfig(min=0, max=100, step=0.1, unit_of_measurement="%", mode=selector.NumberSelectorMode.BOX)
+)
+
+
+def _tariff_select(options: list[str], key: str, *, multiple: bool = False) -> selector.SelectSelector:
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=options,
+            translation_key=key,
+            multiple=multiple,
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
+
+
+class TariffSubentryFlow(ConfigSubentryFlow):
+    """Add or edit a tariff by entering the lines of a bill (see tariff).
+
+    The items can be checked against a bill: SLEMS computes its period from
+    the recorded grid import / export and shows the difference per group.
+    """
+
+    def __init__(self) -> None:
+        self._data: dict[str, Any] = {}
+        self._title = ""
+        self._edit_index: int | None = None
+        self._check: dict[str, str] | None = None
+
+    @property
+    def _items(self) -> list[dict[str, Any]]:
+        return self._data.setdefault("items", [])
+
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Name, role and VAT."""
+        if user_input is not None:
+            self._title = user_input[CONF_NAME]
+            self._data["role"] = user_input["role"]
+            self._data["vat"] = vat_data(
+                (side, group, float(user_input[key]))
+                for key, keys in _TARIFF_VAT_FIELDS.items()
+                for side, group in keys
+            )
+            return await self.async_step_items()
+        if self.source == SOURCE_RECONFIGURE and not self._data:
+            subentry = self._get_reconfigure_subentry()
+            self._title = subentry.title
+            self._data = {**subentry.data, "items": list(subentry.data.get("items") or [])}
+        vat = self._data.get("vat") or {}
+
+        def vat_default(key: str, fallback: float) -> float:
+            side, group = _TARIFF_VAT_FIELDS[key][0]
+            return vat.get(f"{side.value}.{group.value}", fallback)
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_NAME, default=self._title or vol.UNDEFINED): str,
+                    vol.Required("role", default=self._data.get("role", Role.CURRENT.value)): _tariff_select(
+                        [role.value for role in Role], "tariff_role"
+                    ),
+                    vol.Required("vat_import", default=vat_default("vat_import", 20.0)): _PERCENT,
+                    vol.Required("vat_export_energy", default=vat_default("vat_export_energy", 0.0)): _PERCENT,
+                    vol.Required("vat_export_other", default=vat_default("vat_export_other", 20.0)): _PERCENT,
+                }
+            ),
+        )
+
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        return await self.async_step_user(user_input)
+
+    async def async_step_items(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Menu: add, edit, check against a bill, finish."""
+        options = ["add_item"]
+        if self._items:
+            options += ["edit_item", "check", "finish"]
+        lines = "\n".join(
+            f"- {_describe_item(TariffItem.from_dict(item), self.hass.config.language)}" for item in self._items
+        ) or "–"
+        check = self._check or {}
+        return self.async_show_menu(
+            step_id="items",
+            menu_options=options,
+            description_placeholders={"items": lines, "check": check.get("text", "")},
+        )
+
+    async def async_step_add_item(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        self._edit_index = None
+        return await self.async_step_item()
+
+    async def async_step_edit_item(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Which item to change or remove."""
+        if user_input is not None:
+            self._edit_index = int(user_input["item"])
+            return await self.async_step_item()
+        options = [
+            selector.SelectOptionDict(value=str(index), label=_describe_item(TariffItem.from_dict(item), self.hass.config.language))
+            for index, item in enumerate(self._items)
+        ]
+        return self.async_show_form(
+            step_id="edit_item",
+            data_schema=vol.Schema(
+                {vol.Required("item"): selector.SelectSelector(selector.SelectSelectorConfig(options=options))}
+            ),
+        )
+
+    async def async_step_item(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """One line of the bill."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if user_input.get("delete") and self._edit_index is not None:
+                del self._items[self._edit_index]
+                return await self.async_step_items()
+            item = _item_from_input(user_input)
+            if (item.time_from is None) != (item.time_to is None):
+                errors["base"] = "time_window_incomplete"
+            else:
+                if self._edit_index is None:
+                    self._items.append(item.as_dict())
+                else:
+                    self._items[self._edit_index] = item.as_dict()
+                return await self.async_step_items()
+        current = (
+            self._items[self._edit_index] if self._edit_index is not None else {}
+        ) if user_input is None else user_input
+        schema: dict = {
+            vol.Required("name", default=current.get("name", vol.UNDEFINED)): str,
+            vol.Required("side", default=current.get("side", Side.IMPORT.value)): _tariff_select(
+                [side.value for side in Side], "tariff_side"
+            ),
+            vol.Required("group", default=current.get("group", Group.ENERGY.value)): _tariff_select(
+                [group.value for group in Group], "tariff_group"
+            ),
+            vol.Required("unit", default=current.get("unit", Unit.KWH.value)): _tariff_select(
+                [unit.value for unit in Unit], "tariff_unit"
+            ),
+            vol.Required("price", default=current.get("price", vol.UNDEFINED)): selector.NumberSelector(
+                selector.NumberSelectorConfig(min=-10_000, max=10_000, step="any", mode=selector.NumberSelectorMode.BOX)
+            ),
+            _optional("valid_from", current): selector.DateSelector(),
+            vol.Optional("months", default=[str(m) for m in current.get("months") or []]): _tariff_select(
+                [str(m) for m in range(1, 13)], "tariff_months", multiple=True
+            ),
+            vol.Optional("weekdays", default=[str(d) for d in current.get("weekdays") or []]): _tariff_select(
+                [str(d) for d in range(7)], "tariff_weekdays", multiple=True
+            ),
+            _optional("time_from", current): selector.TimeSelector(),
+            _optional("time_to", current): selector.TimeSelector(),
+        }
+        if self._edit_index is not None:
+            schema[vol.Optional("delete", default=False)] = selector.BooleanSelector()
+        return self.async_show_form(step_id="item", data_schema=vol.Schema(schema), errors=errors)
+
+    async def async_step_check(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Compare with a bill: its period and amounts (incl. VAT)."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            start = date.fromisoformat(user_input["start"])
+            end = date.fromisoformat(user_input["end"])
+            if end < start:
+                errors["base"] = "period_invalid"
+            else:
+                self._check = await self._async_compare(
+                    start, end, user_input.get("import_amount"), user_input.get("export_amount")
+                )
+                return await self.async_step_items()
+        return self.async_show_form(
+            step_id="check",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("start"): selector.DateSelector(),
+                    vol.Required("end"): selector.DateSelector(),
+                    vol.Optional("import_amount"): selector.NumberSelector(
+                        selector.NumberSelectorConfig(step="any", unit_of_measurement="€", mode=selector.NumberSelectorMode.BOX)
+                    ),
+                    vol.Optional("export_amount"): selector.NumberSelector(
+                        selector.NumberSelectorConfig(step="any", unit_of_measurement="€", mode=selector.NumberSelectorMode.BOX)
+                    ),
+                }
+            ),
+            errors=errors,
+        )
+
+    async def _async_compare(
+        self, start: date, end: date, import_amount: float | None, export_amount: float | None
+    ) -> dict[str, str]:
+        """Bill of the tariff for the period from the recorded energy, against the bill."""
+        entry = self._get_entry()
+        config = entry.options or entry.data
+        zone = dt_util.get_default_time_zone()
+        imported, exported = await async_grid_energy(
+            self.hass,
+            datetime.combine(start, time(), zone),
+            datetime.combine(end + timedelta(days=1), time(), zone),
+            import_entity=config.get(CONF_GRID_IMPORT_ENERGY_ENTITY),
+            export_entity=config.get(CONF_GRID_EXPORT_ENERGY_ENTITY),
+            grid_power_entity=config[CONF_GRID_POWER_ENTITY],
+            grid_inverted=config.get(CONF_GRID_POWER_INVERTED, False),
+        )
+        tariff = tariff_from_data(self._title, self._data)
+        bill = compute_bill(tariff, start, end, imported, exported)
+        language = self.hass.config.language
+        lines = [
+            _check_line(language, Side.IMPORT, bill.import_kwh, bill.side_gross(tariff, Side.IMPORT), import_amount),
+            _check_line(language, Side.EXPORT, bill.export_kwh, -bill.side_gross(tariff, Side.EXPORT), export_amount),
+        ]
+        return {"text": "\n\n".join(lines) + "\n\n" + _check_groups(language, bill.groups)}
+
+    async def async_step_finish(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        data = {key: self._data[key] for key in ("role", "vat", "items")}
+        if self.source == SOURCE_RECONFIGURE:
+            return self.async_update_and_abort(
+                self._get_entry(), self._get_reconfigure_subentry(), title=self._title, data=data
+            )
+        return self.async_create_entry(title=self._title, data=data)
+
+
+def _item_from_input(user_input: dict[str, Any]) -> TariffItem:
+    def clock(value: str | None) -> time | None:
+        return time.fromisoformat(value) if value else None
+
+    return TariffItem(
+        name=user_input["name"].strip(),
+        side=Side(user_input["side"]),
+        group=Group(user_input["group"]),
+        unit=Unit(user_input["unit"]),
+        price=float(user_input["price"]),
+        valid_from=date.fromisoformat(user_input["valid_from"]) if user_input.get("valid_from") else None,
+        months=frozenset(int(m) for m in user_input.get("months") or ()),
+        weekdays=frozenset(int(d) for d in user_input.get("weekdays") or ()),
+        time_from=clock(user_input.get("time_from")),
+        time_to=clock(user_input.get("time_to")),
+    )
+
+
+def _describe_item(item: TariffItem, language: str) -> str:
+    """'Grid: 6 ct/kWh (import, grid) · M 4,5,6 · 10:00–16:00'."""
+    words = _CHECK_WORDS["de" if language.startswith("de") else "en"]
+    unit = "ct/kWh" if item.unit is Unit.KWH else "€/a"
+    price = _number(language, item.price, 4).rstrip("0").rstrip(",.")
+    parts = [f"{item.name}: {price} {unit} ({words[item.side]}, {words[item.group]})"]
+    if item.months:
+        parts.append(f"{words['months']} {_ranges(item.months, 1)}")
+    if item.weekdays:
+        parts.append(f"{words['weekdays']} {_ranges(item.weekdays, 1, offset=1)}")
+    if item.time_from and item.time_to:
+        parts.append(f"{item.time_from:%H:%M}–{item.time_to:%H:%M}")
+    if item.valid_from:
+        parts.append(f"≥ {item.valid_from.isoformat()}")
+    return " · ".join(parts)
+
+
+_CHECK_WORDS = {
+    "de": {
+        Side.IMPORT: "Bezug", Side.EXPORT: "Einspeisung", "computed": "berechnet", "bill": "Rechnung",
+        Group.ENERGY: "Energie", Group.GRID: "Netz", Group.LEVIES: "Abgaben", "net": "netto",
+        "months": "Monate", "weekdays": "Wochentage",
+    },
+    "en": {
+        Side.IMPORT: "Import", Side.EXPORT: "Export", "computed": "computed", "bill": "bill",
+        Group.ENERGY: "energy", Group.GRID: "grid", Group.LEVIES: "levies", "net": "net",
+        "months": "months", "weekdays": "weekdays",
+    },
+}
+
+
+def _number(language: str, value: float, digits: int) -> str:
+    text = f"{value:,.{digits}f}"
+    if language.startswith("de"):
+        text = text.replace(",", "\u202f").replace(".", ",")
+    return text
+
+
+def _ranges(values: frozenset[int], step: int, offset: int = 0) -> str:
+    """'4–9' or '1, 3, 5–7' (``offset`` shifts 0-based weekdays to 1–7)."""
+    ordered = sorted(value + offset for value in values)
+    parts: list[str] = []
+    start = previous = ordered[0]
+    for value in [*ordered[1:], None]:
+        if value is not None and value == previous + step:
+            previous = value
+            continue
+        parts.append(str(start) if start == previous else f"{start}–{previous}")
+        if value is not None:
+            start = previous = value
+    return ", ".join(parts)
+
+
+def _check_line(language: str, side: Side, kwh: float, computed: float, billed: float | None) -> str:
+    """'Import: 412.3 kWh, computed 98.20 €, bill 97.90 € (+0.3 %)'."""
+    words = _CHECK_WORDS["de" if language.startswith("de") else "en"]
+    text = f"**{words[side]}**: {_number(language, kwh, 1)} kWh, {words['computed']} {_number(language, computed, 2)} €"
+    if billed:
+        deviation = (computed - billed) / abs(billed) * 100
+        text += f", {words['bill']} {_number(language, billed, 2)} € ({'+' if deviation >= 0 else ''}{_number(language, deviation, 1)} %)"
+    return text
+
+
+def _check_groups(language: str, bill_groups: dict[tuple[Side, Group], float]) -> str:
+    """'Import net: energy 54.27 €, grid 17.27 € · Export net: energy −24.07 €'."""
+    words = _CHECK_WORDS["de" if language.startswith("de") else "en"]
+    parts = []
+    for side in Side:
+        amounts = [
+            f"{words[group]} {_number(language, amount, 2)} €"
+            for (item_side, group), amount in sorted(bill_groups.items())
+            if item_side is side
+        ]
+        if amounts:
+            parts.append(f"{words[side]} {words['net']}: " + ", ".join(amounts))
+    return " · ".join(parts)

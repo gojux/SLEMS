@@ -32,6 +32,7 @@ lustiges Wort für ein sehr interessantes Tier) und *EMS*
   - [Manuell](#manuell)
 - [Einrichtung](#einrichtung)
   - [Smart Meter per Modbus (optional)](#smart-meter-per-modbus-optional)
+  - [Tarife (optional)](#tarife-optional)
   - [PV-Prognose](#pv-prognose)
   - [Wetter (optional)](#wetter-optional)
   - [Verbrauchsprognose](#verbrauchsprognose)
@@ -243,6 +244,31 @@ sieht jeden Wert früher; am meisten bringt das bei schnellen Batterien.
   Smart Meter* zeigt die Quelle im Attribut `source`.
 - Beim Wechsel der Quelle beginnen die gelernten Reaktionszeiten der
   Batterien neu, weil sie die Verzögerung der alten Quelle enthalten.
+
+### Tarife (optional)
+
+Mit *Tarif hinzufügen* auf der Seite der SLEMS-Integration trägst du deinen
+Stromtarif so ein, wie ihn deine Rechnung zeigt; die Werte bleiben in deinem
+Home Assistant.
+
+1. Name, Rolle (*aktueller Tarif* oder *Vergleichstarif*) und Umsatzsteuer:
+   für die Bezugsrechnung, für die eingespeiste Energie (bei privaten
+   PV-Anlagen oft 0 %) und für die anderen Einspeise-Posten.
+2. Die Posten der Rechnung einzeln: Name, Seite (*Bezug* oder
+   *Einspeisung*), Gruppe (*Energie*, *Netz*, *Abgaben*) und Preis in ct/kWh
+   oder €/Jahr (je Tag verrechnet; ein Rabatt ist negativ). Optional nur in
+   bestimmten Monaten, an bestimmten Wochentagen oder in einem Zeitfenster
+   des Tages, z. B. ein günstigerer Netzpreis zu Mittag im Sommer: Ein Posten
+   mit Fenster ersetzt in seinem Fenster den gleichnamigen Posten. Eine
+   Preisänderung ist derselbe Posten noch einmal mit *Gültig ab*. Auf der
+   Einspeiseseite ist der Energiepreis deine Vergütung.
+3. *Mit einer Rechnung vergleichen*: Zeitraum und Beträge der Rechnung
+   eingeben; SLEMS rechnet den Zeitraum mit dem Tarif und deinem
+   aufgezeichneten Netzbezug und deiner Einspeisung nach und zeigt beide
+   Beträge und die Abweichung, je Seite und Gruppe. Für genaue Werte in den
+   SLEMS-Optionen die Energiezähler des Smart Meters wählen (*Netzbezug (Zähler)* /
+   *Netzeinspeisung (Zähler)*); sonst nutzt SLEMS das Stundenmittel der
+   Netzleistung.
 
 ### PV-Prognose
 

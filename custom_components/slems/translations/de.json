@@ -12,7 +12,9 @@
           "pv_forecast_entries": "PV-Prognose",
           "outdoor_temperature_entity": "Außentemperatur",
           "house_history_entity": "Historie Hausverbrauch",
-          "grid_modbus": "Smart Meter zusätzlich per Modbus lesen"
+          "grid_modbus": "Smart Meter zusätzlich per Modbus lesen",
+          "grid_import_energy_entity": "Netzbezug (Zähler)",
+          "grid_export_energy_entity": "Netzeinspeisung (Zähler)"
         },
         "data_description": {
           "grid_power_entity": "Leistung am Netzanschlusspunkt. Erwartetes Vorzeichen: positiv = Bezug, negativ = Einspeisung.",
@@ -22,7 +24,9 @@
           "pv_forecast_entries": "Integrationen mit Solarprognose (z. B. Forecast.Solar, Solcast). Mehrere Einträge, z. B. einer je Dachfläche, werden addiert.",
           "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entity selbst auf.",
           "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Wird für die Zeit verwendet, bevor SLEMS eigene Werte aufgezeichnet hat.",
-          "grid_modbus": "Optional. Liest die Netzleistung direkt von einem SunSpec-Zähler (z. B. am SolarEdge-Wechselrichter, über einen Modbus-Proxy) im Bruchteil einer Sekunde. Die Regelung sieht jeden Wert früher als über die Entity; die Entity bleibt Rückfallebene und Historie."
+          "grid_modbus": "Optional. Liest die Netzleistung direkt von einem SunSpec-Zähler (z. B. am SolarEdge-Wechselrichter, über einen Modbus-Proxy) im Bruchteil einer Sekunde. Die Regelung sieht jeden Wert früher als über die Entity; die Entity bleibt Rückfallebene und Historie.",
+          "grid_import_energy_entity": "Optional. Energiezähler des Smart Meters für den Bezug (kWh). Für Tarife und Rechnungen; ohne ihn nutzt SLEMS das Stundenmittel der Netzleistung, das Bezug und Einspeisung innerhalb einer Stunde verrechnet.",
+          "grid_export_energy_entity": "Optional. Energiezähler des Smart Meters für die Einspeisung (kWh)."
         }
       },
       "grid_modbus": {
@@ -72,7 +76,9 @@
           "pv_forecast_entries": "PV-Prognose",
           "outdoor_temperature_entity": "Außentemperatur",
           "house_history_entity": "Historie Hausverbrauch",
-          "grid_modbus": "Smart Meter zusätzlich per Modbus lesen"
+          "grid_modbus": "Smart Meter zusätzlich per Modbus lesen",
+          "grid_import_energy_entity": "Netzbezug (Zähler)",
+          "grid_export_energy_entity": "Netzeinspeisung (Zähler)"
         },
         "data_description": {
           "grid_power_entity": "Leistung am Netzanschlusspunkt. Erwartetes Vorzeichen: positiv = Bezug, negativ = Einspeisung.",
@@ -81,7 +87,9 @@
           "weather_entity": "Optional. Verbessert die Verbrauchsprognose (z. B. Bedarf der Wärmepumpe).",
           "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entity selbst auf.",
           "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Wird für die Zeit verwendet, bevor SLEMS eigene Werte aufgezeichnet hat.",
-          "grid_modbus": "Optional. Liest die Netzleistung direkt von einem SunSpec-Zähler (z. B. am SolarEdge-Wechselrichter, über einen Modbus-Proxy) im Bruchteil einer Sekunde. Die Regelung sieht jeden Wert früher als über die Entity; die Entity bleibt Rückfallebene und Historie."
+          "grid_modbus": "Optional. Liest die Netzleistung direkt von einem SunSpec-Zähler (z. B. am SolarEdge-Wechselrichter, über einen Modbus-Proxy) im Bruchteil einer Sekunde. Die Regelung sieht jeden Wert früher als über die Entity; die Entity bleibt Rückfallebene und Historie.",
+          "grid_import_energy_entity": "Optional. Energiezähler des Smart Meters für den Bezug (kWh). Für Tarife und Rechnungen; ohne ihn nutzt SLEMS das Stundenmittel der Netzleistung, das Bezug und Einspeisung innerhalb einer Stunde verrechnet.",
+          "grid_export_energy_entity": "Optional. Energiezähler des Smart Meters für die Einspeisung (kWh)."
         }
       },
       "grid_modbus": {
@@ -346,6 +354,85 @@
       "abort": {
         "reconfigure_successful": "Verbraucher aktualisiert."
       }
+    },
+    "tariff": {
+      "entry_type": "Tarif",
+      "initiate_flow": {
+        "user": "Tarif hinzufügen",
+        "reconfigure": "Tarif bearbeiten"
+      },
+      "step": {
+        "user": {
+          "title": "Tarif",
+          "description": "Trage den Tarif so ein, wie er auf deiner Rechnung steht: zuerst Name, Rolle und Umsatzsteuer, dann die Posten einzeln. Bezug und Einspeisung sind zwei Seiten desselben Tarifs.",
+          "data": {
+            "name": "Name",
+            "role": "Rolle",
+            "vat_import": "USt. auf die Bezugsrechnung",
+            "vat_export_energy": "USt. auf die eingespeiste Energie",
+            "vat_export_other": "USt. auf andere Einspeise-Posten"
+          },
+          "data_description": {
+            "role": "Aktuell: der Tarif, den du jetzt zahlst. Vergleich: z. B. ein dynamischer Tarif zum Vergleich in der Simulation.",
+            "vat_export_energy": "Bei privaten PV-Anlagen oft 0 %."
+          }
+        },
+        "items": {
+          "title": "Posten der Rechnung",
+          "description": "{items}\n\n{check}",
+          "menu_options": {
+            "add_item": "Posten hinzufügen",
+            "edit_item": "Posten ändern oder entfernen",
+            "check": "Mit einer Rechnung vergleichen",
+            "finish": "Speichern"
+          }
+        },
+        "edit_item": {
+          "title": "Posten ändern",
+          "data": {
+            "item": "Posten"
+          }
+        },
+        "item": {
+          "title": "Posten der Rechnung",
+          "data": {
+            "name": "Name (wie auf der Rechnung)",
+            "side": "Seite",
+            "group": "Gruppe",
+            "unit": "Einheit",
+            "price": "Preis",
+            "valid_from": "Gültig ab",
+            "months": "Nur in Monaten",
+            "weekdays": "Nur an Wochentagen",
+            "time_from": "Nur von",
+            "time_to": "Nur bis",
+            "delete": "Diesen Posten entfernen"
+          },
+          "data_description": {
+            "price": "ct/kWh oder €/Jahr wie auf der Rechnung; ein Rabatt ist negativ. Auf der Einspeiseseite ist der Energiepreis die Vergütung, die du bekommst.",
+            "valid_from": "Optional. Bei einer Preisänderung: den Posten mit dem neuen Preis und diesem Datum noch einmal anlegen.",
+            "months": "Optional, z. B. für einen günstigeren Sommerpreis.",
+            "time_from": "Optional, mit „Nur bis“: ein Zeitfenster am Tag (Ortszeit), z. B. ein günstigerer Netzpreis zu Mittag. Ein Posten mit Fenster ersetzt in seinem Fenster den gleichnamigen Posten."
+          }
+        },
+        "check": {
+          "title": "Mit einer Rechnung vergleichen",
+          "description": "SLEMS rechnet den Zeitraum einer Rechnung mit dem Tarif und deinem aufgezeichneten Netzbezug und deiner Einspeisung nach und zeigt die Abweichung zur Rechnung.",
+          "data": {
+            "start": "Von",
+            "end": "Bis (einschließlich)",
+            "import_amount": "Betrag der Bezugsrechnung (inkl. USt.)",
+            "export_amount": "Gutschrift der Einspeiserechnung (inkl. USt.)"
+          }
+        }
+      },
+      "error": {
+        "time_window_incomplete": "Beide Zeiten des Fensters angeben oder keine.",
+        "period_invalid": "Das Ende darf nicht vor dem Beginn liegen."
+      },
+      "abort": {
+        "reconfigure_successful": "Der Tarif wurde gespeichert."
+      }
     }
   },
   "selector": {
@@ -408,6 +495,58 @@
       "options": {
         "1": "1 Phase",
         "3": "3 Phasen"
+      }
+    },
+    "tariff_role": {
+      "options": {
+        "current": "Aktueller Tarif",
+        "comparison": "Vergleichstarif"
+      }
+    },
+    "tariff_side": {
+      "options": {
+        "import": "Bezug",
+        "export": "Einspeisung"
+      }
+    },
+    "tariff_group": {
+      "options": {
+        "energy": "Energie",
+        "grid": "Netz",
+        "levies": "Abgaben"
+      }
+    },
+    "tariff_unit": {
+      "options": {
+        "kwh": "ct/kWh",
+        "year": "€/Jahr"
+      }
+    },
+    "tariff_months": {
+      "options": {
+        "1": "Januar",
+        "2": "Februar",
+        "3": "März",
+        "4": "April",
+        "5": "Mai",
+        "6": "Juni",
+        "7": "Juli",
+        "8": "August",
+        "9": "September",
+        "10": "Oktober",
+        "11": "November",
+        "12": "Dezember"
+      }
+    },
+    "tariff_weekdays": {
+      "options": {
+        "0": "Montag",
+        "1": "Dienstag",
+        "2": "Mittwoch",
+        "3": "Donnerstag",
+        "4": "Freitag",
+        "5": "Samstag",
+        "6": "Sonntag"
       }
     }
   },

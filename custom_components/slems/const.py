@@ -22,6 +22,9 @@ CONF_WEATHER_ENTITY: Final = "weather_entity"
 # Optional history sources for the consumption forecast.
 CONF_HOUSE_HISTORY_ENTITY: Final = "house_history_entity"
 CONF_OUTDOOR_TEMPERATURE_ENTITY: Final = "outdoor_temperature_entity"
+# Energy counters of the smart meter (kWh), for tariffs and bills.
+CONF_GRID_IMPORT_ENERGY_ENTITY: Final = "grid_import_energy_entity"
+CONF_GRID_EXPORT_ENERGY_ENTITY: Final = "grid_export_energy_entity"
 # Grid power additionally read from a SunSpec meter over Modbus (grid_meter).
 CONF_GRID_MODBUS: Final = "grid_modbus"
 CONF_GRID_MODBUS_HOST: Final = "grid_modbus_host"
@@ -84,6 +87,7 @@ DEFAULT_UNIT_ID: Final = 1
 
 # --- consumer subentry --------------------------------------------------------
 SUBENTRY_TYPE_CONSUMER: Final = "consumer"
+SUBENTRY_TYPE_TARIFF: Final = "tariff"
 
 CONF_CONSUMER_TYPE: Final = "consumer_type"
 CONF_ENERGY_ENTITY: Final = "energy_entity"

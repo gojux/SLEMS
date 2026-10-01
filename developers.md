@@ -202,6 +202,17 @@ on *automatic*) and passes the forced runs with the source *grid* of
 *never* / *automatic* consumers to the projection (`grid_load`,
 `budget_load`).
 
+### Tariffs
+
+`tariff.py`: a tariff (config subentry type `tariff`) is a list of bill lines
+(side, group, unit ct/kWh or €/year per day, optional months / weekdays / time
+window, `valid_from`) with VAT per side and group. Per hour the most specific
+matching line of a name counts, so a window line replaces the general line of
+the same name in its window. `compute_bill` prices hourly import / export
+(`energy_history.async_grid_energy`: changes of the energy counters, else the
+hourly mean of the grid power). The subentry flow is an assistant: lines are
+added from a menu, and *check* compares a bill period with the recorded energy.
+
 ### Night discharge
 
 `night_discharge.py`, optional (switch, off by default). Without it the
@@ -1491,3 +1502,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-01 | Current control (A) for wallboxes and evcc loadpoints, consumer type *wallbox*. Planned in watts (current range × voltage × active phases, from a phases entity if given), sent as whole amperes rounded down. Start/stop through a switch or a select with on/off options, since the maximum current of an evcc loadpoint cannot go below its minimum current (stopping is its charge mode); without one, the lowest current the entity takes, and evcc decides in its PV mode. Checked against evcc 0.316 and ha-evcc 2026.9 (number entities for min/max current, select for mode and phases, sensor for active phases). The minimum pause of a consumer now only counts after SLEMS really switched it off: after every start the first "off" started the pause, so a wallbox (5 min pause) waited five minutes after each restart. |
 | 2026-10-01 | evcc guide (`docs/wallbox-evcc.md`, German `.de.md`) with screenshots from the dev instance and a demo charger. evcc reads grid, PV and battery from SLEMS through its Home Assistant meter template; it expects the battery power positive while discharging and cannot invert it, so SLEMS has the sensor *Battery power total (discharge positive)*. ha-evcc exposes the maximum current of a loadpoint as a select with ampere options, so current control also drives selects (highest option not above the planned current). evcc's battery control scripts stay empty: SLEMS controls the batteries. |
 | 2026-10-01 | Release and service calls hardened after an external code review. A release is confirmed (Venus: every write checked and the force mode / RS485 register read back; entity batteries: blocking calls) and stays outstanding until it succeeds (`BatteryRuntime.release_pending_since`, retried every update while SLEMS does not control the battery, three attempts at unload, repair issue after 5 minutes). Before, a failed release went unnoticed and was not tried again while the grid meter stayed stale, so a battery could keep its last set point. All service calls to other integrations wait for the result with a 10 s timeout (`util.async_call_service`): before, errors were never seen and with separate charge/discharge entities the stopping direction was not guaranteed to stop first. Scripts are called directly so SLEMS waits for them. The ramp timer is kept and cancelled at shutdown, and no cycle starts after it. `clamp_to_entity` stays within min/max when they are not on the step grid; NaN and infinite states count as unknown. |
+| 2026-10-01 | Tariffs as bill lines (`tariff.py`, subentry type `tariff`) instead of a fixed price per kWh: Austrian grid tariffs now have reduced prices in time windows (noon in summer), yearly items are charged per day, and VAT differs between the sides of a bill (e.g. none on feed-in energy). Entered like the bill and checked against it with the recorded hourly energy, so the user does not have to derive effective prices. Values only live in the user's Home Assistant; tests and docs use made-up tariffs. First part of dynamic tariffs (next: market prices with the user's consent, tariff comparison in the simulation, price chart). |
