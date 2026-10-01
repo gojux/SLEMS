@@ -20,7 +20,8 @@ the peak, their charge power is too low (energy would be curtailed), or the
 export has been above the limit for ``CAP_EXCEEDED_AFTER_S``.
 
 Issues are stored by Home Assistant across restarts; the first update after a
-start removes the ones that no longer apply.
+start (also after a reload, e.g. when a battery was removed) removes every
+SLEMS issue that no longer applies, including those of removed batteries.
 """
 
 from __future__ import annotations
@@ -123,6 +124,13 @@ class ProblemReporter:
                     translation_key=translation_key,
                     translation_placeholders=placeholders,
                 )
+        if self._active is None:
+            # Also the issues of batteries that are no longer configured.
+            possible |= {
+                issue_id
+                for domain, issue_id in ir.async_get(self._hass).issues
+                if domain == DOMAIN
+            }
         for issue_id in possible - wanted.keys():
             if self._active is None or issue_id in self._active:
                 ir.async_delete_issue(self._hass, DOMAIN, issue_id)
