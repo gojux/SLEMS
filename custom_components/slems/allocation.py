@@ -369,7 +369,8 @@ def allocate(
                 strategy = Strategy.GRID_FRIENDLY
             max_charge = min(max_charge, room)
     else:
-        strategy = Strategy.BATTERY_PRIORITY
+        # Without batteries the whole surplus goes to the consumers.
+        strategy = Strategy.BATTERY_PRIORITY if battery is not None else Strategy.SELF_CONSUMPTION
         battery_budget = remaining
     battery_power = min(battery_budget, max_charge)
     consumer_budget = remaining - battery_power

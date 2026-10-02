@@ -36,6 +36,7 @@ lustiges Wort für ein sehr interessantes Tier) und *EMS*
   - [PV-Prognose](#pv-prognose)
   - [Wetter (optional)](#wetter-optional)
   - [Verbrauchsprognose](#verbrauchsprognose)
+- [Ohne Batterien](#ohne-batterien)
 - [Batterien](#batterien)
   - [Aufteilung auf die Batterien](#aufteilung-auf-die-batterien)
   - [Verschleißkosten der Batterie](#verschleißkosten-der-batterie)
@@ -125,13 +126,16 @@ SLEMS plant voraus und regelt genau:
   Nachtentladung, Einspeisebegrenzung, Grenzen der Batterien, Prognosen ±%)
   und vergleicht Einspeisung, Netzbezug und Ladezustand mit dem aktuellen
   Plan, ohne etwas zu ändern.
+- **Auch ohne Batterien.** SLEMS kann den PV-Überschuss auch allein in
+  Verbraucher lenken (Heizstab, Wallbox, Luftentfeuchter, …), mit Tageszielen,
+  Tarifen und Prognosen (siehe [Ohne Batterien](#ohne-batterien)).
 
 **Wann (heute) eine andere Lösung besser passt:** viele verschiedene
 Batteriemarken (SLEMS spricht nur die Marstek Venus E 3.0 direkt an; andere
-Batterien steuert es über die Entities ihrer Integration, das ist gröber),
-Laden aus dem Netz nach dynamischen Tarifen oder das Laden von Elektroautos.
-Omnibattery deckt viele Batteriemodelle ab, evcc ist auf das Laden von E-Autos
-spezialisiert; evcc ergänzt SLEMS gut (siehe [Roadmap](#roadmap)).
+Batterien steuert es über die Entities ihrer Integration, das ist gröber) oder
+das Laden von Elektroautos. Omnibattery deckt viele Batteriemodelle ab, evcc
+ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
+[evcc-Anleitung](docs/wallbox-evcc.de.md)).
 
 ## Funktionen
 
@@ -435,6 +439,23 @@ Energiefluss) wird als Netz + PV − Batterien berechnet. Der Smart Meter meldet
 eine Änderung oft später als PV und Batterien; ein kurzzeitig negatives
 Ergebnis wird daher durch den letzten gültigen Wert ersetzt (höchstens 30
 Sekunden, danach unbekannt).
+
+## Ohne Batterien
+
+SLEMS funktioniert auch ohne Batterie: einfach nur die Verbraucher anlegen.
+
+- **Funktioniert**: den PV-Überschuss in gesteuerte Verbraucher lenken
+  (Heizstab, Wallbox auch mit evcc, Luftentfeuchter, Wärmepumpe über einen
+  Schalteingang) mit Prioritäten, Mindestlaufzeit und -pause, *Takten
+  vermeiden* und externer Sperre; Tagesziele mit den Quellen *Nur Überschuss*
+  und *+ Netz* (mit preisbewusster Steuerung auch im günstigsten Fenster);
+  Tarife, Rechnungsprüfung, Börsenpreise, Tarifvergleich und Preisdiagramm;
+  Energiefluss, Verbrauchs- und PV-Prognose mit ihrer Güte.
+- **Nicht ohne Batterien**: alles, was eine Batterie lädt, entlädt oder plant
+  – netzdienliches Laden, Nachtentladung, Bezugsspitzen abfangen, Halten für
+  teure Stunden, Laden aus dem Netz, Einspeisen aus den Batterien – und
+  derzeit die Einspeisebegrenzung (sie braucht eine Batterie, auch mit
+  unterstützenden Verbrauchern).
 
 ## Batterien
 

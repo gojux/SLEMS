@@ -36,6 +36,7 @@ system).
   - [PV forecast](#pv-forecast)
   - [Weather (optional)](#weather-optional)
   - [Consumption forecast](#consumption-forecast)
+- [Without batteries](#without-batteries)
 - [Batteries](#batteries)
   - [Distribution between batteries](#distribution-between-batteries)
   - [Battery wear costs](#battery-wear-costs)
@@ -123,13 +124,16 @@ controls precisely:
   day plan with other settings (grid friendly charging, night discharge,
   feed-in cap, battery limits, forecasts ±%) and compares feed-in, grid import
   and state of charge with the current plan, without changing anything.
+- **Also without batteries.** SLEMS can direct the PV surplus into consumers
+  alone (heating rod, wallbox, dehumidifier, …), with daily targets, tariffs
+  and forecasts (see [without batteries](#without-batteries)).
 
 **When another solution fits better (today):** many different battery brands
 (SLEMS talks directly only to the Marstek Venus E 3.0; other batteries are
-controlled through the entities of their integration, which is coarser),
-charging from the grid by dynamic tariffs or electric vehicle charging.
-Omnibattery covers many battery models, evcc specialises in EV charging; evcc
-complements SLEMS well (see [roadmap](#roadmap)).
+controlled through the entities of their integration, which is coarser) or
+electric vehicle charging. Omnibattery covers many battery models, evcc
+specialises in EV charging; evcc complements SLEMS well (see the
+[evcc guide](docs/wallbox-evcc.md)).
 
 ## Features
 
@@ -418,6 +422,23 @@ The sensor *House consumption* (used for the forecast and shown in the energy
 flow) is calculated as grid + PV − batteries. The smart meter often reports a
 change later than PV and batteries; a momentarily negative result is therefore
 replaced by the last valid value (for at most 30 seconds, then unknown).
+
+## Without batteries
+
+SLEMS also works without any battery: add the consumers only.
+
+- **Works**: directing the PV surplus into controlled consumers (heating rod,
+  wallbox also with evcc, dehumidifier, heat pump through a switch input) with
+  priorities, minimum runtime and pause, *Avoid short runs* and external
+  blocking; daily targets with the sources *surplus only* and *+ grid* (also
+  in the cheapest window with price aware control); tariffs, bill check,
+  market prices, tariff comparison and price chart; energy flow, consumption
+  and PV forecast with their accuracy.
+- **Not without batteries**: everything that charges, discharges or plans a
+  battery – grid friendly charging, night discharge, import peak shaving,
+  price hold, charging from the grid, feeding in from the batteries – and
+  currently the feed-in cap (it needs a battery even with supporting
+  consumers).
 
 ## Batteries
 

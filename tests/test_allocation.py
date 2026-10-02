@@ -427,3 +427,10 @@ def test_running_switch_consumer_is_not_pushed_off_by_a_power_controlled_one() -
     # Too little surplus for the dryer itself: it goes off.
     result = allocate(200, full, [rod, running], SETTINGS, expected_surplus_wh=None)
     assert result.consumer_power_w["dryer"] == 0
+
+
+def test_without_batteries_the_surplus_goes_to_the_consumers() -> None:
+    result = allocate(1500, None, [ROD], SETTINGS, expected_surplus_wh=None)
+    assert result.strategy is Strategy.SELF_CONSUMPTION
+    assert result.consumer_power_w["rod"] == 1500
+    assert result.battery_power_w == 0
