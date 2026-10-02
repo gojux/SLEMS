@@ -1630,6 +1630,13 @@ Mögliche Erweiterungen:
 - Gelernte Anwesenheit des Autos für die Planung.
 - Einspeisen aus den Batterien auch in der Schätzung des Tarifvergleichs.
 - Verbraucher bei negativen Preisen bevorzugen (z. B. den Heizstab).
+- Preisbewusste Steuerung: geschätzte Preise für die Stunden nach dem letzten
+  bekannten Day-Ahead-Preis (aus denselben Stunden der letzten Tage, mit
+  Sicherheitsabschlag), damit die Nacht schon vor Veröffentlichung der Preise
+  des nächsten Tages geplant wird; Planung in Viertelstunden statt
+  Stundenmitteln; ein stabilerer Plan (nur bei deutlicher Verbesserung
+  geändert).
+- Tagesziele der Verbraucher gemeinsam mit den Batterien planen.
 - Programmgeräte (Waschmaschine, Geschirrspüler, Trockner): den Verlauf eines
   Programms lernen und den Rest eines laufenden Programms in die Prognose der
   nächsten Stunden aufnehmen (hilft der Abend- und Nachtplanung); später

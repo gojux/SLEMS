@@ -1540,6 +1540,12 @@ Possible extensions:
 - Feeding in from the batteries also in the estimate of the tariff
   comparison.
 - Consumers preferred at negative prices (e.g. the heating rod).
+- Price aware control: estimated prices for the hours after the last known
+  day-ahead price (from the same hours of the last days, with a safety
+  margin), so the night is planned before the next day's prices are
+  published; planning in quarter hours instead of hourly means; a more stable
+  plan (changed only when clearly better).
+- Daily targets of the consumers planned together with the batteries.
 - Program devices (washing machine, dishwasher, dryer): learn the course of a
   program and add the rest of a running program to the forecast of the next
   hours (helps the evening and night planning); later possibly starting them
