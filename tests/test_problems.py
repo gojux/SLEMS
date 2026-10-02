@@ -75,3 +75,10 @@ def test_outstanding_release_becomes_a_repair_issue() -> None:
         battery.release_pending_since = None
         reporter.update(1000.0)
         assert (DOMAIN, "battery_release_failed_b1") not in registry.issues
+
+
+def test_blocked_duration_text() -> None:
+    from custom_components.slems.problems import _duration
+
+    assert _duration(45 * 60) == "45 min"
+    assert _duration(3 * 3600 + 20 * 60) == "3 h 20 min"

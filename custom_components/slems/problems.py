@@ -254,9 +254,17 @@ class ProblemReporter:
 
 
     async def async_notify_target_missed(
-        self, subentry_id: str, name: str, got: float, goal: float, unit: str, deadline: str
+        self,
+        subentry_id: str,
+        name: str,
+        got: float,
+        goal: float,
+        unit: str,
+        deadline: str,
+        blocked_s: float = 0.0,
     ) -> None:
-        """Notification: a consumer did not reach its daily target by the deadline."""
+        """Notification: a consumer did not reach its daily target by the deadline,
+        with the time it was blocked externally in the period."""
         text = await self._texts()
         comma = self._hass.config.language.startswith("de")
 
@@ -269,13 +277,23 @@ class ProblemReporter:
             "got": f"{number(got)} {unit}",
             "goal": f"{number(goal)} {unit}",
             "deadline": deadline,
+            "blocked": _duration(blocked_s),
         }
+        # Blocked for at least a minute: the block is named as the likely reason.
+        key = "target_missed_blocked_message" if blocked_s >= 60 else "target_missed_message"
         persistent_notification.async_create(
             self._hass,
-            text("target_missed_message", **placeholders),
+            text(key, **placeholders),
             title=text("target_missed_title", **placeholders),
             notification_id=f"{DOMAIN}_target_{subentry_id}",
         )
+
+
+def _duration(seconds: float) -> str:
+    """'3 h 20 min' or '45 min'."""
+    minutes = round(seconds / 60)
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours} h {minutes} min" if hours else f"{minutes} min"
 
 
 def _clock(moment: datetime) -> str:

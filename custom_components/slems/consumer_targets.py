@@ -135,8 +135,17 @@ class TargetProgress:
     # The same for the last period: a missed target is only notified if SLEMS
     # controlled the consumer all the time.
     last_controlled: bool = True
+    # Time the consumer was blocked externally in the period, and in the last
+    # one (the notification of a missed target names it).
+    blocked_s: float = 0.0
+    last_blocked_s: float = 0.0
+    # The consumer declined power in the period although commanded (saturated
+    # or resting: its own thermostat is satisfied); a missed target is then
+    # not notified, the device did not need more.
+    declined: bool = False
+    last_declined: bool = False
     # The previous sample: its state applies until this one.
-    _last: tuple[float, float | None, bool] | None = field(default=None, repr=False)
+    _last: tuple[float, float | None, bool, bool] | None = field(default=None, repr=False)
 
     def update(
         self,
@@ -146,10 +155,14 @@ class TargetProgress:
         power_w: float | None,
         commanded_on: bool,
         controlled: bool = True,
+        blocked: bool = False,
+        declined: bool = False,
     ) -> str | None:
         """Count one poll; returns the result when a period ended.
 
-        ``controlled``: SLEMS may control the consumer right now.
+        ``controlled``: SLEMS may control the consumer right now (operating
+        mode, its control switch), ``blocked``: it is blocked externally,
+        ``declined``: it is saturated or resting.
         """
         result = None
         end = period_end(local_now, settings.deadline)
@@ -159,16 +172,20 @@ class TargetProgress:
             result = "met" if self.met(settings) else "missed"
             self.last_result = result
             self.last_controlled = not self.uncontrolled
+            self.last_blocked_s = self.blocked_s
+            self.last_declined = self.declined
             self._reset(end)
         if not controlled:
             self.uncontrolled = True
+        if declined:
+            self.declined = True
         elif end != self.end:
             # The deadline was changed: the counters stay.
             self.end = end
-        previous, self._last = self._last, (now, power_w, commanded_on)
+        previous, self._last = self._last, (now, power_w, commanded_on, blocked)
         if previous is None:
             return result
-        last_time, last_power, last_on = previous
+        last_time, last_power, last_on, last_blocked = previous
         elapsed = now - last_time
         if elapsed > MAX_GAP_S or elapsed <= 0:
             return result
@@ -176,14 +193,16 @@ class TargetProgress:
             self.runtime_s += elapsed
         if last_on:
             self.enabled_s += elapsed
+        if last_blocked:
+            self.blocked_s += elapsed
         if last_power is not None:
             self.energy_wh += max(0.0, last_power) * elapsed / 3600
         return result
 
     def _reset(self, end: datetime) -> None:
         self.end = end
-        self.uncontrolled = False
-        self.runtime_s = self.enabled_s = self.energy_wh = 0.0
+        self.uncontrolled = self.declined = False
+        self.runtime_s = self.enabled_s = self.energy_wh = self.blocked_s = 0.0
         self.min_reached = self.done = False
         self.done_target_c = None
 
@@ -239,6 +258,10 @@ class TargetProgress:
             "last_result": self.last_result,
             "uncontrolled": self.uncontrolled,
             "last_controlled": self.last_controlled,
+            "blocked_s": self.blocked_s,
+            "last_blocked_s": self.last_blocked_s,
+            "declined": self.declined,
+            "last_declined": self.last_declined,
         }
 
     @classmethod
@@ -257,6 +280,10 @@ class TargetProgress:
             last_result=data.get("last_result"),
             uncontrolled=data.get("uncontrolled", False),
             last_controlled=data.get("last_controlled", True),
+            blocked_s=data.get("blocked_s", 0.0),
+            last_blocked_s=data.get("last_blocked_s", 0.0),
+            declined=data.get("declined", False),
+            last_declined=data.get("last_declined", False),
         )
 
 

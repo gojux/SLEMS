@@ -299,3 +299,28 @@ def test_missed_period_remembers_whether_slems_could_control() -> None:
     assert progress.last_controlled is True
     restored = TargetProgress.from_dict(progress.as_dict())
     assert restored.last_controlled is True and restored.uncontrolled is False
+
+
+def test_blocked_time_of_the_period() -> None:
+    settings = TargetSettings(type=TargetType.RUNTIME, hours=1.0)
+    progress = TargetProgress()
+    t, moment = 0.0, local(20)
+    # 30 minutes blocked, then free.
+    for step in range(0, 3600, 60):
+        progress.update(t, moment, settings, 0.0, False, blocked=step < 1800)
+        t += 60
+        moment += timedelta(seconds=60)
+    assert progress.blocked_s == pytest.approx(1800)
+    assert progress.update(t, local(22, 1), settings, 0.0, False) == "missed"
+    assert progress.last_blocked_s == pytest.approx(1800) and progress.blocked_s == 0
+
+
+def test_declined_power_is_remembered_for_the_period() -> None:
+    settings = TargetSettings(type=TargetType.RUNTIME, hours=1.0)
+    progress = TargetProgress()
+    progress.update(0.0, local(20), settings, 0.0, True)
+    progress.update(60.0, local(20, 1), settings, 0.0, True, declined=True)
+    assert progress.update(120.0, local(22, 1), settings, 0.0, False) == "missed"
+    assert progress.last_declined is True and progress.declined is False
+    assert progress.update(180.0, local(22, 1, day=2), settings, 0.0, False) == "missed"
+    assert progress.last_declined is False

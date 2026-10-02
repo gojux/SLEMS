@@ -2575,7 +2575,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self, consumer: ConsumerConfig, state: ConsumerState, now: float, commanded_on: bool
     ) -> None:
         """Progress of the consumer's daily target; a missed one is notified once
-        (not when SLEMS could not control the consumer at some time of the period)."""
+        (not when SLEMS could not control the consumer at some time of the
+        period or the consumer declined power)."""
         settings = self.consumer_targets[consumer.subentry_id]
         if settings.type is TargetType.NONE:
             return
@@ -2592,6 +2593,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             commanded_on,
             controlled=self.settings.operating_mode is OperatingMode.ACTIVE
             and consumer.subentry_id not in self.consumer_control_disabled,
+            blocked=state.blocked,
+            declined=consumer.subentry_id in self.controller.saturated
+            or consumer.subentry_id in self.controller.resting,
         )
         temperature = target_temperature(settings, state.temperature_c, state.temperatures_c)
         start = window_start(settings, progress.end) if progress.end is not None else None
@@ -2604,13 +2608,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             and (start is None or local_now >= start)
         ):
             progress.track_temperature(settings, temperature)
-        # Only if SLEMS could control the consumer all the period.
-        if result == "missed" and end is not None and progress.last_controlled:
+        # Only if SLEMS could control the consumer all the period and it did
+        # not decline power (saturated or resting: it needed no more).
+        if result == "missed" and end is not None and progress.last_controlled and not progress.last_declined:
             self.config_entry.async_create_background_task(
                 self.hass,
                 self.problems.async_notify_target_missed(
                     consumer.subentry_id, consumer.name, got, goal, unit,
                     dt_util.as_local(end).strftime("%H:%M"),
+                    progress.last_blocked_s,
                 ),
                 "slems target notification",
             )

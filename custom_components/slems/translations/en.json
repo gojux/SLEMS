@@ -1154,6 +1154,9 @@
     },
     "balancing_end_max_time": {
       "message": "The maximum duration of 24 hours was reached"
+    },
+    "target_missed_blocked_message": {
+      "message": "{name} got {got} of {goal} by {deadline}; it was blocked externally for {blocked} of the period. If that happens more often, check the block entity on its card (e.g. a lock period of the grid operator or an automation)."
     }
   },
   "issues": {

@@ -885,7 +885,10 @@ Per controlled consumer, on its card under *Daily target*.
 - **Source** decides what may cover the rest in time:
   - *surplus only* (default; the target may be missed, then a notification
     says so – not if SLEMS could not control the consumer at some time of the
-    period: operating mode not *Active* or its *Control active* switched off),
+    period: operating mode not *Active* or its *Control active* switched off –
+    or if it declined power because its own thermostat was satisfied
+    (saturated or resting); if it was blocked externally, the notification
+    names how long),
   - *surplus + batteries* (from the latest start on the consumer runs
     regardless of the surplus as long as the batteries can deliver, a power
     controlled one at most with their discharge power),

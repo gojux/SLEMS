@@ -1154,6 +1154,9 @@
     },
     "balancing_end_max_time": {
       "message": "Die maximale Dauer von 24 Stunden wurde erreicht"
+    },
+    "target_missed_blocked_message": {
+      "message": "{name} hat bis {deadline} {got} von {goal} erreicht; er war in dieser Zeit {blocked} extern gesperrt. Kommt das öfter vor, prüfe die Sperr-Entity auf seiner Karte (z. B. eine Sperrzeit des Netzbetreibers oder eine Automation)."
     }
   },
   "issues": {
