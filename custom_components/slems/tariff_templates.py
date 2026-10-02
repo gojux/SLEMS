@@ -4,7 +4,10 @@ Shipped with SLEMS (public list prices from price sheets, each with its
 source) as ``templates/tariffs/<country>/<part>/<provider>/<valid_from>_<name>.yaml``:
 ``<part>`` is the first of its parts (``energy``, ``grid``, ``levies``) or
 ``complete`` for a template with all three; one file per price level, so
-the price levels of a provider sort by date and read from the folder
+the price levels of a provider sort by date. Each has an ``id`` starting with
+its country (e.g. ``at/example-energy/fix``); own templates should use ids
+starting with ``own/``, unless they deliberately add a price level to a
+shipped template (same id, newer ``valid_from``) and read from the folder
 ``slems_tariff_templates`` in the Home Assistant configuration (own
 templates). A template covers some parts of a bill (``parts``): the energy
 of a supplier, the grid fees of a grid area, the levies of a country, or all
@@ -20,7 +23,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from .tariff import Group
+from .tariff import Group, TariffItem
 from .tariff_yaml import TariffYamlError, parse_yaml
 
 _LOGGER = logging.getLogger(__name__)
@@ -58,6 +61,18 @@ class Template:
     @property
     def own(self) -> bool:
         return self.key.startswith("own/")
+
+    @property
+    def family(self) -> str:
+        """The same tariff in all its price levels: its ``id``, else the key
+        without the date of the price level."""
+        if self.meta.get("id"):
+            return str(self.meta["id"])
+        folder, _, filename = self.key.rpartition("/")
+        date_part, separator, rest = filename.partition("_")
+        if separator and len(date_part) == 10 and date_part[4] == "-" and date_part[7] == "-":
+            filename = rest
+        return f"{folder}/{filename}"
 
     @property
     def complete(self) -> bool:
@@ -145,6 +160,30 @@ def suggest_levies(templates: Iterable[Template], day: date) -> Template | None:
     return _current(levies_choices(templates), day)
 
 
+def taken_items(level: Template, from_start: bool) -> list[dict[str, Any]]:
+    """The items of a price level as they are put into a tariff; ``from_start``:
+    not before the level starts (a level added to an existing tariff)."""
+    start = level.meta.get("valid_from") or ""
+    items = []
+    for template_item in level.data["items"]:
+        item = TariffItem.from_dict(template_item).as_dict()
+        if from_start and (item.get("valid_from") or "") < start:
+            item["valid_from"] = start
+        items.append(item)
+    return items
+
+
+def origin_of(level: Template, from_start: bool) -> dict[str, Any]:
+    """What a tariff remembers of a template it took over (see tariff_updates)."""
+    return {
+        "family": level.family,
+        "valid_from": level.meta.get("valid_from"),
+        "valid_to": level.meta.get("valid_to"),
+        "from_start": from_start,
+        "items": taken_items(level, from_start),
+    }
+
+
 class TemplatePartTwice(ValueError):
     """Two chosen templates cover the same part of the bill."""
 
@@ -164,7 +203,7 @@ def combine(templates: Sequence[Template]) -> tuple[str, dict[str, Any]]:
     items: list[dict[str, Any]] = []
     vat: dict[str, float] = {}
     for template in ordered:
-        items += template.data["items"]
+        items += taken_items(template, False)
         for key, value in template.data["vat"].items():
             if key.split(".", 1)[1] in template.parts:
                 vat[key] = value
@@ -188,6 +227,8 @@ def combine(templates: Sequence[Template]) -> tuple[str, dict[str, Any]]:
         "valid_from": max(starts) if starts else None,
         "valid_to": min(ends) if ends else None,
         "source": " · ".join(str(meta["source"]) for meta in metas if meta.get("source")) or None,
+        # Where the tariff came from (see tariff_updates).
+        "templates": [origin_of(template, False) for template in ordered],
     }
     return ordered[0].name, {
         "role": "current",

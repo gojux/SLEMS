@@ -12,6 +12,8 @@ supplier, the grid fees of a grid operator in a grid area (``grid_area``,
 e.g. the network level; ``household: true`` for the one households usually
 have), the levies of a country. An energy template may name the grid
 operator it is usually combined with (``suggest: {grid_operator: …}``).
+``id`` names a template over all its price levels and stays when it is
+renamed; a successor names the templates it replaces (``replaces``).
 
 Example (made-up values)::
 
@@ -37,6 +39,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from datetime import date, time
+import re
 from typing import Any
 
 import yaml
@@ -48,8 +51,10 @@ VERSION = 1
 # Information about the tariff kept with it (not used for the prices).
 META_KEYS = (
     "supplier", "grid_operator", "grid_area", "household", "country", "year", "parts",
-    "valid_from", "valid_to", "source", "suggest",
+    "valid_from", "valid_to", "source", "suggest", "templates", "id", "replaces", "declined",
 )
+# Identifier of a template over all its price levels, e.g. "at/example-energy/fix".
+ID_PATTERN = re.compile(r"[a-z0-9-]+(/[a-z0-9-]+)*")
 # Hints of a template for the other parts (``suggest``).
 SUGGEST_KEYS = ("grid_operator",)
 WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -59,7 +64,7 @@ DEFAULT_VAT = {
 }
 _TOP_KEYS = {"format", "version", "name", "vat_pct", "items", *META_KEYS}
 _ITEM_KEYS = {
-    "name", "side", "group", "unit", "price", "factor_pct", "valid_from",
+    "name", "side", "group", "unit", "price", "factor_pct", "valid_from", "valid_to",
     "months", "weekdays", "time_from", "time_to", "month_prices",
 }
 # Version -> function that turns a file of that version into the next one.
@@ -103,6 +108,8 @@ def _item_document(item: TariffItem) -> dict[str, Any]:
         document["factor_pct"] = item.factor_pct
     if item.valid_from:
         document["valid_from"] = item.valid_from.isoformat()
+    if item.valid_to:
+        document["valid_to"] = item.valid_to.isoformat()
     if item.months:
         document["months"] = sorted(item.months)
     if item.weekdays:
@@ -169,6 +176,38 @@ def _meta_value(key: str, value: Any) -> Any:
         if not isinstance(value, dict) or any(k not in SUGGEST_KEYS or not isinstance(v, str) for k, v in value.items()):
             raise TariffYamlError("yaml_field_invalid", key)
         return dict(value)
+    if key == "id":
+        if not isinstance(value, str) or not ID_PATTERN.fullmatch(value):
+            raise TariffYamlError("yaml_field_invalid", key)
+        return value
+    if key == "replaces":
+        values = value if isinstance(value, list) else [value]
+        if any(not isinstance(v, str) or not ID_PATTERN.fullmatch(v) for v in values):
+            raise TariffYamlError("yaml_field_invalid", key)
+        return values
+    if key == "declined":
+        # Family -> date of the newest level declined, or a correction -> its fingerprint.
+        if not isinstance(value, dict):
+            raise TariffYamlError("yaml_field_invalid", key)
+        return {str(k): v.isoformat() if isinstance(v, date) else str(v) for k, v in value.items()}
+    if key == "templates":
+        if not isinstance(value, list) or any(
+            not isinstance(origin, dict) or not isinstance(origin.get("family"), str) for origin in value
+        ):
+            raise TariffYamlError("yaml_field_invalid", key)
+        try:
+            return [
+                {
+                    "family": origin["family"],
+                    "valid_from": _date(origin["valid_from"], key).isoformat() if origin.get("valid_from") else None,
+                    "valid_to": _date(origin["valid_to"], key).isoformat() if origin.get("valid_to") else None,
+                    "from_start": bool(origin.get("from_start", False)),
+                    "items": [TariffItem.from_dict(item).as_dict() for item in origin.get("items") or []],
+                }
+                for origin in value
+            ]
+        except (KeyError, TypeError, ValueError):
+            raise TariffYamlError("yaml_field_invalid", key) from None
     if key == "parts":
         parts = value if isinstance(value, list) else [value]
         if any(part not in {group.value for group in Group} for part in parts):
@@ -248,6 +287,7 @@ def _parse_item(item: Any, index: int) -> TariffItem:
         time_to=clocks[1],
         factor_pct=float(factor),
         month_prices=prices,
+        valid_to=_date(item["valid_to"], f"{index}: valid_to") if item.get("valid_to") else None,
     )
 
 

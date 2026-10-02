@@ -8,6 +8,7 @@ from typing import Any
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.event import async_track_time_change
 
 from .battery_wear import wear_cost
 from .const import (
@@ -33,6 +34,7 @@ from .problems import async_remove_issues
 from .simulation import async_register_websocket
 from .price_chart import async_register_websocket as async_register_price_websocket
 from .tariff_comparison import async_register_websocket as async_register_tariff_websocket
+from .tariff_updates import async_check_tariff_updates
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -92,6 +94,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
     async_register_price_websocket(hass)
     # The switch and select restored consent and source when their platforms were set up.
     coordinator.market_prices.start()
+    # Newer prices of the templates of a tariff: after the start and every morning.
+    entry.async_create_background_task(hass, async_check_tariff_updates(hass, entry), "slems tariff updates")
+
+    async def _check_tariffs(_now) -> None:
+        await async_check_tariff_updates(hass, entry)
+
+    entry.async_on_unload(async_track_time_change(hass, _check_tariffs, hour=6, minute=0, second=0))
     return True
 
 

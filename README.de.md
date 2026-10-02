@@ -298,7 +298,17 @@ wählst du den Energietarif; der Netztarif, mit dem er meist kombiniert wird
 den heute gültigen Preisen, und SLEMS setzt alles zu einem Tarif zusammen
 (danach mit einer Rechnung vergleichen). Das Ergebnis ist ein normaler Tarif,
 den du bearbeiten kannst; spätere Änderungen einer Vorlage berühren ihn
-nicht. Eigene Vorlagen: YAML-Dateien im Ordner
+nicht. Er merkt sich aber seine Vorlagen: Bringt ein Update von SLEMS (oder
+eine eigene Vorlage) neuere Preise oder einen Nachfolgetarif, meldet das ein
+Reparaturhinweis, ebenso wenn ein aktueller Tarif abgelaufen ist. *Auf neue
+Preise aktualisieren* im Menü der Posten übernimmt sie (bei mehreren
+Nachfolgern wählst du einen oder keinen): Die aktuellen Posten enden am Tag
+davor, die neuen gelten ab dann, die alten Preise bleiben für die
+Vergangenheit und eigene Posten bleiben, wie sie sind. Eine korrigierte
+Vorlage (z. B. ein verrutschtes Komma, gleiche Daten) bietet SLEMS genauso
+an: Die Werte werden an Ort und Stelle korrigiert, auch für die
+Vergangenheit; selbst geänderte Posten bleiben. *Auf Vorlagenwerte
+zurücksetzen* nimmt eigene Änderungen an den Vorlagen-Posten zurück. Eigene Vorlagen: YAML-Dateien im Ordner
 `slems_tariff_templates` deiner Home-Assistant-Konfiguration. Eine Vorlage für
 alle schlägst du als [Issue](https://github.com/gojux/SLEMS/issues) mit der
 Quelle der Preise vor. Ein Posten kann auch *Prozent der Gruppe* sein (z. B.

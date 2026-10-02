@@ -14,8 +14,9 @@ A tariff is a list of items, each as a line of a bill:
   or ``percent`` (``price`` % of the net amount of the other items of its
   side and group, e.g. a municipal levy of 7 % on the energy),
 * optional time window (months, weekdays, hours ``from`` – ``to`` local time,
-  e.g. a reduced grid price at noon in summer) and ``valid_from`` (a later
-  version of the same item replaces it from that date).
+  e.g. a reduced grid price at noon in summer), ``valid_from`` (a later
+  version of the same item replaces it from that date) and ``valid_to`` (the
+  item ends after that day).
 
 Items with the same name and side are one price: in an hour the most specific
 matching item counts (a time window before months before weekdays before none),
@@ -90,6 +91,8 @@ class TariffItem:
     factor_pct: float = 0.0
     # Market price per month ("2026-01", ct/kWh), e.g. as published.
     month_prices: tuple[tuple[str, float], ...] = ()
+    # Last day of the item (e.g. a price level replaced by a newer one).
+    valid_to: date | None = None
 
     @property
     def specificity(self) -> int:
@@ -126,6 +129,7 @@ class TariffItem:
             "time_to": self.time_to.strftime("%H:%M") if self.time_to else None,
             "factor_pct": self.factor_pct,
             "month_prices": dict(self.month_prices),
+            "valid_to": self.valid_to.isoformat() if self.valid_to else None,
         }
 
     def ct_per_kwh(self, market_ct: float | None) -> float | None:
@@ -154,6 +158,7 @@ class TariffItem:
             time_to=clock(data.get("time_to")),
             factor_pct=float(data.get("factor_pct") or 0.0),
             month_prices=tuple(sorted((str(k), float(v)) for k, v in (data.get("month_prices") or {}).items())),
+            valid_to=date.fromisoformat(data["valid_to"]) if data.get("valid_to") else None,
         )
 
 
@@ -174,7 +179,8 @@ class Tariff:
         return self.vat_pct.get((side, group), 0.0)
 
     def active_items(self, day: date) -> list[TariffItem]:
-        """The items in effect on ``day``: per name and window the latest version."""
+        """The items in effect on ``day``: per name and window the latest version,
+        unless it ended before (``valid_to``)."""
         latest: dict[tuple, TariffItem] = {}
         for item in self.items:
             if item.valid_from is not None and item.valid_from > day:
@@ -183,7 +189,7 @@ class Tariff:
             current = latest.get(key)
             if current is None or (item.valid_from or date.min) >= (current.valid_from or date.min):
                 latest[key] = item
-        return list(latest.values())
+        return [item for item in latest.values() if item.valid_to is None or item.valid_to >= day]
 
     @property
     def dynamic(self) -> bool:

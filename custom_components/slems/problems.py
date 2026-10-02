@@ -11,7 +11,9 @@ themselves when the problem is gone:
 * the grid meter is stale in operating mode active (the batteries follow their
   own logic meanwhile),
 * the grid power over Modbus is configured but has not been available for
-  ``GRID_MODBUS_AFTER_S`` (SLEMS uses the entity meanwhile).
+  ``GRID_MODBUS_AFTER_S`` (SLEMS uses the entity meanwhile),
+* a current tariff has newer prices or is no longer valid (kept by
+  ``tariff_updates``).
 
 Notifications (bell) for events: the end of an active cell balancing run,
 except when the user cancelled it. The problems of the feed-in cap come from
@@ -38,6 +40,7 @@ from homeassistant.helpers.translation import async_get_translations
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, OperatingMode
+from .tariff_updates import TARIFF_ISSUE_PREFIX
 from .controller import ControlStatus
 
 if TYPE_CHECKING:
@@ -140,11 +143,12 @@ class ProblemReporter:
                     translation_placeholders=placeholders,
                 )
         if self._active is None:
-            # Also the issues of batteries that are no longer configured.
+            # Also the issues of batteries that are no longer configured
+            # (the tariff issues are kept by tariff_updates).
             possible |= {
                 issue_id
                 for domain, issue_id in ir.async_get(self._hass).issues
-                if domain == DOMAIN
+                if domain == DOMAIN and not issue_id.startswith(TARIFF_ISSUE_PREFIX)
             }
         for issue_id in possible - wanted.keys():
             if self._active is None or issue_id in self._active:

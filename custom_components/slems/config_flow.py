@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date, datetime, time, timedelta
-from pathlib import Path
 import socket
 from collections.abc import Mapping
 from typing import Any
@@ -167,9 +166,17 @@ from .tariff import (
 )
 from .tariff_yaml import VERSION as YAML_VERSION
 from .tariff_yaml import TariffYamlError, export_yaml, parse_yaml
+from .tariff_updates import (
+    CORRECTION,
+    Candidate,
+    UpdateChanges,
+    apply_updates,
+    find_candidates,
+    reset_to_templates,
+    template_differences,
+    template_directories,
+)
 from .tariff_templates import (
-    OWN_DIR_NAME,
-    SHIPPED_DIR,
     Template,
     TemplatePartTwice,
     combine as combine_templates,
@@ -1489,6 +1496,11 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         self._templates: list[Template] = []
         self._country: str | None = None
         self._energy_template: Template | None = None
+        # Newer price levels and successors per template of the tariff, and the choices made.
+        self._candidates: dict[str, list[Candidate]] | None = None
+        self._choice_queue: list[str] = []
+        self._chosen: list[Candidate] = []
+        self._declined: list[Candidate] = []
 
     @property
     def _items(self) -> list[dict[str, Any]]:
@@ -1496,9 +1508,7 @@ class TariffSubentryFlow(ConfigSubentryFlow):
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         """A new tariff: enter it, start from templates or paste a YAML file (see tariff_yaml)."""
-        self._templates = await self.hass.async_add_executor_job(
-            load_templates, [("shipped", SHIPPED_DIR), ("own", Path(self.hass.config.path(OWN_DIR_NAME)))]
-        )
+        self._templates = await self.hass.async_add_executor_job(load_templates, template_directories(self.hass))
         options = ["details", "template", "import_yaml"] if self._templates else ["details", "import_yaml"]
         return self.async_show_menu(step_id="user", menu_options=options)
 
@@ -1643,9 +1653,22 @@ class TariffSubentryFlow(ConfigSubentryFlow):
 
     async def async_step_items(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         """Menu: add, edit, check against a bill, finish."""
+        if self._candidates is None:
+            # Newer price levels and successors of the templates the tariff was made from.
+            if not self._templates and (self._data.get("meta") or {}).get("templates"):
+                self._templates = await self.hass.async_add_executor_job(
+                    load_templates, template_directories(self.hass)
+                )
+            self._candidates = find_candidates(self._data, self._templates)
         options = ["add_item"]
+        if self._candidates:
+            options.insert(0, "update_prices")
         if self._items:
-            options += ["edit_item", "check", "export_yaml", "finish"]
+            options += ["edit_item", "check", "export_yaml"]
+        if template_differences(self._data):
+            options.append("reset_template")
+        if self._items:
+            options.append("finish")
         lines = "\n".join(
             f"- {_describe_item(TariffItem.from_dict(item), self.hass.config.language)}" for item in self._items
         ) or "–"
@@ -1657,6 +1680,87 @@ class TariffSubentryFlow(ConfigSubentryFlow):
                 "items": lines,
                 "meta": _describe_meta(self._data.get("meta") or {}),
                 "check": check.get("text", ""),
+            },
+        )
+
+    async def async_step_update_prices(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """New prices: one choice per template of the tariff, then the changes to confirm."""
+        self._choice_queue = list(self._candidates or {})
+        self._chosen, self._declined = [], []
+        return await self.async_step_update_choose()
+
+    async def async_step_update_choose(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """For one template: its newer price levels or a successor, or none of them."""
+        if not self._choice_queue:
+            return await self.async_step_update_confirm()
+        origin = self._choice_queue[0]
+        candidates = (self._candidates or {})[origin]
+        if user_input is not None:
+            choice = user_input["candidate"]
+            picked = next((c for c in candidates if f"{c.kind}:{c.family}" == choice), None)
+            if picked is None:
+                self._declined += candidates
+            else:
+                self._chosen.append(picked)
+            self._choice_queue.pop(0)
+            return await self.async_step_update_choose()
+        words = _CHECK_WORDS["de" if self.hass.config.language.startswith("de") else "en"]
+        def label(candidate: Candidate) -> str:
+            text = words[candidate.kind].format(name=candidate.name, date=candidate.starts.isoformat())
+            if candidate.kind != CORRECTION and candidate.corrected is not None:
+                text += f" ({words['with_correction']})"
+            return text
+
+        options = [
+            selector.SelectOptionDict(value=f"{c.kind}:{c.family}", label=label(c)) for c in candidates
+        ] + [selector.SelectOptionDict(value=_NO_TEMPLATE, label=words["none_of_them"])]
+        return self.async_show_form(
+            step_id="update_choose",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("candidate", default=f"{candidates[0].kind}:{candidates[0].family}"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=options, mode=selector.SelectSelectorMode.LIST)
+                    )
+                }
+            ),
+            description_placeholders={"template": self._template_name(origin)},
+        )
+
+    def _template_name(self, family: str) -> str:
+        """Name of the template a tariff was made from (its family if it is gone)."""
+        origin = next((o for o in (self._data.get("meta") or {}).get("templates") or [] if o["family"] == family), {})
+        level = next(
+            (t for t in self._templates if t.family == family and t.meta.get("valid_from") == origin.get("valid_from")),
+            None,
+        )
+        return level.name if level is not None else family
+
+    async def async_step_reset_template(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """The template items back to the values taken over (own items stay)."""
+        if user_input is not None:
+            self._data = reset_to_templates(self._data)
+            self._check = None
+            return await self.async_step_items()
+        return self.async_show_form(
+            step_id="reset_template",
+            data_schema=vol.Schema({}),
+            description_placeholders={"names": ", ".join(template_differences(self._data))},
+        )
+
+    async def async_step_update_confirm(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """The changes of the chosen candidates (the old prices stay for the past)."""
+        data, changes = apply_updates(self._data, self._chosen, self._declined, self._templates)
+        if user_input is not None or not self._chosen:
+            self._data = data
+            self._candidates = find_candidates(data, self._templates)
+            self._check = None
+            return await self.async_step_items()
+        return self.async_show_form(
+            step_id="update_confirm",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "date": ", ".join(sorted({c.starts.isoformat() for c in self._chosen})),
+                "changes": _describe_changes(changes, self.hass.config.language),
             },
         )
 
@@ -1745,6 +1849,7 @@ class TariffSubentryFlow(ConfigSubentryFlow):
             ),
             _optional("month_prices", current): selector.TextSelector(),
             _optional("valid_from", current): selector.DateSelector(),
+            _optional("valid_to", current): selector.DateSelector(),
             vol.Optional("months", default=[str(m) for m in current.get("months") or []]): _tariff_select(
                 [str(m) for m in range(1, 13)], "tariff_months", multiple=True
             ),
@@ -1850,7 +1955,32 @@ def _item_from_input(user_input: dict[str, Any]) -> TariffItem:
         time_to=clock(user_input.get("time_to")),
         factor_pct=float(user_input.get("factor_pct") or 0.0),
         month_prices=parse_month_prices(user_input.get("month_prices") or ""),
+        valid_to=date.fromisoformat(user_input["valid_to"]) if user_input.get("valid_to") else None,
     )
+
+
+def _describe_changes(changes: UpdateChanges, language: str) -> str:
+    """'- Energy: 10 → 11 ct/kWh' per item, new and dropped items, own changes."""
+    words = _CHECK_WORDS["de" if language.startswith("de") else "en"]
+
+    def price(value: float, unit: str) -> str:
+        suffix = {"kwh": "ct/kWh", "year": "€/a", "percent": "%"}.get(unit, "ct/kWh")
+        return f"{_number(language, value, 4).rstrip('0').rstrip(',.')} {suffix}"
+
+    lines = []
+    for name, (old, new, unit) in changes.prices.items():
+        if old is None:
+            lines.append(f"- {name}: {price(new, unit)} ({words['new_item']})")
+        elif old != new:
+            lines.append(f"- {name}: {price(old, unit).split(' ')[0]} → {price(new, unit)}")
+        else:
+            lines.append(f"- {name}: {price(new, unit)} ({words['unchanged']})")
+    lines += [f"- {name}: {words['dropped']}" for name in changes.removed]
+    if changes.own_changes:
+        lines.append(words["own_changes"].format(names=", ".join(changes.own_changes)))
+    if changes.own_kept:
+        lines.append(words["own_kept"].format(names=", ".join(changes.own_kept)))
+    return "\n".join(lines) or "–"
 
 
 def _describe_meta(meta: Mapping[str, Any]) -> str:
@@ -1886,6 +2016,8 @@ def _describe_item(item: TariffItem, language: str) -> str:
         parts.append(f"{item.time_from:%H:%M}–{item.time_to:%H:%M}")
     if item.valid_from:
         parts.append(f"≥ {item.valid_from.isoformat()}")
+    if item.valid_to:
+        parts.append(f"≤ {item.valid_to.isoformat()}")
     return " · ".join(parts)
 
 
@@ -1894,6 +2026,13 @@ _CHECK_WORDS = {
         Side.IMPORT: "Bezug", Side.EXPORT: "Einspeisung", "computed": "berechnet", "bill": "Rechnung",
         Group.ENERGY: "Energie", Group.GRID: "Netz", Group.LEVIES: "Abgaben", "net": "netto",
         "months": "Monate", "weekdays": "Wochentage", "own": "eigene Vorlage", "no_template": "keine",
+        "new_item": "neu", "unchanged": "unverändert", "dropped": "entfällt",
+        "own_changes": "Von dir geändert, wird ebenfalls ersetzt: {names}",
+        "update": "Neue Preise ab {date} ({name})", "successor": "Nachfolgetarif {name} ab {date}",
+        "correction": "Korrektur der Preise ab {date} ({name})",
+        "with_correction": "mit Korrektur der bisherigen Preise",
+        "own_kept": "Von dir geändert, bleibt: {names}",
+        "none_of_them": "Keiner davon (nicht mehr anbieten)",
         Unit.SPOT: "Börsenpreis", Unit.MARKET_MONTH: "Monatsmarktpreis",
         "unpriced": "{kwh} kWh ohne Börsenpreis nicht berechnet (Börsenpreise abrufen einschalten oder warten, bis sie geladen sind).",
     },
@@ -1901,6 +2040,13 @@ _CHECK_WORDS = {
         Side.IMPORT: "Import", Side.EXPORT: "Export", "computed": "computed", "bill": "bill",
         Group.ENERGY: "energy", Group.GRID: "grid", Group.LEVIES: "levies", "net": "net",
         "months": "months", "weekdays": "weekdays", "own": "own template", "no_template": "none",
+        "new_item": "new", "unchanged": "unchanged", "dropped": "dropped",
+        "own_changes": "Changed by you, replaced as well: {names}",
+        "update": "New prices from {date} ({name})", "successor": "Successor {name} from {date}",
+        "correction": "Correction of the prices from {date} ({name})",
+        "with_correction": "with the correction of the current prices",
+        "own_kept": "Changed by you, kept: {names}",
+        "none_of_them": "None of them (do not offer again)",
         Unit.SPOT: "spot price", Unit.MARKET_MONTH: "monthly market price",
         "unpriced": "{kwh} kWh without a market price not computed (switch on fetching the market prices or wait until they are loaded).",
     },

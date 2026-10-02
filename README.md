@@ -287,7 +287,16 @@ tariff usually combined with it (households) and the levies of the country
 are then preselected, each with the prices in effect today, and SLEMS
 combines them into one tariff (then compare it with a bill). The result is
 an ordinary tariff you can edit; later changes of a template do not touch
-it. Own templates: YAML files in
+it. It remembers its templates, though: when an update of SLEMS (or an own
+template) brings newer prices or a successor tariff, a repair issue tells
+you, as it does when a current tariff is past its end. *Update to the new
+prices* in the menu of the lines takes them over (with several successors you
+choose one, or none): the current lines end the day before, the new ones
+apply from then on, the old prices stay for the past and own lines stay as
+they are. A corrected template (e.g. a misplaced decimal point, same dates)
+is offered the same way: the values are corrected in place, also for the
+past, lines you changed yourself stay. *Reset to the template values* undoes
+your own changes of the template lines. Own templates: YAML files in
 the folder `slems_tariff_templates` of your Home Assistant configuration.
 Suggest a template for everyone as an
 [issue](https://github.com/gojux/SLEMS/issues) with the source of the

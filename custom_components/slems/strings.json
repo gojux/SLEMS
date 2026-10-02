@@ -429,10 +429,12 @@
           "title": "Lines of the bill",
           "description": "{meta}\n\n{items}\n\n{check}",
           "menu_options": {
+            "update_prices": "Update to the new prices",
             "add_item": "Add line",
             "edit_item": "Change or remove a line",
             "check": "Check against a bill",
             "export_yaml": "Export as YAML",
+            "reset_template": "Reset to the template values",
             "finish": "Save"
           }
         },
@@ -453,6 +455,7 @@
             "factor_pct": "Share on top of the market price",
             "month_prices": "Monthly market prices",
             "valid_from": "Valid from",
+            "valid_to": "Valid until",
             "months": "Only in months",
             "weekdays": "Only on weekdays",
             "time_from": "Only from",
@@ -465,6 +468,7 @@
             "factor_pct": "Only for spot price and monthly market price: price = market price × (1 + percent) + price. E.g. −10 % for a credit of 90 % of the market price.",
             "month_prices": "Optional, only for the monthly market price: published values in ct/kWh, e.g. \"2026-01: 8.5; 2026-02: 7.9\". Months without a value: mean of the spot prices weighted by your feed-in.",
             "valid_from": "Optional. For a price change: add the line again with the new price and this date.",
+            "valid_to": "Optional: the last day of the line, e.g. when a price level ends.",
             "months": "Optional, e.g. for a reduced summer price.",
             "time_from": "Optional, with \"Only until\": a time window of the day (local time), e.g. a reduced grid price at noon. A line with a window replaces the line of the same name in its window."
           }
@@ -485,6 +489,21 @@
           "data": {
             "yaml": "YAML"
           }
+        },
+        "update_choose": {
+          "title": "New prices",
+          "description": "For {template} there are corrected or newer prices or successors. Choose the one your contract follows, or none of them (then they are not offered again until something newer comes). A correction keeps the dates and also applies to the past; lines you changed yourself stay.",
+          "data": {
+            "candidate": "Take over"
+          }
+        },
+        "update_confirm": {
+          "title": "Take over new prices",
+          "description": "The current lines end the day before, the new ones apply from {date}; the old prices stay for the past (bill check, tariff comparison). Own lines stay as they are.\n\n{changes}"
+        },
+        "reset_template": {
+          "title": "Reset to the template values",
+          "description": "Back to the values of the templates for the lines you changed or removed: {names}. Own lines you added stay."
         }
       },
       "error": {
@@ -1244,6 +1263,22 @@
     "battery_release_failed": {
       "title": "{name} could not be released",
       "description": "SLEMS could not hand {name} back to its own logic, e.g. because the connection is interrupted. The battery may still run with the last set point. SLEMS keeps trying; check the connection or the battery (e.g. in its app)."
+    },
+    "tariff_update": {
+      "title": "New prices for {name}",
+      "description": "The templates of the tariff {name} have new prices from {date}. Take them over: Settings → Devices & services → SLEMS → the tariff → ⋮ → Reconfigure → Update to the new prices. The old prices stay for the past."
+    },
+    "tariff_expired": {
+      "title": "{name} is no longer valid",
+      "description": "The prices of the tariff {name} were valid until {date}. Enter the new prices (Settings → Devices & services → SLEMS → the tariff → ⋮ → Reconfigure), e.g. as lines with \"valid from\", or add the new tariff."
+    },
+    "tariff_successor": {
+      "title": "Successor for {name}",
+      "description": "The tariff {name} has a successor from {date}: {successors}. Take it over: Settings → Devices & services → SLEMS → the tariff → ⋮ → Reconfigure → Update to the new prices. The old prices stay for the past."
+    },
+    "tariff_correction": {
+      "title": "Corrected prices for {name}",
+      "description": "A template of the tariff {name} was corrected (prices from {date}). Take it over: Settings → Devices & services → SLEMS → the tariff → ⋮ → Reconfigure → Update to the new prices. Lines you changed yourself stay."
     }
   }
 }
