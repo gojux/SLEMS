@@ -176,6 +176,11 @@ async def async_tariff_comparison(hass: HomeAssistant, entry: SlemsConfigEntry) 
         if market:
             result["attribution"] = prices.attribution
         result["market_prices"] = prices.enabled
+        measured = coordinator.price_savings
+        result["measured"] = {
+            "total_eur": round(measured.total_now(dt_util.now()), 2),
+            "runs": measured.runs if measured.month == f"{today:%Y-%m}" else 0,
+        }
         savings = await _async_savings(hass, coordinator, tariffs, first, today, start, end)
         if savings is not None:
             for row in result["months"]:

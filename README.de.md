@@ -340,6 +340,14 @@ oder monatlicher Vergütung zeigt die Strategie, dass die Option ohne Wirkung
 ist. Vorher Vertrag und Förderung prüfen: Manche erlauben nicht, aus dem Netz
 geladene Energie wieder einzuspeisen.
 
+**Gemessene Ersparnis**: Der Sensor *Ersparnis Preissteuerung* summiert je
+Monat, was die preisbewusste Steuerung gespart hat: Nach jeder Nacht (oder
+anderen Phase bis zur PV-Übernahme), in der sie gehalten, geladen oder
+eingespeist hat, vergleicht SLEMS die aufgezeichneten Kosten mit denselben
+Stunden *wie üblich*, gerechnet mit dem Batteriemodell ab dem gemessenen
+Ladezustand. Nächte ohne solche Aktion zählen nichts. Der Tarifvergleich
+zeigt den Wert neben der Schätzung.
+
 ### PV-Prognose
 
 Auswählbar ist jede Integration, die eine Solarprognose für das
@@ -1512,8 +1520,7 @@ Mögliche Erweiterungen:
 - Batterien mit Verfügbarkeit (z. B. „Auto angesteckt“) und einer Reserve bis
   zu einer Uhrzeit: Grundlage für ein Auto, das das Haus versorgt (V2H).
 - Gelernte Anwesenheit des Autos für die Planung.
-- Die gemessene Ersparnis der preisbewussten Steuerung (live, neben der
-  Schätzung im Tarifvergleich).
+- Einspeisen aus den Batterien auch in der Schätzung des Tarifvergleichs.
 - Weitere Batteriemodelle über die Treiber-Schnittstelle.
 
 ## Entwicklung

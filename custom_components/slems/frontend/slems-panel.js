@@ -327,6 +327,7 @@ const STRINGS = {
     priceSpot: "Market price",
     priceTime: "Time",
     tariffCurrent: "current",
+    tariffMeasured: "Measured this month: the price aware control saved {amount} in {runs} nights (recorded costs against the same nights as usual).",
     tariffSaving: "{tariff}: saving price control",
     tariffSavingHint:
       "Saving price control: estimate of what keeping the battery energy for the expensive hours would have saved, from the recorded consumption and PV with a simple battery model and a perfect forecast (an upper bound).",
@@ -748,6 +749,7 @@ const STRINGS = {
     priceSpot: "Börsenpreis",
     priceTime: "Zeit",
     tariffCurrent: "aktuell",
+    tariffMeasured: "Gemessen in diesem Monat: Die preisbewusste Steuerung hat in {runs} Nächten {amount} gespart (aufgezeichnete Kosten gegen dieselben Nächte wie üblich).",
     tariffSaving: "{tariff}: Ersparnis Preissteuerung",
     tariffSavingHint:
       "Ersparnis Preissteuerung: Schätzung, was das Zurückhalten der Batterieenergie für die teuren Stunden gespart hätte, aus aufgezeichnetem Verbrauch und PV mit einem einfachen Batteriemodell und perfekter Prognose (eine Obergrenze).",
@@ -3240,6 +3242,9 @@ class SlemsPanel extends HTMLElement {
       tariffs.some((tariff) => tariff.dynamic) && !result.market_prices ? t.tariffNoPrices : "",
       result.power_hours > 0 ? t.tariffGridPower : "",
       backtest ? (backtest.grid_charge ? t.tariffSavingHintCharge : t.tariffSavingHint) : "",
+      result.measured?.runs
+        ? t.tariffMeasured.replace("{amount}", money.format(result.measured.total_eur)).replace("{runs}", result.measured.runs)
+        : "",
       result.attribution ? t.tariffSource.replace("{source}", result.attribution) : "",
     ].filter(Boolean);
     this._setSection(

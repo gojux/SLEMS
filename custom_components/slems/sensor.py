@@ -681,7 +681,7 @@ async def async_setup_entry(
         ConsumptionForecastSensor(coordinator, key, day_offset)
         for key, day_offset in (("consumption_forecast_today", 0), ("consumption_forecast_tomorrow", 1))
     )
-    async_add_entities([MarketPriceSensor(coordinator)])
+    async_add_entities([MarketPriceSensor(coordinator), PriceSavingSensor(coordinator)])
     for battery in coordinator.batteries:
         extra_keys = battery.driver.extra_telemetry_keys
         descriptions = BATTERY_SENSORS + tuple(
@@ -1002,6 +1002,32 @@ class MarketPriceSensor(SlemsSystemEntity, SensorEntity):
             "source": prices.source.value,
             "last_update": prices.last_update.isoformat() if prices.last_update else None,
             "error": prices.last_error,
+        }
+
+
+class PriceSavingSensor(SlemsSystemEntity, SensorEntity):
+    """Measured saving of the price aware control this month (see price_savings)."""
+
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = "EUR"
+    _attr_suggested_display_precision = 2
+    _attr_icon = "mdi:piggy-bank-outline"
+
+    def __init__(self, coordinator: SlemsCoordinator) -> None:
+        super().__init__(coordinator, "price_saving")
+
+    @property
+    def native_value(self) -> float:
+        return round(self.coordinator.price_savings.total_now(dt_util.now()), 2)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        savings = self.coordinator.price_savings
+        return {
+            "month": savings.month,
+            "runs": savings.runs,
+            "last_run": savings.last,
+            "pending_runs": len(savings.pending),
         }
 
 

@@ -131,3 +131,35 @@ def _plan_run(
     if plan is None:
         return {}, {}, end
     return plan.charge_w, plan.limits_w, end
+
+
+def run_cost(
+    imported: Mapping[datetime, float],
+    exported: Mapping[datetime, float],
+    import_prices: Mapping[datetime, float | None],
+    export_prices: Mapping[datetime, float | None],
+) -> float:
+    """Costs (ct) of grid import minus the feed-in credit; hours without price count 0."""
+    total = 0.0
+    for hour, wh in imported.items():
+        total += wh * (import_prices.get(hour) or 0.0) / 1000
+    for hour, wh in exported.items():
+        total -= wh * (export_prices.get(hour) or 0.0) / 1000
+    return total
+
+
+def measured_saving(
+    hours: Sequence[datetime],
+    load_wh: Mapping[datetime, float],
+    pv_wh: Mapping[datetime, float],
+    battery: BacktestBattery,
+    start_wh: float,
+    actual_import: Mapping[datetime, float],
+    actual_export: Mapping[datetime, float],
+    import_prices: Mapping[datetime, float | None],
+    export_prices: Mapping[datetime, float | None],
+) -> float:
+    """Saving (€) of a run: its costs *as usual* (model) minus the recorded ones."""
+    usual = play(hours, load_wh, pv_wh, battery, None, 0.0, start_wh=start_wh)
+    real = {hour: actual_import.get(hour, 0.0) for hour in hours}, {hour: actual_export.get(hour, 0.0) for hour in hours}
+    return (run_cost(*usual, import_prices, export_prices) - run_cost(*real, import_prices, export_prices)) / 100

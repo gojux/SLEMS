@@ -846,6 +846,9 @@
       },
       "wear_cost": {
         "name": "Verschleißkosten"
+      },
+      "price_saving": {
+        "name": "Ersparnis Preissteuerung"
       }
     },
     "switch": {

@@ -65,3 +65,21 @@ def test_surplus_is_stored_then_exported() -> None:
     noon = hours[11]
     assert imported[noon] == 0 and exported[noon] >= 0
     assert sum(exported.values()) > 0
+
+
+def test_measured_saving_of_a_held_night() -> None:
+    from custom_components.slems.price_backtest import measured_saving
+
+    hours = day_hours(1)[:8]  # 0–8
+    load = {h: 500.0 for h in hours}
+    pv = {h: 0.0 for h in hours}
+    prices = {h: 40.0 if h.hour >= 6 else 20.0 for h in hours}
+    # As usual the battery (1 kWh usable) covers 0–2, the grid 2–8.
+    # Recorded: held until 6, the grid took 0–6 at 20 ct, the battery 6–8.
+    actual = {h: (500.0 if h.hour < 6 else 0.0) for h in hours}
+    saving = measured_saving(
+        hours, load, pv, battery(), 500 + 1000 / 0.95, actual, {}, prices, {}
+    )
+    usual_cost = (4 * 500 * 20 + 2 * 500 * 40) / 1000  # 2–6 at 20 ct, 6–8 at 40 ct
+    real_cost = 6 * 500 * 20 / 1000
+    assert saving == pytest.approx((usual_cost - real_cost) / 100, abs=0.01)

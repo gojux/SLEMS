@@ -304,6 +304,19 @@ consumption), at most `discharge_max_grid_export_w` and the cap limit.
 power on top (strategy `battery_export`); `project_soc(battery_export=…)`.
 `battery_export_effective`: the current tariff has a spot feed-in item.
 
+### Measured saving
+
+`price_savings.PriceSavings` follows runs: from the first cycle with a price
+plan (hold, grid charging, feed-in) until it is gone (PV takeover) or 24 h,
+with the stored energy at the start; `acted` once the strategy was
+`price_hold`, `grid_charge` or `battery_export` in active mode. Finished runs
+with an action wait until their hourly statistics exist (evaluated at :40);
+`price_backtest.measured_saving` compares the recorded import / export
+(`async_grid_energy`, quarter hours summed per hour) priced with the current
+tariff against `play(..., prices=None)` from the start energy. The monthly
+total is kept in the coordinator store (`price_savings`), sensor
+`price_saving`.
+
 ### Price chart
 
 `price_chart.py` (websocket `slems/price_chart`, `day` today / tomorrow): per
@@ -1612,3 +1625,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-02 | Grid charging planned with dynamic programming instead of pairing cheap and expensive hours: the stored energy, the charge and discharge limits, the SoC limits and holding interact over the night, a greedy pairing gets them wrong. Planned only in a deficit, because the plan does not model charging from PV (that stays with the existing rules). Ties go to the later charge (calendar aging at high SoC). The horizon may end at midnight before the prices of the next day are known, with the remaining energy valued at the lowest price of the plan, so that it also works in winter without a PV refill. |
 | 2026-10-02 | The benefit of the price aware control is estimated by replaying the recorded consumption and PV through a battery model with and without it, instead of comparing recorded costs before and after switching it on: months differ in weather and consumption, so a before/after comparison would mostly measure those. The model run is optimistic (perfect forecast) and labelled as an upper bound. |
 | 2026-10-02 | Feeding in from the batteries is part of the same plan as grid charging instead of a separate rule: whether a kWh is worth more fed in now or kept for later depends on the same stored energy and prices. Effective only with an hourly market price credit (shown in the dashboard), because with a fixed or monthly credit the time of feeding in does not change the credit. Not below the morning reserve, so the house is not left on the grid in the morning for a small gain. |
+| 2026-10-02 | The measured saving compares each run in which the price aware control acted with the same run played as usual by the battery model from the measured start energy, and counts runs without an action as 0: the counterfactual cannot be measured, and a before/after comparison of months would mostly show weather and consumption. Restricting it to runs with an action keeps the model's error from adding up over ordinary days. |

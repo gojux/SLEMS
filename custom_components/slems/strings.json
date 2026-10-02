@@ -846,6 +846,9 @@
       },
       "wear_cost": {
         "name": "Wear costs"
+      },
+      "price_saving": {
+        "name": "Saving price control"
       }
     },
     "switch": {

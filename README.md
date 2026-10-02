@@ -326,6 +326,13 @@ price per hour; with a fixed or monthly credit the strategy says the option
 has no effect. Check your contract and any subsidy first: some do not allow
 feeding in energy that was charged from the grid.
 
+**Measured saving**: the sensor *Saving price control* adds up per month what
+the price aware control saved: after every night (or other run until PV takes
+over) in which it held, charged or fed in, SLEMS compares the recorded costs
+with the same hours played *as usual* through the battery model, starting from
+the measured state of charge. Nights without such an action count nothing.
+The tariff comparison shows the value next to the estimate.
+
 ### PV forecast
 
 Every integration that provides a solar forecast for the Home Assistant energy
@@ -1432,8 +1439,8 @@ Possible extensions:
 - Batteries with an availability (e.g. "car plugged in") and a reserve until
   a time of day: the basis for a car supplying the house (V2H).
 - Learned presence of the car for the planning.
-- The measured saving of the price aware control (live, next to the
-  estimate of the tariff comparison).
+- Feeding in from the batteries also in the estimate of the tariff
+  comparison.
 - Further battery models via the driver interface.
 
 ## Development

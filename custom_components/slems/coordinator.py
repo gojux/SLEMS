@@ -50,6 +50,8 @@ from .const import (
     CONF_GRID_MODBUS_PORT,
     CONF_GRID_MODBUS_REGISTER,
     CONF_GRID_MODBUS_UNIT_ID,
+    CONF_GRID_EXPORT_ENERGY_ENTITY,
+    CONF_GRID_IMPORT_ENERGY_ENTITY,
     CONF_GRID_POWER_ENTITY,
     CONF_GRID_POWER_INVERTED,
     CONF_HOUSE_HISTORY_ENTITY,
@@ -172,7 +174,9 @@ from .consumer_targets import (
 from .night_discharge import NightDischargePlan, plan_night_discharge, pv_takeover
 from .price_chart import hourly_import_prices
 from .grid_charge import ChargeBattery, GridChargePlan, plan_grid_charge
-from .price_backtest import BacktestBattery
+from .energy_history import async_grid_energy
+from .price_backtest import BacktestBattery, measured_saving
+from .price_savings import PriceSavings
 from .price_hold import PriceHold, cheapest_start, plan_price_hold
 from .tariff import Side, Unit
 from .tariff_comparison import configured_tariffs
@@ -213,6 +217,9 @@ THERMAL_SAFETY = 0.8
 # A power consumer counts as commanded at full power from this share on.
 FULL_COMMAND_SHARE = 0.9
 MORNING_GAP_STORE_KEY = "morning_gap"
+PRICE_SAVINGS_STORE_KEY = "price_savings"
+# Hourly statistics of an hour are compiled a little after it ended.
+STATISTICS_DELAY = timedelta(minutes=30)
 HALF_HOUR = timedelta(minutes=30)
 
 
@@ -685,6 +692,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._quarters_store: Store[dict] = Store(
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.grid_quarters"
         )
+        # Measured saving of the price aware control (see price_savings).
+        self.price_savings = PriceSavings()
         # Hourly import prices of the price hold: (quarter hour, end, prices update), prices.
         self._import_price_cache: tuple[tuple, dict] | None = None
         # Last tariff comparison for the dashboard: (monotonic time, result).
@@ -747,6 +756,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.grid_quarters = GridQuarters.from_dict(await self._quarters_store.async_load())
         self.pv_accuracy.restore(stored.get(PV_ACCURACY_STORE_KEY))
         self.morning_gap = MorningGapLearner.from_dict(stored.get(MORNING_GAP_STORE_KEY))
+        self.price_savings = PriceSavings.from_dict(stored.get(PRICE_SAVINGS_STORE_KEY))
         consumers = {c.subentry_id: c for c in self.consumers}
         for subentry_id, data in (stored.get(CONSUMERS_STORE_KEY) or {}).items():
             if (consumer := consumers.get(subentry_id)) is not None:
@@ -795,6 +805,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
         self.config_entry.async_on_unload(
             async_track_time_interval(self.hass, self._async_save_quarters, QUARTERS_SAVE_INTERVAL)
+        )
+        self.config_entry.async_on_unload(
+            async_track_time_change(self.hass, self._on_price_runs_time, minute=40, second=0)
         )
         # The forecast is refitted every hour; the first run must not delay setup.
         self.config_entry.async_on_unload(
@@ -998,6 +1011,65 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._export_day = (day, energy, now, grid_w)
         self.grid_quarters.add(grid_w, time.time())
 
+    async def _on_price_runs_time(self, _now: datetime) -> None:
+        try:
+            await self.async_evaluate_price_runs()
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Evaluating the price aware control failed")
+
+    async def async_evaluate_price_runs(self) -> None:
+        """Add the measured saving of the finished runs whose statistics exist."""
+        wall_now = dt_util.now()
+        due = self.price_savings.due(wall_now, STATISTICS_DELAY)
+        tariffs = configured_tariffs(self.config_entry)
+        battery = self.backtest_battery()
+        if not due or not tariffs or battery is None:
+            return
+        tariff = next(iter(tariffs.values()))
+        sources = self.history_sources()
+        config = self._config
+        for run in due:
+            start, end = run.start, run.end
+            means = await async_statistic_means(self.hass, [*sources.house, sources.pv], start, end)
+            load = next((means[i] for i in sources.house if means.get(i)), None)
+            if not load:
+                continue
+            pv = means.get(sources.pv, {}) if sources.pv else {}
+            energy = await async_grid_energy(
+                self.hass, start, end,
+                import_entity=config.get(CONF_GRID_IMPORT_ENERGY_ENTITY),
+                export_entity=config.get(CONF_GRID_EXPORT_ENERGY_ENTITY),
+                grid_power_entity=config[CONF_GRID_POWER_ENTITY],
+                grid_inverted=config.get(CONF_GRID_POWER_INVERTED, False),
+                quarters=self.grid_quarters,
+            )
+            imported: dict[datetime, float] = {}
+            exported: dict[datetime, float] = {}
+            for series, target in ((energy.imported, imported), (energy.exported, exported)):
+                for moment, wh in series.items():
+                    hour = dt_util.as_local(moment).replace(minute=0, second=0, microsecond=0)
+                    target[hour] = target.get(hour, 0.0) + wh
+            hours = []
+            hour = start
+            while hour < end:
+                hours.append(hour)
+                hour += timedelta(hours=1)
+            saving = measured_saving(
+                hours,
+                {dt_util.as_local(h): max(0.0, v) for h, v in load.items()},
+                {dt_util.as_local(h): max(0.0, v) for h, v in pv.items()},
+                battery,
+                run.start_wh,
+                imported,
+                exported,
+                hourly_import_prices(tariff, self.market_prices, start, end),
+                hourly_import_prices(tariff, self.market_prices, start, end, Side.EXPORT),
+            )
+            self.price_savings.add(run, saving)
+            _LOGGER.debug("Price aware control %s – %s: saved %.2f €", start, end, saving)
+        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self.async_update_listeners()
+
     async def _async_save_quarters(self, _now: datetime) -> None:
         await self._quarters_store.async_save(self._quarters_to_store())
 
@@ -1073,6 +1145,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         }
         data[PV_ACCURACY_STORE_KEY] = self.pv_accuracy.as_dict()
         data[MORNING_GAP_STORE_KEY] = self.morning_gap.as_dict()
+        data[PRICE_SAVINGS_STORE_KEY] = self.price_savings.as_dict()
         return data
 
     async def _async_update_data(self) -> SystemSnapshot:
@@ -1776,6 +1849,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         for subentry_id, power in allocation.consumer_power_w.items():
             self._runtime.update(subentry_id, power > 0, now)
         snapshot.allocation = allocation
+        if self.price_savings.observe(
+            wall_now,
+            price_plan is not None,
+            battery.soc_pct / 100 * battery.capacity_wh if battery is not None else None,
+            settings.operating_mode is OperatingMode.ACTIVE
+            and allocation.strategy in (Strategy.PRICE_HOLD, Strategy.GRID_CHARGE, Strategy.BATTERY_EXPORT),
+        ):
+            self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
         snapshot.distribution = self._distributor.distribute(
             allocation.battery_power_w,
             self._battery_units(snapshot),
