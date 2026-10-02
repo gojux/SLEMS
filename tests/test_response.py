@@ -97,3 +97,20 @@ def test_battery_responses_shared_step_ends_a_pending_measurement() -> None:
     responses.sample(1.5, 1600)
     assert responses.learned("a") is None
     assert responses.learned("b") == pytest.approx(0.7)
+
+
+def test_reversal_learned_apart_for_its_battery() -> None:
+    responses = BatteryResponses()
+    # A normal step of battery a (more discharging): 2 s.
+    responses.command(0.0, 0.0, {"a": -800.0})
+    responses.sample(2.0, -800.0)
+    # A reversal of battery a (discharging -> charging): 5 s.
+    responses.command(10.0, -800.0, {"a": 1600.0}, frozenset({"a"}))
+    responses.sample(12.0, -700.0)
+    responses.sample(15.0, 800.0)
+    assert responses.learned("a") is not None
+    assert responses.learned_reversal("a") == 5.0
+    assert responses.learned_reversal("b") is None
+    restored = BatteryResponses()
+    restored.restore_reversals(responses.reversals_as_dict())
+    assert restored.learned_reversal("a") == 5.0

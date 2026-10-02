@@ -52,6 +52,7 @@ from .consumers import amps_for, current_option
 from .response import (
     DEFAULT_BATTERY_RESPONSE_S,
     DEFAULT_CONSUMER_RESPONSE_S,
+    MIN_STEP_W,
     BatteryResponses,
     DirectionalResponse,
     MeterCadence,
@@ -133,6 +134,8 @@ class RealTimeController:
         self._last_grid_w: float | None = None
         self.meter = MeterCadence()
         self.battery_response = StepResponse(DEFAULT_BATTERY_RESPONSE_S)
+        # Steps of all batteries together that reverse the direction (diagnostics).
+        self.battery_reversal_response = StepResponse(DEFAULT_BATTERY_RESPONSE_S)
         self.battery_responses = BatteryResponses()
         self.consumer_response: dict[str, DirectionalResponse] = {}
         self.gain_adapter = AdaptiveGain(coordinator.settings.control_gain)
@@ -151,6 +154,7 @@ class RealTimeController:
         self._last_grid_w = grid_w
         now = time.monotonic()
         self.battery_response.sample(now, grid_w)
+        self.battery_reversal_response.sample(now, grid_w)
         self.battery_responses.sample(now, grid_w)
         for learner in self.consumer_grid_response.values():
             learner.sample(now, grid_w)
@@ -491,6 +495,7 @@ class RealTimeController:
 
         new_total = 0.0
         changes: dict[str, float] = {}
+        reversed_ids: set[str] = set()
         # Batteries that reduce their power are written first: while power
         # moves between batteries, the short gap between the writes then
         # causes a little import instead of feeding battery energy into the grid.
@@ -517,6 +522,8 @@ class RealTimeController:
                     self._battery_refreshed[battery.subentry_id] = now
                 new_total += target
                 changes[battery.subentry_id] = target - (latest or 0.0)
+                if latest is not None and latest * target < 0:
+                    reversed_ids.add(battery.subentry_id)
             else:
                 if battery.delivery.record_comm_failure(now) is not Action.NONE:
                     self.request()
@@ -526,7 +533,11 @@ class RealTimeController:
             return None
         # The grid power moves by the change of the battery power.
         self.battery_response.command(now, self._last_grid_w, new_total - previous_total)
-        self.battery_responses.command(now, self._last_grid_w, changes)
+        self.battery_responses.command(now, self._last_grid_w, changes, frozenset(reversed_ids))
+        if previous_total * new_total < 0:
+            self.battery_reversal_response.command(now, self._last_grid_w, new_total - previous_total)
+        elif abs(new_total - previous_total) >= MIN_STEP_W:
+            self.battery_reversal_response.cancel()
         return new_total
 
     async def _async_apply_balancing(self) -> None:
