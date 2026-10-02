@@ -568,7 +568,7 @@ from the grid) only happen if they earn more than that. A price of 0 means no
 wear costs: field measurements of home storage systems show that they age
 mostly with time, temperature and state of charge and often reach their end
 of life before their rated cycles. Without the values SLEMS assumes a low
-estimate of 1 ct/kWh; the battery card then says so. The sensor *Wear costs*
+estimate of 1 ct/kWh; *Details* of the battery then say so. The sensor *Wear costs*
 shows the value.
 
 ### Battery efficiency

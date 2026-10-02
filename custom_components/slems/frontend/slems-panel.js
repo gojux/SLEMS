@@ -1622,6 +1622,11 @@ class SlemsPanel extends HTMLElement {
         stored?.entity_id,
       ],
       [t.cycles, s("cycle_count") && this._format(s("cycle_count")), s("cycle_count")?.entity_id],
+      [
+        t.wearCost,
+        s("wear_cost") && `${this._format(s("wear_cost"))}${s("wear_cost").attributes.estimated ? ` (${t.wearEstimated})` : ""}`,
+        s("wear_cost")?.entity_id,
+      ],
       [t.totalCharged, s("total_charging_energy") && this._format(s("total_charging_energy")), s("total_charging_energy")?.entity_id],
       [t.totalDischarged, s("total_discharging_energy") && this._format(s("total_discharging_energy")), s("total_discharging_energy")?.entity_id],
       [t.lastFullCharge, this._moment(s("last_full_charge")?.state), s("last_full_charge")?.entity_id],
@@ -1638,8 +1643,10 @@ class SlemsPanel extends HTMLElement {
     ].filter(([, value]) => value !== undefined && value !== null && value !== "");
     this.shadowRoot.getElementById("details-title").textContent = `${t.details}: ${battery?.name ?? ""}`;
     this.shadowRoot.getElementById("details-close").textContent = t.close;
+    // Estimated wear costs: where to enter the real values.
+    const wearHint = s("wear_cost")?.attributes?.estimated ? `<dd class="muted dl-note">${escapeHtml(t.wearHint)}</dd>` : "";
     this.shadowRoot.getElementById("details-body").innerHTML = rows.length
-      ? rows.map(([label, value, entityId]) => this._row(label, escapeHtml(String(value)), entityId)).join("")
+      ? rows.map(([label, value, entityId]) => this._row(label, escapeHtml(String(value)), entityId)).join("") + wearHint
       : `<dd class="muted">${t.noDetails}</dd>`;
   }
 
@@ -3398,13 +3405,6 @@ class SlemsPanel extends HTMLElement {
             [t.powerGridSide, direction(this._batteryPower(b.device_id)), (s("ac_power") || s("battery_power"))?.entity_id],
             [t.setPoint, direction(this._number(s("planned_power"))), s("planned_power")?.entity_id],
             [t.efficiency, s("round_trip_efficiency"), s("round_trip_efficiency")?.entity_id],
-            [
-              t.wearCost,
-              s("wear_cost") && {
-                text: `${this._format(s("wear_cost"))}${s("wear_cost").attributes.estimated ? ` (${t.wearEstimated})` : ""}`,
-              },
-              s("wear_cost")?.entity_id,
-            ],
             [t.state, s("inverter_state"), s("inverter_state")?.entity_id],
             [t.temperature, s("internal_temperature"), s("internal_temperature")?.entity_id],
           ].filter(([, st]) => st);
@@ -3437,7 +3437,6 @@ class SlemsPanel extends HTMLElement {
             <div class="soc"><div class="soc-bar"><div style="width:${soc ?? 0}%"></div></div>
               <span>${soc === null ? "–" : Math.round(soc) + " %"}</span></div>
             <dl>${rows.map(([label, st, entityId]) => this._row(label, escapeHtml(st.text ?? this._format(st)), entityId)).join("")}</dl>
-            ${s("wear_cost")?.attributes?.estimated ? `<p class="hint">${escapeHtml(t.wearHint)}</p>` : ""}
             ${this._cellSection(b)}
           </section>`;
         })
@@ -4148,6 +4147,8 @@ const STYLE = `
   .card-head h2 { margin: 0; }
   dl { display: grid; grid-template-columns: auto auto; gap: 6px 12px; margin: 12px 0 0; }
   dd { margin: 0; text-align: right; }
+  /* A note below the rows, over the full width. */
+  dd.dl-note { grid-column: 1 / -1; text-align: left; font-size: 12px; margin-top: 4px; }
   .soc { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
   .soc-bar { flex: 1; height: 8px; border-radius: 4px; background: var(--divider-color); overflow: hidden; }
   .soc-bar div { height: 100%; background: var(--c-battery); border-radius: 4px; }

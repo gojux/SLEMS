@@ -596,7 +596,7 @@ einbringen. Ein Preis von 0 bedeutet keine Verschleißkosten: Feldmessungen an
 Heimspeichern zeigen, dass sie vor allem mit der Zeit, der Temperatur und dem
 Ladezustand altern und oft ihr Lebensende erreichen, bevor ihre Zyklen
 aufgebraucht sind. Ohne Angaben nimmt SLEMS einen niedrigen Schätzwert von
-1 ct/kWh an; die Batteriekarte weist dann darauf hin. Der Sensor
+1 ct/kWh an; die *Details* der Batterie weisen dann darauf hin. Der Sensor
 *Verschleißkosten* zeigt den Wert.
 
 ### Wirkungsgrad der Batterie
