@@ -710,7 +710,8 @@
           "grid_friendly": "Grid friendly",
           "feed_in_cap": "Feed-in cap",
           "price_hold": "Price hold",
-          "grid_charge": "Grid charging"
+          "grid_charge": "Grid charging",
+          "battery_export": "Feed-in from batteries"
         }
       },
       "expected_surplus_energy": {
@@ -928,6 +929,9 @@
       },
       "grid_charge": {
         "name": "Charge batteries from the grid"
+      },
+      "battery_export": {
+        "name": "Feed in from the batteries"
       }
     },
     "number": {

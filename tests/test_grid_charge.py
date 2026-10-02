@@ -87,3 +87,26 @@ def test_holds_in_cheap_hours_without_charging_and_covers_small_deficits() -> No
     # 1.425 kWh: the four expensive hours take 1.2 kWh, the rest goes to 3:00 (23 ct), not to 2:00 (22 ct).
     assert plan.limit_w(h[2]) == 0
     assert 0 < plan.limit_w(h[3]) < 300
+
+
+def test_feeds_in_at_a_high_credit_above_the_reserve() -> None:
+    h = hours(6)
+    prices = dict(zip(h, [30.0] * 6))
+    # Spot feed-in: 60 ct at 1:00 (price peak), else 5 ct.
+    credit = dict(zip(h, [5.0, 60.0, 5.0, 5.0, 5.0, 5.0]))
+    deficits = {hour: 300.0 for hour in h}
+    plan = plan_grid_charge(
+        night(), battery(stored=4000), deficits, prices, None, 2.0,
+        export_prices=credit, export_floor_wh=2000, export_max_w=1500,
+    )
+    assert plan is not None
+    assert set(plan.export_w) == {h[1]}
+    # At most the export power, and the reserve stays.
+    assert plan.export_w[h[1]] <= 1500 + 1
+    assert plan.export_w[h[1]] / 0.95 <= 4000 - 2000 - 300 / 0.95 + 1
+    # Without a better credit than the later import value nothing is fed in.
+    flat = plan_grid_charge(
+        night(), battery(stored=4000), deficits, prices, None, 2.0,
+        export_prices=dict(zip(h, [8.0] * 6)), export_floor_wh=2000,
+    )
+    assert flat is None or not flat.export_w

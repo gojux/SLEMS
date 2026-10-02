@@ -710,7 +710,8 @@
           "grid_friendly": "Netzdienlich",
           "feed_in_cap": "Einspeisebegrenzung",
           "price_hold": "Für teure Stunden halten",
-          "grid_charge": "Netzladen"
+          "grid_charge": "Netzladen",
+          "battery_export": "Einspeisen aus Akku"
         }
       },
       "expected_surplus_energy": {
@@ -928,6 +929,9 @@
       },
       "grid_charge": {
         "name": "Akku aus dem Netz laden"
+      },
+      "battery_export": {
+        "name": "Akku ins Netz entladen"
       }
     },
     "number": {

@@ -14,6 +14,7 @@ simplified way:
   discharge).
 * Hours with planned charging from the grid (see grid_charge): the batteries
   charge with it, the grid covers the house.
+* Hours with planned feed-in from the batteries: on top of the deficit.
 * Hours with a deficit: the batteries cover it. With import peak shaving at
   low state of charge only the import above the limit; with night discharge
   at least the planned night discharge, the extra part not below its target
@@ -100,6 +101,7 @@ def project_soc(
     budget_wh: float | None = None,
     budget_until: datetime | None = None,
     grid_charge: Mapping[datetime, float] | None = None,
+    battery_export: Mapping[datetime, float] | None = None,
 ) -> SocProjection:
     """Project until the end of tomorrow.
 
@@ -202,6 +204,10 @@ def project_soc(
                 cap,
                 demands,
             )
+            if (export := (battery_export or {}).get(hour)):
+                # Planned feed-in from the batteries on top (see grid_charge).
+                floor = battery.min_soc_pct / 100 * capacity
+                stored = max(floor, stored - export * share / efficiency)
         if (
             cap is not None
             and cap.export_start is not None

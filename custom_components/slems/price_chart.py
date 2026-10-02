@@ -40,9 +40,10 @@ def _month_ct(tariff: Tariff, prices: MarketPrices, day: date, end: datetime) ->
 
 
 def hourly_import_prices(
-    tariff: Tariff, prices: MarketPrices, start: datetime, end: datetime
+    tariff: Tariff, prices: MarketPrices, start: datetime, end: datetime, side: Side = Side.IMPORT
 ) -> dict[datetime, float | None]:
-    """Import price (ct/kWh incl. VAT) per local hour start, the mean of its quarters.
+    """Import price (or with ``side`` export the credit; ct/kWh incl. VAT) per
+    local hour start, the mean of its quarters.
 
     None for an hour with a quarter without price (missing market price).
     """
@@ -57,7 +58,7 @@ def hourly_import_prices(
             slot = moment + timedelta(seconds=quarter * SLOT_S)
             spot = prices.price_at(slot)
             values.append(
-                kwh_price(tariff, Side.IMPORT, dt_util.as_local(slot), None if spot is None else spot / 10, month_ct)
+                kwh_price(tariff, side, dt_util.as_local(slot), None if spot is None else spot / 10, month_ct)
             )
         result[dt_util.as_local(moment)] = None if None in values else sum(values) / len(values)
         moment += timedelta(hours=1)

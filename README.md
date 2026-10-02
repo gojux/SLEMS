@@ -184,7 +184,7 @@ complements SLEMS well (see [roadmap](#roadmap)).
 | Dashboard (sidebar panel): energy flow, key figures, daily forecast and plan chart, batteries, consumers, settings | ✅ |
 | Simulation in the dashboard: day plan with other settings compared with the current one (today or tomorrow) | ✅ |
 | Tariffs as on the bill (time windows, VAT per group) with a check against a bill; day-ahead prices (APG, SMARD, Energy-Charts) only with consent; monthly tariff comparison | ✅ |
-| Price aware control: stored energy kept for the expensive hours, grid part of daily targets in the cheapest window, optional charging from the grid | ✅ |
+| Price aware control: stored energy kept for the expensive hours, grid part of daily targets in the cheapest window, optional charging from the grid and feeding in from the batteries | ✅ |
 
 ## Installation
 
@@ -315,6 +315,16 @@ feed-in cap needs when PV takes over. With a surplus nothing is charged from
 the grid. The plan includes the price hold (also with prices known only
 until midnight); the strategy shows *Grid charging* with the energy, the
 start and the expected saving, the day chart the planned charging.
+
+**Feed in from the batteries** (switch, off by default; only with price
+aware control): the same plan may feed in from the batteries beyond the
+house's need when the credit of the hour is higher than what the energy is
+worth later plus the minimum gain – accepting grid import later. Not below
+the morning reserve, at most the maximum grid export while discharging and
+the feed-in cap. This only pays with a feed-in credit that follows the market
+price per hour; with a fixed or monthly credit the strategy says the option
+has no effect. Check your contract and any subsidy first: some do not allow
+feeding in energy that was charged from the grid.
 
 ### PV forecast
 
@@ -1422,8 +1432,8 @@ Possible extensions:
 - Batteries with an availability (e.g. "car plugged in") and a reserve until
   a time of day: the basis for a car supplying the house (V2H).
 - Learned presence of the car for the planning.
-- Feeding in from the batteries at high prices (optional) and the measured
-  saving of the price aware control.
+- The measured saving of the price aware control (live, next to the
+  estimate of the tariff comparison).
 - Further battery models via the driver interface.
 
 ## Development

@@ -346,7 +346,7 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         device_class=SensorDeviceClass.ENUM,
         options=[strategy.value for strategy in Strategy],
         value_fn=lambda s, _: s.allocation.strategy.value if s.allocation else None,
-        attributes_fn=lambda s, _: {
+        attributes_fn=lambda s, c: {
             "price_hold_hours": sorted(hour.isoformat() for hour in s.price_hold.hold_hours)
             if s.price_hold
             else [],
@@ -357,6 +357,12 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
             if s.grid_charge
             else {},
             "grid_charge_saving_ct": round(s.grid_charge.saving_ct) if s.grid_charge else None,
+            # Planned feed-in from the batteries: W per local hour start.
+            "battery_export": {hour.isoformat(): round(w) for hour, w in s.grid_charge.export_w.items()}
+            if s.grid_charge
+            else {},
+            # Only a credit that changes over the day makes feeding in at the right time pay.
+            "battery_export_effective": c.battery_export_effective(),
         },
     ),
     SystemSensorDescription(

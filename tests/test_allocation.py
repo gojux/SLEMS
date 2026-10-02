@@ -399,3 +399,10 @@ def test_grid_charge_outside_a_surplus_below_the_import_limit() -> None:
     assert limited.battery_power_w == pytest.approx(1200)
     # With a surplus the normal allocation applies.
     assert allocate(1000, battery(30), [], SETTINGS, None, grid_charge_w=1500.0).strategy is not Strategy.GRID_CHARGE
+
+
+def test_battery_export_covers_the_deficit_and_feeds_in_on_top() -> None:
+    feeding = allocate(-800, battery(60), [], SETTINGS, None, battery_export_w=1500.0)
+    assert feeding.strategy is Strategy.BATTERY_EXPORT
+    assert feeding.battery_power_w == -2300
+    assert allocate(-800, battery(60), [], SETTINGS, None, battery_export_w=6000.0).battery_power_w == -5000

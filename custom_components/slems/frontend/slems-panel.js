@@ -189,6 +189,8 @@ const STRINGS = {
     targetMinShort: "min.",
     targetGoalTemp: "target",
     targetBoostChip: "priority",
+    batteryExportText: "Feed-in from batteries: {energy} from {time}",
+    batteryExportNoEffect: "Feeding in from the batteries has no effect with your feed-in tariff (no hourly credit at the market price)",
     gridChargeText: "Grid charging: {energy} from {time} (saves about {saving} ct)",
     priceHoldText: "Batteries cover the hours from {price}; grid in {hours} cheaper hours until {until}",
     priorityConsumers: "Before the batteries: {names}",
@@ -358,6 +360,8 @@ const STRINGS = {
       grid_charge:
         "Only with price aware control. Charges the batteries from the grid in cheap hours when the energy replaces more expensive import later, after the charge and discharge losses, the wear costs and the minimum gain; as late as possible before it is needed. Not when PV fills the batteries anyway.",
       grid_charge_max_power: "0 = the charge power of the batteries. Import peak shaving limits it as well.",
+      battery_export:
+        "Only with price aware control. Feeds in from the batteries when the credit of the hour is higher than what the energy is worth later (plus the minimum gain), accepting grid import later; not below the morning reserve, at most the maximum grid export while discharging and the feed-in cap. Only pays with a feed-in credit that follows the market price per hour. Check your contract and any subsidy: some do not allow feeding in energy that was charged from the grid.",
       price_min_gain:
         "Keep the energy only in hours that are cheaper by at least this much than the hours it is kept for (forecasts are uncertain).",
       night_reserve_auto:
@@ -606,6 +610,8 @@ const STRINGS = {
     targetMinShort: "min.",
     targetGoalTemp: "Ziel",
     targetBoostChip: "Vorrang",
+    batteryExportText: "Einspeisen aus Akku: {energy} ab {time}",
+    batteryExportNoEffect: "Akku ins Netz entladen ohne Wirkung mit deinem Einspeisetarif (keine stündliche Vergütung nach Börsenpreis)",
     gridChargeText: "Netzladen: {energy} ab {time} (spart etwa {saving} ct)",
     priceHoldText: "Batterien decken die Stunden ab {price}; Netz in {hours} günstigeren Stunden bis {until}",
     priorityConsumers: "Vorrang vor den Batterien: {names}",
@@ -775,6 +781,8 @@ const STRINGS = {
       grid_charge:
         "Nur mit preisbewusster Steuerung. Lädt die Batterien in günstigen Stunden aus dem Netz, wenn die Energie später teureren Bezug ersetzt, nach Lade- und Entladeverlusten, Verschleißkosten und Mindestgewinn; so spät wie möglich vor dem Bedarf. Nicht, wenn die PV die Batterien ohnehin füllt.",
       grid_charge_max_power: "0 = Ladeleistung der Batterien. Bezugsspitzen abfangen begrenzt zusätzlich.",
+      battery_export:
+        "Nur mit preisbewusster Steuerung. Speist aus den Batterien ein, wenn die Vergütung der Stunde höher ist als der spätere Wert der Energie (plus Mindestgewinn), und nimmt dafür späteren Netzbezug in Kauf; nicht unter die Morgenreserve, höchstens die maximale Einspeisung beim Entladen und die Einspeisebegrenzung. Lohnt nur mit einer Einspeisevergütung, die stündlich dem Börsenpreis folgt. Vertrag und Förderung prüfen: Manche erlauben nicht, aus dem Netz geladene Energie wieder einzuspeisen.",
       price_min_gain:
         "Energie nur in Stunden zurückhalten, die mindestens um so viel günstiger sind als die Stunden, für die sie gehalten wird (Prognosen sind unsicher).",
       night_reserve_auto:
@@ -955,6 +963,7 @@ const SETTING_GROUPS = [
       "grid_charge",
       "grid_charge_max_soc",
       "grid_charge_max_power",
+      "battery_export",
       "market_prices",
       "price_source",
     ],
@@ -2059,6 +2068,14 @@ class SlemsPanel extends HTMLElement {
           .replace("{hours}", a.price_hold_hours.length)
           .replace("{until}", this._time(a.price_hold_until))
       );
+    }
+    const exports = Object.entries(a.battery_export || {});
+    if (exports.length) {
+      const wh = exports.reduce((sum, [, w]) => sum + w, 0);
+      parts.push(this._t.batteryExportText.replace("{energy}", this._kwh(wh)).replace("{time}", this._time(exports[0][0])));
+    }
+    if (this._state("battery_export")?.state === "on" && a.battery_export_effective === false) {
+      parts.push(this._t.batteryExportNoEffect);
     }
     const charge = Object.entries(a.grid_charge || {});
     if (charge.length) {
@@ -3296,7 +3313,8 @@ class SlemsPanel extends HTMLElement {
           setting("grid_charge", "grid_charge") +
           (s.grid_charge
             ? setting("grid_charge_max_soc_pct", "grid_charge_max_soc") + setting("grid_charge_max_w", "grid_charge_max_power")
-            : ""))}
+            : "") +
+          setting("battery_export", "battery_export"))}
       ${option(t.groups.peak, "peak_shaving", "peak_shaving",
         setting("peak_shaving_auto", "peak_shaving_auto") +
           setting("peak_shaving_grid_limit_w", "peak_shaving_grid_limit", { disabled: s.peak_shaving_auto }) +

@@ -1,4 +1,5 @@
-"""Charging the batteries from the grid when it pays (optional, price aware).
+"""Charging the batteries from the grid and feeding in from them when it pays
+(both optional, price aware).
 
 Planned hour by hour until PV refills the batteries, at most until the end of
 the known prices, with dynamic programming over the stored energy (steps of
@@ -13,7 +14,10 @@ cover all of it (exactly, levels in between interpolated), a part of it in steps
   the price hold, a shift must be worth it),
 * a tiny amount per hour of earlier charging, so of equal plans the one that
   charges later wins: home storage ages mostly with time at a high state of
-  charge, not with the cycle itself.
+  charge, not with the cycle itself,
+* feeding in from the batteries beyond the deficit (optional): the credit of
+  the hour is a gain, the minimum gain a cost; not below the export floor
+  (morning reserve) and at most the export power.
 
 Energy left at the refill is worth nothing (PV fills the batteries anyway);
 if the plan ends before (prices unknown), it is worth the lowest import
@@ -26,7 +30,7 @@ forecast correct themselves; only its first hour is acted on.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import math
 
@@ -63,9 +67,14 @@ class GridChargePlan:
     until: datetime
     # Expected saving against covering the hours in order (ct).
     saving_ct: float
+    # Per local hour start: AC power fed in from the batteries beyond the deficit (W).
+    export_w: Mapping[datetime, float] = field(default_factory=dict)
 
     def charge_at(self, moment: datetime) -> float:
         return self.charge_w.get(_hour(moment), 0.0)
+
+    def export_at(self, moment: datetime) -> float:
+        return self.export_w.get(_hour(moment), 0.0)
 
     def limit_w(self, moment: datetime) -> float | None:
         return self.limits_w.get(_hour(moment))
@@ -83,6 +92,9 @@ def plan_grid_charge(
     until: datetime | None,
     min_gain_ct: float,
     import_limit_w: float = math.inf,
+    export_prices: Mapping[datetime, float | None] | None = None,
+    export_floor_wh: float = 0.0,
+    export_max_w: float = math.inf,
 ) -> GridChargePlan | None:
     """Plan of the hours from now until ``until`` (refill) or the last known price.
 
@@ -111,6 +123,7 @@ def plan_grid_charge(
     left_value = 0.0 if refilled else min(price for _, _, price in hours) * eff
 
     stored = battery.stored_wh / step
+    export_floor = export_floor_wh / step
 
     def options(x: float, index: int) -> list[tuple[str, float, float, float]]:
         """(kind, stored level after, AC Wh delivered or charged, cost of the hour) at level ``x``."""
@@ -128,6 +141,19 @@ def plan_grid_charge(
                  price * (deficit - part) / 1000 + min_gain_ct * (full - part) / 1000)
             )
             k += 1
+        # Feeding in beyond the deficit, with a credit of the hour.
+        credit = (export_prices or {}).get(hour)
+        if credit is not None and full >= deficit - 1e-6:
+            room = min(battery.max_discharge_w * share - full, export_max_w * share)
+            level = x - full / eff / step
+            k = 1
+            while k * step * eff <= room + 1e-6 and level - k >= max(export_floor, floor) - 1e-9:
+                fed = k * step * eff
+                result.append(
+                    ("export", level - k, fed,
+                     price * (deficit - full) / 1000 - (credit - min_gain_ct) * fed / 1000)
+                )
+                k += 1
         # Charging from the grid (the house from the grid too).
         charge_ac_max = min(battery.max_charge_w * share, max(0.0, import_limit_w * share - deficit))
         early = (battery.wear_ct + min_gain_ct + EARLY_CT * (len(hours) - index)) / 1000
@@ -161,6 +187,7 @@ def plan_grid_charge(
 
     charge: dict[datetime, float] = {}
     limits: dict[datetime, float] = {}
+    exports: dict[datetime, float] = {}
     level = stored
     for index, (hour, share, _) in enumerate(hours):
         kind, target, energy, _ = min(
@@ -171,15 +198,23 @@ def plan_grid_charge(
             limits[hour] = 0.0
         elif kind in ("hold", "part"):
             limits[hour] = energy / share
+        elif kind == "export":
+            exports[hour] = energy / share
         level = target
-    if not charge and not limits:
+    if not charge and not limits and not exports:
         return None
     baseline = _in_order_cost(battery, hours, deficits, step, eff, floor, stored)
     return GridChargePlan(
         charge_w=charge,
         limits_w=limits,
         until=hours[-1][0] + PERIOD,
-        saving_ct=max(0.0, baseline - _plan_cost(battery, hours, deficits, charge, limits)),
+        saving_ct=max(
+            0.0,
+            baseline
+            - _plan_cost(battery, hours, deficits, charge, limits)
+            + sum(watts * (export_prices or {}).get(hour, 0.0) for hour, watts in exports.items()) / 1000,
+        ),
+        export_w=exports,
     )
 
 

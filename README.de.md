@@ -186,7 +186,7 @@ spezialisiert; evcc ergänzt SLEMS gut (siehe [Roadmap](#roadmap)).
 | Dashboard (Seitenleiste): Energiefluss, Kennzahlen, Tagesdiagramm mit Prognose und Plan, Batterien, Verbraucher, Einstellungen | ✅ |
 | Simulation im Dashboard: Tagesplan mit anderen Einstellungen im Vergleich zum aktuellen (heute oder morgen) | ✅ |
 | Tarife wie auf der Rechnung (Zeitfenster, Umsatzsteuer je Gruppe) mit Prüfung gegen eine Rechnung; Börsenpreise (APG, SMARD, Energy-Charts) nur mit Zustimmung; monatlicher Tarifvergleich | ✅ |
-| Preisbewusste Steuerung: gespeicherte Energie für die teuren Stunden halten, Netzanteil der Tagesziele im günstigsten Fenster, optional Laden aus dem Netz | ✅ |
+| Preisbewusste Steuerung: gespeicherte Energie für die teuren Stunden halten, Netzanteil der Tagesziele im günstigsten Fenster, optional Laden aus dem Netz und Einspeisen aus den Batterien | ✅ |
 
 ## Installation
 
@@ -328,6 +328,17 @@ der Platz, den die Einspeisebegrenzung zur PV-Übernahme braucht. Bei
 (auch wenn Preise nur bis Mitternacht bekannt sind); die Strategie zeigt
 *Netzladen* mit Energie, Beginn und erwarteter Ersparnis, das Tagesdiagramm
 das geplante Laden.
+
+**Akku ins Netz entladen** (Schalter, standardmäßig aus; nur mit
+preisbewusster Steuerung): Derselbe Plan darf über den Bedarf des Hauses
+hinaus aus den Batterien einspeisen, wenn die Vergütung der Stunde höher ist
+als der spätere Wert der Energie plus Mindestgewinn – späterer Netzbezug wird
+dafür in Kauf genommen. Nicht unter die Morgenreserve, höchstens die maximale
+Einspeisung beim Entladen und die Einspeisebegrenzung. Das lohnt nur mit
+einer Einspeisevergütung, die stündlich dem Börsenpreis folgt; mit fester
+oder monatlicher Vergütung zeigt die Strategie, dass die Option ohne Wirkung
+ist. Vorher Vertrag und Förderung prüfen: Manche erlauben nicht, aus dem Netz
+geladene Energie wieder einzuspeisen.
 
 ### PV-Prognose
 
@@ -1501,8 +1512,8 @@ Mögliche Erweiterungen:
 - Batterien mit Verfügbarkeit (z. B. „Auto angesteckt“) und einer Reserve bis
   zu einer Uhrzeit: Grundlage für ein Auto, das das Haus versorgt (V2H).
 - Gelernte Anwesenheit des Autos für die Planung.
-- Einspeisen aus den Batterien bei hohen Preisen (optional) und die
-  gemessene Ersparnis der preisbewussten Steuerung.
+- Die gemessene Ersparnis der preisbewussten Steuerung (live, neben der
+  Schätzung im Tarifvergleich).
 - Weitere Batteriemodelle über die Treiber-Schnittstelle.
 
 ## Entwicklung

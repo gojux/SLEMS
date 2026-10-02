@@ -295,6 +295,15 @@ passes its charging to `project_soc(grid_charge=…)` and its limits as grid
 load, `allocate(grid_charge_w=…)` charges outside a surplus (strategy
 `grid_charge`).
 
+Feeding in from the batteries (`battery_export`): an extra option per hour
+after the whole deficit is covered, in steps, valued with the hour's export
+credit (`hourly_import_prices(..., Side.EXPORT)`) minus the minimum gain; not
+below `export_floor_wh` (minimum SoC + morning reserve of tomorrow's
+consumption), at most `discharge_max_grid_export_w` and the cap limit.
+`allocate(battery_export_w=…)` covers the deficit and feeds in the planned
+power on top (strategy `battery_export`); `project_soc(battery_export=…)`.
+`battery_export_effective`: the current tariff has a spot feed-in item.
+
 ### Price chart
 
 `price_chart.py` (websocket `slems/price_chart`, `day` today / tomorrow): per
@@ -1602,3 +1611,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-02 | Battery wear costs from optional purchase price and rated cycles, otherwise a low estimate (1 ct/kWh) shown as such; a price of 0 means none. Field measurements of home storage systems (RWTH, Nature Energy 2024: 2–3 percentage points capacity per year, mainly loss of lithium inventory, faster at high and low SoC) show calendar aging dominating at a few hundred cycles per year, so an extra cycle costs little; a high assumed value would silently block grid charging, a low one leaves the safeguarding to the minimum gain and the efficiency losses. The relevant cost of grid charging is rather time at high SoC, so charging is planned late, just before the energy is needed. |
 | 2026-10-02 | Grid charging planned with dynamic programming instead of pairing cheap and expensive hours: the stored energy, the charge and discharge limits, the SoC limits and holding interact over the night, a greedy pairing gets them wrong. Planned only in a deficit, because the plan does not model charging from PV (that stays with the existing rules). Ties go to the later charge (calendar aging at high SoC). The horizon may end at midnight before the prices of the next day are known, with the remaining energy valued at the lowest price of the plan, so that it also works in winter without a PV refill. |
 | 2026-10-02 | The benefit of the price aware control is estimated by replaying the recorded consumption and PV through a battery model with and without it, instead of comparing recorded costs before and after switching it on: months differ in weather and consumption, so a before/after comparison would mostly measure those. The model run is optimistic (perfect forecast) and labelled as an upper bound. |
+| 2026-10-02 | Feeding in from the batteries is part of the same plan as grid charging instead of a separate rule: whether a kWh is worth more fed in now or kept for later depends on the same stored energy and prices. Effective only with an hourly market price credit (shown in the dashboard), because with a fixed or monthly credit the time of feeding in does not change the credit. Not below the morning reserve, so the house is not left on the grid in the morning for a small gain. |

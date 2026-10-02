@@ -40,6 +40,9 @@ Grid charging (optional, see grid_charge): outside a surplus the batteries
 charge with the planned power from the grid, below the import limit of peak
 shaving.
 
+Feeding in from the batteries (optional, see grid_charge): outside a surplus
+the batteries cover the deficit and feed in the planned power on top.
+
 Battery support (see battery_support): the power of consumers that must not
 draw from the batteries right now (``unsupported``) is left to the grid in a
 deficit; the batteries cover only the rest. Import peak shaving still covers
@@ -89,6 +92,7 @@ class Strategy(StrEnum):
     NIGHT_DISCHARGE = "night_discharge"
     PRICE_HOLD = "price_hold"
     GRID_CHARGE = "grid_charge"
+    BATTERY_EXPORT = "battery_export"
     GRID_FRIENDLY = "grid_friendly"
     FEED_IN_CAP = "feed_in_cap"
     IDLE = "idle"
@@ -233,12 +237,14 @@ def allocate(
     unsupported_measured_w: float = 0.0,
     discharge_limit_w: float | None = None,
     grid_charge_w: float = 0.0,
+    battery_export_w: float = 0.0,
 ) -> Allocation:
     """Distribute ``available_w`` between batteries and consumers.
 
     ``discharge_limit_w``: the batteries cover a deficit with at most this
     power (price hold; 0: they keep their energy). ``grid_charge_w``: planned
-    charging from the grid.
+    charging from the grid, ``battery_export_w``: planned feed-in from the
+    batteries beyond the deficit.
 
     ``unsupported`` are controllable consumers whose planned power the
     batteries must not cover, ``unsupported_measured_w`` the measured power of
@@ -279,6 +285,14 @@ def allocate(
         return Allocation(
             strategy=Strategy.GRID_CHARGE,
             battery_power_w=power,
+            consumer_power_w=consumer_power,
+            charge_secured=charge_secured,
+        )
+
+    if battery is not None and battery_export_w > 0 and remaining <= settings.charge_grid_target_w:
+        return Allocation(
+            strategy=Strategy.BATTERY_EXPORT,
+            battery_power_w=-min(battery.max_discharge_w, battery_export_w + max(0.0, -remaining)),
             consumer_power_w=consumer_power,
             charge_secured=charge_secured,
         )
