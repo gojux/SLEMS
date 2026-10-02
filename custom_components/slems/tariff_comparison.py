@@ -1,9 +1,11 @@
 """Tariff comparison for the dashboard: what the recorded months cost with each tariff.
 
 A passive comparison: the recorded grid import and export of every hour are
-priced with each tariff (dynamic items with the stored day-ahead prices). It
-does not show what SLEMS would have done differently with another tariff,
-e.g. charging the batteries in cheap hours.
+priced with each tariff (dynamic items with the stored day-ahead prices).
+
+With batteries and recorded house consumption and PV, an estimate of what the
+price aware control would have saved with each tariff is added per month (see
+price_backtest): both runs of the battery model priced with the tariff.
 """
 
 from __future__ import annotations
@@ -28,14 +30,17 @@ from .const import (
     SUBENTRY_TYPE_TARIFF,
 )
 from .energy_history import async_grid_energy
+from .forecast import async_statistic_means
+from .price_backtest import BacktestBattery, play
 from .tariff import Role, Side, Tariff, compute_bill, tariff_from_data
 
 if TYPE_CHECKING:
     from .coordinator import SlemsConfigEntry
 
 MONTHS = 12
-# A result is reused for this long (the hourly statistics change once an hour).
-CACHE_S = 600
+# A result is reused for this long (the hourly statistics change once an hour;
+# the backtest takes a few seconds).
+CACHE_S = 1800
 
 
 def month_start(day: date, back: int = 0) -> date:
@@ -95,6 +100,32 @@ def compare(
     return rows
 
 
+def backtest_savings(
+    tariffs: Mapping[str, Tariff],
+    first: date,
+    last: date,
+    load_wh: Mapping[datetime, float],
+    pv_wh: Mapping[datetime, float],
+    battery: BacktestBattery,
+    import_prices: Mapping[str, Mapping[datetime, float | None]],
+    market: Mapping[datetime, float],
+    min_gain_ct: float,
+) -> dict[str, dict[str, float]]:
+    """Per month ("2026-05") and tariff the estimated saving (€) of the price aware control."""
+    hours = sorted(load_wh)
+    usual = play(hours, load_wh, pv_wh, battery, None, min_gain_ct)
+    savings: dict[str, dict[str, float]] = {}
+    for key, tariff in tariffs.items():
+        aware = play(hours, load_wh, pv_wh, battery, import_prices[key], min_gain_ct)
+        before = compare({key: tariff}, first, last, *usual, market)
+        after = {row["month"]: row for row in compare({key: tariff}, first, last, *aware, market)}
+        for row in before:
+            if row["month"] in after:
+                saving = row["costs"][key]["total"] - after[row["month"]]["costs"][key]["total"]
+                savings.setdefault(row["month"], {})[key] = round(saving, 2)
+    return savings
+
+
 def configured_tariffs(entry: SlemsConfigEntry) -> dict[str, Tariff]:
     """The tariffs of the entry, the current one(s) first."""
     tariffs = {
@@ -145,8 +176,54 @@ async def async_tariff_comparison(hass: HomeAssistant, entry: SlemsConfigEntry) 
         if market:
             result["attribution"] = prices.attribution
         result["market_prices"] = prices.enabled
+        savings = await _async_savings(hass, coordinator, tariffs, first, today, start, end)
+        if savings is not None:
+            for row in result["months"]:
+                row["savings"] = savings.get(row["month"], {})
+            result["backtest"] = {
+                "grid_charge": coordinator.settings.grid_charge,
+                "min_gain_ct": coordinator.settings.price_min_gain_ct,
+            }
     coordinator.tariff_comparison_cache = (monotonic_time.monotonic(), result)
     return result
+
+
+async def _async_savings(
+    hass: HomeAssistant,
+    coordinator,
+    tariffs: Mapping[str, Tariff],
+    first: date,
+    today: date,
+    start: datetime,
+    end: datetime,
+) -> dict[str, dict[str, float]] | None:
+    """Backtest of the price aware control; None without batteries or history."""
+    battery = coordinator.backtest_battery()
+    if battery is None:
+        return None
+    sources = coordinator.history_sources()
+    ids = [*sources.house, sources.pv]
+    means = await async_statistic_means(hass, ids, start, end)
+    house = next((means[i] for i in sources.house if means.get(i)), None)
+    if not house:
+        return None
+    pv = means.get(sources.pv, {}) if sources.pv else {}
+    load = {hour: max(0.0, value) for hour, value in house.items()}
+    pv = {hour: max(0.0, value) for hour, value in pv.items()}
+    prices = coordinator.market_prices
+    market = prices.period_means({hour: 3600 for hour in load})
+
+    def run() -> dict[str, dict[str, float]]:
+        # price_chart imports this module.
+        from .price_chart import hourly_import_prices
+
+        import_prices = {key: hourly_import_prices(tariff, prices, start, end) for key, tariff in tariffs.items()}
+        return backtest_savings(
+            tariffs, first, today, load, pv, battery, import_prices, market,
+            coordinator.settings.price_min_gain_ct,
+        )
+
+    return await hass.async_add_executor_job(run)
 
 
 @callback

@@ -1001,7 +1001,12 @@ minus the feed-in credit, plus the difference of each comparison tariff to the
 current one. It is a passive comparison: the recorded energy priced
 differently, not what SLEMS would have done with another tariff (e.g. charging
 the batteries in cheap hours). Dynamic tariffs use the stored market prices;
-energy without a market price is marked.
+energy without a market price is marked. With batteries a column per tariff
+adds an estimate of what the [price aware control](#tariffs-optional) would
+have saved: the recorded hourly house consumption and PV are played through a
+simple battery model, once as usual and once planned like the price aware
+control (with charging from the grid if it is switched on). The plan knows
+consumption and PV exactly, so the estimate is an upper bound.
 
 ### Settings tab
 
@@ -1417,8 +1422,8 @@ Possible extensions:
 - Batteries with an availability (e.g. "car plugged in") and a reserve until
   a time of day: the basis for a car supplying the house (V2H).
 - Learned presence of the car for the planning.
-- Feeding in from the batteries at high prices (optional); then a tariff
-  comparison that includes the price aware control.
+- Feeding in from the batteries at high prices (optional) and the measured
+  saving of the price aware control.
 - Further battery models via the driver interface.
 
 ## Development

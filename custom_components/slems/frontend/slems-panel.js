@@ -325,6 +325,11 @@ const STRINGS = {
     priceSpot: "Market price",
     priceTime: "Time",
     tariffCurrent: "current",
+    tariffSaving: "{tariff}: saving price control",
+    tariffSavingHint:
+      "Saving price control: estimate of what keeping the battery energy for the expensive hours would have saved, from the recorded consumption and PV with a simple battery model and a perfect forecast (an upper bound).",
+    tariffSavingHintCharge:
+      "Saving price control: estimate of what keeping the battery energy for the expensive hours and charging from the grid would have saved, from the recorded consumption and PV with a simple battery model and a perfect forecast (an upper bound).",
     tariffSource: "Market prices: {source}",
     tariffUnpriced: "* Part of the energy has no market price yet and is not included.",
     tariffNoPrices: "Dynamic tariffs need market prices: switch on “Fetch market prices” on the SLEMS device.",
@@ -737,6 +742,11 @@ const STRINGS = {
     priceSpot: "Börsenpreis",
     priceTime: "Zeit",
     tariffCurrent: "aktuell",
+    tariffSaving: "{tariff}: Ersparnis Preissteuerung",
+    tariffSavingHint:
+      "Ersparnis Preissteuerung: Schätzung, was das Zurückhalten der Batterieenergie für die teuren Stunden gespart hätte, aus aufgezeichnetem Verbrauch und PV mit einem einfachen Batteriemodell und perfekter Prognose (eine Obergrenze).",
+    tariffSavingHintCharge:
+      "Ersparnis Preissteuerung: Schätzung, was das Zurückhalten der Batterieenergie für die teuren Stunden und das Laden aus dem Netz gespart hätten, aus aufgezeichnetem Verbrauch und PV mit einem einfachen Batteriemodell und perfekter Prognose (eine Obergrenze).",
     tariffSource: "Börsenpreise: {source}",
     tariffUnpriced: "* Für einen Teil der Energie gibt es noch keinen Börsenpreis; er ist nicht enthalten.",
     tariffNoPrices: "Dynamische Tarife brauchen Börsenpreise: Am SLEMS-Gerät „Börsenpreise abrufen“ einschalten.",
@@ -3160,7 +3170,13 @@ class SlemsPanel extends HTMLElement {
     const today = new Date();
     const thisMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
     let unpriced = false;
-    const sums = { import_kwh: 0, export_kwh: 0, costs: {} };
+    const sums = { import_kwh: 0, export_kwh: 0, costs: {}, savings: {} };
+    const backtest = result.backtest;
+    // Saving of the price aware control (estimate), per tariff.
+    const savingCell = (month, tariff) => {
+      const value = month.savings?.[tariff.id];
+      return value === undefined ? "<td>–</td>" : `<td>${escapeHtml(money.format(value))}</td>`;
+    };
     const cell = (month, tariff) => {
       const cost = month.costs[tariff.id];
       if (!cost) return "<td>–</td>";
@@ -3183,6 +3199,7 @@ class SlemsPanel extends HTMLElement {
     for (const month of result.months) {
       sums.import_kwh += month.import_kwh || 0;
       sums.export_kwh += month.export_kwh || 0;
+      for (const [id, value] of Object.entries(month.savings || {})) sums.savings[id] = (sums.savings[id] || 0) + value;
       for (const [id, cost] of Object.entries(month.costs)) {
         sums.costs[id] = { total: (sums.costs[id]?.total || 0) + cost.total, unpriced_kwh: (sums.costs[id]?.unpriced_kwh || 0) + cost.unpriced_kwh };
       }
@@ -3191,18 +3208,21 @@ class SlemsPanel extends HTMLElement {
       `<tr class="${extraClass}"><td>${escapeHtml(label)}</td>
         <td>${escapeHtml(energy.format(month.import_kwh || 0))}</td><td>${escapeHtml(energy.format(month.export_kwh || 0))}</td>
         ${tariffs.map((tariff) => cell(month, tariff)).join("")}
-        ${others.map((tariff) => diffCell(month, tariff)).join("")}</tr>`;
+        ${others.map((tariff) => diffCell(month, tariff)).join("")}
+        ${backtest ? tariffs.map((tariff) => savingCell(month, tariff)).join("") : ""}</tr>`;
     const head = `<tr><th>${escapeHtml(t.tariffMonth)}</th><th>${escapeHtml(t.tariffImport)} (kWh)</th><th>${escapeHtml(t.tariffExport)} (kWh)</th>
       ${tariffs.map((tariff) => `<th>${escapeHtml(tariff === current ? `${tariff.name} (${t.tariffCurrent})` : tariff.name)}</th>`).join("")}
-      ${others.map((tariff) => `<th>${escapeHtml(tariff.name)} ${escapeHtml(t.tariffDiff)}</th>`).join("")}</tr>`;
+      ${others.map((tariff) => `<th>${escapeHtml(tariff.name)} ${escapeHtml(t.tariffDiff)}</th>`).join("")}
+      ${backtest ? tariffs.map((tariff) => `<th>${escapeHtml(t.tariffSaving.replace("{tariff}", tariff.name))}</th>`).join("") : ""}</tr>`;
     const body = result.months.length
       ? [...result.months].reverse().map((month) => row(monthLabel(month.month), month)).join("") +
         row(t.tariffSum, sums, "sum")
-      : `<tr><td colspan="${3 + tariffs.length + others.length}" class="empty">${escapeHtml(t.tariffEmpty)}</td></tr>`;
+      : `<tr><td colspan="${3 + tariffs.length + others.length + (backtest ? tariffs.length : 0)}" class="empty">${escapeHtml(t.tariffEmpty)}</td></tr>`;
     const notes = [
       unpriced ? t.tariffUnpriced : "",
       tariffs.some((tariff) => tariff.dynamic) && !result.market_prices ? t.tariffNoPrices : "",
       result.power_hours > 0 ? t.tariffGridPower : "",
+      backtest ? (backtest.grid_charge ? t.tariffSavingHintCharge : t.tariffSavingHint) : "",
       result.attribution ? t.tariffSource.replace("{source}", result.attribution) : "",
     ].filter(Boolean);
     this._setSection(

@@ -1054,7 +1054,13 @@ Einspeisevergütung, dazu die Differenz jedes Vergleichstarifs zum aktuellen.
 Es ist ein passiver Vergleich: die aufgezeichnete Energie anders bepreist,
 nicht das, was SLEMS mit einem anderen Tarif anders gemacht hätte (z. B. die
 Batterien in günstigen Stunden laden). Dynamische Tarife nutzen die
-gespeicherten Börsenpreise; Energie ohne Börsenpreis wird markiert.
+gespeicherten Börsenpreise; Energie ohne Börsenpreis wird markiert. Mit
+Batterien kommt je Tarif eine Spalte mit einer Schätzung dazu, was die
+[preisbewusste Steuerung](#tarife-optional) gespart hätte: Aufgezeichneter
+Hausverbrauch und PV laufen stündlich durch ein einfaches Batteriemodell,
+einmal wie üblich und einmal geplant wie die preisbewusste Steuerung (mit
+Laden aus dem Netz, wenn es eingeschaltet ist). Der Plan kennt Verbrauch und
+PV genau, die Schätzung ist daher eine Obergrenze.
 
 ### Reiter Einstellungen
 
@@ -1495,8 +1501,8 @@ Mögliche Erweiterungen:
 - Batterien mit Verfügbarkeit (z. B. „Auto angesteckt“) und einer Reserve bis
   zu einer Uhrzeit: Grundlage für ein Auto, das das Haus versorgt (V2H).
 - Gelernte Anwesenheit des Autos für die Planung.
-- Einspeisen aus den Batterien bei hohen Preisen (optional); danach ein
-  Tarifvergleich, der die preisbewusste Steuerung einbezieht.
+- Einspeisen aus den Batterien bei hohen Preisen (optional) und die
+  gemessene Ersparnis der preisbewussten Steuerung.
 - Weitere Batteriemodelle über die Treiber-Schnittstelle.
 
 ## Entwicklung

@@ -235,6 +235,14 @@ and priced with each tariff (`compute_bill` in the executor, dynamic items with
 the stored hourly market prices). The result is cached for 10 minutes on the
 coordinator; a changed tariff reloads the entry and so starts without cache.
 
+Backtest (`price_backtest.play`): hourly house consumption (first house
+statistic with data, as the forecast) and PV through a battery model (current
+battery group: capacity, SoC window, power, efficiency, wear), once as usual
+and once with `plan_grid_charge` per deficit run with the tariff's hourly
+import prices (perfect forecast). Both priced with `compare`; the difference
+per month and tariff is `savings`. Runs in the executor (about half a second
+for a year), cached with the comparison (30 minutes).
+
 ### Recorded quarter hours
 
 `grid_quarters.py`: every grid value (entity or Modbus, via
@@ -1593,3 +1601,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-02 | Daily targets with the source "grid" start their forced run in the cheapest window only when the forecast surplus is short for them anyway: otherwise an early grid run could take what the surplus would have covered later for free. One contiguous run instead of single cheap hours, because the forced mode runs the consumer at full power until the target is met (and minimum runtimes apply). |
 | 2026-10-02 | Battery wear costs from optional purchase price and rated cycles, otherwise a low estimate (1 ct/kWh) shown as such; a price of 0 means none. Field measurements of home storage systems (RWTH, Nature Energy 2024: 2–3 percentage points capacity per year, mainly loss of lithium inventory, faster at high and low SoC) show calendar aging dominating at a few hundred cycles per year, so an extra cycle costs little; a high assumed value would silently block grid charging, a low one leaves the safeguarding to the minimum gain and the efficiency losses. The relevant cost of grid charging is rather time at high SoC, so charging is planned late, just before the energy is needed. |
 | 2026-10-02 | Grid charging planned with dynamic programming instead of pairing cheap and expensive hours: the stored energy, the charge and discharge limits, the SoC limits and holding interact over the night, a greedy pairing gets them wrong. Planned only in a deficit, because the plan does not model charging from PV (that stays with the existing rules). Ties go to the later charge (calendar aging at high SoC). The horizon may end at midnight before the prices of the next day are known, with the remaining energy valued at the lowest price of the plan, so that it also works in winter without a PV refill. |
+| 2026-10-02 | The benefit of the price aware control is estimated by replaying the recorded consumption and PV through a battery model with and without it, instead of comparing recorded costs before and after switching it on: months differ in weather and consumption, so a before/after comparison would mostly measure those. The model run is optimistic (perfect forecast) and labelled as an upper bound. |

@@ -172,6 +172,7 @@ from .consumer_targets import (
 from .night_discharge import NightDischargePlan, plan_night_discharge, pv_takeover
 from .price_chart import hourly_import_prices
 from .grid_charge import ChargeBattery, GridChargePlan, plan_grid_charge
+from .price_backtest import BacktestBattery
 from .price_hold import PriceHold, cheapest_start, plan_price_hold
 from .tariff_comparison import configured_tariffs
 from .peak_shaving import auto_limit, hours_until_refill
@@ -2222,6 +2223,37 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             settings.price_min_gain_ct,
             import_limit_w=peak_limit_w if settings.peak_shaving else math.inf,
         )
+
+    def backtest_battery(self) -> BacktestBattery | None:
+        """The batteries and price settings for the backtest of the price aware control."""
+        snapshot = self.data
+        battery = self._battery_group(snapshot) if snapshot is not None else None
+        if battery is None:
+            return None
+        settings = self.settings
+        capacity = battery.capacity_wh
+        enabled = [b for b in self.batteries if b.enabled]
+        weights = [b.driver.capabilities.capacity_wh or 1.0 for b in enabled]
+        max_charge = battery.max_charge_w
+        if settings.grid_charge_max_w > 0:
+            max_charge = min(max_charge, settings.grid_charge_max_w)
+        return BacktestBattery(
+            capacity_wh=capacity,
+            min_wh=battery.min_soc_pct / 100 * capacity,
+            full_wh=battery.full_soc_pct / 100 * capacity,
+            max_charge_w=max_charge,
+            max_discharge_w=battery.max_discharge_w,
+            efficiency=battery.charge_efficiency or 1.0,
+            wear_ct=sum(b.wear.ct_per_kwh * w for b, w in zip(enabled, weights, strict=True)) / sum(weights)
+            if enabled
+            else 0.0,
+            grid_charge=settings.grid_charge,
+            grid_max_wh=min(settings.grid_charge_max_soc_pct, battery.full_soc_pct) / 100 * capacity,
+        )
+
+    def history_sources(self) -> ForecastSources:
+        """Statistic ids of house consumption and PV (as the consumption forecast uses them)."""
+        return self._forecast_sources()
 
     def _import_prices(self, wall_now: datetime, until: datetime) -> dict[datetime, float | None] | None:
         """Import price per hour with the current tariff (kept per quarter hour); None without tariff."""
