@@ -113,3 +113,15 @@ def test_older_versions_are_migrated(monkeypatch: pytest.MonkeyPatch) -> None:
         "format: slems-tariff\nversion: 1\nname: Old\nlines:\n  - {name: a, side: import, group: energy, unit: kwh, price: 1}"
     )
     assert name == "Old" and len(data["items"]) == 1
+
+
+def test_percent_items_and_grid_area() -> None:
+    name, data = parse_yaml(
+        "format: slems-tariff\nversion: 1\nname: Grid area 7\ngrid_operator: Example Grid\n"
+        "grid_area: Example area, level 7\nparts: [grid, levies]\nitems:\n"
+        "  - {name: Grid use, side: import, group: grid, unit: kwh, price: 6}\n"
+        "  - {name: Municipal levy, side: import, group: grid, unit: percent, price: 7}\n"
+    )
+    assert data["meta"]["grid_area"] == "Example area, level 7"
+    assert data["items"][1]["unit"] == "percent"
+    assert parse_yaml(export_yaml(name, data)) == (name, data)

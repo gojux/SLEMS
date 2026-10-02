@@ -257,3 +257,28 @@ def test_side_names_of_a_combined_contract() -> None:
     assert combined["a"].name_for(Side.EXPORT) == "Feed-in"
     assert combined["c"].name_for(Side.IMPORT) == "Dynamic"
     assert combined["c"].name_for(Side.EXPORT) == "Feed-in"
+
+
+def test_percent_item_on_the_other_items_of_its_group() -> None:
+    from custom_components.slems.tariff import kwh_price
+
+    tariff = Tariff(
+        "T",
+        Role.CURRENT,
+        (
+            TariffItem("Base fee", Side.IMPORT, Group.ENERGY, Unit.YEAR, 36.5),
+            TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.KWH, 10.0),
+            TariffItem("Grid", Side.IMPORT, Group.GRID, Unit.KWH, 5.0),
+            # A municipal levy of 7 % on the energy (not on the grid).
+            TariffItem("Levy energy", Side.IMPORT, Group.ENERGY, Unit.PERCENT, 7.0),
+        ),
+        {(Side.IMPORT, Group.ENERGY): 20.0},
+    )
+    day = date(2026, 3, 2)
+    bill = compute_bill(tariff, day, day, {local(day, 9): 2000}, {})
+    # Energy: 0.10 € base fee + 0.20 € for 2 kWh, 7 % of it on top.
+    assert bill.lines[(Side.IMPORT, "Levy energy")] == pytest.approx(0.30 * 0.07)
+    assert bill.groups[(Side.IMPORT, Group.ENERGY)] == pytest.approx(0.30 * 1.07)
+    assert bill.groups[(Side.IMPORT, Group.GRID)] == pytest.approx(0.10)
+    # A kWh: 10 ct × 1.07 with 20 % VAT, plus 5 ct grid without VAT.
+    assert kwh_price(tariff, Side.IMPORT, local(day, 9), None, None) == pytest.approx(10 * 1.07 * 1.2 + 5)

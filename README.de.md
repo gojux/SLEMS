@@ -290,6 +290,16 @@ Rechnung in eine solche Datei umwandeln:
 Formatversion lehnt SLEMS mit dem Hinweis ab, SLEMS zu aktualisieren; ältere
 Versionen werden umgewandelt.
 
+**Vorlagen.** *Tarif hinzufügen → Aus Vorlagen* bietet Tarife mit
+öffentlichen Listenpreisen an, je Land und Teil der Rechnung: die Energie
+eines Lieferanten, die Netzentgelte eines Netzgebiets, die Abgaben; je Teil
+eine wählen, SLEMS setzt sie zu einem Tarif zusammen (danach mit einer
+Rechnung vergleichen). Eigene Vorlagen: YAML-Dateien im Ordner
+`slems_tariff_templates` deiner Home-Assistant-Konfiguration. Eine Vorlage für
+alle schlägst du als [Issue](https://github.com/gojux/SLEMS/issues) mit der
+Quelle der Preise vor. Ein Posten kann auch *Prozent der Gruppe* sein (z. B.
+eine Gebrauchsabgabe von 7 % auf die Energie).
+
 Woher die Energie kommt: SLEMS zeichnet Netzbezug und Einspeisung aus jedem
 Netzwert selbst je Viertelstunde auf (400 Tage lang), damit sich Bezug und
 Einspeisung innerhalb einer Stunde nicht aufheben und dynamische Preise je

@@ -377,7 +377,22 @@
           "description": "Enter the tariff line by line, or paste it as YAML (an export of SLEMS or the answer of an AI, see the README).",
           "menu_options": {
             "details": "Enter manually",
+            "template": "From templates",
             "import_yaml": "Paste YAML"
+          }
+        },
+        "template": {
+          "title": "Templates",
+          "description": "Country of the templates.",
+          "data": {
+            "country": "Country"
+          }
+        },
+        "template_pick": {
+          "title": "Choose templates",
+          "description": "Choose one template per part of your bill: energy (your supplier), grid (your grid area) and levies; SLEMS combines them into one tariff. Templates contain public list prices; compare the tariff with a bill afterwards. Own templates: YAML files in the folder slems_tariff_templates of your Home Assistant configuration.",
+          "data": {
+            "templates": "Templates"
           }
         },
         "import_yaml": {
@@ -438,7 +453,7 @@
           },
           "data_description": {
             "unit": "Spot price and monthly market price use the market prices of the *Price source* in the SLEMS settings (group *Prices*); *Fetch market prices* must be on.",
-            "price": "Net (without VAT) in ct/kWh or €/year as on the bill; a discount is negative. On the feed-in side the energy price is the credit you get. For spot price and monthly market price: the fixed markup in ct/kWh (negative: deduction).",
+            "price": "Net (without VAT) in ct/kWh or €/year as on the bill; a discount is negative. On the feed-in side the energy price is the credit you get. For spot price and monthly market price: the fixed markup in ct/kWh (negative: deduction). Percent of the group: e.g. 7 for a levy of 7 % on the other items of the same side and group.",
             "factor_pct": "Only for spot price and monthly market price: price = market price × (1 + percent) + price. E.g. −10 % for a credit of 90 % of the market price.",
             "month_prices": "Optional, only for the monthly market price: published values in ct/kWh, e.g. \"2026-01: 8.5; 2026-02: 7.9\". Months without a value: mean of the spot prices weighted by your feed-in.",
             "valid_from": "Optional. For a price change: add the line again with the new price and this date.",
@@ -476,7 +491,9 @@
         "yaml_field_invalid": "Invalid value: {detail}.",
         "yaml_no_items": "The file has no items (\"items\").",
         "yaml_item_invalid": "Item {detail} is invalid.",
-        "yaml_item_unknown_field": "Unknown field in item {detail}."
+        "yaml_item_unknown_field": "Unknown field in item {detail}.",
+        "template_none": "Choose at least one template.",
+        "template_part_twice": "Two templates cover the same part (energy, grid or levies); choose one per part."
       },
       "abort": {
         "reconfigure_successful": "The tariff was saved."
@@ -569,7 +586,8 @@
         "kwh": "ct/kWh",
         "year": "€/year",
         "spot": "Spot price (hourly)",
-        "market_month": "Monthly market price"
+        "market_month": "Monthly market price",
+        "percent": "Percent of the group (%)"
       }
     },
     "tariff_months": {

@@ -33,6 +33,7 @@ version: 1
 name: <product name of the tariff, e.g. "Power Fix 2026">
 supplier: <energy supplier>              # optional
 grid_operator: <grid operator>           # optional, if grid fees are included
+grid_area: <grid area, network level>    # optional, e.g. "grid area X, level 7"
 country: <country code, e.g. AT or DE>   # optional
 year: <year of the prices>               # optional
 parts: [energy, grid, levies]            # which parts of the bill are included
@@ -46,7 +47,7 @@ items:
   - name: <label as on the bill>
     side: import            # import = consumption, export = feed-in
     group: energy           # energy = supplier, grid = grid operator, levies = taxes and levies
-    unit: kwh               # kwh = ct/kWh, year = €/year, spot = market price (hourly), market_month = monthly market price
+    unit: kwh               # kwh = ct/kWh, year = €/year, spot = market price (hourly), market_month = monthly market price, percent = % of the group
     price: 12.34
 
 Optional fields per item:
@@ -67,6 +68,9 @@ Rules:
   them (e.g. a metering fee for the feed-in) are items of their own.
 - Dynamic tariffs: unit spot or market_month, price is the markup in ct/kWh
   (negative for a discount), factor_pct a markup in % on the market price.
+- Surcharges in percent (e.g. a municipal levy of 7 % on energy and grid):
+  one item per group with unit percent and the rate as price; it applies to
+  all other items of the same side and group.
 - If prices changed within the billing period, give one item per price level
   with valid_from.
 - Put each item in a group: what the supplier charges is energy; grid use,

@@ -4,10 +4,12 @@ The format carries its name and version (``format: slems-tariff``,
 ``version: 1``). A file of an older version is migrated on import
 (``_MIGRATIONS``), a newer one is refused, so a file is never read wrongly.
 Prices are net (without VAT), ``kwh`` items in ct/kWh, ``year`` items in
-€/year, dynamic items (``spot``, ``market_month``) the markup in ct/kWh.
+€/year, dynamic items (``spot``, ``market_month``) the markup in ct/kWh,
+``percent`` items % of the other items of their side and group.
 
 A template may cover only some parts of a bill (``parts``): the energy of a
-supplier, the grid fees of a grid operator, the levies of a country.
+supplier, the grid fees of a grid operator in a grid area (``grid_area``,
+e.g. the network level), the levies of a country.
 
 Example (made-up values)::
 
@@ -42,7 +44,9 @@ from .tariff import Group, Role, Side, TariffItem, Unit
 FORMAT = "slems-tariff"
 VERSION = 1
 # Information about the tariff kept with it (not used for the prices).
-META_KEYS = ("supplier", "grid_operator", "country", "year", "parts", "valid_from", "valid_to", "source")
+META_KEYS = (
+    "supplier", "grid_operator", "grid_area", "country", "year", "parts", "valid_from", "valid_to", "source",
+)
 WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 DEFAULT_VAT = {
     "import": {"energy": 20.0, "grid": 20.0, "levies": 20.0},

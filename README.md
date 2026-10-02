@@ -280,6 +280,16 @@ file: [prompt and instructions](docs/tariff-prompt.md). A file of a newer
 format version is refused with a hint to update SLEMS; older versions are
 converted.
 
+**Templates.** *Add tariff → From templates* offers tariffs with public list
+prices, per country and part of the bill: the energy of a supplier, the grid
+fees of a grid area, the levies; choose one per part and SLEMS combines them
+into one tariff (then compare it with a bill). Own templates: YAML files in
+the folder `slems_tariff_templates` of your Home Assistant configuration.
+Suggest a template for everyone as an
+[issue](https://github.com/gojux/SLEMS/issues) with the source of the
+prices. A line may also be a *percent of the group* (e.g. a municipal levy of
+7 % on the energy).
+
 Where the energy comes from: SLEMS records grid import and feed-in per
 quarter hour itself from every grid value (kept for 400 days), so import and
 feed-in within an hour do not cancel out and dynamic prices apply per quarter

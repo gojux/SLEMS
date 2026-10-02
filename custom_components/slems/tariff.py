@@ -11,6 +11,8 @@ A tariff is a list of items, each as a line of a bill:
   entered per month, else the mean day-ahead price of the month weighted by
   the export, which approximates the market price of PV feed-in); for the
   last two the price is spot × (1 + ``factor_pct`` / 100) + ``price`` ct/kWh,
+  or ``percent`` (``price`` % of the net amount of the other items of its
+  side and group, e.g. a municipal levy of 7 % on the energy),
 * optional time window (months, weekdays, hours ``from`` – ``to`` local time,
   e.g. a reduced grid price at noon in summer) and ``valid_from`` (a later
   version of the same item replaces it from that date).
@@ -53,10 +55,11 @@ class Unit(StrEnum):
     YEAR = "year"
     SPOT = "spot"
     MARKET_MONTH = "market_month"
+    PERCENT = "percent"
 
     @property
     def per_kwh(self) -> bool:
-        return self is not Unit.YEAR
+        return self in (Unit.KWH, Unit.SPOT, Unit.MARKET_MONTH)
 
     @property
     def dynamic(self) -> bool:
@@ -249,11 +252,22 @@ def compute_bill(
         if kwh is not None:
             bill.quantities[key] = bill.quantities.get(key, 0.0) + kwh
 
+    def add_percent(items: list[TariffItem], side: Side, base: Mapping[Group, float]) -> None:
+        """Percent items of ``side`` on the net amounts ``base`` of their group."""
+        for item in items:
+            if item.unit is Unit.PERCENT and item.side is side and base.get(item.group):
+                add(item, base[item.group] * item.price / 100)
+
     day = start
     while day <= end:
-        for item in tariff.active_items(day):
+        active = tariff.active_items(day)
+        yearly: dict[Side, dict[Group, float]] = {side: {} for side in Side}
+        for item in active:
             if item.unit is Unit.YEAR and _day_in_window(item, day):
                 add(item, item.price / DAYS_PER_YEAR)
+                yearly[item.side][item.group] = yearly[item.side].get(item.group, 0.0) + item.price / DAYS_PER_YEAR
+        for side in Side:
+            add_percent([i for i in active if _day_in_window(i, day)], side, yearly[side])
         day += timedelta(days=1)
 
     for series, side in ((import_wh, Side.IMPORT), (export_wh, Side.EXPORT)):
@@ -268,6 +282,7 @@ def compute_bill(
                 bill.export_kwh += kwh
             spot = market_prices.get(hour)
             unpriced = False
+            base: dict[Group, float] = {}
             for item in _chosen_items(tariff, side, local):
                 price = item.ct_per_kwh(
                     _market_ct(item, local, None if spot is None else spot / 10, monthly.get((local.year, local.month)))
@@ -276,6 +291,8 @@ def compute_bill(
                     unpriced = True
                     continue
                 add(item, kwh * price / 100, kwh)
+                base[item.group] = base.get(item.group, 0.0) + kwh * price / 100
+            add_percent(_percent_items(tariff, side, local), side, base)
             if unpriced:
                 bill.unpriced_kwh += kwh
 
@@ -294,6 +311,14 @@ def _chosen_items(tariff: Tariff, side: Side, local: datetime) -> list[TariffIte
             if other is None or item.specificity > other.specificity:
                 chosen[item.name] = item
     return list(chosen.values())
+
+
+def _percent_items(tariff: Tariff, side: Side, local: datetime) -> list[TariffItem]:
+    return [
+        item
+        for item in tariff.active_items(local.date())
+        if item.unit is Unit.PERCENT and item.side is side and item.in_window(local)
+    ]
 
 
 def _market_ct(
@@ -316,13 +341,21 @@ def kwh_price(
     Import: what a kWh costs; export: what a kWh earns (credit minus the
     per kWh costs of the feed-in). None if a market price is missing.
     """
-    total = 0.0
+    groups: dict[Group, float] = {}
     for item in _chosen_items(tariff, side, local):
         price = item.ct_per_kwh(_market_ct(item, local, spot_ct, month_ct))
         if price is None:
             return None
-        sign = -1.0 if side is Side.EXPORT and item.group is Group.ENERGY else 1.0
-        total += sign * price * (1 + tariff.vat(side, item.group) / 100)
+        groups[item.group] = groups.get(item.group, 0.0) + price
+    total = 0.0
+    # Percent items raise their group's price.
+    percent = {group: 0.0 for group in groups}
+    for item in _percent_items(tariff, side, local):
+        if item.group in percent:
+            percent[item.group] += item.price
+    for group, price in groups.items():
+        sign = -1.0 if side is Side.EXPORT and group is Group.ENERGY else 1.0
+        total += sign * price * (1 + percent[group] / 100) * (1 + tariff.vat(side, group) / 100)
     return total if side is Side.IMPORT else -total
 
 

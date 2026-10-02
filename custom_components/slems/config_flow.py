@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date, datetime, time, timedelta
+from pathlib import Path
 import socket
 from collections.abc import Mapping
 from typing import Any
@@ -166,6 +167,15 @@ from .tariff import (
 )
 from .tariff_yaml import VERSION as YAML_VERSION
 from .tariff_yaml import TariffYamlError, export_yaml, parse_yaml
+from .tariff_templates import (
+    OWN_DIR_NAME,
+    SHIPPED_DIR,
+    Template,
+    TemplatePartTwice,
+    combine as combine_templates,
+    label as template_label,
+    load_templates,
+)
 from .grid_meter import (
     Reader,
     SignMismatchError,
@@ -1468,14 +1478,73 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         self._title = ""
         self._edit_index: int | None = None
         self._check: dict[str, str] | None = None
+        self._templates: list[Template] = []
+        self._country: str | None = None
 
     @property
     def _items(self) -> list[dict[str, Any]]:
         return self._data.setdefault("items", [])
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
-        """A new tariff: enter it or paste a YAML file (see tariff_yaml)."""
-        return self.async_show_menu(step_id="user", menu_options=["details", "import_yaml"])
+        """A new tariff: enter it, start from templates or paste a YAML file (see tariff_yaml)."""
+        self._templates = await self.hass.async_add_executor_job(
+            load_templates, [("shipped", SHIPPED_DIR), ("own", Path(self.hass.config.path(OWN_DIR_NAME)))]
+        )
+        options = ["details", "template", "import_yaml"] if self._templates else ["details", "import_yaml"]
+        return self.async_show_menu(step_id="user", menu_options=options)
+
+    async def async_step_template(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Country of the templates."""
+        countries = sorted({template.country for template in self._templates})
+        if len(countries) == 1:
+            self._country = countries[0]
+            return await self.async_step_template_pick()
+        if user_input is not None:
+            self._country = user_input["country"]
+            return await self.async_step_template_pick()
+        return self.async_show_form(
+            step_id="template",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("country", default=self._country or vol.UNDEFINED): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=countries, mode=selector.SelectSelectorMode.DROPDOWN)
+                    )
+                }
+            ),
+        )
+
+    async def async_step_template_pick(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Templates for the parts of the bill (energy, grid, levies), combined into one tariff."""
+        errors: dict[str, str] = {}
+        templates = {t.key: t for t in self._templates if t.country == self._country}
+        if user_input is not None:
+            chosen = [templates[key] for key in user_input.get("templates") or [] if key in templates]
+            if not chosen:
+                errors["base"] = "template_none"
+            else:
+                try:
+                    self._title, self._data = combine_templates(chosen)
+                except TemplatePartTwice:
+                    errors["base"] = "template_part_twice"
+                else:
+                    return await self.async_step_details()
+        words = _CHECK_WORDS["de" if self.hass.config.language.startswith("de") else "en"]
+        part_names = {group.value: words[group].capitalize() for group in Group}
+        options = [
+            selector.SelectOptionDict(value=key, label=template_label(template, part_names, words["own"]))
+            for key, template in templates.items()
+        ]
+        return self.async_show_form(
+            step_id="template_pick",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("templates", default=(user_input or {}).get("templates", [])): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=options, multiple=True, mode=selector.SelectSelectorMode.LIST)
+                    )
+                }
+            ),
+            errors=errors,
+        )
 
     async def async_step_import_yaml(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         """Paste a tariff as YAML (an export, a template or the answer of an AI)."""
@@ -1775,7 +1844,7 @@ def _describe_item(item: TariffItem, language: str) -> str:
         if item.price:
             price += f" {'+' if item.price > 0 else '−'} {short(abs(item.price))} ct/kWh"
     else:
-        price = f"{short(item.price)} {'ct/kWh' if item.unit is Unit.KWH else '€/a'}"
+        price = f"{short(item.price)} {({Unit.KWH: 'ct/kWh', Unit.PERCENT: '%'}).get(item.unit, '€/a')}"
     parts = [f"{item.name}: {price} ({words[item.side]}, {words[item.group]})"]
     if item.months:
         parts.append(f"{words['months']} {_ranges(item.months, 1)}")
@@ -1792,14 +1861,14 @@ _CHECK_WORDS = {
     "de": {
         Side.IMPORT: "Bezug", Side.EXPORT: "Einspeisung", "computed": "berechnet", "bill": "Rechnung",
         Group.ENERGY: "Energie", Group.GRID: "Netz", Group.LEVIES: "Abgaben", "net": "netto",
-        "months": "Monate", "weekdays": "Wochentage",
+        "months": "Monate", "weekdays": "Wochentage", "own": "eigene Vorlage",
         Unit.SPOT: "Börsenpreis", Unit.MARKET_MONTH: "Monatsmarktpreis",
         "unpriced": "{kwh} kWh ohne Börsenpreis nicht berechnet (Börsenpreise abrufen einschalten oder warten, bis sie geladen sind).",
     },
     "en": {
         Side.IMPORT: "Import", Side.EXPORT: "Export", "computed": "computed", "bill": "bill",
         Group.ENERGY: "energy", Group.GRID: "grid", Group.LEVIES: "levies", "net": "net",
-        "months": "months", "weekdays": "weekdays",
+        "months": "months", "weekdays": "weekdays", "own": "own template",
         Unit.SPOT: "spot price", Unit.MARKET_MONTH: "monthly market price",
         "unpriced": "{kwh} kWh without a market price not computed (switch on fetching the market prices or wait until they are loaded).",
     },

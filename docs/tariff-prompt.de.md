@@ -35,6 +35,7 @@ version: 1
 name: <Produktname des Tarifs, z. B. "Strom Fix 2026">
 supplier: <Energielieferant>            # optional
 grid_operator: <Netzbetreiber>          # optional, wenn Netzentgelte enthalten sind
+grid_area: <Netzgebiet, Netzebene>      # optional, z. B. "Netzgebiet X, Netzebene 7"
 country: <Ländercode, z. B. AT oder DE> # optional
 year: <Jahr der Preise>                 # optional
 parts: [energy, grid, levies]           # welche Teile der Rechnung enthalten sind
@@ -48,7 +49,7 @@ items:
   - name: <Bezeichnung wie auf der Rechnung>
     side: import            # import = Bezug, export = Einspeisung
     group: energy           # energy = Energie (Lieferant), grid = Netz (Netzbetreiber), levies = Steuern und Abgaben
-    unit: kwh               # kwh = ct/kWh, year = €/Jahr, spot = Börsenpreis (stündlich), market_month = Monatsmarktpreis
+    unit: kwh               # kwh = ct/kWh, year = €/Jahr, spot = Börsenpreis (stündlich), market_month = Monatsmarktpreis, percent = % der Gruppe
     price: 12.34
 
 Optionale Felder je Posten:
@@ -70,6 +71,9 @@ Regeln:
 - Bei dynamischen Tarifen: unit spot oder market_month, price ist der
   Aufschlag in ct/kWh (negativ bei einem Abschlag), factor_pct ein
   prozentualer Aufschlag auf den Marktpreis.
+- Prozentuale Aufschläge (z. B. eine Gebrauchsabgabe von 7 % auf Energie und
+  Netz): je Gruppe ein Posten mit unit percent und dem Prozentsatz als price;
+  er gilt für alle anderen Posten derselben Seite und Gruppe.
 - Haben sich Preise im Abrechnungszeitraum geändert, gib für jeden Preisstand
   einen eigenen Posten mit valid_from an.
 - Ordne jeden Posten einer Gruppe zu: Was der Lieferant verrechnet, ist
