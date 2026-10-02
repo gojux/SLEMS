@@ -766,6 +766,14 @@ show an excluded battery.
 
 Every consumer needs its own power **and** energy sensor.
 
+Which consumers to add: the ones SLEMS controls (heating rod, wallbox,
+dehumidifier, …) and heat pumps (their consumption is forecast from the
+weather). Adding other devices only to measure them, e.g. a washing machine or
+a dishwasher, currently does not improve the planning: their consumption is
+already part of the house consumption, and its forecast (a profile per weekday
+and hour) contains their average use. They only get their own card and box in
+the energy flow.
+
 - **Included in smart meter**: enable if the consumer is behind the smart
   meter (its consumption is already part of the grid power). Disable for
   consumers on a separate supply.
@@ -1494,6 +1502,10 @@ Possible extensions:
 - Learned presence of the car for the planning.
 - Feeding in from the batteries also in the estimate of the tariff
   comparison.
+- Program devices (washing machine, dishwasher, dryer): learn the course of a
+  program and add the rest of a running program to the forecast of the next
+  hours (helps the evening and night planning); later possibly starting them
+  with surplus if the device allows a remote start.
 - Further battery models via the driver interface.
 
 ## Development

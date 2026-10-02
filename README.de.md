@@ -807,6 +807,14 @@ ausgeschlossene Batterie.
 
 Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
 
+Welche Verbraucher anlegen: die, die SLEMS steuert (Heizstab, Wallbox,
+Luftentfeuchter, …), und Wärmepumpen (ihr Verbrauch wird wetterabhängig
+prognostiziert). Andere Geräte nur zum Messen anzulegen, z. B. Waschmaschine
+oder Geschirrspüler, verbessert die Planung derzeit nicht: Ihr Verbrauch ist
+bereits im Hausverbrauch enthalten, und dessen Prognose (ein Profil je
+Wochentag und Stunde) enthält ihren durchschnittlichen Verbrauch. Sie
+bekommen nur eine eigene Karte und ein Feld im Energiefluss.
+
 - **Im Smart Meter enthalten**: aktivieren, wenn der Verbraucher hinter dem
   Smart Meter hängt (sein Verbrauch ist bereits in der Netzleistung
   enthalten). Für Verbraucher an einer separaten Versorgung deaktivieren.
@@ -1582,6 +1590,10 @@ Mögliche Erweiterungen:
   zu einer Uhrzeit: Grundlage für ein Auto, das das Haus versorgt (V2H).
 - Gelernte Anwesenheit des Autos für die Planung.
 - Einspeisen aus den Batterien auch in der Schätzung des Tarifvergleichs.
+- Programmgeräte (Waschmaschine, Geschirrspüler, Trockner): den Verlauf eines
+  Programms lernen und den Rest eines laufenden Programms in die Prognose der
+  nächsten Stunden aufnehmen (hilft der Abend- und Nachtplanung); später
+  eventuell bei Überschuss starten, wenn das Gerät einen Fernstart erlaubt.
 - Weitere Batteriemodelle über die Treiber-Schnittstelle.
 
 ## Entwicklung
