@@ -21,7 +21,10 @@ the next day.
 The planning (day chart, SoC projection, night discharge) counts the forced
 run as an extra load from the latest start on (``forced_load``): the worst
 case, as if no surplus covered any of the rest; it shrinks as the surplus
-does.
+does. The rest of the target and the target of the following period are
+expected from the surplus (``surplus_demand``, ``next_period_demand``); a
+controllable consumer without a target takes its usual daily energy from the
+surplus (``daily_demands``).
 
 *Boost*: the consumer gets the surplus before the batteries. For runtime,
 enabled time and energy only with its priority option and when the forecast
@@ -454,6 +457,44 @@ def surplus_demand(
     return SurplusDemand(rest, power_w, start, state.end)
 
 
+def next_period_demand(
+    settings: TargetSettings, end: datetime, *, power_w: float, estimate_wh: float | None
+) -> SurplusDemand | None:
+    """The target of the period after ``end``, expected from the surplus.
+
+    Energy and runtime as set; a temperature target the daily energy of the
+    last days (``estimate_wh``), None without it.
+    """
+    if settings.type is TargetType.NONE or power_w <= 0:
+        return None
+    if settings.type is TargetType.TEMPERATURE:
+        energy = estimate_wh
+    elif settings.type is TargetType.ENERGY:
+        energy = settings.energy_kwh * 1000
+    else:
+        energy = settings.hours * power_w
+    if not energy:
+        return None
+    next_end = period_end(end, settings.deadline)
+    return SurplusDemand(energy, power_w, window_start(settings, next_end) or end, next_end)
+
+
+def daily_demands(
+    estimate_wh: float, today_wh: float, local_now: datetime, *, power_w: float
+) -> list[SurplusDemand]:
+    """A controllable consumer without a target: its daily energy of the last
+    days from the surplus, today the rest after ``today_wh``, tomorrow all of it."""
+    if power_w <= 0:
+        return []
+    midnight = dt_util.start_of_local_day(local_now) + timedelta(days=1)
+    result = []
+    if (rest := estimate_wh - today_wh) > 0:
+        result.append(SurplusDemand(rest, power_w, local_now, midnight))
+    tomorrow_end = dt_util.start_of_local_day(midnight + timedelta(hours=25))
+    result.append(SurplusDemand(estimate_wh, power_w, midnight, tomorrow_end))
+    return result
+
+
 def forced_load(
     settings: TargetSettings,
     state: TargetState,
@@ -598,9 +639,10 @@ def no_power_threshold_s(settings: TargetSettings, power_w: float, end: datetime
     return min(limits)
 
 
-# While a storage's energy per kelvin is not learned, the energy a temperature
-# target still needs is estimated from the consumer's daily energy of the last
-# days (days without consumption left out).
+# Daily energy of a consumer over the last days (days without consumption left
+# out): a temperature target needs at least that per day (water draws and heat
+# losses, which the energy per kelvin leaves out), and it is what a controllable
+# consumer without a target is expected to take from the surplus.
 ESTIMATE_DAYS = 7
 ESTIMATE_MIN_DAYS = 2
 ESTIMATE_MIN_DAY_WH = 50.0

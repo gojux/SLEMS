@@ -1000,17 +1000,22 @@ Per controlled consumer, on its card under *Daily target*.
   target; for a runtime or enabled time it is the remaining time at full power
   (less if the consumer's own thermostat stops it earlier); for a temperature
   target it is the way up to the target temperature with the learned energy
-  per degree (heat losses are left out). Until that is learned, the mean daily
-  energy of the consumer's last 7 days with consumption (at least 2) minus
-  what it already got in the period is used (*estimated from the last days*),
-  without such days *energy still being learned*.
+  per degree. That leaves out water draws and heat losses, so it is at least
+  the mean daily energy of the consumer's last 7 days with consumption (at
+  least 2) minus what it already got in the period (*estimated from the last
+  days*); this estimate also applies while the energy per degree is not
+  learned yet, without such days *energy still being learned*.
 - **Planning**: with a source beyond the surplus the planning counts the
   forced run as extra consumption from the latest start on, as if the surplus
   covered nothing more; the planned run shrinks as the surplus fills the
   target. The rest of the target the planning expects from the surplus: hour
   by hour it takes what is left after charging the batteries, in order of
   priority, from now (or the earliest start) until the deadline and at most at
-  the consumer's power; the expected feed-in drops by it. Both appear in the
+  the consumer's power; the expected feed-in drops by it. The target of the
+  following period is planned the same way (a temperature target with the
+  daily energy of the last days), so *Tomorrow* shows it too. A controllable
+  consumer without a daily target is expected to take its mean daily energy
+  of the last days from the surplus (today what is left of it). Both appear in the
   day chart as *Consumers (planned)* and in the consumption forecast, the state
   of charge forecast and the night discharge. A consumer with the role
   *Supporting* is left out of the surplus part while the feed-in cap is on:

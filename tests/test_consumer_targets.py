@@ -391,3 +391,37 @@ def test_daily_energy_estimate_from_the_last_days() -> None:
     assert daily_energy_estimate(hourly, today) == pytest.approx(3000)
     # One day with consumption is not enough.
     assert daily_energy_estimate({local(10, day=5): 2000.0}, today) is None
+
+
+def test_next_period_demand() -> None:
+    from custom_components.slems.consumer_targets import next_period_demand
+
+    end = local(16)
+    temperature = TargetSettings(type=TargetType.TEMPERATURE, deadline=time(16, 0))
+    # A temperature target: the daily energy of the last days, from midnight to the deadline.
+    demand = next_period_demand(temperature, end, power_w=3500, estimate_wh=8000)
+    assert (demand.energy_wh, demand.start, demand.end) == (8000, local(0, day=2), local(16, day=2))
+    assert next_period_demand(temperature, end, power_w=3500, estimate_wh=None) is None
+    # A runtime with an earliest start: hours at the power, from the earliest start.
+    runtime = TargetSettings(
+        type=TargetType.RUNTIME, hours=2, deadline=time(16, 0), earliest_enabled=True, earliest=time(10, 0)
+    )
+    demand = next_period_demand(runtime, end, power_w=300, estimate_wh=None)
+    assert (demand.energy_wh, demand.start, demand.end) == (600, local(10, day=2), local(16, day=2))
+    # An energy target without an earliest start: from the deadline on.
+    energy = TargetSettings(type=TargetType.ENERGY, energy_kwh=3, deadline=time(16, 0))
+    demand = next_period_demand(energy, end, power_w=2000, estimate_wh=None)
+    assert (demand.energy_wh, demand.start, demand.end) == (3000, end, local(16, day=2))
+
+
+def test_daily_demands_without_a_target() -> None:
+    from custom_components.slems.consumer_targets import daily_demands
+
+    today, tomorrow = daily_demands(5000, 2000, local(12), power_w=3000)
+    assert (today.energy_wh, today.start, today.end) == (3000, local(12), local(0, day=2))
+    assert (tomorrow.energy_wh, tomorrow.start, tomorrow.end) == (5000, local(0, day=2), local(0, day=3))
+    # Today's share already taken: only tomorrow.
+    assert [d.energy_wh for d in daily_demands(5000, 6000, local(12), power_w=3000)] == [5000]
+    # Over the change from summer time (25 hours): midnight to midnight.
+    _, longer = daily_demands(5000, 0, local(12, day=24), power_w=3000)
+    assert (longer.start, longer.end) == (local(0, day=25), local(0, day=26))

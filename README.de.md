@@ -1054,11 +1054,12 @@ Je gesteuertem Verbraucher, auf seiner Karte unter *Tagesziel*.
   Energieziel genau; bei Laufzeit oder Freigabezeit ist es die Restzeit mit
   voller Leistung (weniger, wenn der eigene Thermostat früher abschaltet); bei
   einem Temperaturziel der Weg bis zur Zieltemperatur mit der gelernten
-  Energie pro Grad (Wärmeverluste bleiben unberücksichtigt). Bis die gelernt
-  ist, gilt der mittlere Tagesverbrauch des Verbrauchers an seinen letzten
-  7 Tagen mit Verbrauch (mindestens 2) abzüglich dessen, was er in der
-  Periode schon bekommen hat (*geschätzt aus den letzten Tagen*), ohne solche
-  Tage *Energie wird noch gelernt*.
+  Energie pro Grad. Darin fehlen Warmwasserzapfungen und Wärmeverluste, daher
+  gilt mindestens der mittlere Tagesverbrauch des Verbrauchers an seinen
+  letzten 7 Tagen mit Verbrauch (mindestens 2) abzüglich dessen, was er in der
+  Periode schon bekommen hat (*geschätzt aus den letzten Tagen*); diese
+  Schätzung gilt auch, solange die Energie pro Grad noch nicht gelernt ist,
+  ohne solche Tage *Energie wird noch gelernt*.
 - **Planung**: Mit einer Quelle über den Überschuss hinaus rechnet die Planung
   den erzwungenen Lauf ab der spätesten Startzeit als zusätzlichen Verbrauch
   ein, so als deckte der Überschuss nichts mehr; der geplante Lauf schrumpft,
@@ -1066,7 +1067,12 @@ Je gesteuertem Verbraucher, auf seiner Karte unter *Tagesziel*.
   Planung aus dem Überschuss: Stunde für Stunde nimmt der Verbraucher, was nach
   dem Laden der Batterien übrig bleibt, in der Reihenfolge der Priorität, ab
   jetzt (oder dem frühesten Beginn) bis zur Frist und höchstens mit seiner
-  Leistung; die erwartete Einspeisung sinkt entsprechend. Beides erscheint im
+  Leistung; die erwartete Einspeisung sinkt entsprechend. Das Ziel der
+  folgenden Periode plant SLEMS genauso ein (ein Temperaturziel mit dem
+  Tagesverbrauch der letzten Tage), es erscheint also auch unter *Morgen*. Von
+  einem gesteuerten Verbraucher ohne Tagesziel erwartet die Planung seinen
+  mittleren Tagesverbrauch der letzten Tage aus dem Überschuss (heute den Rest
+  davon). Beides erscheint im
   Tagesdiagramm als *Verbraucher (geplant)* und geht in Verbrauchsprognose,
   Ladezustandsprognose und Nachtentladung ein. Ein Verbraucher mit dem Einsatz
   *Unterstützend* bleibt beim Überschuss-Teil außen vor, solange die

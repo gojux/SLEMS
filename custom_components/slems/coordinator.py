@@ -170,8 +170,11 @@ from .consumer_targets import (
     SurplusDemand,
     energy_to_target,
     evaluate,
+    daily_demands,
     daily_energy_estimate,
     forced_load,
+    next_period_demand,
+    period_end,
     no_power_threshold_s,
     remaining,
     surplus_demand,
@@ -197,7 +200,7 @@ from .pv_forecast import (
     power_lookup,
 )
 from .soc_projection import ProjectionSettings, SocProjection, project_soc
-from .util import state_as_float, state_as_watts
+from .util import state_as_float, state_as_kwh, state_as_watts
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -749,11 +752,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # Energy (Wh) each target still needs, and the parts expected from the
         # surplus in order of priority (see consumer_targets.surplus_demand).
         self.target_energy_wh: dict[str, float | None] = {}
-        # Daily energy of the last days per consumer (estimate while the energy
-        # per kelvin of a temperature target is not learned) and the consumers
-        # whose target energy is that estimate right now.
+        # Daily energy of the last days per controllable consumer (see
+        # consumer_targets.daily_energy_estimate), the consumers whose target
+        # energy is that estimate right now, and today's energy until the last
+        # refresh with the counter reading (kWh) then.
         self.target_energy_estimate: dict[str, float] = {}
         self.target_energy_estimated: set[str] = set()
+        self._energy_today: dict[str, tuple[float, float | None]] = {}
         self.target_demands: list[SurplusDemand] = []
         # Battery due for its regular full charge (see full_charge), batteries
         # resting after it (monotonic end) and the last full charge seen.
@@ -873,18 +878,35 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             _LOGGER.exception("Daily energy of the consumers failed")
 
     async def _async_refresh_energy_estimates(self) -> None:
-        """Daily energy of the last days of consumers with a temperature target."""
-        today = dt_util.now().date()
-        start = dt_util.start_of_local_day(dt_util.now()) - timedelta(days=ESTIMATE_DAYS)
-        end = dt_util.start_of_local_day(dt_util.now())
+        """Daily energy of the last days and today's energy of the controllable consumers."""
+        now = dt_util.now()
+        today = now.date()
+        end = dt_util.start_of_local_day(now)
+        start = end - timedelta(days=ESTIMATE_DAYS)
         estimates: dict[str, float] = {}
+        energy_today: dict[str, tuple[float, float | None]] = {}
         for consumer in self.consumers:
-            if self.consumer_targets[consumer.subentry_id].type is not TargetType.TEMPERATURE:
+            if (
+                not consumer.controllable
+                or consumer.consumer_type is ConsumerType.WALLBOX
+                or not consumer.energy_entity_id
+            ):
                 continue
-            hourly = await async_hourly_changes(self.hass, consumer.energy_entity_id, start, end)
+            counter = state_as_kwh(self.hass.states.get(consumer.energy_entity_id))
+            hourly = await async_hourly_changes(self.hass, consumer.energy_entity_id, start, now)
             if (estimate := daily_energy_estimate(hourly, today)) is not None:
                 estimates[consumer.subentry_id] = estimate
+            so_far = sum(wh for hour, wh in hourly.items() if hour >= end)
+            energy_today[consumer.subentry_id] = (so_far, counter)
         self.target_energy_estimate = estimates
+        self._energy_today = energy_today
+
+    def _today_wh(self, subentry_id: str, state: ConsumerState | None) -> float:
+        """Energy of the consumer today: the statistics plus the counter since."""
+        so_far, counter = self._energy_today.get(subentry_id, (0.0, None))
+        if counter is not None and state is not None and state.energy_kwh is not None:
+            so_far += max(0.0, state.energy_kwh - counter) * 1000
+        return so_far
 
     def _forecast_sources(self) -> ForecastSources:
         config = self._config
@@ -2808,9 +2830,24 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.target_energy_estimated = set()
         self.target_demands = []
         consumers = sorted(map(self.effective_consumer, self.consumers), key=lambda c: c.priority)
+        # A supporting consumer only takes the surplus above the feed-in cap's
+        # limit; the cap plan counts it there.
+        def supporting(consumer: ConsumerConfig) -> bool:
+            return self.settings.feed_in_cap and self.cap_mode(consumer.subentry_id) is CapMode.SUPPORT
+
         for consumer in consumers:
             settings = self.consumer_targets[consumer.subentry_id]
-            if settings.type is TargetType.NONE or not consumer.controllable:
+            if not consumer.controllable:
+                continue
+            estimate = self.target_energy_estimate.get(consumer.subentry_id)
+            if settings.type is TargetType.NONE:
+                if estimate is not None and _plans_daily_energy(consumer) and not supporting(consumer):
+                    self.target_demands += daily_demands(
+                        estimate,
+                        self._today_wh(consumer.subentry_id, snapshot.consumers.get(consumer.subentry_id)),
+                        local_now,
+                        power_w=self._full_power_w(consumer),
+                    )
                 continue
             progress = self.target_progress[consumer.subentry_id]
             power = self._full_power_w(consumer)
@@ -2834,11 +2871,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             energy = energy_to_target(
                 settings, progress, power_w=power, temperature_c=temperature, wh_per_k=wh_per_k
             )
-            estimate = self.target_energy_estimate.get(consumer.subentry_id)
-            if energy is None and settings.type is TargetType.TEMPERATURE and estimate is not None:
-                # Not learned yet: the daily energy of the last days minus this period's.
-                energy = max(0.0, estimate - progress.energy_wh)
-                self.target_energy_estimated.add(consumer.subentry_id)
+            if settings.type is TargetType.TEMPERATURE and estimate is not None and energy != 0:
+                # Water draws and heat losses: at least the daily energy of the
+                # last days minus this period's (also while not learned yet).
+                expected = max(0.0, estimate - progress.energy_wh)
+                if energy is None or expected > energy:
+                    energy = expected
+                    self.target_energy_estimated.add(consumer.subentry_id)
             self.target_energy_wh[consumer.subentry_id] = energy
             # The batteries must deliver an on/off consumer's full power, a
             # power controlled one at least its minimum (it is then limited).
@@ -2885,11 +2924,18 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 forced_wh=sum(forced.values()),
                 power_w=power,
             )
-            # A supporting consumer only takes the surplus above the feed-in
-            # cap's limit; the cap plan counts it there.
-            supporting = self.settings.feed_in_cap and self.cap_mode(consumer.subentry_id) is CapMode.SUPPORT
-            if demand is not None and not supporting:
+            if supporting(consumer):
+                continue
+            if demand is not None:
                 self.target_demands.append(demand)
+            following = next_period_demand(
+                settings,
+                self.target_states[consumer.subentry_id].end or period_end(local_now, settings.deadline),
+                power_w=power,
+                estimate_wh=estimate,
+            )
+            if following is not None:
+                self.target_demands.append(following)
 
     def _price_window(
         self, settings: TargetSettings, state: TargetState, wall_now: datetime, *, short: bool
@@ -3301,6 +3347,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     )
         for battery in self.batteries:
             await battery.driver.close()
+
+
+def _plans_daily_energy(consumer: ConsumerConfig) -> bool:
+    """Its usual daily energy is planned (heat pumps have their own forecast
+    model, a wallbox charges when a car is there)."""
+    return consumer.controllable and consumer.consumer_type not in (
+        ConsumerType.HEAT_PUMP,
+        ConsumerType.WALLBOX,
+    )
 
 
 def _weather_temperature(state) -> float | None:
