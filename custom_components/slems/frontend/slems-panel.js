@@ -2028,6 +2028,7 @@ class SlemsPanel extends HTMLElement {
         <div class="sim-layout">
           <div class="sim-main">
             <section class="card"><div id="simnote"></div><div id="daychart"></div></section>
+            <div id="pricechart"></div>
             <section class="card"><div id="simmetrics"></div></section>
             <div id="tariffs"></div>
           </div>
@@ -2890,9 +2891,9 @@ class SlemsPanel extends HTMLElement {
 
   // --- price chart ----------------------------------------------------------------
   //
-  // Below the day chart, on the same time axis: the price of a kWh with the
-  // current tariff per quarter hour (import, feed-in credit) and the market
-  // price. Only shown when a tariff exists.
+  // Below the day chart (overview and simulation), on the same time axis: the
+  // price of a kWh with the current tariff per quarter hour (import, feed-in
+  // credit) and the market price. Only shown when a tariff exists.
 
   async _loadPrices(day) {
     const state = this._prices;
@@ -3180,6 +3181,8 @@ class SlemsPanel extends HTMLElement {
       titles: [t.simToday, t.simTomorrow],
       todayPlan: plans.today,
     });
+    // The prices of the day shown, as in the overview (same conditions).
+    this._renderPriceChart();
     this._setSection("simmetrics", this._simMetrics());
   }
 
@@ -4157,7 +4160,7 @@ const STYLE = `
   .legend-item.off { opacity: 0.4; text-decoration: line-through; }
   .chart-wrap { position: relative; }
   .chart { display: block; max-width: 100%; }
-  .chart .tick { font-size: 11px; fill: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
+  .chart .tick, .price-chart .tick { font-size: 11px; fill: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
   #daychart, #pricechart { position: relative; }
   svg.chart { touch-action: pan-y; }
   svg.price-chart { display: block; max-width: 100%; touch-action: pan-y; margin-top: 8px; }
