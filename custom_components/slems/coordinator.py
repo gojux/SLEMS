@@ -182,8 +182,16 @@ from .consumer_targets import (
     window_start,
 )
 from .night_discharge import NightDischargePlan, plan_night_discharge, pv_takeover
-from .price_chart import hourly_import_prices
-from .grid_charge import ChargeBattery, GridChargePlan, plan_grid_charge
+from .price_chart import hourly_import_prices, period_import_prices
+from .grid_charge import MIN_STEP_WH as GRID_CHARGE_STEP_WH
+from .grid_charge import (
+    QUARTER,
+    ChargeBattery,
+    GridChargePlan,
+    PlanTiming,
+    plan_grid_charge,
+    slot_start,
+)
 from .energy_history import async_grid_energy, async_hourly_changes
 from .price_backtest import BacktestBattery, measured_saving
 from .price_savings import PriceSavings
@@ -210,6 +218,7 @@ STORAGE_SAVE_DELAY_S = 600
 BALANCING_SAVE_DELAY_S = 5
 # Charging from the grid is planned at most this far ahead without a refill.
 MAX_GRID_CHARGE_HORIZON = timedelta(hours=36)
+GRID_CHARGE_REPLAN_S = 60.0
 # The recorded quarter hours are saved this often (a restart loses at most this).
 QUARTERS_SAVE_INTERVAL = timedelta(minutes=15)
 # Releases tried when SLEMS unloads, and the wait between them.
@@ -710,6 +719,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.price_savings = PriceSavings()
         # Hourly prices per side (import, feed-in credit): (quarter hour, end, prices update), prices.
         self._import_price_cache: dict[Side, tuple[tuple, dict]] = {}
+        # Price plans of the last inputs (real and simulated) -> (monotonic expiry, plan).
+        self._grid_charge_cache: dict[tuple, tuple[float, GridChargePlan | None]] = {}
+        # Duration of the price plans made since the start (also for the simulation).
+        self.grid_charge_timing = PlanTiming()
         # Last tariff comparison for the dashboard: (monotonic time, result).
         self.tariff_comparison_cache: tuple[float, dict] | None = None
         # Grid power read over Modbus (see grid_meter); None if not configured
@@ -2187,12 +2200,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             until = next_refill(wall_now, pv_hourly, consumption_hourly) if consumption_hourly else None
             if settings.price_control and consumption_hourly:
                 result.grid_charge = self._grid_charge(
-                    battery, wall_now, pv_hourly, consumption_hourly, grid_load, until, settings,
+                    battery, wall_now, pv_forecast, pv_hourly, consumption_hourly, grid_load, until, settings,
                     result.peak_limit_w, cap,
                 )
                 if result.grid_charge is None:
                     result.price_hold = self._price_hold(
-                        battery, wall_now, pv_hourly, consumption_hourly, grid_load, until, settings
+                        battery, wall_now, pv_forecast, consumption_hourly, grid_load, until, settings
                     )
                 limits = (result.grid_charge or result.price_hold)
                 if limits is not None:
@@ -2201,7 +2214,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                         **grid_load,
                         **{
                             hour: max(0.0, consumption_hourly.get(hour, 0.0) - (pv_hourly or {}).get(hour, 0.0) - limit)
-                            for hour, limit in limits.limits_w.items()
+                            for hour, limit in limits.hourly_limits_w.items()
                         },
                     }
             if consumption_hourly and any(
@@ -2238,9 +2251,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 budget_load=budget_load,
                 budget_wh=result.support_budget_wh,
                 budget_until=until,
-                grid_charge=result.grid_charge.charge_w if result.grid_charge else None,
-                battery_export=result.grid_charge.export_w if result.grid_charge else None,
-                charge_caps=result.grid_charge.charge_caps_w if result.grid_charge else None,
+                grid_charge=result.grid_charge.hourly_charge_w if result.grid_charge else None,
+                battery_export=result.grid_charge.hourly_export_w if result.grid_charge else None,
+                charge_caps=result.grid_charge.hourly_caps_w if result.grid_charge else None,
             )
         pv_power = power_lookup(self._pv_native(snapshot, wall_now))
         result.day_plan = self._day_plan(
@@ -2316,21 +2329,21 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self,
         battery: BatteryGroup,
         wall_now: datetime,
-        pv_hourly: Mapping[datetime, float] | None,
+        pv_forecast: PvForecast | None,
         consumption_hourly: Mapping[datetime, float],
         grid_load: Mapping[datetime, float],
         until: datetime | None,
         settings: ControlSettings,
     ) -> PriceHold | None:
-        """Hours in which the batteries keep their energy for more expensive ones."""
+        """Quarter hours in which the batteries keep their energy for more expensive ones."""
         if until is None:
             return None
         prices = self._import_prices(wall_now, until)
         if prices is None:
             return None
         deficits = {
-            hour: max(0.0, wh - (pv_hourly or {}).get(hour, 0.0) - grid_load.get(hour, 0.0))
-            for hour, wh in consumption_hourly.items()
+            start: max(0.0, wh)
+            for start, wh in _quarter_nets(wall_now, until, pv_forecast, consumption_hourly, grid_load).items()
         }
         stored = battery.soc_pct / 100 * battery.capacity_wh
         floor = battery.min_soc_pct / 100 * battery.capacity_wh
@@ -2341,6 +2354,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self,
         battery: BatteryGroup,
         wall_now: datetime,
+        pv_forecast: PvForecast | None,
         pv_hourly: Mapping[datetime, float] | None,
         consumption_hourly: Mapping[datetime, float],
         grid_load: Mapping[datetime, float],
@@ -2366,18 +2380,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             return None
         credits = self._import_prices(wall_now, horizon, Side.EXPORT) or {}
         negative = any(v is not None and v < 0 for v in [*prices.values(), *credits.values()])
-        hour = local_now.replace(minute=0, second=0, microsecond=0)
         if not negative:
             if not (settings.grid_charge or settings.battery_export):
                 return None
-            if (pv_hourly or {}).get(hour, 0.0) > consumption_hourly.get(hour, 0.0):
-                return None
             horizon = until or horizon
-        nets = {
-            start: wh - (pv_hourly or {}).get(start, 0.0) - grid_load.get(start, 0.0)
-            for start, wh in consumption_hourly.items()
-        }
+        nets = _quarter_nets(wall_now, horizon, pv_forecast, consumption_hourly, grid_load)
         if not negative:
+            if nets.get(slot_start(local_now), 0.0) < 0:
+                return None
             nets = {start: max(0.0, wh) for start, wh in nets.items()}
         capacity = battery.capacity_wh
         enabled = [b for b in self.batteries if b.enabled]
@@ -2397,37 +2407,64 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         tomorrow = sum(
             wh for start, wh in consumption_hourly.items() if day_start <= start < day_start + timedelta(days=1)
         )
-        return plan_grid_charge(
-            wall_now,
-            ChargeBattery(
-                capacity_wh=capacity,
-                stored_wh=battery.soc_pct / 100 * capacity,
-                floor_wh=battery.min_soc_pct / 100 * capacity,
-                grid_max_wh=min(
-                    min(settings.grid_charge_max_soc_pct, battery.full_soc_pct) / 100 * capacity,
-                    battery.full_soc_pct / 100 * capacity - cap.space_needed_at(horizon)
-                    if cap is not None
-                    else math.inf,
-                ),
-                max_charge_w=battery.max_charge_w,
-                max_discharge_w=battery.max_discharge_w,
-                efficiency=battery.charge_efficiency or 1.0,
-                wear_ct=wear,
-                full_wh=battery.full_soc_pct / 100 * capacity,
-                grid_charge_w=grid_power,
+        charge_battery = ChargeBattery(
+            capacity_wh=capacity,
+            stored_wh=battery.soc_pct / 100 * capacity,
+            floor_wh=battery.min_soc_pct / 100 * capacity,
+            grid_max_wh=min(
+                min(settings.grid_charge_max_soc_pct, battery.full_soc_pct) / 100 * capacity,
+                battery.full_soc_pct / 100 * capacity - cap.space_needed_at(horizon)
+                if cap is not None
+                else math.inf,
             ),
+            max_charge_w=battery.max_charge_w,
+            max_discharge_w=battery.max_discharge_w,
+            efficiency=battery.charge_efficiency or 1.0,
+            wear_ct=wear,
+            full_wh=battery.full_soc_pct / 100 * capacity,
+            grid_charge_w=grid_power,
+        )
+        # Not below the morning reserve (as the night discharge).
+        export_floor = battery.min_soc_pct / 100 * capacity + self.night_reserve_pct(settings) / 100 * tomorrow
+        export_max = min(settings.discharge_max_grid_export_w, cap.limit_w if cap is not None else math.inf)
+        # The plan takes a noticeable time: made again for a new quarter hour,
+        # a step of the stored energy, other settings or at least every minute.
+        step = max(GRID_CHARGE_STEP_WH, capacity / 100)
+        key = (
+            slot_start(local_now),
+            replace(charge_battery, stored_wh=round(charge_battery.stored_wh / step)),
+            None if negative else until,
+            settings.price_min_gain_ct,
+            import_limit,
+            round(export_floor / step),
+            export_max,
+            settings.battery_export,
+            self.market_prices.last_update,
+        )
+        monotonic = time.monotonic()
+        cached = self._grid_charge_cache.get(key)
+        if cached is not None and cached[0] > monotonic:
+            return cached[1]
+        started = time.perf_counter()
+        plan = plan_grid_charge(
+            wall_now,
+            charge_battery,
             nets,
             prices,
             None if negative else until,
             settings.price_min_gain_ct,
             import_limit_w=import_limit,
             export_prices=credits,
-            # Not below the morning reserve (as the night discharge).
-            export_floor_wh=battery.min_soc_pct / 100 * capacity
-            + self.night_reserve_pct(settings) / 100 * tomorrow,
-            export_max_w=min(settings.discharge_max_grid_export_w, cap.limit_w if cap is not None else math.inf),
+            export_floor_wh=export_floor,
+            export_max_w=export_max,
             battery_export=settings.battery_export,
         )
+        self.grid_charge_timing.add(time.perf_counter() - started, len(nets))
+        self._grid_charge_cache = {
+            k: v for k, v in self._grid_charge_cache.items() if v[0] > monotonic
+        }
+        self._grid_charge_cache[key] = (monotonic + GRID_CHARGE_REPLAN_S, plan)
+        return plan
 
     def backtest_battery(self) -> BacktestBattery | None:
         """The batteries and price settings for the backtest of the price aware control."""
@@ -2472,8 +2509,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     def _import_prices(
         self, wall_now: datetime, until: datetime, side: Side = Side.IMPORT
     ) -> dict[datetime, float | None] | None:
-        """Import price (or feed-in credit) per hour with the current tariff,
-        kept per quarter hour; None without tariff."""
+        """Import price (or feed-in credit) per quarter hour with the current
+        tariff, kept per quarter hour; None without tariff."""
         tariffs = configured_tariffs(self.config_entry)
         if not tariffs:
             return None
@@ -2481,7 +2518,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         key = (stamp - stamp % 900, until, self.market_prices.last_update)
         cached = self._import_price_cache.get(side)
         if cached is None or cached[0] != key:
-            prices = hourly_import_prices(next(iter(tariffs.values())), self.market_prices, wall_now, until, side)
+            prices = period_import_prices(next(iter(tariffs.values())), self.market_prices, wall_now, until, side)
             cached = self._import_price_cache[side] = (key, prices)
         return cached[1]
 
@@ -3347,6 +3384,30 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     )
         for battery in self.batteries:
             await battery.driver.close()
+
+
+def _quarter_nets(
+    wall_now: datetime,
+    end: datetime,
+    pv_forecast: PvForecast | None,
+    consumption_hourly: Mapping[datetime, float],
+    grid_load: Mapping[datetime, float],
+) -> dict[datetime, float]:
+    """Consumption minus PV (Wh) per local quarter hour start until ``end``:
+    the hourly consumption forecast spread evenly, PV from the forecast's own
+    periods. ``grid_load`` (per hour) is covered by the grid, not the batteries."""
+    power = power_lookup(pv_forecast) if pv_forecast else (lambda _moment: 0.0)
+    share = QUARTER / timedelta(hours=1)
+    nets: dict[datetime, float] = {}
+    start = slot_start(wall_now)
+    end = dt_util.as_local(end)
+    while start < end:
+        hour = start.replace(minute=0)
+        if hour in consumption_hourly:
+            load = (consumption_hourly[hour] - grid_load.get(hour, 0.0)) * share
+            nets[start] = load - mean_power(power, start, QUARTER) * share
+        start += QUARTER
+    return nets
 
 
 def _plans_daily_energy(consumer: ConsumerConfig) -> bool:

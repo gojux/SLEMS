@@ -171,6 +171,8 @@ def _system(coordinator: SlemsCoordinator) -> dict:
             "last_update": market.last_update.isoformat() if market.last_update else None,
             "error": market.last_error,
         },
+        # Duration of the price plans (quarter hours) since the start.
+        "price_plan_timing": coordinator.grid_charge_timing.as_dict(),
         "controller": {
             "status": _plain(controller.status),
             "gain": controller.gain,

@@ -6,7 +6,18 @@ import pytest
 
 from homeassistant.util import dt as dt_util
 
-from custom_components.slems.price_hold import plan_price_hold
+from custom_components.slems.grid_charge import HOUR
+from custom_components.slems.price_hold import cheapest_start as cheapest_in_periods
+from custom_components.slems.price_hold import plan_price_hold as hold_in_periods
+
+
+def plan_price_hold(*args, **kwargs):
+    """Hourly periods (the cases below are worked out by the hour)."""
+    return hold_in_periods(*args, **{"period": HOUR, **kwargs})
+
+
+def cheapest_start(*args, **kwargs):
+    return cheapest_in_periods(*args, **{"period": HOUR, **kwargs})
 
 
 @pytest.fixture(autouse=True)
@@ -30,7 +41,7 @@ def test_energy_goes_to_the_expensive_hours() -> None:
     plan = plan_price_hold(now, 2500.0, deficits, prices, now + timedelta(hours=6), 2.0)
     assert plan is not None
     # 2.5 kWh: 19:00 (32 ct), 18:00 (30 ct), part of 20:00 (25 ct) – held: 21–24.
-    assert plan.hold_hours == frozenset(night[3:])
+    assert plan.hold_slots == frozenset(night[3:])
     assert plan.covered_from_ct == 25.0 and plan.held_up_to_ct == 20.0
     assert plan.holds(now + timedelta(hours=3, minutes=10))
     assert not plan.holds(now + timedelta(minutes=10))
@@ -56,7 +67,7 @@ def test_current_hour_counts_with_its_remaining_part() -> None:
     prices = dict(zip(night, [10.0, 30.0, 30.0]))
     # 500 Wh left of this hour + 2 × 1000 Wh; 2 kWh usable: the cheap current hour is held.
     plan = plan_price_hold(now, 2000.0, deficits, prices, evening() + timedelta(hours=3), 2.0)
-    assert plan is not None and plan.hold_hours == frozenset({night[0]})
+    assert plan is not None and plan.hold_slots == frozenset({night[0]})
     assert plan.holds(now)
 
 
@@ -68,7 +79,7 @@ def test_partly_covered_hour_is_limited_before_a_more_expensive_one() -> None:
     prices = dict(zip(night, [30.0, 20.0, 25.0, 40.0]))
     plan = plan_price_hold(now, 2400.0, deficits, prices, now + timedelta(hours=4), 2.0)
     assert plan is not None
-    assert plan.hold_hours == frozenset({night[1]})
+    assert plan.hold_slots == frozenset({night[1]})
     # 21 and 18 take 2 kWh; 20:00 gets the remaining 400 Wh, limited for 21:00 after it.
     assert plan.limit_w(night[2]) == pytest.approx(400.0)
     assert plan.limit_w(night[3]) is None
@@ -80,8 +91,6 @@ def test_partly_covered_hour_is_limited_before_a_more_expensive_one() -> None:
 
 
 def test_cheapest_start_of_a_forced_run() -> None:
-    from custom_components.slems.price_hold import cheapest_start
-
     now = evening()  # 18:00
     prices = dict(zip(hours(now, 6), [40.0, 35.0, 20.0, 22.0, 30.0, 38.0]))
     two_hours = timedelta(hours=2)
@@ -95,3 +104,20 @@ def test_cheapest_start_of_a_forced_run() -> None:
     # 19:00–21:00 (27.5 ct) is the cheapest run ending before the gap.
     assert cheapest_start(gap, now, latest, two_hours, 2.0) == now + timedelta(hours=1)
     assert cheapest_start(prices, latest, latest, two_hours, 2.0) is None
+
+
+def test_holds_in_cheap_quarter_hours() -> None:
+    from custom_components.slems.grid_charge import QUARTER
+
+    now = evening()
+    starts = [now + QUARTER * i for i in range(8)]
+    # 18:00–20:00 per quarter; the two quarters at 19:00 and 19:15 are expensive.
+    prices = dict(zip(starts, [20.0, 20.0, 20.0, 20.0, 40.0, 40.0, 20.0, 20.0]))
+    deficits = {start: 150.0 for start in starts}
+    plan = hold_in_periods(now, 300.0, deficits, prices, now + timedelta(hours=2), 2.0)
+    assert plan is not None
+    assert plan.hold_slots == frozenset(starts[:4] + starts[6:])
+    assert plan.limit_w(now + timedelta(minutes=20)) == 0.0
+    assert plan.limit_w(starts[4]) is None
+    # Hourly: nothing in the first hour, half of the deficit (600 W) in the second.
+    assert plan.hourly_limits_w == {now: 0.0, starts[4]: pytest.approx(300.0)}

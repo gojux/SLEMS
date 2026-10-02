@@ -47,21 +47,38 @@ def hourly_import_prices(
 
     None for an hour with a quarter without price (missing market price).
     """
-    first = dt_util.as_local(start).replace(minute=0, second=0, microsecond=0)
+    return period_import_prices(tariff, prices, start, end, side, timedelta(hours=1))
+
+
+def period_import_prices(
+    tariff: Tariff,
+    prices: MarketPrices,
+    start: datetime,
+    end: datetime,
+    side: Side = Side.IMPORT,
+    period: timedelta = timedelta(seconds=SLOT_S),
+) -> dict[datetime, float | None]:
+    """Import price (or with ``side`` export the credit; ct/kWh incl. VAT) per
+    local start of a quarter hour or an hour (``period``), the mean of its
+    quarters; None with a quarter without price (missing market price)."""
+    local = dt_util.as_local(start)
+    minutes = int(period.total_seconds() // 60)
+    first = local.replace(minute=local.minute - local.minute % minutes, second=0, microsecond=0)
     month_ct = _month_ct(tariff, prices, first.date(), end)
     result: dict[datetime, float | None] = {}
     moment = dt_util.as_utc(first)
     end = dt_util.as_utc(end)
+    quarters = int(period.total_seconds() // SLOT_S)
     while moment < end:
         values = []
-        for quarter in range(4):
+        for quarter in range(quarters):
             slot = moment + timedelta(seconds=quarter * SLOT_S)
             spot = prices.price_at(slot)
             values.append(
                 kwh_price(tariff, side, dt_util.as_local(slot), None if spot is None else spot / 10, month_ct)
             )
         result[dt_util.as_local(moment)] = None if None in values else sum(values) / len(values)
-        moment += timedelta(hours=1)
+        moment += period
     return result
 
 

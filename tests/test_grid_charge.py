@@ -7,7 +7,13 @@ import pytest
 
 from homeassistant.util import dt as dt_util
 
-from custom_components.slems.grid_charge import ChargeBattery, plan_grid_charge
+from custom_components.slems.grid_charge import HOUR, QUARTER, ChargeBattery
+from custom_components.slems.grid_charge import plan_grid_charge as plan_periods
+
+
+def plan_grid_charge(*args, **kwargs):
+    """Hourly periods unless given (the cases below are worked out by the hour)."""
+    return plan_periods(*args, **{"period": HOUR, **kwargs})
 
 
 @pytest.fixture(autouse=True)
@@ -157,3 +163,39 @@ def test_grid_charging_on_top_of_the_surplus_at_a_negative_import_price() -> Non
     no_grid = replace(battery_, grid_charge_w=0.0)
     plan = plan_grid_charge(day_from(12), no_grid, nets, prices, None, 2.0, export_prices=credit)
     assert plan is None or plan.charge_at(h[0]) == 0
+
+
+def test_quarter_hours_use_a_cheap_quarter_within_an_hour() -> None:
+    # One hour at 40 ct with a single cheap quarter (10 ct) at 01:15, then two
+    # expensive hours; 100 Wh deficit per quarter, battery nearly empty.
+    starts = [night() + QUARTER * i for i in range(12)]
+    prices = {start: 40.0 for start in starts}
+    prices[night() + timedelta(minutes=15)] = 10.0
+    deficits = {start: 100.0 for start in starts}
+    plan = plan_periods(night(), battery(), deficits, prices, night() + timedelta(hours=3), 2.0)
+    assert plan is not None and plan.period == QUARTER
+    cheap = night() + timedelta(minutes=15)
+    assert set(plan.charge_w) == {cheap}
+    assert plan.charge_at(cheap + timedelta(minutes=10)) == pytest.approx(plan.charge_w[cheap])
+    assert plan.charge_at(night()) == 0.0
+    # Hourly for the SoC projection: the quarter's power over the whole hour.
+    assert plan.hourly_charge_w[night()] == pytest.approx(plan.charge_w[cheap] / 4)
+
+
+def test_hourly_means_over_the_planned_periods() -> None:
+    from custom_components.slems.grid_charge import hourly_means
+
+    starts = [night() + timedelta(minutes=30), night() + timedelta(minutes=45), night() + timedelta(hours=1)]
+    # The first hour starts at 00:30 (planned from then on): mean of two quarters.
+    means = hourly_means({starts[0]: 400.0}, starts, {starts[1]: 200.0})
+    assert means == {night(): pytest.approx(300.0)}
+
+
+def test_plan_timing() -> None:
+    from custom_components.slems.grid_charge import PlanTiming
+
+    timing = PlanTiming()
+    assert timing.as_dict() == {"plans": 0, "last_s": None, "mean_s": None, "max_s": 0.0, "periods": 0}
+    timing.add(0.1, 144)
+    timing.add(0.3, 140)
+    assert timing.as_dict() == {"plans": 2, "last_s": 0.3, "mean_s": 0.2, "max_s": 0.3, "periods": 140}

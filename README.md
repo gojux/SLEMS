@@ -305,7 +305,10 @@ stays the same, it only moves to cheaper hours – no charging from the grid
 and no feed-in from the batteries. Any time dependent price counts: market
 prices or time windows of a fixed tariff. Import peak shaving still applies.
 The strategy shows *Price hold* with the hours concerned, the day chart and
-the simulation include it. Daily targets with the source *+ grid*: if the
+the simulation include it. The price plans work in quarter hours (market
+prices change every quarter hour): the hourly consumption forecast is spread
+evenly over its quarters, PV comes from the forecast; the day chart shows
+their hourly means. Daily targets with the source *+ grid*: if the
 forecast surplus is short for them anyway, the forced run starts in the
 window with the lowest mean import price before the deadline (cheaper by at
 least the minimum gain than at the latest start); the consumer card shows
@@ -1549,8 +1552,7 @@ Possible extensions:
 - Price aware control: estimated prices for the hours after the last known
   day-ahead price (from the same hours of the last days, with a safety
   margin), so the night is planned before the next day's prices are
-  published; planning in quarter hours instead of hourly means; a more stable
-  plan (changed only when clearly better).
+  published; a more stable plan (changed only when clearly better).
 - Daily targets of the consumers planned together with the batteries.
 - Program devices (washing machine, dishwasher, dryer): learn the course of a
   program and add the rest of a running program to the forecast of the next

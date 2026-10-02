@@ -347,22 +347,24 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         options=[strategy.value for strategy in Strategy],
         value_fn=lambda s, _: s.allocation.strategy.value if s.allocation else None,
         attributes_fn=lambda s, c: {
-            "price_hold_hours": sorted(hour.isoformat() for hour in s.price_hold.hold_hours)
+            # Length (min) of the periods of the price plan below.
+            "price_plan_period_min": 15,
+            "price_hold_slots": sorted(start.isoformat() for start in s.price_hold.hold_slots)
             if s.price_hold
             else [],
             "price_hold_until": s.price_hold.until.isoformat() if s.price_hold else None,
             "price_covered_from_ct": round(s.price_hold.covered_from_ct, 2) if s.price_hold else None,
-            # Planned charging from the grid: W per local hour start.
-            "grid_charge": {hour.isoformat(): round(w) for hour, w in s.grid_charge.charge_w.items()}
+            # Planned charging from the grid: W per local period start.
+            "grid_charge": {start.isoformat(): round(w) for start, w in s.grid_charge.charge_w.items()}
             if s.grid_charge
             else {},
             "grid_charge_saving_ct": round(s.grid_charge.saving_ct) if s.grid_charge else None,
-            # Planned feed-in from the batteries: W per local hour start.
-            "battery_export": {hour.isoformat(): round(w) for hour, w in s.grid_charge.export_w.items()}
+            # Planned feed-in from the batteries: W per local period start.
+            "battery_export": {start.isoformat(): round(w) for start, w in s.grid_charge.export_w.items()}
             if s.grid_charge
             else {},
-            # Surplus hours in which the batteries keep room for cheaper hours: W cap.
-            "charge_caps": {hour.isoformat(): round(w) for hour, w in s.grid_charge.charge_caps_w.items()}
+            # Surplus periods in which the batteries keep room for cheaper ones: W cap.
+            "charge_caps": {start.isoformat(): round(w) for start, w in s.grid_charge.charge_caps_w.items()}
             if s.grid_charge
             else {},
             # Only a credit that changes over the day makes feeding in at the right time pay.

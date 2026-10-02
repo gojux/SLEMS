@@ -197,9 +197,9 @@ const STRINGS = {
     targetBoostChip: "priority",
     batteryExportText: "Feed-in from batteries: {energy} from {time}",
     batteryExportNoEffect: "Feeding in from the batteries has no effect with your feed-in tariff (no hourly credit at the market price)",
-    priceRoomText: "Charges only partly until {time} and feeds in: room for the surplus of cheaper (negative) hours",
+    priceRoomText: "Charges only partly until {time} and feeds in: room for the surplus of cheaper (negative) times",
     gridChargeText: "Grid charging: {energy} from {time} (saves about {saving} ct)",
-    priceHoldText: "Batteries cover the hours from {price}; grid in {hours} cheaper hours until {until}",
+    priceHoldText: "Batteries cover the times from {price}; grid for {duration} at cheaper times until {until}",
     priorityConsumers: "Before the batteries: {names}",
     targetForcedChip: "forced",
     storageCapacity: "Storage left",
@@ -627,9 +627,9 @@ const STRINGS = {
     targetBoostChip: "Vorrang",
     batteryExportText: "Einspeisen aus Akku: {energy} ab {time}",
     batteryExportNoEffect: "Akku ins Netz entladen ohne Wirkung mit deinem Einspeisetarif (keine stündliche Vergütung nach Börsenpreis)",
-    priceRoomText: "Lädt bis {time} nur begrenzt und speist ein: Platz für den Überschuss günstigerer (negativer) Stunden",
+    priceRoomText: "Lädt bis {time} nur begrenzt und speist ein: Platz für den Überschuss günstigerer (negativer) Zeiten",
     gridChargeText: "Netzladen: {energy} ab {time} (spart etwa {saving} ct)",
-    priceHoldText: "Batterien decken die Stunden ab {price}; Netz in {hours} günstigeren Stunden bis {until}",
+    priceHoldText: "Batterien decken die Zeiten ab {price}; Netz für {duration} zu günstigeren Zeiten bis {until}",
     priorityConsumers: "Vorrang vor den Batterien: {names}",
     targetForcedChip: "erzwungen",
     storageCapacity: "Speicherreserve",
@@ -1804,10 +1804,17 @@ class SlemsPanel extends HTMLElement {
     return name;
   }
 
-  /** Energy of an hour (Wh, equal to the mean power in W) in kWh. */
+  /** Energy (Wh) in kWh. */
   _kwh(wh) {
     const language = this._hass?.locale?.language || "en";
     return `${new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(wh / 1000)} kWh`;
+  }
+
+  /** "45 min" or "2,5 h". */
+  _minutes(minutes) {
+    const language = this._hass?.locale?.language || "en";
+    if (minutes < 60) return `${Math.round(minutes)} min`;
+    return `${new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(minutes / 60)} h`;
   }
 
   _percent(value) {
@@ -2099,17 +2106,20 @@ class SlemsPanel extends HTMLElement {
     const parts = names.length ? [this._t.priorityConsumers.replace("{names}", names.join(", "))] : [];
     // Price hold: which hours the batteries keep their energy for.
     const a = this._state("allocation_strategy")?.attributes || {};
-    if (a.price_hold_hours?.length && a.price_hold_until) {
+    // The price plan works in periods (quarter hours): W per period start.
+    const periodMin = a.price_plan_period_min || 60;
+    const energyWh = (entries) => entries.reduce((sum, [, w]) => sum + (w * periodMin) / 60, 0);
+    if (a.price_hold_slots?.length && a.price_hold_until) {
       parts.push(
         this._t.priceHoldText
           .replace("{price}", this._priceNumber(a.price_covered_from_ct))
-          .replace("{hours}", a.price_hold_hours.length)
+          .replace("{duration}", this._minutes(a.price_hold_slots.length * periodMin))
           .replace("{until}", this._time(a.price_hold_until))
       );
     }
     const exports = Object.entries(a.battery_export || {});
     if (exports.length) {
-      const wh = exports.reduce((sum, [, w]) => sum + w, 0);
+      const wh = energyWh(exports);
       parts.push(this._t.batteryExportText.replace("{energy}", this._kwh(wh)).replace("{time}", this._time(exports[0][0])));
     }
     if (this._state("battery_export")?.state === "on" && a.battery_export_effective === false) {
@@ -2117,13 +2127,13 @@ class SlemsPanel extends HTMLElement {
     }
     const caps = Object.keys(a.charge_caps || {}).sort();
     if (caps.length) {
-      // The hour after the last capped one: from then on the batteries take the surplus again.
-      const until = new Date(new Date(caps[caps.length - 1]).getTime() + 3600e3).toISOString();
+      // The end of the last capped period: from then on the batteries take the surplus again.
+      const until = new Date(new Date(caps[caps.length - 1]).getTime() + periodMin * 60e3).toISOString();
       parts.push(this._t.priceRoomText.replace("{time}", this._time(until)));
     }
     const charge = Object.entries(a.grid_charge || {});
     if (charge.length) {
-      const wh = charge.reduce((sum, [, w]) => sum + w, 0);
+      const wh = energyWh(charge);
       parts.push(
         this._t.gridChargeText
           .replace("{energy}", this._kwh(wh))

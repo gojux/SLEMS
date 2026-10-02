@@ -317,7 +317,10 @@ günstigere Stunden – kein Laden aus dem Netz und keine Einspeisung aus den
 Batterien. Jeder zeitabhängige Preis zählt: Börsenpreise oder Zeitfenster
 eines festen Tarifs. Bezugsspitzen abfangen gilt weiter. Die Strategie zeigt
 *Für teure Stunden halten* mit den betroffenen Stunden, Tagesdiagramm und
-Simulation berücksichtigen es. Tagesziele mit der Quelle *+ Netz*: Reicht der
+Simulation berücksichtigen es. Die Preispläne arbeiten in Viertelstunden
+(Börsenpreise wechseln je Viertelstunde): Die stündliche Verbrauchsprognose
+wird gleichmäßig auf ihre Viertelstunden verteilt, die PV kommt aus der
+Prognose; das Tagesdiagramm zeigt ihre Stundenmittel. Tagesziele mit der Quelle *+ Netz*: Reicht der
 prognostizierte Überschuss ohnehin nicht, startet der erzwungene Lauf im
 Fenster mit dem niedrigsten mittleren Bezugspreis vor der Frist (um
 mindestens den Mindestgewinn günstiger als zum spätesten Start); die
@@ -1641,9 +1644,8 @@ Mögliche Erweiterungen:
 - Preisbewusste Steuerung: geschätzte Preise für die Stunden nach dem letzten
   bekannten Day-Ahead-Preis (aus denselben Stunden der letzten Tage, mit
   Sicherheitsabschlag), damit die Nacht schon vor Veröffentlichung der Preise
-  des nächsten Tages geplant wird; Planung in Viertelstunden statt
-  Stundenmitteln; ein stabilerer Plan (nur bei deutlicher Verbesserung
-  geändert).
+  des nächsten Tages geplant wird; ein stabilerer Plan (nur bei deutlicher
+  Verbesserung geändert).
 - Tagesziele der Verbraucher gemeinsam mit den Batterien planen.
 - Programmgeräte (Waschmaschine, Geschirrspüler, Trockner): den Verlauf eines
   Programms lernen und den Rest eines laufenden Programms in die Prognose der

@@ -43,3 +43,22 @@ def test_quarter_hours_of_a_day_with_monthly_mean() -> None:
     # The monthly market price so far: mean of the two stored hours.
     assert at_noon["export"] == pytest.approx(7.0)
     assert slots[0]["spot"] is None and slots[0]["import"] is None
+
+
+def test_prices_per_quarter_hour_and_per_hour() -> None:
+    from datetime import timedelta
+
+    from custom_components.slems.price_chart import hourly_import_prices, period_import_prices
+
+    tariff = Tariff("T", Role.CURRENT, (TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.SPOT, 0.0),), {})
+    zone = dt_util.get_default_time_zone()
+    start = datetime(2026, 11, 3, 18, 20, tzinfo=zone)
+    hour = int(datetime(2026, 11, 3, 18, 0, tzinfo=zone).timestamp())
+    # €/MWh per quarter: 18:00 100, 18:15 200, 18:30 300, 18:45 400.
+    prices = {hour + 900 * i: 100.0 * (i + 1) for i in range(4)}
+    quarters = period_import_prices(tariff, fake_prices(prices), start, start + timedelta(minutes=40))
+    # From the quarter of the start (18:15) on, in ct/kWh.
+    assert list(quarters.values()) == pytest.approx([20.0, 30.0, 40.0])
+    assert min(quarters) == datetime(2026, 11, 3, 18, 15, tzinfo=zone)
+    hourly = hourly_import_prices(tariff, fake_prices(prices), start, start + timedelta(minutes=40))
+    assert list(hourly.values()) == pytest.approx([25.0])

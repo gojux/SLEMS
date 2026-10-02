@@ -7,7 +7,7 @@ simple battery model twice:
   order (minimum and maximum state of charge, power, efficiency),
 * *price aware*: the same, but every deficit run (until PV takes over again,
   at most ``MAX_RUN``) is planned with ``grid_charge.plan_grid_charge`` with
-  the import prices of the tariff: holding for the expensive hours, and
+  the hourly import prices of the tariff (the recordings are hourly): holding for the expensive hours, and
   charging from the grid if that option is on.
 
 Both give hourly grid import and export; priced with the tariff, their
@@ -22,7 +22,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from .grid_charge import ChargeBattery, plan_grid_charge
+from .grid_charge import HOUR, ChargeBattery, plan_grid_charge
 
 MAX_RUN = timedelta(hours=36)
 PERIOD = timedelta(hours=1)
@@ -128,6 +128,7 @@ def _plan_run(
         prices,
         until,
         min_gain_ct,
+        period=HOUR,
     )
     if plan is None:
         return {}, {}, end
