@@ -388,11 +388,19 @@
             "country": "Land"
           }
         },
-        "template_pick": {
-          "title": "Vorlagen wählen",
-          "description": "Wähle je Teil deiner Rechnung eine Vorlage: Energie (dein Lieferant), Netz (dein Netzgebiet) und Abgaben; SLEMS setzt sie zu einem Tarif zusammen. Vorlagen enthalten öffentliche Listenpreise; vergleiche den Tarif danach mit einer Rechnung. Eigene Vorlagen: YAML-Dateien im Ordner slems_tariff_templates deiner Home-Assistant-Konfiguration.",
+        "template_energy": {
+          "title": "Energie",
+          "description": "Der Energietarif deines Lieferanten. Eine vollständige Vorlage (Energie, Netz und Abgaben, z. B. in der Schweiz) genügt allein. Vorlagen enthalten öffentliche Listenpreise; vergleiche den Tarif danach mit einer Rechnung. Eigene Vorlagen: YAML-Dateien im Ordner slems_tariff_templates deiner Home-Assistant-Konfiguration.",
           "data": {
-            "templates": "Vorlagen"
+            "energy": "Energie"
+          }
+        },
+        "template_rest": {
+          "title": "Netz und Abgaben",
+          "description": "Vorausgewählt: der Netztarif, mit dem der Energietarif meist kombiniert wird (Haushalte), und die Abgaben des Landes, jeweils mit den heute gültigen Preisen. Ändere sie, wenn dein Netzgebiet ein anderes ist.",
+          "data": {
+            "grid": "Netz",
+            "levies": "Abgaben"
           }
         },
         "import_yaml": {

@@ -388,11 +388,19 @@
             "country": "Country"
           }
         },
-        "template_pick": {
-          "title": "Choose templates",
-          "description": "Choose one template per part of your bill: energy (your supplier), grid (your grid area) and levies; SLEMS combines them into one tariff. Templates contain public list prices; compare the tariff with a bill afterwards. Own templates: YAML files in the folder slems_tariff_templates of your Home Assistant configuration.",
+        "template_energy": {
+          "title": "Energy",
+          "description": "The energy tariff of your supplier. A complete template (energy, grid and levies, e.g. in Switzerland) is all you need. Templates contain public list prices; compare the tariff with a bill afterwards. Own templates: YAML files in the folder slems_tariff_templates of your Home Assistant configuration.",
           "data": {
-            "templates": "Templates"
+            "energy": "Energy"
+          }
+        },
+        "template_rest": {
+          "title": "Grid and levies",
+          "description": "Preselected: the grid tariff usually combined with the energy tariff (households) and the levies of the country, each as in effect today. Change them if your grid area is a different one.",
+          "data": {
+            "grid": "Grid",
+            "levies": "Levies"
           }
         },
         "import_yaml": {

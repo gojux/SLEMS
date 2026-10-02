@@ -9,7 +9,9 @@ Prices are net (without VAT), ``kwh`` items in ct/kWh, ``year`` items in
 
 A template may cover only some parts of a bill (``parts``): the energy of a
 supplier, the grid fees of a grid operator in a grid area (``grid_area``,
-e.g. the network level), the levies of a country.
+e.g. the network level; ``household: true`` for the one households usually
+have), the levies of a country. An energy template may name the grid
+operator it is usually combined with (``suggest: {grid_operator: …}``).
 
 Example (made-up values)::
 
@@ -45,8 +47,11 @@ FORMAT = "slems-tariff"
 VERSION = 1
 # Information about the tariff kept with it (not used for the prices).
 META_KEYS = (
-    "supplier", "grid_operator", "grid_area", "country", "year", "parts", "valid_from", "valid_to", "source",
+    "supplier", "grid_operator", "grid_area", "household", "country", "year", "parts",
+    "valid_from", "valid_to", "source", "suggest",
 )
+# Hints of a template for the other parts (``suggest``).
+SUGGEST_KEYS = ("grid_operator",)
 WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 DEFAULT_VAT = {
     "import": {"energy": 20.0, "grid": 20.0, "levies": 20.0},
@@ -156,6 +161,14 @@ def _meta_value(key: str, value: Any) -> Any:
         if not isinstance(value, int):
             raise TariffYamlError("yaml_field_invalid", key)
         return value
+    if key == "household":
+        if not isinstance(value, bool):
+            raise TariffYamlError("yaml_field_invalid", key)
+        return value
+    if key == "suggest":
+        if not isinstance(value, dict) or any(k not in SUGGEST_KEYS or not isinstance(v, str) for k, v in value.items()):
+            raise TariffYamlError("yaml_field_invalid", key)
+        return dict(value)
     if key == "parts":
         parts = value if isinstance(value, list) else [value]
         if any(part not in {group.value for group in Group} for part in parts):

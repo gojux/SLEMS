@@ -110,3 +110,39 @@ def test_shipped_templates_are_valid() -> None:
         assert part == expected, template.key
     files = list(SHIPPED_DIR.rglob("*.yaml")) if SHIPPED_DIR.is_dir() else []
     assert len(load_templates([("shipped", SHIPPED_DIR)])) == len(files), "a shipped template is invalid"
+
+
+def _grid(name: str, operator: str, valid_from: str, household: bool | None = None, parts: str = "[grid]") -> str:
+    extra = "" if household is None else f"household: {str(household).lower()}\n"
+    return (
+        f"format: slems-tariff\nversion: 1\nname: {name}\ngrid_operator: {operator}\ncountry: AT\nyear: 2026\n"
+        f"parts: {parts}\nvalid_from: {valid_from}\n{extra}source: ordinance\n"
+        "items:\n  - {name: Grid use, side: import, group: grid, unit: kwh, price: 6}\n"
+    )
+
+
+def test_grid_and_levies_are_suggested(tmp_path: Path) -> None:
+    from datetime import date
+
+    from custom_components.slems.tariff_templates import suggest_grid, suggest_levies
+
+    (tmp_path / "energy.yaml").write_text(
+        ENERGY.format(year=2026).replace("parts: [energy]", "parts: [energy]\nsuggest: {grid_operator: example grid}")
+    )
+    (tmp_path / "grid-2025.yaml").write_text(_grid("Level 7 old", "Example Grid", "2025-01-01", True))
+    (tmp_path / "grid-7.yaml").write_text(_grid("Level 7", "Example Grid", "2026-01-01", True))
+    (tmp_path / "grid-6.yaml").write_text(_grid("Level 6", "Example Grid", "2026-01-01", False))
+    (tmp_path / "other.yaml").write_text(_grid("Level 7", "Other Grid", "2026-01-01", True))
+    (tmp_path / "levies.yaml").write_text(_grid("Levies", "AT", "2026-01-01", parts="[levies]").replace("group: grid", "group: levies"))
+    templates = load_templates([("own", tmp_path)])
+    energy = next(t for t in templates if t.parts == ("energy",))
+    # The operator named by the energy template (any case), its household level in effect today.
+    assert suggest_grid(energy, templates, date(2026, 3, 1)).key == "own/grid-7.yaml"
+    assert suggest_grid(energy, templates, date(2025, 6, 1)).key == "own/grid-2025.yaml"
+    assert suggest_grid(None, templates, date(2026, 3, 1)) is None
+    assert suggest_levies(templates, date(2026, 3, 1)).key == "own/levies.yaml"
+    assert suggest_levies(templates, date(2025, 3, 1)) is None
+    # Two levels and none marked as households: nothing is guessed.
+    (tmp_path / "grid-7.yaml").write_text(_grid("Level 7", "Example Grid", "2026-01-01"))
+    (tmp_path / "grid-6.yaml").write_text(_grid("Level 6", "Example Grid", "2026-01-01"))
+    assert suggest_grid(energy, load_templates([("own", tmp_path)]), date(2026, 3, 1)) is None

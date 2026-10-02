@@ -282,8 +282,12 @@ converted.
 
 **Templates.** *Add tariff → From templates* offers tariffs with public list
 prices, per country and part of the bill: the energy of a supplier, the grid
-fees of a grid area, the levies; choose one per part and SLEMS combines them
-into one tariff (then compare it with a bill). Own templates: YAML files in
+fees of a grid area, the levies. First choose the energy tariff; the grid
+tariff usually combined with it (households) and the levies of the country
+are then preselected, each with the prices in effect today, and SLEMS
+combines them into one tariff (then compare it with a bill). The result is
+an ordinary tariff you can edit; later changes of a template do not touch
+it. Own templates: YAML files in
 the folder `slems_tariff_templates` of your Home Assistant configuration.
 Suggest a template for everyone as an
 [issue](https://github.com/gojux/SLEMS/issues) with the source of the

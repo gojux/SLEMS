@@ -292,9 +292,13 @@ Versionen werden umgewandelt.
 
 **Vorlagen.** *Tarif hinzufügen → Aus Vorlagen* bietet Tarife mit
 öffentlichen Listenpreisen an, je Land und Teil der Rechnung: die Energie
-eines Lieferanten, die Netzentgelte eines Netzgebiets, die Abgaben; je Teil
-eine wählen, SLEMS setzt sie zu einem Tarif zusammen (danach mit einer
-Rechnung vergleichen). Eigene Vorlagen: YAML-Dateien im Ordner
+eines Lieferanten, die Netzentgelte eines Netzgebiets, die Abgaben. Zuerst
+wählst du den Energietarif; der Netztarif, mit dem er meist kombiniert wird
+(Haushalte), und die Abgaben des Landes sind dann vorausgewählt, jeweils mit
+den heute gültigen Preisen, und SLEMS setzt alles zu einem Tarif zusammen
+(danach mit einer Rechnung vergleichen). Das Ergebnis ist ein normaler Tarif,
+den du bearbeiten kannst; spätere Änderungen einer Vorlage berühren ihn
+nicht. Eigene Vorlagen: YAML-Dateien im Ordner
 `slems_tariff_templates` deiner Home-Assistant-Konfiguration. Eine Vorlage für
 alle schlägst du als [Issue](https://github.com/gojux/SLEMS/issues) mit der
 Quelle der Preise vor. Ein Posten kann auch *Prozent der Gruppe* sein (z. B.

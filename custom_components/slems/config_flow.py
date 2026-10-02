@@ -173,9 +173,17 @@ from .tariff_templates import (
     Template,
     TemplatePartTwice,
     combine as combine_templates,
+    energy_choices,
+    grid_choices,
     label as template_label,
+    levies_choices,
     load_templates,
+    suggest_grid,
+    suggest_levies,
 )
+
+# Option "no template" of a template selection.
+_NO_TEMPLATE = "-"
 from .grid_meter import (
     Reader,
     SignMismatchError,
@@ -1480,6 +1488,7 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         self._check: dict[str, str] | None = None
         self._templates: list[Template] = []
         self._country: str | None = None
+        self._energy_template: Template | None = None
 
     @property
     def _items(self) -> list[dict[str, Any]]:
@@ -1498,10 +1507,10 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         countries = sorted({template.country for template in self._templates})
         if len(countries) == 1:
             self._country = countries[0]
-            return await self.async_step_template_pick()
+            return await self.async_step_template_energy()
         if user_input is not None:
             self._country = user_input["country"]
-            return await self.async_step_template_pick()
+            return await self.async_step_template_energy()
         return self.async_show_form(
             step_id="template",
             data_schema=vol.Schema(
@@ -1513,62 +1522,85 @@ class TariffSubentryFlow(ConfigSubentryFlow):
             ),
         )
 
-    async def async_step_template_pick(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
-        """Templates for the parts of the bill (energy, grid, levies), combined into one tariff."""
-        errors: dict[str, str] = {}
-        templates = {t.key: t for t in self._templates if t.country == self._country}
+    async def async_step_template_energy(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """The energy template (supplier); complete templates include grid and levies."""
+        templates = self._country_templates()
+        choices = energy_choices(templates.values())
+        if not choices:
+            return await self.async_step_template_rest()
         if user_input is not None:
-            chosen = [templates[key] for key in user_input.get("templates") or [] if key in templates]
+            self._energy_template = templates.get(user_input["energy"])
+            if self._energy_template is not None and self._energy_template.complete:
+                return await self._async_combine_templates([self._energy_template])
+            return await self.async_step_template_rest()
+        return self.async_show_form(
+            step_id="template_energy",
+            data_schema=vol.Schema({vol.Required("energy"): self._template_selector(choices)}),
+        )
+
+    async def async_step_template_rest(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Grid and levies, preselected: the grid operator the energy template names
+        (its household level) and the levies of the country, each in effect today."""
+        templates = self._country_templates()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            chosen = [
+                template
+                for template in (
+                    self._energy_template,
+                    templates.get(user_input.get("grid", "")),
+                    templates.get(user_input.get("levies", "")),
+                )
+                if template is not None
+            ]
             if not chosen:
                 errors["base"] = "template_none"
             else:
-                try:
-                    self._title, self._data = combine_templates(chosen)
-                except TemplatePartTwice:
-                    errors["base"] = "template_part_twice"
-                else:
-                    return await self.async_step_details()
-        words = _CHECK_WORDS["de" if self.hass.config.language.startswith("de") else "en"]
-        part_names = {group.value: words[group].capitalize() for group in Group}
-        options = [
-            selector.SelectOptionDict(value=key, label=template_label(template, part_names, words["own"]))
-            for key, template in templates.items()
-        ]
+                result = await self._async_combine_templates(chosen)
+                if result is not None:
+                    return result
+                errors["base"] = "template_part_twice"
+        today = dt_util.now().date()
+        grid = suggest_grid(self._energy_template, templates.values(), today)
+        levies = None if grid is not None and "levies" in grid.parts else suggest_levies(templates.values(), today)
+        defaults = user_input or {"grid": grid.key if grid else _NO_TEMPLATE, "levies": levies.key if levies else _NO_TEMPLATE}
         return self.async_show_form(
-            step_id="template_pick",
+            step_id="template_rest",
             data_schema=vol.Schema(
                 {
-                    vol.Required("templates", default=(user_input or {}).get("templates", [])): selector.SelectSelector(
-                        selector.SelectSelectorConfig(options=options, multiple=True, mode=selector.SelectSelectorMode.LIST)
-                    )
+                    vol.Required("grid", default=defaults["grid"]): self._template_selector(
+                        grid_choices(templates.values())
+                    ),
+                    vol.Required("levies", default=defaults["levies"]): self._template_selector(
+                        levies_choices(templates.values())
+                    ),
                 }
             ),
             errors=errors,
         )
 
-    async def async_step_import_yaml(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
-        """Paste a tariff as YAML (an export, a template or the answer of an AI)."""
-        errors: dict[str, str] = {}
-        detail = ""
-        if user_input is not None:
-            try:
-                self._title, self._data = parse_yaml(user_input["yaml"])
-            except TariffYamlError as err:
-                errors["base"], detail = err.key, err.detail
-            else:
-                return await self.async_step_details()
-        return self.async_show_form(
-            step_id="import_yaml",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("yaml", default=(user_input or {}).get("yaml", vol.UNDEFINED)): selector.TextSelector(
-                        selector.TextSelectorConfig(multiline=True)
-                    )
-                }
-            ),
-            errors=errors,
-            description_placeholders={"detail": detail, "version": str(YAML_VERSION)},
+    def _country_templates(self) -> dict[str, Template]:
+        return {t.key: t for t in self._templates if t.country == self._country}
+
+    def _template_selector(self, templates: list[Template]) -> selector.SelectSelector:
+        """Templates to choose from, with "none" first."""
+        words = _CHECK_WORDS["de" if self.hass.config.language.startswith("de") else "en"]
+        part_names = {group.value: words[group].capitalize() for group in Group}
+        options = [selector.SelectOptionDict(value=_NO_TEMPLATE, label=words["no_template"])] + [
+            selector.SelectOptionDict(value=t.key, label=template_label(t, part_names, words["own"])) for t in templates
+        ]
+        return selector.SelectSelector(
+            selector.SelectSelectorConfig(options=options, mode=selector.SelectSelectorMode.DROPDOWN)
         )
+
+    async def _async_combine_templates(self, chosen: list[Template]) -> SubentryFlowResult | None:
+        """One tariff of the chosen templates, on to name, role and VAT; None if
+        two of them cover the same part."""
+        try:
+            self._title, self._data = combine_templates(chosen)
+        except TemplatePartTwice:
+            return None
+        return await self.async_step_details()
 
     async def async_step_details(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         """Name, role and VAT."""
@@ -1861,14 +1893,14 @@ _CHECK_WORDS = {
     "de": {
         Side.IMPORT: "Bezug", Side.EXPORT: "Einspeisung", "computed": "berechnet", "bill": "Rechnung",
         Group.ENERGY: "Energie", Group.GRID: "Netz", Group.LEVIES: "Abgaben", "net": "netto",
-        "months": "Monate", "weekdays": "Wochentage", "own": "eigene Vorlage",
+        "months": "Monate", "weekdays": "Wochentage", "own": "eigene Vorlage", "no_template": "keine",
         Unit.SPOT: "Börsenpreis", Unit.MARKET_MONTH: "Monatsmarktpreis",
         "unpriced": "{kwh} kWh ohne Börsenpreis nicht berechnet (Börsenpreise abrufen einschalten oder warten, bis sie geladen sind).",
     },
     "en": {
         Side.IMPORT: "Import", Side.EXPORT: "Export", "computed": "computed", "bill": "bill",
         Group.ENERGY: "energy", Group.GRID: "grid", Group.LEVIES: "levies", "net": "net",
-        "months": "months", "weekdays": "weekdays", "own": "own template",
+        "months": "months", "weekdays": "weekdays", "own": "own template", "no_template": "none",
         Unit.SPOT: "spot price", Unit.MARKET_MONTH: "monthly market price",
         "unpriced": "{kwh} kWh without a market price not computed (switch on fetching the market prices or wait until they are loaded).",
     },

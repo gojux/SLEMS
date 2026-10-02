@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from datetime import date
 import logging
 from pathlib import Path
 from typing import Any
@@ -58,6 +59,14 @@ class Template:
     def own(self) -> bool:
         return self.key.startswith("own/")
 
+    @property
+    def complete(self) -> bool:
+        return len(self.parts) == len(PART_ORDER)
+
+    def valid_on(self, day: date) -> bool:
+        start, end = self.meta.get("valid_from"), self.meta.get("valid_to")
+        return (start is None or start <= day.isoformat()) and (end is None or day.isoformat() <= end)
+
     def sort_key(self) -> tuple:
         year = self.meta.get("year") or 0
         return (PART_ORDER.index(self.parts[0]) if self.parts else 0, self.provider.lower(), -year, self.name.lower())
@@ -91,6 +100,49 @@ def label(template: Template, part_names: dict[str, str], own: str) -> str:
     if meta.get("year"):
         text += f" ({meta['year']})"
     return f"{text} · {own}" if template.own else text
+
+
+def energy_choices(templates: Iterable[Template]) -> list[Template]:
+    """Templates to start with: energy (with or without further parts)."""
+    return [t for t in templates if t.parts and t.parts[0] == "energy"]
+
+
+def grid_choices(templates: Iterable[Template]) -> list[Template]:
+    return [t for t in templates if t.parts and t.parts[0] == "grid"]
+
+
+def levies_choices(templates: Iterable[Template]) -> list[Template]:
+    return [t for t in templates if t.parts == ("levies",)]
+
+
+def _current(templates: Iterable[Template], day: date) -> Template | None:
+    """The one template in effect on ``day`` (the latest start), None if none or
+    several equally likely ones (e.g. two network levels)."""
+    valid = [t for t in templates if t.valid_on(day)]
+    if not valid:
+        return None
+    latest = max(t.meta.get("valid_from") or "" for t in valid)
+    newest = [t for t in valid if (t.meta.get("valid_from") or "") == latest]
+    household = [t for t in newest if t.meta.get("household")]
+    if len(household) == 1:
+        return household[0]
+    return newest[0] if len(newest) == 1 else None
+
+
+def suggest_grid(energy: Template | None, templates: Iterable[Template], day: date) -> Template | None:
+    """The grid template usually combined with ``energy`` (its ``suggest``)."""
+    operator = ((energy.meta.get("suggest") or {}) if energy else {}).get("grid_operator")
+    if not operator:
+        return None
+    return _current(
+        [t for t in grid_choices(templates) if str(t.meta.get("grid_operator", "")).casefold() == operator.casefold()],
+        day,
+    )
+
+
+def suggest_levies(templates: Iterable[Template], day: date) -> Template | None:
+    """The levies of the country in effect on ``day``."""
+    return _current(levies_choices(templates), day)
 
 
 class TemplatePartTwice(ValueError):
