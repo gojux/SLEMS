@@ -480,13 +480,37 @@ replaced by the last valid value (for at most 30 seconds, then unknown).
   cloud based), *Repeat set point every* batteries that fall back to their own
   logic without new commands. Switch off the battery's own control (e.g. its
   zero export) in its integration, otherwise both control at the same time.
-  Batteries behind a cloud react slower than a Venus over Modbus; SLEMS learns
-  their response time, but the control is coarser. With cell voltages SLEMS
-  uses gentle charging near the top, the cell delta and cell balancing as for
-  a Venus (LFP cells). This control has been tested with simulated entities
-  and with a Marstek Venus E 3.0 through Omnibattery; please report your
-  experience with other devices in an
+
+  **Response time**: from a set point until the smart meter shows it, the
+  path adds up: the integration writing the command (often in its own
+  polling cycle, behind a cloud also with a rate limit), the battery itself
+  and the smart meter's update interval. SLEMS learns the response time per
+  battery (*Details* of the battery). Measured on one installation with the
+  same Marstek Venus E 3.0 and the smart meter read over Modbus every 0.5 s:
+  about 0.7–1.3 s directly over Modbus, about 4 s through Omnibattery
+  (entities); batteries behind a cloud are usually slower still. A slower
+  battery means more grid exchange after load changes and a coarser control;
+  together with faster batteries, those take the changes first (see
+  [distribution between batteries](#distribution-between-batteries)).
+  With cell voltages SLEMS uses gentle charging near the top, the cell delta
+  and cell balancing as for a Venus (LFP cells). This control has been tested
+  with simulated entities and with a Marstek Venus E 3.0 through Omnibattery;
+  please report your experience with other devices in an
   [issue](https://github.com/gojux/SLEMS/issues).
+
+  **Directly or through another integration?** Where SLEMS supports a battery
+  directly (Marstek Venus E 3.0 over Modbus), that is the better choice: it
+  reacts faster, has fewer parts in between and gives SLEMS more data (cell
+  voltages, counters, firmware, OTA state). Through another integration makes
+  sense if the battery is not supported directly, if that integration must
+  keep the battery's only Modbus connection, or if no network cable reaches
+  it. The difference matters most with fast load changes (cooking, kettle).
+
+  **Another battery model?** If you would like SLEMS to support a model
+  directly, please open an [issue](https://github.com/gojux/SLEMS/issues) with
+  manufacturer and model, interface (Modbus TCP/RTU, local API, cloud only),
+  a register list or API documentation if available, and the Home Assistant
+  integration that exists for it.
 
   **Example: a battery through Omnibattery.** For a battery model SLEMS does
   not support directly, [Omnibattery](https://github.com/ffunes/Omnibattery)

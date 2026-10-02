@@ -501,14 +501,40 @@ Sekunden, danach unbekannt).
   Integrationen mit begrenzter Befehlsrate (oft über eine Cloud), *Sollwert
   wiederholen alle* für Batterien, die ohne neue Befehle auf ihre eigene Logik
   zurückfallen. Die eigene Regelung der Batterie (z. B. ihre Nulleinspeisung)
-  in ihrer Integration ausschalten, sonst regeln beide gleichzeitig. Batterien
-  über eine Cloud reagieren langsamer als eine Venus über Modbus; SLEMS lernt
-  ihre Reaktionszeit, die Regelung ist aber gröber. Mit Zellspannungen nutzt
+  in ihrer Integration ausschalten, sonst regeln beide gleichzeitig.
+
+  **Reaktionszeit**: Vom Sollwert bis der Smart Meter ihn zeigt, addiert sich
+  der Weg: die Integration, die den Befehl schreibt (oft in ihrem eigenen
+  Abfragetakt, über eine Cloud auch mit Ratenbegrenzung), die Batterie selbst
+  und das Aktualisierungsintervall des Smart Meters. SLEMS lernt die
+  Reaktionszeit je Batterie (*Details* der Batterie). Gemessen an einer Anlage
+  mit derselben Marstek Venus E 3.0 und dem Smart Meter per Modbus alle 0,5 s:
+  etwa 0,7–1,3 s direkt per Modbus, etwa 4 s über Omnibattery (Entities);
+  Batterien über eine Cloud sind meist noch langsamer. Eine langsamere
+  Batterie bedeutet mehr Netzaustausch nach Laständerungen und eine gröbere
+  Regelung; zusammen mit schnelleren Batterien übernehmen diese die Änderungen
+  zuerst (siehe [Aufteilung auf die Batterien](#aufteilung-auf-die-batterien)).
+  Mit Zellspannungen nutzt
   SLEMS sanftes Laden nahe voll, das Zell-Delta und den Zellausgleich wie bei
   einer Venus (LFP-Zellen). Diese Steuerung ist mit simulierten Entities und
   mit einer Marstek Venus E 3.0 über Omnibattery getestet; Erfahrungen mit
   anderen Geräten bitte als [Issue](https://github.com/gojux/SLEMS/issues)
   melden.
+
+  **Direkt oder über eine andere Integration?** Wo SLEMS eine Batterie direkt
+  unterstützt (Marstek Venus E 3.0 per Modbus), ist das die bessere Wahl: Sie
+  reagiert schneller, es gibt weniger Zwischenschritte, und SLEMS bekommt mehr
+  Daten (Zellspannungen, Zähler, Firmware, OTA-Zustand). Der Weg über eine
+  andere Integration ist sinnvoll, wenn die Batterie nicht direkt unterstützt
+  wird, wenn diese Integration die einzige Modbus-Verbindung der Batterie
+  behalten soll oder wenn kein Netzwerkkabel hinreicht. Der Unterschied zeigt
+  sich vor allem bei schnellen Laständerungen (Kochen, Wasserkocher).
+
+  **Ein weiteres Batteriemodell?** Soll SLEMS ein Modell direkt unterstützen,
+  bitte ein [Issue](https://github.com/gojux/SLEMS/issues) anlegen mit
+  Hersteller und Modell, Schnittstelle (Modbus TCP/RTU, lokale API, nur
+  Cloud), Registerliste oder API-Doku, falls vorhanden, und der
+  Home-Assistant-Integration, die es dafür gibt.
 
   **Beispiel: eine Batterie über Omnibattery.** Für ein Batteriemodell, das
   SLEMS nicht direkt unterstützt, kann
