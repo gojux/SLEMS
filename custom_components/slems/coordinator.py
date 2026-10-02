@@ -2574,7 +2574,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     def _count_target(
         self, consumer: ConsumerConfig, state: ConsumerState, now: float, commanded_on: bool
     ) -> None:
-        """Progress of the consumer's daily target; a missed one is notified once."""
+        """Progress of the consumer's daily target; a missed one is notified once
+        (not when SLEMS could not control the consumer at some time of the period)."""
         settings = self.consumer_targets[consumer.subentry_id]
         if settings.type is TargetType.NONE:
             return
@@ -2583,7 +2584,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         got = self.target_got(settings, progress)
         end = progress.end
         local_now = dt_util.now()
-        result = progress.update(now, local_now, settings, state.power_w, commanded_on)
+        result = progress.update(
+            now,
+            local_now,
+            settings,
+            state.power_w,
+            commanded_on,
+            controlled=self.settings.operating_mode is OperatingMode.ACTIVE
+            and consumer.subentry_id not in self.consumer_control_disabled,
+        )
         temperature = target_temperature(settings, state.temperature_c, state.temperatures_c)
         start = window_start(settings, progress.end) if progress.end is not None else None
         # Temperatures between the deadline and midnight belong to no day.
@@ -2595,7 +2604,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             and (start is None or local_now >= start)
         ):
             progress.track_temperature(settings, temperature)
-        if result == "missed" and end is not None:
+        # Only if SLEMS could control the consumer all the period.
+        if result == "missed" and end is not None and progress.last_controlled:
             self.config_entry.async_create_background_task(
                 self.hass,
                 self.problems.async_notify_target_missed(

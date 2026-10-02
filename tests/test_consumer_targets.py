@@ -283,3 +283,19 @@ def test_surplus_demand_is_what_the_forced_run_leaves() -> None:
         earliest, state(earliest, progress, now, power_w=2000), now, energy_wh=4000, forced_wh=0, power_w=2000
     )
     assert demand.start == local(11)
+
+
+def test_missed_period_remembers_whether_slems_could_control() -> None:
+    settings = TargetSettings(type=TargetType.RUNTIME, hours=1.0)
+    progress = TargetProgress()
+    # Control switched off for a while in the period: missed, but not controlled.
+    progress.update(0.0, local(20), settings, 0.0, False)
+    progress.update(60.0, local(20, 1), settings, 0.0, False, controlled=False)
+    progress.update(120.0, local(20, 2), settings, 0.0, False)
+    assert progress.update(180.0, local(22, 1), settings, 0.0, False) == "missed"
+    assert progress.last_controlled is False
+    # The next period under control all the time: a missed target counts.
+    assert progress.update(240.0, local(22, 1, day=2), settings, 0.0, False) == "missed"
+    assert progress.last_controlled is True
+    restored = TargetProgress.from_dict(progress.as_dict())
+    assert restored.last_controlled is True and restored.uncontrolled is False

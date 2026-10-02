@@ -129,6 +129,12 @@ class TargetProgress:
     temperature_sensor: str | None = None
     # "met" / "missed" of the last period.
     last_result: str | None = None
+    # SLEMS could not control the consumer at some time of the period
+    # (operating mode not active, its control switched off).
+    uncontrolled: bool = False
+    # The same for the last period: a missed target is only notified if SLEMS
+    # controlled the consumer all the time.
+    last_controlled: bool = True
     # The previous sample: its state applies until this one.
     _last: tuple[float, float | None, bool] | None = field(default=None, repr=False)
 
@@ -139,8 +145,12 @@ class TargetProgress:
         settings: TargetSettings,
         power_w: float | None,
         commanded_on: bool,
+        controlled: bool = True,
     ) -> str | None:
-        """Count one poll; returns the result when a period ended."""
+        """Count one poll; returns the result when a period ended.
+
+        ``controlled``: SLEMS may control the consumer right now.
+        """
         result = None
         end = period_end(local_now, settings.deadline)
         if self.end is None:
@@ -148,7 +158,10 @@ class TargetProgress:
         elif local_now >= self.end:
             result = "met" if self.met(settings) else "missed"
             self.last_result = result
+            self.last_controlled = not self.uncontrolled
             self._reset(end)
+        if not controlled:
+            self.uncontrolled = True
         elif end != self.end:
             # The deadline was changed: the counters stay.
             self.end = end
@@ -169,6 +182,7 @@ class TargetProgress:
 
     def _reset(self, end: datetime) -> None:
         self.end = end
+        self.uncontrolled = False
         self.runtime_s = self.enabled_s = self.energy_wh = 0.0
         self.min_reached = self.done = False
         self.done_target_c = None
@@ -223,6 +237,8 @@ class TargetProgress:
             "done_target_c": self.done_target_c,
             "temperature_sensor": self.temperature_sensor,
             "last_result": self.last_result,
+            "uncontrolled": self.uncontrolled,
+            "last_controlled": self.last_controlled,
         }
 
     @classmethod
@@ -239,6 +255,8 @@ class TargetProgress:
             done_target_c=data.get("done_target_c"),
             temperature_sensor=data.get("temperature_sensor"),
             last_result=data.get("last_result"),
+            uncontrolled=data.get("uncontrolled", False),
+            last_controlled=data.get("last_controlled", True),
         )
 
 

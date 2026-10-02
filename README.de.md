@@ -932,7 +932,9 @@ Je gesteuertem Verbraucher, auf seiner Karte unter *Tagesziel*.
   Luftentfeuchter erst ab 10:00); die späteste Startzeit liegt nie davor.
 - **Quelle** bestimmt, was den Rest rechtzeitig decken darf:
   - *Nur Überschuss* (Standard; das Ziel kann verfehlt werden, dann meldet es
-    eine Benachrichtigung),
+    eine Benachrichtigung – nicht, wenn SLEMS den Verbraucher in der Periode
+    zeitweise nicht steuern konnte: Betriebsmodus nicht *Aktiv* oder seine
+    *Steuerung aktiv* ausgeschaltet),
   - *Überschuss + Batterie* (ab der spätesten Startzeit läuft der Verbraucher
     unabhängig vom Überschuss, solange die Batterien liefern können, ein
     leistungsgeregelter höchstens mit ihrer Entladeleistung),
