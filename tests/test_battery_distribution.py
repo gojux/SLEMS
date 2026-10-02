@@ -181,3 +181,69 @@ def test_full_charge_battery_spared_while_the_others_are_above_half() -> None:
     # The others cannot deliver the power: it helps.
     result = settle(BatteryDistributor(), -6000, units, full_charge="c")
     assert result.power_w["c"] < 0
+
+
+def _speed_units(fast_s: float = 1.0, slow_s: float = 6.0):
+    from custom_components.slems.battery_distribution import BatteryUnit
+
+    return [
+        BatteryUnit("fast", 50, 2500, 2500, response_s=fast_s),
+        BatteryUnit("slow", 50, 2500, 2500, response_s=slow_s),
+    ]
+
+
+def _shared_settings():
+    from custom_components.slems.battery_distribution import RotationSettings
+
+    return RotationSettings(soc_threshold_pct=10, min_interval_s=0, ramp_rate_w_per_s=10_000, ramp_max_s=0.1)
+
+
+def test_fast_battery_takes_a_change_first() -> None:
+    from custom_components.slems.battery_distribution import BatteryDistributor
+
+    dist = BatteryDistributor()
+    units = _speed_units()
+    # Settle at 3 kW discharging (both batteries share).
+    for t in range(30):
+        result = dist.distribute(-3000, units, _shared_settings(), float(t))
+    assert result.power_w["slow"] == pytest.approx(-1500, abs=50)
+    # A jump to 4 kW: the fast battery takes the extra kW at once.
+    result = dist.distribute(-4000, units, _shared_settings(), 30.1)
+    assert result.power_w["fast"] < -2400
+    assert result.power_w["slow"] > -1600
+    assert sum(result.power_w.values()) == pytest.approx(-4000)
+    # Later the split is even again.
+    for t in range(31, 70):
+        result = dist.distribute(-4000, units, _shared_settings(), float(t))
+    assert result.power_w["slow"] == pytest.approx(-2000, abs=50)
+
+
+def test_no_battery_against_the_direction_of_the_total() -> None:
+    from custom_components.slems.battery_distribution import BatteryDistributor
+
+    dist = BatteryDistributor()
+    units = _speed_units()
+    for t in range(30):
+        dist.distribute(-3000, units, _shared_settings(), float(t))
+    # Suddenly a small surplus: nothing discharges while the total charges.
+    result = dist.distribute(500, units, _shared_settings(), 30.1)
+    assert all(power >= 0 for power in result.power_w.values())
+    assert sum(result.power_w.values()) == pytest.approx(500)
+    # A drop to 0.5 kW discharging: the fast one gives up first, never charges.
+    for t in range(31, 70):
+        dist.distribute(-3000, units, _shared_settings(), float(t))
+    result = dist.distribute(-500, units, _shared_settings(), 70.1)
+    assert all(power <= 0 for power in result.power_w.values())
+    assert sum(result.power_w.values()) == pytest.approx(-500)
+
+
+def test_similar_batteries_split_as_before() -> None:
+    from custom_components.slems.battery_distribution import BatteryDistributor
+
+    dist = BatteryDistributor()
+    # Learning noise of similar batteries (0.7 s against 2.2 s) is not a difference.
+    units = _speed_units(0.7, 2.2)
+    for t in range(30):
+        dist.distribute(-3000, units, _shared_settings(), float(t))
+    result = dist.distribute(-4000, units, _shared_settings(), 30.1)
+    assert result.power_w["fast"] == pytest.approx(result.power_w["slow"], abs=50)

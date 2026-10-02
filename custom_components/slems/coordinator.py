@@ -3045,6 +3045,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     max_charge_w=0.0 if resting else limits.charge_w,
                     max_discharge_w=0.0 if resting else limits.discharge_w,
                     loss_model=battery.loss_curve.model(LossModel()),
+                    response_s=self.controller.battery_responses.learned(battery.subentry_id),
                     leaving_fraction=(
                         None
                         if battery.plannable

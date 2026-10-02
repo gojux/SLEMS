@@ -24,6 +24,15 @@ longer selected, its weight is limited to the remaining fraction of
 ``LEAVE_RAMP_S`` (independent of how often the distribution runs) and it
 never helps out.
 
+Fast batteries first: if the batteries react at clearly different speeds
+(learned response times, the slowest at least ``SPEED_RATIO`` times and
+``MIN_SPEED_GAP_S`` slower than the fastest), the distribution above is made
+for a *settled* total that follows the total with the slow batteries'
+response time, and the fastest battery takes the difference at once. Changes
+are first absorbed by the battery that can follow them, then move over to
+the efficient split. No battery works against the direction of the total;
+what the fast battery cannot take, the others take at once.
+
 A battery due for its regular full charge (see full_charge) gets the charge
 power first; the others share the rest as above. When discharging it is
 spared while all others have more than ``SPARE_OTHERS_MIN_SOC_PCT`` and can
@@ -38,6 +47,10 @@ from dataclasses import dataclass, field
 from .full_charge import SPARE_OTHERS_MIN_SOC_PCT
 
 KEEP_TOLERANCE = 1.05
+# Fast batteries first only with clearly different response times.
+SPEED_RATIO = 2.0
+# Learned times of similar batteries differ by a second or two (noise).
+MIN_SPEED_GAP_S = 3.0
 # Below this total loss the loss model gives no reason to run more batteries.
 MIN_RELEVANT_LOSS_W = 1.0
 # Ramp-out of a disabled battery; with the command transfer (about 1 s for two
@@ -73,6 +86,8 @@ class BatteryUnit:
     loss_model: LossModel = field(default_factory=LossModel)
     # Being disabled: remaining share of the ramp-out (1 -> 0), None otherwise.
     leaving_fraction: float | None = None
+    # Learned time until the grid meter shows a command (None: not learned).
+    response_s: float | None = None
 
     @property
     def leaving(self) -> bool:
@@ -113,6 +128,8 @@ class BatteryDistributor:
         self._last_rotation: float | None = None
         self._weights: dict[str, float] = {}
         self._last_call: float | None = None
+        # Total the slow batteries follow (fast batteries first), None: not in use.
+        self._settled: float | None = None
 
     def distribute(
         self,
@@ -129,6 +146,29 @@ class BatteryDistributor:
         """
         elapsed = 0.0 if self._last_call is None else max(0.0, now - self._last_call)
         self._last_call = now
+        fast, slow_s = _fast_battery(units, total_w)
+        if fast is None:
+            self._settled = None
+            return self._distribute_all(total_w, units, settings, now, elapsed, full_charge)
+        settled = total_w if self._settled is None else self._settled
+        if settled * total_w < 0:
+            # The direction changed: the slow batteries leave it at once.
+            settled = 0.0
+        settled += (total_w - settled) * min(1.0, elapsed / slow_s)
+        self._settled = settled
+        result = self._distribute_all(settled, units, settings, now, elapsed, full_charge)
+        _shift_to_fast(result, total_w - settled, fast, units, total_w)
+        return result
+
+    def _distribute_all(
+        self,
+        total_w: float,
+        units: Sequence[BatteryUnit],
+        settings: RotationSettings,
+        now: float,
+        elapsed: float,
+        full_charge: str | None,
+    ) -> Distribution:
         unit = next((u for u in units if u.battery_id == full_charge), None)
         if unit is not None and total_w > 0 and unit.can(True):
             first = min(total_w, unit.max_charge_w)
@@ -334,6 +374,53 @@ class BatteryDistributor:
             result[unit.battery_id] += take
             remaining -= take
         return result
+
+
+def _fast_battery(units: Sequence[BatteryUnit], total_w: float) -> tuple[BatteryUnit | None, float]:
+    """The battery to take changes first and the slow batteries' response time.
+
+    None if the batteries do not differ enough in speed (or a time is not learned).
+    """
+    charging = total_w > 0
+    active = [u for u in units if not u.leaving and (total_w == 0 or u.can(charging))]
+    if len(active) < 2 or any(u.response_s is None for u in active):
+        return None, 0.0
+    fast = min(active, key=lambda u: (u.response_s, u.battery_id))
+    slow_s = max(u.response_s for u in active)
+    if slow_s < fast.response_s * SPEED_RATIO or slow_s - fast.response_s < MIN_SPEED_GAP_S:
+        return None, 0.0
+    return fast, slow_s
+
+
+def _shift_to_fast(
+    result: Distribution,
+    delta_w: float,
+    fast: BatteryUnit,
+    units: Sequence[BatteryUnit],
+    total_w: float,
+) -> None:
+    """Give the fast battery ``delta_w`` on top; never against the direction of the total."""
+    if abs(delta_w) < 1e-6:
+        return
+
+    def bounds(unit: BatteryUnit) -> tuple[float, float]:
+        if total_w > 0:
+            return 0.0, unit.max_charge_w if unit.can(True) else 0.0
+        if total_w < 0:
+            return -(unit.max_discharge_w if unit.can(False) else 0.0), 0.0
+        return 0.0, 0.0
+
+    power = result.power_w
+    rest = delta_w
+    order = [fast, *[u for u in units if u is not fast and not u.leaving]]
+    for unit in order:
+        low, high = bounds(unit)
+        current = power.get(unit.battery_id, 0.0)
+        target = min(high, max(low, current + rest))
+        power[unit.battery_id] = target
+        rest -= target - current
+        if abs(rest) < 1e-6:
+            break
 
 
 def _rank(unit: BatteryUnit, charging: bool) -> float:

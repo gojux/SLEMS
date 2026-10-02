@@ -521,6 +521,13 @@ rate* (default 100 W/s), but never takes longer than *Battery rotation maximum
 ramp time* (default 30 s). The conversion losses per power level are learned
 from the battery's AC and DC power.
 
+Batteries that react at clearly different speeds (learned response times,
+the slowest at least twice and 3 s slower than the fastest, e.g. a Venus over
+Modbus next to a battery over a cloud integration): changes of the total
+power go to the fastest battery first and then move over to the efficient
+split with the response time of the slower ones. No battery works against the
+direction of the total.
+
 Every battery has an *Enabled* switch. A disabled battery is still measured
 (its power is part of the energy balance), but it is neither planned with nor
 controlled, and it does not count towards the total state of charge. If it is

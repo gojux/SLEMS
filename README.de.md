@@ -545,6 +545,14 @@ Batteriewechsel* (Standard 100 W/s), aber nie länger als die *Maximale
 Übergangszeit Batteriewechsel* (Standard 30 s). Die Umwandlungsverluste je
 Leistungsbereich lernt SLEMS aus AC- und DC-Leistung der Batterie.
 
+Reagieren die Batterien deutlich unterschiedlich schnell (gelernte
+Reaktionszeiten, die langsamste mindestens doppelt und 3 s langsamer als die
+schnellste, z. B. eine Venus über Modbus neben einer Batterie über eine
+Cloud-Integration), übernimmt die schnellste Änderungen der Gesamtleistung
+zuerst; danach wandert die Leistung mit der Reaktionszeit der langsameren zur
+effizienten Aufteilung. Keine Batterie arbeitet gegen die Richtung der
+Gesamtleistung.
+
 Jede Batterie hat einen Schalter *Aktiviert*. Eine deaktivierte Batterie wird
 weiter gemessen (ihre Leistung gehört zur Energiebilanz), aber weder
 eingeplant noch gesteuert und zählt nicht zum Gesamt-Ladezustand. Entlädt sie
