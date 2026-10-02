@@ -217,3 +217,30 @@ def test_kwh_price_per_quarter_hour() -> None:
     spot = Tariff("S", Role.CURRENT, (TariffItem("E", Side.IMPORT, Group.ENERGY, Unit.SPOT, 1.0),), {})
     assert kwh_price(spot, Side.IMPORT, noon, None, None) is None
     assert kwh_price(spot, Side.IMPORT, noon, -3.0, None) == pytest.approx(-2.0)
+
+
+def test_separate_contracts_are_combined_and_comparisons_completed() -> None:
+    from custom_components.slems.tariff import combine_tariffs
+
+    supply = Tariff("Supply", Role.CURRENT, (
+        TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.KWH, 20.0),
+    ), {(Side.IMPORT, Group.ENERGY): 20.0})
+    feed_in = Tariff("Feed-in", Role.CURRENT, (
+        TariffItem("Credit", Side.EXPORT, Group.ENERGY, Unit.KWH, 7.0),
+    ), {(Side.EXPORT, Group.GRID): 20.0})
+    dynamic = Tariff("Dynamic", Role.COMPARISON, (
+        TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.SPOT, 1.5),
+    ), {(Side.IMPORT, Group.ENERGY): 20.0})
+    combined = combine_tariffs({"a": supply, "b": feed_in, "c": dynamic})
+    # One current contract (under the first id), then the comparison.
+    assert list(combined) == ["a", "c"]
+    current = combined["a"]
+    assert current.name == "Supply + Feed-in"
+    assert {item.side for item in current.items} == {Side.IMPORT, Side.EXPORT}
+    assert current.vat(Side.EXPORT, Group.GRID) == 20.0
+    # The comparison keeps its own import and takes the feed-in of the current contract.
+    comparison = combined["c"]
+    assert [item.name for item in comparison.items] == ["Energy", "Credit"]
+    assert comparison.items[0].unit is Unit.SPOT
+    # A single complete tariff stays as it is.
+    assert combine_tariffs({"x": example()}) == {"x": example()}

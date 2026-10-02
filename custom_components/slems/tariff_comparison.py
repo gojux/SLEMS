@@ -32,7 +32,7 @@ from .const import (
 from .energy_history import async_grid_energy
 from .forecast import async_statistic_means
 from .price_backtest import BacktestBattery, play
-from .tariff import Role, Side, Tariff, compute_bill, tariff_from_data
+from .tariff import Side, Tariff, combine_tariffs, compute_bill, tariff_from_data
 
 if TYPE_CHECKING:
     from .coordinator import SlemsConfigEntry
@@ -127,13 +127,16 @@ def backtest_savings(
 
 
 def configured_tariffs(entry: SlemsConfigEntry) -> dict[str, Tariff]:
-    """The tariffs of the entry, the current one(s) first."""
-    tariffs = {
-        subentry.subentry_id: tariff_from_data(subentry.title, subentry.data)
-        for subentry in entry.subentries.values()
-        if subentry.subentry_type == SUBENTRY_TYPE_TARIFF
-    }
-    return dict(sorted(tariffs.items(), key=lambda item: item[1].role is not Role.CURRENT))
+    """The tariffs of the entry (see tariff.combine_tariffs): the current
+    contract first (several current tariffs together), then the comparison
+    tariffs, each completed with the current contract's missing side."""
+    return combine_tariffs(
+        {
+            subentry.subentry_id: tariff_from_data(subentry.title, subentry.data)
+            for subentry in entry.subentries.values()
+            if subentry.subentry_type == SUBENTRY_TYPE_TARIFF
+        }
+    )
 
 
 async def async_tariff_comparison(hass: HomeAssistant, entry: SlemsConfigEntry) -> dict[str, Any]:

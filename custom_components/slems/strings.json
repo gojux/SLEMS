@@ -383,7 +383,7 @@
             "vat_export_other": "VAT on other feed-in items"
           },
           "data_description": {
-            "role": "Current: the tariff you pay now. Comparison: e.g. a dynamic tariff to compare with in the simulation.",
+            "role": "Current: what you pay now. Several current tariffs (e.g. separate contracts for import and feed-in) count together as one. Comparison: e.g. a dynamic tariff; a comparison tariff with items for only one side takes the other side from the current tariffs.",
             "vat_export_energy": "Often 0 % for private PV systems."
           }
         },
@@ -421,6 +421,7 @@
             "delete": "Remove this line"
           },
           "data_description": {
+            "unit": "Spot price and monthly market price use the market prices of the *Price source* in the SLEMS settings (group *Prices*); *Fetch market prices* must be on.",
             "price": "Net (without VAT) in ct/kWh or €/year as on the bill; a discount is negative. On the feed-in side the energy price is the credit you get. For spot price and monthly market price: the fixed markup in ct/kWh (negative: deduction).",
             "factor_pct": "Only for spot price and monthly market price: price = market price × (1 + percent) + price. E.g. −10 % for a credit of 90 % of the market price.",
             "month_prices": "Optional, only for the monthly market price: published values in ct/kWh, e.g. \"2026-01: 8.5; 2026-02: 7.9\". Months without a value: mean of the spot prices weighted by your feed-in.",

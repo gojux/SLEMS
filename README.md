@@ -254,7 +254,10 @@ tariff the way your bill shows it; the values stay in your Home Assistant.
 
 1. Name, role (*current tariff* or *comparison tariff*) and VAT: for the
    consumption bill, for the feed-in energy (often 0 % for private PV) and for
-   the other feed-in items.
+   the other feed-in items. Separate contracts for import and feed-in: add
+   both as *current tariff*, they count together as one. A comparison tariff
+   with items for only one side (e.g. a dynamic supply tariff) takes the other
+   side from the current tariffs, so the comparison always shows total costs.
 2. The lines of the bill one by one: name, side (*consumption* or
    *feed-in*), group (*energy*, *grid*, *levies*) and the net price (without
    VAT; SLEMS adds the VAT of step 1) in ct/kWh or €/year (charged per day; a

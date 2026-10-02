@@ -260,7 +260,11 @@ Home Assistant.
 
 1. Name, Rolle (*aktueller Tarif* oder *Vergleichstarif*) und Umsatzsteuer:
    für die Bezugsrechnung, für die eingespeiste Energie (bei privaten
-   PV-Anlagen oft 0 %) und für die anderen Einspeise-Posten.
+   PV-Anlagen oft 0 %) und für die anderen Einspeise-Posten. Getrennte
+   Verträge für Bezug und Einspeisung: beide als *aktueller Tarif* anlegen, sie
+   zählen zusammen als einer. Ein Vergleichstarif mit Posten nur für eine Seite
+   (z. B. ein dynamischer Stromtarif) übernimmt die andere Seite von den
+   aktuellen Tarifen, der Vergleich zeigt so immer die Gesamtkosten.
 2. Die Posten der Rechnung einzeln: Name, Seite (*Bezug* oder
    *Einspeisung*), Gruppe (*Energie*, *Netz*, *Abgaben*) und Nettopreis (ohne
    USt.; SLEMS rechnet die USt. aus Schritt 1 dazu) in ct/kWh oder €/Jahr (je

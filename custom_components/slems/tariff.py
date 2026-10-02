@@ -27,7 +27,7 @@ on a feed-in credit note.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from typing import Any
@@ -386,3 +386,51 @@ def tariff_from_data(name: str, data: Mapping[str, Any]) -> Tariff:
 
 def vat_data(values: Iterable[tuple[Side, Group, float]]) -> dict[str, float]:
     return {f"{side.value}.{group.value}": value for side, group, value in values}
+
+
+def _sides(tariff: Tariff) -> set[Side]:
+    return {item.side for item in tariff.items}
+
+
+def _with_side(target: Tariff, source: Tariff, side: Side) -> Tariff:
+    """``target`` with the items and VAT of ``source`` for ``side`` added."""
+    return replace(
+        target,
+        items=target.items + tuple(item for item in source.items if item.side is side),
+        vat_pct={
+            **target.vat_pct,
+            **{key: value for key, value in source.vat_pct.items() if key[0] is side},
+        },
+    )
+
+
+def combine_tariffs(tariffs: Mapping[str, Tariff]) -> dict[str, Tariff]:
+    """The current contract first, then the comparison tariffs, each complete.
+
+    Several current tariffs (e.g. import and feed-in with different
+    contracts) form one contract, kept under the id of the first. A
+    comparison tariff without items for a side takes that side from the
+    current contract, so tariffs are compared with their total costs.
+    """
+    current_ids = [key for key, tariff in tariffs.items() if tariff.role is Role.CURRENT]
+    result: dict[str, Tariff] = {}
+    current: Tariff | None = None
+    for key in current_ids:
+        tariff = tariffs[key]
+        if current is None:
+            current = tariff
+            continue
+        current = replace(current, name=f"{current.name} + {tariff.name}")
+        for side in _sides(tariff):
+            current = _with_side(current, tariff, side)
+    if current is not None:
+        result[current_ids[0]] = current
+    for key, tariff in tariffs.items():
+        if tariff.role is Role.CURRENT:
+            continue
+        if current is not None:
+            for side in Side:
+                if side not in _sides(tariff) and side in _sides(current):
+                    tariff = _with_side(tariff, current, side)
+        result[key] = tariff
+    return result
