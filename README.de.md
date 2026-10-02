@@ -185,7 +185,7 @@ spezialisiert; evcc ergänzt SLEMS gut (siehe [Roadmap](#roadmap)).
 | Dashboard (Seitenleiste): Energiefluss, Kennzahlen, Tagesdiagramm mit Prognose und Plan, Batterien, Verbraucher, Einstellungen | ✅ |
 | Simulation im Dashboard: Tagesplan mit anderen Einstellungen im Vergleich zum aktuellen (heute oder morgen) | ✅ |
 | Tarife wie auf der Rechnung (Zeitfenster, Umsatzsteuer je Gruppe) mit Prüfung gegen eine Rechnung; Börsenpreise (APG, SMARD, Energy-Charts) nur mit Zustimmung; monatlicher Tarifvergleich | ✅ |
-| Preisbewusste Steuerung: gespeicherte Energie für die teuren Stunden halten | ✅ |
+| Preisbewusste Steuerung: gespeicherte Energie für die teuren Stunden halten, Netzanteil der Tagesziele im günstigsten Fenster | ✅ |
 
 ## Installation
 
@@ -306,7 +306,11 @@ günstigere Stunden – kein Laden aus dem Netz und keine Einspeisung aus den
 Batterien. Jeder zeitabhängige Preis zählt: Börsenpreise oder Zeitfenster
 eines festen Tarifs. Bezugsspitzen abfangen gilt weiter. Die Strategie zeigt
 *Für teure Stunden halten* mit den betroffenen Stunden, Tagesdiagramm und
-Simulation berücksichtigen es.
+Simulation berücksichtigen es. Tagesziele mit der Quelle *+ Netz*: Reicht der
+prognostizierte Überschuss ohnehin nicht, startet der erzwungene Lauf im
+Fenster mit dem niedrigsten mittleren Bezugspreis vor der Frist (um
+mindestens den Mindestgewinn günstiger als zum spätesten Start); die
+Verbraucherkarte zeigt *ab … im günstigsten Fenster*.
 
 ### PV-Prognose
 
@@ -1460,10 +1464,10 @@ Mögliche Erweiterungen:
 - Batterien mit Verfügbarkeit (z. B. „Auto angesteckt“) und einer Reserve bis
   zu einer Uhrzeit: Grundlage für ein Auto, das das Haus versorgt (V2H).
 - Gelernte Anwesenheit des Autos für die Planung.
-- Mehr preisbewusste Steuerung zusätzlich zu den bestehenden Regeln:
-  Tagesziele der Verbraucher in günstige Fenster, Laden aus dem Netz in
-  günstigen oder negativen Stunden und Einspeisen aus den Batterien bei hohen
-  Preisen (beides optional); danach ein Tarifvergleich, der das einbezieht.
+- Mehr preisbewusste Steuerung zusätzlich zu den bestehenden Regeln: Laden
+  aus dem Netz in günstigen oder negativen Stunden und Einspeisen aus den
+  Batterien bei hohen Preisen (beides optional); danach ein Tarifvergleich,
+  der das einbezieht.
 - Weitere Batteriemodelle über die Treiber-Schnittstelle.
 
 ## Entwicklung

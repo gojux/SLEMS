@@ -158,6 +158,7 @@ from .consumer_targets import (
     TargetProgress,
     TargetSettings,
     TargetState,
+    START_MARGIN,
     SurplusDemand,
     energy_to_target,
     evaluate,
@@ -168,7 +169,7 @@ from .consumer_targets import (
 )
 from .night_discharge import NightDischargePlan, plan_night_discharge, pv_takeover
 from .price_chart import hourly_import_prices
-from .price_hold import PriceHold, plan_price_hold
+from .price_hold import PriceHold, cheapest_start, plan_price_hold
 from .tariff_comparison import configured_tariffs
 from .peak_shaving import auto_limit, hours_until_refill
 from .pv_forecast import (
@@ -2423,16 +2424,22 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             # The batteries must deliver an on/off consumer's full power, a
             # power controlled one at least its minimum (it is then limited).
             needed = power if consumer.control_mode is ControlMode.SWITCH else max(consumer.min_power_w or 0, 1.0)
-            self.target_states[consumer.subentry_id] = evaluate(
+            battery_need = battery.energy_to_full_wh if battery else 0.0
+            self.target_states[consumer.subentry_id] = self._price_window(
                 settings,
-                progress,
-                dt_util.as_local(wall_now),
-                power_w=power,
-                temperature_c=temperature,
-                wh_per_k=wh_per_k,
-                expected_surplus_wh=surplus,
-                battery_need_wh=battery.energy_to_full_wh if battery else 0.0,
-                battery_can_supply=battery is not None and battery.max_discharge_w >= needed,
+                evaluate(
+                    settings,
+                    progress,
+                    dt_util.as_local(wall_now),
+                    power_w=power,
+                    temperature_c=temperature,
+                    wh_per_k=wh_per_k,
+                    expected_surplus_wh=surplus,
+                    battery_need_wh=battery_need,
+                    battery_can_supply=battery is not None and battery.max_discharge_w >= needed,
+                ),
+                wall_now,
+                short=energy is not None and surplus < energy + battery_need,
             )
             # A heat pump's consumption is already in its own forecast model.
             if consumer.consumer_type is ConsumerType.HEAT_PUMP:
@@ -2464,6 +2471,40 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             supporting = self.settings.feed_in_cap and self.cap_mode(consumer.subentry_id) is CapMode.SUPPORT
             if demand is not None and not supporting:
                 self.target_demands.append(demand)
+
+    def _price_window(
+        self, settings: TargetSettings, state: TargetState, wall_now: datetime, *, short: bool
+    ) -> TargetState:
+        """Move the forced run of a target with the source "grid" into a cheaper
+        window if the surplus is short for it anyway (see price_hold)."""
+        if (
+            not self.settings.price_control
+            or not short
+            or settings.source is not TargetSource.GRID
+            or state.mode not in (TargetMode.SURPLUS, TargetMode.BOOST)
+            or state.latest_start is None
+            or state.end is None
+        ):
+            return state
+        prices = self._import_prices(wall_now, state.end)
+        if prices is None:
+            return state
+        local_now = dt_util.as_local(wall_now)
+        start = cheapest_start(
+            prices,
+            local_now,
+            state.latest_start,
+            state.end - START_MARGIN - state.latest_start,
+            self.settings.price_min_gain_ct,
+        )
+        if start is None:
+            return state
+        return replace(
+            state,
+            latest_start=start,
+            mode=TargetMode.FORCED if local_now >= start else state.mode,
+            price_window=True,
+        )
 
     @staticmethod
     def _target_wh_per_k(settings: TargetSettings, thermal: ThermalLearner | None) -> float | None:

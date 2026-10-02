@@ -183,7 +183,7 @@ complements SLEMS well (see [roadmap](#roadmap)).
 | Dashboard (sidebar panel): energy flow, key figures, daily forecast and plan chart, batteries, consumers, settings | ✅ |
 | Simulation in the dashboard: day plan with other settings compared with the current one (today or tomorrow) | ✅ |
 | Tariffs as on the bill (time windows, VAT per group) with a check against a bill; day-ahead prices (APG, SMARD, Energy-Charts) only with consent; monthly tariff comparison | ✅ |
-| Price aware control: stored energy kept for the expensive hours | ✅ |
+| Price aware control: stored energy kept for the expensive hours, grid part of daily targets in the cheapest window | ✅ |
 
 ## Installation
 
@@ -295,7 +295,11 @@ stays the same, it only moves to cheaper hours – no charging from the grid
 and no feed-in from the batteries. Any time dependent price counts: market
 prices or time windows of a fixed tariff. Import peak shaving still applies.
 The strategy shows *Price hold* with the hours concerned, the day chart and
-the simulation include it.
+the simulation include it. Daily targets with the source *+ grid*: if the
+forecast surplus is short for them anyway, the forced run starts in the
+window with the lowest mean import price before the deadline (cheaper by at
+least the minimum gain than at the latest start); the consumer card shows
+*from … in the cheapest window*.
 
 ### PV forecast
 
@@ -1385,10 +1389,9 @@ Possible extensions:
 - Batteries with an availability (e.g. "car plugged in") and a reserve until
   a time of day: the basis for a car supplying the house (V2H).
 - Learned presence of the car for the planning.
-- More price aware control in addition to the current rules: daily targets
-  of the consumers in cheap windows, charging from the grid in cheap or
-  negative hours and feeding in from the batteries at high prices (both
-  optional); then a tariff comparison that includes it.
+- More price aware control in addition to the current rules: charging from
+  the grid in cheap or negative hours and feeding in from the batteries at
+  high prices (both optional); then a tariff comparison that includes it.
 - Further battery models via the driver interface.
 
 ## Development

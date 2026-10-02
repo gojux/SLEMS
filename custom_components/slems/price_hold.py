@@ -1,4 +1,5 @@
-"""Price aware discharging: keep the stored energy for the expensive hours.
+"""Price aware control: keep the stored energy for the expensive hours, and
+start the grid part of a daily target in the cheapest window.
 
 Until the batteries are refilled (PV takes over), the stored energy may not
 cover every hour with a deficit. The batteries then cover the hours with the
@@ -13,6 +14,11 @@ energy is charged from the grid or fed in.
 Without prices for every hour until the refill, or if the energy covers all
 hours, there is no hold. The plan is made again every cycle from the current
 state of charge, so deviations of the forecast correct themselves.
+
+Daily targets with the source "grid" (see consumer_targets) run forced from
+their latest start. If the forecast surplus is short for them anyway, the
+forced run may start earlier in the window with the lowest mean import price
+(``cheapest_start``), when it is cheaper by at least the minimum gain.
 """
 
 from __future__ import annotations
@@ -45,6 +51,54 @@ class PriceHold:
     def limit_w(self, moment: datetime) -> float | None:
         """Mean discharge power allowed in the hour of ``moment`` (None: no limit)."""
         return self.limits_w.get(_hour(moment))
+
+
+def cheapest_start(
+    prices: Mapping[datetime, float | None],
+    first: datetime,
+    latest: datetime,
+    duration: timedelta,
+    min_gain_ct: float,
+) -> datetime | None:
+    """Start between ``first`` and ``latest`` of a run of ``duration`` with the
+    lowest mean import price (``prices`` per local hour start).
+
+    None if it is not cheaper than starting at ``latest`` by ``min_gain_ct``,
+    or a price in the way is missing.
+    """
+    if first >= latest or duration <= timedelta(0):
+        return None
+
+    def mean(start: datetime) -> float | None:
+        total = 0.0
+        moment, end = start, start + duration
+        while moment < end:
+            hour = _hour(moment)
+            until = min(hour + PERIOD, end)
+            price = prices.get(hour)
+            if price is None:
+                return None
+            total += price * (until - moment) / duration
+            moment = until
+        return total
+
+    base = mean(latest)
+    if base is None:
+        return None
+    candidates = [first]
+    quarter = _hour(first)
+    while quarter < latest:
+        quarter += timedelta(minutes=15)
+        if first < quarter < latest:
+            candidates.append(quarter)
+    best: tuple[float, datetime] | None = None
+    for start in candidates:
+        value = mean(start)
+        if value is not None and (best is None or value < best[0]):
+            best = (value, start)
+    if best is None or best[0] > base - min_gain_ct:
+        return None
+    return best[1]
 
 
 def _hour(moment: datetime) -> datetime:

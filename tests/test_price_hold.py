@@ -77,3 +77,21 @@ def test_partly_covered_hour_is_limited_before_a_more_expensive_one() -> None:
     # 21 (40) and 20 (35) first, 18:00 (30) partly with 400 Wh before them.
     assert plan.limit_w(night[0]) == pytest.approx(400.0)
     assert plan.limit_w(night[1]) == 0.0
+
+
+def test_cheapest_start_of_a_forced_run() -> None:
+    from custom_components.slems.price_hold import cheapest_start
+
+    now = evening()  # 18:00
+    prices = dict(zip(hours(now, 6), [40.0, 35.0, 20.0, 22.0, 30.0, 38.0]))
+    two_hours = timedelta(hours=2)
+    latest = now + timedelta(hours=4)  # 22:00–24:00 would cost 34 ct on average
+    start = cheapest_start(prices, now, latest, two_hours, 2.0)
+    assert start == now + timedelta(hours=2)  # 20:00–22:00: 21 ct
+    # Not cheaper by the minimum gain: stays at the latest start.
+    assert cheapest_start(prices, now, latest, two_hours, 15.0) is None
+    # A missing price on the way: that start is not possible.
+    gap = {**prices, now + timedelta(hours=3): None}
+    # 19:00–21:00 (27.5 ct) is the cheapest run ending before the gap.
+    assert cheapest_start(gap, now, latest, two_hours, 2.0) == now + timedelta(hours=1)
+    assert cheapest_start(prices, latest, latest, two_hours, 2.0) is None

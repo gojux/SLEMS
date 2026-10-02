@@ -176,6 +176,8 @@ const STRINGS = {
     targetProgress: "Today",
     targetUntil: "until {time}",
     targetLatest: "forced from {time}",
+    targetLatestPrice: "from {time} in the cheapest window",
+    targetForcedPrice: "running in the cheapest window",
     targetDone: "reached",
     targetEnergy: "about {energy} to go",
     targetEnergyLearning: "energy still being learned",
@@ -579,6 +581,8 @@ const STRINGS = {
     targetProgress: "Heute",
     targetUntil: "bis {time}",
     targetLatest: "erzwungen ab {time}",
+    targetLatestPrice: "ab {time} im günstigsten Fenster",
+    targetForcedPrice: "läuft im günstigsten Fenster",
     targetDone: "erreicht",
     targetEnergy: "noch ca. {energy}",
     targetEnergyLearning: "Energie wird noch gelernt",
@@ -3529,8 +3533,10 @@ class SlemsPanel extends HTMLElement {
     }
     if (mode === "done") parts.push(t.targetDone);
     else if (mode === "waiting") parts.push(t.targetWaiting.replace("{time}", clock(attrs.target_earliest)));
-    else if (mode === "forced") parts.push(t.targetForced);
-    else if (source !== "surplus" && attrs.target_latest_start) parts.push(t.targetLatest.replace("{time}", clock(attrs.target_latest_start)));
+    else if (mode === "forced") parts.push(attrs.target_price_window ? t.targetForcedPrice : t.targetForced);
+    else if (source !== "surplus" && attrs.target_latest_start) {
+      parts.push((attrs.target_price_window ? t.targetLatestPrice : t.targetLatest).replace("{time}", clock(attrs.target_latest_start)));
+    }
     if (mode === "boost") parts.push(t.targetBoost);
     return parts.join(" · ");
   }

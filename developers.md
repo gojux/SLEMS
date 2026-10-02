@@ -263,6 +263,13 @@ grid load to the projection; `allocate(discharge_limit_w=…)` caps the deficit
 cover (strategy `price_hold`), the night discharge is off in such an hour,
 peak shaving stays. Without a price for every hour until the refill: no hold.
 
+Daily targets with the source "grid": `SlemsCoordinator._price_window` moves
+`TargetState.latest_start` to `price_hold.cheapest_start` (quarter hour
+candidates from now to the latest start, run length = deadline − margin −
+latest start, mean of the hourly prices) when the forecast surplus is short
+for the target plus filling the batteries, and marks `price_window`. The mode
+becomes forced from that start; `forced_load` and the plans follow it.
+
 ### Price chart
 
 `price_chart.py` (websocket `slems/price_chart`, `day` today / tomorrow): per
@@ -1566,3 +1573,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-01 | Tariff comparison as a passive comparison in the simulation tab: the recorded energy priced with each tariff per month. Simulating what the control would have done with another tariff would need price-aware planning, which does not exist yet; the label says so, so a dynamic tariff is not judged by a comparison that leaves out its main advantage. |
 | 2026-10-02 | SLEMS records grid import and export per quarter hour from its own grid values instead of relying on statistics only: the hourly mean of the grid power nets import and export within an hour, the counters' long-term statistics are hourly, while bills with dynamic prices are per quarter hour. With counters the quarters only give the split within the hour and the counter the total, so a less exact sampling of the grid power does not change the billed energy. |
 | 2026-10-02 | Price aware control starts with moving the grid import that happens anyway into cheaper hours (price hold): no extra import, no export, no extra cycles, so it needs no wear costs and cannot make things worse than the forecast error. A greedy cover of the most expensive hours is optimal for a fixed amount of energy and linear prices; a full optimisation (dynamic programming) comes with charging from the grid. The minimum gain absorbs forecast errors; any time dependent import price of the tariff counts, with or without market prices. |
+| 2026-10-02 | Daily targets with the source "grid" start their forced run in the cheapest window only when the forecast surplus is short for them anyway: otherwise an early grid run could take what the surplus would have covered later for free. One contiguous run instead of single cheap hours, because the forced mode runs the consumer at full power until the target is met (and minimum runtimes apply). |

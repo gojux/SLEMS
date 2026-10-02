@@ -923,6 +923,8 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             "target_latest_start": (
                 target.latest_start.isoformat() if target and target.latest_start else None
             ),
+            # The forced run starts early in a cheaper window (price aware control).
+            "target_price_window": bool(target and target.price_window),
             "target_last_result": progress.last_result,
             # Energy still needed for the target (Wh), None when not known.
             "target_energy_wh": (

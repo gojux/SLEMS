@@ -260,6 +260,8 @@ class TargetState:
     missing: float = 0.0
     latest_start: datetime | None = None
     end: datetime | None = None
+    # The latest start was moved to a cheaper window (see price_hold).
+    price_window: bool = False
 
 
 def evaluate(
