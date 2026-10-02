@@ -162,11 +162,13 @@ from .consumer_targets import (
     TargetProgress,
     TargetSettings,
     TargetState,
+    ESTIMATE_DAYS,
     START_MARGIN,
     NoPowerWatch,
     SurplusDemand,
     energy_to_target,
     evaluate,
+    daily_energy_estimate,
     forced_load,
     no_power_threshold_s,
     surplus_demand,
@@ -176,7 +178,7 @@ from .consumer_targets import (
 from .night_discharge import NightDischargePlan, plan_night_discharge, pv_takeover
 from .price_chart import hourly_import_prices
 from .grid_charge import ChargeBattery, GridChargePlan, plan_grid_charge
-from .energy_history import async_grid_energy
+from .energy_history import async_grid_energy, async_hourly_changes
 from .price_backtest import BacktestBattery, measured_saving
 from .price_savings import PriceSavings
 from .price_hold import PriceHold, cheapest_start, plan_price_hold
@@ -739,6 +741,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # Energy (Wh) each target still needs, and the parts expected from the
         # surplus in order of priority (see consumer_targets.surplus_demand).
         self.target_energy_wh: dict[str, float | None] = {}
+        # Daily energy of the last days per consumer (estimate while the energy
+        # per kelvin of a temperature target is not learned) and the consumers
+        # whose target energy is that estimate right now.
+        self.target_energy_estimate: dict[str, float] = {}
+        self.target_energy_estimated: set[str] = set()
         self.target_demands: list[SurplusDemand] = []
         # Battery due for its regular full charge (see full_charge), batteries
         # resting after it (monotonic end) and the last full charge seen.
@@ -852,6 +859,24 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             await self.forecaster.async_refresh(self.settings.vacation)
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Consumption forecast failed")
+        try:
+            await self._async_refresh_energy_estimates()
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Daily energy of the consumers failed")
+
+    async def _async_refresh_energy_estimates(self) -> None:
+        """Daily energy of the last days of consumers with a temperature target."""
+        today = dt_util.now().date()
+        start = dt_util.start_of_local_day(dt_util.now()) - timedelta(days=ESTIMATE_DAYS)
+        end = dt_util.start_of_local_day(dt_util.now())
+        estimates: dict[str, float] = {}
+        for consumer in self.consumers:
+            if self.consumer_targets[consumer.subentry_id].type is not TargetType.TEMPERATURE:
+                continue
+            hourly = await async_hourly_changes(self.hass, consumer.energy_entity_id, start, end)
+            if (estimate := daily_energy_estimate(hourly, today)) is not None:
+                estimates[consumer.subentry_id] = estimate
+        self.target_energy_estimate = estimates
 
     def _forecast_sources(self) -> ForecastSources:
         config = self._config
@@ -2674,6 +2699,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.target_load = {}
         self.target_load_grid = {}
         self.target_energy_wh = {}
+        self.target_energy_estimated = set()
         self.target_demands = []
         consumers = sorted(map(self.effective_consumer, self.consumers), key=lambda c: c.priority)
         for consumer in consumers:
@@ -2702,6 +2728,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             energy = energy_to_target(
                 settings, progress, power_w=power, temperature_c=temperature, wh_per_k=wh_per_k
             )
+            estimate = self.target_energy_estimate.get(consumer.subentry_id)
+            if energy is None and settings.type is TargetType.TEMPERATURE and estimate is not None:
+                # Not learned yet: the daily energy of the last days minus this period's.
+                energy = max(0.0, estimate - progress.energy_wh)
+                self.target_energy_estimated.add(consumer.subentry_id)
             self.target_energy_wh[consumer.subentry_id] = energy
             # The batteries must deliver an on/off consumer's full power, a
             # power controlled one at least its minimum (it is then limited).

@@ -38,6 +38,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 
+from homeassistant.util import dt as dt_util
+
 from .const import TargetSensor, TargetSource, TargetType
 
 TIME_FACTOR = 1.2
@@ -594,3 +596,24 @@ def no_power_threshold_s(settings: TargetSettings, power_w: float, end: datetime
     if end is not None and settings.type is not TargetType.TEMPERATURE:
         limits.append(target_window_s(settings, end))
     return min(limits)
+
+
+# While a storage's energy per kelvin is not learned, the energy a temperature
+# target still needs is estimated from the consumer's daily energy of the last
+# days (days without consumption left out).
+ESTIMATE_DAYS = 7
+ESTIMATE_MIN_DAYS = 2
+ESTIMATE_MIN_DAY_WH = 50.0
+
+
+def daily_energy_estimate(hourly_wh: dict[datetime, float], today: date) -> float | None:
+    """Mean energy (Wh) of the last ``ESTIMATE_DAYS`` full days with consumption."""
+    days: dict[date, float] = {}
+    for hour, wh in hourly_wh.items():
+        day = dt_util.as_local(hour).date()
+        if today - timedelta(days=ESTIMATE_DAYS) <= day < today:
+            days[day] = days.get(day, 0.0) + max(0.0, wh)
+    used = [wh for wh in days.values() if wh >= ESTIMATE_MIN_DAY_WH]
+    if len(used) < ESTIMATE_MIN_DAYS:
+        return None
+    return sum(used) / len(used)

@@ -377,3 +377,17 @@ def test_target_window_and_fit() -> None:
     energy = TargetSettings(type=TargetType.ENERGY, energy_kwh=3.0, deadline=time(16, 0),
                             earliest_enabled=True, earliest=time(14, 0))
     assert not target_fits(energy, end, 1000) and target_fits(energy, end, 2000)
+
+
+def test_daily_energy_estimate_from_the_last_days() -> None:
+    from custom_components.slems.consumer_targets import daily_energy_estimate
+
+    today = local(12, day=8).date()
+    hourly = {}
+    # Days 1–7: 3 kWh on days 5 and 6 (in two hours each), nothing else; day 8 (today) not counted.
+    for day, wh in ((5, 1500.0), (6, 1500.0), (8, 9999.0)):
+        for hour in (10, 11):
+            hourly[local(hour, day=day)] = wh
+    assert daily_energy_estimate(hourly, today) == pytest.approx(3000)
+    # One day with consumption is not enough.
+    assert daily_energy_estimate({local(10, day=5): 2000.0}, today) is None

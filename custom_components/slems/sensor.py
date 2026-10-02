@@ -969,6 +969,8 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             "target_price_window": bool(target and target.price_window),
             "target_last_result": progress.last_result,
             # Energy still needed for the target (Wh), None when not known.
+            # The energy is estimated from the last days (energy per kelvin not learned yet).
+            "target_energy_estimated": subentry_id in coordinator.target_energy_estimated,
             "target_energy_wh": (
                 None
                 if (energy := coordinator.target_energy_wh.get(subentry_id)) is None

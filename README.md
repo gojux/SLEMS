@@ -923,8 +923,10 @@ Per controlled consumer, on its card under *Daily target*.
   target; for a runtime or enabled time it is the remaining time at full power
   (less if the consumer's own thermostat stops it earlier); for a temperature
   target it is the way up to the target temperature with the learned energy
-  per degree (*energy still being learned* until then; heat losses are left
-  out).
+  per degree (heat losses are left out). Until that is learned, the mean daily
+  energy of the consumer's last 7 days with consumption (at least 2) minus
+  what it already got in the period is used (*estimated from the last days*),
+  without such days *energy still being learned*.
 - **Planning**: with a source beyond the surplus the planning counts the
   forced run as extra consumption from the latest start on, as if the surplus
   covered nothing more; the planned run shrinks as the surplus fills the

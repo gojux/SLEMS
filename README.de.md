@@ -972,8 +972,11 @@ Je gesteuertem Verbraucher, auf seiner Karte unter *Tagesziel*.
   Energieziel genau; bei Laufzeit oder Freigabezeit ist es die Restzeit mit
   voller Leistung (weniger, wenn der eigene Thermostat früher abschaltet); bei
   einem Temperaturziel der Weg bis zur Zieltemperatur mit der gelernten
-  Energie pro Grad (bis dahin *Energie wird noch gelernt*; Wärmeverluste
-  bleiben unberücksichtigt).
+  Energie pro Grad (Wärmeverluste bleiben unberücksichtigt). Bis die gelernt
+  ist, gilt der mittlere Tagesverbrauch des Verbrauchers an seinen letzten
+  7 Tagen mit Verbrauch (mindestens 2) abzüglich dessen, was er in der
+  Periode schon bekommen hat (*geschätzt aus den letzten Tagen*), ohne solche
+  Tage *Energie wird noch gelernt*.
 - **Planung**: Mit einer Quelle über den Überschuss hinaus rechnet die Planung
   den erzwungenen Lauf ab der spätesten Startzeit als zusätzlichen Verbrauch
   ein, so als deckte der Überschuss nichts mehr; der geplante Lauf schrumpft,

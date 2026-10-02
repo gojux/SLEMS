@@ -137,7 +137,7 @@ const STRINGS = {
     consumptionBasis: "{days} days of consumption",
     heatPumpBasis: ", {days} days heat pump with temperature",
     pvBasis: "{days} days recorded",
-    tomorrow: "Tomorrow (expected)",
+    tomorrowExpected: "Tomorrow (expected)",
     storedOf: "{stored} of {capacity} kWh",
     powerGridSide: "Power (grid side)",
     setPoint: "SLEMS set point",
@@ -186,8 +186,9 @@ const STRINGS = {
     targetLatestPrice: "from {time} in the cheapest window",
     targetForcedPrice: "running in the cheapest window",
     targetDone: "reached",
-    targetEnergy: "about {energy} to go",
+    targetEnergyLeft: "about {energy} to go",
     targetEnergyLearning: "energy still being learned",
+    targetEnergyEstimated: "about {energy} more (estimated from the last days)",
     targetForced: "running forced",
     targetBoost: "before the batteries",
     targetMinShort: "min.",
@@ -204,7 +205,7 @@ const STRINGS = {
     storageUntilCycling: "{energy} until it cycles",
     storageUntilFull: "{cycling} until it cycles, {full} until full",
     controlActive: "Control active",
-    responseTime: "Response time on/off (own sensor)",
+    consumerResponseTime: "Response time on/off (own sensor)",
     gridResponseTime: "Response time on/off at the meter",
     notControlled: "measured only",
     noBatteries: "No batteries configured.",
@@ -245,7 +246,6 @@ const STRINGS = {
     gainSetting: "Control gain (setting)",
     controlInterval: "Control interval",
     averageWindow: "Surplus averaging window",
-    automatic: "automatic",
     fixed: "fixed",
     meterSource: "Source",
     meterInterval: "Update interval",
@@ -563,7 +563,7 @@ const STRINGS = {
     consumptionBasis: "{days} Tage Verbrauch",
     heatPumpBasis: ", {days} Tage Wärmepumpe mit Temperatur",
     pvBasis: "{days} Tage aufgezeichnet",
-    tomorrow: "Morgen (erwartet)",
+    tomorrowExpected: "Morgen (erwartet)",
     storedOf: "{stored} von {capacity} kWh",
     powerGridSide: "Leistung (netzseitig)",
     setPoint: "Vorgabe SLEMS",
@@ -612,8 +612,9 @@ const STRINGS = {
     targetLatestPrice: "ab {time} im günstigsten Fenster",
     targetForcedPrice: "läuft im günstigsten Fenster",
     targetDone: "erreicht",
-    targetEnergy: "noch ca. {energy}",
+    targetEnergyLeft: "noch ca. {energy}",
     targetEnergyLearning: "Energie wird noch gelernt",
+    targetEnergyEstimated: "noch ca. {energy} (geschätzt aus den letzten Tagen)",
     targetForced: "läuft erzwungen",
     targetBoost: "vor der Batterie",
     targetMinShort: "min.",
@@ -630,7 +631,7 @@ const STRINGS = {
     storageUntilCycling: "{energy} bis zum Takten",
     storageUntilFull: "{cycling} bis zum Takten, {full} bis voll",
     controlActive: "Steuerung aktiv",
-    responseTime: "Reaktionszeit an/aus (eigener Sensor)",
+    consumerResponseTime: "Reaktionszeit an/aus (eigener Sensor)",
     gridResponseTime: "Reaktionszeit an/aus am Zähler",
     notControlled: "nur gemessen",
     noBatteries: "Keine Batterien konfiguriert.",
@@ -671,7 +672,6 @@ const STRINGS = {
     gainSetting: "Regelverstärkung (Einstellung)",
     controlInterval: "Regelintervall",
     averageWindow: "Mittelungsfenster Überschuss",
-    automatic: "automatisch",
     fixed: "fest",
     meterSource: "Quelle",
     meterInterval: "Aktualisierungsintervall",
@@ -1248,7 +1248,7 @@ class SlemsPanel extends HTMLElement {
       if (a.tomorrow_forecast_kwh !== null && a.tomorrow_forecast_kwh !== undefined) {
         const error = collecting ? null : a.tomorrow_expected_error_kwh;
         rows.push([
-          t.tomorrow,
+          t.tomorrowExpected,
           `${kwh(a.tomorrow_forecast_kwh)}${error !== null && error !== undefined ? ` ± ${kwh(error)}` : ""}`,
         ]);
       }
@@ -3537,7 +3537,7 @@ class SlemsPanel extends HTMLElement {
               : "";
           const details = expanded
             ? `<dl>
-              ${c.controllable ? this._row(t.responseTime, response, planned?.entity_id) : ""}
+              ${c.controllable ? this._row(t.consumerResponseTime, response, planned?.entity_id) : ""}
               ${c.controllable ? this._row(t.gridResponseTime, gridResponse, planned?.entity_id) : ""}
             </dl>${
               settings.length ? `<div class="settings card-setting">${settings.map((st) => this._control(st)).join("")}</div>` : ""
@@ -3642,7 +3642,9 @@ class SlemsPanel extends HTMLElement {
     }
     parts.push(t.targetUntil.replace("{time}", clock(attrs.target_deadline)));
     const energy = attrs.target_energy_wh;
-    if (mode !== "done" && energy > 0) parts.push(t.targetEnergy.replace("{energy}", `${number(energy / 1000)} kWh`));
+    if (mode !== "done" && energy > 0) {
+      parts.push((attrs.target_energy_estimated ? t.targetEnergyEstimated : t.targetEnergyLeft).replace("{energy}", `${number(energy / 1000)} kWh`));
+    }
     else if (mode !== "done" && attrs.target_type === "temperature" && (energy === null || energy === undefined)) {
       parts.push(t.targetEnergyLearning);
     }
