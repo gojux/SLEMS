@@ -163,10 +163,12 @@ from .consumer_targets import (
     TargetSettings,
     TargetState,
     START_MARGIN,
+    NoPowerWatch,
     SurplusDemand,
     energy_to_target,
     evaluate,
     forced_load,
+    no_power_threshold_s,
     surplus_demand,
     target_temperature,
     window_start,
@@ -212,6 +214,7 @@ PV_ACCURACY_STORE_KEY = "pv_accuracy"
 CONSUMERS_STORE_KEY = "consumers"
 THERMAL_STORE_KEY = "thermal"
 TARGETS_STORE_KEY = "targets"
+NO_POWER_STORE_KEY = "no_power"
 # Share of the learned storage capacity the feed-in cap planning relies on.
 THERMAL_SAFETY = 0.8
 # A power consumer counts as commanded at full power from this share on.
@@ -724,6 +727,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # (restored by their entities), progress of the period (stored) and
         # the mode of the last plan.
         self.consumer_targets = {c.subentry_id: TargetSettings() for c in consumers}
+        # Consumers with a daily target that draw no power although switched on.
+        self.no_power = {c.subentry_id: NoPowerWatch() for c in consumers}
         self.target_progress = {c.subentry_id: TargetProgress() for c in consumers}
         self.target_states: dict[str, TargetState] = {}
         # Local hour start -> Wh of the forced runs the targets may still need
@@ -769,6 +774,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         for subentry_id, data in (stored.get(TARGETS_STORE_KEY) or {}).items():
             if subentry_id in self.target_progress:
                 self.target_progress[subentry_id] = TargetProgress.from_dict(data)
+        for subentry_id, data in (stored.get(NO_POWER_STORE_KEY) or {}).items():
+            if subentry_id in self.no_power:
+                self.no_power[subentry_id] = NoPowerWatch.from_dict(data)
         control = stored.get(CONTROL_STORE_KEY) or {}
         if gain := control.get("gain"):
             self.controller.gain_adapter.reset(gain)
@@ -1138,6 +1146,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         }
         data[TARGETS_STORE_KEY] = {
             subentry_id: progress.as_dict() for subentry_id, progress in self.target_progress.items()
+        }
+        data[NO_POWER_STORE_KEY] = {
+            subentry_id: watch.as_dict() for subentry_id, watch in self.no_power.items()
         }
         data[CONTROL_STORE_KEY] = {
             "gain": self.controller.gain_adapter.gain,
@@ -2578,8 +2589,17 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         (not when SLEMS could not control the consumer at some time of the
         period or the consumer declined power)."""
         settings = self.consumer_targets[consumer.subentry_id]
+        watch = self.no_power[consumer.subentry_id]
         if settings.type is TargetType.NONE:
+            watch.reset()
             return
+        watch.update(
+            now,
+            dt_util.now(),
+            commanded_on,
+            state.power_w,
+            no_power_threshold_s(settings, self._full_power_w(consumer), self.target_progress[consumer.subentry_id].end),
+        )
         progress = self.target_progress[consumer.subentry_id]
         goal, unit = self.target_goal(settings)
         got = self.target_got(settings, progress)
@@ -2767,6 +2787,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             mode=TargetMode.FORCED if local_now >= start else state.mode,
             price_window=True,
         )
+
+    def consumer_full_power_w(self, consumer: ConsumerConfig) -> float:
+        """Power of the consumer when it runs at full power (learned or configured)."""
+        return self._full_power_w(consumer)
 
     @staticmethod
     def _target_wh_per_k(settings: TargetSettings, thermal: ThermalLearner | None) -> float | None:

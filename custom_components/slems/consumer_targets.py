@@ -35,7 +35,7 @@ The target counts for the sensor chosen when it was reached.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 
 from .const import TargetSensor, TargetSource, TargetType
@@ -493,3 +493,104 @@ def forced_load(
         energy -= wh
         moment = until
     return result
+
+
+# A consumer with a daily target that SLEMS switched on for at least
+# NO_POWER_COMMANDED_S a day (or the target's own duration, if shorter) but
+# that drew no power for NO_POWER_DAYS days is probably switched off or broken.
+NO_POWER_DAYS = 3
+NO_POWER_COMMANDED_S = 1800.0
+
+
+@dataclass
+class NoPowerWatch:
+    """Days in a row a consumer drew no power although SLEMS switched it on; stored."""
+
+    day: date | None = None
+    commanded_s: float = 0.0
+    drew: bool = False
+    days: int = 0
+    since: date | None = None
+    _last: tuple[float, bool] | None = field(default=None, repr=False)
+
+    @property
+    def active(self) -> bool:
+        return self.days >= NO_POWER_DAYS
+
+    def update(
+        self, now: float, local_now: datetime, commanded_on: bool, power_w: float | None, min_commanded_s: float
+    ) -> None:
+        """One poll. A day counts if it was switched on for ``min_commanded_s``."""
+        day = local_now.date()
+        if self.day is None:
+            self.day = day
+        elif day != self.day:
+            if not self.drew and self.commanded_s >= min_commanded_s:
+                self.days += 1
+                self.since = self.since or self.day
+            self.day, self.commanded_s, self.drew = day, 0.0, False
+        previous, self._last = self._last, (now, commanded_on)
+        if previous is not None and previous[1] and 0 < now - previous[0] <= MAX_GAP_S:
+            self.commanded_s += now - previous[0]
+        if power_w is not None and power_w >= RUNNING_W:
+            self.drew = True
+            self.days, self.since = 0, None
+
+    def reset(self) -> None:
+        self.commanded_s, self.drew, self.days, self.since = 0.0, False, 0, None
+
+    def as_dict(self) -> dict:
+        return {
+            "day": self.day.isoformat() if self.day else None,
+            "commanded_s": self.commanded_s,
+            "drew": self.drew,
+            "days": self.days,
+            "since": self.since.isoformat() if self.since else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> NoPowerWatch:
+        data = data or {}
+        try:
+            return cls(
+                day=date.fromisoformat(data["day"]) if data.get("day") else None,
+                commanded_s=float(data.get("commanded_s", 0.0)),
+                drew=bool(data.get("drew", False)),
+                days=int(data.get("days", 0)),
+                since=date.fromisoformat(data["since"]) if data.get("since") else None,
+            )
+        except (TypeError, ValueError):
+            return cls()
+
+
+def target_duration_s(settings: TargetSettings, power_w: float) -> float | None:
+    """Time the target needs: runtime / enabled time, or the energy at full power."""
+    if settings.type in (TargetType.RUNTIME, TargetType.ENABLED):
+        return settings.hours * 3600
+    if settings.type is TargetType.ENERGY and power_w > 0:
+        return settings.energy_kwh * 1000 / power_w * 3600
+    return None
+
+
+def target_window_s(settings: TargetSettings, end: datetime) -> float:
+    """Length of the period the target may use: from the earliest start (or the
+    previous deadline) to the deadline ``end``."""
+    start = window_start(settings, end)
+    return (end - start).total_seconds() if start is not None else 86400.0
+
+
+def target_fits(settings: TargetSettings, end: datetime, power_w: float) -> bool:
+    """Whether the target fits into its window (runtime, enabled time, energy)."""
+    duration = target_duration_s(settings, power_w)
+    return duration is None or duration <= target_window_s(settings, end)
+
+
+def no_power_threshold_s(settings: TargetSettings, power_w: float, end: datetime | None = None) -> float:
+    """Time switched on that makes a day count: 30 minutes, or less if the target
+    or its window (earliest start to deadline) is shorter."""
+    limits = [NO_POWER_COMMANDED_S]
+    if (duration := target_duration_s(settings, power_w)) is not None:
+        limits.append(duration)
+    if end is not None and settings.type is not TargetType.TEMPERATURE:
+        limits.append(target_window_s(settings, end))
+    return min(limits)

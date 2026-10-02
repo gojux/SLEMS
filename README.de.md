@@ -930,6 +930,14 @@ Je gesteuertem Verbraucher, auf seiner Karte unter *Tagesziel*.
 - **Frühester Beginn** (Laufzeit, Freigabezeit, Energie): Vorher schaltet
   SLEMS den Verbraucher nicht ein, auch nicht mit Überschuss (z. B. ein
   Luftentfeuchter erst ab 10:00); die späteste Startzeit liegt nie davor.
+  Passen die Stunden (oder die Energie bei voller Leistung) nicht zwischen
+  frühesten Beginn und Frist, zeigen die Einstellungen des Tagesziels eine
+  Warnung.
+- **Keine Leistung**: Nimmt ein Verbraucher mit Tagesziel an 3 Tagen in Folge
+  keine Leistung auf, obwohl SLEMS ihn eingeschaltet hat (mindestens 30
+  Minuten am Tag, weniger, wenn das Ziel oder sein Zeitfenster kürzer ist),
+  zeigen seine Karte und sein Feld im Energiefluss einen Hinweis
+  (ausgeschaltet, Sicherung oder defekt?), bis er wieder Leistung aufnimmt.
 - **Quelle** bestimmt, was den Rest rechtzeitig decken darf:
   - *Nur Überschuss* (Standard; das Ziel kann verfehlt werden, dann meldet es
     eine Benachrichtigung – nicht, wenn SLEMS den Verbraucher in der Periode

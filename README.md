@@ -881,7 +881,13 @@ Per controlled consumer, on its card under *Daily target*.
   midnight) to the next and met from the surplus first.
 - **Earliest start** (runtime, enabled time, energy): before this time SLEMS
   does not switch the consumer on, not even with surplus (e.g. a dehumidifier
-  only from 10:00); the latest start is never before it.
+  only from 10:00); the latest start is never before it. If the hours (or the
+  energy at full power) do not fit between the earliest start and the
+  deadline, the target settings show a warning.
+- **No power**: if a consumer with a daily target draws no power on 3 days in
+  a row although SLEMS switched it on (at least 30 minutes a day, less if the
+  target or its window is shorter), its card and its box in the energy flow
+  show a hint (switched off, fuse or broken?) until it draws power again.
 - **Source** decides what may cover the rest in time:
   - *surplus only* (default; the target may be missed, then a notification
     says so – not if SLEMS could not control the consumer at some time of the

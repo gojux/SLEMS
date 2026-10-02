@@ -159,6 +159,10 @@ const STRINGS = {
     supportFromGrid: "the batteries do not cover it",
     supportFromBattery: "the batteries cover it",
     gridBadge: "grid",
+    targetNoFit: "The hours do not fit into the time from the earliest start to the deadline – the target cannot be reached like this.",
+    targetNoFitEnergy: "Even at full power the energy does not fit into the time from the earliest start to the deadline – the target cannot be reached like this.",
+    noPowerBadge: "no power",
+    noPowerText: "Has drawn no power for {days} days although SLEMS switches it on – switched off, fuse or broken?",
     targetKind: "Kind",
     targetHours: "Hours",
     targetEnergy: "Energy",
@@ -581,6 +585,10 @@ const STRINGS = {
     supportFromGrid: "Batterie deckt ihn nicht",
     supportFromBattery: "Batterie deckt ihn",
     gridBadge: "Netz",
+    targetNoFit: "Die Stunden passen nicht in die Zeit vom frühesten Beginn bis zur Frist – das Ziel ist so nicht erreichbar.",
+    targetNoFitEnergy: "Die Energie passt auch bei voller Leistung nicht in die Zeit vom frühesten Beginn bis zur Frist – das Ziel ist so nicht erreichbar.",
+    noPowerBadge: "keine Leistung",
+    noPowerText: "Nimmt seit {days} Tagen keine Leistung auf, obwohl SLEMS ihn einschaltet – ausgeschaltet, Sicherung oder defekt?",
     targetKind: "Art",
     targetHours: "Stunden",
     targetEnergy: "Energie",
@@ -2043,10 +2051,12 @@ class SlemsPanel extends HTMLElement {
     return mode === "boost" || mode === "forced" ? mode : null;
   }
 
-  /** Badge of a consumer in the energy flow: priority of its daily target, or "grid"
-   *  while it runs from the grid because the batteries must not cover it. */
+  /** Badge of a consumer in the energy flow: no power for days although switched on,
+   *  priority of its daily target, or "grid" while it runs from the grid because the
+   *  batteries must not cover it. */
   _consumerBadge(consumer, gridW) {
     const t = this._t;
+    if (this._state("planned_power", consumer.device_id)?.attributes?.no_power_days) return t.noPowerBadge;
     const priority = { boost: t.targetBoostChip, forced: t.targetForcedChip }[this._priorityMode(consumer)];
     if (priority) return priority;
     const support = this._state("battery_support", consumer.device_id);
@@ -3537,8 +3547,15 @@ class SlemsPanel extends HTMLElement {
             ? `<button class="link card-toggle" data-action="toggle-consumer" data-id="${c.id}" aria-expanded="${expanded}">
                 <ha-icon icon="${expanded ? "mdi:chevron-up" : "mdi:chevron-down"}"></ha-icon>${expanded ? t.hideSettings : t.showSettings}</button>`
             : "";
+          // Switched on for days by SLEMS but no power: probably off or broken.
+          const noPower = attrs.no_power_days
+            ? `<div class="problem"><ha-icon icon="mdi:power-plug-off-outline"></ha-icon><span>${escapeHtml(
+                t.noPowerText.replace("{days}", attrs.no_power_days)
+              )}</span></div>`
+            : "";
           return `<section class="card">
             <div class="card-head"><h2>${escapeHtml(c.name)}</h2><div class="chips">${chips}${control ? this._toggle(control, t.controlActive) : ""}</div></div>
+            ${noPower}
             <dl>
               ${this._row(t.measured, escapeHtml(this._format(measured)), c.power_entity)}
               ${planned ? this._row(t.planned, escapeHtml(this._plannedText(planned)), planned.entity_id) : ""}
@@ -3594,7 +3611,14 @@ class SlemsPanel extends HTMLElement {
     }
     if (type !== "none") controls.push([s("target_deadline"), t.targetDeadline], [s("target_source"), t.targetSource]);
     if (type !== "none" && type !== "temperature") controls.push([s("target_priority"), t.targetPriority]);
-    return `<div class="settings card-setting"><h3 class="card-subheading">${t.targetSection}</h3>${controls
+    // The target needs more time than its window (earliest start to deadline) has.
+    const fits = this._state("planned_power", c.device_id)?.attributes?.target_fits;
+    const warning = fits === false
+      ? `<div class="problem"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><span>${escapeHtml(
+          type === "energy" ? t.targetNoFitEnergy : t.targetNoFit
+        )}</span></div>`
+      : "";
+    return `<div class="settings card-setting"><h3 class="card-subheading">${t.targetSection}</h3>${warning}${controls
       .filter(([st]) => st)
       .map(([st, label]) => this._control(st, { label }))
       .join("")}</div>`;

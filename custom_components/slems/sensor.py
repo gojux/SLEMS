@@ -36,7 +36,7 @@ from .controller import ControlStatus
 from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 from .forecast.accuracy import Accuracy
 from .full_charge import is_due
-from .consumer_targets import target_temperature, window_start
+from .consumer_targets import target_fits, target_temperature, window_start
 from .const import ControlMode, TargetType
 from .grid_friendly import correction_weight
 from .problems import CAP_EXCEEDED_AFTER_S
@@ -903,6 +903,8 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             "blocked": state.blocked if state else None,
             "saturated": self.consumer.subentry_id in data.saturated,
             "resting": self.consumer.subentry_id in data.resting,
+            # Days in a row without power although switched on (daily target only).
+            "no_power_days": watch.days if (watch := self.coordinator.no_power.get(subentry_id)) and watch.active else 0,
             # Command until the own sensor / the grid meter shows it, switching
             # on (with the start delay of the device) and off.
             "response_on_s": controller.consumer_response_s(subentry_id, on=True),
@@ -956,6 +958,10 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
                 if progress.end and (earliest := window_start(settings, progress.end))
                 else None
             ),
+            # The target does not fit into its window (earliest start to deadline).
+            "target_fits": target_fits(settings, progress.end, coordinator.consumer_full_power_w(self.consumer))
+            if progress.end
+            else True,
             "target_latest_start": (
                 target.latest_start.isoformat() if target and target.latest_start else None
             ),

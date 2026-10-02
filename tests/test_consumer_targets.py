@@ -324,3 +324,56 @@ def test_declined_power_is_remembered_for_the_period() -> None:
     assert progress.last_declined is True and progress.declined is False
     assert progress.update(180.0, local(22, 1, day=2), settings, 0.0, False) == "missed"
     assert progress.last_declined is False
+
+
+def _no_power_day(watch, day: int, commanded_minutes: int, power: float = 0.0) -> None:
+    """One day: switched on for ``commanded_minutes`` from 10:00, polled every minute."""
+    base = (day - 1) * 86400.0
+    for minute in range(0, 120):
+        moment = local(10, day=day) + timedelta(minutes=minute)
+        watch.update(base + 36000 + minute * 60, moment, minute < commanded_minutes, power, 1800)
+
+
+def test_no_power_for_three_days_although_switched_on() -> None:
+    from custom_components.slems.consumer_targets import NoPowerWatch
+
+    watch = NoPowerWatch()
+    for day in (1, 2, 3):
+        _no_power_day(watch, day, 60)
+    assert not watch.active  # day 3 is not over yet
+    # A day it was hardly switched on does not count either way.
+    _no_power_day(watch, 4, 10)
+    assert watch.days == 3 and watch.active and watch.since == local(0, day=1).date()
+    # Drawing power again ends it at once.
+    _no_power_day(watch, 5, 60, power=500.0)
+    assert not watch.active and watch.days == 0
+    assert NoPowerWatch.from_dict(watch.as_dict()).days == 0
+
+
+def test_no_power_threshold_follows_a_short_target() -> None:
+    from custom_components.slems.consumer_targets import no_power_threshold_s
+
+    assert no_power_threshold_s(TargetSettings(type=TargetType.RUNTIME, hours=0.25), 500) == 900
+    assert no_power_threshold_s(TargetSettings(type=TargetType.RUNTIME, hours=2), 500) == 1800
+    assert no_power_threshold_s(TargetSettings(type=TargetType.ENERGY, energy_kwh=0.1), 1000) == 360
+
+
+def test_target_window_and_fit() -> None:
+    from custom_components.slems.consumer_targets import no_power_threshold_s, target_fits
+
+    # Enabled time 3 h, only from 14:00 to 16:00: does not fit.
+    settings = TargetSettings(
+        type=TargetType.ENABLED, hours=3.0, deadline=time(16, 0), earliest_enabled=True, earliest=time(14, 0)
+    )
+    end = local(16)
+    assert not target_fits(settings, end, 500)
+    assert target_fits(TargetSettings(type=TargetType.ENABLED, hours=1.5, deadline=time(16, 0),
+                                      earliest_enabled=True, earliest=time(14, 0)), end, 500)
+    # A 20 minute window caps the time that makes a no-power day count.
+    short = TargetSettings(type=TargetType.ENABLED, hours=2.0, deadline=time(16, 0),
+                           earliest_enabled=True, earliest=time(15, 40))
+    assert no_power_threshold_s(short, 500, end) == pytest.approx(1200)
+    # Energy: 3 kWh at 1 kW need 3 h.
+    energy = TargetSettings(type=TargetType.ENERGY, energy_kwh=3.0, deadline=time(16, 0),
+                            earliest_enabled=True, earliest=time(14, 0))
+    assert not target_fits(energy, end, 1000) and target_fits(energy, end, 2000)
