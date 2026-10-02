@@ -175,6 +175,9 @@ const STRINGS = {
     targetPriority: "Before the batteries when short",
     targetProgress: "Today",
     targetUntil: "until {time}",
+    wearCost: "Wear costs",
+    wearEstimated: "estimated",
+    wearHint: "Wear costs estimated: the purchase price and the rated cycles can be added in the battery configuration (Settings → SLEMS → edit battery).",
     targetLatest: "forced from {time}",
     targetLatestPrice: "from {time} in the cheapest window",
     targetForcedPrice: "running in the cheapest window",
@@ -580,6 +583,9 @@ const STRINGS = {
     targetPriority: "Vor der Batterie, wenn knapp",
     targetProgress: "Heute",
     targetUntil: "bis {time}",
+    wearCost: "Verschleißkosten",
+    wearEstimated: "geschätzt",
+    wearHint: "Verschleißkosten geschätzt: Anschaffungspreis und Zyklen laut Hersteller lassen sich in der Batterie-Konfiguration nachtragen (Einstellungen → SLEMS → Batterie bearbeiten).",
     targetLatest: "erzwungen ab {time}",
     targetLatestPrice: "ab {time} im günstigsten Fenster",
     targetForcedPrice: "läuft im günstigsten Fenster",
@@ -3293,6 +3299,13 @@ class SlemsPanel extends HTMLElement {
             [t.powerGridSide, direction(this._batteryPower(b.device_id)), (s("ac_power") || s("battery_power"))?.entity_id],
             [t.setPoint, direction(this._number(s("planned_power"))), s("planned_power")?.entity_id],
             [t.efficiency, s("round_trip_efficiency"), s("round_trip_efficiency")?.entity_id],
+            [
+              t.wearCost,
+              s("wear_cost") && {
+                text: `${this._format(s("wear_cost"))}${s("wear_cost").attributes.estimated ? ` (${t.wearEstimated})` : ""}`,
+              },
+              s("wear_cost")?.entity_id,
+            ],
             [t.state, s("inverter_state"), s("inverter_state")?.entity_id],
             [t.temperature, s("internal_temperature"), s("internal_temperature")?.entity_id],
           ].filter(([, st]) => st);
@@ -3324,6 +3337,7 @@ class SlemsPanel extends HTMLElement {
             <div class="soc"><div class="soc-bar"><div style="width:${soc ?? 0}%"></div></div>
               <span>${soc === null ? "–" : Math.round(soc) + " %"}</span></div>
             <dl>${rows.map(([label, st, entityId]) => this._row(label, escapeHtml(st.text ?? this._format(st)), entityId)).join("")}</dl>
+            ${s("wear_cost")?.attributes?.estimated ? `<p class="hint">${escapeHtml(t.wearHint)}</p>` : ""}
             ${this._cellSection(b)}
           </section>`;
         })

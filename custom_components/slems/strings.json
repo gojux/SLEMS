@@ -159,13 +159,17 @@
             "skip_connection_test": "Skip connection test",
             "efficiency_mode": "Efficiency source",
             "round_trip_efficiency_pct": "Round trip efficiency",
-            "release_state": "State when SLEMS releases the battery"
+            "release_state": "State when SLEMS releases the battery",
+            "purchase_price_eur": "Purchase price",
+            "rated_cycles": "Rated cycles"
           },
           "data_description": {
             "skip_connection_test": "Save without testing the connection, e.g. while another integration still holds the Modbus connection.",
             "efficiency_mode": "Battery counters (recommended): from the lifetime charge and discharge counters of the battery; accurate at once, because the battery counts its whole operating time. Learned: from the battery power measured by SLEMS; needs about three full charge cycles first. Manual: fixed value.",
             "round_trip_efficiency_pct": "Energy out / energy in (AC). Fixed value in manual mode, otherwise used until enough data has been measured.",
-            "release_state": "Automatic: the battery's own logic takes over again (e.g. its zero export). Standby: the battery stays idle at 0 W until something else takes it over. Applies when SLEMS stops controlling it, e.g. in operating mode Off, without smart meter values or when the battery is removed from SLEMS."
+            "release_state": "Automatic: the battery's own logic takes over again (e.g. its zero export). Standby: the battery stays idle at 0 W until something else takes it over. Applies when SLEMS stops controlling it, e.g. in operating mode Off, without smart meter values or when the battery is removed from SLEMS.",
+            "purchase_price_eur": "Optional, with the rated cycles: for the wear costs per kWh (price ÷ (cycles × usable capacity)) used by price aware actions that cost a cycle, e.g. charging from the grid. 0: no wear costs (home storage systems age mostly with time, temperature and state of charge, often before their rated cycles are used up). Without it SLEMS assumes a low estimate of 1 ct/kWh.",
+            "rated_cycles": "Optional: full cycles according to the manufacturer (e.g. from the data sheet or warranty)."
           }
         },
         "ha_device": {
@@ -257,14 +261,18 @@
             "round_trip_efficiency_pct": "Round trip efficiency",
             "release_state": "State when SLEMS releases the battery",
             "min_command_interval_s": "Minimum time between commands",
-            "keepalive_s": "Repeat set point every"
+            "keepalive_s": "Repeat set point every",
+            "purchase_price_eur": "Purchase price",
+            "rated_cycles": "Rated cycles"
           },
           "data_description": {
             "efficiency_mode": "Battery counters: from the total charged and discharged energy. Learned (recommended without counters): from the measured battery power; needs about three full charge cycles, until then the start value is used. Manual: fixed value.",
             "round_trip_efficiency_pct": "Energy out / energy in (AC). Fixed value in manual mode, otherwise used until enough data has been measured.",
             "release_state": "Automatic: the battery's own logic takes over again (e.g. its zero export). Standby: the battery stays idle at 0 W until something else takes it over. Applies when SLEMS stops controlling it, e.g. in operating mode Off, without smart meter values or when the battery is removed from SLEMS.",
             "min_command_interval_s": "For integrations with a rate limit (often cloud based); 0 = no limit.",
-            "keepalive_s": "Some batteries fall back to their own logic without new commands; 0 = SLEMS default (60 s)."
+            "keepalive_s": "Some batteries fall back to their own logic without new commands; 0 = SLEMS default (60 s).",
+            "purchase_price_eur": "Optional, with the rated cycles: for the wear costs per kWh (price ÷ (cycles × usable capacity)) used by price aware actions that cost a cycle, e.g. charging from the grid. 0: no wear costs (home storage systems age mostly with time, temperature and state of charge, often before their rated cycles are used up). Without it SLEMS assumes a low estimate of 1 ct/kWh.",
+            "rated_cycles": "Optional: full cycles according to the manufacturer (e.g. from the data sheet or warranty)."
           }
         }
       },
@@ -833,6 +841,9 @@
       },
       "market_price": {
         "name": "Market price"
+      },
+      "wear_cost": {
+        "name": "Wear costs"
       }
     },
     "switch": {

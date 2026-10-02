@@ -53,6 +53,9 @@ CONF_POWER_ENTITY: Final = "power_entity"
 CONF_POWER_INVERTED: Final = "power_inverted"
 CONF_EFFICIENCY_MODE: Final = "efficiency_mode"
 CONF_ROUND_TRIP_EFFICIENCY_PCT: Final = "round_trip_efficiency_pct"
+# Optional, for the wear costs (see battery_wear).
+CONF_PURCHASE_PRICE_EUR: Final = "purchase_price_eur"
+CONF_RATED_CYCLES: Final = "rated_cycles"
 CONF_RELEASE_STATE: Final = "release_state"
 # Battery backed by Home Assistant entities: optional sensors and control.
 CONF_DEVICE: Final = "device"

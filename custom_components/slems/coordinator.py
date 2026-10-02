@@ -129,6 +129,7 @@ from .forecast import (
 )
 from .forecast.accuracy import PvAccuracyTracker
 from .bad_weather import BadWeatherMode
+from .battery_wear import ESTIMATED_CT_PER_KWH, Wear
 from .battery_support import BatterySupport, SupportBudget, next_refill, support_budget_wh
 from .grid_filter import GridPowerFilter
 from .grid_meter import ModbusGridMeter
@@ -255,6 +256,8 @@ class BatteryRuntime:
     learn_capacity: bool = False
     # Allowed power right now (updated with every poll).
     power_limits: PowerLimits | None = None
+    # Costs per kWh stored and delivered again (see battery_wear).
+    wear: Wear = field(default_factory=lambda: Wear(ESTIMATED_CT_PER_KWH))
     delivery: DeliveryMonitor = field(init=False)
 
     def __post_init__(self) -> None:

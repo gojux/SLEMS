@@ -38,6 +38,7 @@ lustiges Wort für ein sehr interessantes Tier) und *EMS*
   - [Verbrauchsprognose](#verbrauchsprognose)
 - [Batterien](#batterien)
   - [Aufteilung auf die Batterien](#aufteilung-auf-die-batterien)
+  - [Verschleißkosten der Batterie](#verschleißkosten-der-batterie)
   - [Wirkungsgrad der Batterie](#wirkungsgrad-der-batterie)
   - [Umstieg von einer anderen Batterie-Integration](#umstieg-von-einer-anderen-batterie-integration)
   - [Zell-Delta und aktiver Zellausgleich](#zell-delta-und-aktiver-zellausgleich)
@@ -514,6 +515,20 @@ weiter gemessen (ihre Leistung gehört zur Energiebilanz), aber weder
 eingeplant noch gesteuert und zählt nicht zum Gesamt-Ladezustand. Entlädt sie
 im Modus *Aktiv* gerade, übernehmen die anderen Batterien innerhalb von 5
 Sekunden, bevor sie an ihre eigene Logik zurückgegeben wird.
+
+### Verschleißkosten der Batterie
+
+Optional in der Batterie-Konfiguration: Anschaffungspreis und Zyklen laut
+Hersteller. Daraus berechnet SLEMS die Verschleißkosten je kWh, die
+eingespeichert und wieder abgegeben wird: Preis ÷ (Zyklen × nutzbare
+Kapazität), z. B. 1200 € ÷ (6000 × 5 kWh) = 4 ct/kWh. Preisbewusste Aktionen
+mit zusätzlichem Zyklus (Laden aus dem Netz) finden nur statt, wenn sie mehr
+einbringen. Ein Preis von 0 bedeutet keine Verschleißkosten: Feldmessungen an
+Heimspeichern zeigen, dass sie vor allem mit der Zeit, der Temperatur und dem
+Ladezustand altern und oft ihr Lebensende erreichen, bevor ihre Zyklen
+aufgebraucht sind. Ohne Angaben nimmt SLEMS einen niedrigen Schätzwert von
+1 ct/kWh an; die Batteriekarte weist dann darauf hin. Der Sensor
+*Verschleißkosten* zeigt den Wert.
 
 ### Wirkungsgrad der Batterie
 

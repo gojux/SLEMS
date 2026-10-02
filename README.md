@@ -38,6 +38,7 @@ system).
   - [Consumption forecast](#consumption-forecast)
 - [Batteries](#batteries)
   - [Distribution between batteries](#distribution-between-batteries)
+  - [Battery wear costs](#battery-wear-costs)
   - [Battery efficiency](#battery-efficiency)
   - [Switching from another battery integration](#switching-from-another-battery-integration)
   - [Cell delta and active cell balancing](#cell-delta-and-active-cell-balancing)
@@ -494,6 +495,19 @@ Every battery has an *Enabled* switch. A disabled battery is still measured
 controlled, and it does not count towards the total state of charge. If it is
 discharging in active mode, the other batteries take over within 5 seconds
 before it is handed back to its own logic.
+
+### Battery wear costs
+
+Optional in the battery configuration: purchase price and rated cycles
+(manufacturer). From them SLEMS computes the wear costs per kWh stored and
+delivered again: price ÷ (cycles × usable capacity), e.g. 1200 € ÷ (6000 ×
+5 kWh) = 4 ct/kWh. Price aware actions that cost an extra cycle (charging
+from the grid) only happen if they earn more than that. A price of 0 means no
+wear costs: field measurements of home storage systems show that they age
+mostly with time, temperature and state of charge and often reach their end
+of life before their rated cycles. Without the values SLEMS assumes a low
+estimate of 1 ct/kWh; the battery card then says so. The sensor *Wear costs*
+shows the value.
 
 ### Battery efficiency
 

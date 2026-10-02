@@ -159,13 +159,17 @@
             "skip_connection_test": "Verbindungstest überspringen",
             "efficiency_mode": "Quelle des Wirkungsgrads",
             "round_trip_efficiency_pct": "Gesamtwirkungsgrad",
-            "release_state": "Zustand, wenn SLEMS die Batterie freigibt"
+            "release_state": "Zustand, wenn SLEMS die Batterie freigibt",
+            "purchase_price_eur": "Anschaffungspreis",
+            "rated_cycles": "Zyklen laut Hersteller"
           },
           "data_description": {
             "skip_connection_test": "Ohne Verbindungstest speichern, z. B. solange eine andere Integration die Modbus-Verbindung belegt.",
             "efficiency_mode": "Batteriezähler (empfohlen): aus den Gesamtzählern der Batterie für Laden und Entladen; sofort genau, weil die Batterie ihre ganze Betriebszeit mitzählt. Gelernt: aus der von SLEMS gemessenen Leistung; braucht erst etwa drei volle Ladezyklen. Manuell: fester Wert.",
             "round_trip_efficiency_pct": "Entnommene / eingespeicherte Energie (AC). Im manuellen Modus fester Wert, sonst Startwert, bis genug Messdaten vorliegen.",
-            "release_state": "Automatik: die eigene Logik der Batterie übernimmt wieder (z. B. ihre Nulleinspeisung). Standby: die Batterie bleibt bei 0 W stehen, bis etwas anderes sie übernimmt. Gilt, wenn SLEMS die Steuerung beendet, z. B. im Betriebsmodus Aus, ohne Werte des Smart Meters oder wenn die Batterie aus SLEMS entfernt wird."
+            "release_state": "Automatik: die eigene Logik der Batterie übernimmt wieder (z. B. ihre Nulleinspeisung). Standby: die Batterie bleibt bei 0 W stehen, bis etwas anderes sie übernimmt. Gilt, wenn SLEMS die Steuerung beendet, z. B. im Betriebsmodus Aus, ohne Werte des Smart Meters oder wenn die Batterie aus SLEMS entfernt wird.",
+            "purchase_price_eur": "Optional, mit den Zyklen: für die Verschleißkosten je kWh (Preis ÷ (Zyklen × nutzbare Kapazität)), die preisbewusste Aktionen mit zusätzlichem Zyklus berücksichtigen, z. B. Laden aus dem Netz. 0: keine Verschleißkosten (Heimspeicher altern vor allem mit der Zeit, der Temperatur und dem Ladezustand, oft bevor ihre Zyklen aufgebraucht sind). Ohne Angabe nimmt SLEMS einen niedrigen Schätzwert von 1 ct/kWh an.",
+            "rated_cycles": "Optional: volle Zyklen laut Hersteller (z. B. aus Datenblatt oder Garantie)."
           }
         },
         "ha_device": {
@@ -257,14 +261,18 @@
             "round_trip_efficiency_pct": "Gesamtwirkungsgrad",
             "release_state": "Zustand, wenn SLEMS die Batterie freigibt",
             "min_command_interval_s": "Mindestabstand zwischen Befehlen",
-            "keepalive_s": "Sollwert wiederholen alle"
+            "keepalive_s": "Sollwert wiederholen alle",
+            "purchase_price_eur": "Anschaffungspreis",
+            "rated_cycles": "Zyklen laut Hersteller"
           },
           "data_description": {
             "efficiency_mode": "Batteriezähler: aus der insgesamt geladenen und entladenen Energie. Gelernt (empfohlen ohne Zähler): aus der gemessenen Batterieleistung; braucht etwa drei volle Ladezyklen, bis dahin gilt der Startwert. Manuell: fester Wert.",
             "round_trip_efficiency_pct": "Entnommene / eingespeicherte Energie (AC). Im manuellen Modus fester Wert, sonst Startwert, bis genug Messdaten vorliegen.",
             "release_state": "Automatik: die eigene Logik der Batterie übernimmt wieder (z. B. ihre Nulleinspeisung). Standby: die Batterie bleibt bei 0 W stehen, bis etwas anderes sie übernimmt. Gilt, wenn SLEMS die Steuerung beendet, z. B. im Betriebsmodus Aus, ohne Werte des Smart Meters oder wenn die Batterie aus SLEMS entfernt wird.",
             "min_command_interval_s": "Für Integrationen mit begrenzter Befehlsrate (oft über eine Cloud); 0 = keine Begrenzung.",
-            "keepalive_s": "Manche Batterien fallen ohne neue Befehle auf ihre eigene Logik zurück; 0 = Standard von SLEMS (60 s)."
+            "keepalive_s": "Manche Batterien fallen ohne neue Befehle auf ihre eigene Logik zurück; 0 = Standard von SLEMS (60 s).",
+            "purchase_price_eur": "Optional, mit den Zyklen: für die Verschleißkosten je kWh (Preis ÷ (Zyklen × nutzbare Kapazität)), die preisbewusste Aktionen mit zusätzlichem Zyklus berücksichtigen, z. B. Laden aus dem Netz. 0: keine Verschleißkosten (Heimspeicher altern vor allem mit der Zeit, der Temperatur und dem Ladezustand, oft bevor ihre Zyklen aufgebraucht sind). Ohne Angabe nimmt SLEMS einen niedrigen Schätzwert von 1 ct/kWh an.",
+            "rated_cycles": "Optional: volle Zyklen laut Hersteller (z. B. aus Datenblatt oder Garantie)."
           }
         }
       },
@@ -833,6 +841,9 @@
       },
       "market_price": {
         "name": "Börsenpreis"
+      },
+      "wear_cost": {
+        "name": "Verschleißkosten"
       }
     },
     "switch": {

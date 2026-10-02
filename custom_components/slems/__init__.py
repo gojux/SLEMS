@@ -9,9 +9,13 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
+from .battery_wear import wear_cost
 from .const import (
     CONF_EFFICIENCY_MODE,
     CONF_ROUND_TRIP_EFFICIENCY_PCT,
+    CONF_CAPACITY_WH,
+    CONF_PURCHASE_PRICE_EUR,
+    CONF_RATED_CYCLES,
     DEFAULT_ROUND_TRIP_EFFICIENCY_PCT,
     DOMAIN,
     MANUFACTURER,
@@ -64,6 +68,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
                 name=subentry.title,
                 driver=driver,
                 efficiency=_efficiency_tracker(driver, subentry.data),
+                wear=wear_cost(
+                    subentry.data.get(CONF_PURCHASE_PRICE_EUR),
+                    subentry.data.get(CONF_RATED_CYCLES),
+                    subentry.data.get(CONF_CAPACITY_WH),
+                ),
             )
         )
     consumers = [

@@ -682,6 +682,7 @@ async def async_setup_entry(
                 StoredEnergySensor(coordinator, battery),
                 *([FirmwareSensor(coordinator, battery)] if battery.driver.has_connection else []),
                 EfficiencySensor(coordinator, battery),
+                WearCostSensor(coordinator, battery),
                 PlannedBatteryPowerSensor(coordinator, battery),
                 LearnedCapacitySensor(coordinator, battery),
                 LastFullChargeSensor(coordinator, battery),
@@ -832,6 +833,30 @@ class EfficiencySensor(SlemsBatteryEntity, SensorEntity):
     def extra_state_attributes(self) -> dict:
         efficiency = self.battery.efficiency
         return {"mode": efficiency.mode.value, "measured": efficiency.is_learned}
+
+
+class WearCostSensor(SlemsBatteryEntity, SensorEntity):
+    """Wear costs per kWh stored and delivered again (see battery_wear)."""
+
+    _attr_native_unit_of_measurement = "ct/kWh"
+    _attr_suggested_display_precision = 1
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:battery-heart-variant"
+
+    def __init__(self, coordinator: SlemsCoordinator, battery) -> None:
+        super().__init__(coordinator, battery, "wear_cost")
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success
+
+    @property
+    def native_value(self) -> float:
+        return round(self.battery.wear.ct_per_kwh, 2)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"estimated": self.battery.wear.estimated}
 
 
 class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):

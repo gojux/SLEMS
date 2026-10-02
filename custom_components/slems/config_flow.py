@@ -94,6 +94,8 @@ from .const import (
     CONF_TEMPERATURE_2_ENTITY,
     CONF_TEMPERATURE_ENTITY,
     CONF_CAPACITY_WH,
+    CONF_PURCHASE_PRICE_EUR,
+    CONF_RATED_CYCLES,
     CONF_CONSUMER_TYPE,
     CONF_CONTROL_ENTITY,
     CONF_CONTROL_MODE,
@@ -987,6 +989,15 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                     mode=selector.NumberSelectorMode.BOX,
                 )
             ),
+            _optional(CONF_PURCHASE_PRICE_EUR, defaults): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=100_000, step="any", unit_of_measurement="€",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            _optional(CONF_RATED_CYCLES, defaults): selector.NumberSelector(
+                selector.NumberSelectorConfig(min=0, max=100_000, step=1, mode=selector.NumberSelectorMode.BOX)
+            ),
         }
 
     def _defaults(self, user_input: dict[str, Any] | None) -> dict[str, Any]:
@@ -1166,6 +1177,8 @@ def _battery_data(user_input: dict[str, Any], model: BatteryModel) -> dict[str, 
         CONF_ROUND_TRIP_EFFICIENCY_PCT,
     ):
         data[key] = int(data[key])
+    if data.get(CONF_RATED_CYCLES) is not None:
+        data[CONF_RATED_CYCLES] = int(data[CONF_RATED_CYCLES])
     return data
 
 
