@@ -654,7 +654,9 @@ communication at all. The menu (⋮) of a battery card offers *Pause
 communication (firmware update)*: SLEMS hands the battery back to its own
 logic, closes the connection and does not read or send anything for the
 *Communication pause duration* (default 20 minutes; switch *Communication
-paused*). Afterwards it reconnects by itself; *Resume* ends the pause earlier.
+paused*). Afterwards it reconnects by itself; *Resume* ends the pause earlier,
+*Extend pause* adds the pause duration to a running pause (as does switching
+*Communication paused* on again, e.g. in an automation).
 Meanwhile the battery is treated like a disabled one. If the battery itself
 reports a running firmware update (state *OTA update*), SLEMS pauses
 automatically; as this is only noticed with the next poll, pause manually

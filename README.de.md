@@ -688,7 +688,9 @@ Modbus-Kommunikation laufen. Das Menü (⋮) einer Batteriekarte bietet
 eigene Logik zurück, trennt die Verbindung und liest und sendet für die *Dauer
 Kommunikationspause* (Standard 20 Minuten; Schalter *Kommunikation pausiert*)
 nichts. Danach verbindet es sich von selbst wieder; *Fortsetzen* beendet die
-Pause früher. Solange wird die Batterie wie eine deaktivierte behandelt.
+Pause früher, *Pause verlängern* hängt an eine laufende Pause noch einmal die
+Pausendauer an (ebenso das erneute Einschalten von *Kommunikation pausiert*,
+z. B. in einer Automation). Solange wird die Batterie wie eine deaktivierte behandelt.
 Meldet die Batterie selbst ein laufendes Firmware-Update (Zustand
 *OTA-Update*), pausiert SLEMS automatisch; das fällt erst bei der nächsten
 Abfrage auf, daher vor einem Update besser manuell pausieren.

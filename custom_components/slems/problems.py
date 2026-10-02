@@ -110,7 +110,8 @@ class ProblemReporter:
             if since is not None and now - since >= UNREADABLE_AFTER_S:
                 wanted[_unreadable_issue(battery)] = ("battery_unreadable", placeholders)
             pending = battery.release_pending_since
-            if pending is not None and now - pending >= RELEASE_FAILED_AFTER_S:
+            # A paused battery is not talked to on purpose.
+            if pending is not None and not battery.communication_paused and now - pending >= RELEASE_FAILED_AFTER_S:
                 wanted[_release_issue(battery)] = ("battery_release_failed", placeholders)
         if (
             coordinator.settings.operating_mode is OperatingMode.ACTIVE

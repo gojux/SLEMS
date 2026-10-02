@@ -89,6 +89,7 @@ const STRINGS = {
     resumeCommunication: "Resume communication",
     resume: "Resume",
     paused: "communication paused",
+    extendPause: "Extend pause (+{min} min)",
     pausedManual: "Communication paused until {time} (e.g. for a firmware update).",
     pausedFirmware: "Firmware update detected: communication paused until {time}.",
     pauseTitle: "Pause communication with {name}?",
@@ -515,6 +516,7 @@ const STRINGS = {
     resumeCommunication: "Kommunikation fortsetzen",
     resume: "Fortsetzen",
     paused: "Kommunikation pausiert",
+    extendPause: "Pause verlängern (+{min} min)",
     pausedManual: "Kommunikation pausiert bis {time} (z. B. für ein Firmware-Update).",
     pausedFirmware: "Firmware-Update erkannt: Kommunikation pausiert bis {time}.",
     pauseTitle: "Kommunikation mit {name} pausieren?",
@@ -1452,6 +1454,7 @@ class SlemsPanel extends HTMLElement {
           ? item("menu-resume", t.resumeCommunication, ` data-entity="${pause.entity_id}"`)
           : item("menu-pause", t.pauseCommunication, ` data-entity="${pause.entity_id}" data-name="${name}"`)
       );
+      if (pause.state === "on") items.push(item("menu-extend", this._extendLabel(), ` data-entity="${pause.entity_id}"`));
     }
     const balancing = s("cell_balancing");
     if (balancing) {
@@ -1513,7 +1516,7 @@ class SlemsPanel extends HTMLElement {
       if (this._openMenu) this._menuItems(this._openMenu)[0]?.focus();
       return true;
     }
-    const item = event.target.closest(".menu-item, [data-action='menu-resume']");
+    const item = event.target.closest(".menu-item, [data-action='menu-resume'], [data-action='menu-extend']");
     const wasOpen = this._openMenu;
     if (wasOpen && !event.target.closest(".menu-wrap")) {
       this._openMenu = null;
@@ -1545,6 +1548,10 @@ class SlemsPanel extends HTMLElement {
         break;
       case "menu-resume":
         this._hass.callService("switch", "turn_off", { entity_id: entityId });
+        break;
+      case "menu-extend":
+        // Switching the pause on again extends it.
+        this._hass.callService("switch", "turn_on", { entity_id: entityId });
         break;
       case "hub-bad-weather-on":
         this._confirm(t.badWeatherTitle, t.badWeatherText, t.badWeatherConfirm, () =>
@@ -2043,6 +2050,11 @@ class SlemsPanel extends HTMLElement {
     this._renderDayChart();
     this._renderPriceChart();
     this._renderAccuracy();
+  }
+
+  /** "Extend pause (+20 min)" with the configured pause duration. */
+  _extendLabel() {
+    return this._t.extendPause.replace("{min}", this._number(this._state("communication_pause")) ?? 20);
   }
 
   /** Daily target mode ("boost" / "forced") of a consumer whose target goes before the batteries. */
@@ -3404,7 +3416,8 @@ class SlemsPanel extends HTMLElement {
               : "–";
             const text = (pause.attributes.reason === "firmware_update" ? t.pausedFirmware : t.pausedManual).replace("{time}", until);
             problem = `<div class="info-box"><ha-icon icon="mdi:pause-circle-outline"></ha-icon><span>${escapeHtml(text)}</span>
-              <button class="link" data-action="menu-resume" data-entity="${pause.entity_id}">${t.resume}</button></div>`;
+              <button class="link" data-action="menu-resume" data-entity="${pause.entity_id}">${t.resume}</button>
+              <button class="link" data-action="menu-extend" data-entity="${pause.entity_id}">${escapeHtml(this._extendLabel())}</button></div>`;
           } else if (s("battery_soc")?.state === "unavailable") {
             problem = `<div class="problem"><ha-icon icon="mdi:alert-circle"></ha-icon><span><b>${t.unreadable}</b> – ${t.unreadableText}</span></div>`;
           } else if (notResponding?.state === "on") {

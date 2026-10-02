@@ -200,6 +200,7 @@ class CommunicationPauseSwitch(SlemsBatteryEntity, SwitchEntity):
     On: the battery is handed back to its own logic and the connection is
     closed for the configured time, then SLEMS reconnects by itself. Also
     switched on automatically when the battery reports a firmware update.
+    Switching it on again while paused extends the pause by the configured time.
     """
 
     def __init__(self, coordinator: SlemsCoordinator, battery: BatteryRuntime) -> None:

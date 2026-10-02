@@ -1543,8 +1543,18 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         """Stop all communication with a battery for the configured time.
 
         A manual pause first hands the battery back to its own logic; during a
-        detected firmware update nothing is sent any more.
+        detected firmware update nothing is sent any more. A running pause is
+        extended by the configured time (counted from its end).
         """
+        now = dt_util.utcnow().timestamp()
+        if battery.paused_until is not None and battery.paused_until > now:
+            battery.paused_until += self.settings.communication_pause_min * 60
+            if reason == "firmware_update":
+                battery.pause_reason = reason
+            _LOGGER.info("Battery %s: communication pause extended", battery.name)
+            self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+            self.async_update_listeners()
+            return
         if reason == "manual" and battery.driver.capabilities.controllable:
             await self.controller.async_release([battery])
         await battery.driver.close()
@@ -1553,6 +1563,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
         battery.pause_reason = reason
         battery.unreadable_since = None
+        # Nothing is sent while paused: an outstanding release is given up (the
+        # user paused on purpose, e.g. another integration holds the connection).
+        battery.release_pending_since = None
         if reason == "firmware_update":
             _LOGGER.warning(
                 "Battery %s reports a firmware update, communication paused for %d minutes",

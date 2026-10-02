@@ -60,7 +60,7 @@ def test_first_update_removes_issues_of_removed_batteries() -> None:
 def test_outstanding_release_becomes_a_repair_issue() -> None:
     battery = SimpleNamespace(
         subentry_id="b1", name="Venus", not_responding=False, unreadable_since=None,
-        release_pending_since=100.0,
+        release_pending_since=100.0, communication_paused=False,
     )
     registry = FakeIssues(set())
     reporter = problems.ProblemReporter(None, coordinator([battery]))
@@ -72,6 +72,11 @@ def test_outstanding_release_becomes_a_repair_issue() -> None:
         assert (DOMAIN, "battery_release_failed_b1") not in registry.issues
         reporter.update(100.0 + problems.RELEASE_FAILED_AFTER_S)
         assert (DOMAIN, "battery_release_failed_b1") in registry.issues
+        # Paused on purpose: no warning.
+        battery.communication_paused = True
+        reporter.update(100.0 + problems.RELEASE_FAILED_AFTER_S + 1)
+        assert (DOMAIN, "battery_release_failed_b1") not in registry.issues
+        battery.communication_paused = False
         battery.release_pending_since = None
         reporter.update(1000.0)
         assert (DOMAIN, "battery_release_failed_b1") not in registry.issues
