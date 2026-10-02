@@ -1,0 +1,19 @@
+format: slems-tariff
+version: 1
+id: at/levies/ne7-unterbrechbar
+name: Abgaben Österreich, Netzebene 7 unterbrechbar
+household: false
+country: AT
+year: 2026
+parts: [levies]
+valid_from: 2026-01-01
+valid_to: 2026-12-31
+source: "Erneuerbaren-Förderpauschale und -Förderbeitrag 2026, Elektrizitätsabgabe (0,1 ct/kWh für Haushalte 2026); Preisblätter der Netzbetreiber 01/2026"
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Erneuerbaren-Förderpauschale, side: import, group: levies, unit: year, price: 19.02}
+  - {name: Erneuerbaren-Förderbeitrag Netznutzung, side: import, group: levies, unit: kwh, price: 0.347}
+  - {name: Erneuerbaren-Förderbeitrag Netzverlust, side: import, group: levies, unit: kwh, price: 0.037}
+  - {name: Elektrizitätsabgabe, side: import, group: levies, unit: kwh, price: 0.1}

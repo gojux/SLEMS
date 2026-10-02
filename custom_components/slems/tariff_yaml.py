@@ -14,6 +14,8 @@ have), the levies of a country. An energy template may name the grid
 operator it is usually combined with (``suggest: {grid_operator: …}``).
 ``id`` names a template over all its price levels and stays when it is
 renamed; a successor names the templates it replaces (``replaces``).
+``offer: true`` marks an offer for new contracts: its price is fixed from the
+start of a contract, so a newer offer is no update of an existing one.
 
 Example (made-up values)::
 
@@ -51,7 +53,7 @@ VERSION = 1
 # Information about the tariff kept with it (not used for the prices).
 META_KEYS = (
     "supplier", "grid_operator", "grid_area", "household", "country", "year", "parts",
-    "valid_from", "valid_to", "source", "suggest", "templates", "id", "replaces", "declined",
+    "valid_from", "valid_to", "source", "suggest", "templates", "id", "replaces", "declined", "offer",
 )
 # Identifier of a template over all its price levels, e.g. "at/example-energy/fix".
 ID_PATTERN = re.compile(r"[a-z0-9-]+(/[a-z0-9-]+)*")
@@ -168,7 +170,7 @@ def _meta_value(key: str, value: Any) -> Any:
         if not isinstance(value, int):
             raise TariffYamlError("yaml_field_invalid", key)
         return value
-    if key == "household":
+    if key in ("household", "offer"):
         if not isinstance(value, bool):
             raise TariffYamlError("yaml_field_invalid", key)
         return value

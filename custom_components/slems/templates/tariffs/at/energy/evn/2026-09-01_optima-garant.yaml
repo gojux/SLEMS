@@ -1,0 +1,18 @@
+format: slems-tariff
+version: 1
+id: at/evn/optima-garant
+name: Optima Garant
+supplier: EVN
+country: AT
+year: 2026
+parts: [energy]
+offer: true
+valid_from: 2026-09-01
+source: "Informations- und Preisblatt Strom Optima Garant, Preisgarantie ab September 2026, Ausgabe 26.08.2026 (evn.at)"
+suggest: {grid_operator: Netz Niederösterreich GmbH}
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Grundpreis, side: import, group: energy, unit: year, price: 72.0}
+  - {name: Verbrauchspreis, side: import, group: energy, unit: kwh, price: 18.5}

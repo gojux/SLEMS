@@ -9,6 +9,9 @@ as taken over (``items``, the snapshot). Candidates for one of them:
 * *newer price levels* of the same family,
 * *successors*: templates naming the family in ``replaces``, possibly several.
 
+Offers for new contracts (``offer``) only get corrections: a contract keeps
+its price, a newer offer is for new contracts.
+
 A repair issue tells about them, or that a current tariff is no longer valid
 (``meta.valid_to``). A correction changes the items in place (their dates
 stay, so past bills use the right price), but not items the user changed.
@@ -134,6 +137,11 @@ def find_candidates(data: Mapping[str, Any], templates: Iterable[Template]) -> d
             if changed and declined.get(_correction_key(origin)) != fingerprint:
                 corrected = own_level
         candidates = [Candidate(family, family, CORRECTION, (), corrected)] if corrected else []
+        if any(t.meta.get("offer") for t in by_family.get(family, [])):
+            # An offer: the contract keeps its price, newer offers are no update.
+            if candidates:
+                result[family] = candidates
+            continue
         families = [(family, UPDATE)] + sorted(
             (other, SUCCESSOR)
             for other, levels in by_family.items()

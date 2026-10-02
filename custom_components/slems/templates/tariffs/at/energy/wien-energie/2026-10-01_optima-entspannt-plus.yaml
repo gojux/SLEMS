@@ -1,0 +1,19 @@
+format: slems-tariff
+version: 1
+id: at/wien-energie/optima-entspannt-plus
+name: OPTIMA Entspannt plus
+supplier: Wien Energie
+country: AT
+year: 2026
+parts: [energy]
+offer: true
+valid_from: 2026-10-01
+source: "Informations- und Preisblatt Strom OPTIMA Entspannt plus, Vertragsbeginn Oktober 2026 (dokumente.wienenergie.at/link/soptb_0002-w)"
+suggest: {grid_operator: Wiener Netze GmbH}
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Grundpreis, side: import, group: energy, unit: year, price: 60.1659}
+  - {name: Verbrauchspreis, side: import, group: energy, unit: kwh, price: 13.0595}
+  - {name: Rabatt 12 Monate Vertragsbindung, side: import, group: energy, unit: kwh, price: -3.0695}

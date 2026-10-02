@@ -82,9 +82,15 @@ class Template:
         start, end = self.meta.get("valid_from"), self.meta.get("valid_to")
         return (start is None or start <= day.isoformat()) and (end is None or day.isoformat() <= end)
 
+    @property
+    def area_first(self) -> bool:
+        """A grid template: listed by its grid area (known to everyone) before the operator."""
+        return bool(self.parts) and self.parts[0] == "grid"
+
     def sort_key(self) -> tuple:
         year = self.meta.get("year") or 0
-        return (PART_ORDER.index(self.parts[0]) if self.parts else 0, self.provider.lower(), -year, self.name.lower())
+        first = str(self.meta.get("grid_area") or self.name) if self.area_first else self.provider
+        return (PART_ORDER.index(self.parts[0]) if self.parts else 0, first.lower(), -year, self.name.lower())
 
 
 def load_templates(directories: Iterable[tuple[str, Path]]) -> list[Template]:
@@ -104,15 +110,22 @@ def load_templates(directories: Iterable[tuple[str, Path]]) -> list[Template]:
     return sorted(templates, key=Template.sort_key)
 
 
-def label(template: Template, part_names: dict[str, str], own: str) -> str:
-    """'Energy · Example Energy – Fix (2026)' for the selection."""
+def label(template: Template, part_names: dict[str, str], own: str, offer: str = "offer {month}") -> str:
+    """'Energy · Example Energy – Fix (2026)', for grid templates
+    'Grid · Area X, level 7 – Example Grid (2026)' for the selection."""
     parts = " + ".join(part_names[part] for part in template.parts)
     meta = template.meta
     detail = template.name
     if meta.get("grid_area") and meta["grid_area"] not in detail:
         detail += f", {meta['grid_area']}"
-    text = f"{parts} · {template.provider} – {detail}" if template.provider else f"{parts} · {detail}"
-    if meta.get("year"):
+    if template.area_first:
+        text = f"{parts} · {detail} – {template.provider}" if template.provider else f"{parts} · {detail}"
+    else:
+        text = f"{parts} · {template.provider} – {detail}" if template.provider else f"{parts} · {detail}"
+    if meta.get("offer") and meta.get("valid_from"):
+        # An offer for new contracts: the month of the contract start.
+        text += f" ({offer.format(month=f'{meta['valid_from'][5:7]}/{meta['valid_from'][:4]}')})"
+    elif meta.get("year"):
         text += f" ({meta['year']})"
     return f"{text} · {own}" if template.own else text
 

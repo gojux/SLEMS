@@ -153,3 +153,22 @@ def test_correction_reset_and_declining_a_correction(tmp_path: Path) -> None:
     assert [c.kind for c in find_candidates(declined, load_templates([("shipped", tmp_path)]))["at/example/fix"]] == [
         "correction"
     ]
+
+
+def test_offers_get_corrections_but_no_newer_offers(tmp_path: Path) -> None:
+    from custom_components.slems.tariff_templates import label
+
+    folder = tmp_path / "at" / "energy" / "example"
+    folder.mkdir(parents=True)
+    offer = "id: at/example/offer\noffer: true\nparts:"
+    (folder / "2026-10-01_offer.yaml").write_text(level("2026-10-01", 10).replace("parts:", offer))
+    templates = load_templates([("shipped", tmp_path)])
+    assert label(templates[0], {"energy": "Energy"}, "own", "offer {month}").endswith("(offer 10/2026)")
+    _, data = combine(templates)
+    # The November offer is for new contracts.
+    (folder / "2026-11-01_offer.yaml").write_text(level("2026-11-01", 11).replace("parts:", offer))
+    assert find_candidates(data, load_templates([("shipped", tmp_path)])) == {}
+    # A correction of the October offer is offered.
+    (folder / "2026-10-01_offer.yaml").write_text(level("2026-10-01", 10.1).replace("parts:", offer))
+    candidates = find_candidates(data, load_templates([("shipped", tmp_path)]))["at/example/offer"]
+    assert [c.kind for c in candidates] == ["correction"]

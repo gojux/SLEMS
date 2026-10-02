@@ -71,7 +71,7 @@ def test_load_sorted_by_part_provider_and_year(folders) -> None:
     assert {t.country for t in templates} == {"AT"}
     assert label(templates[0], NAMES, "own") == "Energy · Example Energy – Fix 2026 (2026)"
     assert label(templates[2], NAMES, "own") == "Energy · Example Energy – Mine (2024) · own"
-    assert label(templates[3], NAMES, "own") == "Grid + Levies · Example Grid – Example area level 7 (2026)"
+    assert label(templates[3], NAMES, "own") == "Grid + Levies · Example area level 7 – Example Grid (2026)"
 
 
 def test_combine_parts_into_one_tariff(folders) -> None:

@@ -311,7 +311,12 @@ Vergangenheit; selbst geänderte Posten bleiben. *Auf Vorlagenwerte
 zurücksetzen* nimmt eigene Änderungen an den Vorlagen-Posten zurück. Eigene Vorlagen: YAML-Dateien im Ordner
 `slems_tariff_templates` deiner Home-Assistant-Konfiguration. Eine Vorlage für
 alle schlägst du als [Issue](https://github.com/gojux/SLEMS/issues) mit der
-Quelle der Preise vor. Ein Posten kann auch *Prozent der Gruppe* sein (z. B.
+Quelle der Preise vor. Österreich: die Netzentgelte aller Netzbereiche
+(Netzebene 7, aus der Systemnutzungsentgelte-Verordnung, mit dem günstigeren
+Preis von April bis September 10–16 Uhr) und die bundesweiten Abgaben; das
+Messentgelt steht mit dem gesetzlichen Höchstpreis drin (dein Netzbetreiber
+kann weniger verrechnen), Gemeindeabgaben (z. B. die Gebrauchsabgabe in Wien)
+fehlen. Ein Posten kann auch *Prozent der Gruppe* sein (z. B.
 eine Gebrauchsabgabe von 7 % auf die Energie).
 
 Woher die Energie kommt: SLEMS zeichnet Netzbezug und Einspeisung aus jedem

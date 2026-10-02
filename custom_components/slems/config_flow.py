@@ -1597,7 +1597,7 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         words = _CHECK_WORDS["de" if self.hass.config.language.startswith("de") else "en"]
         part_names = {group.value: words[group].capitalize() for group in Group}
         options = [selector.SelectOptionDict(value=_NO_TEMPLATE, label=words["no_template"])] + [
-            selector.SelectOptionDict(value=t.key, label=template_label(t, part_names, words["own"])) for t in templates
+            selector.SelectOptionDict(value=t.key, label=template_label(t, part_names, words["own"], words["offer"])) for t in templates
         ]
         return selector.SelectSelector(
             selector.SelectSelectorConfig(options=options, mode=selector.SelectSelectorMode.DROPDOWN)
@@ -2025,7 +2025,7 @@ _CHECK_WORDS = {
     "de": {
         Side.IMPORT: "Bezug", Side.EXPORT: "Einspeisung", "computed": "berechnet", "bill": "Rechnung",
         Group.ENERGY: "Energie", Group.GRID: "Netz", Group.LEVIES: "Abgaben", "net": "netto",
-        "months": "Monate", "weekdays": "Wochentage", "own": "eigene Vorlage", "no_template": "keine",
+        "months": "Monate", "weekdays": "Wochentage", "own": "eigene Vorlage", "no_template": "keine", "offer": "Angebot für Vertragsbeginn {month}",
         "new_item": "neu", "unchanged": "unverändert", "dropped": "entfällt",
         "own_changes": "Von dir geändert, wird ebenfalls ersetzt: {names}",
         "update": "Neue Preise ab {date} ({name})", "successor": "Nachfolgetarif {name} ab {date}",
@@ -2039,7 +2039,7 @@ _CHECK_WORDS = {
     "en": {
         Side.IMPORT: "Import", Side.EXPORT: "Export", "computed": "computed", "bill": "bill",
         Group.ENERGY: "energy", Group.GRID: "grid", Group.LEVIES: "levies", "net": "net",
-        "months": "months", "weekdays": "weekdays", "own": "own template", "no_template": "none",
+        "months": "months", "weekdays": "weekdays", "own": "own template", "no_template": "none", "offer": "offer for contracts starting {month}",
         "new_item": "new", "unchanged": "unchanged", "dropped": "dropped",
         "own_changes": "Changed by you, replaced as well: {names}",
         "update": "New prices from {date} ({name})", "successor": "Successor {name} from {date}",

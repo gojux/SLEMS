@@ -1,0 +1,19 @@
+format: slems-tariff
+version: 1
+id: at/burgenland-energie/optima12-unabhaengig-plus
+name: Optima12 Unabhängig+ 5.0
+supplier: Burgenland Energie
+country: AT
+year: 2026
+parts: [energy]
+offer: true
+valid_from: 2026-10-01
+source: "Informations- und Preisblatt Privatstrom Optima12 Unabhängig+ 5.0, Vertragsabschluss Oktober 2026 (burgenlandenergie.at)"
+suggest: {grid_operator: Netz Burgenland GmbH}
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Grundpreis, side: import, group: energy, unit: year, price: 62.28}
+  - {name: Verbrauchspreis, side: import, group: energy, unit: kwh, price: 13.211}
+  - {name: Smart-Meter-Rabatt, side: import, group: energy, unit: kwh, price: -0.661}

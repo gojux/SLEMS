@@ -300,7 +300,11 @@ your own changes of the template lines. Own templates: YAML files in
 the folder `slems_tariff_templates` of your Home Assistant configuration.
 Suggest a template for everyone as an
 [issue](https://github.com/gojux/SLEMS/issues) with the source of the
-prices. A line may also be a *percent of the group* (e.g. a municipal levy of
+prices. Austria: the grid fees of every grid area (network level 7, from the
+grid fee ordinance, with the reduced price from April to September 10–16 h)
+and the federal levies; the metering fee is entered at its legal maximum
+(your grid operator may charge less) and municipal levies (e.g. the
+Gebrauchsabgabe in Vienna) are not included. A line may also be a *percent of the group* (e.g. a municipal levy of
 7 % on the energy).
 
 Where the energy comes from: SLEMS records grid import and feed-in per

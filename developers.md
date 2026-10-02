@@ -1504,6 +1504,16 @@ python3 tools/set_power.py <battery-ip> --discharge 800
 python3 tools/set_power.py <battery-ip> --release
 ```
 
+`tools/at_grid_templates.py` writes the Austrian tariff templates for the grid
+fees of every grid area (network level 7, for households and interruptible
+supply) and the federal levies from a table of the published values (SNE-V,
+Erneuerbaren-Förderbeitrag, Elektrizitätsabgabe). For a new year add the new
+values with their date and run it again; earlier price levels stay.
+
+```bash
+python3 tools/at_grid_templates.py
+```
+
 `dev/readme_charts.py` creates the charts of the README section *Which option
 when?* (`docs/images/<scenario>_<language>.svg`) from the SLEMS state of charge
 projection with example data; after changes to the planning run it again
@@ -1639,3 +1649,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-03 | Tariff templates in parts (`tariff_templates`): a template covers energy, grid and/or levies and several are combined into one tariff, each bringing the VAT of its parts. Shipped templates live in `templates/tariffs/<country>/` and contain only public list prices from price sheets with their source; a test validates every file. Own templates are read from `slems_tariff_templates` in the HA configuration (private ones, and testing without made-up files in the project). Data of the E-Control tariff calculator is not used: its terms of use forbid changing the data, combining it with other services and passing it on as files. A `percent` item covers levies that are a share of other items (e.g. a municipal levy on energy and grid). |
 | 2026-10-03 | Updating tariffs made from templates (`tariff_updates`): a tariff remembers the family and price level of each template; newer levels and successors are offered, the old items end the day before (`valid_to` per item) instead of being replaced, so bill checks and the tariff comparison of past months keep their prices. Templates have a readable fixed `id` (country/provider/tariff, not a UUID: reviewable and derivable from a price sheet) that survives renaming; a successor names its predecessors in `replaces`, because old price levels stay unchanged once published. Several successors are possible, the user chooses (or declines until a newer level comes). Reminders are repair issues for current tariffs only. Own templates may reuse a shipped id on purpose to add a price level before an update of SLEMS. |
 | 2026-10-03 | A tariff from templates keeps a snapshot of the template items it took over (per template, current price level). A change of the template at the same price level is a correction (detected by comparison, no revision number to forget): it changes the values in place and keeps the dates, so past bills use the right price, but leaves items the user changed. The snapshot also tells own changes apart exactly and allows resetting to the template values. |
+| 2026-10-03 | Energy templates: list prices that apply to all customers are preferred (their price changes are updates for everyone); offers for new contracts (a price fixed from the contract start, new offer every month) are marked `offer: true` and only get corrections, never a newer offer as update. Tariffs following a published index that SLEMS cannot fetch (e.g. the Austrian ÖSPI) are left out; tariffs on the hourly market price are fine. Austrian grid templates are listed by grid area, which everyone knows, before the grid operator. |
