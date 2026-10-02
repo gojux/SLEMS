@@ -102,6 +102,8 @@ CONF_MIN_POWER_W: Final = "min_power_w"
 CONF_MAX_POWER_W: Final = "max_power_w"
 CONF_BLOCK_ENTITY: Final = "block_entity"
 CONF_THERMOSTAT_CYCLES: Final = "thermostat_cycles"
+# Avoid short runs: start only with enough expected surplus, bridge short dips.
+CONF_AVOID_CYCLING: Final = "avoid_cycling"
 # Optional temperature sensors of the consumer's storage (e.g. a boiler).
 CONF_TEMPERATURE_ENTITY: Final = "temperature_entity"
 CONF_TEMPERATURE_2_ENTITY: Final = "temperature_2_entity"

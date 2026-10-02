@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 import asyncio
@@ -94,11 +94,13 @@ from .const import (
 )
 from .controller import ControlStatus, RealTimeController
 from .consumers import (
+    AVOID_CYCLING_RUN_S,
     ConsumerConfig,
     ConsumerState,
     RuntimeTracker,
     active_phases,
     amps_for,
+    cycling_holds,
     read_consumer_state,
 )
 from .drivers import BatteryDriver, BatteryDriverError, BatteryTelemetry
@@ -171,6 +173,7 @@ from .consumer_targets import (
     daily_energy_estimate,
     forced_load,
     no_power_threshold_s,
+    remaining,
     surplus_demand,
     target_temperature,
     window_start,
@@ -729,6 +732,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # (restored by their entities), progress of the period (stored) and
         # the mode of the last plan.
         self.consumer_targets = {c.subentry_id: TargetSettings() for c in consumers}
+        # Avoid short runs: monotonic time since the surplus is short for a running consumer.
+        self._short_since: dict[str, float] = {}
         # Consumers with a daily target that draw no power although switched on.
         self.no_power = {c.subentry_id: NoPowerWatch() for c in consumers}
         self.target_progress = {c.subentry_id: TargetProgress() for c in consumers}
@@ -1787,8 +1792,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         grid_charge_w = forecast_plan.grid_charge.charge_at(wall_now) if forecast_plan.grid_charge else 0.0
         battery_export_w = forecast_plan.grid_charge.export_at(wall_now) if forecast_plan.grid_charge else 0.0
 
+        surplus_w = self._run_surplus(pv_forecast, consumption, load, wall_now)
         requests = [
-            self._request(consumer, now, battery)
+            self._request(consumer, now, battery, snapshot.available_power_w, surplus_w)
             for consumer in map(self.effective_consumer, self.consumers)
             if snapshot.is_controllable_now(consumer.subentry_id)
         ]
@@ -2577,12 +2583,78 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             normal,
         )
 
+    def _run_surplus(
+        self,
+        pv_forecast: PvForecast | None,
+        consumption: ConsumptionForecast | None,
+        load: float | None,
+        wall_now: datetime,
+    ) -> Callable[[float], float] | None:
+        """Mean forecast surplus (W) of the next ``seconds``; None without a PV forecast."""
+        if pv_forecast is None:
+            return None
+        total = consumption.total if consumption is not None else None
+
+        def mean(seconds: float) -> float:
+            until = wall_now + timedelta(seconds=seconds)
+            energy = 0.0
+            for start, surplus_w, _ in remaining_surplus_by_hour(pv_forecast, total, load, wall_now, until):
+                overlap = (min(start + timedelta(hours=1), until) - max(start, wall_now)).total_seconds()
+                energy += surplus_w * max(0.0, overlap)
+            return energy / seconds if seconds > 0 else 0.0
+
+        return mean
+
+    def _cycling_holds(
+        self,
+        consumer: ConsumerConfig,
+        now: float,
+        mode: TargetMode,
+        available_w: float | None,
+        run_surplus: Callable[[float], float] | None,
+    ) -> tuple[bool, bool]:
+        """(keep on, keep off) of a consumer that avoids short runs (see
+        consumers.cycling_holds); a run is the minimum runtime, or what its
+        daily target still needs if less."""
+        subentry_id = consumer.subentry_id
+        if not consumer.avoid_cycling or mode in (TargetMode.FORCED, TargetMode.BOOST):
+            self._short_since.pop(subentry_id, None)
+            return False, False
+        power = self._full_power_w(consumer)
+        run_s = consumer.min_on_s or AVOID_CYCLING_RUN_S
+        settings = self.consumer_targets[subentry_id]
+        if settings.type in (TargetType.RUNTIME, TargetType.ENABLED, TargetType.ENERGY) and power > 0:
+            missing = remaining(settings, self.target_progress[subentry_id])
+            needed = missing if settings.type is not TargetType.ENERGY else missing / power * 3600
+            if needed > 0:
+                run_s = min(run_s, needed)
+        keep_on, keep_off, since = cycling_holds(
+            self._runtime.is_on(subentry_id),
+            power,
+            now,
+            self._short_since.get(subentry_id),
+            available_w,
+            run_surplus,
+            run_s,
+        )
+        if since is None:
+            self._short_since.pop(subentry_id, None)
+        else:
+            self._short_since[subentry_id] = since
+        return keep_on, keep_off
+
     def _request(
-        self, consumer: ConsumerConfig, now: float, battery: BatteryGroup | None
+        self,
+        consumer: ConsumerConfig,
+        now: float,
+        battery: BatteryGroup | None,
+        available_w: float | None = None,
+        run_surplus: Callable[[float], float] | None = None,
     ) -> ConsumerRequest:
         """Allocation request of a consumer, with its daily target."""
         mode = self.target_states.get(consumer.subentry_id, TargetState(TargetMode.NONE)).mode
-        must_stay_on = self._runtime.must_stay_on(consumer, now)
+        keep_on, keep_off = self._cycling_holds(consumer, now, mode, available_w, run_surplus)
+        must_stay_on = self._runtime.must_stay_on(consumer, now) or keep_on
         return ConsumerRequest(
             subentry_id=consumer.subentry_id,
             priority=consumer.priority,
@@ -2595,6 +2667,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             # A met target or one before its earliest start keeps it off
             # (after its minimum runtime).
             must_stay_off=self._runtime.must_stay_off(consumer, now)
+            or keep_off
             or (mode in (TargetMode.DONE, TargetMode.WAITING) and not must_stay_on),
             cap_mode=self.cap_mode(consumer.subentry_id),
             boost=mode is TargetMode.BOOST,

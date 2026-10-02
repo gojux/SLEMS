@@ -801,6 +801,13 @@ Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
   Ein/Aus-Verbrauchern reicht für die Leistung im eingeschalteten Zustand eine
   grobe Schätzung, wenn *Gelernte Werte verwenden* an ist; lieber zu niedrig
   als zu hoch, weil SLEMS nur lernt, während es den Verbraucher betreibt.
+- **Takten vermeiden** (z. B. ein Gerät mit Kompressor): SLEMS schaltet den
+  Verbraucher nur ein, wenn der prognostizierte Überschuss für einen ganzen
+  Lauf reicht (seine Mindestlaufzeit, ohne eine 15 Minuten, oder was sein
+  Tagesziel noch braucht, wenn weniger), und lässt ihn bei Einbrüchen des
+  Überschusses bis zu 5 Minuten weiterlaufen (Batterien oder Netz
+  überbrücken). Erzwungene Läufe eines Tagesziels bleiben unverändert. Dazu
+  eine Mindestlaufzeit und Mindestpause setzen.
 - **Thermostat taktet selbst**: für Verbraucher, die ihr eigener Thermostat
   während der Ansteuerung ein- und ausschaltet (z. B. ein Heizstab, der am
   Heizelement misst). Normalerweise gilt ein Verbraucher, der trotz Vorgabe

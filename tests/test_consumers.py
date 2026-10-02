@@ -116,3 +116,24 @@ def test_no_saturation_while_the_device_starts() -> None:
     controller._consumer_commands = {"rod": (300.0, now - 190)}
     controller._check_saturation("rod", snapshot, now)
     assert "rod" in controller.saturated
+
+
+def test_avoid_cycling_starts_only_with_lasting_surplus_and_bridges_dips() -> None:
+    from custom_components.slems.consumers import AVOID_CYCLING_BRIDGE_S, cycling_holds
+
+    def surplus(value: float):
+        return lambda seconds: value
+
+    # Off: the forecast surplus of the next run decides.
+    assert cycling_holds(False, 300, 0.0, None, 500, surplus(250), 1800)[1] is True
+    assert cycling_holds(False, 300, 0.0, None, 500, surplus(400), 1800)[1] is False
+    # Running with enough surplus: nothing to hold.
+    assert cycling_holds(True, 300, 0.0, None, 450, None, 1800) == (False, False, None)
+    # A dip: kept on, remembered since when.
+    keep_on, _, since = cycling_holds(True, 300, 100.0, None, 120, None, 1800)
+    assert keep_on and since == 100.0
+    keep_on, _, since = cycling_holds(True, 300, 100.0 + AVOID_CYCLING_BRIDGE_S - 1, since, 120, None, 1800)
+    assert keep_on
+    # Longer than the bridge: let go.
+    keep_on, _, _ = cycling_holds(True, 300, 100.0 + AVOID_CYCLING_BRIDGE_S + 1, since, 120, None, 1800)
+    assert not keep_on

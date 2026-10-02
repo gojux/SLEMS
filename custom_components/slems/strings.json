@@ -330,7 +330,8 @@
             "phases": "Phases",
             "phases_entity": "Active phases entity",
             "voltage_v": "Voltage",
-            "start_entity": "Start/stop entity"
+            "start_entity": "Start/stop entity",
+            "avoid_cycling": "Avoid short runs"
           },
           "data_description": {
             "control_entity": "Switch for on/off consumers, number entity in W for power controlled ones, in A for current controlled ones (e.g. the charging current of a wallbox); with current control also a select with ampere options (e.g. *Max. charging current* of an evcc loadpoint in ha-evcc).",
@@ -347,7 +348,8 @@
             "phases": "Phases the consumer charges with when no entity tells the active ones.",
             "phases_entity": "Optional. Sensor with the number of active phases (1 or 3), e.g. of an evcc loadpoint or a wallbox that switches phases itself; the power range follows it.",
             "voltage_v": "Voltage per phase.",
-            "start_entity": "Optional. Switch, or a select (then the options for on and off are asked next, e.g. the mode of an evcc loadpoint: now / off). Without it SLEMS stops by setting the lowest current the control entity takes (0 A if allowed); with evcc and its minimum current evcc then decides itself when to start and stop."
+            "start_entity": "Optional. Switch, or a select (then the options for on and off are asked next, e.g. the mode of an evcc loadpoint: now / off). Without it SLEMS stops by setting the lowest current the control entity takes (0 A if allowed); with evcc and its minimum current evcc then decides itself when to start and stop.",
+            "avoid_cycling": "Start only when the forecast surplus lasts for a whole run (the minimum runtime, or what the daily target still needs if less) and keep running through dips of the surplus for up to 5 minutes (the batteries or the grid bridge them). For devices that should not be switched on and off often, e.g. with a compressor; set a minimum runtime and pause as well."
           }
         },
         "start_options": {

@@ -330,7 +330,8 @@
             "phases": "Phasen",
             "phases_entity": "Entity der aktiven Phasen",
             "voltage_v": "Spannung",
-            "start_entity": "Start/Stopp-Entity"
+            "start_entity": "Start/Stopp-Entity",
+            "avoid_cycling": "Takten vermeiden"
           },
           "data_description": {
             "control_entity": "Schalter für Ein/Aus-Verbraucher, Number-Entity in W für leistungsgeregelte, in A für stromgeregelte Verbraucher (z. B. Ladestrom einer Wallbox); bei Stromvorgabe auch eine Auswahl mit Ampere-Optionen (z. B. *Max. Ladestrom* eines evcc-Ladepunkts in ha-evcc).",
@@ -347,7 +348,8 @@
             "phases": "Phasen, mit denen der Verbraucher lädt, wenn keine Entity die aktiven nennt.",
             "phases_entity": "Optional. Sensor mit der Zahl der aktiven Phasen (1 oder 3), z. B. eines evcc-Ladepunkts oder einer Wallbox, die selbst umschaltet; der Leistungsbereich folgt ihm.",
             "voltage_v": "Spannung je Phase.",
-            "start_entity": "Optional. Schalter, oder eine Auswahl (dann werden als Nächstes die Optionen für ein und aus abgefragt, z. B. Modus eines evcc-Ladepunkts: now / off). Ohne sie stoppt SLEMS, indem es den kleinsten Strom setzt, den die Steuer-Entity zulässt (0 A, wenn erlaubt); bei evcc mit seinem Mindeststrom entscheidet evcc dann selbst über Start und Stopp."
+            "start_entity": "Optional. Schalter, oder eine Auswahl (dann werden als Nächstes die Optionen für ein und aus abgefragt, z. B. Modus eines evcc-Ladepunkts: now / off). Ohne sie stoppt SLEMS, indem es den kleinsten Strom setzt, den die Steuer-Entity zulässt (0 A, wenn erlaubt); bei evcc mit seinem Mindeststrom entscheidet evcc dann selbst über Start und Stopp.",
+            "avoid_cycling": "Nur einschalten, wenn der prognostizierte Überschuss für einen ganzen Lauf reicht (die Mindestlaufzeit, oder was das Tagesziel noch braucht, wenn weniger), und bei Einbrüchen des Überschusses bis zu 5 Minuten weiterlaufen (Batterien oder Netz überbrücken). Für Geräte, die nicht oft ein- und ausgeschaltet werden sollen, z. B. mit Kompressor; dazu eine Mindestlaufzeit und -pause setzen."
           }
         },
         "start_options": {

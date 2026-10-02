@@ -761,6 +761,12 @@ Every consumer needs its own power **and** energy sensor.
   minimum pause. For on/off consumers a rough estimate of the power when on is
   enough if *Use learned values* is on; rather too low than too high, because
   SLEMS only learns while it runs the consumer.
+- **Avoid short runs** (e.g. a device with a compressor): SLEMS switches the
+  consumer on only when the forecast surplus lasts for a whole run (its
+  minimum runtime, 15 minutes without one, or what its daily target still
+  needs if less), and keeps it running through dips of the surplus for up to
+  5 minutes (the batteries or the grid bridge them). Forced runs of a daily
+  target are not affected. Set a minimum runtime and pause as well.
 - **Thermostat cycles by itself**: for consumers whose own thermostat switches
   them on and off while they are commanded (e.g. a heating rod that measures
   at the element). Normally a consumer that draws nothing although commanded

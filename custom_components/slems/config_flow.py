@@ -91,6 +91,7 @@ from .const import (
     CONF_BLOCK_ENTITY,
     CONF_SHOW_IN_FLOW,
     CONF_THERMOSTAT_CYCLES,
+    CONF_AVOID_CYCLING,
     CONF_TEMPERATURE_2_ENTITY,
     CONF_TEMPERATURE_ENTITY,
     CONF_CAPACITY_WH,
@@ -1276,6 +1277,7 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
                 CONF_MIN_ON_MINUTES,
                 CONF_MIN_OFF_MINUTES,
                 CONF_THERMOSTAT_CYCLES,
+                CONF_AVOID_CYCLING,
                 CONF_TEMPERATURE_ENTITY,
                 CONF_TEMPERATURE_2_ENTITY,
             )
@@ -1357,6 +1359,9 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
         )
         fields[_optional(CONF_MIN_ON_MINUTES, defaults)] = minutes
         fields[_optional(CONF_MIN_OFF_MINUTES, defaults)] = minutes
+        fields[
+            vol.Required(CONF_AVOID_CYCLING, default=defaults.get(CONF_AVOID_CYCLING, False))
+        ] = selector.BooleanSelector()
         fields[_optional(CONF_BLOCK_ENTITY, defaults)] = selector.EntitySelector(
             selector.EntitySelectorConfig(
                 domain=["binary_sensor", "input_boolean", "switch", "water_heater"]

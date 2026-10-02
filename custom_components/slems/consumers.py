@@ -11,7 +11,7 @@ options (the maximum current of an evcc loadpoint in ha-evcc).
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 import math
 from typing import Any
@@ -44,6 +44,7 @@ from .const import (
     CONF_TEMPERATURE_2_ENTITY,
     CONF_TEMPERATURE_ENTITY,
     CONF_THERMOSTAT_CYCLES,
+    CONF_AVOID_CYCLING,
     CONF_VOLTAGE_V,
     DEFAULT_MAX_CURRENT_A,
     DEFAULT_MIN_CURRENT_A,
@@ -85,6 +86,9 @@ class ConsumerConfig:
     # Its own thermostat switches it on and off while it is commanded (e.g. a
     # heating rod that measures at the element): pauses are no saturation.
     thermostat_cycles: bool = False
+    # Avoid short runs (see coordinator): start only when the expected surplus
+    # lasts for a run, keep running through short dips.
+    avoid_cycling: bool = False
     # Optional temperature sensors of its storage (a boiler); their mean is
     # used to learn how much energy it can still take (ThermalLearner).
     temperature_entity_ids: tuple[str, ...] = ()
@@ -137,6 +141,7 @@ class ConsumerConfig:
             min_on_s=(data.get(CONF_MIN_ON_MINUTES) or 0) * 60,
             min_off_s=(data.get(CONF_MIN_OFF_MINUTES) or 0) * 60,
             thermostat_cycles=data.get(CONF_THERMOSTAT_CYCLES, False),
+            avoid_cycling=data.get(CONF_AVOID_CYCLING, False),
             show_in_flow=data.get(CONF_SHOW_IN_FLOW, True),
             temperature_entity_ids=tuple(
                 entity_id
@@ -272,3 +277,35 @@ class RuntimeTracker:
     def must_stay_off(self, consumer: ConsumerConfig, now: float) -> bool:
         state = self._states.get(consumer.subentry_id)
         return state is not None and not state[0] and now - state[1] < consumer.min_off_s
+
+
+# Avoid short runs (consumer option): dips of the surplus bridged at most this
+# long, and the run that must fit into the forecast surplus without a minimum runtime.
+AVOID_CYCLING_BRIDGE_S = 300.0
+AVOID_CYCLING_RUN_S = 900.0
+
+
+def cycling_holds(
+    running: bool,
+    power_w: float,
+    now: float,
+    short_since: float | None,
+    available_w: float | None,
+    run_surplus_w: Callable[[float], float] | None,
+    run_s: float,
+) -> tuple[bool, bool, float | None]:
+    """(keep on, keep off, short since) of a consumer that avoids short runs.
+
+    Running: kept on while the surplus (``available_w``, including its own
+    power) is short for less than ``AVOID_CYCLING_BRIDGE_S``; the batteries or
+    the grid bridge the dip. Off: only started when the mean forecast surplus
+    of the next ``run_s`` (``run_surplus_w``) covers its power.
+    """
+    if running:
+        if available_w is not None and available_w < power_w:
+            since = now if short_since is None else short_since
+            return now - since < AVOID_CYCLING_BRIDGE_S, False, since
+        return False, False, None
+    if run_surplus_w is None or power_w <= 0:
+        return False, False, None
+    return False, run_surplus_w(run_s) < power_w, None
