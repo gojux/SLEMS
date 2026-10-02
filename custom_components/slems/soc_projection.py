@@ -15,6 +15,8 @@ simplified way:
 * Hours with planned charging from the grid (see grid_charge): the batteries
   charge with it, the grid covers the house.
 * Hours with planned feed-in from the batteries: on top of the deficit.
+* Surplus hours of a price plan: charging at most up to its cap (room kept for
+  cheaper hours), or the planned charging including import from the grid.
 * Hours with a deficit: the batteries cover it. With import peak shaving at
   low state of charge only the import above the limit; with night discharge
   at least the planned night discharge, the extra part not below its target
@@ -102,6 +104,7 @@ def project_soc(
     budget_until: datetime | None = None,
     grid_charge: Mapping[datetime, float] | None = None,
     battery_export: Mapping[datetime, float] | None = None,
+    charge_caps: Mapping[datetime, float] | None = None,
 ) -> SocProjection:
     """Project until the end of tomorrow.
 
@@ -166,6 +169,12 @@ def project_soc(
             # what still fits into the batteries is charged.
             room = max(0.0, min(full, allowed) - stored)
             charge = min(plan.get(hour, 0.0), room / (share * efficiency))
+            if (cap_w := (charge_caps or {}).get(hour)) is not None:
+                # Room kept for cheaper hours (see grid_charge).
+                charge = min(charge, cap_w)
+            if (planned_w := (grid_charge or {}).get(hour)) and planned_w > charge:
+                # Charging from the grid on top of the surplus.
+                charge = min(planned_w, max(0.0, full - stored) / (share * efficiency))
             if cap is not None and hour in cap.hourly:
                 charge = max(charge, cap.hourly[hour].absorbed_wh / share)
                 charge = min(charge, max(0.0, full - stored) / (share * efficiency))

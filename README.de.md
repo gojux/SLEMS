@@ -339,6 +339,18 @@ der Platz, den die Einspeisebegrenzung zur PV-Übernahme braucht. Bei
 *Netzladen* mit Energie, Beginn und erwarteter Ersparnis, das Tagesdiagramm
 das geplante Laden.
 
+**Negative Preise**: Mit preisbewusster Steuerung und einem negativen
+Bezugspreis oder einer negativen Einspeisevergütung innerhalb der bekannten
+Preise plant SLEMS auch die Überschussstunden: Die Batterien halten Platz für
+den PV-Überschuss der negativen Stunden frei (sie nehmen davor nur einen Teil
+des Überschusses auf und speisen den Rest zum positiven Preis ein; Strategie
+*Platz für günstigere Stunden*) und laden mit *Akku aus dem Netz laden* auch
+aus dem Netz, wenn der Bezugspreis samt allen Entgelten negativ ist. Der
+eigene PV-Überschuss geht dabei vor. *Höchster Netzbezug beim Netzladen*
+(0 = keine Grenze, z. B. für die Hauptsicherung) und die Bezugsgrenze von
+Bezugsspitzen abfangen begrenzen den Bezug. Das wirkt nur mit einer
+Vergütung oder einem Bezugspreis, die stündlich dem Börsenpreis folgen.
+
 **Akku ins Netz entladen** (Schalter, standardmäßig aus; nur mit
 preisbewusster Steuerung): Derselbe Plan darf über den Bedarf des Hauses
 hinaus aus den Batterien einspeisen, wenn die Vergütung der Stunde höher ist
@@ -1617,6 +1629,7 @@ Mögliche Erweiterungen:
   zu einer Uhrzeit: Grundlage für ein Auto, das das Haus versorgt (V2H).
 - Gelernte Anwesenheit des Autos für die Planung.
 - Einspeisen aus den Batterien auch in der Schätzung des Tarifvergleichs.
+- Verbraucher bei negativen Preisen bevorzugen (z. B. den Heizstab).
 - Programmgeräte (Waschmaschine, Geschirrspüler, Trockner): den Verlauf eines
   Programms lernen und den Rest eines laufenden Programms in die Prognose der
   nächsten Stunden aufnehmen (hilft der Abend- und Nachtplanung); später

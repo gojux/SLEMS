@@ -714,7 +714,8 @@
           "feed_in_cap": "Einspeisebegrenzung",
           "price_hold": "Für teure Stunden halten",
           "grid_charge": "Netzladen",
-          "battery_export": "Einspeisen aus Akku"
+          "battery_export": "Einspeisen aus Akku",
+          "price_room": "Platz für günstigere Stunden"
         }
       },
       "expected_surplus_energy": {
@@ -1057,6 +1058,9 @@
       },
       "grid_charge_max_power": {
         "name": "Höchste Netzladeleistung"
+      },
+      "grid_import_max": {
+        "name": "Höchster Netzbezug beim Netzladen"
       }
     },
     "binary_sensor": {

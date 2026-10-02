@@ -1,5 +1,6 @@
 """Tests for charging the batteries from the grid (made-up prices)."""
 
+from dataclasses import replace
 from datetime import datetime, timedelta
 
 import pytest
@@ -110,3 +111,49 @@ def test_feeds_in_at_a_high_credit_above_the_reserve() -> None:
         export_prices=dict(zip(h, [8.0] * 6)), export_floor_wh=2000,
     )
     assert flat is None or not flat.export_w
+
+
+def day_from(hour: int) -> datetime:
+    return datetime(2026, 5, 10, hour, 0, tzinfo=dt_util.get_default_time_zone())
+
+
+def test_room_kept_for_the_pv_surplus_of_negative_hours() -> None:
+    # 9–12: surplus 2 kWh/h at +8 ct feed-in; 12–15: surplus 2 kWh/h at −5 ct.
+    h = [day_from(9) + timedelta(hours=i) for i in range(6)]
+    nets = {hour: -2000.0 for hour in h}
+    credit = dict(zip(h, [8.0, 8.0, 8.0, -5.0, -5.0, -5.0]))
+    prices = {hour: 30.0 for hour in h}
+    empty = ChargeBattery(
+        capacity_wh=5000, stored_wh=500, floor_wh=500, grid_max_wh=4500,
+        max_charge_w=2500, max_discharge_w=2500, efficiency=0.95, wear_ct=1.0,
+        grid_charge_w=0.0,
+    )
+    plan = plan_grid_charge(day_from(9), empty, nets, prices, None, 2.0, export_prices=credit)
+    assert plan is not None
+    # The morning surplus is fed in (at +8 ct) instead of filling the battery …
+    assert all(plan.charge_cap_at(hour) is not None for hour in h[:3])
+    assert sum(plan.charge_caps_w.get(hour, 0.0) for hour in h[:3]) < 1000
+    # … so it takes the surplus of the negative hours.
+    assert all(plan.charge_cap_at(hour) is None for hour in h[3:])
+    assert plan.saving_ct > 0
+
+
+def test_grid_charging_on_top_of_the_surplus_at_a_negative_import_price() -> None:
+    h = [day_from(12) + timedelta(hours=i) for i in range(3)]
+    nets = {hour: -500.0 for hour in h}
+    # Import price incl. fees negative at 12:00.
+    prices = dict(zip(h, [-4.0, 25.0, 25.0]))
+    credit = dict(zip(h, [-15.0, 5.0, 5.0]))
+    battery_ = ChargeBattery(
+        capacity_wh=5000, stored_wh=1000, floor_wh=500, grid_max_wh=4500,
+        max_charge_w=2500, max_discharge_w=2500, efficiency=0.95, wear_ct=1.0,
+        grid_charge_w=1500.0,
+    )
+    plan = plan_grid_charge(day_from(12), battery_, nets, prices, None, 2.0, export_prices=credit, import_limit_w=1200)
+    assert plan is not None
+    # The 500 W surplus plus at most 1200 W import (the import limit).
+    assert 500 < plan.charge_at(h[0]) <= 500 + 1200 + 1
+    # Without grid charging only the surplus is taken.
+    no_grid = replace(battery_, grid_charge_w=0.0)
+    plan = plan_grid_charge(day_from(12), no_grid, nets, prices, None, 2.0, export_prices=credit)
+    assert plan is None or plan.charge_at(h[0]) == 0

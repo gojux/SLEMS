@@ -128,6 +128,7 @@ SETTING_NUMBERS: tuple[SettingNumberDescription, ...] = (
     _percentage("night_reserve", "night_reserve_pct"),
     _percentage("grid_charge_max_soc", "grid_charge_max_soc_pct", 10, 100),
     _watts("grid_charge_max_power", "grid_charge_max_w", 0, 100_000),
+    _watts("grid_import_max", "grid_import_max_w", 0, 100_000),
     SettingNumberDescription(
         key="price_min_gain",
         translation_key="price_min_gain",

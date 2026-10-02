@@ -325,6 +325,17 @@ the grid. The plan includes the price hold (also with prices known only
 until midnight); the strategy shows *Grid charging* with the energy, the
 start and the expected saving, the day chart the planned charging.
 
+**Negative prices**: with price aware control and a negative import price or
+feed-in credit within the known prices, the plan also covers the surplus
+hours: the batteries keep room for the PV surplus of the negative hours (they
+take only part of the surplus before and feed in the rest at a positive
+price; strategy *Room for cheaper hours*) and, with *Charge batteries from
+the grid*, also charge from the grid when the import price including all fees
+is negative. Your own PV surplus is taken first. *Highest grid import while
+charging from the grid* (0 = no limit, e.g. for the main fuse) and the import
+limit of peak shaving cap the import. This only matters with a credit or an
+import price that follows the market price per hour.
+
 **Feed in from the batteries** (switch, off by default; only with price
 aware control): the same plan may feed in from the batteries beyond the
 house's need when the credit of the hour is higher than what the energy is
@@ -1528,6 +1539,7 @@ Possible extensions:
 - Learned presence of the car for the planning.
 - Feeding in from the batteries also in the estimate of the tariff
   comparison.
+- Consumers preferred at negative prices (e.g. the heating rod).
 - Program devices (washing machine, dishwasher, dryer): learn the course of a
   program and add the rest of a running program to the forecast of the next
   hours (helps the evening and night planning); later possibly starting them

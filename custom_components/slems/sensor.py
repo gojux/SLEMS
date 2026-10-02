@@ -361,6 +361,10 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
             "battery_export": {hour.isoformat(): round(w) for hour, w in s.grid_charge.export_w.items()}
             if s.grid_charge
             else {},
+            # Surplus hours in which the batteries keep room for cheaper hours: W cap.
+            "charge_caps": {hour.isoformat(): round(w) for hour, w in s.grid_charge.charge_caps_w.items()}
+            if s.grid_charge
+            else {},
             # Only a credit that changes over the day makes feeding in at the right time pay.
             "battery_export_effective": c.battery_export_effective(),
         },

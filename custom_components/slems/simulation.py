@@ -57,6 +57,7 @@ SETTINGS = (
     "grid_charge_max_soc_pct",
     "grid_charge_max_w",
     "battery_export",
+    "grid_import_max_w",
 )
 BATTERY_KEYS = ("capacity_kwh", "min_soc_pct", "max_soc_pct", "max_charge_w", "max_discharge_w")
 HOUR = timedelta(hours=1)

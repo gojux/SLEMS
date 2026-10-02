@@ -714,7 +714,8 @@
           "feed_in_cap": "Feed-in cap",
           "price_hold": "Price hold",
           "grid_charge": "Grid charging",
-          "battery_export": "Feed-in from batteries"
+          "battery_export": "Feed-in from batteries",
+          "price_room": "Room for cheaper hours"
         }
       },
       "expected_surplus_energy": {
@@ -1057,6 +1058,9 @@
       },
       "grid_charge_max_power": {
         "name": "Highest grid charge power"
+      },
+      "grid_import_max": {
+        "name": "Highest grid import while charging from the grid"
       }
     },
     "binary_sensor": {

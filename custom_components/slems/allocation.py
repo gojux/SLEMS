@@ -42,6 +42,10 @@ Grid charging (optional, see grid_charge): outside a surplus the batteries
 charge with the planned power from the grid, below the import limit of peak
 shaving.
 
+Room for cheaper hours (price aware control with negative prices ahead, see
+grid_charge): in a surplus the batteries take at most the planned power, the
+rest goes to the consumers or is fed in now.
+
 Feeding in from the batteries (optional, see grid_charge): outside a surplus
 the batteries cover the deficit and feed in the planned power on top.
 
@@ -74,6 +78,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import StrEnum
+import math
 
 from homeassistant.util import dt as dt_util
 
@@ -95,6 +100,7 @@ class Strategy(StrEnum):
     PRICE_HOLD = "price_hold"
     GRID_CHARGE = "grid_charge"
     BATTERY_EXPORT = "battery_export"
+    PRICE_ROOM = "price_room"
     GRID_FRIENDLY = "grid_friendly"
     FEED_IN_CAP = "feed_in_cap"
     IDLE = "idle"
@@ -243,13 +249,18 @@ def allocate(
     discharge_limit_w: float | None = None,
     grid_charge_w: float = 0.0,
     battery_export_w: float = 0.0,
+    charge_cap_w: float | None = None,
+    grid_import_limit_w: float = math.inf,
 ) -> Allocation:
     """Distribute ``available_w`` between batteries and consumers.
 
     ``discharge_limit_w``: the batteries cover a deficit with at most this
     power (price hold; 0: they keep their energy). ``grid_charge_w``: planned
-    charging from the grid, ``battery_export_w``: planned feed-in from the
-    batteries beyond the deficit.
+    charging from the grid (in a surplus the whole planned charge power),
+    ``battery_export_w``: planned feed-in from the batteries beyond the
+    deficit, ``charge_cap_w``: the batteries take at most this of a surplus
+    (room kept for cheaper hours), ``grid_import_limit_w``: grid import that
+    charging from the grid must not exceed.
 
     ``unsupported`` are controllable consumers whose planned power the
     batteries must not cover, ``unsupported_measured_w`` the measured power of
@@ -282,11 +293,14 @@ def allocate(
         battery is not None
         and grid_charge_w > 0
         and not battery.is_full
-        and remaining <= settings.charge_grid_target_w
+        and grid_charge_w > remaining - settings.charge_grid_target_w
     ):
         power = min(grid_charge_w, battery.max_charge_w)
+        limit = grid_import_limit_w
         if settings.peak_shaving:
-            power = min(power, max(0.0, settings.peak_shaving_grid_limit_w + remaining))
+            limit = min(limit, settings.peak_shaving_grid_limit_w)
+        # remaining is the surplus (+) or deficit (−) before charging.
+        power = min(power, max(0.0, limit + remaining))
         return Allocation(
             strategy=Strategy.GRID_CHARGE,
             battery_power_w=power,
@@ -341,6 +355,9 @@ def allocate(
             charge_secured=charge_secured,
         )
     max_charge = 0.0 if battery is None or battery.is_full else battery.max_charge_w
+    room_kept = charge_cap_w is not None and charge_cap_w < max_charge
+    if room_kept:
+        max_charge = max(0.0, charge_cap_w)
     cap_charge = 0.0
     capped = False
     if cap is not None:
@@ -382,6 +399,8 @@ def allocate(
     battery_power = min(battery_power + unused, max_charge) + cap_charge
     if capped:
         strategy = Strategy.FEED_IN_CAP
+    elif room_kept and battery_power >= max_charge - 1:
+        strategy = Strategy.PRICE_ROOM
 
     return Allocation(
         strategy=strategy,

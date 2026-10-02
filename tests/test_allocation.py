@@ -397,8 +397,8 @@ def test_grid_charge_outside_a_surplus_below_the_import_limit() -> None:
     # Peak shaving: house 800 W + charging at most up to the 2000 W limit.
     limited = allocate(-800, battery(30), [], _with(peak_shaving=True, peak_shaving_grid_limit_w=2000), None, grid_charge_w=1500.0)
     assert limited.battery_power_w == pytest.approx(1200)
-    # With a surplus the normal allocation applies.
-    assert allocate(1000, battery(30), [], SETTINGS, None, grid_charge_w=1500.0).strategy is not Strategy.GRID_CHARGE
+    # A surplus larger than the planned charging: the normal allocation applies.
+    assert allocate(2000, battery(30), [], SETTINGS, None, grid_charge_w=1500.0).strategy is not Strategy.GRID_CHARGE
 
 
 def test_battery_export_covers_the_deficit_and_feeds_in_on_top() -> None:
@@ -434,3 +434,13 @@ def test_without_batteries_the_surplus_goes_to_the_consumers() -> None:
     assert result.strategy is Strategy.SELF_CONSUMPTION
     assert result.consumer_power_w["rod"] == 1500
     assert result.battery_power_w == 0
+
+
+def test_room_kept_and_grid_charging_in_a_surplus() -> None:
+    # Room kept: the battery takes at most 300 W of the 2 kW surplus.
+    capped = allocate(2000, battery(50), [], SETTINGS, None, charge_cap_w=300.0)
+    assert capped.battery_power_w == 300 and capped.strategy is Strategy.PRICE_ROOM
+    # Negative import price: 800 W surplus plus import, at most 1000 W import.
+    charged = allocate(800, battery(50), [], SETTINGS, None, grid_charge_w=4000.0, grid_import_limit_w=1000.0)
+    assert charged.strategy is Strategy.GRID_CHARGE
+    assert charged.battery_power_w == pytest.approx(1800)
