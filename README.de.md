@@ -258,8 +258,10 @@ Home Assistant.
    für die Bezugsrechnung, für die eingespeiste Energie (bei privaten
    PV-Anlagen oft 0 %) und für die anderen Einspeise-Posten.
 2. Die Posten der Rechnung einzeln: Name, Seite (*Bezug* oder
-   *Einspeisung*), Gruppe (*Energie*, *Netz*, *Abgaben*) und Preis in ct/kWh
-   oder €/Jahr (je Tag verrechnet; ein Rabatt ist negativ). Optional nur in
+   *Einspeisung*), Gruppe (*Energie*, *Netz*, *Abgaben*) und Nettopreis (ohne
+   USt.; SLEMS rechnet die USt. aus Schritt 1 dazu) in ct/kWh oder €/Jahr (je
+   Tag verrechnet; ein Rabatt ist negativ). Zeigt die Rechnung nur
+   Bruttopreise, diese eingeben und die USt. auf 0 % setzen. Optional nur in
    bestimmten Monaten, an bestimmten Wochentagen oder in einem Zeitfenster
    des Tages, z. B. ein günstigerer Netzpreis zu Mittag im Sommer: Ein Posten
    mit Fenster ersetzt in seinem Fenster den gleichnamigen Posten. Eine

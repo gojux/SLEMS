@@ -252,8 +252,10 @@ tariff the way your bill shows it; the values stay in your Home Assistant.
    consumption bill, for the feed-in energy (often 0 % for private PV) and for
    the other feed-in items.
 2. The lines of the bill one by one: name, side (*consumption* or
-   *feed-in*), group (*energy*, *grid*, *levies*) and price in ct/kWh or
-   €/year (charged per day; a discount is negative). Optionally only in some
+   *feed-in*), group (*energy*, *grid*, *levies*) and the net price (without
+   VAT; SLEMS adds the VAT of step 1) in ct/kWh or €/year (charged per day; a
+   discount is negative). If the bill only shows gross prices, enter those and
+   set the VAT to 0 %. Optionally only in some
    months, on some weekdays or in a time window of the day, e.g. a cheaper
    grid price at noon in summer: a line with a window replaces the line of the
    same name in its window. A price change is the same line again with

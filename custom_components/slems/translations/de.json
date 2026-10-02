@@ -374,7 +374,7 @@
       "step": {
         "user": {
           "title": "Tarif",
-          "description": "Trage den Tarif so ein, wie er auf deiner Rechnung steht: zuerst Name, Rolle und Umsatzsteuer, dann die Posten einzeln. Bezug und Einspeisung sind zwei Seiten desselben Tarifs.",
+          "description": "Trage den Tarif so ein, wie er auf deiner Rechnung steht: zuerst Name, Rolle und Umsatzsteuer, dann die Posten einzeln. Bezug und Einspeisung sind zwei Seiten desselben Tarifs. Die Preise der Posten gibst du netto (ohne USt.) ein; SLEMS rechnet die Umsatzsteuer mit diesen Sätzen dazu. Zeigt deine Rechnung nur Bruttopreise, gib diese ein und setze die USt. auf 0 %.",
           "data": {
             "name": "Name",
             "role": "Rolle",
@@ -421,7 +421,7 @@
             "delete": "Diesen Posten entfernen"
           },
           "data_description": {
-            "price": "ct/kWh oder €/Jahr wie auf der Rechnung; ein Rabatt ist negativ. Auf der Einspeiseseite ist der Energiepreis die Vergütung, die du bekommst. Bei Börsenpreis und Monatsmarktpreis: der feste Aufschlag in ct/kWh (negativ: Abzug).",
+            "price": "Netto (ohne USt.) in ct/kWh oder €/Jahr wie auf der Rechnung; ein Rabatt ist negativ. Auf der Einspeiseseite ist der Energiepreis die Vergütung, die du bekommst. Bei Börsenpreis und Monatsmarktpreis: der feste Aufschlag in ct/kWh (negativ: Abzug).",
             "factor_pct": "Nur bei Börsenpreis und Monatsmarktpreis: Preis = Börsenpreis × (1 + Prozent) + Preis. Z. B. −10 % für eine Vergütung von 90 % des Marktpreises.",
             "month_prices": "Optional, nur beim Monatsmarktpreis: veröffentlichte Werte in ct/kWh, z. B. „2026-01: 8,5; 2026-02: 7,9“. Monate ohne Wert: Mittel der Börsenpreise, gewichtet mit deiner Einspeisung.",
             "valid_from": "Optional. Bei einer Preisänderung: den Posten mit dem neuen Preis und diesem Datum noch einmal anlegen.",

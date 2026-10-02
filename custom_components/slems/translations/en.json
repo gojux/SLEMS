@@ -374,7 +374,7 @@
       "step": {
         "user": {
           "title": "Tariff",
-          "description": "Enter the tariff as it appears on your bill: first name, role and VAT, then the lines one by one. Consumption and feed-in are two sides of the same tariff.",
+          "description": "Enter the tariff as it appears on your bill: first name, role and VAT, then the lines one by one. Consumption and feed-in are two sides of the same tariff. Enter the prices of the items net (without VAT); SLEMS adds the VAT with these rates. If your bill only shows gross prices, enter them and set the VAT to 0 %.",
           "data": {
             "name": "Name",
             "role": "Role",
@@ -421,7 +421,7 @@
             "delete": "Remove this line"
           },
           "data_description": {
-            "price": "ct/kWh or €/year as on the bill; a discount is negative. On the feed-in side the energy price is the credit you get. For spot price and monthly market price: the fixed markup in ct/kWh (negative: deduction).",
+            "price": "Net (without VAT) in ct/kWh or €/year as on the bill; a discount is negative. On the feed-in side the energy price is the credit you get. For spot price and monthly market price: the fixed markup in ct/kWh (negative: deduction).",
             "factor_pct": "Only for spot price and monthly market price: price = market price × (1 + percent) + price. E.g. −10 % for a credit of 90 % of the market price.",
             "month_prices": "Optional, only for the monthly market price: published values in ct/kWh, e.g. \"2026-01: 8.5; 2026-02: 7.9\". Months without a value: mean of the spot prices weighted by your feed-in.",
             "valid_from": "Optional. For a price change: add the line again with the new price and this date.",
