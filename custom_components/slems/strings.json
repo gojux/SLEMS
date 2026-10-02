@@ -373,6 +373,21 @@
       },
       "step": {
         "user": {
+          "title": "Add tariff",
+          "description": "Enter the tariff line by line, or paste it as YAML (an export of SLEMS or the answer of an AI, see the README).",
+          "menu_options": {
+            "details": "Enter manually",
+            "import_yaml": "Paste YAML"
+          }
+        },
+        "import_yaml": {
+          "title": "Paste tariff as YAML",
+          "description": "Paste the whole file (format slems-tariff, version {version} or older). Prices are net; afterwards you check name, role and VAT and can compare the tariff with a bill.",
+          "data": {
+            "yaml": "YAML"
+          }
+        },
+        "details": {
           "title": "Tariff",
           "description": "Enter the tariff as it appears on your bill: first name, role and VAT, then the lines one by one. Consumption and feed-in are two sides of the same tariff. Enter the prices of the items net (without VAT); SLEMS adds the VAT with these rates. If your bill only shows gross prices, enter them and set the VAT to 0 %.",
           "data": {
@@ -389,11 +404,12 @@
         },
         "items": {
           "title": "Lines of the bill",
-          "description": "{items}\n\n{check}",
+          "description": "{meta}\n\n{items}\n\n{check}",
           "menu_options": {
             "add_item": "Add line",
             "edit_item": "Change or remove a line",
             "check": "Check against a bill",
+            "export_yaml": "Export as YAML",
             "finish": "Save"
           }
         },
@@ -439,12 +455,28 @@
             "import_amount": "Amount of the consumption bill (incl. VAT)",
             "export_amount": "Credit of the feed-in bill (incl. VAT)"
           }
+        },
+        "export_yaml": {
+          "title": "Tariff as YAML",
+          "description": "Copy the text to save the tariff or to use it in another SLEMS. Before you share it (e.g. as a template), remove personal discounts. Nothing is changed here.",
+          "data": {
+            "yaml": "YAML"
+          }
         }
       },
       "error": {
         "time_window_incomplete": "Enter both times of the window or none.",
         "period_invalid": "The end must not be before the start.",
-        "month_prices_invalid": "Enter the monthly market prices as \"2026-01: 8.5; 2026-02: 7.9\"."
+        "month_prices_invalid": "Enter the monthly market prices as \"2026-01: 8.5; 2026-02: 7.9\".",
+        "yaml_syntax": "The text is not valid YAML (line {detail}).",
+        "yaml_not_tariff": "This is not a SLEMS tariff: the line \"format: slems-tariff\" is missing.",
+        "yaml_version_missing": "The line \"version: …\" with the format version is missing.",
+        "yaml_version_newer": "The file has format version {detail}, this SLEMS knows up to version {version}. Please update SLEMS.",
+        "yaml_unknown_field": "Unknown field: {detail}.",
+        "yaml_field_invalid": "Invalid value: {detail}.",
+        "yaml_no_items": "The file has no items (\"items\").",
+        "yaml_item_invalid": "Item {detail} is invalid.",
+        "yaml_item_unknown_field": "Unknown field in item {detail}."
       },
       "abort": {
         "reconfigure_successful": "The tariff was saved."

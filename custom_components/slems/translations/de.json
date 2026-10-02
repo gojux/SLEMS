@@ -373,6 +373,21 @@
       },
       "step": {
         "user": {
+          "title": "Tarif hinzufügen",
+          "description": "Gib den Tarif Posten für Posten ein oder füge ihn als YAML ein (ein Export aus SLEMS oder die Antwort einer KI, siehe README).",
+          "menu_options": {
+            "details": "Manuell eingeben",
+            "import_yaml": "YAML einfügen"
+          }
+        },
+        "import_yaml": {
+          "title": "Tarif als YAML einfügen",
+          "description": "Füge die ganze Datei ein (Format slems-tariff, Version {version} oder älter). Preise sind netto; danach prüfst du Name, Rolle und USt. und kannst den Tarif mit einer Rechnung vergleichen.",
+          "data": {
+            "yaml": "YAML"
+          }
+        },
+        "details": {
           "title": "Tarif",
           "description": "Trage den Tarif so ein, wie er auf deiner Rechnung steht: zuerst Name, Rolle und Umsatzsteuer, dann die Posten einzeln. Bezug und Einspeisung sind zwei Seiten desselben Tarifs. Die Preise der Posten gibst du netto (ohne USt.) ein; SLEMS rechnet die Umsatzsteuer mit diesen Sätzen dazu. Zeigt deine Rechnung nur Bruttopreise, gib diese ein und setze die USt. auf 0 %.",
           "data": {
@@ -389,11 +404,12 @@
         },
         "items": {
           "title": "Posten der Rechnung",
-          "description": "{items}\n\n{check}",
+          "description": "{meta}\n\n{items}\n\n{check}",
           "menu_options": {
             "add_item": "Posten hinzufügen",
             "edit_item": "Posten ändern oder entfernen",
             "check": "Mit einer Rechnung vergleichen",
+            "export_yaml": "Als YAML exportieren",
             "finish": "Speichern"
           }
         },
@@ -439,12 +455,28 @@
             "import_amount": "Betrag der Bezugsrechnung (inkl. USt.)",
             "export_amount": "Gutschrift der Einspeiserechnung (inkl. USt.)"
           }
+        },
+        "export_yaml": {
+          "title": "Tarif als YAML",
+          "description": "Kopiere den Text, um den Tarif zu sichern oder in einem anderen SLEMS zu verwenden. Bevor du ihn teilst (z. B. als Vorlage), entferne persönliche Rabatte. Hier wird nichts geändert.",
+          "data": {
+            "yaml": "YAML"
+          }
         }
       },
       "error": {
         "time_window_incomplete": "Beide Zeiten des Fensters angeben oder keine.",
         "period_invalid": "Das Ende darf nicht vor dem Beginn liegen.",
-        "month_prices_invalid": "Monatsmarktpreise im Format „2026-01: 8,5; 2026-02: 7,9“ angeben."
+        "month_prices_invalid": "Monatsmarktpreise im Format „2026-01: 8,5; 2026-02: 7,9“ angeben.",
+        "yaml_syntax": "Der Text ist kein gültiges YAML (Zeile {detail}).",
+        "yaml_not_tariff": "Das ist kein SLEMS-Tarif: Die Zeile „format: slems-tariff“ fehlt.",
+        "yaml_version_missing": "Die Zeile „version: …“ mit der Formatversion fehlt.",
+        "yaml_version_newer": "Die Datei hat Formatversion {detail}, dieses SLEMS kennt bis Version {version}. Bitte SLEMS aktualisieren.",
+        "yaml_unknown_field": "Unbekanntes Feld: {detail}.",
+        "yaml_field_invalid": "Ungültiger Wert: {detail}.",
+        "yaml_no_items": "Die Datei enthält keine Posten („items“).",
+        "yaml_item_invalid": "Posten {detail} ist ungültig.",
+        "yaml_item_unknown_field": "Unbekanntes Feld in Posten {detail}."
       },
       "abort": {
         "reconfigure_successful": "Der Tarif wurde gespeichert."

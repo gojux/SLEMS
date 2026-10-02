@@ -271,6 +271,15 @@ tariff the way your bill shows it; the values stay in your Home Assistant.
    period with the tariff and your recorded grid import and export and shows
    both amounts and the deviation, per side and group.
 
+**Import and export as YAML.** Instead of entering the lines, *Add tariff →
+Paste YAML* takes a tariff file (format `slems-tariff` with a version
+number; prices net, plus optional supplier, validity from/to and source).
+*Export as YAML* in the menu of the lines shows a tariff as such a file, e.g.
+to save it or to use it in another SLEMS. An AI can turn a bill into such a
+file: [prompt and instructions](docs/tariff-prompt.md). A file of a newer
+format version is refused with a hint to update SLEMS; older versions are
+converted.
+
 Where the energy comes from: SLEMS records grid import and feed-in per
 quarter hour itself from every grid value (kept for 400 days), so import and
 feed-in within an hour do not cancel out and dynamic prices apply per quarter

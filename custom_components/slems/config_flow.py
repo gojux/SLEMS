@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date, datetime, time, timedelta
 import socket
+from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
@@ -163,6 +164,8 @@ from .tariff import (
     tariff_from_data,
     vat_data,
 )
+from .tariff_yaml import VERSION as YAML_VERSION
+from .tariff_yaml import TariffYamlError, export_yaml, parse_yaml
 from .grid_meter import (
     Reader,
     SignMismatchError,
@@ -1471,6 +1474,34 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         return self._data.setdefault("items", [])
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """A new tariff: enter it or paste a YAML file (see tariff_yaml)."""
+        return self.async_show_menu(step_id="user", menu_options=["details", "import_yaml"])
+
+    async def async_step_import_yaml(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Paste a tariff as YAML (an export, a template or the answer of an AI)."""
+        errors: dict[str, str] = {}
+        detail = ""
+        if user_input is not None:
+            try:
+                self._title, self._data = parse_yaml(user_input["yaml"])
+            except TariffYamlError as err:
+                errors["base"], detail = err.key, err.detail
+            else:
+                return await self.async_step_details()
+        return self.async_show_form(
+            step_id="import_yaml",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("yaml", default=(user_input or {}).get("yaml", vol.UNDEFINED)): selector.TextSelector(
+                        selector.TextSelectorConfig(multiline=True)
+                    )
+                }
+            ),
+            errors=errors,
+            description_placeholders={"detail": detail, "version": str(YAML_VERSION)},
+        )
+
+    async def async_step_details(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         """Name, role and VAT."""
         if user_input is not None:
             self._title = user_input[CONF_NAME]
@@ -1492,7 +1523,7 @@ class TariffSubentryFlow(ConfigSubentryFlow):
             return vat.get(f"{side.value}.{group.value}", fallback)
 
         return self.async_show_form(
-            step_id="user",
+            step_id="details",
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_NAME, default=self._title or vol.UNDEFINED): str,
@@ -1507,13 +1538,13 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         )
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
-        return await self.async_step_user(user_input)
+        return await self.async_step_details(user_input)
 
     async def async_step_items(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         """Menu: add, edit, check against a bill, finish."""
         options = ["add_item"]
         if self._items:
-            options += ["edit_item", "check", "finish"]
+            options += ["edit_item", "check", "export_yaml", "finish"]
         lines = "\n".join(
             f"- {_describe_item(TariffItem.from_dict(item), self.hass.config.language)}" for item in self._items
         ) or "–"
@@ -1521,7 +1552,26 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         return self.async_show_menu(
             step_id="items",
             menu_options=options,
-            description_placeholders={"items": lines, "check": check.get("text", "")},
+            description_placeholders={
+                "items": lines,
+                "meta": _describe_meta(self._data.get("meta") or {}),
+                "check": check.get("text", ""),
+            },
+        )
+
+    async def async_step_export_yaml(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """The tariff as YAML to copy (nothing is changed)."""
+        if user_input is not None:
+            return await self.async_step_items()
+        return self.async_show_form(
+            step_id="export_yaml",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional("yaml", default=export_yaml(self._title, self._data)): selector.TextSelector(
+                        selector.TextSelectorConfig(multiline=True)
+                    )
+                }
+            ),
         )
 
     async def async_step_add_item(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
@@ -1673,6 +1723,8 @@ class TariffSubentryFlow(ConfigSubentryFlow):
 
     async def async_step_finish(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         data = {key: self._data[key] for key in ("role", "vat", "items")}
+        if self._data.get("meta"):
+            data["meta"] = self._data["meta"]
         if self.source == SOURCE_RECONFIGURE:
             return self.async_update_and_abort(
                 self._get_entry(), self._get_reconfigure_subentry(), title=self._title, data=data
@@ -1698,6 +1750,15 @@ def _item_from_input(user_input: dict[str, Any]) -> TariffItem:
         factor_pct=float(user_input.get("factor_pct") or 0.0),
         month_prices=parse_month_prices(user_input.get("month_prices") or ""),
     )
+
+
+def _describe_meta(meta: Mapping[str, Any]) -> str:
+    """'Example Energy Ltd · 2026-01-01 – 2026-12-31 · price sheet 01/2026' (from an import)."""
+    validity = ""
+    if meta.get("valid_from") or meta.get("valid_to"):
+        validity = f"{meta.get('valid_from') or '…'} – {meta.get('valid_to') or '…'}"
+    parts = [meta.get("supplier"), meta.get("grid_operator"), validity, meta.get("source")]
+    return " · ".join(str(part) for part in parts if part)
 
 
 def _describe_item(item: TariffItem, language: str) -> str:

@@ -280,6 +280,16 @@ Home Assistant.
    aufgezeichneten Netzbezug und deiner Einspeisung nach und zeigt beide
    Beträge und die Abweichung, je Seite und Gruppe.
 
+**Import und Export als YAML.** Statt die Posten einzutippen, nimmt *Tarif
+hinzufügen → YAML einfügen* eine Tarifdatei (Format `slems-tariff` mit
+Versionsnummer; Preise netto, dazu optional Lieferant, Gültigkeit von/bis und
+Quelle). *Als YAML exportieren* im Menü der Posten zeigt einen Tarif als
+solche Datei, z. B. zum Sichern oder für ein anderes SLEMS. Eine KI kann eine
+Rechnung in eine solche Datei umwandeln:
+[Prompt und Anleitung](docs/tariff-prompt.de.md). Eine Datei mit neuerer
+Formatversion lehnt SLEMS mit dem Hinweis ab, SLEMS zu aktualisieren; ältere
+Versionen werden umgewandelt.
+
 Woher die Energie kommt: SLEMS zeichnet Netzbezug und Einspeisung aus jedem
 Netzwert selbst je Viertelstunde auf (400 Tage lang), damit sich Bezug und
 Einspeisung innerhalb einer Stunde nicht aufheben und dynamische Preise je
