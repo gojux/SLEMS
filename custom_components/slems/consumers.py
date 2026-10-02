@@ -260,6 +260,11 @@ class RuntimeTracker:
         elif previous is None or previous[0] != is_on:
             self._states[subentry_id] = (is_on, now)
 
+    def is_on(self, subentry_id: str) -> bool:
+        """Switched on by SLEMS (or virtually, in simulation mode)."""
+        state = self._states.get(subentry_id)
+        return state is not None and state[0]
+
     def must_stay_on(self, consumer: ConsumerConfig, now: float) -> bool:
         state = self._states.get(consumer.subentry_id)
         return state is not None and state[0] and now - state[1] < consumer.min_on_s

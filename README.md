@@ -1355,7 +1355,9 @@ sensor *Learned values in use* has all learned values as attributes.
   secured: the state of charge is above the threshold and the expected PV
   surplus of the day covers the energy to fill them plus the safety buffer.
   Afterwards the surplus is split, the consumers' share is distributed by
-  priority. Power one side cannot use goes to the other.
+  priority; a running on/off consumer keeps its power before power controlled
+  consumers of higher priority (they take less instead, so the on/off one is
+  not switched off and on again). Power one side cannot use goes to the other.
 - *Grid surplus target while charging* (0–5000 W, default 100 W) – the
   batteries only charge from the surplus above this value.
 - *Grid surplus target while discharging* (−1000…+1000 W, default 50 W;

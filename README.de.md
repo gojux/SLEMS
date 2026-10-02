@@ -1432,7 +1432,10 @@ alle gelernten Werte als Attribute.
   ihre Ladung gesichert ist, d. h. der Ladezustand über der Schwelle liegt und
   der erwartete PV-Überschuss des Tages die Energie bis zur Vollladung plus
   Sicherheitspuffer deckt. Danach wird aufgeteilt, der Anteil der Verbraucher
-  geht nach Priorität. Was eine Seite nicht nutzen kann, bekommt die andere.
+  geht nach Priorität; ein laufender Ein/Aus-Verbraucher behält seine Leistung
+  vor leistungsgeregelten Verbrauchern höherer Priorität (die nehmen dafür
+  weniger, damit er nicht aus- und wieder eingeschaltet wird). Was eine Seite
+  nicht nutzen kann, bekommt die andere.
 - *Ziel-Netzüberschuss beim Laden* (0–5000 W, Standard 100 W): Die Batterien
   laden nur aus dem Überschuss oberhalb dieses Werts.
 - *Ziel-Netzüberschuss beim Entladen* (−1000…+1000 W, Standard 50 W; positiv =

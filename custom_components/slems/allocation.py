@@ -5,6 +5,8 @@ plus the power currently drawn by everything SLEMS controls (batteries and
 unblocked controllable consumers). Positive = surplus, negative = deficit.
 
 Consumers that must keep running (minimum runtime) keep their power first.
+Running on/off consumers keep their power before power controlled consumers
+of higher priority (those can adapt, switching costs a cycle).
 With the remaining power three cases exist:
 
 Surplus (remaining above the charge grid target): the power above the target
@@ -145,6 +147,9 @@ class ConsumerRequest:
     max_power_w: float = 0.0
     # Minimum runtime not yet elapsed: must keep running.
     must_stay_on: bool = False
+    # Switched on right now (an on/off consumer keeps its power before the
+    # power controlled ones, see _distribute).
+    running: bool = False
     # Minimum pause not yet elapsed: must stay off.
     must_stay_off: bool = False
     cap_mode: CapMode = CapMode.NORMAL
@@ -437,7 +442,16 @@ def _distribute(
     consumers: Iterable[ConsumerRequest],
     consumer_power: dict[str, float],
 ) -> float:
-    """Hand out ``budget`` in order of priority; return what is left."""
+    """Hand out ``budget`` in order of priority; return what is left.
+
+    Running on/off consumers come first: a power controlled consumer of higher
+    priority can take less instead, while switching an on/off consumer off and
+    on again costs a cycle (e.g. a compressor). The priority still decides who
+    is switched on first.
+    """
+    consumers = sorted(
+        consumers, key=lambda c: not (c.control_mode is ControlMode.SWITCH and c.running)
+    )
     for consumer in consumers:
         if budget <= 0:
             break

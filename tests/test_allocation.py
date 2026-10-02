@@ -406,3 +406,24 @@ def test_battery_export_covers_the_deficit_and_feeds_in_on_top() -> None:
     assert feeding.strategy is Strategy.BATTERY_EXPORT
     assert feeding.battery_power_w == -2300
     assert allocate(-800, battery(60), [], SETTINGS, None, battery_export_w=6000.0).battery_power_w == -5000
+
+
+def test_running_switch_consumer_is_not_pushed_off_by_a_power_controlled_one() -> None:
+    rod = ConsumerRequest(
+        subentry_id="rod", priority=1, control_mode=ControlMode.POWER, min_power_w=0, max_power_w=3500,
+    )
+    dryer = ConsumerRequest(
+        subentry_id="dryer", priority=2, control_mode=ControlMode.SWITCH, nominal_power_w=300,
+    )
+    full = battery(100)
+    # Off: the rod (higher priority) takes the whole surplus.
+    result = allocate(1500, full, [rod, dryer], SETTINGS, expected_surplus_wh=None)
+    assert result.consumer_power_w["dryer"] == 0
+    # Running: the dryer keeps its 300 W, the rod takes the rest.
+    running = replace(dryer, running=True)
+    result = allocate(1500, full, [rod, running], SETTINGS, expected_surplus_wh=None)
+    assert result.consumer_power_w["dryer"] == 300
+    assert result.consumer_power_w["rod"] == pytest.approx(1200)
+    # Too little surplus for the dryer itself: it goes off.
+    result = allocate(200, full, [rod, running], SETTINGS, expected_surplus_wh=None)
+    assert result.consumer_power_w["dryer"] == 0
