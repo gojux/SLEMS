@@ -36,6 +36,10 @@ more expensive hours the batteries cover no deficit (or only up to the power
 allotted to a partly covered hour), the house draws from the grid; import peak
 shaving still covers the import above its limit.
 
+Grid charging (optional, see grid_charge): outside a surplus the batteries
+charge with the planned power from the grid, below the import limit of peak
+shaving.
+
 Battery support (see battery_support): the power of consumers that must not
 draw from the batteries right now (``unsupported``) is left to the grid in a
 deficit; the batteries cover only the rest. Import peak shaving still covers
@@ -84,6 +88,7 @@ class Strategy(StrEnum):
     PEAK_SHAVING = "peak_shaving"
     NIGHT_DISCHARGE = "night_discharge"
     PRICE_HOLD = "price_hold"
+    GRID_CHARGE = "grid_charge"
     GRID_FRIENDLY = "grid_friendly"
     FEED_IN_CAP = "feed_in_cap"
     IDLE = "idle"
@@ -227,11 +232,13 @@ def allocate(
     unsupported: frozenset[str] = frozenset(),
     unsupported_measured_w: float = 0.0,
     discharge_limit_w: float | None = None,
+    grid_charge_w: float = 0.0,
 ) -> Allocation:
     """Distribute ``available_w`` between batteries and consumers.
 
     ``discharge_limit_w``: the batteries cover a deficit with at most this
-    power (price hold; 0: they keep their energy).
+    power (price hold; 0: they keep their energy). ``grid_charge_w``: planned
+    charging from the grid.
 
     ``unsupported`` are controllable consumers whose planned power the
     batteries must not cover, ``unsupported_measured_w`` the measured power of
@@ -259,6 +266,22 @@ def allocate(
     charge_secured = battery is not None and _charge_secured(
         battery, settings, expected_surplus_wh
     )
+
+    if (
+        battery is not None
+        and grid_charge_w > 0
+        and not battery.is_full
+        and remaining <= settings.charge_grid_target_w
+    ):
+        power = min(grid_charge_w, battery.max_charge_w)
+        if settings.peak_shaving:
+            power = min(power, max(0.0, settings.peak_shaving_grid_limit_w + remaining))
+        return Allocation(
+            strategy=Strategy.GRID_CHARGE,
+            battery_power_w=power,
+            consumer_power_w=consumer_power,
+            charge_secured=charge_secured,
+        )
 
     max_export = max_discharge_export_w(settings, cap)
     discharge_target = min(settings.discharge_grid_target_w, max_export)

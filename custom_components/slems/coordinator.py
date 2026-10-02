@@ -7,6 +7,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 import asyncio
 import logging
+import math
 import time
 
 from homeassistant.components.modbus import async_get_unit
@@ -170,6 +171,7 @@ from .consumer_targets import (
 )
 from .night_discharge import NightDischargePlan, plan_night_discharge, pv_takeover
 from .price_chart import hourly_import_prices
+from .grid_charge import ChargeBattery, GridChargePlan, plan_grid_charge
 from .price_hold import PriceHold, cheapest_start, plan_price_hold
 from .tariff_comparison import configured_tariffs
 from .peak_shaving import auto_limit, hours_until_refill
@@ -190,6 +192,8 @@ STORAGE_VERSION = 1
 STORAGE_SAVE_DELAY_S = 600
 # Start, phase changes and end of a balancing run are saved sooner.
 BALANCING_SAVE_DELAY_S = 5
+# Charging from the grid is planned at most this far ahead without a refill.
+MAX_GRID_CHARGE_HORIZON = timedelta(hours=36)
 # The recorded quarter hours are saved this often (a restart loses at most this).
 QUARTERS_SAVE_INTERVAL = timedelta(minutes=15)
 # Releases tried when SLEMS unloads, and the wait between them.
@@ -371,6 +375,12 @@ class ControlSettings:
     # import price must be lower by at least the minimum gain.
     price_control: bool = False
     price_min_gain_ct: float = 2.0
+    # Charge the batteries from the grid when it pays (see grid_charge; only
+    # with price aware control), up to this state of charge and power (0: the
+    # charge power of the batteries).
+    grid_charge: bool = False
+    grid_charge_max_soc_pct: float = 90.0
+    grid_charge_max_w: float = 0.0
     # Night discharge reserve in % of tomorrow's forecast daily consumption.
     night_reserve_pct: float = DEFAULT_NIGHT_RESERVE_PCT
     # Learned from the morning gaps; share of the mornings it covers (above
@@ -459,6 +469,8 @@ class SystemSnapshot:
     night_discharge: NightDischargePlan | None = None
     # Hours in which the batteries keep their energy (see price_hold).
     price_hold: PriceHold | None = None
+    # Charging from the grid (see grid_charge), None when nothing is planned.
+    grid_charge: GridChargePlan | None = None
     # Feed-in cap plan, None when off or without forecasts.
     feed_in_cap: CapPlan | None = None
     # Buffer of the feed-in cap in effect: % and "manual" or "auto" (+ days).
@@ -578,6 +590,7 @@ class ForecastPlan:
     # "automatic" (see battery_support); None without such a consumer.
     support_budget_wh: float | None = None
     price_hold: PriceHold | None = None
+    grid_charge: GridChargePlan | None = None
     day_plan: list[dict] = field(default_factory=list)
     day_plan_tomorrow: list[dict] = field(default_factory=list)
 
@@ -1648,7 +1661,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         snapshot.day_plan = forecast_plan.day_plan
         snapshot.day_plan_tomorrow = forecast_plan.day_plan_tomorrow
         snapshot.price_hold = forecast_plan.price_hold
-        price_limit_w = forecast_plan.price_hold.limit_w(wall_now) if forecast_plan.price_hold else None
+        snapshot.grid_charge = forecast_plan.grid_charge
+        price_plan = forecast_plan.grid_charge or forecast_plan.price_hold
+        price_limit_w = price_plan.limit_w(wall_now) if price_plan else None
+        grid_charge_w = forecast_plan.grid_charge.charge_at(wall_now) if forecast_plan.grid_charge else 0.0
 
         requests = [
             self._request(consumer, now, battery)
@@ -1718,6 +1734,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             unsupported=self.unsupported,
             unsupported_measured_w=unsupported_measured_w,
             discharge_limit_w=price_limit_w,
+            grid_charge_w=grid_charge_w,
         )
         # Resting consumers draw nothing: the batteries take their allocation.
         # Counted at their command (controller cycle), that command is not in
@@ -1992,16 +2009,23 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             grid_load, budget_load = self._support_loads()
             until = next_refill(wall_now, pv_hourly, consumption_hourly) if consumption_hourly else None
             if settings.price_control and consumption_hourly:
-                result.price_hold = self._price_hold(
-                    battery, wall_now, pv_hourly, consumption_hourly, grid_load, until, settings
-                )
-                if result.price_hold is not None:
+                if settings.grid_charge:
+                    result.grid_charge = self._grid_charge(
+                        battery, wall_now, pv_hourly, consumption_hourly, grid_load, until, settings,
+                        result.peak_limit_w, cap,
+                    )
+                if result.grid_charge is None:
+                    result.price_hold = self._price_hold(
+                        battery, wall_now, pv_hourly, consumption_hourly, grid_load, until, settings
+                    )
+                limits = (result.grid_charge or result.price_hold)
+                if limits is not None:
                     # Beyond the allowed discharge the grid covers the deficit.
                     grid_load = {
                         **grid_load,
                         **{
                             hour: max(0.0, consumption_hourly.get(hour, 0.0) - (pv_hourly or {}).get(hour, 0.0) - limit)
-                            for hour, limit in result.price_hold.limits_w.items()
+                            for hour, limit in limits.limits_w.items()
                         },
                     }
             if consumption_hourly and any(
@@ -2038,6 +2062,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 budget_load=budget_load,
                 budget_wh=result.support_budget_wh,
                 budget_until=until,
+                grid_charge=result.grid_charge.charge_w if result.grid_charge else None,
             )
         pv_power = power_lookup(self._pv_native(snapshot, wall_now))
         result.day_plan = self._day_plan(
@@ -2133,6 +2158,70 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         floor = battery.min_soc_pct / 100 * battery.capacity_wh
         usable = max(0.0, stored - floor) * (battery.charge_efficiency or 1.0)
         return plan_price_hold(wall_now, usable, deficits, prices, until, settings.price_min_gain_ct)
+
+    def _grid_charge(
+        self,
+        battery: BatteryGroup,
+        wall_now: datetime,
+        pv_hourly: Mapping[datetime, float] | None,
+        consumption_hourly: Mapping[datetime, float],
+        grid_load: Mapping[datetime, float],
+        until: datetime | None,
+        settings: ControlSettings,
+        peak_limit_w: float,
+        cap: CapPlan | None,
+    ) -> GridChargePlan | None:
+        """Charging from the grid until the refill or the end of the known prices.
+
+        Not into the space the feed-in cap needs when PV takes over. Only in a
+        deficit: with a surplus PV charges the batteries (the plan does not
+        model that), the plan for the evening starts with its first deficit.
+        """
+        hour = dt_util.as_local(wall_now).replace(minute=0, second=0, microsecond=0)
+        if (pv_hourly or {}).get(hour, 0.0) > consumption_hourly.get(hour, 0.0):
+            return None
+        horizon = until or dt_util.as_local(wall_now) + MAX_GRID_CHARGE_HORIZON
+        prices = self._import_prices(wall_now, horizon)
+        if prices is None:
+            return None
+        deficits = {
+            hour: max(0.0, wh - (pv_hourly or {}).get(hour, 0.0) - grid_load.get(hour, 0.0))
+            for hour, wh in consumption_hourly.items()
+        }
+        capacity = battery.capacity_wh
+        enabled = [b for b in self.batteries if b.enabled]
+        weights = [b.driver.capabilities.capacity_wh or 1.0 for b in enabled]
+        wear = (
+            sum(b.wear.ct_per_kwh * w for b, w in zip(enabled, weights, strict=True)) / sum(weights)
+            if enabled
+            else 0.0
+        )
+        max_charge = battery.max_charge_w
+        if settings.grid_charge_max_w > 0:
+            max_charge = min(max_charge, settings.grid_charge_max_w)
+        return plan_grid_charge(
+            wall_now,
+            ChargeBattery(
+                capacity_wh=capacity,
+                stored_wh=battery.soc_pct / 100 * capacity,
+                floor_wh=battery.min_soc_pct / 100 * capacity,
+                grid_max_wh=min(
+                    min(settings.grid_charge_max_soc_pct, battery.full_soc_pct) / 100 * capacity,
+                    battery.full_soc_pct / 100 * capacity - cap.space_needed_at(horizon)
+                    if cap is not None
+                    else math.inf,
+                ),
+                max_charge_w=max_charge,
+                max_discharge_w=battery.max_discharge_w,
+                efficiency=battery.charge_efficiency or 1.0,
+                wear_ct=wear,
+            ),
+            deficits,
+            prices,
+            until,
+            settings.price_min_gain_ct,
+            import_limit_w=peak_limit_w if settings.peak_shaving else math.inf,
+        )
 
     def _import_prices(self, wall_now: datetime, until: datetime) -> dict[datetime, float | None] | None:
         """Import price per hour with the current tariff (kept per quarter hour); None without tariff."""

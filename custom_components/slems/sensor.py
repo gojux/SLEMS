@@ -352,6 +352,11 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
             else [],
             "price_hold_until": s.price_hold.until.isoformat() if s.price_hold else None,
             "price_covered_from_ct": round(s.price_hold.covered_from_ct, 2) if s.price_hold else None,
+            # Planned charging from the grid: W per local hour start.
+            "grid_charge": {hour.isoformat(): round(w) for hour, w in s.grid_charge.charge_w.items()}
+            if s.grid_charge
+            else {},
+            "grid_charge_saving_ct": round(s.grid_charge.saving_ct) if s.grid_charge else None,
         },
     ),
     SystemSensorDescription(

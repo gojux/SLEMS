@@ -35,6 +35,7 @@ SETTING_SWITCHES: dict[str, str] = {
     "night_reserve_auto": "night_reserve_auto",
     "regular_full_charge": "regular_full_charge",
     "price_control": "price_control",
+    "grid_charge": "grid_charge",
 }
 
 

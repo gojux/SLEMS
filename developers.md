@@ -270,6 +270,23 @@ latest start, mean of the hourly prices) when the forecast surplus is short
 for the target plus filling the batteries, and marks `price_window`. The mode
 becomes forced from that start; `forced_load` and the plans follow it.
 
+### Grid charging
+
+`grid_charge.py`: dynamic programming over the stored energy (1 % steps of
+the capacity, at least 25 Wh) per hour from now (only in a deficit) until the
+refill (`next_refill`) or the last known price (no refill within 36 h: winter).
+Options per hour: cover the whole deficit (exact; the cost to go is
+interpolated between the levels, so rounding does not favour a part), a part
+in steps, hold, or charge in steps. Costs: price × import, per kWh charged
+wear + minimum gain + a tiny early-charging cost (later wins), per kWh kept the
+minimum gain; energy left at the end is worth nothing at a refill, else the
+lowest price × efficiency. Limits: grid charge SoC (also below the space of
+the feed-in cap at the horizon), charge power, import limit of peak shaving.
+The plan replaces the price hold when grid charging is on; `forecast_plan`
+passes its charging to `project_soc(grid_charge=…)` and its limits as grid
+load, `allocate(grid_charge_w=…)` charges outside a surplus (strategy
+`grid_charge`).
+
 ### Price chart
 
 `price_chart.py` (websocket `slems/price_chart`, `day` today / tomorrow): per
@@ -1575,3 +1592,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-02 | Price aware control starts with moving the grid import that happens anyway into cheaper hours (price hold): no extra import, no export, no extra cycles, so it needs no wear costs and cannot make things worse than the forecast error. A greedy cover of the most expensive hours is optimal for a fixed amount of energy and linear prices; a full optimisation (dynamic programming) comes with charging from the grid. The minimum gain absorbs forecast errors; any time dependent import price of the tariff counts, with or without market prices. |
 | 2026-10-02 | Daily targets with the source "grid" start their forced run in the cheapest window only when the forecast surplus is short for them anyway: otherwise an early grid run could take what the surplus would have covered later for free. One contiguous run instead of single cheap hours, because the forced mode runs the consumer at full power until the target is met (and minimum runtimes apply). |
 | 2026-10-02 | Battery wear costs from optional purchase price and rated cycles, otherwise a low estimate (1 ct/kWh) shown as such; a price of 0 means none. Field measurements of home storage systems (RWTH, Nature Energy 2024: 2–3 percentage points capacity per year, mainly loss of lithium inventory, faster at high and low SoC) show calendar aging dominating at a few hundred cycles per year, so an extra cycle costs little; a high assumed value would silently block grid charging, a low one leaves the safeguarding to the minimum gain and the efficiency losses. The relevant cost of grid charging is rather time at high SoC, so charging is planned late, just before the energy is needed. |
+| 2026-10-02 | Grid charging planned with dynamic programming instead of pairing cheap and expensive hours: the stored energy, the charge and discharge limits, the SoC limits and holding interact over the night, a greedy pairing gets them wrong. Planned only in a deficit, because the plan does not model charging from PV (that stays with the existing rules). Ties go to the later charge (calendar aging at high SoC). The horizon may end at midnight before the prices of the next day are known, with the remaining energy valued at the lowest price of the plan, so that it also works in winter without a PV refill. |

@@ -12,6 +12,8 @@ simplified way:
   controller's in the current hour and, like the controller does later, from
   the projected state of charge in the hours after (e.g. lower after a night
   discharge).
+* Hours with planned charging from the grid (see grid_charge): the batteries
+  charge with it, the grid covers the house.
 * Hours with a deficit: the batteries cover it. With import peak shaving at
   low state of charge only the import above the limit; with night discharge
   at least the planned night discharge, the extra part not below its target
@@ -97,6 +99,7 @@ def project_soc(
     budget_load: Mapping[datetime, float] | None = None,
     budget_wh: float | None = None,
     budget_until: datetime | None = None,
+    grid_charge: Mapping[datetime, float] | None = None,
 ) -> SocProjection:
     """Project until the end of tomorrow.
 
@@ -171,6 +174,14 @@ def project_soc(
             )
             if consumers > 0:
                 result.consumer_w[hour] = consumers / share
+        elif (grid_charge or {}).get(hour):
+            # Planned charging from the grid (see grid_charge): the grid
+            # covers the house, the batteries charge.
+            charge = grid_charge[hour]
+            room = max(0.0, full - stored)
+            charge = min(charge, room / (share * efficiency))
+            result.planned_charge_w[hour] = charge
+            stored += charge * share * efficiency
         else:
             deficit = load - pv_w
             unsupported = (grid_load or {}).get(hour, 0.0)

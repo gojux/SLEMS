@@ -709,7 +709,8 @@
           "night_discharge": "Night discharge",
           "grid_friendly": "Grid friendly",
           "feed_in_cap": "Feed-in cap",
-          "price_hold": "Price hold"
+          "price_hold": "Price hold",
+          "grid_charge": "Grid charging"
         }
       },
       "expected_surplus_energy": {
@@ -924,6 +925,9 @@
       },
       "price_control": {
         "name": "Price aware control"
+      },
+      "grid_charge": {
+        "name": "Charge batteries from the grid"
       }
     },
     "number": {
@@ -1037,6 +1041,12 @@
       },
       "price_min_gain": {
         "name": "Minimum gain"
+      },
+      "grid_charge_max_soc": {
+        "name": "Highest state of charge from the grid"
+      },
+      "grid_charge_max_power": {
+        "name": "Highest grid charge power"
       }
     },
     "binary_sensor": {

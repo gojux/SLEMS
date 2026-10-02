@@ -189,6 +189,7 @@ const STRINGS = {
     targetMinShort: "min.",
     targetGoalTemp: "target",
     targetBoostChip: "priority",
+    gridChargeText: "Grid charging: {energy} from {time} (saves about {saving} ct)",
     priceHoldText: "Batteries cover the hours from {price}; grid in {hours} cheaper hours until {until}",
     priorityConsumers: "Before the batteries: {names}",
     targetForcedChip: "forced",
@@ -349,6 +350,9 @@ const STRINGS = {
     settingHints: {
       price_control:
         "Needs a tariff. If the stored energy does not last for every hour until PV refills the batteries, they cover the hours with the highest import price and keep their energy in the cheaper ones (the house draws from the grid there). The grid import stays the same, it only moves to cheaper hours.",
+      grid_charge:
+        "Only with price aware control. Charges the batteries from the grid in cheap hours when the energy replaces more expensive import later, after the charge and discharge losses, the wear costs and the minimum gain; as late as possible before it is needed. Not when PV fills the batteries anyway.",
+      grid_charge_max_power: "0 = the charge power of the batteries. Import peak shaving limits it as well.",
       price_min_gain:
         "Keep the energy only in hours that are cheaper by at least this much than the hours it is kept for (forecasts are uncertain).",
       night_reserve_auto:
@@ -597,6 +601,7 @@ const STRINGS = {
     targetMinShort: "min.",
     targetGoalTemp: "Ziel",
     targetBoostChip: "Vorrang",
+    gridChargeText: "Netzladen: {energy} ab {time} (spart etwa {saving} ct)",
     priceHoldText: "Batterien decken die Stunden ab {price}; Netz in {hours} günstigeren Stunden bis {until}",
     priorityConsumers: "Vorrang vor den Batterien: {names}",
     targetForcedChip: "erzwungen",
@@ -757,6 +762,9 @@ const STRINGS = {
     settingHints: {
       price_control:
         "Braucht einen Tarif. Reicht die gespeicherte Energie nicht für alle Stunden, bis die PV die Batterien wieder füllt, decken sie die Stunden mit dem höchsten Bezugspreis und halten ihre Energie in den günstigeren zurück (dort bezieht das Haus aus dem Netz). Der Netzbezug bleibt gleich, er wandert nur in günstigere Stunden.",
+      grid_charge:
+        "Nur mit preisbewusster Steuerung. Lädt die Batterien in günstigen Stunden aus dem Netz, wenn die Energie später teureren Bezug ersetzt, nach Lade- und Entladeverlusten, Verschleißkosten und Mindestgewinn; so spät wie möglich vor dem Bedarf. Nicht, wenn die PV die Batterien ohnehin füllt.",
+      grid_charge_max_power: "0 = Ladeleistung der Batterien. Bezugsspitzen abfangen begrenzt zusätzlich.",
       price_min_gain:
         "Energie nur in Stunden zurückhalten, die mindestens um so viel günstiger sind als die Stunden, für die sie gehalten wird (Prognosen sind unsicher).",
       night_reserve_auto:
@@ -929,7 +937,18 @@ const SETTING_GROUPS = [
   ["reserve", ["night_reserve_auto", "night_reserve", "night_reserve_coverage"]],
   ["night", ["night_discharge"]],
   // Needs a tariff (SLEMS integration page); market prices only with consent.
-  ["price", ["price_control", "price_min_gain", "market_prices", "price_source"]],
+  [
+    "price",
+    [
+      "price_control",
+      "price_min_gain",
+      "grid_charge",
+      "grid_charge_max_soc",
+      "grid_charge_max_power",
+      "market_prices",
+      "price_source",
+    ],
+  ],
   [
     "peak",
     [
@@ -2029,6 +2048,16 @@ class SlemsPanel extends HTMLElement {
           .replace("{price}", this._priceNumber(a.price_covered_from_ct))
           .replace("{hours}", a.price_hold_hours.length)
           .replace("{until}", this._time(a.price_hold_until))
+      );
+    }
+    const charge = Object.entries(a.grid_charge || {});
+    if (charge.length) {
+      const wh = charge.reduce((sum, [, w]) => sum + w, 0);
+      parts.push(
+        this._t.gridChargeText
+          .replace("{energy}", this._kwh(wh))
+          .replace("{time}", this._time(charge[0][0]))
+          .replace("{saving}", this._priceNumber(a.grid_charge_saving_ct ?? 0).replace(" ct", ""))
       );
     }
     return parts.join(" · ");
@@ -3242,7 +3271,12 @@ class SlemsPanel extends HTMLElement {
       ${option(t.groups.gridFriendly, "grid_friendly_charging", "grid_friendly_charging",
         setting("grid_friendly_buffer_kwh", "grid_friendly_buffer"))}
       ${option(t.groups.night, "night_discharge", "night_discharge", setting("night_reserve_pct", "night_reserve"))}
-      ${option(t.groups.price, "price_control", "price_control", setting("price_min_gain_ct", "price_min_gain"))}
+      ${option(t.groups.price, "price_control", "price_control",
+        setting("price_min_gain_ct", "price_min_gain") +
+          setting("grid_charge", "grid_charge") +
+          (s.grid_charge
+            ? setting("grid_charge_max_soc_pct", "grid_charge_max_soc") + setting("grid_charge_max_w", "grid_charge_max_power")
+            : ""))}
       ${option(t.groups.peak, "peak_shaving", "peak_shaving",
         setting("peak_shaving_auto", "peak_shaving_auto") +
           setting("peak_shaving_grid_limit_w", "peak_shaving_grid_limit", { disabled: s.peak_shaving_auto }) +

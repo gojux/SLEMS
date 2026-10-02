@@ -389,3 +389,13 @@ def test_price_hold_leaves_the_deficit_to_the_grid() -> None:
     peak = _with(peak_shaving=True)
     shaved = allocate(-4000, battery(10), [], peak, None, discharge_limit_w=0.0)
     assert shaved.strategy is Strategy.PEAK_SHAVING and shaved.battery_power_w == -1000
+
+
+def test_grid_charge_outside_a_surplus_below_the_import_limit() -> None:
+    charging = allocate(-800, battery(30), [], SETTINGS, None, grid_charge_w=1500.0)
+    assert charging.strategy is Strategy.GRID_CHARGE and charging.battery_power_w == 1500
+    # Peak shaving: house 800 W + charging at most up to the 2000 W limit.
+    limited = allocate(-800, battery(30), [], _with(peak_shaving=True, peak_shaving_grid_limit_w=2000), None, grid_charge_w=1500.0)
+    assert limited.battery_power_w == pytest.approx(1200)
+    # With a surplus the normal allocation applies.
+    assert allocate(1000, battery(30), [], SETTINGS, None, grid_charge_w=1500.0).strategy is not Strategy.GRID_CHARGE

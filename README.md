@@ -184,7 +184,7 @@ complements SLEMS well (see [roadmap](#roadmap)).
 | Dashboard (sidebar panel): energy flow, key figures, daily forecast and plan chart, batteries, consumers, settings | ✅ |
 | Simulation in the dashboard: day plan with other settings compared with the current one (today or tomorrow) | ✅ |
 | Tariffs as on the bill (time windows, VAT per group) with a check against a bill; day-ahead prices (APG, SMARD, Energy-Charts) only with consent; monthly tariff comparison | ✅ |
-| Price aware control: stored energy kept for the expensive hours, grid part of daily targets in the cheapest window | ✅ |
+| Price aware control: stored energy kept for the expensive hours, grid part of daily targets in the cheapest window, optional charging from the grid | ✅ |
 
 ## Installation
 
@@ -301,6 +301,20 @@ forecast surplus is short for them anyway, the forced run starts in the
 window with the lowest mean import price before the deadline (cheaper by at
 least the minimum gain than at the latest start); the consumer card shows
 *from … in the cheapest window*.
+
+**Charge batteries from the grid** (switch, off by default; only with price
+aware control): in a deficit SLEMS plans until PV refills the batteries (at
+most until the last known price) which hours the batteries cover, which they
+hold and in which they charge from the grid. A charge must pay after the
+charge and discharge losses, the [wear costs](#battery-wear-costs) and the
+minimum gain; of equal plans the later charge wins, as home storage ages
+mostly with time at a high state of charge. Limits: *Highest state of charge
+from the grid* (default 90 %), *Highest grid charge power* (0 = the charge
+power of the batteries), the import limit of peak shaving and the space the
+feed-in cap needs when PV takes over. With a surplus nothing is charged from
+the grid. The plan includes the price hold (also with prices known only
+until midnight); the strategy shows *Grid charging* with the energy, the
+start and the expected saving, the day chart the planned charging.
 
 ### PV forecast
 
@@ -1403,9 +1417,8 @@ Possible extensions:
 - Batteries with an availability (e.g. "car plugged in") and a reserve until
   a time of day: the basis for a car supplying the house (V2H).
 - Learned presence of the car for the planning.
-- More price aware control in addition to the current rules: charging from
-  the grid in cheap or negative hours and feeding in from the batteries at
-  high prices (both optional); then a tariff comparison that includes it.
+- Feeding in from the batteries at high prices (optional); then a tariff
+  comparison that includes the price aware control.
 - Further battery models via the driver interface.
 
 ## Development

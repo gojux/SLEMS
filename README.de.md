@@ -186,7 +186,7 @@ spezialisiert; evcc ergänzt SLEMS gut (siehe [Roadmap](#roadmap)).
 | Dashboard (Seitenleiste): Energiefluss, Kennzahlen, Tagesdiagramm mit Prognose und Plan, Batterien, Verbraucher, Einstellungen | ✅ |
 | Simulation im Dashboard: Tagesplan mit anderen Einstellungen im Vergleich zum aktuellen (heute oder morgen) | ✅ |
 | Tarife wie auf der Rechnung (Zeitfenster, Umsatzsteuer je Gruppe) mit Prüfung gegen eine Rechnung; Börsenpreise (APG, SMARD, Energy-Charts) nur mit Zustimmung; monatlicher Tarifvergleich | ✅ |
-| Preisbewusste Steuerung: gespeicherte Energie für die teuren Stunden halten, Netzanteil der Tagesziele im günstigsten Fenster | ✅ |
+| Preisbewusste Steuerung: gespeicherte Energie für die teuren Stunden halten, Netzanteil der Tagesziele im günstigsten Fenster, optional Laden aus dem Netz | ✅ |
 
 ## Installation
 
@@ -312,6 +312,22 @@ prognostizierte Überschuss ohnehin nicht, startet der erzwungene Lauf im
 Fenster mit dem niedrigsten mittleren Bezugspreis vor der Frist (um
 mindestens den Mindestgewinn günstiger als zum spätesten Start); die
 Verbraucherkarte zeigt *ab … im günstigsten Fenster*.
+
+**Akku aus dem Netz laden** (Schalter, standardmäßig aus; nur mit
+preisbewusster Steuerung): In einem Defizit plant SLEMS bis zur nächsten
+PV-Übernahme (höchstens bis zum letzten bekannten Preis), in welchen Stunden
+die Batterien decken, halten oder aus dem Netz laden. Laden muss sich nach
+Lade- und Entladeverlusten, den
+[Verschleißkosten](#verschleißkosten-der-batterie) und dem Mindestgewinn
+lohnen; bei gleichen Kosten gewinnt das spätere Laden, weil Heimspeicher vor
+allem mit der Zeit bei hohem Ladezustand altern. Grenzen: *Höchster
+Ladezustand aus dem Netz* (Standard 90 %), *Höchste Netzladeleistung* (0 =
+Ladeleistung der Batterien), die Bezugsgrenze von Bezugsspitzen abfangen und
+der Platz, den die Einspeisebegrenzung zur PV-Übernahme braucht. Bei
+Überschuss wird nicht aus dem Netz geladen. Der Plan schließt das Halten ein
+(auch wenn Preise nur bis Mitternacht bekannt sind); die Strategie zeigt
+*Netzladen* mit Energie, Beginn und erwarteter Ersparnis, das Tagesdiagramm
+das geplante Laden.
 
 ### PV-Prognose
 
@@ -1479,10 +1495,8 @@ Mögliche Erweiterungen:
 - Batterien mit Verfügbarkeit (z. B. „Auto angesteckt“) und einer Reserve bis
   zu einer Uhrzeit: Grundlage für ein Auto, das das Haus versorgt (V2H).
 - Gelernte Anwesenheit des Autos für die Planung.
-- Mehr preisbewusste Steuerung zusätzlich zu den bestehenden Regeln: Laden
-  aus dem Netz in günstigen oder negativen Stunden und Einspeisen aus den
-  Batterien bei hohen Preisen (beides optional); danach ein Tarifvergleich,
-  der das einbezieht.
+- Einspeisen aus den Batterien bei hohen Preisen (optional); danach ein
+  Tarifvergleich, der die preisbewusste Steuerung einbezieht.
 - Weitere Batteriemodelle über die Treiber-Schnittstelle.
 
 ## Entwicklung
