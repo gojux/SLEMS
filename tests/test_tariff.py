@@ -244,3 +244,16 @@ def test_separate_contracts_are_combined_and_comparisons_completed() -> None:
     assert comparison.items[0].unit is Unit.SPOT
     # A single complete tariff stays as it is.
     assert combine_tariffs({"x": example()}) == {"x": example()}
+
+
+def test_side_names_of_a_combined_contract() -> None:
+    from custom_components.slems.tariff import combine_tariffs
+
+    supply = Tariff("Supply", Role.CURRENT, (TariffItem("E", Side.IMPORT, Group.ENERGY, Unit.KWH, 20.0),), {})
+    feed_in = Tariff("Feed-in", Role.CURRENT, (TariffItem("C", Side.EXPORT, Group.ENERGY, Unit.KWH, 7.0),), {})
+    dynamic = Tariff("Dynamic", Role.COMPARISON, (TariffItem("E", Side.IMPORT, Group.ENERGY, Unit.SPOT, 1.0),), {})
+    combined = combine_tariffs({"a": supply, "b": feed_in, "c": dynamic})
+    assert combined["a"].name_for(Side.IMPORT) == "Supply"
+    assert combined["a"].name_for(Side.EXPORT) == "Feed-in"
+    assert combined["c"].name_for(Side.IMPORT) == "Dynamic"
+    assert combined["c"].name_for(Side.EXPORT) == "Feed-in"

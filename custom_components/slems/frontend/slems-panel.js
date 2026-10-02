@@ -329,7 +329,7 @@ const STRINGS = {
     priceTitle: "Electricity prices",
     priceHint: "ct/kWh incl. VAT, without fixed fees; the market price without fees and taxes.",
     priceImport: "Import ({tariff})",
-    priceExport: "Feed-in credit",
+    priceExport: "Feed-in credit ({tariff})",
     priceSpot: "Market price",
     priceTime: "Time",
     tariffCurrent: "current",
@@ -759,7 +759,7 @@ const STRINGS = {
     priceTitle: "Strompreise",
     priceHint: "ct/kWh inkl. USt., ohne Grundgebühren; der Börsenpreis ohne Gebühren und Steuern.",
     priceImport: "Bezug ({tariff})",
-    priceExport: "Einspeisevergütung",
+    priceExport: "Einspeisevergütung ({tariff})",
     priceSpot: "Börsenpreis",
     priceTime: "Zeit",
     tariffCurrent: "aktuell",
@@ -2902,12 +2902,18 @@ class SlemsPanel extends HTMLElement {
   _renderPriceChart() {
     const state = this._prices;
     const day = this._chartDay;
-    // New prices for another day, every 15 minutes and after midnight.
+    // New prices for another day, every 15 minutes, after midnight and when
+    // fetching the market prices or the price aware control is switched.
+    const switches = `${this._state("market_prices")?.state}/${this._state("price_control")?.state}`;
     const stale =
+      state.switches !== switches ||
       state.day !== day ||
       Date.now() - state.at > 15 * 60 * 1000 ||
       (state.result?.slots?.length && !state.result.slots[0].start.startsWith(this._localDate(day)));
-    if (stale && !state.loading && this._hass) this._loadPrices(day);
+    if (stale && !state.loading && this._hass) {
+      state.switches = switches;
+      this._loadPrices(day);
+    }
     const result = state.day === day ? state.result : null;
     if (!result?.available) {
       this._setSection("pricechart", "");
@@ -2923,7 +2929,7 @@ class SlemsPanel extends HTMLElement {
     const c = this._colors;
     const series = [
       ["import", c.house, t.priceImport.replace("{tariff}", result.tariff), false],
-      ["export", c.grid, t.priceExport, false],
+      ["export", c.grid, t.priceExport.replace("{tariff}", result.export_tariff || result.tariff), false],
       ["spot", c.muted, t.priceSpot, true],
     ].filter(([key]) => has(key));
     this._priceSeries = series;

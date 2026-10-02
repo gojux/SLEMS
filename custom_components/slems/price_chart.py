@@ -123,14 +123,27 @@ def _ws_price_chart(hass: HomeAssistant, connection: websocket_api.ActiveConnect
         connection.send_result(msg["id"], {"available": False})
         return
     tariff = next(iter(tariffs.values()))
-    prices = entry.runtime_data.market_prices
+    coordinator = entry.runtime_data
+    prices = coordinator.market_prices
     day = dt_util.now().date() + timedelta(days=1 if msg["day"] == "tomorrow" else 0)
     slots = day_prices(tariff, prices, day)
+    if not prices.enabled:
+        # Fetching switched off: the stored market prices are not shown any more.
+        for slot in slots:
+            slot["spot"] = None
+    # Only fixed prices over the day and no price aware control: nothing to show.
+    flat = all(
+        len({slot[key] for slot in slots}) <= 1 for key in ("import", "export")
+    ) and all(slot["spot"] is None for slot in slots)
+    if flat and not coordinator.settings.price_control:
+        connection.send_result(msg["id"], {"available": False})
+        return
     connection.send_result(
         msg["id"],
         {
             "available": True,
-            "tariff": tariff.name,
+            "tariff": tariff.name_for(Side.IMPORT),
+            "export_tariff": tariff.name_for(Side.EXPORT),
             "slots": slots,
             "attribution": prices.attribution if any(slot["spot"] is not None for slot in slots) else None,
         },

@@ -161,6 +161,11 @@ class Tariff:
     items: tuple[TariffItem, ...]
     # VAT in % per (side, group).
     vat_pct: Mapping[tuple[Side, Group], float]
+    # Name of the tariff(s) a side comes from, if not ``name`` (see combine_tariffs).
+    side_names: Mapping[Side, str] = field(default_factory=dict)
+
+    def name_for(self, side: Side) -> str:
+        return self.side_names.get(side, self.name)
 
     def vat(self, side: Side, group: Group) -> float:
         return self.vat_pct.get((side, group), 0.0)
@@ -423,6 +428,14 @@ def combine_tariffs(tariffs: Mapping[str, Tariff]) -> dict[str, Tariff]:
         current = replace(current, name=f"{current.name} + {tariff.name}")
         for side in _sides(tariff):
             current = _with_side(current, tariff, side)
+    if current is not None and len(current_ids) > 1:
+        current = replace(
+            current,
+            side_names={
+                side: " + ".join(tariffs[key].name for key in current_ids if side in _sides(tariffs[key]))
+                for side in _sides(current)
+            },
+        )
     if current is not None:
         result[current_ids[0]] = current
     for key, tariff in tariffs.items():
@@ -431,6 +444,9 @@ def combine_tariffs(tariffs: Mapping[str, Tariff]) -> dict[str, Tariff]:
         if current is not None:
             for side in Side:
                 if side not in _sides(tariff) and side in _sides(current):
-                    tariff = _with_side(tariff, current, side)
+                    tariff = replace(
+                        _with_side(tariff, current, side),
+                        side_names={**tariff.side_names, side: current.name_for(side)},
+                    )
         result[key] = tariff
     return result

@@ -1054,7 +1054,8 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar.
     series (the scale follows the series shown; the browser keeps the choice;
     *PV above the limit* of the feed-in cap is hidden until switched on);
     *Show table* switches to a table.
-- **Price chart** (only with a [tariff](#tariffs-optional)), below the
+- **Price chart** (only with a [tariff](#tariffs-optional) whose prices change
+  over the day, with market prices or with price aware control), below the
   forecast chart on the same time axis: per quarter hour the price of an
   imported kWh with the current tariff and the feed-in credit (ct/kWh incl.
   VAT, with time windows and dynamic prices, without fixed fees) and the

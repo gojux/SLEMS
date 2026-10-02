@@ -1115,7 +1115,9 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
     Kurven; der Browser merkt sich die Auswahl; *PV über der Grenze* der
     Einspeisebegrenzung ist ausgeblendet, bis man es einschaltet); *Tabelle
     anzeigen* schaltet auf eine Tabelle um.
-- **Preisdiagramm** (nur mit einem [Tarif](#tarife-optional)), unter dem
+- **Preisdiagramm** (nur mit einem [Tarif](#tarife-optional), dessen Preise
+  sich über den Tag ändern, mit Börsenpreisen oder mit preisbewusster
+  Steuerung), unter dem
   Prognose-Diagramm auf derselben Zeitachse: je Viertelstunde der Preis einer
   bezogenen kWh mit dem aktuellen Tarif und die Einspeisevergütung (ct/kWh
   inkl. USt., mit Zeitfenstern und dynamischen Preisen, ohne Grundgebühren)
