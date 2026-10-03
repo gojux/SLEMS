@@ -263,6 +263,8 @@ def combine(
         "valid_to": min(ends) if ends else None,
         "source": " · ".join(str(meta["source"]) for meta in metas if meta.get("source")) or None,
         "currency": first("currency"),
+        # A Swiss tariff from ElCom: what it was fetched for (see elcom).
+        "elcom": first("elcom"),
         # Where the tariff came from (see tariff_updates).
         "templates": [origin_of(template, False, options.get(template.key, ())) for template in ordered],
     }

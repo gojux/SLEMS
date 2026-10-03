@@ -377,6 +377,7 @@
           "description": "Enter the tariff line by line, or paste it as YAML (an export of SLEMS or the answer of an AI, see the README).",
           "menu_options": {
             "details": "Enter manually",
+            "elcom": "From ElCom (Switzerland)",
             "template": "From templates",
             "import_yaml": "Paste YAML"
           }
@@ -390,14 +391,14 @@
         },
         "template_energy": {
           "title": "Energy",
-          "description": "The energy tariff of your supplier. A complete template (energy, grid and levies, e.g. in Switzerland) is all you need. Templates contain public list prices; compare the tariff with a bill afterwards. Own templates: YAML files in the folder slems_tariff_templates of your Home Assistant configuration.",
+          "description": "The energy tariff of your supplier. A complete template (energy, grid and levies, e.g. in Switzerland) is all you need. Templates contain public list prices; compare the tariff with a bill afterwards. Own templates: YAML files in the folder slems_tariff_templates of your Home Assistant configuration. Leave a field empty for none; type in it to search.",
           "data": {
             "energy": "Energy"
           }
         },
         "template_rest": {
           "title": "Grid and levies",
-          "description": "Preselected: the grid tariff usually combined with the energy tariff (households) and the levies of the country, each as in effect today. Change them if your grid area is a different one.",
+          "description": "Preselected: the grid tariff usually combined with the energy tariff (households) and the levies of the country, each as in effect today. Change them if your grid area is a different one. Leave a field empty for none; type in it to search.",
           "data": {
             "grid": "Grid",
             "levies": "Levies"
@@ -408,6 +409,21 @@
           "description": "Options of the chosen templates as on the price sheet, e.g. an upgrade to green electricity or a bonus with conditions (online bill, direct debit, contract term). Choose those of your contract.",
           "data": {
             "options": "Options"
+          }
+        },
+        "elcom": {
+          "title": "Tariff from ElCom",
+          "description": "SLEMS queries the open data of the Federal Electricity Commission ElCom (ld.admin.ch) for the tariff of your municipality: energy, grid and levies of your grid operator, excluding VAT, as the mean of the consumption category. Later years are offered as new prices once published (in September), if fetching market prices is switched on.",
+          "data": {
+            "municipality": "Municipality (name or part of it)",
+            "category": "Consumption category"
+          }
+        },
+        "elcom_pick": {
+          "title": "Municipality and grid operator",
+          "description": "Choose your municipality and its grid operator.",
+          "data": {
+            "supply": "Municipality – grid operator"
           }
         },
         "import_yaml": {
@@ -530,7 +546,10 @@
         "yaml_item_unknown_field": "Unknown field in item {detail}.",
         "template_none": "Choose at least one template.",
         "template_part_twice": "Two templates cover the same part (energy, grid or levies); choose one per part.",
-        "yaml_currency": "The tariff is in another currency than Home Assistant (tariff / Home Assistant: {detail}). Prices are plain numbers in the currency of Home Assistant; change the currency in the file or in Home Assistant."
+        "yaml_currency": "The tariff is in another currency than Home Assistant (tariff / Home Assistant: {detail}). Prices are plain numbers in the currency of Home Assistant; change the currency in the file or in Home Assistant.",
+        "elcom_unavailable": "ElCom could not be reached; try again later.",
+        "elcom_none": "No tariff found; check the name of the municipality.",
+        "template_unknown": "Choose a template from the list (type to search)."
       },
       "abort": {
         "reconfigure_successful": "The tariff was saved."

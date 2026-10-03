@@ -35,8 +35,10 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
 
+from . import elcom
 from .const import DOMAIN, SUBENTRY_TYPE_TARIFF
 from .tariff import Role
 from .tariff_templates import OWN_DIR_NAME, SHIPPED_DIR, Template, load_templates, origin_of, taken_items
@@ -301,12 +303,24 @@ async def async_check_tariff_updates(hass: HomeAssistant, entry) -> None:
     successors, or past their end."""
     templates = await hass.async_add_executor_job(load_templates, template_directories(hass))
     today = dt_util.now().date()
+    coordinator = getattr(entry, "runtime_data", None)
+    consent = coordinator is not None and coordinator.market_prices.enabled
     wanted: dict[str, tuple[str, dict[str, str]]] = {}
     for subentry in entry.subentries.values():
         if subentry.subentry_type != SUBENTRY_TYPE_TARIFF or subentry.data.get("role", Role.CURRENT) != Role.CURRENT:
             continue
         placeholders = {"name": subentry.title}
-        if candidates := [c for options in find_candidates(subentry.data, templates).values() for c in options]:
+        levels = templates
+        origin = elcom.supply_of(subentry.data.get("meta") or {})
+        if origin is not None and consent:
+            # A Swiss tariff: its years at ElCom (the next one is published in September).
+            try:
+                levels = templates + await elcom.async_levels(
+                    async_get_clientsession(hass), *origin, int((subentry.data.get("meta") or {}).get("year") or today.year)
+                )
+            except elcom.ElcomError:
+                pass
+        if candidates := [c for options in find_candidates(subentry.data, levels).values() for c in options]:
             kinds = {c.kind for c in candidates}
             key = "tariff_successor" if SUCCESSOR in kinds else "tariff_update" if UPDATE in kinds else "tariff_correction"
             wanted[f"{TARIFF_ISSUE_PREFIX}update_{subentry.subentry_id}"] = (

@@ -58,7 +58,7 @@ VERSION = 1
 META_KEYS = (
     "supplier", "grid_operator", "grid_area", "household", "country", "year", "parts",
     "valid_from", "valid_to", "source", "suggest", "templates", "id", "replaces", "declined", "offer",
-    "currency",
+    "currency", "elcom",
 )
 # Identifier of a template over all its price levels, e.g. "at/example-energy/fix".
 ID_PATTERN = re.compile(r"[a-z0-9-]+(/[a-z0-9-]+)*")
@@ -190,6 +190,11 @@ def _meta_value(key: str, value: Any) -> Any:
         if not isinstance(value, int):
             raise TariffYamlError("yaml_field_invalid", key)
         return value
+    if key == "elcom":
+        # Where a Swiss tariff came from (see elcom): municipality, operator, category.
+        if not isinstance(value, dict) or not all(isinstance(value.get(k), str | int) for k in ("municipality", "operator", "category")):
+            raise TariffYamlError("yaml_field_invalid", key)
+        return {str(k): str(v) for k, v in value.items()}
     if key == "currency":
         if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z]{3}", value):
             raise TariffYamlError("yaml_field_invalid", key)

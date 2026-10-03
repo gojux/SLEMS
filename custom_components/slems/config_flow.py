@@ -32,6 +32,7 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er, selector
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
 from modbus_connection import ModbusTcpParams
 
@@ -164,6 +165,7 @@ from .tariff import (
     tariff_from_data,
     vat_data,
 )
+from . import elcom
 from .currency import currency_code, symbols
 from .reference_values import MARKETS as REFERENCE_MARKETS
 from .tariff_yaml import VERSION as YAML_VERSION
@@ -1499,6 +1501,10 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         self._country: str | None = None
         self._energy_template: Template | None = None
         self._chosen_templates: list[Template] = []
+        # ElCom (Switzerland): categories, found supplies and the chosen category.
+        self._elcom_categories: dict[str, str] = {}
+        self._elcom_found: list[elcom.Supply] = []
+        self._elcom_category = "H4"
         # Newer price levels and successors per template of the tariff, and the choices made.
         self._candidates: dict[str, list[Candidate]] | None = None
         self._choice_queue: list[str] = []
@@ -1512,15 +1518,23 @@ class TariffSubentryFlow(ConfigSubentryFlow):
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         """A new tariff: enter it, start from templates or paste a YAML file (see tariff_yaml)."""
         templates = await self.hass.async_add_executor_job(load_templates, template_directories(self.hass))
-        # Only templates in the currency of Home Assistant (no exchange rates).
-        self._templates = [t for t in templates if t.currency in (None, currency_code(self.hass))]
+        # Only templates in the currency of Home Assistant (no exchange rates) and
+        # of its country: a tariff applies to the country of the metering point.
+        country = (self.hass.config.country or "").upper()
+        self._templates = [
+            t
+            for t in templates
+            if t.currency in (None, currency_code(self.hass)) and (not country or t.country in (country, "–"))
+        ]
         options = ["details", "template", "import_yaml"] if self._templates else ["details", "import_yaml"]
+        if currency_code(self.hass) == "CHF" or self.hass.config.country == "CH":
+            options.insert(1, "elcom")
         return self.async_show_menu(step_id="user", menu_options=options)
 
     async def async_step_template(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
-        """Country of the templates."""
-        countries = sorted({template.country for template in self._templates})
-        if len(countries) == 1:
+        """Country of the templates: the one of Home Assistant, else chosen."""
+        countries = sorted({template.country for template in self._templates} - {"–"}) or ["–"]
+        if self.hass.config.country or len(countries) == 1:
             self._country = countries[0]
             return await self.async_step_template_energy()
         if user_input is not None:
@@ -1543,23 +1557,27 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         choices = energy_choices(templates.values())
         if not choices:
             return await self.async_step_template_rest()
+        schema = vol.Schema({vol.Optional("energy"): self._template_selector(choices)})
+        if user_input is not None and user_input.get("energy", _NO_TEMPLATE) not in (*templates, _NO_TEMPLATE):
+            return self.async_show_form(step_id="template_energy", data_schema=schema, errors={"energy": "template_unknown"})
         if user_input is not None:
-            self._energy_template = templates.get(user_input["energy"])
+            self._energy_template = templates.get(user_input.get("energy", _NO_TEMPLATE))
             if self._energy_template is not None and (self._energy_template.complete or self._energy_template.feed_in):
                 # Complete, or a feed-in tariff of its own: no grid or levies.
                 return await self._async_combine_templates([self._energy_template])
             return await self.async_step_template_rest()
-        return self.async_show_form(
-            step_id="template_energy",
-            data_schema=vol.Schema({vol.Required("energy"): self._template_selector(choices)}),
-        )
+        return self.async_show_form(step_id="template_energy", data_schema=schema)
 
     async def async_step_template_rest(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         """Grid and levies, preselected: the grid operator the energy template names
         (its household level) and the levies of the country, each in effect today."""
         templates = self._country_templates()
         errors: dict[str, str] = {}
-        if user_input is not None:
+        if user_input is not None and any(
+            user_input.get(key, _NO_TEMPLATE) not in (*templates, _NO_TEMPLATE) for key in ("grid", "levies")
+        ):
+            errors["base"] = "template_unknown"
+        elif user_input is not None:
             chosen = [
                 template
                 for template in (
@@ -1579,34 +1597,39 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         today = dt_util.now().date()
         grid = suggest_grid(self._energy_template, templates.values(), today)
         levies = None if grid is not None and "levies" in grid.parts else suggest_levies(templates.values(), today)
-        defaults = user_input or {"grid": grid.key if grid else _NO_TEMPLATE, "levies": levies.key if levies else _NO_TEMPLATE}
+        defaults = user_input or {"grid": grid.key if grid else None, "levies": levies.key if levies else None}
+
+        def field(key: str):
+            # Empty: none of them.
+            return vol.Optional(key, default=defaults[key]) if defaults.get(key) else vol.Optional(key)
+
         return self.async_show_form(
             step_id="template_rest",
             data_schema=vol.Schema(
                 {
-                    vol.Required("grid", default=defaults["grid"]): self._template_selector(
-                        grid_choices(templates.values())
-                    ),
-                    vol.Required("levies", default=defaults["levies"]): self._template_selector(
-                        levies_choices(templates.values())
-                    ),
+                    field("grid"): self._template_selector(grid_choices(templates.values())),
+                    field("levies"): self._template_selector(levies_choices(templates.values())),
                 }
             ),
             errors=errors,
         )
 
     def _country_templates(self) -> dict[str, Template]:
-        return {t.key: t for t in self._templates if t.country == self._country}
+        # Own templates without a country are offered in every country.
+        return {t.key: t for t in self._templates if t.country in (self._country, "–")}
 
     def _template_selector(self, templates: list[Template]) -> selector.SelectSelector:
-        """Templates to choose from, with "none" first."""
+        """Templates to choose from (left empty: none)."""
         words = _CHECK_WORDS["de" if self.hass.config.language.startswith("de") else "en"]
         part_names = {group.value: words[group].capitalize() for group in Group} | {"feed_in": words[Side.EXPORT]}
-        options = [selector.SelectOptionDict(value=_NO_TEMPLATE, label=words["no_template"])] + [
-            selector.SelectOptionDict(value=t.key, label=template_label(t, part_names, words["own"], words["offer"])) for t in templates
+        options = [
+            selector.SelectOptionDict(value=t.key, label=template_label(t, part_names, words["own"], words["offer"]))
+            for t in templates
         ]
+        # A custom value makes the frontend show a searchable picker; unknown
+        # values are refused by the steps.
         return selector.SelectSelector(
-            selector.SelectSelectorConfig(options=options, mode=selector.SelectSelectorMode.DROPDOWN)
+            selector.SelectSelectorConfig(options=options, mode=selector.SelectSelectorMode.DROPDOWN, custom_value=True)
         )
 
     async def _async_combine_templates(self, chosen: list[Template]) -> SubentryFlowResult | None:
@@ -1650,6 +1673,81 @@ class TariffSubentryFlow(ConfigSubentryFlow):
                     )
                 }
             ),
+        )
+
+    async def async_step_elcom(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Swiss tariff from ElCom (see elcom): municipality and consumption category.
+        Choosing this queries the open data of ElCom (ld.admin.ch)."""
+        errors: dict[str, str] = {}
+        session = async_get_clientsession(self.hass)
+        if user_input is not None:
+            try:
+                self._elcom_found = await elcom.async_search(session, user_input["municipality"], dt_util.now().year)
+            except elcom.ElcomError:
+                errors["base"] = "elcom_unavailable"
+            else:
+                if self._elcom_found:
+                    self._elcom_category = user_input["category"]
+                    return await self.async_step_elcom_pick()
+                errors["municipality"] = "elcom_none"
+        if not self._elcom_categories:
+            try:
+                self._elcom_categories = await elcom.async_categories(session)
+            except elcom.ElcomError:
+                self._elcom_categories = {name: name for name in elcom.CATEGORIES}
+        options = [
+            selector.SelectOptionDict(value=name, label=f"{name}: {text}") for name, text in self._elcom_categories.items()
+        ]
+        return self.async_show_form(
+            step_id="elcom",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("municipality", default=(user_input or {}).get("municipality", vol.UNDEFINED)): str,
+                    vol.Required("category", default=(user_input or {}).get("category", "H4")): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=options, mode=selector.SelectSelectorMode.DROPDOWN)
+                    ),
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_elcom_pick(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Municipality and grid operator of the search; the tariff of this year."""
+        errors: dict[str, str] = {}
+        found = {f"{s.municipality}/{s.operator}": s for s in self._elcom_found}
+        if user_input is not None:
+            supply = found[user_input["supply"]]
+            year = dt_util.now().year
+            try:
+                levels = await elcom.async_levels(
+                    async_get_clientsession(self.hass), supply, self._elcom_category, year - 1
+                )
+            except elcom.ElcomError:
+                errors["base"] = "elcom_unavailable"
+            else:
+                current = [t for t in levels if t.meta["year"] <= year]
+                if current:
+                    # The later years are offered as newer prices (see tariff_updates).
+                    self._templates = levels
+                    self._title, self._data = combine_templates([current[-1]])
+                    return await self.async_step_details()
+                errors["base"] = "elcom_none"
+        return self.async_show_form(
+            step_id="elcom_pick",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("supply"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(value=key, label=f"{s.municipality_name} – {s.operator_name}")
+                                for key, s in found.items()
+                            ],
+                            mode=selector.SelectSelectorMode.LIST,
+                        )
+                    )
+                }
+            ),
+            errors=errors,
         )
 
     async def async_step_import_yaml(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
@@ -1729,6 +1827,7 @@ class TariffSubentryFlow(ConfigSubentryFlow):
                 self._templates = await self.hass.async_add_executor_job(
                     load_templates, template_directories(self.hass)
                 )
+                self._templates += await self._async_elcom_levels()
             self._candidates = find_candidates(self._data, self._templates)
         options = ["add_item"]
         if self._candidates:
@@ -1753,6 +1852,19 @@ class TariffSubentryFlow(ConfigSubentryFlow):
                 "check": check.get("text", ""),
             },
         )
+
+    async def _async_elcom_levels(self) -> list[Template]:
+        """The ElCom years of a Swiss tariff (only with the consent to fetch market prices)."""
+        origin = elcom.supply_of(self._data.get("meta") or {})
+        coordinator = getattr(self._get_entry(), "runtime_data", None)
+        if origin is None or coordinator is None or not coordinator.market_prices.enabled:
+            return []
+        supply, category = origin
+        year = int((self._data.get("meta") or {}).get("year") or dt_util.now().year)
+        try:
+            return await elcom.async_levels(async_get_clientsession(self.hass), supply, category, year)
+        except elcom.ElcomError:
+            return []
 
     async def async_step_update_prices(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         """New prices: one choice per template of the tariff, then the changes to confirm."""
@@ -2066,7 +2178,8 @@ def _describe_meta(meta: Mapping[str, Any]) -> str:
     validity = ""
     if meta.get("valid_from") or meta.get("valid_to"):
         validity = f"{meta.get('valid_from') or '…'} – {meta.get('valid_to') or '…'}"
-    parts = [meta.get("supplier"), meta.get("grid_operator"), validity, meta.get("source")]
+    operator = meta.get("grid_operator") if meta.get("grid_operator") != meta.get("supplier") else None
+    parts = [meta.get("supplier"), operator, validity, meta.get("source")]
     return " · ".join(str(part) for part in parts if part)
 
 

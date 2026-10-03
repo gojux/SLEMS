@@ -307,7 +307,12 @@ your own changes of the template lines. Own templates: YAML files in
 the folder `slems_tariff_templates` of your Home Assistant configuration.
 Suggest a template for everyone as an
 [issue](https://github.com/gojux/SLEMS/issues) with the source of the
-prices. Austria: the grid fees of every grid area (network level 7, from the
+prices. Switzerland: *Add tariff → From ElCom* queries the open data of
+ElCom (ld.admin.ch) for the tariff of your municipality and consumption
+category (energy, grid and levies, excluding VAT, as the mean of the
+category; high and low tariff times are averaged); the next year, published
+in September, is offered as new prices, in the background only with
+*Fetch market prices* switched on. Austria: the grid fees of every grid area (network level 7, from the
 grid fee ordinance, with the reduced price from April to September 10–16 h)
 and the federal levies; the metering fee is entered at its legal maximum
 (your grid operator may charge less) and municipal levies (e.g. the

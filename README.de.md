@@ -317,7 +317,12 @@ Vergangenheit; selbst geänderte Posten bleiben. *Auf Vorlagenwerte
 zurücksetzen* nimmt eigene Änderungen an den Vorlagen-Posten zurück. Eigene Vorlagen: YAML-Dateien im Ordner
 `slems_tariff_templates` deiner Home-Assistant-Konfiguration. Eine Vorlage für
 alle schlägst du als [Issue](https://github.com/gojux/SLEMS/issues) mit der
-Quelle der Preise vor. Österreich: die Netzentgelte aller Netzbereiche
+Quelle der Preise vor. Schweiz: *Tarif hinzufügen → Von der ElCom* fragt die
+offenen Daten der ElCom (ld.admin.ch) nach dem Tarif deiner Gemeinde und
+Verbrauchskategorie ab (Energie, Netz und Abgaben, ohne MWST, als Mittel der
+Kategorie; Hoch- und Niedertarifzeiten sind darin gemittelt); das im September
+veröffentlichte Folgejahr bietet SLEMS als neue Preise an, im Hintergrund nur
+mit eingeschaltetem *Börsenpreise abrufen*. Österreich: die Netzentgelte aller Netzbereiche
 (Netzebene 7, aus der Systemnutzungsentgelte-Verordnung, mit dem günstigeren
 Preis von April bis September 10–16 Uhr) und die bundesweiten Abgaben; das
 Messentgelt steht mit dem gesetzlichen Höchstpreis drin (dein Netzbetreiber

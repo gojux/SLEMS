@@ -377,6 +377,7 @@
           "description": "Gib den Tarif Posten für Posten ein oder füge ihn als YAML ein (ein Export aus SLEMS oder die Antwort einer KI, siehe README).",
           "menu_options": {
             "details": "Manuell eingeben",
+            "elcom": "Von der ElCom (Schweiz)",
             "template": "Aus Vorlagen",
             "import_yaml": "YAML einfügen"
           }
@@ -390,14 +391,14 @@
         },
         "template_energy": {
           "title": "Energie",
-          "description": "Der Energietarif deines Lieferanten. Eine vollständige Vorlage (Energie, Netz und Abgaben, z. B. in der Schweiz) genügt allein. Vorlagen enthalten öffentliche Listenpreise; vergleiche den Tarif danach mit einer Rechnung. Eigene Vorlagen: YAML-Dateien im Ordner slems_tariff_templates deiner Home-Assistant-Konfiguration.",
+          "description": "Der Energietarif deines Lieferanten. Eine vollständige Vorlage (Energie, Netz und Abgaben, z. B. in der Schweiz) genügt allein. Vorlagen enthalten öffentliche Listenpreise; vergleiche den Tarif danach mit einer Rechnung. Eigene Vorlagen: YAML-Dateien im Ordner slems_tariff_templates deiner Home-Assistant-Konfiguration. Ein leeres Feld bedeutet keine Vorlage; zum Suchen ins Feld tippen.",
           "data": {
             "energy": "Energie"
           }
         },
         "template_rest": {
           "title": "Netz und Abgaben",
-          "description": "Vorausgewählt: der Netztarif, mit dem der Energietarif meist kombiniert wird (Haushalte), und die Abgaben des Landes, jeweils mit den heute gültigen Preisen. Ändere sie, wenn dein Netzgebiet ein anderes ist.",
+          "description": "Vorausgewählt: der Netztarif, mit dem der Energietarif meist kombiniert wird (Haushalte), und die Abgaben des Landes, jeweils mit den heute gültigen Preisen. Ändere sie, wenn dein Netzgebiet ein anderes ist. Ein leeres Feld bedeutet keine Vorlage; zum Suchen ins Feld tippen.",
           "data": {
             "grid": "Netz",
             "levies": "Abgaben"
@@ -408,6 +409,21 @@
           "description": "Wählbare Optionen der Vorlagen laut Preisblatt, z. B. ein Ökostrom-Upgrade oder ein Bonus mit Bedingungen (Online-Rechnung, Bankeinzug, Vertragsbindung). Wähle die deines Vertrags.",
           "data": {
             "options": "Optionen"
+          }
+        },
+        "elcom": {
+          "title": "Tarif von der ElCom",
+          "description": "SLEMS fragt die offenen Daten der Eidgenössischen Elektrizitätskommission ElCom (ld.admin.ch) nach dem Tarif deiner Gemeinde ab: Energie, Netz und Abgaben deines Netzbetreibers, ohne MWST, als Mittel der Verbrauchskategorie. Spätere Jahre bietet SLEMS nach der Veröffentlichung (im September) als neue Preise an, wenn „Börsenpreise abrufen“ eingeschaltet ist.",
+          "data": {
+            "municipality": "Gemeinde (Name oder Teil davon)",
+            "category": "Verbrauchskategorie"
+          }
+        },
+        "elcom_pick": {
+          "title": "Gemeinde und Netzbetreiber",
+          "description": "Wähle deine Gemeinde und ihren Netzbetreiber.",
+          "data": {
+            "supply": "Gemeinde – Netzbetreiber"
           }
         },
         "import_yaml": {
@@ -530,7 +546,10 @@
         "yaml_item_unknown_field": "Unbekanntes Feld in Posten {detail}.",
         "template_none": "Wähle mindestens eine Vorlage.",
         "template_part_twice": "Zwei Vorlagen decken denselben Teil ab (Energie, Netz oder Abgaben); wähle je Teil eine.",
-        "yaml_currency": "Der Tarif ist in einer anderen Währung als Home Assistant (Tarif / Home Assistant: {detail}). Preise gelten in der Währung von Home Assistant; ändere die Währung in der Datei oder in Home Assistant."
+        "yaml_currency": "Der Tarif ist in einer anderen Währung als Home Assistant (Tarif / Home Assistant: {detail}). Preise gelten in der Währung von Home Assistant; ändere die Währung in der Datei oder in Home Assistant.",
+        "elcom_unavailable": "Die ElCom ist nicht erreichbar; versuche es später noch einmal.",
+        "elcom_none": "Kein Tarif gefunden; prüfe den Namen der Gemeinde.",
+        "template_unknown": "Wähle eine Vorlage aus der Liste (zum Suchen tippen)."
       },
       "abort": {
         "reconfigure_successful": "Der Tarif wurde gespeichert."
