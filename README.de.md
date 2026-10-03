@@ -193,7 +193,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Tarife und Preise | Status |
 |---|---|
 | Tarife wie auf der Rechnung (Zeitfenster, Umsatzsteuer je Gruppe, prozentuale Abgaben) mit Prüfung gegen eine Rechnung | ✅ |
-| Tarif-Vorlagen: Österreich (Netzentgelte aller Netzbereiche, Abgaben, Lieferanten inkl. Optionen wie Ökostrom-Upgrade), Deutschland (Abgaben, EEG-Einspeisevergütung, Netzentgelte von 19 Netzbetreibern inkl. § 14a-Module und Messstellenbetrieb), Schweiz (Abfrage der offenen Daten der ElCom) | ✅ |
+| Tarif-Vorlagen: Österreich (Netzentgelte aller Netzbereiche, Abgaben, Lieferanten inkl. Optionen wie Ökostrom-Upgrade), Deutschland (Abgaben, EEG-Einspeisevergütung, Netzentgelte von 19 Netzbetreibern inkl. § 14a-Module und Messstellenbetrieb), Schweiz (Abfrage der offenen Daten der ElCom); eine allgemeine Vorlage für dynamische Tarife (Börsenpreis plus Aufschlag aus dem Vertrag) | ✅ |
 | Vorlagen-Updates: neue Preise, Nachfolgetarife und Korrekturen als Reparaturhinweis, Zurücksetzen auf die Vorlagenwerte | ✅ |
 | Tarife als YAML (Import, Export, eigene Vorlagen) mit einem Prompt, um sie mit einer KI aus einer Rechnung zu erstellen | ✅ |
 | Börsenpreise je Viertelstunde (APG, SMARD, Energy-Charts) und offizielle Monatsmarktwerte (E-Control) nur mit Zustimmung; keine Einspeisevergütung bei negativen Preisen, wo der Tarif es vorsieht (EEG) | ✅ |
@@ -335,7 +335,11 @@ mit eingeschaltetem *Börsenpreise abrufen*. Österreich: die Netzentgelte aller
 Preis von April bis September 10–16 Uhr) und die bundesweiten Abgaben; das
 Messentgelt steht mit dem gesetzlichen Höchstpreis drin (dein Netzbetreiber
 kann weniger verrechnen), Gemeindeabgaben (z. B. die Gebrauchsabgabe in Wien)
-fehlen. Deutschland: die bundesweiten Abgaben (Stromsteuer, Umlagen und die
+fehlen. Österreich und Deutschland: eine allgemeine Vorlage *Dynamischer
+Tarif* (Energie zum Day-Ahead-Börsenpreis je Viertelstunde); den Aufschlag und
+die Monatsgebühr deines Vertrags trägst du danach in ihren Posten ein, weil
+Anbieter dynamischer Tarife sie meist nur je Postleitzahl veröffentlichen.
+Deutschland: die bundesweiten Abgaben (Stromsteuer, Umlagen und die
 Konzessionsabgabe nach Gemeindegröße mit ihrem gesetzlichen Höchstbetrag), die
 Netzentgelte der größten Netzbetreiber (Westnetz, Bayernwerk, E.DIS, Avacon,
 Netze BW, Schleswig-Holstein Netz, Stromnetz Berlin, Hamburger Energienetze,
@@ -1735,6 +1739,10 @@ Mögliche Erweiterungen:
 - Verbraucher bei negativen Preisen bevorzugen (z. B. den Heizstab).
 - Preisbewusste Steuerung: ein stabilerer Plan (nur bei deutlicher
   Verbesserung geändert).
+- Preise aus einer Home-Assistant-Entität des Lieferanten (z. B. die
+  Tibber-Integration, Octopus Deutschland, Ostrom): eine Posten-Art mit
+  Adaptern für die verbreiteten Vorschau-Formate, mit der Angabe, ob der Preis
+  Netzentgelte und Abgaben schon enthält.
 - Tagesziele der Verbraucher gemeinsam mit den Batterien planen.
 - Index-Tarife (z. B. nach dem Österreichischen Strompreisindex ÖSPI): eine
   Posten-Art mit der Formel des Lieferanten, die Monatswerte des Index mit

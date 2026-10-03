@@ -191,7 +191,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Tariffs and prices | Status |
 |---|---|
 | Tariffs as on the bill (time windows, VAT per group, percent levies) with a check against a bill | ✅ |
-| Tariff templates: Austria (grid fees of all grid areas, levies, suppliers incl. options such as a green upgrade), Germany (levies, EEG feed-in credit, grid fees of 19 grid operators incl. § 14a modules and metering), Switzerland (query of the ElCom open data) | ✅ |
+| Tariff templates: Austria (grid fees of all grid areas, levies, suppliers incl. options such as a green upgrade), Germany (levies, EEG feed-in credit, grid fees of 19 grid operators incl. § 14a modules and metering), Switzerland (query of the ElCom open data); a general template for dynamic tariffs (market price plus the markup of the contract) | ✅ |
 | Template updates: new prices, successor tariffs and corrections as a repair issue, reset to the template values | ✅ |
 | Tariffs as YAML (import, export, own templates) with a prompt to create one from a bill with an AI | ✅ |
 | Day-ahead prices per quarter hour (APG, SMARD, Energy-Charts) and official monthly market values (E-Control) only with consent; no feed-in credit at negative prices where the tariff says so (EEG) | ✅ |
@@ -324,7 +324,11 @@ in September, is offered as new prices, in the background only with
 grid fee ordinance, with the reduced price from April to September 10–16 h)
 and the federal levies; the metering fee is entered at its legal maximum
 (your grid operator may charge less) and municipal levies (e.g. the
-Gebrauchsabgabe in Vienna) are not included. Germany: the federal levies
+Gebrauchsabgabe in Vienna) are not included. Austria and Germany: a general
+template *Dynamic tariff* (energy at the day-ahead price per quarter hour);
+enter the markup and the monthly fee of your contract afterwards in its
+lines, as suppliers of dynamic tariffs mostly publish them only per postcode.
+Germany: the federal levies
 (electricity tax, surcharges and the concession levy by the size of the
 municipality, at its legal maximum), the grid fees of the largest grid
 operators (Westnetz, Bayernwerk, E.DIS, Avacon, Netze BW, Schleswig-Holstein
@@ -1640,6 +1644,10 @@ Possible extensions:
 - Consumers preferred at negative prices (e.g. the heating rod).
 - Price aware control: a more stable plan (changed only when clearly
   better).
+- Prices from a Home Assistant entity of the supplier (e.g. the Tibber
+  integration, Octopus Germany, Ostrom): a line type with adapters for the
+  common forecast formats, stating whether the price already includes the
+  grid fees and levies.
 - Daily targets of the consumers planned together with the batteries.
 - Index tariffs (e.g. on the Austrian electricity price index ÖSPI): a line
   type with the supplier's formula, the monthly index values fetched (with

@@ -74,6 +74,15 @@ Regeln:
 - Bei dynamischen Tarifen: unit spot oder market_month, price ist der
   Aufschlag in ct/kWh (negativ bei einem Abschlag), factor_pct ein
   prozentualer Aufschlag auf den Marktpreis.
+- Die Rechnung eines dynamischen Tarifs (Preis je Stunde oder Viertelstunde
+  nach der Börse) zeigt nur einen Durchschnittspreis des Zeitraums. Nimm ihn
+  nie als festen Preis: Der Energiepreis ist unit spot mit dem Aufschlag aus
+  dem Vertrag (oft in der Vertragszusammenfassung oder im Preisblatt, kann 0
+  sein), die monatliche Gebühr ein Posten mit unit year (× 12). Steht der
+  Aufschlag nirgends, setze price 0 mit "# uncertain: Aufschlag nicht auf der
+  Rechnung". Beispiel:
+    - {name: Energie, side: import, group: energy, unit: spot, price: 0}
+    - {name: Monatsgebühr, side: import, group: energy, unit: year, price: 60}
 - Prozentuale Aufschläge (z. B. eine Gebrauchsabgabe von 7 % auf Energie und
   Netz): je Gruppe ein Posten mit unit percent und dem Prozentsatz als price;
   er gilt für alle anderen Posten derselben Seite und Gruppe.

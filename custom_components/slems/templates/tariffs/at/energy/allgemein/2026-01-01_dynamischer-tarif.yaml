@@ -1,0 +1,17 @@
+format: slems-tariff
+version: 1
+id: at/energy/allgemein/dynamischer-tarif
+name: Dynamischer Tarif (Börsenpreis + Aufschlag aus deinem Vertrag)
+supplier: Allgemeine Vorlage
+country: AT
+currency: EUR
+year: 2026
+parts: [energy]
+valid_from: 2026-01-01
+source: "Allgemeine Vorlage für Tarife, die den Day-Ahead-Börsenpreis je Viertelstunde weitergeben (z. B. Floatingtarife): danach unter Posten den Aufschlag (ct/kWh netto) und die Grundgebühr (€/Jahr netto, Monatsbetrag × 12) aus deinem Vertrag eintragen"
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Arbeitspreis, side: import, group: energy, unit: spot, price: 0}
+  - {name: Grundgebühr, side: import, group: energy, unit: year, price: 0}

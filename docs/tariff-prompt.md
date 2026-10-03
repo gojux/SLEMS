@@ -72,6 +72,14 @@ Rules:
   them (e.g. a metering fee for the feed-in) are items of their own.
 - Dynamic tariffs: unit spot or market_month, price is the markup in ct/kWh
   (negative for a discount), factor_pct a markup in % on the market price.
+- The bill of a dynamic tariff (price per hour or quarter hour following the
+  exchange) shows only a mean price of the period. Never take it as a fixed
+  price: the energy price is unit spot with the markup of the contract
+  (often in the contract summary or the price sheet, may be 0), the monthly
+  fee an item with unit year (× 12). If the markup is nowhere given, set
+  price 0 with "# uncertain: markup not on the bill". Example:
+    - {name: Energy, side: import, group: energy, unit: spot, price: 0}
+    - {name: Monthly fee, side: import, group: energy, unit: year, price: 60}
 - Surcharges in percent (e.g. a municipal levy of 7 % on energy and grid):
   one item per group with unit percent and the rate as price; it applies to
   all other items of the same side and group.

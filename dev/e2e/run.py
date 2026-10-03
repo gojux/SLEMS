@@ -455,7 +455,7 @@ def tariffs(token: str) -> None:
         {
             "user": "template",
             "template": {"country": "DE"},
-            "template_energy": {},
+            "template_energy": lambda step: {"energy": option(step, "energy", "Dynamischer Tarif")},
             "template_rest": lambda step: {
                 "grid": option(step, "grid", "Westnetz", "Modul 1 + 3"),
                 "levies": option(step, "levies", "1,59"),
@@ -464,7 +464,7 @@ def tariffs(token: str) -> None:
             "details": {"role": "comparison"},
             "items": "finish",
         },
-        "German grid and levies from templates",
+        "German dynamic tariff with grid and levies from templates",
     )
     subentry(
         token,
