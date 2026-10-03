@@ -15,7 +15,9 @@ operator it is usually combined with (``suggest: {grid_operator: …}``).
 ``id`` names a template over all its price levels and stays when it is
 renamed; a successor names the templates it replaces (``replaces``).
 An item of a template with ``optional: true`` is chosen when the tariff is
-made from it (e.g. an upgrade, a bonus with conditions). ``offer: true`` marks an offer for new contracts: its price is fixed from the
+made from it (e.g. an upgrade, a bonus with conditions). ``currency`` (ISO code, e.g. EUR or CHF) is the currency of the prices; a
+file without it is taken to be in the currency of Home Assistant.
+``offer: true`` marks an offer for new contracts: its price is fixed from the
 start of a contract, so a newer offer is no update of an existing one.
 
 Example (made-up values)::
@@ -56,6 +58,7 @@ VERSION = 1
 META_KEYS = (
     "supplier", "grid_operator", "grid_area", "household", "country", "year", "parts",
     "valid_from", "valid_to", "source", "suggest", "templates", "id", "replaces", "declined", "offer",
+    "currency",
 )
 # Identifier of a template over all its price levels, e.g. "at/example-energy/fix".
 ID_PATTERN = re.compile(r"[a-z0-9-]+(/[a-z0-9-]+)*")
@@ -84,9 +87,12 @@ class TariffYamlError(ValueError):
         self.detail = detail
 
 
-def export_yaml(title: str, data: Mapping[str, Any]) -> str:
-    """The tariff of a config subentry (``data``) as YAML of the current version."""
-    meta = data.get("meta") or {}
+def export_yaml(title: str, data: Mapping[str, Any], currency: str | None = None) -> str:
+    """The tariff of a config subentry (``data``) as YAML of the current version,
+    in ``currency`` (the one of Home Assistant) unless the tariff names its own."""
+    meta = dict(data.get("meta") or {})
+    if currency and not meta.get("currency"):
+        meta["currency"] = currency
     document: dict[str, Any] = {"format": FORMAT, "version": VERSION, "name": title}
     for key in META_KEYS:
         if meta.get(key) not in (None, "", []):
@@ -184,6 +190,10 @@ def _meta_value(key: str, value: Any) -> Any:
         if not isinstance(value, int):
             raise TariffYamlError("yaml_field_invalid", key)
         return value
+    if key == "currency":
+        if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z]{3}", value):
+            raise TariffYamlError("yaml_field_invalid", key)
+        return value.upper()
     if key in ("household", "offer"):
         if not isinstance(value, bool):
             raise TariffYamlError("yaml_field_invalid", key)

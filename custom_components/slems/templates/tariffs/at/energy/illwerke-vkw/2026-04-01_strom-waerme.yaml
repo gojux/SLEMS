@@ -4,6 +4,7 @@ id: at/illwerke-vkw/strom-waerme
 name: vkw Strom Wärme (Bestandstarif)
 supplier: illwerke vkw
 country: AT
+currency: EUR
 year: 2026
 parts: [energy]
 valid_from: 2026-04-01

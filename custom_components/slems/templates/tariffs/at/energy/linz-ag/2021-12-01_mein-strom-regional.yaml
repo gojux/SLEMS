@@ -4,6 +4,7 @@ id: at/linz-ag/mein-strom-regional
 name: Mein Strom Regional
 supplier: LINZ AG
 country: AT
+currency: EUR
 year: 2021
 parts: [energy]
 valid_from: 2021-12-01

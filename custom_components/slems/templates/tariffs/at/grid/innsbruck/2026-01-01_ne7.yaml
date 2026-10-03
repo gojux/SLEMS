@@ -6,6 +6,7 @@ grid_operator: Innsbrucker Kommunalbetriebe AG
 grid_area: Netzbereich Innsbruck, Netzebene 7
 household: true
 country: AT
+currency: EUR
 year: 2026
 parts: [grid]
 valid_from: 2026-01-01

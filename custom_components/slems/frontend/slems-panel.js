@@ -198,7 +198,7 @@ const STRINGS = {
     batteryExportText: "Feed-in from batteries: {energy} from {time}",
     batteryExportNoEffect: "Feeding in from the batteries has no effect with your feed-in tariff (no hourly credit at the market price)",
     priceRoomText: "Charges only partly until {time} and feeds in: room for the surplus of cheaper (negative) times",
-    gridChargeText: "Grid charging: {energy} from {time} (saves about {saving} ct)",
+    gridChargeText: "Grid charging: {energy} from {time} (saves about {saving})",
     priceHoldText: "Batteries cover the times from {price}; grid for {duration} at cheaper times until {until}",
     priorityConsumers: "Before the batteries: {names}",
     targetForcedChip: "forced",
@@ -327,7 +327,7 @@ const STRINGS = {
     tariffToDate: "to date",
     tariffDiff: "vs. current",
     priceTitle: "Electricity prices",
-    priceHint: "ct/kWh incl. VAT, without fixed fees; the market price without fees and taxes.",
+    priceHint: "{minor}/kWh incl. VAT, without fixed fees; the market price (in ct) without fees and taxes.",
     priceImport: "Import ({tariff})",
     priceExport: "Feed-in credit ({tariff})",
     priceSpot: "Market price",
@@ -628,7 +628,7 @@ const STRINGS = {
     batteryExportText: "Einspeisen aus Akku: {energy} ab {time}",
     batteryExportNoEffect: "Akku ins Netz entladen ohne Wirkung mit deinem Einspeisetarif (keine stündliche Vergütung nach Börsenpreis)",
     priceRoomText: "Lädt bis {time} nur begrenzt und speist ein: Platz für den Überschuss günstigerer (negativer) Zeiten",
-    gridChargeText: "Netzladen: {energy} ab {time} (spart etwa {saving} ct)",
+    gridChargeText: "Netzladen: {energy} ab {time} (spart etwa {saving})",
     priceHoldText: "Batterien decken die Zeiten ab {price}; Netz für {duration} zu günstigeren Zeiten bis {until}",
     priorityConsumers: "Vorrang vor den Batterien: {names}",
     targetForcedChip: "erzwungen",
@@ -757,7 +757,7 @@ const STRINGS = {
     tariffToDate: "bis heute",
     tariffDiff: "ggü. aktuell",
     priceTitle: "Strompreise",
-    priceHint: "ct/kWh inkl. USt., ohne Grundgebühren; der Börsenpreis ohne Gebühren und Steuern.",
+    priceHint: "{minor}/kWh inkl. USt., ohne Grundgebühren; der Börsenpreis (in ct) ohne Gebühren und Steuern.",
     priceImport: "Bezug ({tariff})",
     priceExport: "Einspeisevergütung ({tariff})",
     priceSpot: "Börsenpreis",
@@ -2139,7 +2139,7 @@ class SlemsPanel extends HTMLElement {
         this._t.gridChargeText
           .replace("{energy}", this._kwh(wh))
           .replace("{time}", this._time(charge[0][0]))
-          .replace("{saving}", this._priceNumber(a.grid_charge_saving_ct ?? 0).replace(" ct", ""))
+          .replace("{saving}", this._priceNumber(a.grid_charge_saving_ct ?? 0))
       );
     }
     return parts.join(" · ");
@@ -2960,7 +2960,7 @@ class SlemsPanel extends HTMLElement {
       : "";
     this._setSection(
       "pricechart",
-      `<section class="card"><h2>${escapeHtml(t.priceTitle)}</h2><span class="hint">${escapeHtml(t.priceHint)}</span>
+      `<section class="card"><h2>${escapeHtml(t.priceTitle)}</h2><span class="hint">${escapeHtml(t.priceHint.replace("{minor}", this._minor()))}</span>
         ${legend}${body}${source}</section>`
     );
   }
@@ -2972,9 +2972,19 @@ class SlemsPanel extends HTMLElement {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   }
 
+  /** Currency set in Home Assistant (Settings → System → General). */
+  _currency() {
+    return (this._hass?.config?.currency || "EUR").toUpperCase();
+  }
+
+  /** Symbol of a hundredth of the currency (ct, Rp., …). */
+  _minor() {
+    return { EUR: "ct", CHF: "Rp.", GBP: "p", USD: "¢" }[this._currency()] || "ct";
+  }
+
   _priceNumber(value) {
     const language = this._hass?.locale?.language || "en";
-    return `${new Intl.NumberFormat(language, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value)} ct`;
+    return `${new Intl.NumberFormat(language, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value)} ${this._minor()}`;
   }
 
   _priceSvg(slots, series) {
@@ -3241,7 +3251,7 @@ class SlemsPanel extends HTMLElement {
     }
     const t = this._t;
     const language = this._hass?.locale?.language || "en";
-    const money = new Intl.NumberFormat(language, { style: "currency", currency: "EUR" });
+    const money = new Intl.NumberFormat(language, { style: "currency", currency: this._currency() });
     const energy = new Intl.NumberFormat(language, { maximumFractionDigits: 0 });
     const signed = (value) => (value > 0 ? "+" : value < 0 ? "−" : "±") + money.format(Math.abs(value));
     const tariffs = result.tariffs;

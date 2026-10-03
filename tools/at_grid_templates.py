@@ -91,7 +91,7 @@ def grid(area: str, interruptible: bool) -> tuple[Path, str]:
         f"grid_operator: {operator}\n"
         f"grid_area: {title}\n"
         f"household: {'false' if interruptible else 'true'}\n"
-        f"country: AT\nyear: {YEAR}\nparts: [grid]\n"
+        f"country: AT\ncurrency: EUR\nyear: {YEAR}\nparts: [grid]\n"
         f"valid_from: {VALID_FROM}\nvalid_to: {VALID_TO}\n"
         f"source: \"{SOURCE_GRID}\"\n" + VAT + "items:\n" + "\n".join(items) + "\n"
     )
@@ -118,7 +118,7 @@ def levies(interruptible: bool) -> tuple[Path, str]:
         f"id: at/levies/{kind}\n"
         f"name: {title}\n"
         f"household: {'false' if interruptible else 'true'}\n"
-        f"country: AT\nyear: {YEAR}\nparts: [levies]\n"
+        f"country: AT\ncurrency: EUR\nyear: {YEAR}\nparts: [levies]\n"
         f"valid_from: {VALID_FROM}\nvalid_to: {VALID_TO}\n"
         f"source: \"{SOURCE_LEVIES}\"\n" + VAT + "items:\n" + "\n".join(items) + "\n"
     )

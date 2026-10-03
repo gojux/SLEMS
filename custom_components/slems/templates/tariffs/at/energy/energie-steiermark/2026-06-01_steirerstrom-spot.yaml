@@ -4,6 +4,7 @@ id: at/energie-steiermark/steirerstrom-spot
 name: SteirerStrom Spot
 supplier: Energie Steiermark
 country: AT
+currency: EUR
 year: 2026
 parts: [energy]
 valid_from: 2026-06-01

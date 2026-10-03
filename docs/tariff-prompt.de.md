@@ -37,6 +37,7 @@ supplier: <Energielieferant>            # optional
 grid_operator: <Netzbetreiber>          # optional, wenn Netzentgelte enthalten sind
 grid_area: <Netzgebiet, Netzebene>      # optional, z. B. "Netzgebiet X, Netzebene 7"
 country: <Ländercode, z. B. AT oder DE> # optional
+currency: <Währung, z. B. EUR oder CHF> # Währung der Preise
 year: <Jahr der Preise>                 # optional
 parts: [energy, grid, levies]           # welche Teile der Rechnung enthalten sind
 valid_from: <JJJJ-MM-TT>                # optional: ab wann die Preise gelten
@@ -65,7 +66,8 @@ Regeln:
 - Alle Preise ohne Umsatzsteuer (netto). Stehen auf der Rechnung nur
   Bruttopreise, rechne sie mit dem angegebenen Steuersatz auf netto um.
 - Arbeitspreise in ct/kWh (unit kwh), Grund- und Pauschalpreise in €/Jahr
-  (unit year). Monatliche Beträge × 12, Tagespreise × 365.
+  (unit year). Monatliche Beträge × 12, Tagespreise × 365. Bei Franken:
+  Rappen/kWh und CHF/Jahr (dieselben Felder).
 - Einspeisevergütungen sind positive Preise auf der Seite export; Abzüge davon
   (z. B. ein Messentgelt für die Einspeisung) sind eigene Posten.
 - Bei dynamischen Tarifen: unit spot oder market_month, price ist der

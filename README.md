@@ -251,6 +251,9 @@ sooner; the gain is largest with fast batteries.
 
 With *Add tariff* on the SLEMS integration page you enter your electricity
 tariff the way your bill shows it; the values stay in your Home Assistant.
+Prices are in the currency set in Home Assistant under *Settings → System →
+General* (hundredths per kWh, e.g. ct or Rp., and whole amounts per year);
+market prices come in euro.
 
 1. Name, role (*current tariff* or *comparison tariff*) and VAT: for the
    consumption bill, for the feed-in energy (often 0 % for private PV) and for

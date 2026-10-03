@@ -4,6 +4,7 @@ id: at/energie-ag/oekostrom-loyal
 name: Ökostrom Loyal
 supplier: Energie AG Oberösterreich
 country: AT
+currency: EUR
 year: 2025
 parts: [energy]
 valid_from: 2025-04-01

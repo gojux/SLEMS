@@ -35,6 +35,7 @@ supplier: <energy supplier>              # optional
 grid_operator: <grid operator>           # optional, if grid fees are included
 grid_area: <grid area, network level>    # optional, e.g. "grid area X, level 7"
 country: <country code, e.g. AT or DE>   # optional
+currency: <currency, e.g. EUR or CHF>    # currency of the prices
 year: <year of the prices>               # optional
 parts: [energy, grid, levies]            # which parts of the bill are included
 valid_from: <YYYY-MM-DD>                 # optional: from when the prices apply
@@ -63,7 +64,9 @@ Rules:
 - All prices without VAT (net). If the bill only shows gross prices, convert
   them to net with the VAT rate given.
 - Energy prices in ct/kWh (unit kwh), standing charges and flat fees in
-  €/year (unit year). Monthly amounts × 12, daily prices × 365.
+  €/year (unit year). Monthly amounts × 12, daily prices × 365. For other
+  currencies the same in hundredths/kWh and whole units/year (e.g. Rappen
+  and CHF).
 - Feed-in credits are positive prices on the export side; deductions from
   them (e.g. a metering fee for the feed-in) are items of their own.
 - Dynamic tariffs: unit spot or market_month, price is the markup in ct/kWh

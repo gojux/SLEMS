@@ -4,6 +4,7 @@ id: at/tiwag/comfort-privat
 name: TIWAG comfort privat
 supplier: TIWAG
 country: AT
+currency: EUR
 year: 2026
 parts: [energy]
 valid_from: 2026-08-17

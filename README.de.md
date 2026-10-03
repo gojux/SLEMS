@@ -256,7 +256,9 @@ sieht jeden Wert früher; am meisten bringt das bei schnellen Batterien.
 
 Mit *Tarif hinzufügen* auf der Seite der SLEMS-Integration trägst du deinen
 Stromtarif so ein, wie ihn deine Rechnung zeigt; die Werte bleiben in deinem
-Home Assistant.
+Home Assistant. Preise gelten in der Währung, die in Home Assistant unter
+*Einstellungen → System → Allgemein* eingestellt ist (Hundertstel je kWh, z. B.
+ct oder Rp., und ganze Beträge je Jahr); Börsenpreise kommen in Euro.
 
 1. Name, Rolle (*aktueller Tarif* oder *Vergleichstarif*) und Umsatzsteuer:
    für die Bezugsrechnung, für die eingespeiste Energie (bei privaten

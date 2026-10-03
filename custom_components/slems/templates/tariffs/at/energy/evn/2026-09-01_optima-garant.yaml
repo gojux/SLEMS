@@ -4,6 +4,7 @@ id: at/evn/optima-garant
 name: Optima Garant
 supplier: EVN
 country: AT
+currency: EUR
 year: 2026
 parts: [energy]
 offer: true

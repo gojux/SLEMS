@@ -43,6 +43,8 @@ items:
   - {name: Levy, side: import, group: levies, unit: year, price: 20}
 """
 NAMES = {"energy": "Energy", "grid": "Grid", "levies": "Levies"}
+# Currency of the prices per country of the shipped templates.
+CURRENCIES = {"AT": "EUR", "DE": "EUR", "CH": "CHF"}
 
 
 @pytest.fixture
@@ -110,6 +112,7 @@ def test_shipped_templates_are_valid() -> None:
         assert template.country == country.upper(), template.key
         expected = "complete" if len(template.parts) == 3 else template.parts[0]
         assert part == expected, template.key
+        assert template.currency == CURRENCIES[country.upper()], template.key
         # A fixed id per tariff over its price levels, starting with the country.
         assert str(meta.get("id", "")).startswith(f"{country}/"), template.key
     shipped = load_templates([("shipped", SHIPPED_DIR)])

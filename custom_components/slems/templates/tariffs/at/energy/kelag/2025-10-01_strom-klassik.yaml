@@ -4,6 +4,7 @@ id: at/kelag/strom-klassik
 name: Kelag Strom Klassik
 supplier: Kelag
 country: AT
+currency: EUR
 year: 2025
 parts: [energy]
 valid_from: 2025-10-01

@@ -164,6 +164,7 @@ from .tariff import (
     tariff_from_data,
     vat_data,
 )
+from .currency import currency_code, symbols
 from .reference_values import MARKETS as REFERENCE_MARKETS
 from .tariff_yaml import VERSION as YAML_VERSION
 from .tariff_yaml import TariffYamlError, export_yaml, parse_yaml
@@ -1021,7 +1022,7 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             ),
             _optional(CONF_PURCHASE_PRICE_EUR, defaults): selector.NumberSelector(
                 selector.NumberSelectorConfig(
-                    min=0, max=100_000, step="any", unit_of_measurement="€",
+                    min=0, max=100_000, step="any", unit_of_measurement=symbols(currency_code(self.hass))[0],
                     mode=selector.NumberSelectorMode.BOX,
                 )
             ),
@@ -1510,7 +1511,9 @@ class TariffSubentryFlow(ConfigSubentryFlow):
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         """A new tariff: enter it, start from templates or paste a YAML file (see tariff_yaml)."""
-        self._templates = await self.hass.async_add_executor_job(load_templates, template_directories(self.hass))
+        templates = await self.hass.async_add_executor_job(load_templates, template_directories(self.hass))
+        # Only templates in the currency of Home Assistant (no exchange rates).
+        self._templates = [t for t in templates if t.currency in (None, currency_code(self.hass))]
         options = ["details", "template", "import_yaml"] if self._templates else ["details", "import_yaml"]
         return self.async_show_menu(step_id="user", menu_options=options)
 
@@ -1633,7 +1636,7 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         choices = [
             selector.SelectOptionDict(
                 value=f"{t.key}|{item['name']}",
-                label=f"{item['name']} ({_describe_item(TariffItem.from_dict(item), language).split(': ', 1)[1].split(' (')[0]})",
+                label=f"{item['name']} ({_describe_item(TariffItem.from_dict(item), language, currency_code(self.hass)).split(': ', 1)[1].split(' (')[0]})",
             )
             for t in chosen
             for item in t.optional_items
@@ -1647,6 +1650,36 @@ class TariffSubentryFlow(ConfigSubentryFlow):
                     )
                 }
             ),
+        )
+
+    async def async_step_import_yaml(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Paste a tariff as YAML (an export, a template or the answer of an AI)."""
+        errors: dict[str, str] = {}
+        detail = ""
+        if user_input is not None:
+            try:
+                title, data = parse_yaml(user_input["yaml"])
+            except TariffYamlError as err:
+                errors["base"], detail = err.key, err.detail
+            else:
+                currency = (data.get("meta") or {}).get("currency")
+                if currency and currency != currency_code(self.hass):
+                    # Prices are plain numbers in the currency of Home Assistant.
+                    errors["base"], detail = "yaml_currency", f"{currency} / {currency_code(self.hass)}"
+                else:
+                    self._title, self._data = title, data
+                    return await self.async_step_details()
+        return self.async_show_form(
+            step_id="import_yaml",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("yaml", default=(user_input or {}).get("yaml", vol.UNDEFINED)): selector.TextSelector(
+                        selector.TextSelectorConfig(multiline=True)
+                    )
+                }
+            ),
+            errors=errors,
+            description_placeholders={"detail": detail, "version": str(YAML_VERSION)},
         )
 
     async def async_step_details(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
@@ -1707,7 +1740,8 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         if self._items:
             options.append("finish")
         lines = "\n".join(
-            f"- {_describe_item(TariffItem.from_dict(item), self.hass.config.language)}" for item in self._items
+            f"- {_describe_item(TariffItem.from_dict(item), self.hass.config.language, currency_code(self.hass))}"
+            for item in self._items
         ) or "–"
         check = self._check or {}
         return self.async_show_menu(
@@ -1797,7 +1831,7 @@ class TariffSubentryFlow(ConfigSubentryFlow):
             data_schema=vol.Schema({}),
             description_placeholders={
                 "date": ", ".join(sorted({c.starts.isoformat() for c in self._chosen})),
-                "changes": _describe_changes(changes, self.hass.config.language),
+                "changes": _describe_changes(changes, self.hass.config.language, currency_code(self.hass)),
             },
         )
 
@@ -1809,7 +1843,7 @@ class TariffSubentryFlow(ConfigSubentryFlow):
             step_id="export_yaml",
             data_schema=vol.Schema(
                 {
-                    vol.Optional("yaml", default=export_yaml(self._title, self._data)): selector.TextSelector(
+                    vol.Optional("yaml", default=export_yaml(self._title, self._data, currency_code(self.hass))): selector.TextSelector(
                         selector.TextSelectorConfig(multiline=True)
                     )
                 }
@@ -1826,7 +1860,7 @@ class TariffSubentryFlow(ConfigSubentryFlow):
             self._edit_index = int(user_input["item"])
             return await self.async_step_item()
         options = [
-            selector.SelectOptionDict(value=str(index), label=_describe_item(TariffItem.from_dict(item), self.hass.config.language))
+            selector.SelectOptionDict(value=str(index), label=_describe_item(TariffItem.from_dict(item), self.hass.config.language, currency_code(self.hass)))
             for index, item in enumerate(self._items)
         ]
         return self.async_show_form(
@@ -1923,10 +1957,10 @@ class TariffSubentryFlow(ConfigSubentryFlow):
                     vol.Required("start"): selector.DateSelector(),
                     vol.Required("end"): selector.DateSelector(),
                     vol.Optional("import_amount"): selector.NumberSelector(
-                        selector.NumberSelectorConfig(step="any", unit_of_measurement="€", mode=selector.NumberSelectorMode.BOX)
+                        selector.NumberSelectorConfig(step="any", unit_of_measurement=symbols(currency_code(self.hass))[0], mode=selector.NumberSelectorMode.BOX)
                     ),
                     vol.Optional("export_amount"): selector.NumberSelector(
-                        selector.NumberSelectorConfig(step="any", unit_of_measurement="€", mode=selector.NumberSelectorMode.BOX)
+                        selector.NumberSelectorConfig(step="any", unit_of_measurement=symbols(currency_code(self.hass))[0], mode=selector.NumberSelectorMode.BOX)
                     ),
                 }
             ),
@@ -1959,11 +1993,12 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         bill = compute_bill(tariff, start, end, energy.imported, energy.exported, market, references)
         language = self.hass.config.language
         words = _CHECK_WORDS["de" if language.startswith("de") else "en"]
+        money = symbols(currency_code(self.hass))[0]
         lines = [
-            _check_line(language, Side.IMPORT, bill.import_kwh, bill.side_gross(tariff, Side.IMPORT), import_amount),
-            _check_line(language, Side.EXPORT, bill.export_kwh, -bill.side_gross(tariff, Side.EXPORT), export_amount),
+            _check_line(language, Side.IMPORT, bill.import_kwh, bill.side_gross(tariff, Side.IMPORT), import_amount, money),
+            _check_line(language, Side.EXPORT, bill.export_kwh, -bill.side_gross(tariff, Side.EXPORT), export_amount, money),
         ]
-        text = "\n\n".join(lines) + "\n\n" + _check_groups(language, bill.groups)
+        text = "\n\n".join(lines) + "\n\n" + _check_groups(language, bill.groups, money)
         if bill.unpriced_kwh > 0:
             text += "\n\n" + words["unpriced"].format(kwh=_number(language, bill.unpriced_kwh, 1))
         return {"text": text}
@@ -2001,12 +2036,13 @@ def _item_from_input(user_input: dict[str, Any]) -> TariffItem:
     )
 
 
-def _describe_changes(changes: UpdateChanges, language: str) -> str:
+def _describe_changes(changes: UpdateChanges, language: str, currency: str = "EUR") -> str:
     """'- Energy: 10 → 11 ct/kWh' per item, new and dropped items, own changes."""
     words = _CHECK_WORDS["de" if language.startswith("de") else "en"]
 
     def price(value: float, unit: str) -> str:
-        suffix = {"kwh": "ct/kWh", "year": "€/a", "percent": "%"}.get(unit, "ct/kWh")
+        major, minor = symbols(currency)
+        suffix = {"year": f"{major}/a", "percent": "%"}.get(unit, f"{minor}/kWh")
         return f"{_number(language, value, 4).rstrip('0').rstrip(',.')} {suffix}"
 
     lines = []
@@ -2034,7 +2070,7 @@ def _describe_meta(meta: Mapping[str, Any]) -> str:
     return " · ".join(str(part) for part in parts if part)
 
 
-def _describe_item(item: TariffItem, language: str) -> str:
+def _describe_item(item: TariffItem, language: str, currency: str = "EUR") -> str:
     """'Grid: 6 ct/kWh (import, grid) · M 4,5,6 · 10:00–16:00'."""
     words = _CHECK_WORDS["de" if language.startswith("de") else "en"]
 
@@ -2046,9 +2082,10 @@ def _describe_item(item: TariffItem, language: str) -> str:
         if item.factor_pct:
             price += f" × {short(1 + item.factor_pct / 100)}"
         if item.price:
-            price += f" {'+' if item.price > 0 else '−'} {short(abs(item.price))} ct/kWh"
+            price += f" {'+' if item.price > 0 else '−'} {short(abs(item.price))} {symbols(currency)[1]}/kWh"
     else:
-        price = f"{short(item.price)} {({Unit.KWH: 'ct/kWh', Unit.PERCENT: '%'}).get(item.unit, '€/a')}"
+        major, minor = symbols(currency)
+        price = f"{short(item.price)} {({Unit.KWH: f'{minor}/kWh', Unit.PERCENT: '%'}).get(item.unit, f'{major}/a')}"
     parts = [f"{item.name}: {price} ({words[item.side]}, {words[item.group]})"]
     if item.months:
         parts.append(f"{words['months']} {_ranges(item.months, 1)}")
@@ -2117,23 +2154,25 @@ def _ranges(values: frozenset[int], step: int, offset: int = 0) -> str:
     return ", ".join(parts)
 
 
-def _check_line(language: str, side: Side, kwh: float, computed: float, billed: float | None) -> str:
+def _check_line(
+    language: str, side: Side, kwh: float, computed: float, billed: float | None, money: str = "€"
+) -> str:
     """'Import: 412.3 kWh, computed 98.20 €, bill 97.90 € (+0.3 %)'."""
     words = _CHECK_WORDS["de" if language.startswith("de") else "en"]
-    text = f"**{words[side]}**: {_number(language, kwh, 1)} kWh, {words['computed']} {_number(language, computed, 2)} €"
+    text = f"**{words[side]}**: {_number(language, kwh, 1)} kWh, {words['computed']} {_number(language, computed, 2)} {money}"
     if billed:
         deviation = (computed - billed) / abs(billed) * 100
-        text += f", {words['bill']} {_number(language, billed, 2)} € ({'+' if deviation >= 0 else ''}{_number(language, deviation, 1)} %)"
+        text += f", {words['bill']} {_number(language, billed, 2)} {money} ({'+' if deviation >= 0 else ''}{_number(language, deviation, 1)} %)"
     return text
 
 
-def _check_groups(language: str, bill_groups: dict[tuple[Side, Group], float]) -> str:
+def _check_groups(language: str, bill_groups: dict[tuple[Side, Group], float], money: str = "€") -> str:
     """'Import net: energy 54.27 €, grid 17.27 € · Export net: energy −24.07 €'."""
     words = _CHECK_WORDS["de" if language.startswith("de") else "en"]
     parts = []
     for side in Side:
         amounts = [
-            f"{words[group]} {_number(language, amount, 2)} €"
+            f"{words[group]} {_number(language, amount, 2)} {money}"
             for (item_side, group), amount in sorted(bill_groups.items())
             if item_side is side
         ]

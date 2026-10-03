@@ -4,6 +4,7 @@ id: at/ikb/flex
 name: IKB-flex
 supplier: IKB
 country: AT
+currency: EUR
 year: 2026
 parts: [energy]
 valid_from: 2026-10-01

@@ -472,9 +472,9 @@
           },
           "data_description": {
             "unit": "Börsenpreis und Monatsmarktpreis nutzen die Börsenpreise der *Preisquelle* in den SLEMS-Einstellungen (Gruppe *Preise*); *Börsenpreise abrufen* muss an sein.",
-            "price": "Netto (ohne USt.) in ct/kWh oder €/Jahr wie auf der Rechnung; ein Rabatt ist negativ. Auf der Einspeiseseite ist der Energiepreis die Vergütung, die du bekommst. Bei Börsenpreis und Monatsmarktpreis: der feste Aufschlag in ct/kWh (negativ: Abzug). Prozent der Gruppe: z. B. 7 für eine Abgabe von 7 % auf die anderen Posten derselben Seite und Gruppe.",
+            "price": "Netto (ohne USt.) in Hundertstel pro kWh (ct, Rp.) oder pro Jahr (€, CHF), in der Währung von Home Assistant, wie auf der Rechnung; ein Rabatt ist negativ. Auf der Einspeiseseite ist der Energiepreis die Vergütung, die du bekommst. Bei Börsenpreis und Monatsmarktpreis: der feste Aufschlag in Hundertstel pro kWh (negativ: Abzug). Prozent der Gruppe: z. B. 7 für eine Abgabe von 7 % auf die anderen Posten derselben Seite und Gruppe.",
             "factor_pct": "Nur bei Börsenpreis und Monatsmarktpreis: Preis = Börsenpreis × (1 + Prozent) + Preis. Z. B. −10 % für eine Vergütung von 90 % des Marktpreises.",
-            "month_prices": "Optional, nur beim Monatsmarktpreis: veröffentlichte Werte in ct/kWh, z. B. „2026-01: 8,5; 2026-02: 7,9“. Monate ohne Wert: Mittel der Börsenpreise, gewichtet mit deiner Einspeisung.",
+            "month_prices": "Optional, nur beim Monatsmarktpreis: veröffentlichte Werte in Hundertstel pro kWh, z. B. „2026-01: 8,5; 2026-02: 7,9“. Monate ohne Wert: Mittel der Börsenpreise, gewichtet mit deiner Einspeisung.",
             "market": "Nur beim Monatsmarktpreis: der offizielle Monatswert, dem der Preis folgt. Er wird mit den Börsenpreisen abgerufen; bis ein Monat veröffentlicht ist, gilt das Mittel der Börsenpreise, gewichtet mit deiner Einspeisung.",
             "valid_from": "Optional. Bei einer Preisänderung: den Posten mit dem neuen Preis und diesem Datum noch einmal anlegen.",
             "valid_to": "Optional: der letzte Tag des Postens, z. B. wenn ein Preisstand endet.",
@@ -529,7 +529,8 @@
         "yaml_item_invalid": "Posten {detail} ist ungültig.",
         "yaml_item_unknown_field": "Unbekanntes Feld in Posten {detail}.",
         "template_none": "Wähle mindestens eine Vorlage.",
-        "template_part_twice": "Zwei Vorlagen decken denselben Teil ab (Energie, Netz oder Abgaben); wähle je Teil eine."
+        "template_part_twice": "Zwei Vorlagen decken denselben Teil ab (Energie, Netz oder Abgaben); wähle je Teil eine.",
+        "yaml_currency": "Der Tarif ist in einer anderen Währung als Home Assistant (Tarif / Home Assistant: {detail}). Preise gelten in der Währung von Home Assistant; ändere die Währung in der Datei oder in Home Assistant."
       },
       "abort": {
         "reconfigure_successful": "Der Tarif wurde gespeichert."
@@ -619,8 +620,8 @@
     },
     "tariff_unit": {
       "options": {
-        "kwh": "ct/kWh",
-        "year": "€/Jahr",
+        "kwh": "Hundertstel/kWh (ct, Rp.)",
+        "year": "pro Jahr (€, CHF)",
         "spot": "Börsenpreis (stündlich)",
         "market_month": "Monatsmarktpreis",
         "percent": "Prozent der Gruppe (%)"

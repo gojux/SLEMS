@@ -6,6 +6,7 @@ grid_operator: Energie Klagenfurt GmbH
 grid_area: Netzbereich Klagenfurt, Netzebene 7 unterbrechbar
 household: false
 country: AT
+currency: EUR
 year: 2026
 parts: [grid]
 valid_from: 2026-01-01

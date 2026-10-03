@@ -26,6 +26,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
+from .currency import currency_code, symbols
 from .const import CONF_PV_FORECAST_ENTRIES, CONF_WEATHER_ENTITY, FEED_IN_CAP_MIN_BUFFER_PCT
 from .coordinator import SlemsConfigEntry, SlemsCoordinator, SystemSnapshot
 from .drivers import BatteryTelemetry
@@ -855,10 +856,14 @@ class EfficiencySensor(SlemsBatteryEntity, SensorEntity):
 class WearCostSensor(SlemsBatteryEntity, SensorEntity):
     """Wear costs per kWh stored and delivered again (see battery_wear)."""
 
-    _attr_native_unit_of_measurement = "ct/kWh"
     _attr_suggested_display_precision = 1
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:battery-heart-variant"
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        """Hundredths of the Home Assistant currency per kWh (e.g. ct/kWh)."""
+        return f"{symbols(currency_code(self.coordinator.hass))[1]}/kWh"
 
     def __init__(self, coordinator: SlemsCoordinator, battery) -> None:
         super().__init__(coordinator, battery, "wear_cost")
@@ -1023,9 +1028,13 @@ class PriceSavingSensor(SlemsSystemEntity, SensorEntity):
     """Measured saving of the price aware control this month (see price_savings)."""
 
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_native_unit_of_measurement = "EUR"
     _attr_suggested_display_precision = 2
     _attr_icon = "mdi:piggy-bank-outline"
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        """The Home Assistant currency (the tariffs are in it)."""
+        return currency_code(self.coordinator.hass)
 
     def __init__(self, coordinator: SlemsCoordinator) -> None:
         super().__init__(coordinator, "price_saving")

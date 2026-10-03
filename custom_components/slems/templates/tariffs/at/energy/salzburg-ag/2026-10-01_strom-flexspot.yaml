@@ -4,6 +4,7 @@ id: at/salzburg-ag/strom-flexspot
 name: Strom FlexSpot
 supplier: Salzburg AG
 country: AT
+currency: EUR
 year: 2026
 parts: [energy]
 valid_from: 2026-10-01

@@ -138,3 +138,20 @@ def test_market_of_a_monthly_item() -> None:
             "format: slems-tariff\nversion: 1\nname: PV\nitems:\n"
             "  - {name: Credit, side: export, group: energy, unit: kwh, price: 7, market: at-pv}\n"
         )
+
+
+def test_currency_is_kept_and_exported() -> None:
+    _, data = parse_yaml(
+        "format: slems-tariff\nversion: 1\nname: Swiss\ncurrency: chf\nitems:\n"
+        "  - {name: Energy, side: import, group: energy, unit: kwh, price: 12}\n"
+    )
+    assert data["meta"]["currency"] == "CHF"
+    assert "currency: CHF" in export_yaml("Swiss", data, "EUR")
+    # Without its own currency the export names the one of Home Assistant.
+    _, plain = parse_yaml(
+        "format: slems-tariff\nversion: 1\nname: Plain\nitems:\n"
+        "  - {name: Energy, side: import, group: energy, unit: kwh, price: 12}\n"
+    )
+    assert "currency: EUR" in export_yaml("Plain", plain, "EUR")
+    with pytest.raises(TariffYamlError):
+        parse_yaml("format: slems-tariff\nversion: 1\nname: X\ncurrency: euro\nitems:\n  - {name: E, side: import, group: energy, unit: kwh, price: 1}\n")

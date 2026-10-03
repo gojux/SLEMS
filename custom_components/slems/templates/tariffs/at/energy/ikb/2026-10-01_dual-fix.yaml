@@ -4,6 +4,7 @@ id: at/ikb/dual-fix
 name: IKB-dual fix
 supplier: IKB
 country: AT
+currency: EUR
 year: 2026
 parts: [energy]
 offer: true
