@@ -11,7 +11,7 @@ year: 2026
 parts: [grid]
 valid_from: 2026-01-01
 valid_to: 2026-12-31
-source: "SNE-V 2018 – Novelle 2026, BGBl. II Nr. 305/2025 (§ 5, § 6); Messentgelt: Höchstpreis § 10 SNE-V 2018"
+source: "SNE-V 2018 – Novelle 2026, BGBl. II Nr. 305/2025 (§ 5, § 6); Messentgelt: Preisblatt des Netzbetreibers oder Höchstpreis § 10 SNE-V 2018"
 vat_pct:
   import: {energy: 20, grid: 20, levies: 20}
   export: {energy: 0, grid: 20, levies: 20}
@@ -21,4 +21,3 @@ items:
   - {name: Netznutzungsentgelt, side: import, group: grid, unit: kwh, price: 14.18, months: [4, 5, 6, 7, 8, 9], time_from: '10:00', time_to: '16:00'}
   - {name: Netzverlustentgelt, side: import, group: grid, unit: kwh, price: 0.401}
   - {name: Messentgelt (Höchstpreis), side: import, group: grid, unit: year, price: 28.8}
-  - {name: Messentgelt Einspeisung (Höchstpreis), side: export, group: grid, unit: year, price: 28.8, optional: true}

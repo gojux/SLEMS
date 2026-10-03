@@ -17,4 +17,4 @@ items:
   - {name: Grundpreis, side: import, group: energy, unit: year, price: 10.5}
   - {name: Verbrauchspreis, side: import, group: energy, unit: kwh, price: 16.25}
   - {name: Sonderrabatt, side: import, group: energy, unit: kwh, price: -6.35, valid_to: 2027-03-31}
-  - {name: Upgrade Öko+, side: import, group: energy, unit: kwh, price: 0.7, optional: true}
+  - {name: Upgrade Öko+, side: import, group: energy, unit: kwh, price: 0.7, optional: true, suffix: Öko+}

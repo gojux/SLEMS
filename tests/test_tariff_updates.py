@@ -211,3 +211,13 @@ def test_feed_in_templates(tmp_path: Path) -> None:
     assert template.feed_in
     names = {"energy": "Energy", "grid": "Grid", "levies": "Levies", "feed_in": "Feed-in"}
     assert label(template, names, "own").startswith("Feed-in · Example Energy – PV")
+
+
+def test_a_chosen_option_names_the_tariff(tmp_path: Path) -> None:
+    folder = tmp_path / "at" / "energy" / "example"
+    folder.mkdir(parents=True)
+    extra = "  - {name: Upgrade, side: import, group: energy, unit: kwh, price: 0.7, optional: true, suffix: Öko+}\n"
+    (folder / "2026-01-01_fix.yaml").write_text(level("2026-01-01", 10, extra))
+    templates = load_templates([("shipped", tmp_path)])
+    assert combine(templates)[0] == "Fix"
+    assert combine(templates, {templates[0].key: ["Upgrade"]})[0] == "Fix Öko+"

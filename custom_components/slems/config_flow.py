@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date, datetime, time, timedelta
 import socket
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 import voluptuous as vol
@@ -1557,11 +1557,12 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         choices = energy_choices(templates.values())
         if not choices:
             return await self.async_step_template_rest()
-        schema = vol.Schema({vol.Optional("energy"): self._template_selector(choices)})
-        if user_input is not None and user_input.get("energy", _NO_TEMPLATE) not in (*templates, _NO_TEMPLATE):
+        by_label = self._labelled(choices)
+        schema = vol.Schema({vol.Optional("energy"): self._template_selector(by_label)})
+        if user_input is not None and user_input.get("energy") and user_input["energy"] not in by_label:
             return self.async_show_form(step_id="template_energy", data_schema=schema, errors={"energy": "template_unknown"})
         if user_input is not None:
-            self._energy_template = templates.get(user_input.get("energy", _NO_TEMPLATE))
+            self._energy_template = by_label.get(user_input.get("energy") or "")
             if self._energy_template is not None and (self._energy_template.complete or self._energy_template.feed_in):
                 # Complete, or a feed-in tariff of its own: no grid or levies.
                 return await self._async_combine_templates([self._energy_template])
@@ -1573,8 +1574,11 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         (its household level) and the levies of the country, each in effect today."""
         templates = self._country_templates()
         errors: dict[str, str] = {}
+        grids = self._labelled(grid_choices(templates.values()))
+        levies_by_label = self._labelled(levies_choices(templates.values()))
         if user_input is not None and any(
-            user_input.get(key, _NO_TEMPLATE) not in (*templates, _NO_TEMPLATE) for key in ("grid", "levies")
+            user_input.get(key) and user_input[key] not in options
+            for key, options in (("grid", grids), ("levies", levies_by_label))
         ):
             errors["base"] = "template_unknown"
         elif user_input is not None:
@@ -1582,8 +1586,8 @@ class TariffSubentryFlow(ConfigSubentryFlow):
                 template
                 for template in (
                     self._energy_template,
-                    templates.get(user_input.get("grid", "")),
-                    templates.get(user_input.get("levies", "")),
+                    grids.get(user_input.get("grid") or ""),
+                    levies_by_label.get(user_input.get("levies") or ""),
                 )
                 if template is not None
             ]
@@ -1597,7 +1601,11 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         today = dt_util.now().date()
         grid = suggest_grid(self._energy_template, templates.values(), today)
         levies = None if grid is not None and "levies" in grid.parts else suggest_levies(templates.values(), today)
-        defaults = user_input or {"grid": grid.key if grid else None, "levies": levies.key if levies else None}
+        label_of = {template.key: label for options in (grids, levies_by_label) for label, template in options.items()}
+        defaults = user_input or {
+            "grid": label_of.get(grid.key) if grid else None,
+            "levies": label_of.get(levies.key) if levies else None,
+        }
 
         def field(key: str):
             # Empty: none of them.
@@ -1607,8 +1615,8 @@ class TariffSubentryFlow(ConfigSubentryFlow):
             step_id="template_rest",
             data_schema=vol.Schema(
                 {
-                    field("grid"): self._template_selector(grid_choices(templates.values())),
-                    field("levies"): self._template_selector(levies_choices(templates.values())),
+                    field("grid"): self._template_selector(grids),
+                    field("levies"): self._template_selector(levies_by_label),
                 }
             ),
             errors=errors,
@@ -1618,18 +1626,27 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         # Own templates without a country are offered in every country.
         return {t.key: t for t in self._templates if t.country in (self._country, "–")}
 
-    def _template_selector(self, templates: list[Template]) -> selector.SelectSelector:
-        """Templates to choose from (left empty: none)."""
+    def _labelled(self, templates: Iterable[Template]) -> dict[str, Template]:
+        """Templates by the label shown (unique; the picker shows the value it returns)."""
         words = _CHECK_WORDS["de" if self.hass.config.language.startswith("de") else "en"]
         part_names = {group.value: words[group].capitalize() for group in Group} | {"feed_in": words[Side.EXPORT]}
-        options = [
-            selector.SelectOptionDict(value=t.key, label=template_label(t, part_names, words["own"], words["offer"]))
-            for t in templates
-        ]
-        # A custom value makes the frontend show a searchable picker; unknown
-        # values are refused by the steps.
+        result: dict[str, Template] = {}
+        for template in templates:
+            label = template_label(template, part_names, words["own"], words["offer"])
+            if not template.feed_in:
+                # The field names the part; only feed-in tariffs share the energy list.
+                label = label.split(" · ", 1)[-1]
+            if label in result:
+                label = f"{label} [{template.key.rsplit('/', 1)[-1]}]"
+            result[label] = template
+        return result
+
+    def _template_selector(self, templates: Mapping[str, Template]) -> selector.SelectSelector:
+        """Templates to choose from by their label (left empty: none). A custom
+        value makes the frontend show a searchable picker; unknown values are
+        refused by the steps."""
         return selector.SelectSelector(
-            selector.SelectSelectorConfig(options=options, mode=selector.SelectSelectorMode.DROPDOWN, custom_value=True)
+            selector.SelectSelectorConfig(options=list(templates), mode=selector.SelectSelectorMode.DROPDOWN, custom_value=True)
         )
 
     async def _async_combine_templates(self, chosen: list[Template]) -> SubentryFlowResult | None:

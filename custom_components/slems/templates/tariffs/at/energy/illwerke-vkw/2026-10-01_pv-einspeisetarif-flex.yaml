@@ -8,9 +8,10 @@ currency: EUR
 year: 2026
 parts: [energy]
 valid_from: 2026-10-01
-source: "PV-Einspeisetarif Flex (vkw.at, Stand Oktober 2026): Referenzmarktwert PV (EAG) − 0,6 ct/kWh; den Referenzmarktwert holt SLEMS mit den Börsenpreisen von der E-Control, bis zur Veröffentlichung gilt das Mittel der Börsenpreise, gewichtet mit der eigenen Einspeisung"
+source: "Messentgelt: Vorarlberger Energienetze, Preisblatt Messpreise für Einspeiser 01/2026 (Überschusseinspeisung Drehstrom 1,60 €/Monat; bis 5 kWp über Wechselrichter 0,60 €/Monat); PV-Einspeisetarif Flex (vkw.at, Stand Oktober 2026): Referenzmarktwert PV (EAG) − 0,6 ct/kWh; den Referenzmarktwert holt SLEMS mit den Börsenpreisen von der E-Control, bis zur Veröffentlichung gilt das Mittel der Börsenpreise, gewichtet mit der eigenen Einspeisung"
 vat_pct:
   import: {energy: 20, grid: 20, levies: 20}
   export: {energy: 0, grid: 20, levies: 20}
 items:
   - {name: Einspeisevergütung, side: export, group: energy, unit: market_month, price: -0.6, market: at-pv}
+  - {name: Messentgelt Einspeisung, side: export, group: grid, unit: year, price: 19.2}

@@ -21,7 +21,10 @@ from pathlib import Path
 VALID_FROM = "2026-01-01"
 VALID_TO = "2026-12-31"
 YEAR = 2026
-SOURCE_GRID = "SNE-V 2018 – Novelle 2026, BGBl. II Nr. 305/2025 (§ 5, § 6); Messentgelt: Höchstpreis § 10 SNE-V 2018"
+SOURCE_GRID = (
+    "SNE-V 2018 – Novelle 2026, BGBl. II Nr. 305/2025 (§ 5, § 6); Messentgelt: Preisblatt des Netzbetreibers "
+    "oder Höchstpreis § 10 SNE-V 2018"
+)
 SOURCE_LEVIES = (
     "Erneuerbaren-Förderpauschale und -Förderbeitrag 2026, Elektrizitätsabgabe (0,1 ct/kWh für Haushalte 2026); "
     "Preisblätter der Netzbetreiber 01/2026"
@@ -53,6 +56,10 @@ AREA_LEVIES = {
     "Salzburg": {"Gebrauchsabgabe": 0.3789},
 }
 # Maximum metering price (three-phase meter): 2.40 €/month and metering direction.
+# Metering fee of the main operator of a grid area (€/year, three-phase meter
+# without control functions), from its price sheet 2026:
+# Vorarlberger Energienetze "Preisblatt Messpreise für Verbraucher" 01/2026.
+METERING_BY_AREA = {"Vorarlberg": 19.20}
 METERING_YEAR = 28.80
 VAT = "vat_pct:\n  import: {energy: 20, grid: 20, levies: 20}\n  export: {energy: 0, grid: 20, levies: 20}\n"
 SUMMER = "months: [4, 5, 6, 7, 8, 9], time_from: '10:00', time_to: '16:00'"
@@ -76,12 +83,12 @@ def grid(area: str, interruptible: bool) -> tuple[Path, str]:
         f"  - {{name: Netzverlustentgelt, side: import, group: grid, unit: kwh, price: {_number(loss)}}}",
     ]
     if not interruptible:
-        items += [
-            f"  - {{name: Messentgelt (Höchstpreis), side: import, group: grid, unit: year, price: {_number(METERING_YEAR)}}}",
-            # The metering of the feed-in direction (PV): chosen as an option.
-            f"  - {{name: Messentgelt Einspeisung (Höchstpreis), side: export, group: grid, unit: year, "
-            f"price: {_number(METERING_YEAR)}, optional: true}}",
-        ]
+        # The metering fee of the operator's price sheet where known, else the legal maximum.
+        metering = METERING_BY_AREA.get(area)
+        name = "Messentgelt" if metering is not None else "Messentgelt (Höchstpreis)"
+        items.append(
+            f"  - {{name: {name}, side: import, group: grid, unit: year, price: {_number(metering or METERING_YEAR)}}}"
+        )
     for name, price in AREA_LEVIES.get(area, {}).items():
         items.append(f"  - {{name: {name}, side: import, group: levies, unit: kwh, price: {_number(price)}}}")
     text = (

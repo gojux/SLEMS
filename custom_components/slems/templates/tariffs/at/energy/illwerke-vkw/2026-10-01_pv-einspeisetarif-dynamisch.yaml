@@ -8,9 +8,10 @@ currency: EUR
 year: 2026
 parts: [energy]
 valid_from: 2026-10-01
-source: "PV-Einspeisetarif Dynamisch (vkw.at, Stand Oktober 2026): EPEX Spot Day-Ahead (viertelstündlich) − 0,60 ct/kWh netto; Netz- und Messentgelte zusätzlich"
+source: "Messentgelt: Vorarlberger Energienetze, Preisblatt Messpreise für Einspeiser 01/2026 (Überschusseinspeisung Drehstrom 1,60 €/Monat; bis 5 kWp über Wechselrichter 0,60 €/Monat); PV-Einspeisetarif Dynamisch (vkw.at, Stand Oktober 2026): EPEX Spot Day-Ahead (viertelstündlich) − 0,60 ct/kWh netto"
 vat_pct:
   import: {energy: 20, grid: 20, levies: 20}
   export: {energy: 0, grid: 20, levies: 20}
 items:
   - {name: Einspeisevergütung, side: export, group: energy, unit: spot, price: -0.6}
+  - {name: Messentgelt Einspeisung, side: export, group: grid, unit: year, price: 19.2}

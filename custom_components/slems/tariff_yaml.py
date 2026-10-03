@@ -15,7 +15,8 @@ operator it is usually combined with (``suggest: {grid_operator: …}``).
 ``id`` names a template over all its price levels and stays when it is
 renamed; a successor names the templates it replaces (``replaces``).
 An item of a template with ``optional: true`` is chosen when the tariff is
-made from it (e.g. an upgrade, a bonus with conditions). ``currency`` (ISO code, e.g. EUR or CHF) is the currency of the prices; a
+made from it (e.g. an upgrade, a bonus with conditions); its ``suffix`` is
+then added to the name of the tariff. ``currency`` (ISO code, e.g. EUR or CHF) is the currency of the prices; a
 file without it is taken to be in the currency of Home Assistant.
 ``offer: true`` marks an offer for new contracts: its price is fixed from the
 start of a contract, so a newer offer is no update of an existing one.
@@ -72,7 +73,7 @@ DEFAULT_VAT = {
 _TOP_KEYS = {"format", "version", "name", "vat_pct", "items", *META_KEYS}
 _ITEM_KEYS = {
     "name", "side", "group", "unit", "price", "factor_pct", "valid_from", "valid_to",
-    "months", "weekdays", "time_from", "time_to", "month_prices", "optional", "market",
+    "months", "weekdays", "time_from", "time_to", "month_prices", "optional", "market", "suffix",
 }
 # Version -> function that turns a file of that version into the next one.
 _MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {}
@@ -171,6 +172,11 @@ def parse_yaml(text: str) -> tuple[str, dict[str, Any]]:
             if raw["optional"]:
                 # A template item the user chooses (e.g. an upgrade or a bonus).
                 data["optional"] = True
+        if raw.get("suffix") is not None:
+            if not isinstance(raw["suffix"], str) or not raw.get("optional"):
+                raise TariffYamlError("yaml_item_invalid", f"{len(taken) + 1}: suffix")
+            # Added to the name of the tariff when the option is chosen (e.g. "Öko+").
+            data["suffix"] = raw["suffix"].strip()
         taken.append(data)
     meta = {key: _meta_value(key, document[key]) for key in META_KEYS if document.get(key) is not None}
     if meta.get("valid_from") and meta.get("valid_to") and meta["valid_to"] < meta["valid_from"]:

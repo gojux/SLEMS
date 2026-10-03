@@ -131,10 +131,12 @@ def label(template: Template, part_names: dict[str, str], own: str, offer: str =
     detail = template.name
     if meta.get("grid_area") and meta["grid_area"] not in detail:
         detail += f", {meta['grid_area']}"
+    # Levies have no provider but their country, which the name tells anyway.
+    provider = template.provider if template.provider.upper() != template.country else ""
     if template.area_first:
-        text = f"{parts} · {detail} – {template.provider}" if template.provider else f"{parts} · {detail}"
+        text = f"{parts} · {detail} – {provider}" if provider else f"{parts} · {detail}"
     else:
-        text = f"{parts} · {template.provider} – {detail}" if template.provider else f"{parts} · {detail}"
+        text = f"{parts} · {provider} – {detail}" if provider else f"{parts} · {detail}"
     if meta.get("offer") and meta.get("valid_from"):
         # An offer for new contracts: the month of the contract start.
         text += f" ({offer.format(month=f'{meta['valid_from'][5:7]}/{meta['valid_from'][:4]}')})"
@@ -268,7 +270,14 @@ def combine(
         # Where the tariff came from (see tariff_updates).
         "templates": [origin_of(template, False, options.get(template.key, ())) for template in ordered],
     }
-    return ordered[0].name, {
+    # Chosen options may name the tariff (e.g. an upgrade "Öko+").
+    suffixes = [
+        item["suffix"]
+        for template in ordered
+        for item in template.optional_items
+        if item.get("suffix") and item["name"] in options.get(template.key, ())
+    ]
+    return " ".join([ordered[0].name, *suffixes]), {
         "role": "current",
         "vat": vat,
         "items": items,
