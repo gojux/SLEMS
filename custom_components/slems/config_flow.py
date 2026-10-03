@@ -699,7 +699,7 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         if user_input is not None:
             user_input[CONF_PORT] = int(user_input[CONF_PORT])
             user_input[CONF_UNIT_ID] = int(user_input[CONF_UNIT_ID])
-            skip_test = user_input.pop(CONF_SKIP_CONNECTION_TEST, False)
+            skip_test = user_input.pop(CONF_SKIP_CONNECTION_TEST, False) or self._same_connection(user_input)
             if skip_test or await MarstekVenusE3Driver.probe(
                 user_input[CONF_HOST], user_input[CONF_PORT], user_input[CONF_UNIT_ID]
             ):
@@ -1031,6 +1031,14 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                 selector.NumberSelectorConfig(min=0, max=100_000, step=1, mode=selector.NumberSelectorMode.BOX)
             ),
         }
+
+    def _same_connection(self, user_input: dict[str, Any]) -> bool:
+        """Reconfigured with the same address: the running battery holds the
+        connection, a second one for a test is refused (one Modbus client)."""
+        if self.source != SOURCE_RECONFIGURE:
+            return False
+        data = self._get_reconfigure_subentry().data
+        return all(data.get(key) == user_input.get(key) for key in (CONF_HOST, CONF_PORT, CONF_UNIT_ID))
 
     def _defaults(self, user_input: dict[str, Any] | None) -> dict[str, Any]:
         """Form defaults: last input, else the subentry being reconfigured."""

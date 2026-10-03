@@ -45,3 +45,21 @@ def test_no_static_method_uses_self() -> None:
             ):
                 names = {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
                 assert "self" not in names, f"{path.name}: {node.name}"
+
+
+def test_reconfigured_battery_with_the_same_address_is_not_probed() -> None:
+    from types import SimpleNamespace
+
+    from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
+
+    from custom_components.slems.config_flow import BatterySubentryFlow
+
+    flow = BatterySubentryFlow.__new__(BatterySubentryFlow)
+    data = {"host": "192.0.2.10", "port": 502, "unit_id": 1}
+    flow._get_reconfigure_subentry = lambda: SimpleNamespace(data=data)
+    flow.context = {"source": SOURCE_RECONFIGURE}
+    # The running battery holds its only Modbus connection.
+    assert flow._same_connection(dict(data))
+    assert not flow._same_connection({**data, "host": "192.0.2.11"})
+    flow.context = {"source": SOURCE_USER}
+    assert not flow._same_connection(dict(data))

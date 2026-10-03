@@ -1,0 +1,64 @@
+# End-to-end test of the setup: a fresh Home Assistant (configuration in
+# memory) with the development configuration and its own simulators, the
+# integration set up through the same API as the frontend (run.py). A project
+# of its own, so a running development instance is not touched.
+#
+# Usage (from the repository root):
+#   docker compose -f dev/e2e/docker-compose.yml run --rm e2e
+#   docker compose -f dev/e2e/docker-compose.yml down
+name: slems-e2e
+
+x-venus-sim: &venus-sim
+  image: python:3.13-alpine
+  command: ["python", "/sim/simulator.py"]
+  volumes:
+    - ../venus_sim:/sim:ro
+
+services:
+  homeassistant:
+    # The same version as the development instance.
+    image: ghcr.io/home-assistant/home-assistant:2026.9.3
+    tmpfs:
+      - /config
+    volumes:
+      - ../config/configuration.yaml:/config/configuration.yaml:ro
+      - ../../custom_components/slems:/config/custom_components/slems:ro
+    environment:
+      TZ: Europe/Vienna
+    depends_on:
+      - venus-sim-1
+      - venus-sim-2
+      - venus-sim-3
+      - sunspec-meter
+
+  venus-sim-1:
+    <<: *venus-sim
+    environment:
+      SIM_INITIAL_SOC: "40"
+
+  venus-sim-2:
+    <<: *venus-sim
+    environment:
+      SIM_INITIAL_SOC: "75"
+
+  venus-sim-3:
+    <<: *venus-sim
+    environment:
+      SIM_INITIAL_SOC: "55"
+
+  sunspec-meter:
+    image: python:3.13-alpine
+    command: ["python", "/sim/meter_sim.py"]
+    volumes:
+      - ../sunspec_meter:/sim:ro
+
+  e2e:
+    image: python:3.13-alpine
+    command: ["python", "-u", "/e2e/run.py"]
+    volumes:
+      - .:/e2e:ro
+    environment:
+      HA_URL: http://homeassistant:8123
+      PYTHONDONTWRITEBYTECODE: "1"
+    depends_on:
+      - homeassistant

@@ -1528,8 +1528,29 @@ docstring).
 `.github/workflows/validate.yml` runs the HACS validation (`hacs/action`,
 category integration) and `hassfest` on every push, on pull requests and
 daily; `tests.yml` runs the test suite in the same container as locally
-(`docker compose --profile tests run --rm tests`). `hassfest` can be run
-locally before a push:
+(`docker compose --profile tests run --rm tests`) and the end-to-end test of
+the setup.
+
+The end-to-end test (`dev/e2e`, a Compose project of its own, so a running
+development instance is not touched) starts a fresh Home Assistant with its
+configuration in memory, the development `configuration.yaml` and its own
+simulators, onboards it and runs the config flows through the REST and
+websocket API of the frontend (`run.py`, standard library only): setup,
+batteries (Modbus simulator, entities), consumers of every control mode,
+tariffs (by hand, YAML, Austrian and German templates, EEG), the options with
+the smart meter over Modbus, every subentry reconfigured, and the dashboard
+commands. A form gets its defaults and suggested values like in the frontend
+plus the values of its step; after every entry the integration must be
+loaded and the log free of errors. Only made-up data, no secrets, no
+internet services (market prices stay off). It takes a few minutes, so it
+runs on GitHub after a push; locally when a change touches the setup:
+
+```bash
+docker compose -f dev/e2e/docker-compose.yml run --rm e2e
+docker compose -f dev/e2e/docker-compose.yml down
+```
+
+`hassfest` can be run locally before a push:
 
 ```bash
 docker run --rm -v "$PWD/custom_components:/github/workspace/custom_components:ro" ghcr.io/home-assistant/hassfest
@@ -1664,3 +1685,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-03 | The learned power of a power controlled consumer no longer caps its maximum power (replaces the decision of 2026-09-29): the power of a heating element varies with the water temperature and the grid voltage, the median sat below what it took at times, and the cap kept SLEMS from ever seeing more. It is its nominal power now, used for planning only (`_full_power_w`: forecast, daily target, feed-in cap); what the device does not take, the batteries balance on the grid meter. Samples count once the command is `CONSUMER_SETTLE_S` (15 s) or twice the learned response time old, as some devices take seconds to follow. |
 | 2026-10-03 | Prices after the last known day-ahead price are estimated for the price aware control (`market_prices.estimate_prices`): the median of the same local quarter hour over the last 14 days of the same kind (working day or weekend; all days if a kind has fewer than 3), the swing around the mean of that day profile halved. The median resists single spikes, the halving is the safety margin: an estimated spread must be twice as large to move energy as a known one. Holding, charging from the grid, feeding in and the cheapest window of daily targets use them; the plan for negative prices starts only on known negative prices, as estimates are means of past days. Without consent there are no stored prices and so no estimates. |
 | 2026-10-03 | Metering in the German grid templates is offered as options at the legal maximum (§ 30, § 32 MsbG: modern meter, smart meter by consumption, control box) rather than per operator: it is billed by the metering operator, who may be a third party, and most charge the maximum. Price sheets published only as preliminary (Stromnetz Berlin, Westfalen Weser Netz) are taken with "vorläufig" in the source; a later final sheet comes as a correction of the template. |
+| 2026-10-03 | The setup is tested end to end against a real, fresh Home Assistant through the frontend API (`dev/e2e`) rather than with `pytest-homeassistant-custom-component`, which pins its own Home Assistant version against the one of the image. It found two faults no unit test saw: the battery form failing on the currency symbol, and reconfiguring a Marstek battery with an unchanged address failing its connection test (the running battery holds the only Modbus connection; the test is now skipped then). Too slow for every change, it runs on GitHub after a push. |
