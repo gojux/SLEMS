@@ -389,7 +389,7 @@
         },
         "template_energy": {
           "title": "Energy",
-          "description": "The energy tariff of your supplier. Templates contain public list prices; compare the tariff with a bill afterwards. Your tariff is missing? Go back and paste it as YAML, e.g. from your bill with the help of an AI (see the README).",
+          "description": "The energy tariff of your supplier; left empty, OK goes on to the grid and the levies. A feed-in tariff (*Feed-in · …*) becomes a tariff of its own. Templates contain public list prices; compare the tariff with a bill afterwards. Your tariff is missing? Go back and paste it as YAML, e.g. from your bill with the help of an AI (see the README).",
           "data": {
             "energy": "Energy"
           }

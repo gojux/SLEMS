@@ -389,7 +389,7 @@
         },
         "template_energy": {
           "title": "Energie",
-          "description": "Der Energietarif deines Lieferanten. Vorlagen enthalten öffentliche Listenpreise; vergleiche den Tarif danach mit einer Rechnung. Dein Tarif fehlt? Geh zurück und füge ihn als YAML ein, z. B. mit Hilfe einer KI aus deiner Rechnung (siehe README).",
+          "description": "Der Energietarif deines Lieferanten; leer gelassen geht es mit OK weiter zu Netz und Abgaben. Ein Einspeisetarif (*Einspeisung · …*) wird ein eigener Tarif. Vorlagen enthalten öffentliche Listenpreise; vergleiche den Tarif danach mit einer Rechnung. Dein Tarif fehlt? Geh zurück und füge ihn als YAML ein, z. B. mit Hilfe einer KI aus deiner Rechnung (siehe README).",
           "data": {
             "energy": "Energie"
           }

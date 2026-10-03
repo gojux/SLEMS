@@ -193,7 +193,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Tarife und Preise | Status |
 |---|---|
 | Tarife wie auf der Rechnung (Zeitfenster, Umsatzsteuer je Gruppe, prozentuale Abgaben) mit Prüfung gegen eine Rechnung | ✅ |
-| Tarif-Vorlagen: Österreich (Netzentgelte aller Netzbereiche, Abgaben, Lieferanten inkl. Optionen wie Ökostrom-Upgrade), Deutschland (Abgaben, EEG-Einspeisevergütung, Netzentgelte von sechs Netzbetreibern inkl. § 14a-Module), Schweiz (Abfrage der offenen Daten der ElCom) | ✅ |
+| Tarif-Vorlagen: Österreich (Netzentgelte aller Netzbereiche, Abgaben, Lieferanten inkl. Optionen wie Ökostrom-Upgrade), Deutschland (Abgaben, EEG-Einspeisevergütung, Netzentgelte von 19 Netzbetreibern inkl. § 14a-Module und Messstellenbetrieb), Schweiz (Abfrage der offenen Daten der ElCom) | ✅ |
 | Vorlagen-Updates: neue Preise, Nachfolgetarife und Korrekturen als Reparaturhinweis, Zurücksetzen auf die Vorlagenwerte | ✅ |
 | Tarife als YAML (Import, Export, eigene Vorlagen) mit einem Prompt, um sie mit einer KI aus einer Rechnung zu erstellen | ✅ |
 | Börsenpreise je Viertelstunde (APG, SMARD, Energy-Charts) und offizielle Monatsmarktwerte (E-Control) nur mit Zustimmung; keine Einspeisevergütung bei negativen Preisen, wo der Tarif es vorsieht (EEG) | ✅ |
@@ -337,9 +337,13 @@ Messentgelt steht mit dem gesetzlichen Höchstpreis drin (dein Netzbetreiber
 kann weniger verrechnen), Gemeindeabgaben (z. B. die Gebrauchsabgabe in Wien)
 fehlen. Deutschland: die bundesweiten Abgaben (Stromsteuer, Umlagen und die
 Konzessionsabgabe nach Gemeindegröße mit ihrem gesetzlichen Höchstbetrag), die
-Netzentgelte der ersten Netzbetreiber (Netze BW, Westnetz, Bayernwerk, Avacon, E.DIS, Schleswig-Holstein Netz; auch mit § 14a Modul 1 und
-Modul 1 + 3 mit zeitvariablen Preisen für steuerbare Verbrauchseinrichtungen;
-der Messstellenbetrieb wird getrennt verrechnet und fehlt) und die
+Netzentgelte der größten Netzbetreiber (Westnetz, Bayernwerk, E.DIS, Avacon,
+Netze BW, Schleswig-Holstein Netz, Stromnetz Berlin, Hamburger Energienetze,
+EWE NETZ, N-ERGIE Netz, SWM Infrastruktur, RheinNetz, enercity Netz,
+Thüringer Energienetze, Netze ODR, LEW Verteilnetz, Westfalen Weser Netz, Syna,
+Mainnetz; auch mit § 14a Modul 1 und Modul 1 + 3 mit zeitvariablen Preisen für
+steuerbare Verbrauchseinrichtungen; der Messstellenbetrieb als Option mit dem
+gesetzlichen Höchstpreis nach Zählerart und Verbrauch) und die
 EEG-Einspeisevergütung von PV-Anlagen bis 10 kWp je Inbetriebnahme-Zeitraum;
 für Anlagen ab 25. Februar 2025 ist die Vergütung 0, solange der
 Day-Ahead-Preis negativ ist (*Börsenpreise abrufen* nötig). Ein Posten kann

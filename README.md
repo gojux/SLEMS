@@ -191,7 +191,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Tariffs and prices | Status |
 |---|---|
 | Tariffs as on the bill (time windows, VAT per group, percent levies) with a check against a bill | ✅ |
-| Tariff templates: Austria (grid fees of all grid areas, levies, suppliers incl. options such as a green upgrade), Germany (levies, EEG feed-in credit, grid fees of six grid operators incl. § 14a modules), Switzerland (query of the ElCom open data) | ✅ |
+| Tariff templates: Austria (grid fees of all grid areas, levies, suppliers incl. options such as a green upgrade), Germany (levies, EEG feed-in credit, grid fees of 19 grid operators incl. § 14a modules and metering), Switzerland (query of the ElCom open data) | ✅ |
 | Template updates: new prices, successor tariffs and corrections as a repair issue, reset to the template values | ✅ |
 | Tariffs as YAML (import, export, own templates) with a prompt to create one from a bill with an AI | ✅ |
 | Day-ahead prices per quarter hour (APG, SMARD, Energy-Charts) and official monthly market values (E-Control) only with consent; no feed-in credit at negative prices where the tariff says so (EEG) | ✅ |
@@ -326,9 +326,13 @@ and the federal levies; the metering fee is entered at its legal maximum
 (your grid operator may charge less) and municipal levies (e.g. the
 Gebrauchsabgabe in Vienna) are not included. Germany: the federal levies
 (electricity tax, surcharges and the concession levy by the size of the
-municipality, at its legal maximum), the grid fees of the first grid operators
-(Netze BW, Westnetz, Bayernwerk, Avacon, E.DIS, Schleswig-Holstein Netz; also with § 14a module 1 and module 1 + 3 with time variable prices
-for controllable devices; metering is billed separately and not included) and
+municipality, at its legal maximum), the grid fees of the largest grid
+operators (Westnetz, Bayernwerk, E.DIS, Avacon, Netze BW, Schleswig-Holstein
+Netz, Stromnetz Berlin, Hamburger Energienetze, EWE NETZ, N-ERGIE Netz, SWM
+Infrastruktur, RheinNetz, enercity Netz, Thüringer Energienetze, Netze ODR,
+LEW Verteilnetz, Westfalen Weser Netz, Syna, Mainnetz; also with § 14a module 1 and
+module 1 + 3 with time variable prices for controllable devices; metering as
+an option at its legal maximum by meter type and consumption) and
 the EEG feed-in credit of PV plants up
 to 10 kWp per commissioning period; for plants commissioned since 25 February
 2025 the credit is 0 while the day-ahead price is negative (*Fetch market
