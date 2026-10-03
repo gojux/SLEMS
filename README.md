@@ -896,7 +896,9 @@ the energy flow.
 - **Thermostat cycles by itself**: for consumers whose own thermostat switches
   them on and off while they are commanded (e.g. a heating rod that measures
   at the element). Normally a consumer that draws nothing although commanded
-  counts as saturated for 15 minutes and keeps its last command. With this
+  counts as saturated for 15 minutes and keeps its last command (shown as
+  *Planned* with "held"); once it draws half of that command again, SLEMS
+  controls it again at once. With this
   option SLEMS keeps controlling it: during a pause (no power for 2 response
   times, 10–60 s) the batteries get its unused power, and as soon as it draws
   again it gets it back (shown as *thermostat pause*).
@@ -1170,17 +1172,20 @@ Try other settings without changing anything.
 
 **Tariff comparison**: with [tariffs](#tariffs-optional) the simulation tab
 shows per month of the last year (and the current month to date) the recorded
-grid import and feed-in and what they cost with each tariff including VAT,
-minus the feed-in credit, plus the difference of each comparison tariff to the
-current one. It is a passive comparison: the recorded energy priced
+grid import and feed-in and, per tariff including VAT, the costs of the
+import and the credit for the feed-in (less its fees; a switch shows both
+summed), below each comparison tariff its difference to the current one
+(green better, red worse). The comparison tariffs can be shown or
+hidden with a click on their names (remembered in the browser). It is a passive comparison: the recorded energy priced
 differently, not what SLEMS would have done with another tariff (e.g. charging
 the batteries in cheap hours). Dynamic tariffs use the stored market prices;
-energy without a market price is marked. With batteries a column per tariff
-adds an estimate of what the [price aware control](#tariffs-optional) would
+energy without a market price is marked. With batteries a line below the
+costs of a tariff adds an estimate of what the [price aware control](#tariffs-optional) would
 have saved: the recorded hourly house consumption and PV are played through a
 simple battery model, once as usual and once planned like the price aware
 control (with charging from the grid if it is switched on). The plan knows
-consumption and PV exactly, so the estimate is an upper bound.
+consumption and PV exactly, so the estimate is an upper bound. Tariffs where
+the control saves nothing (a fixed price) have no such line.
 
 ### Settings tab
 
@@ -1477,7 +1482,7 @@ sensor *Learned values in use* has all learned values as attributes.
 |---|---|---|
 | Grid friendly charging buffer | recorded PV forecasts: of the days with less PV than forecast the shortfall not exceeded on 80 % of them, applied to the PV still expected today | 14 recorded days |
 | Charge secured safety buffer (also the night discharge target) | the same for the PV plus the consumption forecast being too low (backtest), applied to the rest of the day or the next 24 hours | 14 PV days, 7 consumption days |
-| Grid surplus targets while charging and discharging | how far the grid power swings towards import while the batteries control it; the target keeps the grid on the export side 90 % of the time (20–1000 W) | some controlling in operating mode *active* |
+| Grid surplus targets while charging and discharging | how far the grid power swings towards import while the batteries control it; charging: the target keeps the grid on the export side 90 % of the time (20–1000 W); discharging: the grid swings around the target, half of the time each side (−100 to 300 W), as a short import costs little there but a permanent export gives battery energy away | some controlling in operating mode *active* |
 | Control interval and surplus averaging window | the learned report interval of the smart meter (0.8 × and 3 ×) | a few meter reports |
 | Usable capacity (per battery, *Use learned capacity*) | charge and discharge legs over at least 20 % state of charge: DC energy / change of the state of charge (legs with a jump of the state of charge are discarded), median of the last ten | three legs |
 | Morning reserve (*Morning reserve coverage* sets how cautious; shown only while the reserve is automatic) | the morning gap: energy the house needed from battery or grid between the planned takeover of PV (end of the night discharge) and the real one (PV covering the consumption for 15 minutes), in % of the day's forecast consumption; the reserve covers the chosen share of the mornings (90 % = 9 of 10), above 100 % the largest gap times the value (110 % = 10 % more than the worst morning) | 14 measured mornings (also measured while the night discharge is off) |

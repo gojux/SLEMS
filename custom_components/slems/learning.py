@@ -11,8 +11,12 @@ the value set by the user applies.
 * Usable capacity of a battery (``CapacityLearner``): DC energy of a charge or
   discharge divided by the change of the state of charge.
 * Grid surplus targets (``GridTargetLearner``): the deviation of the grid
-  power towards import while the batteries control the grid; the target keeps
-  the grid on the export side for ``TARGET_QUANTILE`` of the time.
+  power towards import while the batteries control the grid. Charging: the
+  target keeps the grid on the export side for ``TARGET_QUANTILE`` of the
+  time (an import buys grid energy for the batteries). Discharging: the
+  median, the grid swings around zero; a short import costs little there
+  (the batteries keep that energy for later), a permanent export would give
+  battery energy away for the feed-in credit.
 * Control interval and averaging window (``auto_timing``): from the learned
   report interval of the smart meter.
 * Consumers (``ConsumerLearner``): power while switched on (a power
@@ -178,6 +182,8 @@ TARGET_QUANTILE = 0.9
 TARGET_KEEP = 3000
 TARGET_MIN_SAMPLES = 300
 TARGET_LIMITS_W = (20.0, 1000.0)
+DISCHARGE_TARGET_QUANTILE = 0.5
+DISCHARGE_TARGET_LIMITS_W = (-100.0, 300.0)
 
 
 @dataclass
@@ -189,14 +195,21 @@ class GridTargetLearner:
 
     def add(self, charging: bool, grid_w: float, target_w: float) -> None:
         """``target_w`` is the grid surplus aimed at (+export), ``grid_w`` +import."""
-        (self.charge if charging else self.discharge).append(max(0.0, grid_w + target_w))
+        deviation = grid_w + target_w
+        if charging:
+            self.charge.append(max(0.0, deviation))
+        else:
+            self.discharge.append(deviation)
 
     def target_w(self, charging: bool) -> float | None:
         samples = self.charge if charging else self.discharge
         if len(samples) < TARGET_MIN_SAMPLES:
             return None
-        low, high = TARGET_LIMITS_W
-        return min(high, max(low, quantile(samples, TARGET_QUANTILE)))
+        if charging:
+            low, high = TARGET_LIMITS_W
+            return min(high, max(low, quantile(samples, TARGET_QUANTILE)))
+        low, high = DISCHARGE_TARGET_LIMITS_W
+        return min(high, max(low, quantile(samples, DISCHARGE_TARGET_QUANTILE)))
 
 
 # --- control timing ------------------------------------------------------------------

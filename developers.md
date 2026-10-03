@@ -233,7 +233,7 @@ market price is the mean weighted by the export unless entered per month.
 import / export of the last 12 months (`energy_history`) split per local month
 and priced with each tariff (`compute_bill` in the executor, dynamic items with
 the stored hourly market prices). The result is cached for 10 minutes on the
-coordinator; a changed tariff reloads the entry and so starts without cache.
+coordinator; a changed tariff clears it (`tariffs_changed`).
 
 Backtest (`price_backtest.play`): hourly house consumption (first house
 statistic with data, as the forecast) and PV through a battery model (current
@@ -854,10 +854,11 @@ known):
   (allocation), next 24 h for the night discharge buffer (real plan and
   projection).
 - `grid_target_w(settings, charging)`: `GridTargetLearner` samples
-  `max(0, grid + target)` in `plan()` during controller cycles (active mode,
+  `grid + target` in `plan()` during controller cycles (active mode,
   control status active, strategy charging or self consumption, battery power
-  not near its limit); 90 % quantile of the last 3000 samples, 20–1000 W,
-  from 300 samples. Not stored (relearned within an hour).
+  not near its limit), from 300 of the last 3000 samples. Charging: 90 %
+  quantile of `max(0, grid + target)`, 20–1000 W. Discharging: median,
+  −100 to 300 W. Not stored (relearned within an hour).
 - `control_interval_s` / `average_window_s`: `auto_timing` of
   `controller.meter.interval_s`; used by the controller and the grid filter.
 - `BatteryRuntime.capacity_wh`: learned capacity if `learn_capacity` and

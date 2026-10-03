@@ -143,9 +143,11 @@ def configured_tariffs(entry: SlemsConfigEntry) -> dict[str, Tariff]:
 
 async def async_tariff_comparison(hass: HomeAssistant, entry: SlemsConfigEntry) -> dict[str, Any]:
     coordinator = entry.runtime_data
+    # The backtest follows the battery and price settings: a change of them computes anew.
+    key = (coordinator.backtest_battery(), coordinator.settings.price_min_gain_ct)
     cached = coordinator.tariff_comparison_cache
-    if cached is not None and monotonic_time.monotonic() - cached[0] < CACHE_S:
-        return cached[1]
+    if cached is not None and cached[1] == key and monotonic_time.monotonic() - cached[0] < CACHE_S:
+        return cached[2]
     tariffs = configured_tariffs(entry)
     result: dict[str, Any] = {
         "tariffs": [
@@ -194,7 +196,7 @@ async def async_tariff_comparison(hass: HomeAssistant, entry: SlemsConfigEntry) 
                 "grid_charge": coordinator.settings.grid_charge,
                 "min_gain_ct": coordinator.settings.price_min_gain_ct,
             }
-    coordinator.tariff_comparison_cache = (monotonic_time.monotonic(), result)
+    coordinator.tariff_comparison_cache = (monotonic_time.monotonic(), key, result)
     return result
 
 

@@ -74,6 +74,24 @@ def test_grid_target_from_import_deviation() -> None:
     assert learner.target_w(charging=False) is None
 
 
+def test_discharge_target_is_the_median_and_may_allow_import() -> None:
+    learner = GridTargetLearner()
+    # Target 0 W; the grid swings between 150 W export and 200 W import.
+    for i in range(400):
+        learner.add(False, -150 + (i % 8) * 50, 0)
+    assert learner.target_w(charging=False) == pytest.approx(0)
+    # Swings mostly towards export: a slight import is aimed at, at most 100 W.
+    learner = GridTargetLearner()
+    for _ in range(400):
+        learner.add(False, -400, 0)
+    assert learner.target_w(charging=False) == -100
+    # Large swings towards import: at most 300 W export.
+    learner = GridTargetLearner()
+    for _ in range(400):
+        learner.add(False, 900, 0)
+    assert learner.target_w(charging=False) == 300
+
+
 def test_auto_timing() -> None:
     assert auto_timing(None) is None
     assert auto_timing(1.0) == (0.8, 3)

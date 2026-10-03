@@ -23,7 +23,9 @@ Safety:
 * Consumers get at most one command per ``CONSUMER_COMMAND_INTERVAL_S``.
 * A consumer that draws (almost) nothing although commanded, e.g. because its
   own thermostat switched off, is treated as saturated for
-  ``SATURATION_HOLD_S`` and planned like an uncontrolled load meanwhile.
+  ``SATURATION_HOLD_S`` and planned like an uncontrolled load meanwhile,
+  keeping its last command; as soon as it draws ``UNSATURATED_RATIO`` of
+  that command again (the thermostat switched on), it is controlled again.
   A consumer whose thermostat cycles by itself (option) is never saturated:
   it keeps its command and is only *resting* while it draws nothing; the
   batteries get its unused power meanwhile. The controller counts a resting
@@ -76,6 +78,8 @@ CONSUMER_COMMAND_INTERVAL_S = 10.0
 CONSUMER_MIN_STEP_W = 100.0
 SATURATION_RATIO = 0.1
 SATURATION_HOLD_S = 900.0
+# A saturated consumer drawing this share of its kept command is controlled again.
+UNSATURATED_RATIO = 0.5
 # Saturation is assumed after this many response times of switching off, and
 # not before this share more than the learned start time (bounded).
 SATURATION_RESPONSE_FACTOR = 5
@@ -589,6 +593,8 @@ class RealTimeController:
                 if subentry_id not in snapshot.saturated:
                     # Blocked or no longer controlled: its set point is not ours.
                     self._device_commands.pop(subentry_id, None)
+                else:
+                    self._check_drawing_again(subentry_id, snapshot)
                 continue
             if consumer.thermostat_cycles:
                 self._check_resting(subentry_id, snapshot, now)
@@ -772,6 +778,15 @@ class RealTimeController:
             if subentry_id not in self._resting:
                 _LOGGER.debug("Consumer %s rests (thermostat)", subentry_id)
             self._resting.add(subentry_id)
+
+    def _check_drawing_again(self, subentry_id: str, snapshot: SystemSnapshot) -> None:
+        """End the saturation of a consumer that draws its kept command again."""
+        kept = self._device_commands.get(subentry_id)
+        measured = snapshot.consumers[subentry_id].power_w
+        if kept and measured is not None and measured >= kept * UNSATURATED_RATIO:
+            _LOGGER.debug("Consumer %s draws again (%.0f W)", subentry_id, measured)
+            self._saturated_until.pop(subentry_id, None)
+            self.request()
 
     def _check_saturation(self, subentry_id: str, snapshot: SystemSnapshot, now: float) -> None:
         """Mark a consumer saturated if it ignores its command for a while."""

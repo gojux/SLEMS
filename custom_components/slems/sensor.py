@@ -894,10 +894,14 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
 
     @property
     def native_value(self) -> float | None:
-        allocation = self.coordinator.data.allocation
-        if allocation is None:
+        data = self.coordinator.data
+        subentry_id = self.consumer.subentry_id
+        if subentry_id in data.saturated:
+            # Not distributed meanwhile; the last command stays on the device.
+            return self.coordinator.controller.consumer_command(subentry_id)
+        if data.allocation is None:
             return None
-        return allocation.consumer_power_w.get(self.consumer.subentry_id)
+        return data.allocation.consumer_power_w.get(subentry_id)
 
     @property
     def extra_state_attributes(self) -> dict:

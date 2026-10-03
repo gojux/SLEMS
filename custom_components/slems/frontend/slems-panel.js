@@ -149,6 +149,7 @@ const STRINGS = {
     measured: "Measured",
     blocked: "blocked",
     saturated: "saturated",
+    heldCommand: "held, draws too little",
     resting: "thermostat pause",
     controlOff: "control off",
     onlyWithControl: "Applies only while the control is active.",
@@ -325,7 +326,6 @@ const STRINGS = {
     tariffExport: "Feed-in",
     tariffSum: "Total",
     tariffToDate: "to date",
-    tariffDiff: "vs. current",
     priceTitle: "Electricity prices",
     priceHint: "{minor}/kWh incl. VAT, without fixed fees; the market price (in ct) without fees and taxes.",
     priceImport: "Import ({tariff})",
@@ -334,7 +334,13 @@ const STRINGS = {
     priceTime: "Time",
     tariffCurrent: "current",
     tariffMeasured: "Measured this month: the price aware control saved {amount} in {runs} nights (recorded costs against the same nights as usual).",
-    tariffSaving: "{tariff}: saving price control",
+    tariffSavingShort: "price control saves {amount}",
+    tariffImportCost: "Import",
+    tariffExportCredit: "Credit",
+    tariffSumSides: "Sum import and feed-in",
+    tariffSidesHint: "Per tariff the costs of the import and the credit for the feed-in (less its fees).",
+    tariffSigns: "Costs: import minus feed-in credit; positive you pay, negative you get money.",
+    tariffDiffHint: "Below each comparison tariff the difference to the current one: green better, red worse. Click a tariff to show or hide it.",
     tariffSavingHint:
       "Saving price control: estimate of what keeping the battery energy for the expensive hours would have saved, from the recorded consumption and PV with a simple battery model and a perfect forecast (an upper bound).",
     tariffSavingHintCharge:
@@ -382,7 +388,7 @@ const STRINGS = {
       charge_secured_buffer_auto:
         "Learns the safety buffer (charge secured and night discharge target) from the PV forecast being too high and the consumption forecast being too low, each the error not exceeded on 80 % of such days, applied to the forecasts of the rest of the day or the next 24 hours.",
       grid_targets_auto:
-        "Learns both grid surplus targets from how far the grid power swings towards import while the batteries control it: the target keeps the grid on the export side 90 % of the time (20–1000 W). Needs some controlling in operating mode active first.",
+        "Learns both grid surplus targets from how far the grid power swings towards import while the batteries control it: while charging the target keeps the grid on the export side 90 % of the time (20–1000 W), while discharging the grid swings around it, half of the time each side (−100 to 300 W): a short import costs little there, a permanent export gives battery energy away. Needs some controlling in operating mode active first.",
       timing_auto:
         "Derives the control interval (0.8 × the report interval of the smart meter) and the averaging window (3 × the report interval) from the learned smart meter interval.",
       regular_full_charge:
@@ -405,6 +411,8 @@ const STRINGS = {
         "Not switched on before the earliest start, also with surplus (e.g. a dehumidifier only from 10:00). Counted until the deadline; the latest start is never before it.",
       target_sensor:
         "Which temperature the minimum and target temperature apply to: the mean of both sensors, or one of them (e.g. the upper sensor for the hot water at the tap). Sensor 1 is the temperature sensor of the storage, sensor 2 the second one in the consumer's configuration. The latest start is estimated with the energy per degree learned for the chosen sensor (the mean's until it is learned).",
+      battery_support:
+        "Whether the batteries may supply the consumer while it runs without PV surplus (switched on by hand, minimum runtime, a forced run of its daily target). Always: like any other load. Automatic: only with the energy the batteries can spare until PV charges them again. Never: from the grid. The source of the daily target decides something else: whether SLEMS switches the consumer on without surplus to meet its target; with the source surplus + battery such a run uses the batteries regardless of this setting.",
       target_source:
         "What may cover the rest if the surplus is not enough by the deadline. With the batteries (and the grid) the consumer runs from the latest start on regardless of the surplus. Only surplus: the target may be missed (notification).",
       target_priority:
@@ -418,6 +426,10 @@ const STRINGS = {
         "Below the state of charge threshold, consumption up to this power comes from the grid; the batteries only cover what exceeds it.",
       peak_shaving_auto:
         "Calculates the import limit so that the usable energy (above the minimum state of charge, minus the safety reserve) lasts until PV refills the batteries. Based on the consumption peaks of the last days; the fixed limit is then not used.",
+      charge_grid_target:
+        "Grid power aimed at while the batteries charge: this much is fed in, so that a sudden rise of the consumption is covered before it is drawn from the grid. 0 to 5000 W; 0 W charges with the whole surplus. Learned: 20 to 1000 W.",
+      discharge_grid_target:
+        "Grid power aimed at while the batteries cover the consumption. Positive: this much battery energy is fed in as a buffer against sudden consumption. Negative: a slight import is allowed, e.g. −50 W leaves 50 W to the grid. −1000 to 1000 W. Learned: −100 to 300 W.",
       discharge_max_grid_export:
         "Hard limit of the grid export while batteries discharge. 0 W: never feed battery energy into the grid. To switch the limit off, set it to the maximum.",
       night_reserve:
@@ -579,6 +591,7 @@ const STRINGS = {
     measured: "Gemessen",
     blocked: "gesperrt",
     saturated: "gesättigt",
+    heldCommand: "gehalten, zieht zu wenig",
     resting: "Thermostat-Pause",
     controlOff: "Steuerung aus",
     onlyWithControl: "Wirkt nur bei aktiver Steuerung.",
@@ -755,7 +768,6 @@ const STRINGS = {
     tariffExport: "Einspeisung",
     tariffSum: "Summe",
     tariffToDate: "bis heute",
-    tariffDiff: "ggü. aktuell",
     priceTitle: "Strompreise",
     priceHint: "{minor}/kWh inkl. USt., ohne Grundgebühren; der Börsenpreis (in ct) ohne Gebühren und Steuern.",
     priceImport: "Bezug ({tariff})",
@@ -764,7 +776,13 @@ const STRINGS = {
     priceTime: "Zeit",
     tariffCurrent: "aktuell",
     tariffMeasured: "Gemessen in diesem Monat: Die preisbewusste Steuerung hat in {runs} Nächten {amount} gespart (aufgezeichnete Kosten gegen dieselben Nächte wie üblich).",
-    tariffSaving: "{tariff}: Ersparnis Preissteuerung",
+    tariffSavingShort: "Preissteuerung spart {amount}",
+    tariffImportCost: "Bezug",
+    tariffExportCredit: "Vergütung",
+    tariffSumSides: "Bezug und Einspeisung summieren",
+    tariffSidesHint: "Je Tarif die Kosten des Bezugs und die Vergütung der Einspeisung (abzüglich ihrer Gebühren).",
+    tariffSigns: "Kosten: Bezug minus Einspeisevergütung; positiv zahlst du, negativ bekommst du Geld.",
+    tariffDiffHint: "Unter jedem Vergleichstarif der Unterschied zum aktuellen: grün besser, rot schlechter. Klick auf einen Tarif blendet ihn ein oder aus.",
     tariffSavingHint:
       "Ersparnis Preissteuerung: Schätzung, was das Zurückhalten der Batterieenergie für die teuren Stunden gespart hätte, aus aufgezeichnetem Verbrauch und PV mit einem einfachen Batteriemodell und perfekter Prognose (eine Obergrenze).",
     tariffSavingHintCharge:
@@ -812,7 +830,7 @@ const STRINGS = {
       charge_secured_buffer_auto:
         "Lernt den Sicherheitspuffer (gesicherte Ladung und Ziel der Nachtentladung) aus zu hoher PV- und zu niedriger Verbrauchsprognose, jeweils die Abweichung, die an 80 % solcher Tage nicht überschritten wurde, angewendet auf die Prognosen des restlichen Tages bzw. der nächsten 24 Stunden.",
       grid_targets_auto:
-        "Lernt beide Ziel-Netzüberschüsse daraus, wie weit die Netzleistung Richtung Bezug schwankt, während die Batterien regeln: Das Ziel hält das Netz 90 % der Zeit auf der Einspeiseseite (20–1000 W). Braucht zuerst etwas Regelbetrieb im Modus Aktiv.",
+        "Lernt beide Ziel-Netzüberschüsse daraus, wie weit die Netzleistung Richtung Bezug schwankt, während die Batterien regeln: Beim Laden hält das Ziel das Netz 90 % der Zeit auf der Einspeiseseite (20–1000 W), beim Entladen schwankt das Netz um das Ziel, je die Hälfte der Zeit auf jeder Seite (−100 bis 300 W): ein kurzer Bezug kostet dort wenig, dauerhaftes Einspeisen verschenkt Batterieenergie. Braucht zuerst etwas Regelbetrieb im Modus Aktiv.",
       timing_auto:
         "Leitet Regelintervall (0,8 × Meldeintervall des Smart Meters) und Mittelungsfenster (3 × Meldeintervall) aus dem gelernten Meldeintervall ab.",
       regular_full_charge:
@@ -835,6 +853,8 @@ const STRINGS = {
         "Vor dem frühesten Beginn wird der Verbraucher nicht eingeschaltet, auch nicht mit Überschuss (z. B. ein Luftentfeuchter erst ab 10:00). Gezählt bis zur Frist; die späteste Startzeit liegt nie davor.",
       target_sensor:
         "Für welche Temperatur Mindest- und Zieltemperatur gelten: das Mittel beider Fühler oder einer davon (z. B. der obere Fühler für das Warmwasser am Hahn). Fühler 1 ist der Temperaturfühler des Speichers, Fühler 2 der zweite in der Konfiguration des Verbrauchers. Die späteste Startzeit wird mit der für den gewählten Fühler gelernten Energie pro Grad geschätzt (bis sie gelernt ist, mit der des Mittelwerts).",
+      battery_support:
+        "Ob die Batterien den Verbraucher versorgen dürfen, während er ohne PV-Überschuss läuft (von Hand eingeschaltet, Mindestlaufzeit, erzwungener Lauf des Tagesziels). Immer: wie jede andere Last. Automatisch: nur mit der Energie, die die Batterien bis zum nächsten Laden durch PV übrig haben. Nie: aus dem Netz. Die Quelle des Tagesziels entscheidet etwas anderes: ob SLEMS den Verbraucher ohne Überschuss einschaltet, um sein Ziel zu erreichen; mit der Quelle „Überschuss + Batterie“ nutzt ein solcher Lauf die Batterien unabhängig von dieser Einstellung.",
       target_source:
         "Was den Rest decken darf, wenn der Überschuss bis zur Frist nicht reicht. Mit Batterie (und Netz) läuft der Verbraucher ab der spätesten Startzeit unabhängig vom Überschuss. Nur Überschuss: Das Ziel kann verfehlt werden (Benachrichtigung).",
       target_priority:
@@ -848,6 +868,10 @@ const STRINGS = {
         "Unterhalb der Ladezustand-Schwelle kommt Verbrauch bis zu dieser Leistung aus dem Netz; die Batterien decken nur, was darüber hinausgeht.",
       peak_shaving_auto:
         "Berechnet die Bezugsgrenze so, dass die nutzbare Energie (über dem minimalen Ladezustand, abzüglich Sicherheitsreserve) reicht, bis PV die Batterien wieder füllt. Grundlage sind die Verbrauchsspitzen der letzten Tage; die feste Grenze wird dann nicht verwendet.",
+      charge_grid_target:
+        "Netzleistung, die beim Laden der Batterien angepeilt wird: so viel wird eingespeist, damit ein plötzlich höherer Verbrauch gedeckt ist, bevor er aus dem Netz kommt. 0 bis 5000 W; 0 W lädt mit dem ganzen Überschuss. Gelernt: 20 bis 1000 W.",
+      discharge_grid_target:
+        "Netzleistung, die angepeilt wird, während die Batterien den Verbrauch decken. Positiv: so viel Batterieenergie wird als Puffer gegen plötzlichen Verbrauch eingespeist. Negativ: ein leichter Bezug ist erlaubt, z. B. −50 W überlässt 50 W dem Netz. −1000 bis 1000 W. Gelernt: −100 bis 300 W.",
       discharge_max_grid_export:
         "Harte Grenze der Einspeisung, solange Batterien entladen. 0 W: nie Batterieenergie einspeisen. Zum Abschalten der Grenze auf das Maximum stellen.",
       night_reserve:
@@ -1052,6 +1076,10 @@ const HIDDEN_SERIES_KEY = "slems-hidden-series";
 // localStorage key of the consumer cards shown with all their settings.
 const EXPANDED_CONSUMERS_KEY = "slems-expanded-consumers";
 const SHOWN_SERIES_KEY = "slems-shown-series";
+// localStorage key of the comparison tariffs hidden in the tariff comparison.
+const HIDDEN_TARIFFS_KEY = "slems-hidden-tariffs";
+// localStorage key: "1" shows import costs and feed-in credit of a tariff summed.
+const TARIFF_SUM_KEY = "slems-tariff-sum";
 // Series hidden until switched on in the legend.
 const DEFAULT_HIDDEN_SERIES = ["capExcess"];
 
@@ -1118,6 +1146,15 @@ class SlemsPanel extends HTMLElement {
     this._sim = { form: null, result: null, serial: 0, timer: null, requested: false };
     // Tariff comparison (slems/tariff_comparison), loaded once per visit of the tab.
     this._tariffs = { result: null, requested: false };
+    // Comparison tariffs hidden in the table (kept in the browser).
+    this._hiddenTariffs = new Set();
+    this._tariffSum = false;
+    try {
+      this._hiddenTariffs = new Set(JSON.parse(localStorage.getItem(HIDDEN_TARIFFS_KEY) || "[]"));
+      this._tariffSum = localStorage.getItem(TARIFF_SUM_KEY) === "1";
+    } catch (err) {
+      // Storage not available: all tariffs shown, sides apart.
+    }
     // Prices of the day shown (slems/price_chart): day, result, time of the request.
     this._prices = { day: null, result: null, at: 0, loading: false };
     // Series of the day chart switched off in its legend (kept in the browser).
@@ -3262,25 +3299,6 @@ class SlemsPanel extends HTMLElement {
     let unpriced = false;
     const sums = { import_kwh: 0, export_kwh: 0, costs: {}, savings: {} };
     const backtest = result.backtest;
-    // Saving of the price aware control (estimate), per tariff.
-    const savingCell = (month, tariff) => {
-      const value = month.savings?.[tariff.id];
-      return value === undefined ? "<td>–</td>" : `<td>${escapeHtml(money.format(value))}</td>`;
-    };
-    const cell = (month, tariff) => {
-      const cost = month.costs[tariff.id];
-      if (!cost) return "<td>–</td>";
-      const mark = cost.unpriced_kwh > 0 ? "*" : "";
-      if (mark) unpriced = true;
-      return `<td>${escapeHtml(money.format(cost.total))}${mark}</td>`;
-    };
-    const diffCell = (month, tariff) => {
-      const cost = month.costs[tariff.id];
-      const base = month.costs[current.id];
-      if (!cost || !base) return "<td>–</td>";
-      const diff = cost.total - base.total;
-      return `<td class="${diff < 0 ? "cheaper" : ""}">${escapeHtml(signed(diff))}</td>`;
-    };
     const monthLabel = (month) => {
       const [year, number] = month.split("-").map(Number);
       const label = new Date(year, number - 1, 1).toLocaleDateString(language, { month: "short", year: "numeric" });
@@ -3291,28 +3309,78 @@ class SlemsPanel extends HTMLElement {
       sums.export_kwh += month.export_kwh || 0;
       for (const [id, value] of Object.entries(month.savings || {})) sums.savings[id] = (sums.savings[id] || 0) + value;
       for (const [id, cost] of Object.entries(month.costs)) {
-        sums.costs[id] = { total: (sums.costs[id]?.total || 0) + cost.total, unpriced_kwh: (sums.costs[id]?.unpriced_kwh || 0) + cost.unpriced_kwh };
+        const sum = (sums.costs[id] ||= { total: 0, import: 0, export: 0, unpriced_kwh: 0 });
+        for (const key of Object.keys(sum)) sum[key] += cost[key] || 0;
       }
     }
+    // The saving of the price aware control only where there is one (a fixed price saves nothing).
+    const withSaving = new Set(
+      backtest ? tariffs.filter((tariff) => Math.abs(sums.savings[tariff.id] || 0) >= 0.005).map((tariff) => tariff.id) : []
+    );
+    const shown = tariffs.filter((tariff) => tariff === current || !this._hiddenTariffs.has(tariff.id));
+    const sum = this._tariffSum;
+    // Per tariff the import costs and the feed-in credit (or both summed as
+    // costs), below the difference to the current tariff (green: better, red:
+    // worse) and the saving of the price control.
+    const sides = sum ? [["total", 1]] : [["import", 1], ["export", -1]];
+    const cells = (month, tariff) => {
+      const cost = month.costs[tariff.id];
+      if (!cost) return sides.map(() => "<td>–</td>").join("");
+      if (cost.unpriced_kwh > 0) unpriced = true;
+      const base = current && tariff !== current ? month.costs[current.id] : null;
+      return sides
+        .map(([key, costSign], index) => {
+          let html = `${escapeHtml(money.format(cost[key]))}${cost.unpriced_kwh > 0 ? "*" : ""}`;
+          let tone = "";
+          if (base) {
+            const diff = cost[key] - base[key];
+            // A higher feed-in credit is better, higher costs are worse.
+            const worse = diff * costSign;
+            tone = worse <= -0.005 ? "better" : worse >= 0.005 ? "worse" : "";
+            html += `<span class="sub">${escapeHtml(signed(diff))}</span>`;
+          }
+          const saving = month.savings?.[tariff.id];
+          if (index === 0 && withSaving.has(tariff.id) && saving !== undefined) {
+            html += `<span class="sub">${escapeHtml(t.tariffSavingShort.replace("{amount}", money.format(saving)))}</span>`;
+          }
+          const edge = !sum && index === 0 ? " side-start" : "";
+          return `<td class="${tone}${edge}">${html}</td>`;
+        })
+        .join("");
+    };
     const row = (label, month, extraClass = "") =>
       `<tr class="${extraClass}"><td>${escapeHtml(label)}</td>
         <td>${escapeHtml(energy.format(month.import_kwh || 0))}</td><td>${escapeHtml(energy.format(month.export_kwh || 0))}</td>
-        ${tariffs.map((tariff) => cell(month, tariff)).join("")}
-        ${others.map((tariff) => diffCell(month, tariff)).join("")}
-        ${backtest ? tariffs.map((tariff) => savingCell(month, tariff)).join("") : ""}</tr>`;
-    const head = `<tr><th>${escapeHtml(t.tariffMonth)}</th><th>${escapeHtml(t.tariffImport)} (kWh)</th><th>${escapeHtml(t.tariffExport)} (kWh)</th>
-      ${tariffs.map((tariff) => `<th>${escapeHtml(tariff === current ? `${tariff.name} (${t.tariffCurrent})` : tariff.name)}</th>`).join("")}
-      ${others.map((tariff) => `<th>${escapeHtml(tariff.name)} ${escapeHtml(t.tariffDiff)}</th>`).join("")}
-      ${backtest ? tariffs.map((tariff) => `<th>${escapeHtml(t.tariffSaving.replace("{tariff}", tariff.name))}</th>`).join("") : ""}</tr>`;
+        ${shown.map((tariff) => cells(month, tariff)).join("")}</tr>`;
+    const tariffName = (tariff) => escapeHtml(tariff === current ? `${tariff.name} (${t.tariffCurrent})` : tariff.name);
+    const span = sum ? "" : ' rowspan="2"';
+    const head =
+      `<tr><th${span}>${escapeHtml(t.tariffMonth)}</th><th${span}>${escapeHtml(t.tariffImport)} (kWh)</th><th${span}>${escapeHtml(t.tariffExport)} (kWh)</th>
+      ${shown.map((tariff) => `<th${sum ? "" : ' colspan="2" class="side-start"'}>${tariffName(tariff)}</th>`).join("")}</tr>` +
+      (sum
+        ? ""
+        : `<tr>${shown
+            .map(() => `<th class="side side-start">${escapeHtml(t.tariffImportCost)}</th><th class="side">${escapeHtml(t.tariffExportCredit)}</th>`)
+            .join("")}</tr>`);
     const body = result.months.length
       ? [...result.months].reverse().map((month) => row(monthLabel(month.month), month)).join("") +
         row(t.tariffSum, sums, "sum")
-      : `<tr><td colspan="${3 + tariffs.length + others.length + (backtest ? tariffs.length : 0)}" class="empty">${escapeHtml(t.tariffEmpty)}</td></tr>`;
+      : `<tr><td colspan="${3 + shown.length * sides.length}" class="empty">${escapeHtml(t.tariffEmpty)}</td></tr>`;
+    // Chips to show or hide the comparison tariffs, and the switch to sum the sides.
+    const sumChip = `<button class="legend-item${sum ? "" : " off"}" data-action="toggle-tariff-sum" aria-pressed="${sum}">${escapeHtml(t.tariffSumSides)}</button>`;
+    const chips = others.length
+      ? `<div class="legend">${sumChip}</div><div class="legend">${others
+          .map((tariff) => {
+            const hidden = this._hiddenTariffs.has(tariff.id);
+            return `<button class="legend-item${hidden ? " off" : ""}" data-action="toggle-tariff" data-tariff="${escapeHtml(tariff.id)}" aria-pressed="${!hidden}">${escapeHtml(tariff.name)}</button>`;
+          })
+          .join("")}</div>`
+      : `<div class="legend">${sumChip}</div>`;
     const notes = [
       unpriced ? t.tariffUnpriced : "",
       tariffs.some((tariff) => tariff.dynamic) && !result.market_prices ? t.tariffNoPrices : "",
       result.power_hours > 0 ? t.tariffGridPower : "",
-      backtest ? (backtest.grid_charge ? t.tariffSavingHintCharge : t.tariffSavingHint) : "",
+      withSaving.size ? (backtest.grid_charge ? t.tariffSavingHintCharge : t.tariffSavingHint) : "",
       result.measured?.runs
         ? t.tariffMeasured.replace("{amount}", money.format(result.measured.total_eur)).replace("{runs}", result.measured.runs)
         : "",
@@ -3321,6 +3389,7 @@ class SlemsPanel extends HTMLElement {
     this._setSection(
       "tariffs",
       `<section class="card"><h2>${escapeHtml(t.tariffTitle)}</h2><p class="hint">${escapeHtml(t.tariffHint)}</p>
+        <p class="hint">${escapeHtml(sum ? t.tariffSigns : t.tariffSidesHint)}${others.length ? ` ${escapeHtml(t.tariffDiffHint)}` : ""}</p>${chips}
         <div class="table-wrap"><table class="tariff-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>
         ${notes.map((note) => `<p class="hint">${escapeHtml(note)}</p>`).join("")}</section>`
     );
@@ -3627,6 +3696,7 @@ class SlemsPanel extends HTMLElement {
   _plannedText(planned) {
     const a = planned.attributes || {};
     const text = this._format(planned);
+    if (a.saturated && this._number(planned) !== null) return `${text} (${this._t.heldCommand})`;
     if (a.current_a === null || a.current_a === undefined || !this._number(planned)) return text;
     return `${text} (${this._t.currentDetail(a.current_a, a.phases)})`;
   }
@@ -3930,6 +4000,30 @@ class SlemsPanel extends HTMLElement {
       this._render();
       return;
     }
+    if (event.target.closest("[data-action='toggle-tariff-sum']")) {
+      this._tariffSum = !this._tariffSum;
+      try {
+        localStorage.setItem(TARIFF_SUM_KEY, this._tariffSum ? "1" : "0");
+      } catch (err) {
+        // Not stored: the choice lasts until the page is reloaded.
+      }
+      this._sections.tariffs = undefined;
+      this._render();
+      return;
+    }
+    const tariffButton = event.target.closest("[data-action='toggle-tariff']");
+    if (tariffButton) {
+      const id = tariffButton.dataset.tariff;
+      if (!this._hiddenTariffs.delete(id)) this._hiddenTariffs.add(id);
+      try {
+        localStorage.setItem(HIDDEN_TARIFFS_KEY, JSON.stringify([...this._hiddenTariffs]));
+      } catch (err) {
+        // Not stored: the choice lasts until the page is reloaded.
+      }
+      this._sections.tariffs = undefined;
+      this._render();
+      return;
+    }
     const seriesButton = event.target.closest("[data-action='toggle-series']");
     if (seriesButton) {
       const key = seriesButton.dataset.series;
@@ -4064,7 +4158,11 @@ const STYLE = `
   .sim-metrics td.changed { font-weight: 600; }
   .tariff-table th { white-space: normal; vertical-align: bottom; }
   .tariff-table tr.sum td { font-weight: 600; border-top: 1px solid var(--divider-color); }
-  .tariff-table td.cheaper { font-weight: 600; }
+  .tariff-table td .sub { display: block; font-size: 12px; color: var(--secondary-text-color); }
+  .tariff-table th.side { font-weight: 400; font-size: 12px; color: var(--secondary-text-color); }
+  .tariff-table .side-start { border-left: 1px solid var(--divider-color); }
+  .tariff-table td.better { background: rgba(67, 160, 71, 0.12); }
+  .tariff-table td.worse { background: rgba(229, 57, 53, 0.10); }
   .sim-note { margin: 0 0 12px; }
   .sim-metrics th { white-space: normal; }
   @media (max-width: 500px) {
@@ -4221,6 +4319,7 @@ const STYLE = `
   .card-subheading.disabled { color: var(--secondary-text-color); }
   .setting.disabled > span:first-child { color: var(--secondary-text-color); }
   .setting select:disabled { opacity: 0.5; }
+  .setting select { flex-shrink: 0; }
   .card-setting select { min-width: 0; max-width: 55%; font-size: 14px; padding: 3px 4px; }
   .number { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
   .switch { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }

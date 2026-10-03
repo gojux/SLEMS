@@ -137,3 +137,21 @@ def test_avoid_cycling_starts_only_with_lasting_surplus_and_bridges_dips() -> No
     # Longer than the bridge: let go.
     keep_on, _, _ = cycling_holds(True, 300, 100.0 + AVOID_CYCLING_BRIDGE_S + 1, since, 120, None, 1800)
     assert not keep_on
+
+
+def test_saturation_ends_when_the_consumer_draws_again() -> None:
+    controller = RealTimeController.__new__(RealTimeController)
+    controller._device_commands = {"rod": 2000.0}
+    controller._saturated_until = {"rod": time.monotonic() + 900}
+    requested = []
+    controller.request = lambda: requested.append(True)
+
+    def snapshot(power_w: float):
+        return SimpleNamespace(consumers={"rod": ConsumerState(power_w=power_w)})
+
+    controller._check_drawing_again("rod", snapshot(300.0))
+    assert "rod" in controller.saturated
+    # The thermostat switched on again: controlled again at once.
+    controller._check_drawing_again("rod", snapshot(1900.0))
+    assert "rod" not in controller.saturated
+    assert requested

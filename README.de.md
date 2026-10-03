@@ -943,7 +943,9 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
 - **Thermostat taktet selbst**: für Verbraucher, die ihr eigener Thermostat
   während der Ansteuerung ein- und ausschaltet (z. B. ein Heizstab, der am
   Heizelement misst). Normalerweise gilt ein Verbraucher, der trotz Vorgabe
-  nichts abnimmt, 15 Minuten als gesättigt und behält seine letzte Vorgabe.
+  nichts abnimmt, 15 Minuten als gesättigt und behält seine letzte Vorgabe
+  (bei *Geplant* als „gehalten“ angezeigt); sobald er wieder die Hälfte dieser
+  Vorgabe abnimmt, steuert SLEMS ihn sofort wieder.
   Mit dieser Option steuert SLEMS ihn weiter: In einer Pause (keine Leistung
   für 2 Reaktionszeiten, 10–60 s) bekommen die Batterien seine nicht genutzte
   Leistung, und sobald er wieder abnimmt, bekommt er sie zurück (angezeigt als
@@ -1237,19 +1239,22 @@ Andere Einstellungen ausprobieren, ohne etwas zu ändern.
 
 **Tarifvergleich**: Mit [Tarifen](#tarife-optional) zeigt der Reiter
 Simulation für jeden Monat des letzten Jahres (und den laufenden Monat bis
-heute) den aufgezeichneten Netzbezug und die Einspeisung und was sie mit jedem
-Tarif inklusive Umsatzsteuer gekostet hätten, abzüglich der
-Einspeisevergütung, dazu die Differenz jedes Vergleichstarifs zum aktuellen.
+heute) den aufgezeichneten Netzbezug und die Einspeisung und je Tarif
+inklusive Umsatzsteuer die Kosten des Bezugs und die Vergütung der Einspeisung
+(abzüglich ihrer Gebühren; ein Schalter zeigt beides summiert), unter jedem
+Vergleichstarif die Differenz zum aktuellen (grün besser, rot schlechter). Die Vergleichstarife lassen sich mit einem Klick
+auf ihren Namen ein- und ausblenden (im Browser gemerkt).
 Es ist ein passiver Vergleich: die aufgezeichnete Energie anders bepreist,
 nicht das, was SLEMS mit einem anderen Tarif anders gemacht hätte (z. B. die
 Batterien in günstigen Stunden laden). Dynamische Tarife nutzen die
 gespeicherten Börsenpreise; Energie ohne Börsenpreis wird markiert. Mit
-Batterien kommt je Tarif eine Spalte mit einer Schätzung dazu, was die
+Batterien steht unter den Kosten eines Tarifs eine Schätzung, was die
 [preisbewusste Steuerung](#tarife-optional) gespart hätte: Aufgezeichneter
 Hausverbrauch und PV laufen stündlich durch ein einfaches Batteriemodell,
 einmal wie üblich und einmal geplant wie die preisbewusste Steuerung (mit
 Laden aus dem Netz, wenn es eingeschaltet ist). Der Plan kennt Verbrauch und
-PV genau, die Schätzung ist daher eine Obergrenze.
+PV genau, die Schätzung ist daher eine Obergrenze. Tarife, bei denen die
+Steuerung nichts spart (Fixpreis), haben keine solche Zeile.
 
 ### Reiter Einstellungen
 
@@ -1563,7 +1568,7 @@ alle gelernten Werte als Attribute.
 |---|---|---|
 | Puffer netzdienliches Laden | aufgezeichneten PV-Prognosen: von den Tagen mit weniger PV als prognostiziert die Abweichung, die an 80 % davon nicht überschritten wurde, angewendet auf die heute noch erwartete PV | 14 aufgezeichnete Tage |
 | Sicherheitspuffer gesicherte Ladung (auch Ziel der Nachtentladung) | dasselbe für die PV plus zu niedrige Verbrauchsprognose (Rückrechnung), angewendet auf den restlichen Tag bzw. die nächsten 24 Stunden | 14 PV-Tage, 7 Verbrauchstage |
-| Ziel-Netzüberschuss beim Laden und Entladen | wie weit die Netzleistung Richtung Bezug schwankt, während die Batterien regeln; das Ziel hält das Netz 90 % der Zeit auf der Einspeiseseite (20–1000 W) | etwas Regelbetrieb im Modus *Aktiv* |
+| Ziel-Netzüberschuss beim Laden und Entladen | wie weit die Netzleistung Richtung Bezug schwankt, während die Batterien regeln; Laden: das Ziel hält das Netz 90 % der Zeit auf der Einspeiseseite (20–1000 W); Entladen: das Netz schwankt um das Ziel, je die Hälfte der Zeit auf jeder Seite (−100 bis 300 W), weil ein kurzer Bezug dort wenig kostet, dauerhaftes Einspeisen aber Batterieenergie verschenkt | etwas Regelbetrieb im Modus *Aktiv* |
 | Regelintervall und Mittelungsfenster | dem gelernten Meldeintervall des Smart Meters (0,8 × und 3 ×) | einige Meldungen des Zählers |
 | Nutzbare Kapazität (je Batterie, *Gelernte Kapazität verwenden*) | Lade- und Entladevorgängen über mindestens 20 % Ladezustand: DC-Energie / Änderung des Ladezustands (Vorgänge mit einem Sprung des Ladezustands werden verworfen), Median der letzten zehn | drei Vorgänge |
 | Morgenreserve (*Deckung der Morgenreserve* bestimmt, wie vorsichtig; nur sichtbar, solange die Reserve automatisch ist) | der Morgenlücke: Energie, die das Haus zwischen der geplanten Übernahme durch die PV (Ende der Nachtentladung) und der tatsächlichen (PV deckt den Verbrauch 15 Minuten lang) aus Batterie oder Netz brauchte, in % des prognostizierten Tagesverbrauchs; die Reserve deckt den gewählten Anteil der Morgen (90 % = 9 von 10), über 100 % die größte Lücke mal dem Wert (110 % = 10 % mehr als der schlechteste Morgen) | 14 gemessene Morgen (gemessen wird auch bei ausgeschalteter Nachtentladung) |
