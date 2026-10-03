@@ -985,9 +985,8 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             step_id="ha_limits", data_schema=vol.Schema(schema), errors=errors
         )
 
-    @staticmethod
     def _limits_schema(
-        defaults: dict[str, Any], max_power_w: int, efficiency_modes: list[EfficiencyMode]
+        self, defaults: dict[str, Any], max_power_w: int, efficiency_modes: list[EfficiencyMode]
     ) -> dict:
         default_power = min(HARDWARE_MAX_POWER_W, max_power_w)
         return {

@@ -1,4 +1,5 @@
-"""Every step and menu option of the config flows named in strings.json has its method."""
+"""Config flows: every step and menu option named in strings.json has its method, and the
+forms build without errors."""
 
 import json
 from pathlib import Path
@@ -16,3 +17,31 @@ def test_steps_and_menu_options_have_methods() -> None:
             assert hasattr(flow, f"async_step_{step_id}"), f"{name}: step {step_id}"
             for option in step.get("menu_options", {}):
                 assert hasattr(flow, f"async_step_{option}"), f"{name}: menu option {option} of {step_id}"
+
+
+def test_battery_limits_show_the_currency_of_home_assistant() -> None:
+    from types import SimpleNamespace
+
+    from custom_components.slems.config_flow import BatterySubentryFlow
+    from custom_components.slems.const import CONF_PURCHASE_PRICE_EUR, EfficiencyMode
+
+    flow = BatterySubentryFlow.__new__(BatterySubentryFlow)
+    flow.hass = SimpleNamespace(config=SimpleNamespace(currency="CHF"))
+    schema = flow._limits_schema({}, 2500, list(EfficiencyMode))
+    price = next(value for key, value in schema.items() if str(key) == CONF_PURCHASE_PRICE_EUR)
+    assert price.config["unit_of_measurement"] == "CHF"
+
+
+def test_no_static_method_uses_self() -> None:
+    import ast
+    from pathlib import Path
+
+    import custom_components.slems as package
+
+    for path in Path(package.__file__).parent.rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and any(
+                isinstance(d, ast.Name) and d.id in ("staticmethod", "classmethod") for d in node.decorator_list
+            ):
+                names = {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
+                assert "self" not in names, f"{path.name}: {node.name}"
