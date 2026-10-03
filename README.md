@@ -186,8 +186,16 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Dashboard | Status |
 |---|---|
 | Dashboard (sidebar panel): energy flow, key figures, daily forecast and plan chart, batteries, consumers, settings | ✅ |
-| Simulation in the dashboard: day plan with other settings compared with the current one (today or tomorrow) | ✅ |
-| Tariffs as on the bill (time windows, VAT per group) with a check against a bill; day-ahead prices (APG, SMARD, Energy-Charts) only with consent; monthly tariff comparison | ✅ |
+| Simulation in the dashboard: day plan with other settings compared with the current one (today or tomorrow), with the price chart | ✅ |
+
+| Tariffs and prices | Status |
+|---|---|
+| Tariffs as on the bill (time windows, VAT per group, percent levies) with a check against a bill | ✅ |
+| Tariff templates: Austria (grid fees of all grid areas, levies, suppliers incl. options such as a green upgrade), Germany (levies, EEG feed-in credit, grid fees of six grid operators incl. § 14a modules), Switzerland (query of the ElCom open data) | ✅ |
+| Template updates: new prices, successor tariffs and corrections as a repair issue, reset to the template values | ✅ |
+| Tariffs as YAML (import, export, own templates) with a prompt to create one from a bill with an AI | ✅ |
+| Day-ahead prices per quarter hour (APG, SMARD, Energy-Charts) and official monthly market values (E-Control) only with consent; no feed-in credit at negative prices where the tariff says so (EEG) | ✅ |
+| Monthly tariff comparison: import costs and feed-in credit per tariff, tariffs shown or hidden, estimated saving of the price aware control | ✅ |
 | Price aware control: stored energy kept for the expensive hours, grid part of daily targets in the cheapest window, optional charging from the grid and feeding in from the batteries | ✅ |
 
 ## Installation
@@ -1613,6 +1621,10 @@ Possible extensions:
 - Learned presence of the car for the planning.
 - Feeding in from the batteries also in the estimate of the tariff
   comparison.
+- Tariff comparison with other hardware: what a larger battery, more charge
+  power, another maximum state of charge or more PV would have brought in the
+  recorded year (the battery model of the estimate with the settings of the
+  simulation).
 - Consumers preferred at negative prices (e.g. the heating rod).
 - Price aware control: estimated prices for the hours after the last known
   day-ahead price (from the same hours of the last days, with a safety

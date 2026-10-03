@@ -188,8 +188,16 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Dashboard | Status |
 |---|---|
 | Dashboard (Seitenleiste): Energiefluss, Kennzahlen, Tagesdiagramm mit Prognose und Plan, Batterien, Verbraucher, Einstellungen | ✅ |
-| Simulation im Dashboard: Tagesplan mit anderen Einstellungen im Vergleich zum aktuellen (heute oder morgen) | ✅ |
-| Tarife wie auf der Rechnung (Zeitfenster, Umsatzsteuer je Gruppe) mit Prüfung gegen eine Rechnung; Börsenpreise (APG, SMARD, Energy-Charts) nur mit Zustimmung; monatlicher Tarifvergleich | ✅ |
+| Simulation im Dashboard: Tagesplan mit anderen Einstellungen im Vergleich zum aktuellen (heute oder morgen), mit Preisdiagramm | ✅ |
+
+| Tarife und Preise | Status |
+|---|---|
+| Tarife wie auf der Rechnung (Zeitfenster, Umsatzsteuer je Gruppe, prozentuale Abgaben) mit Prüfung gegen eine Rechnung | ✅ |
+| Tarif-Vorlagen: Österreich (Netzentgelte aller Netzbereiche, Abgaben, Lieferanten inkl. Optionen wie Ökostrom-Upgrade), Deutschland (Abgaben, EEG-Einspeisevergütung, Netzentgelte von sechs Netzbetreibern inkl. § 14a-Module), Schweiz (Abfrage der offenen Daten der ElCom) | ✅ |
+| Vorlagen-Updates: neue Preise, Nachfolgetarife und Korrekturen als Reparaturhinweis, Zurücksetzen auf die Vorlagenwerte | ✅ |
+| Tarife als YAML (Import, Export, eigene Vorlagen) mit einem Prompt, um sie mit einer KI aus einer Rechnung zu erstellen | ✅ |
+| Börsenpreise je Viertelstunde (APG, SMARD, Energy-Charts) und offizielle Monatsmarktwerte (E-Control) nur mit Zustimmung; keine Einspeisevergütung bei negativen Preisen, wo der Tarif es vorsieht (EEG) | ✅ |
+| Monatlicher Tarifvergleich: Bezugskosten und Einspeisevergütung je Tarif, Tarife ein- und ausblendbar, geschätzte Ersparnis der preisbewussten Steuerung | ✅ |
 | Preisbewusste Steuerung: gespeicherte Energie für die teuren Stunden halten, Netzanteil der Tagesziele im günstigsten Fenster, optional Laden aus dem Netz und Einspeisen aus den Batterien | ✅ |
 
 ## Installation
@@ -1707,6 +1715,10 @@ Mögliche Erweiterungen:
   zu einer Uhrzeit: Grundlage für ein Auto, das das Haus versorgt (V2H).
 - Gelernte Anwesenheit des Autos für die Planung.
 - Einspeisen aus den Batterien auch in der Schätzung des Tarifvergleichs.
+- Tarifvergleich mit anderer Hardware: was eine größere Batterie, mehr
+  Ladeleistung, ein anderer höchster Ladezustand oder mehr PV im
+  aufgezeichneten Jahr gebracht hätten (das Batteriemodell der Schätzung mit
+  den Einstellungen der Simulation).
 - Verbraucher bei negativen Preisen bevorzugen (z. B. den Heizstab).
 - Preisbewusste Steuerung: geschätzte Preise für die Stunden nach dem letzten
   bekannten Day-Ahead-Preis (aus denselben Stunden der letzten Tage, mit
