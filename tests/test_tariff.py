@@ -219,6 +219,28 @@ def test_kwh_price_per_quarter_hour() -> None:
     assert kwh_price(spot, Side.IMPORT, noon, -3.0, None) == pytest.approx(-2.0)
 
 
+def test_zero_when_the_market_price_is_negative() -> None:
+    from custom_components.slems.tariff import kwh_price
+
+    tariff = Tariff("EEG", Role.CURRENT, (
+        TariffItem("Feed-in", Side.EXPORT, Group.ENERGY, Unit.KWH, 7.7, zero_when_negative=True),
+    ), {})
+    assert tariff.dynamic
+    day = date(2026, 6, 1)
+    noon, evening = dt_util.as_utc(local(day, 12)), dt_util.as_utc(local(day, 18))
+    # Negative at noon: no credit; positive in the evening; unknown counts.
+    bill = compute_bill(tariff, day, day, {}, {noon: 3000, evening: 1000}, {noon: -5.0, evening: 80.0})
+    assert bill.lines[(Side.EXPORT, "Feed-in")] == pytest.approx(-0.077)
+    assert bill.unpriced_kwh == 0
+    assert kwh_price(tariff, Side.EXPORT, local(day, 12), -0.5, None) == 0.0
+    assert kwh_price(tariff, Side.EXPORT, local(day, 12), None, None) == pytest.approx(7.7)
+    item = tariff.items[0]
+    assert TariffItem.from_dict(item.as_dict()) == item
+    from custom_components.slems.config_flow import _describe_item
+
+    assert _describe_item(item, "de").endswith("0 bei negativem Börsenpreis")
+
+
 def test_separate_contracts_are_combined_and_comparisons_completed() -> None:
     from custom_components.slems.tariff import combine_tariffs
 

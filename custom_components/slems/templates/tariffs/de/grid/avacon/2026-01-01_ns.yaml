@@ -1,0 +1,20 @@
+format: slems-tariff
+version: 1
+id: de/grid/avacon/ns
+name: Netzgebiet Avacon, Niederspannung
+grid_operator: Avacon Netz GmbH
+grid_area: Netzgebiet Avacon, Niederspannung
+household: true
+country: DE
+currency: EUR
+year: 2026
+parts: [grid]
+valid_from: 2026-01-01
+valid_to: 2026-12-31
+source: "Avacon Netz GmbH, Preisblätter Strom, gültig ab 01.01.2026 (Stand 10.12.2025), Preisblatt SLP und sVE; zzgl. Messstellenbetrieb"
+vat_pct:
+  import: {energy: 19, grid: 19, levies: 19}
+  export: {energy: 0, grid: 19, levies: 19}
+items:
+  - {name: Netzentgelt Grundpreis, side: import, group: grid, unit: year, price: 80.30}
+  - {name: Netzentgelt Arbeitspreis, side: import, group: grid, unit: kwh, price: 6.04}

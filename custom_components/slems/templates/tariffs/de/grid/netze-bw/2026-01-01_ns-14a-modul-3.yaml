@@ -1,0 +1,23 @@
+format: slems-tariff
+version: 1
+id: de/grid/netze-bw/ns-14a-modul-3
+name: Netzgebiet Netze BW, Niederspannung, § 14a Modul 1 + 3 (zeitvariabel)
+grid_operator: Netze BW GmbH
+grid_area: Netzgebiet Netze BW, Niederspannung, § 14a Modul 1 + 3 (zeitvariabel)
+household: false
+country: DE
+currency: EUR
+year: 2026
+parts: [grid]
+valid_from: 2026-01-01
+valid_to: 2026-12-31
+source: "Netze BW GmbH, Endgültige Preise für die Nutzung des Stromverteilnetzes, gültig ab 1. Januar 2026 (Version 1.2, 12.12.2025), Preisblatt 2 und 2a; zzgl. Messstellenbetrieb"
+vat_pct:
+  import: {energy: 19, grid: 19, levies: 19}
+  export: {energy: 0, grid: 19, levies: 19}
+items:
+  - {name: Netzentgelt Grundpreis, side: import, group: grid, unit: year, price: 84.00}
+  - {name: Netzentgelt Arbeitspreis, side: import, group: grid, unit: kwh, price: 7.57}
+  - {name: Netzentgeltreduzierung § 14a Modul 1, side: import, group: grid, unit: year, price: -124.00}
+  - {name: Netzentgelt Arbeitspreis, side: import, group: grid, unit: kwh, price: 11.06, time_from: '17:00', time_to: '22:00'}
+  - {name: Netzentgelt Arbeitspreis, side: import, group: grid, unit: kwh, price: 3.03, time_from: '10:00', time_to: '14:00'}

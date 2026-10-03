@@ -74,6 +74,7 @@ _TOP_KEYS = {"format", "version", "name", "vat_pct", "items", *META_KEYS}
 _ITEM_KEYS = {
     "name", "side", "group", "unit", "price", "factor_pct", "valid_from", "valid_to",
     "months", "weekdays", "time_from", "time_to", "month_prices", "optional", "market", "suffix",
+    "zero_when_negative",
 }
 # Version -> function that turns a file of that version into the next one.
 _MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {}
@@ -132,6 +133,8 @@ def _item_document(item: TariffItem) -> dict[str, Any]:
         document["month_prices"] = dict(item.month_prices)
     if item.market:
         document["market"] = item.market
+    if item.zero_when_negative:
+        document["zero_when_negative"] = True
     return document
 
 
@@ -315,6 +318,9 @@ def _parse_item(item: Any, index: int) -> TariffItem:
     market = item.get("market")
     if market is not None and (market not in MARKETS or choice("unit", Unit) is not Unit.MARKET_MONTH):
         raise invalid("market")
+    zero_when_negative = item.get("zero_when_negative", False)
+    if not isinstance(zero_when_negative, bool):
+        raise invalid("zero_when_negative")
     return TariffItem(
         name=name.strip(),
         side=choice("side", Side),
@@ -330,6 +336,7 @@ def _parse_item(item: Any, index: int) -> TariffItem:
         month_prices=prices,
         valid_to=_date(item["valid_to"], f"{index}: valid_to") if item.get("valid_to") else None,
         market=market,
+        zero_when_negative=zero_when_negative,
     )
 
 

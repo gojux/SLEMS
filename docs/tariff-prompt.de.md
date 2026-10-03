@@ -61,6 +61,7 @@ Optionale Felder je Posten:
   time_from: "10:00"        # Zeitfenster, beide Zeiten angeben
   time_to: "16:00"
   month_prices: {"2026-01": 8.5}      # veröffentlichte Monatsmarktpreise in ct/kWh
+  zero_when_negative: true  # 0, solange der Day-Ahead-Preis negativ ist (z. B. EEG-Einspeisung seit 25.02.2025)
 
 Regeln:
 - Alle Preise ohne Umsatzsteuer (netto). Stehen auf der Rechnung nur

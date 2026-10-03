@@ -59,6 +59,7 @@ Optional fields per item:
   time_from: "10:00"        # time window, give both times
   time_to: "16:00"
   month_prices: {"2026-01": 8.5}      # published monthly market prices in ct/kWh
+  zero_when_negative: true  # 0 while the day-ahead price is negative (e.g. EEG feed-in since 25 Feb 2025)
 
 Rules:
 - All prices without VAT (net). If the bill only shows gross prices, convert

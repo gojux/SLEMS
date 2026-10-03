@@ -140,6 +140,21 @@ def test_market_of_a_monthly_item() -> None:
         )
 
 
+def test_zero_when_negative() -> None:
+    name, data = parse_yaml(
+        "format: slems-tariff\nversion: 1\nname: EEG\nitems:\n"
+        "  - {name: Credit, side: export, group: energy, unit: kwh, price: 7.7, zero_when_negative: true}\n"
+    )
+    assert data["items"][0]["zero_when_negative"] is True
+    assert "zero_when_negative: true" in export_yaml(name, data)
+    assert parse_yaml(export_yaml(name, data)) == (name, data)
+    with pytest.raises(TariffYamlError):
+        parse_yaml(
+            "format: slems-tariff\nversion: 1\nname: EEG\nitems:\n"
+            "  - {name: Credit, side: export, group: energy, unit: kwh, price: 7.7, zero_when_negative: yes please}\n"
+        )
+
+
 def test_currency_is_kept_and_exported() -> None:
     _, data = parse_yaml(
         "format: slems-tariff\nversion: 1\nname: Swiss\ncurrency: chf\nitems:\n"

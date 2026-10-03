@@ -316,7 +316,15 @@ in September, is offered as new prices, in the background only with
 grid fee ordinance, with the reduced price from April to September 10–16 h)
 and the federal levies; the metering fee is entered at its legal maximum
 (your grid operator may charge less) and municipal levies (e.g. the
-Gebrauchsabgabe in Vienna) are not included. A line may also be a *percent of the group* (e.g. a municipal levy of
+Gebrauchsabgabe in Vienna) are not included. Germany: the federal levies
+(electricity tax, surcharges and the concession levy by the size of the
+municipality, at its legal maximum), the grid fees of the first grid operators
+(Netze BW, Westnetz, Bayernwerk, Avacon, E.DIS, Schleswig-Holstein Netz; also with § 14a module 1 and module 1 + 3 with time variable prices
+for controllable devices; metering is billed separately and not included) and
+the EEG feed-in credit of PV plants up
+to 10 kWp per commissioning period; for plants commissioned since 25 February
+2025 the credit is 0 while the day-ahead price is negative (*Fetch market
+prices* needed). A line can have *Zero at negative market prices* for this. A line may also be a *percent of the group* (e.g. a municipal levy of
 7 % on the energy).
 
 Where the energy comes from: SLEMS records grid import and feed-in per

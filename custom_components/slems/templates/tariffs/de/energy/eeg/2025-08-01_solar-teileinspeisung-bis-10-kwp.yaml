@@ -1,0 +1,16 @@
+format: slems-tariff
+version: 1
+id: de/eeg/solar-teileinspeisung-bis-10-kwp/2025-08
+name: Einspeisevergütung PV bis 10 kWp, Inbetriebnahme 01.08.2025–31.01.2026
+supplier: EEG
+country: DE
+currency: EUR
+year: 2025
+parts: [energy]
+valid_from: 2025-08-01
+source: "Bundesnetzagentur, Fördersätze für Solaranlagen (EEG 2023), Gebäudeanlagen mit Teileinspeisung bis 10 kWp; die Vergütung gilt 20 Jahre ab dem Jahr der Inbetriebnahme; Anlagen über 10 kWp: 6,80 ct/kWh für die Leistung von 10 bis 40 kWp, anteilig gemittelt; keine Vergütung bei negativen Börsenpreisen (§ 51 EEG 2023)"
+vat_pct:
+  import: {energy: 19, grid: 19, levies: 19}
+  export: {energy: 0, grid: 19, levies: 19}
+items:
+  - {name: Einspeisevergütung, side: export, group: energy, unit: kwh, price: 7.86, zero_when_negative: true}

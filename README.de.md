@@ -327,7 +327,15 @@ mit eingeschaltetem *Börsenpreise abrufen*. Österreich: die Netzentgelte aller
 Preis von April bis September 10–16 Uhr) und die bundesweiten Abgaben; das
 Messentgelt steht mit dem gesetzlichen Höchstpreis drin (dein Netzbetreiber
 kann weniger verrechnen), Gemeindeabgaben (z. B. die Gebrauchsabgabe in Wien)
-fehlen. Ein Posten kann auch *Prozent der Gruppe* sein (z. B.
+fehlen. Deutschland: die bundesweiten Abgaben (Stromsteuer, Umlagen und die
+Konzessionsabgabe nach Gemeindegröße mit ihrem gesetzlichen Höchstbetrag), die
+Netzentgelte der ersten Netzbetreiber (Netze BW, Westnetz, Bayernwerk, Avacon, E.DIS, Schleswig-Holstein Netz; auch mit § 14a Modul 1 und
+Modul 1 + 3 mit zeitvariablen Preisen für steuerbare Verbrauchseinrichtungen;
+der Messstellenbetrieb wird getrennt verrechnet und fehlt) und die
+EEG-Einspeisevergütung von PV-Anlagen bis 10 kWp je Inbetriebnahme-Zeitraum;
+für Anlagen ab 25. Februar 2025 ist die Vergütung 0, solange der
+Day-Ahead-Preis negativ ist (*Börsenpreise abrufen* nötig). Ein Posten kann
+dafür *Null bei negativen Börsenpreisen* haben. Ein Posten kann auch *Prozent der Gruppe* sein (z. B.
 eine Gebrauchsabgabe von 7 % auf die Energie).
 
 Woher die Energie kommt: SLEMS zeichnet Netzbezug und Einspeisung aus jedem

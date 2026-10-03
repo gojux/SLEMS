@@ -1,0 +1,21 @@
+format: slems-tariff
+version: 1
+id: de/levies/bis-25000
+name: Abgaben Deutschland, Konzessionsabgabe 1,32 ct (Gemeinde bis 25.000 Einwohner)
+household: true
+country: DE
+currency: EUR
+year: 2026
+parts: [levies]
+valid_from: 2026-01-01
+valid_to: 2026-12-31
+source: "Stromsteuer § 3 StromStG; KWKG-Umlage, Offshore-Netzumlage und Aufschlag für besondere Netznutzung 2026 (Übertragungsnetzbetreiber, netztransparenz.de, Oktober 2025); Konzessionsabgabe: Höchstbetrag § 2 KAV"
+vat_pct:
+  import: {energy: 19, grid: 19, levies: 19}
+  export: {energy: 0, grid: 19, levies: 19}
+items:
+  - {name: Stromsteuer, side: import, group: levies, unit: kwh, price: 2.05}
+  - {name: KWKG-Umlage, side: import, group: levies, unit: kwh, price: 0.446}
+  - {name: Offshore-Netzumlage, side: import, group: levies, unit: kwh, price: 0.941}
+  - {name: Aufschlag für besondere Netznutzung, side: import, group: levies, unit: kwh, price: 1.559}
+  - {name: Konzessionsabgabe, side: import, group: levies, unit: kwh, price: 1.32}

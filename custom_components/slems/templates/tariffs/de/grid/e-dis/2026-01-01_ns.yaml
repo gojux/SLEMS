@@ -1,0 +1,20 @@
+format: slems-tariff
+version: 1
+id: de/grid/e-dis/ns
+name: Netzgebiet E.DIS, Niederspannung
+grid_operator: E.DIS Netz GmbH
+grid_area: Netzgebiet E.DIS, Niederspannung
+household: true
+country: DE
+currency: EUR
+year: 2026
+parts: [grid]
+valid_from: 2026-01-01
+valid_to: 2026-12-31
+source: "E.DIS Netz GmbH, Endgültige Netzentgelte 2026 (Stand 10. Dezember 2025), Preisblatt SLP und sVE; zzgl. Messstellenbetrieb"
+vat_pct:
+  import: {energy: 19, grid: 19, levies: 19}
+  export: {energy: 0, grid: 19, levies: 19}
+items:
+  - {name: Netzentgelt Grundpreis, side: import, group: grid, unit: year, price: 76.65}
+  - {name: Netzentgelt Arbeitspreis, side: import, group: grid, unit: kwh, price: 5.47}

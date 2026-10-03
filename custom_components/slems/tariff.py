@@ -16,7 +16,10 @@ A tariff is a list of items, each as a line of a bill:
 * optional time window (months, weekdays, hours ``from`` – ``to`` local time,
   e.g. a reduced grid price at noon in summer), ``valid_from`` (a later
   version of the same item replaces it from that date) and ``valid_to`` (the
-  item ends after that day).
+  item ends after that day),
+* ``zero_when_negative``: the item is 0 in periods with a negative day-ahead
+  price (e.g. no feed-in credit then, German EEG § 51 for plants since
+  25 February 2025); it needs the market prices, without one it counts.
 
 Items with the same name and side are one price: in an hour the most specific
 matching item counts (a time window before months before weekdays before none),
@@ -96,6 +99,7 @@ class TariffItem:
     # ``market_month``: the official monthly value it follows (see
     # reference_values, e.g. "at-pv"); None: the day-ahead mean weighted by the feed-in.
     market: str | None = None
+    zero_when_negative: bool = False
 
     @property
     def specificity(self) -> int:
@@ -134,10 +138,13 @@ class TariffItem:
             "month_prices": dict(self.month_prices),
             "valid_to": self.valid_to.isoformat() if self.valid_to else None,
             "market": self.market,
+            "zero_when_negative": self.zero_when_negative,
         }
 
-    def ct_per_kwh(self, market_ct: float | None) -> float | None:
+    def ct_per_kwh(self, market_ct: float | None, spot_ct: float | None = None) -> float | None:
         """Price of a kWh; for dynamic units from the market price (None: unknown)."""
+        if self.zero_when_negative and spot_ct is not None and spot_ct < 0:
+            return 0.0
         if not self.unit.dynamic:
             return self.price
         if market_ct is None:
@@ -164,6 +171,7 @@ class TariffItem:
             month_prices=tuple(sorted((str(k), float(v)) for k, v in (data.get("month_prices") or {}).items())),
             valid_to=date.fromisoformat(data["valid_to"]) if data.get("valid_to") else None,
             market=data.get("market") or None,
+            zero_when_negative=bool(data.get("zero_when_negative")),
         )
 
 
@@ -198,7 +206,8 @@ class Tariff:
 
     @property
     def dynamic(self) -> bool:
-        return any(item.unit.dynamic for item in self.items)
+        """Whether it needs the market prices."""
+        return any(item.unit.dynamic or item.zero_when_negative for item in self.items)
 
 
 @dataclass
@@ -296,11 +305,10 @@ def compute_bill(
             spot = market_prices.get(hour)
             unpriced = False
             base: dict[Group, float] = {}
+            spot_ct = None if spot is None else spot / 10
             for item in _chosen_items(tariff, side, local):
                 price = item.ct_per_kwh(
-                    _market_ct(
-                        item, local, None if spot is None else spot / 10, monthly.get((local.year, local.month)), references
-                    )
+                    _market_ct(item, local, spot_ct, monthly.get((local.year, local.month)), references), spot_ct
                 )
                 if price is None:
                     unpriced = True
@@ -372,7 +380,7 @@ def kwh_price(
     """
     groups: dict[Group, float] = {}
     for item in _chosen_items(tariff, side, local):
-        price = item.ct_per_kwh(_market_ct(item, local, spot_ct, month_ct, references))
+        price = item.ct_per_kwh(_market_ct(item, local, spot_ct, month_ct, references), spot_ct)
         if price is None:
             return None
         groups[item.group] = groups.get(item.group, 0.0) + price
