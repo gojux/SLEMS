@@ -20,3 +20,4 @@ items:
   - {name: Netznutzungsentgelt, side: import, group: grid, unit: kwh, price: 5.58, months: [4, 5, 6, 7, 8, 9], time_from: '10:00', time_to: '16:00'}
   - {name: Netzverlustentgelt, side: import, group: grid, unit: kwh, price: 0.7}
   - {name: Messentgelt (Höchstpreis), side: import, group: grid, unit: year, price: 28.8}
+  - {name: Messentgelt Einspeisung (Höchstpreis), side: export, group: grid, unit: year, price: 28.8, optional: true}

@@ -298,7 +298,11 @@ wählst du den Energietarif; der Netztarif, mit dem er meist kombiniert wird
 den heute gültigen Preisen, und SLEMS setzt alles zu einem Tarif zusammen
 (danach mit einer Rechnung vergleichen). Das Ergebnis ist ein normaler Tarif,
 den du bearbeiten kannst; spätere Änderungen einer Vorlage berühren ihn
-nicht. Er merkt sich aber seine Vorlagen: Bringt ein Update von SLEMS (oder
+nicht. Optionen eines Preisblatts (z. B. ein Ökostrom-Upgrade, ein Bonus für
+die Online-Rechnung, das Messentgelt der Einspeiserichtung) wählst du in einem
+eigenen Schritt. Ein eigener Einspeisetarif ist eine eigene Vorlage und wird
+als weiterer aktueller Tarif angelegt (SLEMS zählt alle aktuellen Tarife als
+einen Vertrag). Er merkt sich aber seine Vorlagen: Bringt ein Update von SLEMS (oder
 eine eigene Vorlage) neuere Preise oder einen Nachfolgetarif, meldet das ein
 Reparaturhinweis, ebenso wenn ein aktueller Tarif abgelaufen ist. *Auf neue
 Preise aktualisieren* im Menü der Posten übernimmt sie (bei mehreren
@@ -1686,6 +1690,10 @@ Mögliche Erweiterungen:
   des nächsten Tages geplant wird; ein stabilerer Plan (nur bei deutlicher
   Verbesserung geändert).
 - Tagesziele der Verbraucher gemeinsam mit den Batterien planen.
+- Index-Tarife (z. B. nach dem Österreichischen Strompreisindex ÖSPI): eine
+  Posten-Art mit der Formel des Lieferanten, die Monatswerte des Index mit
+  Zustimmung von der Energieagentur abgerufen; damit auch Vorlagen für
+  Index-Tarife.
 - Programmgeräte (Waschmaschine, Geschirrspüler, Trockner): den Verlauf eines
   Programms lernen und den Rest eines laufenden Programms in die Prognose der
   nächsten Stunden aufnehmen (hilft der Abend- und Nachtplanung); später

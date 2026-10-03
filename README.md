@@ -287,7 +287,11 @@ tariff usually combined with it (households) and the levies of the country
 are then preselected, each with the prices in effect today, and SLEMS
 combines them into one tariff (then compare it with a bill). The result is
 an ordinary tariff you can edit; later changes of a template do not touch
-it. It remembers its templates, though: when an update of SLEMS (or an own
+it. Options of a price sheet (e.g. an upgrade to certified green electricity,
+a bonus for an online bill, the metering of the feed-in direction) are chosen
+in an extra step. A feed-in tariff of its own is a template of its own, added
+as a separate current tariff (SLEMS counts all current tariffs as one
+contract). It remembers its templates, though: when an update of SLEMS (or an own
 template) brings newer prices or a successor tariff, a repair issue tells
 you, as it does when a current tariff is past its end. *Update to the new
 prices* in the menu of the lines takes them over (with several successors you
@@ -1590,6 +1594,9 @@ Possible extensions:
   margin), so the night is planned before the next day's prices are
   published; a more stable plan (changed only when clearly better).
 - Daily targets of the consumers planned together with the batteries.
+- Index tariffs (e.g. on the Austrian electricity price index ÖSPI): a line
+  type with the supplier's formula, the monthly index values fetched (with
+  consent) from the Austrian Energy Agency; templates for index tariffs too.
 - Program devices (washing machine, dishwasher, dryer): learn the course of a
   program and add the rest of a running program to the forecast of the next
   hours (helps the evening and night planning); later possibly starting them

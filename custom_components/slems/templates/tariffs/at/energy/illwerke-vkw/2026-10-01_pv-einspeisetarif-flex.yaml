@@ -1,0 +1,15 @@
+format: slems-tariff
+version: 1
+id: at/illwerke-vkw/pv-einspeisetarif-flex
+name: vkw PV-Einspeisetarif Flex
+supplier: illwerke vkw
+country: AT
+year: 2026
+parts: [energy]
+valid_from: 2026-10-01
+source: "PV-Einspeisetarif Flex (vkw.at, Stand Oktober 2026): Referenzmarktwert PV (EAG) − 0,6 ct/kWh; SLEMS nimmt bis zur Eingabe der veröffentlichten Monatswerte das Mittel der Börsenpreise, gewichtet mit der eigenen Einspeisung"
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Einspeisevergütung, side: export, group: energy, unit: market_month, price: -0.6}

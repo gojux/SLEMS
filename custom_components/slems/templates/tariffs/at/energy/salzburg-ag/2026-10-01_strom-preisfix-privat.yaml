@@ -1,0 +1,19 @@
+format: slems-tariff
+version: 1
+id: at/salzburg-ag/strom-preisfix-privat
+name: Strom Preisfix Privat
+supplier: Salzburg AG
+country: AT
+year: 2026
+parts: [energy]
+offer: true
+valid_from: 2026-10-01
+valid_to: 2028-06-30
+source: "Produktblatt Strom Preisfix Privat, Preisgarantie bis 30. Juni 2028 (salzburg-ag.at, Stand Oktober 2026)"
+suggest: {grid_operator: Salzburg Netz GmbH}
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Grundentgelt, side: import, group: energy, unit: year, price: 60.0}
+  - {name: Arbeitspreis, side: import, group: energy, unit: kwh, price: 9.9}

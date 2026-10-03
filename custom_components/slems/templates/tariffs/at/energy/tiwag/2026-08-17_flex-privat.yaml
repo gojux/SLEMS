@@ -1,0 +1,17 @@
+format: slems-tariff
+version: 1
+id: at/tiwag/flex-privat
+name: TIWAG flex privat
+supplier: TIWAG
+country: AT
+year: 2026
+parts: [energy]
+valid_from: 2026-08-17
+source: "Produkt- und Preisblatt flex privat, gültig ab 17. August 2026: EPEX Spot AT Day-Ahead (viertelstündlich) + 1,20 ct/kWh netto (tiwag.at)"
+suggest: {grid_operator: TINETZ-Tiroler Netze GmbH}
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Grundpreis, side: import, group: energy, unit: year, price: 20.0}
+  - {name: Arbeitspreis, side: import, group: energy, unit: spot, price: 1.2}

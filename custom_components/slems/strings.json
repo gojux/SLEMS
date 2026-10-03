@@ -403,6 +403,13 @@
             "levies": "Levies"
           }
         },
+        "template_options": {
+          "title": "Options",
+          "description": "Options of the chosen templates as on the price sheet, e.g. an upgrade to green electricity or a bonus with conditions (online bill, direct debit, contract term). Choose those of your contract.",
+          "data": {
+            "options": "Options"
+          }
+        },
         "import_yaml": {
           "title": "Paste tariff as YAML",
           "description": "Paste the whole file (format slems-tariff, version {version} or older). Prices are net; afterwards you check name, role and VAT and can compare the tariff with a bill.",

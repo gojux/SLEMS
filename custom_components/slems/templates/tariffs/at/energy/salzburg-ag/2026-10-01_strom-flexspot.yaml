@@ -1,0 +1,17 @@
+format: slems-tariff
+version: 1
+id: at/salzburg-ag/strom-flexspot
+name: Strom FlexSpot
+supplier: Salzburg AG
+country: AT
+year: 2026
+parts: [energy]
+valid_from: 2026-10-01
+source: "Produktblatt Strom FlexSpot (salzburg-ag.at, Stand Oktober 2026): EXAA-Börsenpreis + 3 % seines Betrags + 1,80 ct/kWh; SLEMS nutzt den Day-Ahead-Preis der Preisquelle und rechnet die 3 % bei negativen Preisen nach unten statt nach oben"
+suggest: {grid_operator: Salzburg Netz GmbH}
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Grundentgelt, side: import, group: energy, unit: year, price: 50.0}
+  - {name: Arbeitspreis, side: import, group: energy, unit: spot, price: 1.8, factor_pct: 3}

@@ -1,0 +1,15 @@
+format: slems-tariff
+version: 1
+id: at/illwerke-vkw/pv-einspeisetarif-dynamisch
+name: vkw PV-Einspeisetarif Dynamisch
+supplier: illwerke vkw
+country: AT
+year: 2026
+parts: [energy]
+valid_from: 2026-10-01
+source: "PV-Einspeisetarif Dynamisch (vkw.at, Stand Oktober 2026): EPEX Spot Day-Ahead (viertelstündlich) − 0,60 ct/kWh netto; Netz- und Messentgelte zusätzlich"
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Einspeisevergütung, side: export, group: energy, unit: spot, price: -0.6}

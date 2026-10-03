@@ -172,3 +172,42 @@ def test_offers_get_corrections_but_no_newer_offers(tmp_path: Path) -> None:
     (folder / "2026-10-01_offer.yaml").write_text(level("2026-10-01", 10.1).replace("parts:", offer))
     candidates = find_candidates(data, load_templates([("shipped", tmp_path)]))["at/example/offer"]
     assert [c.kind for c in candidates] == ["correction"]
+
+
+def test_optional_items_are_chosen_and_kept_through_updates(tmp_path: Path) -> None:
+    folder = tmp_path / "at" / "energy" / "example"
+    folder.mkdir(parents=True)
+    extra = "  - {name: Upgrade, side: import, group: energy, unit: kwh, price: 0.7, optional: true}\n"
+    (folder / "2026-01-01_fix.yaml").write_text(level("2026-01-01", 10, extra).replace("parts:", "id: at/example/fix\nparts:"))
+    templates = load_templates([("shipped", tmp_path)])
+    assert [item["name"] for item in templates[0].optional_items] == ["Upgrade"]
+    # Without the option the item is left out; with it, it is taken over.
+    _, plain = combine(templates)
+    assert "Upgrade" not in {item["name"] for item in plain["items"]}
+    _, chosen = combine(templates, {templates[0].key: ["Upgrade"]})
+    assert {item["name"] for item in chosen["items"]} == {"Energy", "Base fee", "Upgrade"}
+    assert "optional" not in next(item for item in chosen["items"] if item["name"] == "Upgrade")
+    # A newer level keeps the choice.
+    (folder / "2026-07-01_fix.yaml").write_text(
+        level("2026-07-01", 11, extra.replace("0.7", "0.8")).replace("parts:", "id: at/example/fix\nparts:")
+    )
+    templates = load_templates([("shipped", tmp_path)])
+    for data, upgrade in ((plain, None), (chosen, 0.8)):
+        updated, _ = apply_updates(data, find_candidates(data, templates)["at/example/fix"], [], templates)
+        tariff = tariff_from_data("Fix", updated)
+        prices = {i.name: i.price for i in tariff.active_items(date(2026, 8, 1))}
+        assert prices.get("Upgrade") == upgrade
+
+
+def test_feed_in_templates(tmp_path: Path) -> None:
+    from custom_components.slems.tariff_templates import label
+
+    (tmp_path / "feed.yaml").write_text(
+        "format: slems-tariff\nversion: 1\nname: PV\nsupplier: Example Energy\ncountry: AT\nyear: 2026\nparts: [energy]\n"
+        "valid_from: 2026-01-01\nsource: price sheet\nitems:\n"
+        "  - {name: Credit, side: export, group: energy, unit: kwh, price: 7}\n"
+    )
+    template = load_templates([("own", tmp_path)])[0]
+    assert template.feed_in
+    names = {"energy": "Energy", "grid": "Grid", "levies": "Levies", "feed_in": "Feed-in"}
+    assert label(template, names, "own").startswith("Feed-in · Example Energy – PV")

@@ -14,7 +14,8 @@ have), the levies of a country. An energy template may name the grid
 operator it is usually combined with (``suggest: {grid_operator: …}``).
 ``id`` names a template over all its price levels and stays when it is
 renamed; a successor names the templates it replaces (``replaces``).
-``offer: true`` marks an offer for new contracts: its price is fixed from the
+An item of a template with ``optional: true`` is chosen when the tariff is
+made from it (e.g. an upgrade, a bonus with conditions). ``offer: true`` marks an offer for new contracts: its price is fixed from the
 start of a contract, so a newer offer is no update of an existing one.
 
 Example (made-up values)::
@@ -67,7 +68,7 @@ DEFAULT_VAT = {
 _TOP_KEYS = {"format", "version", "name", "vat_pct", "items", *META_KEYS}
 _ITEM_KEYS = {
     "name", "side", "group", "unit", "price", "factor_pct", "valid_from", "valid_to",
-    "months", "weekdays", "time_from", "time_to", "month_prices",
+    "months", "weekdays", "time_from", "time_to", "month_prices", "optional",
 }
 # Version -> function that turns a file of that version into the next one.
 _MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {}
@@ -152,13 +153,23 @@ def parse_yaml(text: str) -> tuple[str, dict[str, Any]]:
     if not isinstance(items, list) or not items:
         raise TariffYamlError("yaml_no_items")
     parsed = [_parse_item(item, index) for index, item in enumerate(items, start=1)]
+    taken = []
+    for raw, item in zip(items, parsed, strict=True):
+        data = item.as_dict()
+        if raw.get("optional") is not None:
+            if not isinstance(raw["optional"], bool):
+                raise TariffYamlError("yaml_item_invalid", f"{len(taken) + 1}: optional")
+            if raw["optional"]:
+                # A template item the user chooses (e.g. an upgrade or a bonus).
+                data["optional"] = True
+        taken.append(data)
     meta = {key: _meta_value(key, document[key]) for key in META_KEYS if document.get(key) is not None}
     if meta.get("valid_from") and meta.get("valid_to") and meta["valid_to"] < meta["valid_from"]:
         raise TariffYamlError("yaml_field_invalid", "valid_to")
     return name.strip(), {
         "role": Role.CURRENT.value,
         "vat": _parse_vat(document.get("vat_pct")),
-        "items": [item.as_dict() for item in parsed],
+        "items": taken,
         "meta": meta,
     }
 
@@ -204,6 +215,7 @@ def _meta_value(key: str, value: Any) -> Any:
                     "valid_from": _date(origin["valid_from"], key).isoformat() if origin.get("valid_from") else None,
                     "valid_to": _date(origin["valid_to"], key).isoformat() if origin.get("valid_to") else None,
                     "from_start": bool(origin.get("from_start", False)),
+                    "options": [str(name) for name in origin.get("options") or []],
                     "items": [TariffItem.from_dict(item).as_dict() for item in origin.get("items") or []],
                 }
                 for origin in value

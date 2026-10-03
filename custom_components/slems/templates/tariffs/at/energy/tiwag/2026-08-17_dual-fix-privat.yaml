@@ -1,0 +1,19 @@
+format: slems-tariff
+version: 1
+id: at/tiwag/dual-fix-privat
+name: TIWAG dual fix privat
+supplier: TIWAG
+country: AT
+year: 2026
+parts: [energy]
+offer: true
+valid_from: 2026-08-17
+source: "Produkt- und Preisblatt dual fix privat, gültig ab 17. August 2026, fixer Energiepreis 24 Monate (tiwag.at)"
+suggest: {grid_operator: TINETZ-Tiroler Netze GmbH}
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Grundpreis, side: import, group: energy, unit: year, price: 22.0}
+  - {name: Arbeitspreis, side: import, group: energy, unit: kwh, price: 9.8}
+  - {name: Arbeitspreis, side: import, group: energy, unit: kwh, price: 4.9, months: [4, 5, 6, 7, 8, 9], time_from: '10:00', time_to: '16:00'}

@@ -1496,6 +1496,7 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         self._templates: list[Template] = []
         self._country: str | None = None
         self._energy_template: Template | None = None
+        self._chosen_templates: list[Template] = []
         # Newer price levels and successors per template of the tariff, and the choices made.
         self._candidates: dict[str, list[Candidate]] | None = None
         self._choice_queue: list[str] = []
@@ -1540,7 +1541,8 @@ class TariffSubentryFlow(ConfigSubentryFlow):
             return await self.async_step_template_rest()
         if user_input is not None:
             self._energy_template = templates.get(user_input["energy"])
-            if self._energy_template is not None and self._energy_template.complete:
+            if self._energy_template is not None and (self._energy_template.complete or self._energy_template.feed_in):
+                # Complete, or a feed-in tariff of its own: no grid or levies.
                 return await self._async_combine_templates([self._energy_template])
             return await self.async_step_template_rest()
         return self.async_show_form(
@@ -1595,7 +1597,7 @@ class TariffSubentryFlow(ConfigSubentryFlow):
     def _template_selector(self, templates: list[Template]) -> selector.SelectSelector:
         """Templates to choose from, with "none" first."""
         words = _CHECK_WORDS["de" if self.hass.config.language.startswith("de") else "en"]
-        part_names = {group.value: words[group].capitalize() for group in Group}
+        part_names = {group.value: words[group].capitalize() for group in Group} | {"feed_in": words[Side.EXPORT]}
         options = [selector.SelectOptionDict(value=_NO_TEMPLATE, label=words["no_template"])] + [
             selector.SelectOptionDict(value=t.key, label=template_label(t, part_names, words["own"], words["offer"])) for t in templates
         ]
@@ -1604,13 +1606,47 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         )
 
     async def _async_combine_templates(self, chosen: list[Template]) -> SubentryFlowResult | None:
-        """One tariff of the chosen templates, on to name, role and VAT; None if
-        two of them cover the same part."""
+        """One tariff of the chosen templates (their optional items chosen
+        first), on to name, role and VAT; None if two of them cover the same part."""
         try:
-            self._title, self._data = combine_templates(chosen)
+            combine_templates(chosen)
         except TemplatePartTwice:
             return None
+        self._chosen_templates = chosen
+        if any(template.optional_items for template in chosen):
+            return await self.async_step_template_options()
+        self._title, self._data = combine_templates(chosen)
         return await self.async_step_details()
+
+    async def async_step_template_options(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """The optional items of the chosen templates (upgrades, bonuses with conditions)."""
+        chosen = self._chosen_templates
+        if user_input is not None:
+            picked = set(user_input.get("options") or [])
+            options = {
+                t.key: [item["name"] for item in t.optional_items if f"{t.key}|{item['name']}" in picked] for t in chosen
+            }
+            self._title, self._data = combine_templates(chosen, options)
+            return await self.async_step_details()
+        language = self.hass.config.language
+        choices = [
+            selector.SelectOptionDict(
+                value=f"{t.key}|{item['name']}",
+                label=f"{item['name']} ({_describe_item(TariffItem.from_dict(item), language).split(': ', 1)[1].split(' (')[0]})",
+            )
+            for t in chosen
+            for item in t.optional_items
+        ]
+        return self.async_show_form(
+            step_id="template_options",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional("options", default=[]): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=choices, multiple=True, mode=selector.SelectSelectorMode.LIST)
+                    )
+                }
+            ),
+        )
 
     async def async_step_details(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         """Name, role and VAT."""

@@ -1,0 +1,17 @@
+format: slems-tariff
+version: 1
+id: at/ikb/flex
+name: IKB-flex
+supplier: IKB
+country: AT
+year: 2026
+parts: [energy]
+valid_from: 2026-10-01
+source: "IKB-flex (ikb.at, Stand Oktober 2026): EPEX Spot AT + 1,200 ct/kWh netto"
+suggest: {grid_operator: Innsbrucker Kommunalbetriebe AG}
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Grundpreis, side: import, group: energy, unit: year, price: 20.0}
+  - {name: Arbeitspreis, side: import, group: energy, unit: spot, price: 1.2}

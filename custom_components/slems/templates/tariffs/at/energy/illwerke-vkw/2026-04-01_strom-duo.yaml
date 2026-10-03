@@ -1,0 +1,20 @@
+format: slems-tariff
+version: 1
+id: at/illwerke-vkw/strom-duo
+name: vkw Strom Duo
+supplier: illwerke vkw
+country: AT
+year: 2026
+parts: [energy]
+valid_from: 2026-04-01
+source: "Produktblatt vkw Strom Duo, Energiepreise gültig ab 01.04.2026 (vkw.at)"
+suggest: {grid_operator: Vorarlberger Energienetze GmbH}
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Grundpreis, side: import, group: energy, unit: year, price: 36.0}
+  - {name: Verbrauchspreis, side: import, group: energy, unit: kwh, price: 12.2}
+  - {name: Verbrauchspreis, side: import, group: energy, unit: kwh, price: 11.2, months: [4, 5, 6, 7, 8, 9], time_from: '10:00', time_to: '16:00'}
+  - {name: Sonderrabatt, side: import, group: energy, unit: kwh, price: -2.8, valid_to: 2027-03-31}
+  - {name: Upgrade Öko+, side: import, group: energy, unit: kwh, price: 0.7, optional: true}

@@ -1,0 +1,19 @@
+format: slems-tariff
+version: 1
+id: at/illwerke-vkw/strom-waerme
+name: vkw Strom Wärme (Bestandstarif)
+supplier: illwerke vkw
+country: AT
+year: 2026
+parts: [energy]
+valid_from: 2026-04-01
+source: "Produktblatt vkw Strom Einfach, TagNacht, Wärme (Bestandstarife), Energiepreise gültig ab 01.04.2026 (vkw.at); für Wärmepumpen mit eigenem Zähler"
+suggest: {grid_operator: Vorarlberger Energienetze GmbH}
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Grundpreis, side: import, group: energy, unit: year, price: 10.5}
+  - {name: Verbrauchspreis, side: import, group: energy, unit: kwh, price: 16.25}
+  - {name: Sonderrabatt, side: import, group: energy, unit: kwh, price: -6.35, valid_to: 2027-03-31}
+  - {name: Upgrade Öko+, side: import, group: energy, unit: kwh, price: 0.7, optional: true}

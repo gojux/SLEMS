@@ -1,0 +1,17 @@
+format: slems-tariff
+version: 1
+id: at/linz-ag/mein-strom-regional
+name: Mein Strom Regional
+supplier: LINZ AG
+country: AT
+year: 2021
+parts: [energy]
+valid_from: 2021-12-01
+source: "Preisblatt Mein Strom Regional für Privatkund*innen, Preise gültig ab 1. Dezember 2021 (linzag.at, Stand Oktober 2026); Gratisstromtage nicht abgebildet"
+suggest: {grid_operator: LINZ NETZ GmbH}
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Grundpreis, side: import, group: energy, unit: year, price: 46.9}
+  - {name: Arbeitspreis, side: import, group: energy, unit: kwh, price: 18.04}

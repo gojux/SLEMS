@@ -1,0 +1,18 @@
+format: slems-tariff
+version: 1
+id: at/illwerke-vkw/strom-dynamisch
+name: vkw Strom Dynamisch
+supplier: illwerke vkw
+country: AT
+year: 2026
+parts: [energy]
+valid_from: 2026-10-01
+source: "Produktblatt vkw Strom Dynamisch (vkw.at, Stand Oktober 2026): EPEX Spot Day-Ahead AT (viertelstündlich) + 1,2 ct/kWh netto"
+suggest: {grid_operator: Vorarlberger Energienetze GmbH}
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Grundpreis, side: import, group: energy, unit: year, price: 36.0}
+  - {name: Verbrauchspreis, side: import, group: energy, unit: spot, price: 1.2}
+  - {name: Upgrade Öko+, side: import, group: energy, unit: kwh, price: 0.7, optional: true}

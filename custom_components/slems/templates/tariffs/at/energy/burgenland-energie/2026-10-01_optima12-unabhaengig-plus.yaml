@@ -16,4 +16,4 @@ vat_pct:
 items:
   - {name: Grundpreis, side: import, group: energy, unit: year, price: 62.28}
   - {name: Verbrauchspreis, side: import, group: energy, unit: kwh, price: 13.211}
-  - {name: Smart-Meter-Rabatt, side: import, group: energy, unit: kwh, price: -0.661}
+  - {name: Smart-Meter-Rabatt, side: import, group: energy, unit: kwh, price: -0.661, optional: true}

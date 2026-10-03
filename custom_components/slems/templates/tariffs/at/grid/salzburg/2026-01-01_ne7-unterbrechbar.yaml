@@ -18,3 +18,4 @@ items:
   - {name: Netznutzungsentgelt, side: import, group: grid, unit: kwh, price: 3.91}
   - {name: Netznutzungsentgelt, side: import, group: grid, unit: kwh, price: 3.13, months: [4, 5, 6, 7, 8, 9], time_from: '10:00', time_to: '16:00'}
   - {name: Netzverlustentgelt, side: import, group: grid, unit: kwh, price: 0.357}
+  - {name: Gebrauchsabgabe, side: import, group: levies, unit: kwh, price: 0.3789}

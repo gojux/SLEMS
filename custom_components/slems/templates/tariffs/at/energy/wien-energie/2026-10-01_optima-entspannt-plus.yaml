@@ -16,4 +16,4 @@ vat_pct:
 items:
   - {name: Grundpreis, side: import, group: energy, unit: year, price: 60.1659}
   - {name: Verbrauchspreis, side: import, group: energy, unit: kwh, price: 13.0595}
-  - {name: Rabatt 12 Monate Vertragsbindung, side: import, group: energy, unit: kwh, price: -3.0695}
+  - {name: Rabatt 12 Monate Vertragsbindung, side: import, group: energy, unit: kwh, price: -3.0695, optional: true}

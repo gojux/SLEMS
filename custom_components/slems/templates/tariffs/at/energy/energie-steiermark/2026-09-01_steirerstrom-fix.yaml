@@ -1,0 +1,19 @@
+format: slems-tariff
+version: 1
+id: at/energie-steiermark/steirerstrom-fix
+name: SteirerStrom Fix
+supplier: Energie Steiermark
+country: AT
+year: 2026
+parts: [energy]
+offer: true
+valid_from: 2026-09-01
+valid_to: 2027-12-31
+source: "Tarifblatt SteirerStrom Fix, Vertragsabschlüsse 01.09.–31.12.2026, Preisgarantie bis 31.12.2027 (e-steiermark.com)"
+suggest: {grid_operator: Energienetze Steiermark GmbH}
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Grundpauschale, side: import, group: energy, unit: year, price: 62.4}
+  - {name: Energiepreis, side: import, group: energy, unit: kwh, price: 13.68}

@@ -131,7 +131,7 @@ def find_candidates(data: Mapping[str, Any], templates: Iterable[Template]) -> d
         own_level = next((t for t in by_family.get(family, []) if t.meta["valid_from"] == since), None)
         corrected = None
         if own_level is not None and "items" in origin:
-            new_items = taken_items(own_level, origin.get("from_start", False))
+            new_items = taken_items(own_level, origin.get("from_start", False), origin.get("options") or ())
             changed = (new_items, own_level.meta.get("valid_to")) != (origin["items"], origin.get("valid_to"))
             fingerprint = _fingerprint(new_items, own_level.meta.get("valid_to"))
             if changed and declined.get(_correction_key(origin)) != fingerprint:
@@ -168,7 +168,7 @@ def expired(data: Mapping[str, Any], today: date) -> date | None:
 
 def _correct(items: list[dict[str, Any]], origin: dict[str, Any], level: Template, changes: UpdateChanges) -> None:
     """The corrected price level in place: changed values, added and removed items."""
-    new_items = taken_items(level, origin.get("from_start", False))
+    new_items = taken_items(level, origin.get("from_start", False), origin.get("options") or ())
     old = {_identity(item): item for item in origin.get("items") or []}
     new = {_identity(item): item for item in new_items}
     in_tariff = {_identity(item): item for item in items}
@@ -212,14 +212,14 @@ def _take_level(items: list[dict[str, Any]], origin: dict[str, Any], level: Temp
         if not item.get("valid_to") or item["valid_to"] >= start:
             item["valid_to"] = (date.fromisoformat(start) - timedelta(days=1)).isoformat()
             old_prices.setdefault(item["name"], item["price"])
-    new_items = taken_items(level, True)
+    new_items = taken_items(level, True, origin.get("options") or ())
     items += [dict(item) for item in new_items]
     for item in new_items:
         old = changes.prices.get(item["name"], (old_prices.get(item["name"]),))[0]
         changes.prices[item["name"]] = (old, item["price"], item["unit"])
     new_names = {item["name"] for item in new_items}
     changes.removed += [name for name in old_prices if name not in new_names and name not in changes.removed]
-    origin.update(origin_of(level, True))
+    origin.update(origin_of(level, True, origin.get("options") or ()))
 
 
 def apply_updates(
@@ -249,7 +249,8 @@ def apply_updates(
             origin = next(o for o in origins if o["family"] == candidate.origin)
             level = candidate.corrected
             declined_levels[_correction_key(origin)] = _fingerprint(
-                taken_items(level, origin.get("from_start", False)), level.meta.get("valid_to")
+                taken_items(level, origin.get("from_start", False), origin.get("options") or ()),
+                level.meta.get("valid_to"),
             )
         else:
             declined_levels[candidate.family] = max(declined_levels.get(candidate.family) or "", candidate.newest)

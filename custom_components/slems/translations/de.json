@@ -403,6 +403,13 @@
             "levies": "Abgaben"
           }
         },
+        "template_options": {
+          "title": "Optionen",
+          "description": "Wählbare Optionen der Vorlagen laut Preisblatt, z. B. ein Ökostrom-Upgrade oder ein Bonus mit Bedingungen (Online-Rechnung, Bankeinzug, Vertragsbindung). Wähle die deines Vertrags.",
+          "data": {
+            "options": "Optionen"
+          }
+        },
         "import_yaml": {
           "title": "Tarif als YAML einfügen",
           "description": "Füge die ganze Datei ein (Format slems-tariff, Version {version} oder älter). Preise sind netto; danach prüfst du Name, Rolle und USt. und kannst den Tarif mit einer Rechnung vergleichen.",

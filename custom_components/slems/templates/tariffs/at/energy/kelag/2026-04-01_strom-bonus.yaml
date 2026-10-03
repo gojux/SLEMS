@@ -1,0 +1,19 @@
+format: slems-tariff
+version: 1
+id: at/kelag/strom-bonus
+name: Kelag Strom Bonus
+supplier: Kelag
+country: AT
+year: 2026
+parts: [energy]
+offer: true
+valid_from: 2026-04-01
+source: "Tarifblatt Kelag Strom Bonus, gültig ab 1.4.2026 bis auf Widerruf (kelag.at); der Treue-Rabatt gilt im 1. Vertragsjahr"
+suggest: {grid_operator: KNG-Kärnten Netz GmbH}
+vat_pct:
+  import: {energy: 20, grid: 20, levies: 20}
+  export: {energy: 0, grid: 20, levies: 20}
+items:
+  - {name: Grundpauschale, side: import, group: energy, unit: year, price: 54.0}
+  - {name: Verbrauchspreis, side: import, group: energy, unit: kwh, price: 12.38}
+  - {name: Treue-Rabatt 1. Vertragsjahr, side: import, group: energy, unit: kwh, price: -2.48}

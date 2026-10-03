@@ -16,7 +16,7 @@ of them. Templates for different parts are combined into one tariff.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 import logging
@@ -75,6 +75,15 @@ class Template:
         return f"{folder}/{filename}"
 
     @property
+    def optional_items(self) -> list[dict[str, Any]]:
+        return [item for item in self.data["items"] if item.get("optional")]
+
+    @property
+    def feed_in(self) -> bool:
+        """A feed-in tariff of its own (a separate contract): only export items."""
+        return all(item["side"] == "export" for item in self.data["items"])
+
+    @property
     def complete(self) -> bool:
         return len(self.parts) == len(PART_ORDER)
 
@@ -113,7 +122,7 @@ def load_templates(directories: Iterable[tuple[str, Path]]) -> list[Template]:
 def label(template: Template, part_names: dict[str, str], own: str, offer: str = "offer {month}") -> str:
     """'Energy · Example Energy – Fix (2026)', for grid templates
     'Grid · Area X, level 7 – Example Grid (2026)' for the selection."""
-    parts = " + ".join(part_names[part] for part in template.parts)
+    parts = part_names.get("feed_in", "Feed-in") if template.feed_in else " + ".join(part_names[part] for part in template.parts)
     meta = template.meta
     detail = template.name
     if meta.get("grid_area") and meta["grid_area"] not in detail:
@@ -173,12 +182,16 @@ def suggest_levies(templates: Iterable[Template], day: date) -> Template | None:
     return _current(levies_choices(templates), day)
 
 
-def taken_items(level: Template, from_start: bool) -> list[dict[str, Any]]:
-    """The items of a price level as they are put into a tariff; ``from_start``:
-    not before the level starts (a level added to an existing tariff)."""
+def taken_items(level: Template, from_start: bool, options: Iterable[str] = ()) -> list[dict[str, Any]]:
+    """The items of a price level as they are put into a tariff, of the
+    optional ones those named in ``options``; ``from_start``: not before the
+    level starts (a level added to an existing tariff)."""
     start = level.meta.get("valid_from") or ""
+    chosen = set(options)
     items = []
     for template_item in level.data["items"]:
+        if template_item.get("optional") and template_item["name"] not in chosen:
+            continue
         item = TariffItem.from_dict(template_item).as_dict()
         if from_start and (item.get("valid_from") or "") < start:
             item["valid_from"] = start
@@ -186,14 +199,15 @@ def taken_items(level: Template, from_start: bool) -> list[dict[str, Any]]:
     return items
 
 
-def origin_of(level: Template, from_start: bool) -> dict[str, Any]:
+def origin_of(level: Template, from_start: bool, options: Iterable[str] = ()) -> dict[str, Any]:
     """What a tariff remembers of a template it took over (see tariff_updates)."""
     return {
         "family": level.family,
         "valid_from": level.meta.get("valid_from"),
         "valid_to": level.meta.get("valid_to"),
         "from_start": from_start,
-        "items": taken_items(level, from_start),
+        "options": sorted(set(options)),
+        "items": taken_items(level, from_start, options),
     }
 
 
@@ -201,12 +215,16 @@ class TemplatePartTwice(ValueError):
     """Two chosen templates cover the same part of the bill."""
 
 
-def combine(templates: Sequence[Template]) -> tuple[str, dict[str, Any]]:
+def combine(
+    templates: Sequence[Template], options: Mapping[str, Iterable[str]] | None = None
+) -> tuple[str, dict[str, Any]]:
     """One tariff (name, subentry data) of templates for different parts.
 
-    Each template brings the items and the VAT of its parts; the name is the
-    one of the template with the energy part (else the first).
+    Each template brings the items and the VAT of its parts, of its optional
+    items those chosen (``options``: template key -> item names); the name is
+    the one of the template with the energy part (else the first).
     """
+    options = options or {}
     seen: set[str] = set()
     for template in templates:
         if seen & set(template.parts):
@@ -216,7 +234,7 @@ def combine(templates: Sequence[Template]) -> tuple[str, dict[str, Any]]:
     items: list[dict[str, Any]] = []
     vat: dict[str, float] = {}
     for template in ordered:
-        items += taken_items(template, False)
+        items += taken_items(template, False, options.get(template.key, ()))
         for key, value in template.data["vat"].items():
             if key.split(".", 1)[1] in template.parts:
                 vat[key] = value
@@ -241,7 +259,7 @@ def combine(templates: Sequence[Template]) -> tuple[str, dict[str, Any]]:
         "valid_to": min(ends) if ends else None,
         "source": " · ".join(str(meta["source"]) for meta in metas if meta.get("source")) or None,
         # Where the tariff came from (see tariff_updates).
-        "templates": [origin_of(template, False) for template in ordered],
+        "templates": [origin_of(template, False, options.get(template.key, ())) for template in ordered],
     }
     return ordered[0].name, {
         "role": "current",
