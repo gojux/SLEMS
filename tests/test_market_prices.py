@@ -12,6 +12,7 @@ from custom_components.slems.market_prices import (
     day_bounds,
     day_runs,
     default_source,
+    estimate_prices,
     hourly_means,
     missing_days,
     parse_apg,
@@ -108,3 +109,30 @@ def test_default_source_by_country() -> None:
     assert default_source("AT") is PriceSource.APG
     assert default_source("DE") is PriceSource.SMARD
     assert default_source(None) is PriceSource.SMARD
+
+
+def test_estimates_after_the_last_known_price() -> None:
+    zone = dt_util.get_default_time_zone()
+    # Two weeks, Monday 2026-09-14 to Sunday 2026-09-27: working days 50 €/MWh
+    # at night and 150 at 18:00, weekends 30 all day.
+    prices = {}
+    day = date(2026, 9, 14)
+    while day <= date(2026, 9, 27):
+        start, end = day_bounds(day)
+        for slot in range(start, end, 900):
+            hour = datetime.fromtimestamp(slot, zone).hour
+            prices[slot] = 30.0 if day.weekday() >= 5 else (150.0 if hour == 18 else 50.0)
+        day += timedelta(days=1)
+    monday, _ = day_bounds(date(2026, 9, 28))
+    estimates = estimate_prices(prices, monday - 3600, monday + 86400)
+    # Only after the last known price.
+    assert min(estimates) == monday
+    evening = int(datetime.combine(date(2026, 9, 28), time(18), zone).timestamp())
+    night = int(datetime.combine(date(2026, 9, 28), time(3), zone).timestamp())
+    # Working day profile, its swing halved around the day mean (50 + 100 / 24).
+    mean = 50 + 100 / 24
+    assert estimates[evening] == pytest.approx(mean + 0.5 * (150 - mean))
+    assert estimates[night] == pytest.approx(mean + 0.5 * (50 - mean))
+    saturday, _ = day_bounds(date(2026, 10, 3))
+    assert estimate_prices(prices, saturday, saturday + 900)[saturday] == pytest.approx(30.0)
+    assert estimate_prices({}, monday, monday + 900) == {}

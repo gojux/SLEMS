@@ -396,9 +396,18 @@ Fenster mit dem niedrigsten mittleren Bezugspreis vor der Frist (um
 mindestens den Mindestgewinn günstiger als zum spätesten Start); die
 Verbraucherkarte zeigt *ab … im günstigsten Fenster*.
 
+**Geschätzte Preise**: Die Day-Ahead-Preise des nächsten Tages erscheinen
+gegen 13 Uhr. Für die Viertelstunden nach dem letzten bekannten Preis plant
+die preisbewusste Steuerung mit Schätzungen: je Uhrzeit der Median der
+letzten 14 Tage derselben Art (Werktag oder Wochenende), sein Ausschlag um das
+Tagesmittel als Sicherheitsabschlag halbiert. So werden die Nacht und ein
+trüber Folgetag schon geplant, bevor die echten Preise bekannt sind; sobald
+sie da sind, wird neu geplant. Nur bekannte negative Preise lösen die Planung
+für negative Preise aus. Das Preisdiagramm zeigt die Schätzungen blass.
+
 **Akku aus dem Netz laden** (Schalter, standardmäßig aus; nur mit
 preisbewusster Steuerung): In einem Defizit plant SLEMS bis zur nächsten
-PV-Übernahme (höchstens bis zum letzten bekannten Preis), in welchen Stunden
+PV-Übernahme (nach dem letzten bekannten Preis mit den geschätzten), in welchen Stunden
 die Batterien decken, halten oder aus dem Netz laden. Laden muss sich nach
 Lade- und Entladeverlusten, den
 [Verschleißkosten](#verschleißkosten-der-batterie) und dem Mindestgewinn
@@ -407,8 +416,8 @@ allem mit der Zeit bei hohem Ladezustand altern. Grenzen: *Höchster
 Ladezustand aus dem Netz* (Standard 90 %), *Höchste Netzladeleistung* (0 =
 Ladeleistung der Batterien), die Bezugsgrenze von Bezugsspitzen abfangen und
 der Platz, den die Einspeisebegrenzung zur PV-Übernahme braucht. Bei
-Überschuss wird nicht aus dem Netz geladen. Der Plan schließt das Halten ein
-(auch wenn Preise nur bis Mitternacht bekannt sind); die Strategie zeigt
+Überschuss wird nicht aus dem Netz geladen. Der Plan schließt das Halten ein;
+die Strategie zeigt
 *Netzladen* mit Energie, Beginn und erwarteter Ersparnis, das Tagesdiagramm
 das geplante Laden.
 
@@ -1720,10 +1729,7 @@ Mögliche Erweiterungen:
   aufgezeichneten Jahr gebracht hätten (das Batteriemodell der Schätzung mit
   den Einstellungen der Simulation).
 - Verbraucher bei negativen Preisen bevorzugen (z. B. den Heizstab).
-- Preisbewusste Steuerung: geschätzte Preise für die Stunden nach dem letzten
-  bekannten Day-Ahead-Preis (aus denselben Stunden der letzten Tage, mit
-  Sicherheitsabschlag), damit die Nacht schon vor Veröffentlichung der Preise
-  des nächsten Tages geplant wird; ein stabilerer Plan (nur bei deutlicher
+- Preisbewusste Steuerung: ein stabilerer Plan (nur bei deutlicher
   Verbesserung geändert).
 - Tagesziele der Verbraucher gemeinsam mit den Batterien planen.
 - Index-Tarife (z. B. nach dem Österreichischen Strompreisindex ÖSPI): eine

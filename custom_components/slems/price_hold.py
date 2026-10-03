@@ -11,8 +11,9 @@ more expensive covered one comes after it, so it does not use the energy
 meant for the later one. The total grid import stays the same, only its time
 moves to cheaper quarter hours; no energy is charged from the grid or fed in.
 
-Without prices for every quarter hour until the refill, or if the energy
-covers all of them, there is no hold. The plan is made again every cycle from the current
+After the last known market price the estimated prices count (see
+market_prices.estimate_prices). Without prices for every quarter hour until
+the refill, or if the energy covers all of them, there is no hold. The plan is made again every cycle from the current
 state of charge, so deviations of the forecast correct themselves.
 
 Daily targets with the source "grid" (see consumer_targets) run forced from

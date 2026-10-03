@@ -721,7 +721,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # Measured saving of the price aware control (see price_savings).
         self.price_savings = PriceSavings()
         # Hourly prices per side (import, feed-in credit): (quarter hour, end, prices update), prices.
-        self._import_price_cache: dict[Side, tuple[tuple, dict]] = {}
+        self._import_price_cache: dict[tuple[Side, bool], tuple[tuple, dict]] = {}
         # Configuration the setup depends on (see __init__._setup_key).
         self.setup_key: str | None = None
         # Price plans of the last inputs (real and simulated) -> (monotonic expiry, plan).
@@ -2406,7 +2406,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if prices is None:
             return None
         credits = self._import_prices(wall_now, horizon, Side.EXPORT) or {}
-        negative = any(v is not None and v < 0 for v in [*prices.values(), *credits.values()])
+        # Only known negative prices plan for them; the estimates are means of past days.
+        negative = any(
+            v is not None and v < 0
+            for v in [
+                *(self._import_prices(wall_now, horizon, estimate=False) or {}).values(),
+                *(self._import_prices(wall_now, horizon, Side.EXPORT, estimate=False) or {}).values(),
+            ]
+        )
         if not negative:
             if not (settings.grid_charge or settings.battery_export):
                 return None
@@ -2534,19 +2541,22 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         return self._forecast_sources()
 
     def _import_prices(
-        self, wall_now: datetime, until: datetime, side: Side = Side.IMPORT
+        self, wall_now: datetime, until: datetime, side: Side = Side.IMPORT, *, estimate: bool = True
     ) -> dict[datetime, float | None] | None:
         """Import price (or feed-in credit) per quarter hour with the current
-        tariff, kept per quarter hour; None without tariff."""
+        tariff, after the last known market price estimated (see
+        market_prices.estimate_prices), kept per quarter hour; None without tariff."""
         tariffs = configured_tariffs(self.config_entry)
         if not tariffs:
             return None
         stamp = int(wall_now.timestamp())
         key = (stamp - stamp % 900, until, self.market_prices.last_update)
-        cached = self._import_price_cache.get(side)
+        cached = self._import_price_cache.get((side, estimate))
         if cached is None or cached[0] != key:
-            prices = period_import_prices(next(iter(tariffs.values())), self.market_prices, wall_now, until, side)
-            cached = self._import_price_cache[side] = (key, prices)
+            prices = period_import_prices(
+                next(iter(tariffs.values())), self.market_prices, wall_now, until, side, estimate=estimate
+            )
+            cached = self._import_price_cache[(side, estimate)] = (key, prices)
         return cached[1]
 
     def _support_loads(self) -> tuple[dict[datetime, float], dict[datetime, float]]:

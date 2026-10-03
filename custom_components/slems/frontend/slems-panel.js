@@ -333,6 +333,9 @@ const STRINGS = {
     priceImport: "Import ({tariff})",
     priceExport: "Feed-in credit ({tariff})",
     priceSpot: "Market price",
+    priceEstimatedShort: "estimated",
+    priceEstimated:
+      "Faint: estimated from the same times of the last days (prices of the next day are published around 13:00); the price aware control plans with them until the real prices are known.",
     priceTime: "Time",
     tariffCurrent: "current",
     tariffMeasured: "Measured this month: the price aware control saved {amount} in {runs} nights (recorded costs against the same nights as usual).",
@@ -777,6 +780,9 @@ const STRINGS = {
     priceImport: "Bezug ({tariff})",
     priceExport: "Einspeisevergütung ({tariff})",
     priceSpot: "Börsenpreis",
+    priceEstimatedShort: "geschätzt",
+    priceEstimated:
+      "Blass: geschätzt aus denselben Uhrzeiten der letzten Tage (die Preise des Folgetags erscheinen gegen 13 Uhr); die preisbewusste Steuerung plant damit, bis die echten Preise bekannt sind.",
     priceTime: "Zeit",
     tariffCurrent: "aktuell",
     tariffMeasured: "Gemessen in diesem Monat: Die preisbewusste Steuerung hat in {runs} Nächten {amount} gespart (aufgezeichnete Kosten gegen dieselben Nächte wie üblich).",
@@ -2996,9 +3002,9 @@ class SlemsPanel extends HTMLElement {
     const body = this._showTable
       ? this._priceTable(slots, series)
       : this._priceSvg(slots, series) + `<div class="tooltip" id="pricetip" hidden></div>`;
-    const source = result.attribution
-      ? `<p class="hint">${escapeHtml(t.tariffSource.replace("{source}", result.attribution))}</p>`
-      : "";
+    const source =
+      (slots.some((slot) => slot.estimated) ? `<p class="hint">${escapeHtml(t.priceEstimated)}</p>` : "") +
+      (result.attribution ? `<p class="hint">${escapeHtml(t.tariffSource.replace("{source}", result.attribution))}</p>` : "");
     this._setSection(
       "pricechart",
       `<section class="card"><h2>${escapeHtml(t.priceTitle)}</h2><span class="hint">${escapeHtml(t.priceHint.replace("{minor}", this._minor()))}</span>
@@ -3060,25 +3066,33 @@ class SlemsPanel extends HTMLElement {
     const hourLines = labelled
       .map((h) => `<line x1="${x(h)}" x2="${x(h)}" y1="${pad.top}" y2="${pad.top + plotH}" stroke="${c.grid_line}" stroke-width="1"/>`)
       .join("");
-    // A step per quarter hour; a gap where a price is missing.
+    // A step per quarter hour; a gap where a price is missing. Estimated
+    // prices (after the last known market price) are drawn faint.
     const stepLine = (key, color, dashed) => {
-      const parts = [];
-      let open = false;
+      const parts = { known: [], estimated: [] };
+      let open = null;
       slots.forEach((slot, index) => {
         const value = slot[key];
         if (value === null || value === undefined) {
-          open = false;
+          open = null;
           return;
         }
+        const kind = slot.estimated ? "estimated" : "known";
         const next = slots[index + 1];
         const end = next && next.hour > slot.hour ? next.hour : slot.hour + 0.25;
         const yv = y(value).toFixed(1);
-        parts.push(open ? `V${yv}` : `M${x(slot.hour).toFixed(1)} ${yv}`, `H${x(end).toFixed(1)}`);
-        open = true;
+        parts[kind].push(open === kind ? `V${yv}` : `M${x(slot.hour).toFixed(1)} ${yv}`, `H${x(end).toFixed(1)}`);
+        open = kind;
       });
-      return `<path d="${parts.join(" ")}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"${
-        dashed ? ' stroke-dasharray="4 3"' : ""
-      }/>`;
+      return Object.entries(parts)
+        .filter(([, path]) => path.length)
+        .map(
+          ([kind, path]) =>
+            `<path d="${path.join(" ")}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"${
+              dashed ? ' stroke-dasharray="4 3"' : ""
+            }${kind === "estimated" ? ' opacity="0.4"' : ""}/>`
+        )
+        .join("");
     };
     // The market price first, so the tariff prices are drawn on top.
     const lines = [...series].reverse().map(([key, color, , dashed]) => stepLine(key, color, dashed)).join("");
@@ -3136,7 +3150,9 @@ class SlemsPanel extends HTMLElement {
     cross.setAttribute("x2", cx);
     cross.setAttribute("visibility", "visible");
     const time = (h) => `${String(Math.floor(h) % 24).padStart(2, "0")}:${String(Math.round((h % 1) * 60)).padStart(2, "0")}`;
-    tooltip.innerHTML = `<div class="tt-title">${time(slot.hour)}–${time(slot.hour + 0.25)}</div>${this._priceSeries
+    tooltip.innerHTML = `<div class="tt-title">${time(slot.hour)}–${time(slot.hour + 0.25)}${
+      slot.estimated ? ` (${escapeHtml(this._t.priceEstimatedShort)})` : ""
+    }</div>${this._priceSeries
       .map(([key, color, label]) =>
         slot[key] === null || slot[key] === undefined
           ? ""

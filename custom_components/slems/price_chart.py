@@ -57,10 +57,12 @@ def period_import_prices(
     end: datetime,
     side: Side = Side.IMPORT,
     period: timedelta = timedelta(seconds=SLOT_S),
+    estimate: bool = False,
 ) -> dict[datetime, float | None]:
     """Import price (or with ``side`` export the credit; ct/kWh incl. VAT) per
     local start of a quarter hour or an hour (``period``), the mean of its
-    quarters; None with a quarter without price (missing market price)."""
+    quarters; None with a quarter without price (missing market price).
+    ``estimate``: after the last known market price with the estimated ones."""
     local = dt_util.as_local(start)
     minutes = int(period.total_seconds() // 60)
     first = local.replace(minute=local.minute - local.minute % minutes, second=0, microsecond=0)
@@ -69,11 +71,14 @@ def period_import_prices(
     moment = dt_util.as_utc(first)
     end = dt_util.as_utc(end)
     quarters = int(period.total_seconds() // SLOT_S)
+    estimated = prices.estimates(moment, end) if estimate else {}
     while moment < end:
         values = []
         for quarter in range(quarters):
             slot = moment + timedelta(seconds=quarter * SLOT_S)
             spot = prices.price_at(slot)
+            if spot is None:
+                spot = estimated.get(int(slot.timestamp()))
             values.append(
                 kwh_price(tariff, side, dt_util.as_local(slot), None if spot is None else spot / 10, month_ct, prices.references)
             )
@@ -82,8 +87,10 @@ def period_import_prices(
     return result
 
 
-def day_prices(tariff: Tariff, prices: MarketPrices, day: date) -> list[dict[str, Any]]:
-    """Quarter hours of the local ``day`` with import, export and spot price (ct/kWh)."""
+def day_prices(tariff: Tariff, prices: MarketPrices, day: date, estimate: bool = False) -> list[dict[str, Any]]:
+    """Quarter hours of the local ``day`` with import, export and spot price
+    (ct/kWh); ``estimate``: after the last known market price the estimated
+    ones, marked ``estimated``."""
     zone = dt_util.get_default_time_zone()
     start = datetime.combine(day, time(), zone)
     end = datetime.combine(day + timedelta(days=1), time(), zone)
@@ -92,9 +99,13 @@ def day_prices(tariff: Tariff, prices: MarketPrices, day: date) -> list[dict[str
     slots = []
     # In UTC, so a day with a clock change has 92 or 100 quarter hours.
     moment, end = dt_util.as_utc(start), dt_util.as_utc(end)
+    estimated = prices.estimates(moment, end) if estimate else {}
     while moment < end:
         local = dt_util.as_local(moment)
         spot = prices.price_at(moment)
+        guess = spot is None and int(moment.timestamp()) in estimated
+        if guess:
+            spot = estimated[int(moment.timestamp())]
         spot_ct = None if spot is None else spot / 10
         slots.append(
             {
@@ -102,6 +113,7 @@ def day_prices(tariff: Tariff, prices: MarketPrices, day: date) -> list[dict[str
                 "import": _round(kwh_price(tariff, Side.IMPORT, local, spot_ct, month_ct, prices.references)),
                 "export": _round(kwh_price(tariff, Side.EXPORT, local, spot_ct, month_ct, prices.references)) if has_export else None,
                 "spot": _round(spot_ct),
+                "estimated": guess,
             }
         )
         moment += timedelta(seconds=SLOT_S)
@@ -143,7 +155,8 @@ def _ws_price_chart(hass: HomeAssistant, connection: websocket_api.ActiveConnect
     coordinator = entry.runtime_data
     prices = coordinator.market_prices
     day = dt_util.now().date() + timedelta(days=1 if msg["day"] == "tomorrow" else 0)
-    slots = day_prices(tariff, prices, day)
+    # Estimates as the price aware control plans with them (only with fetching on).
+    slots = day_prices(tariff, prices, day, estimate=prices.enabled)
     if not prices.enabled:
         # Fetching switched off: the stored market prices are not shown any more.
         for slot in slots:

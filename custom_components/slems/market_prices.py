@@ -13,12 +13,19 @@ kept in a local store: the last year is filled once, then the next day is
 fetched after the day-ahead auction (published around 13:00 local time).
 With the same consent the official monthly market values a tariff refers to
 are fetched (see reference_values), at most every ``REFERENCE_REFRESH``.
+
+After the last known price the price aware control plans with estimates
+(``estimate_prices``): per local quarter hour of the day the median of the
+last ``ESTIMATE_DAYS`` days of the same kind (working day or weekend), its
+deviation from the mean of that day profile reduced to ``ESTIMATE_SHARE``,
+so an uncertain swing counts less than a known one.
 """
 
 from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterable, Mapping
+import statistics
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 import logging
@@ -50,6 +57,10 @@ REQUEST_PAUSE_S = 1.0
 # Days per request of the sources that take a period.
 CHUNK_DAYS = 28
 REFERENCE_REFRESH = timedelta(hours=12)
+ESTIMATE_DAYS = 14
+# Days of the same kind needed for its own profile, else all days count.
+ESTIMATE_MIN_DAYS = 3
+ESTIMATE_SHARE = 0.5
 
 APG_URL = "https://transparency.apg.at/api/v1/EXAAD1P/Data/English/PT15M"
 SMARD_URL = "https://www.smard.de/app/chart_data/4169/DE-LU"
@@ -243,6 +254,50 @@ def hourly_means(prices: Mapping[int, float], start: datetime, end: datetime) ->
     return {dt_util.utc_from_timestamp(hour): total / count for hour, (total, count) in sums.items()}
 
 
+def estimate_prices(prices: Mapping[int, float], start: int, end: int) -> dict[int, float]:
+    """Estimated €/MWh of the quarter hours from ``start`` to ``end`` (epoch s)
+    after the last known price, from the profile of the recent days."""
+    if not prices:
+        return {}
+    last = max(prices)
+    first = max(start - start % SLOT_S, last + SLOT_S)
+    if first >= end:
+        return {}
+    zone = dt_util.get_default_time_zone()
+
+    def key(slot: int) -> tuple[bool, int]:
+        local = datetime.fromtimestamp(slot, zone)
+        return local.weekday() >= 5, local.hour * 60 + local.minute
+
+    samples: dict[tuple[bool, int], list[float]] = {}
+    for slot, price in prices.items():
+        if slot > last - ESTIMATE_DAYS * 86400:
+            samples.setdefault(key(slot), []).append(price)
+
+    def profile(weekend: bool) -> dict[int, float]:
+        """Median per minute of the day for one kind of day (or both if too few)."""
+        result = {}
+        for (kind, minute), values in samples.items():
+            if kind == weekend and len(values) >= ESTIMATE_MIN_DAYS:
+                result[minute] = statistics.median(values)
+        if len(result) < 24 * 4:
+            merged: dict[int, list[float]] = {}
+            for (_kind, minute), values in samples.items():
+                merged.setdefault(minute, []).extend(values)
+            result = {minute: statistics.median(values) for minute, values in merged.items()}
+        return result
+
+    profiles = {weekend: profile(weekend) for weekend in (False, True)}
+    means = {weekend: statistics.fmean(values.values()) if values else None for weekend, values in profiles.items()}
+    estimates = {}
+    for slot in range(first, end, SLOT_S):
+        weekend, minute = key(slot)
+        median, mean = profiles[weekend].get(minute), means[weekend]
+        if median is not None and mean is not None:
+            estimates[slot] = mean + ESTIMATE_SHARE * (median - mean)
+    return estimates
+
+
 def period_means(prices: Mapping[int, float], lengths: Mapping[datetime, int]) -> dict[datetime, float]:
     """Mean price (€/MWh) of each period (start -> length in s) with prices."""
     means = {}
@@ -348,6 +403,10 @@ class MarketPrices:
         """€/MWh of the quarter hour of ``moment``."""
         timestamp = int(moment.timestamp())
         return self.prices.get(timestamp - timestamp % SLOT_S)
+
+    def estimates(self, start: datetime, end: datetime) -> dict[int, float]:
+        """Estimated €/MWh per quarter hour (epoch s) after the last known price."""
+        return estimate_prices(self.prices, int(start.timestamp()), int(end.timestamp()))
 
     def hourly_means(self, start: datetime, end: datetime) -> dict[datetime, float]:
         return hourly_means(self.prices, start, end)

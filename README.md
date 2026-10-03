@@ -382,9 +382,18 @@ window with the lowest mean import price before the deadline (cheaper by at
 least the minimum gain than at the latest start); the consumer card shows
 *from … in the cheapest window*.
 
+**Estimated prices**: the day-ahead prices of the next day are published
+around 13:00. For the quarter hours after the last known price the price aware
+control plans with estimates: per time of day the median of the last 14 days
+of the same kind (working day or weekend), its swing around the mean of the
+day halved as a safety margin. So the night and a cloudy next day are planned
+before the real prices are known; a new plan follows as soon as they are.
+Only known negative prices start the plan for negative prices. The price
+chart shows the estimates faint.
+
 **Charge batteries from the grid** (switch, off by default; only with price
-aware control): in a deficit SLEMS plans until PV refills the batteries (at
-most until the last known price) which hours the batteries cover, which they
+aware control): in a deficit SLEMS plans until PV refills the batteries (after
+the last known price with the estimated ones) which hours the batteries cover, which they
 hold and in which they charge from the grid. A charge must pay after the
 charge and discharge losses, the [wear costs](#battery-wear-costs) and the
 minimum gain; of equal plans the later charge wins, as home storage ages
@@ -392,8 +401,7 @@ mostly with time at a high state of charge. Limits: *Highest state of charge
 from the grid* (default 90 %), *Highest grid charge power* (0 = the charge
 power of the batteries), the import limit of peak shaving and the space the
 feed-in cap needs when PV takes over. With a surplus nothing is charged from
-the grid. The plan includes the price hold (also with prices known only
-until midnight); the strategy shows *Grid charging* with the energy, the
+the grid. The plan includes the price hold; the strategy shows *Grid charging* with the energy, the
 start and the expected saving, the day chart the planned charging.
 
 **Negative prices**: with price aware control and a negative import price or
@@ -1626,10 +1634,8 @@ Possible extensions:
   recorded year (the battery model of the estimate with the settings of the
   simulation).
 - Consumers preferred at negative prices (e.g. the heating rod).
-- Price aware control: estimated prices for the hours after the last known
-  day-ahead price (from the same hours of the last days, with a safety
-  margin), so the night is planned before the next day's prices are
-  published; a more stable plan (changed only when clearly better).
+- Price aware control: a more stable plan (changed only when clearly
+  better).
 - Daily targets of the consumers planned together with the batteries.
 - Index tariffs (e.g. on the Austrian electricity price index ÖSPI): a line
   type with the supplier's formula, the monthly index values fetched (with

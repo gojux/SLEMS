@@ -64,3 +64,23 @@ def test_prices_per_quarter_hour_and_per_hour() -> None:
     assert min(quarters) == datetime(2026, 11, 3, 18, 15, tzinfo=zone)
     hourly = hourly_import_prices(tariff, fake_prices(prices), start, start + timedelta(minutes=40))
     assert list(hourly.values()) == pytest.approx([25.0])
+
+
+def test_estimated_prices_after_the_last_known_one() -> None:
+    from datetime import timedelta
+
+    from custom_components.slems.price_chart import period_import_prices
+
+    tariff = Tariff("T", Role.CURRENT, (TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.SPOT, 1.0),), {})
+    zone = dt_util.get_default_time_zone()
+    start = datetime(2026, 11, 3, 23, 30, tzinfo=zone)
+    known = int(start.timestamp())
+    prices = fake_prices({known: 100.0, known + 900: 100.0})
+    prices.estimates = lambda first, end: {known + 1800: 80.0}
+    end = start + timedelta(hours=1)
+    # Without estimates the price ends with the known ones.
+    assert list(period_import_prices(tariff, prices, start, end).values())[2:] == [None, None]
+    estimated = list(period_import_prices(tariff, prices, start, end, estimate=True).values())
+    # Known 10 + 1 ct, then the estimate 8 + 1 ct; nothing estimated for the last quarter.
+    assert estimated[:3] == pytest.approx([11.0, 11.0, 9.0])
+    assert estimated[3] is None

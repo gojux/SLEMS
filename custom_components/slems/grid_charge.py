@@ -2,7 +2,8 @@
 (both optional, price aware).
 
 Planned quarter hour by quarter hour (the backtest: hour by hour) until PV
-refills the batteries, at most until the end of the known prices, with
+refills the batteries, at most until the end of the prices (known or
+estimated, see market_prices.estimate_prices), with
 dynamic programming over the stored energy (steps of ``STEP_PCT`` of the
 capacity). In each period with a deficit the batteries may
 cover all of it (exactly, levels in between interpolated), a part of it in steps, nothing
