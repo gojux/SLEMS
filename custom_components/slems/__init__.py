@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import json
 from typing import Any
 
 from homeassistant.const import Platform
@@ -23,6 +24,7 @@ from .const import (
     REMOVED_SETTINGS,
     SUBENTRY_TYPE_BATTERY,
     SUBENTRY_TYPE_CONSUMER,
+    SUBENTRY_TYPE_TARIFF,
     EfficiencyMode,
 )
 from .consumers import ConsumerConfig
@@ -101,6 +103,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
         await async_check_tariff_updates(hass, entry)
 
     entry.async_on_unload(async_track_time_change(hass, _check_tariffs, hour=6, minute=0, second=0))
+    coordinator.setup_key = _setup_key(entry)
     return True
 
 
@@ -127,8 +130,24 @@ async def async_remove_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> No
 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> None:
-    """Reload the entry after its configuration changed."""
+    """Reload the entry after its configuration changed; a change of tariffs only
+    needs no reload (they are read with every computation), just a refresh."""
+    coordinator = getattr(entry, "runtime_data", None)
+    if coordinator is not None and coordinator.setup_key == _setup_key(entry):
+        coordinator.tariffs_changed()
+        hass.async_create_task(async_check_tariff_updates(hass, entry))
+        return
     hass.config_entries.async_schedule_reload(entry.entry_id)
+
+
+def _setup_key(entry: SlemsConfigEntry) -> str:
+    """Everything the setup depends on: the configuration without the tariffs."""
+    subentries = sorted(
+        (subentry.subentry_id, subentry.subentry_type, subentry.title, dict(subentry.data))
+        for subentry in entry.subentries.values()
+        if subentry.subentry_type != SUBENTRY_TYPE_TARIFF
+    )
+    return json.dumps([dict(entry.data), dict(entry.options), subentries], sort_keys=True, default=str)
 
 
 def _efficiency_tracker(driver: BatteryDriver, data: Mapping[str, Any]) -> EfficiencyTracker:

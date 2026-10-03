@@ -340,6 +340,10 @@ class MarketPrices:
             self._cached_source = None
         self._sync()
 
+    def refresh(self) -> None:
+        """Fetch what is missing now (e.g. reference values a new tariff needs)."""
+        self._sync()
+
     def price_at(self, moment: datetime) -> float | None:
         """€/MWh of the quarter hour of ``moment``."""
         timestamp = int(moment.timestamp())

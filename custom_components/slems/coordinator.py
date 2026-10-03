@@ -719,6 +719,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.price_savings = PriceSavings()
         # Hourly prices per side (import, feed-in credit): (quarter hour, end, prices update), prices.
         self._import_price_cache: dict[Side, tuple[tuple, dict]] = {}
+        # Configuration the setup depends on (see __init__._setup_key).
+        self.setup_key: str | None = None
         # Price plans of the last inputs (real and simulated) -> (monotonic expiry, plan).
         self._grid_charge_cache: dict[tuple, tuple[float, GridChargePlan | None]] = {}
         # Duration of the price plans made since the start (also for the simulation).
@@ -791,10 +793,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         """Restore learned data and follow the grid meter."""
         stored = await self._store.async_load() or {}
         await self.market_prices.async_load()
-        # The official monthly market values the tariffs refer to (fetched with the market prices).
-        self.market_prices.wanted_references = {
-            item.market for tariff in configured_tariffs(self.config_entry).values() for item in tariff.items if item.market
-        }
+        self._wanted_references()
         self.grid_quarters = GridQuarters.from_dict(await self._quarters_store.async_load())
         self.pv_accuracy.restore(stored.get(PV_ACCURACY_STORE_KEY))
         self.morning_gap = MorningGapLearner.from_dict(stored.get(MORNING_GAP_STORE_KEY))
@@ -924,6 +923,22 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if counter is not None and state is not None and state.energy_kwh is not None:
             so_far += max(0.0, state.energy_kwh - counter) * 1000
         return so_far
+
+    def _wanted_references(self) -> None:
+        """The official monthly market values the tariffs refer to (fetched with the market prices)."""
+        self.market_prices.wanted_references = {
+            item.market for tariff in configured_tariffs(self.config_entry).values() for item in tariff.items if item.market
+        }
+
+    @callback
+    def tariffs_changed(self) -> None:
+        """A tariff was added, changed or removed (no reload needed): forget what
+        was computed with the old tariffs."""
+        self._import_price_cache.clear()
+        self._grid_charge_cache.clear()
+        self._wanted_references()
+        self.market_prices.references_update = None
+        self.market_prices.refresh()
 
     def _forecast_sources(self) -> ForecastSources:
         config = self._config
