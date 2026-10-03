@@ -461,6 +461,7 @@
             "price": "Preis",
             "factor_pct": "Aufschlag auf den Börsenpreis",
             "month_prices": "Monatsmarktpreise",
+            "market": "Monatswert",
             "valid_from": "Gültig ab",
             "valid_to": "Gültig bis",
             "months": "Nur in Monaten",
@@ -474,6 +475,7 @@
             "price": "Netto (ohne USt.) in ct/kWh oder €/Jahr wie auf der Rechnung; ein Rabatt ist negativ. Auf der Einspeiseseite ist der Energiepreis die Vergütung, die du bekommst. Bei Börsenpreis und Monatsmarktpreis: der feste Aufschlag in ct/kWh (negativ: Abzug). Prozent der Gruppe: z. B. 7 für eine Abgabe von 7 % auf die anderen Posten derselben Seite und Gruppe.",
             "factor_pct": "Nur bei Börsenpreis und Monatsmarktpreis: Preis = Börsenpreis × (1 + Prozent) + Preis. Z. B. −10 % für eine Vergütung von 90 % des Marktpreises.",
             "month_prices": "Optional, nur beim Monatsmarktpreis: veröffentlichte Werte in ct/kWh, z. B. „2026-01: 8,5; 2026-02: 7,9“. Monate ohne Wert: Mittel der Börsenpreise, gewichtet mit deiner Einspeisung.",
+            "market": "Nur beim Monatsmarktpreis: der offizielle Monatswert, dem der Preis folgt. Er wird mit den Börsenpreisen abgerufen; bis ein Monat veröffentlicht ist, gilt das Mittel der Börsenpreise, gewichtet mit deiner Einspeisung.",
             "valid_from": "Optional. Bei einer Preisänderung: den Posten mit dem neuen Preis und diesem Datum noch einmal anlegen.",
             "valid_to": "Optional: der letzte Tag des Postens, z. B. wenn ein Preisstand endet.",
             "months": "Optional, z. B. für einen günstigeren Sommerpreis.",
@@ -649,6 +651,14 @@
         "4": "Freitag",
         "5": "Samstag",
         "6": "Sonntag"
+      }
+    },
+    "tariff_market": {
+      "options": {
+        "own": "Mittel der Börsenpreise, gewichtet mit deiner Einspeisung",
+        "at-pv": "Referenzmarktwert PV (E-Control, AT)",
+        "at-wind": "Referenzmarktwert Wind (E-Control, AT)",
+        "at-hydro": "Referenzmarktwert Wasserkraft (E-Control, AT)"
       }
     }
   },

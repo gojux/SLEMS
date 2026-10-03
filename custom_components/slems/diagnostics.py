@@ -170,6 +170,9 @@ def _system(coordinator: SlemsCoordinator) -> dict:
             "quarter_hours": len(market.prices),
             "last_update": market.last_update.isoformat() if market.last_update else None,
             "error": market.last_error,
+            # Official monthly market values the tariffs use: months per market.
+            "references": {name: len(values) for name, values in market.references.items()},
+            "references_update": market.references_update.isoformat() if market.references_update else None,
         },
         # Duration of the price plans (quarter hours) since the start.
         "price_plan_timing": coordinator.grid_charge_timing.as_dict(),

@@ -47,6 +47,7 @@ from typing import Any
 
 import yaml
 
+from .reference_values import MARKETS
 from .tariff import Group, Role, Side, TariffItem, Unit
 
 FORMAT = "slems-tariff"
@@ -68,7 +69,7 @@ DEFAULT_VAT = {
 _TOP_KEYS = {"format", "version", "name", "vat_pct", "items", *META_KEYS}
 _ITEM_KEYS = {
     "name", "side", "group", "unit", "price", "factor_pct", "valid_from", "valid_to",
-    "months", "weekdays", "time_from", "time_to", "month_prices", "optional",
+    "months", "weekdays", "time_from", "time_to", "month_prices", "optional", "market",
 }
 # Version -> function that turns a file of that version into the next one.
 _MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {}
@@ -122,6 +123,8 @@ def _item_document(item: TariffItem) -> dict[str, Any]:
         document["time_to"] = item.time_to.strftime("%H:%M")
     if item.month_prices:
         document["month_prices"] = dict(item.month_prices)
+    if item.market:
+        document["market"] = item.market
     return document
 
 
@@ -288,6 +291,9 @@ def _parse_item(item: Any, index: int) -> TariffItem:
             raise ValueError
     except (TypeError, ValueError):
         raise invalid("month_prices") from None
+    market = item.get("market")
+    if market is not None and (market not in MARKETS or choice("unit", Unit) is not Unit.MARKET_MONTH):
+        raise invalid("market")
     return TariffItem(
         name=name.strip(),
         side=choice("side", Side),
@@ -302,6 +308,7 @@ def _parse_item(item: Any, index: int) -> TariffItem:
         factor_pct=float(factor),
         month_prices=prices,
         valid_to=_date(item["valid_to"], f"{index}: valid_to") if item.get("valid_to") else None,
+        market=market,
     )
 
 

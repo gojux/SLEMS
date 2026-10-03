@@ -164,6 +164,7 @@ from .tariff import (
     tariff_from_data,
     vat_data,
 )
+from .reference_values import MARKETS as REFERENCE_MARKETS
 from .tariff_yaml import VERSION as YAML_VERSION
 from .tariff_yaml import TariffYamlError, export_yaml, parse_yaml
 from .tariff_updates import (
@@ -1884,6 +1885,9 @@ class TariffSubentryFlow(ConfigSubentryFlow):
                 )
             ),
             _optional("month_prices", current): selector.TextSelector(),
+            vol.Optional("market", default=current.get("market") or "own"): _tariff_select(
+                ["own", *REFERENCE_MARKETS], "tariff_market"
+            ),
             _optional("valid_from", current): selector.DateSelector(),
             _optional("valid_to", current): selector.DateSelector(),
             vol.Optional("months", default=[str(m) for m in current.get("months") or []]): _tariff_select(
@@ -1951,7 +1955,8 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         market = None
         if tariff.dynamic and coordinator is not None:
             market = coordinator.market_prices.period_means(energy.lengths)
-        bill = compute_bill(tariff, start, end, energy.imported, energy.exported, market)
+        references = coordinator.market_prices.references if coordinator is not None else None
+        bill = compute_bill(tariff, start, end, energy.imported, energy.exported, market, references)
         language = self.hass.config.language
         words = _CHECK_WORDS["de" if language.startswith("de") else "en"]
         lines = [
@@ -1992,6 +1997,7 @@ def _item_from_input(user_input: dict[str, Any]) -> TariffItem:
         factor_pct=float(user_input.get("factor_pct") or 0.0),
         month_prices=parse_month_prices(user_input.get("month_prices") or ""),
         valid_to=date.fromisoformat(user_input["valid_to"]) if user_input.get("valid_to") else None,
+        market=None if user_input.get("market") in (None, "own") or user_input["unit"] != Unit.MARKET_MONTH else user_input["market"],
     )
 
 

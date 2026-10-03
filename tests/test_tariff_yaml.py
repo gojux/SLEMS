@@ -125,3 +125,16 @@ def test_percent_items_and_grid_area() -> None:
     assert data["meta"]["grid_area"] == "Example area, level 7"
     assert data["items"][1]["unit"] == "percent"
     assert parse_yaml(export_yaml(name, data)) == (name, data)
+
+
+def test_market_of_a_monthly_item() -> None:
+    _, data = parse_yaml(
+        "format: slems-tariff\nversion: 1\nname: PV\nitems:\n"
+        "  - {name: Credit, side: export, group: energy, unit: market_month, price: -0.6, market: at-pv}\n"
+    )
+    assert data["items"][0]["market"] == "at-pv"
+    with pytest.raises(TariffYamlError):
+        parse_yaml(
+            "format: slems-tariff\nversion: 1\nname: PV\nitems:\n"
+            "  - {name: Credit, side: export, group: energy, unit: kwh, price: 7, market: at-pv}\n"
+        )

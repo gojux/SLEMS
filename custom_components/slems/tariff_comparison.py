@@ -63,6 +63,7 @@ def compare(
     imported: Mapping[datetime, float],
     exported: Mapping[datetime, float],
     market: Mapping[datetime, float],
+    references: Mapping[str, Mapping[str, float]] | None = None,
 ) -> list[dict[str, Any]]:
     """Per month from ``first`` to ``last`` (both included): energy and the costs per tariff.
 
@@ -79,7 +80,7 @@ def compare(
             costs = {}
             energy = None
             for key, tariff in tariffs.items():
-                bill = compute_bill(tariff, start, end, month_import, month_export, month_market)
+                bill = compute_bill(tariff, start, end, month_import, month_export, month_market, references)
                 energy = (bill.import_kwh, bill.export_kwh)
                 costs[key] = {
                     "import": round(bill.side_gross(tariff, Side.IMPORT), 2),
@@ -110,6 +111,7 @@ def backtest_savings(
     import_prices: Mapping[str, Mapping[datetime, float | None]],
     market: Mapping[datetime, float],
     min_gain_ct: float,
+    references: Mapping[str, Mapping[str, float]] | None = None,
 ) -> dict[str, dict[str, float]]:
     """Per month ("2026-05") and tariff the estimated saving (€) of the price aware control."""
     hours = sorted(load_wh)
@@ -117,8 +119,8 @@ def backtest_savings(
     savings: dict[str, dict[str, float]] = {}
     for key, tariff in tariffs.items():
         aware = play(hours, load_wh, pv_wh, battery, import_prices[key], min_gain_ct)
-        before = compare({key: tariff}, first, last, *usual, market)
-        after = {row["month"]: row for row in compare({key: tariff}, first, last, *aware, market)}
+        before = compare({key: tariff}, first, last, *usual, market, references)
+        after = {row["month"]: row for row in compare({key: tariff}, first, last, *aware, market, references)}
         for row in before:
             if row["month"] in after:
                 saving = row["costs"][key]["total"] - after[row["month"]]["costs"][key]["total"]
@@ -172,7 +174,7 @@ async def async_tariff_comparison(hass: HomeAssistant, entry: SlemsConfigEntry) 
         prices = coordinator.market_prices
         market = prices.period_means(energy.lengths) if any(t.dynamic for t in tariffs.values()) else {}
         result["months"] = await hass.async_add_executor_job(
-            compare, tariffs, first, today, energy.imported, energy.exported, market
+            compare, tariffs, first, today, energy.imported, energy.exported, market, prices.references
         )
         # Hours only known from the hourly mean of the grid power (less exact).
         result["power_hours"] = energy.hours_from_power
@@ -228,7 +230,7 @@ async def _async_savings(
         import_prices = {key: hourly_import_prices(tariff, prices, start, end) for key, tariff in tariffs.items()}
         return backtest_savings(
             tariffs, first, today, load, pv, battery, import_prices, market,
-            coordinator.settings.price_min_gain_ct,
+            coordinator.settings.price_min_gain_ct, prices.references,
         )
 
     return await hass.async_add_executor_job(run)

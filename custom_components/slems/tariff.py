@@ -93,6 +93,9 @@ class TariffItem:
     month_prices: tuple[tuple[str, float], ...] = ()
     # Last day of the item (e.g. a price level replaced by a newer one).
     valid_to: date | None = None
+    # ``market_month``: the official monthly value it follows (see
+    # reference_values, e.g. "at-pv"); None: the day-ahead mean weighted by the feed-in.
+    market: str | None = None
 
     @property
     def specificity(self) -> int:
@@ -130,6 +133,7 @@ class TariffItem:
             "factor_pct": self.factor_pct,
             "month_prices": dict(self.month_prices),
             "valid_to": self.valid_to.isoformat() if self.valid_to else None,
+            "market": self.market,
         }
 
     def ct_per_kwh(self, market_ct: float | None) -> float | None:
@@ -159,6 +163,7 @@ class TariffItem:
             factor_pct=float(data.get("factor_pct") or 0.0),
             month_prices=tuple(sorted((str(k), float(v)) for k, v in (data.get("month_prices") or {}).items())),
             valid_to=date.fromisoformat(data["valid_to"]) if data.get("valid_to") else None,
+            market=data.get("market") or None,
         )
 
 
@@ -234,12 +239,14 @@ def compute_bill(
     import_wh: Mapping[datetime, float],
     export_wh: Mapping[datetime, float],
     market_prices: Mapping[datetime, float] | None = None,
+    references: Mapping[str, Mapping[str, float]] | None = None,
 ) -> Bill:
     """Bill for the days ``start`` to ``end`` (both included).
 
     ``import_wh`` / ``export_wh`` map period starts (hours or quarter hours,
     any time zone) to the energy of that period, ``market_prices`` the same
-    starts to the day-ahead price in €/MWh.
+    starts to the day-ahead price in €/MWh; ``references``: the official
+    monthly market values (market -> month -> ct/kWh).
     """
     market_prices = market_prices or {}
     monthly = monthly_market_prices(export_wh, market_prices)
@@ -291,7 +298,9 @@ def compute_bill(
             base: dict[Group, float] = {}
             for item in _chosen_items(tariff, side, local):
                 price = item.ct_per_kwh(
-                    _market_ct(item, local, None if spot is None else spot / 10, monthly.get((local.year, local.month)))
+                    _market_ct(
+                        item, local, None if spot is None else spot / 10, monthly.get((local.year, local.month)), references
+                    )
                 )
                 if price is None:
                     unpriced = True
@@ -328,19 +337,33 @@ def _percent_items(tariff: Tariff, side: Side, local: datetime) -> list[TariffIt
 
 
 def _market_ct(
-    item: TariffItem, local: datetime, spot_ct: float | None, month_ct: float | None
+    item: TariffItem,
+    local: datetime,
+    spot_ct: float | None,
+    month_ct: float | None,
+    references: Mapping[str, Mapping[str, float]] | None = None,
 ) -> float | None:
-    """Market price (ct/kWh) a dynamic item refers to at ``local``."""
+    """Market price (ct/kWh) a dynamic item refers to at ``local``; for a
+    monthly one the value entered, else the official one, else ``month_ct``."""
     if item.unit is Unit.SPOT:
         return spot_ct
     if item.unit is Unit.MARKET_MONTH:
-        entered = dict(item.month_prices).get(f"{local.year:04d}-{local.month:02d}")
-        return entered if entered is not None else month_ct
+        month = f"{local.year:04d}-{local.month:02d}"
+        entered = dict(item.month_prices).get(month)
+        if entered is not None:
+            return entered
+        official = (references or {}).get(item.market or "", {}).get(month)
+        return official if official is not None else month_ct
     return None
 
 
 def kwh_price(
-    tariff: Tariff, side: Side, local: datetime, spot_ct: float | None, month_ct: float | None
+    tariff: Tariff,
+    side: Side,
+    local: datetime,
+    spot_ct: float | None,
+    month_ct: float | None,
+    references: Mapping[str, Mapping[str, float]] | None = None,
 ) -> float | None:
     """Price of a kWh at ``local`` in ct incl. VAT, without yearly items.
 
@@ -349,7 +372,7 @@ def kwh_price(
     """
     groups: dict[Group, float] = {}
     for item in _chosen_items(tariff, side, local):
-        price = item.ct_per_kwh(_market_ct(item, local, spot_ct, month_ct))
+        price = item.ct_per_kwh(_market_ct(item, local, spot_ct, month_ct, references))
         if price is None:
             return None
         groups[item.group] = groups.get(item.group, 0.0) + price

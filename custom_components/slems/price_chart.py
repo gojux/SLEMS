@@ -75,7 +75,7 @@ def period_import_prices(
             slot = moment + timedelta(seconds=quarter * SLOT_S)
             spot = prices.price_at(slot)
             values.append(
-                kwh_price(tariff, side, dt_util.as_local(slot), None if spot is None else spot / 10, month_ct)
+                kwh_price(tariff, side, dt_util.as_local(slot), None if spot is None else spot / 10, month_ct, prices.references)
             )
         result[dt_util.as_local(moment)] = None if None in values else sum(values) / len(values)
         moment += period
@@ -99,8 +99,8 @@ def day_prices(tariff: Tariff, prices: MarketPrices, day: date) -> list[dict[str
         slots.append(
             {
                 "start": local.isoformat(),
-                "import": _round(kwh_price(tariff, Side.IMPORT, local, spot_ct, month_ct)),
-                "export": _round(kwh_price(tariff, Side.EXPORT, local, spot_ct, month_ct)) if has_export else None,
+                "import": _round(kwh_price(tariff, Side.IMPORT, local, spot_ct, month_ct, prices.references)),
+                "export": _round(kwh_price(tariff, Side.EXPORT, local, spot_ct, month_ct, prices.references)) if has_export else None,
                 "spot": _round(spot_ct),
             }
         )

@@ -461,6 +461,7 @@
             "price": "Price",
             "factor_pct": "Share on top of the market price",
             "month_prices": "Monthly market prices",
+            "market": "Monthly value",
             "valid_from": "Valid from",
             "valid_to": "Valid until",
             "months": "Only in months",
@@ -474,6 +475,7 @@
             "price": "Net (without VAT) in ct/kWh or €/year as on the bill; a discount is negative. On the feed-in side the energy price is the credit you get. For spot price and monthly market price: the fixed markup in ct/kWh (negative: deduction). Percent of the group: e.g. 7 for a levy of 7 % on the other items of the same side and group.",
             "factor_pct": "Only for spot price and monthly market price: price = market price × (1 + percent) + price. E.g. −10 % for a credit of 90 % of the market price.",
             "month_prices": "Optional, only for the monthly market price: published values in ct/kWh, e.g. \"2026-01: 8.5; 2026-02: 7.9\". Months without a value: mean of the spot prices weighted by your feed-in.",
+            "market": "Only for the monthly market price: the official monthly value the price follows. It is fetched with the market prices; until a month is published, the day-ahead mean weighted by your feed-in stands in.",
             "valid_from": "Optional. For a price change: add the line again with the new price and this date.",
             "valid_to": "Optional: the last day of the line, e.g. when a price level ends.",
             "months": "Optional, e.g. for a reduced summer price.",
@@ -649,6 +651,14 @@
         "4": "Friday",
         "5": "Saturday",
         "6": "Sunday"
+      }
+    },
+    "tariff_market": {
+      "options": {
+        "own": "Day-ahead mean, weighted by your feed-in",
+        "at-pv": "Reference market value PV (E-Control, AT)",
+        "at-wind": "Reference market value wind (E-Control, AT)",
+        "at-hydro": "Reference market value hydro (E-Control, AT)"
       }
     }
   },

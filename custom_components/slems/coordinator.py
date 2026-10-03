@@ -791,6 +791,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         """Restore learned data and follow the grid meter."""
         stored = await self._store.async_load() or {}
         await self.market_prices.async_load()
+        # The official monthly market values the tariffs refer to (fetched with the market prices).
+        self.market_prices.wanted_references = {
+            item.market for tariff in configured_tariffs(self.config_entry).values() for item in tariff.items if item.market
+        }
         self.grid_quarters = GridQuarters.from_dict(await self._quarters_store.async_load())
         self.pv_accuracy.restore(stored.get(PV_ACCURACY_STORE_KEY))
         self.morning_gap = MorningGapLearner.from_dict(stored.get(MORNING_GAP_STORE_KEY))

@@ -22,7 +22,9 @@ def fake_prices(prices: dict[int, float]) -> SimpleNamespace:
         stamp = int(moment.timestamp())
         return prices.get(stamp - stamp % 900)
 
-    return SimpleNamespace(price_at=price_at, hourly_means=lambda start, end: hourly_means(prices, start, end))
+    return SimpleNamespace(
+        price_at=price_at, hourly_means=lambda start, end: hourly_means(prices, start, end), references={}
+    )
 
 
 def test_quarter_hours_of_a_day_with_monthly_mean() -> None:

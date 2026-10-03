@@ -338,7 +338,11 @@ jeweils als Marktpreis × (1 + Aufschlag in %) + Preis in ct/kWh, z. B.
 „Börsenpreis × 1,05 + 1,2 ct“ oder „Monatsmarktpreis − 0,5 ct“ für die
 Einspeisung. Veröffentlichte Monatsmarktpreise lassen sich je Monat eintragen
 (z. B. „2026-08: 7,1“); Monate ohne Wert nutzen das Mittel der Börsenpreise,
-gewichtet mit deiner Einspeisung.
+gewichtet mit deiner Einspeisung. Folgt der Preis einem offiziellen
+Monatswert, wählst du ihn beim Posten als *Monatswert* (Österreich: der
+Referenzmarktwert PV, Wind oder Wasserkraft der E-Control nach § 13 EAG);
+SLEMS holt ihn dann mit den Börsenpreisen, bis zur Veröffentlichung gilt das
+gewichtete Mittel.
 
 SLEMS ruft Börsenpreise erst aus dem Internet ab, wenn du *Börsenpreise
 abrufen* einschaltest (standardmäßig aus). *Preisquelle* wählt woher: APG

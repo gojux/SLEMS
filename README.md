@@ -325,7 +325,11 @@ market: *spot price (hourly)* or *monthly market price*, each as market price
 × (1 + share in %) + price in ct/kWh, e.g. "spot × 1.05 + 1.2 ct" or
 "monthly market price − 0.5 ct" for the feed-in. Published monthly market
 prices can be entered per month (e.g. "2026-08: 7.1"); months without a value
-use the mean of the spot prices weighted by your feed-in.
+use the mean of the spot prices weighted by your feed-in. If the price
+follows an official monthly value, choose it as the line's *Monthly value*
+(Austria: the reference market value for PV, wind or hydro published by
+E-Control according to § 13 EAG); SLEMS then fetches it with the market
+prices, the weighted mean stands in until it is published.
 
 SLEMS only fetches market prices from the internet once you switch on
 *Fetch market prices* (off by default). *Price source* selects where from:

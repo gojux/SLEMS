@@ -11,6 +11,8 @@ market switched to quarter hours are repeated for each quarter):
 Nothing is fetched until the user switches the fetching on. The prices are
 kept in a local store: the last year is filled once, then the next day is
 fetched after the day-ahead auction (published around 13:00 local time).
+With the same consent the official monthly market values a tariff refers to
+are fetched (see reference_values), at most every ``REFERENCE_REFRESH``.
 """
 
 from __future__ import annotations
@@ -30,6 +32,11 @@ from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
+from .reference_values import ReferenceError, async_fetch_at_reference
+from .reference_values import ATTRIBUTION as REFERENCE_ATTRIBUTIONS
+
+REFERENCE_ATTRIBUTION = next(iter(REFERENCE_ATTRIBUTIONS.values()))
+
 _LOGGER = logging.getLogger(__name__)
 
 SLOT_S = 900
@@ -42,6 +49,7 @@ REQUEST_TIMEOUT_S = 30
 REQUEST_PAUSE_S = 1.0
 # Days per request of the sources that take a period.
 CHUNK_DAYS = 28
+REFERENCE_REFRESH = timedelta(hours=12)
 
 APG_URL = "https://transparency.apg.at/api/v1/EXAAD1P/Data/English/PT15M"
 SMARD_URL = "https://www.smard.de/app/chart_data/4169/DE-LU"
@@ -261,9 +269,16 @@ class MarketPrices:
         self._task: asyncio.Task | None = None
         self._started = False
         self._unsub: list = []
+        # Official monthly market values (reference_values): market -> month -> ct/kWh,
+        # the ones the tariffs use, and when they were fetched.
+        self.references: dict[str, dict[str, float]] = {}
+        self.wanted_references: set[str] = set()
+        self.references_update: datetime | None = None
 
     @property
     def attribution(self) -> str:
+        if self.references:
+            return f"{ATTRIBUTION[self.source]}; {REFERENCE_ATTRIBUTION}"
         return ATTRIBUTION[self.source]
 
     async def async_load(self) -> None:
@@ -280,6 +295,13 @@ class MarketPrices:
                 self.last_update = dt_util.parse_datetime(data["last_update"])
         except (KeyError, TypeError, ValueError):
             self.prices = {}
+        references = data.get("references") or {}
+        self.references = {
+            str(market): {str(month): float(value) for month, value in values.items()}
+            for market, values in (references.get("values") or {}).items()
+        }
+        if references.get("updated"):
+            self.references_update = dt_util.parse_datetime(references["updated"])
 
     def start(self) -> None:
         """Begin the regular update (after the entities restored the settings)."""
@@ -383,6 +405,23 @@ class MarketPrices:
             self.last_error = str(err)
             return
         self.last_error = None
+        await self._async_fetch_references(session)
+
+    async def _async_fetch_references(self, session: aiohttp.ClientSession) -> None:
+        """The official monthly market values the tariffs use (see reference_values)."""
+        if not self.wanted_references:
+            return
+        now = dt_util.utcnow()
+        if self.references_update and now - self.references_update < REFERENCE_REFRESH:
+            return
+        try:
+            fetched = await async_fetch_at_reference(session)
+        except ReferenceError as err:
+            _LOGGER.warning("Reference market values not available: %s", err)
+            return
+        self.references = {market: fetched[market] for market in self.wanted_references if market in fetched}
+        self.references_update = now
+        self._store.async_delay_save(self._data_to_save, 10)
 
     def _prune(self, first: date) -> None:
         oldest, _ = day_bounds(first - timedelta(days=1))
@@ -390,12 +429,17 @@ class MarketPrices:
             del self.prices[slot]
 
     def _data_to_save(self) -> dict:
+        references = {
+            "values": self.references,
+            "updated": self.references_update.isoformat() if self.references_update else None,
+        }
         if not self.prices:
-            return {"source": self.source.value, "start": 0, "values": []}
+            return {"source": self.source.value, "start": 0, "values": [], "references": references}
         start, end = min(self.prices), max(self.prices)
         return {
             "source": self.source.value,
             "start": start,
             "values": [self.prices.get(slot) for slot in range(start, end + SLOT_S, SLOT_S)],
             "last_update": self.last_update.isoformat() if self.last_update else None,
+            "references": references,
         }
