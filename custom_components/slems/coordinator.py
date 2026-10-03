@@ -236,6 +236,9 @@ NO_POWER_STORE_KEY = "no_power"
 THERMAL_SAFETY = 0.8
 # A power consumer counts as commanded at full power from this share on.
 FULL_COMMAND_SHARE = 0.9
+# Its power is learned once a command is this old, at least twice its
+# response time (some devices take several seconds to follow).
+CONSUMER_SETTLE_S = 15.0
 MORNING_GAP_STORE_KEY = "morning_gap"
 PRICE_SAVINGS_STORE_KEY = "price_savings"
 # Hourly statistics of an hour are compiled a little after it ended.
@@ -1281,7 +1284,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             state = snapshot.consumers[consumer.subentry_id]
             learner = self.consumer_learners[consumer.subentry_id]
             full_power = self._full_power_w(consumer)
-            full_command = command is not None and command >= FULL_COMMAND_SHARE * full_power
+            since = self.controller.consumer_command_since(consumer.subentry_id)
+            response = self.controller.consumer_response_s(consumer.subentry_id, on=True) or 0.0
+            settled = since is None or now - since >= max(CONSUMER_SETTLE_S, 2 * response)
+            full_command = command is not None and command >= FULL_COMMAND_SHARE * full_power and settled
             learner.update(now, command is not None and command > 0, state.power_w, full_command)
             if thermal := self.thermal_learners.get(consumer.subentry_id):
                 thermal.update(
@@ -2066,31 +2072,32 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         return self.settings.surplus_average_window_s
 
     def effective_consumer(self, consumer: ConsumerConfig) -> ConsumerConfig:
-        """The consumer with its active phases (current control) and, if switched on,
-        its learned power and thermostat behaviour.
+        """The consumer with its active phases (current control), its observed
+        thermostat cycling and, if switched on, its learned power.
 
         On/off: the learned power replaces the nominal power. Power controlled:
-        the maximum power is capped at the learned highest power, so no power
-        is planned that the device does not take (never raised above the
-        configured maximum, never below the minimum power).
+        the learned power at full command becomes its nominal power, used for
+        planning (forecast, daily target, feed-in cap); the maximum power it is
+        commanded stays as configured, as its power varies (e.g. a heating
+        element with the water temperature) and the batteries balance what it
+        does not take.
         """
         if consumer.control_mode is ControlMode.CURRENT:
             consumer = consumer.with_phases(active_phases(self.hass, consumer))
+        learner = self.consumer_learners.get(consumer.subentry_id)
+        if learner is None:
+            return consumer
+        # Observed pauses of its own thermostat apply also without the learned values.
+        if learner.thermostat_cycles and not consumer.thermostat_cycles:
+            consumer = replace(consumer, thermostat_cycles=True)
         if consumer.subentry_id not in self.consumer_learning:
             return consumer
-        learner = self.consumer_learners[consumer.subentry_id]
         nominal = learner.nominal_w
-        thermostat_cycles = consumer.thermostat_cycles or learner.thermostat_cycles
-        if consumer.control_mode is ControlMode.SWITCH:
-            return replace(
-                consumer,
-                nominal_power_w=nominal if nominal is not None else consumer.nominal_power_w,
-                thermostat_cycles=thermostat_cycles,
-            )
-        max_power = consumer.max_power_w
-        if nominal is not None and max_power is not None and nominal < max_power:
-            max_power = max(nominal, consumer.min_power_w or 0)
-        return replace(consumer, max_power_w=max_power, thermostat_cycles=thermostat_cycles)
+        if nominal is None:
+            return consumer
+        if consumer.control_mode is not ControlMode.SWITCH:
+            nominal = max(nominal, consumer.min_power_w or 0)
+        return replace(consumer, nominal_power_w=nominal)
 
     @staticmethod
     def _energy(series: dict[datetime, float] | None, start: datetime, end: datetime) -> float:
@@ -2663,11 +2670,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         for consumer in consumers:
             if not snapshot.is_controllable_now(consumer.subentry_id):
                 continue
-            power = (
-                consumer.nominal_power_w
-                if consumer.control_mode is ControlMode.SWITCH
-                else consumer.max_power_w
-            ) or 0
+            power = self._full_power_w(consumer)
             mode = self.cap_mode(consumer.subentry_id)
             if mode is CapMode.SUPPORT:
                 support.append(self.cap_consumer(consumer, power))
@@ -3030,7 +3033,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
 
     def consumer_full_power_w(self, consumer: ConsumerConfig) -> float:
         """Power of the consumer when it runs at full power (learned or configured)."""
-        return self._full_power_w(consumer)
+        return self._full_power_w(self.effective_consumer(consumer))
 
     @staticmethod
     def _target_wh_per_k(settings: TargetSettings, thermal: ThermalLearner | None) -> float | None:
@@ -3051,14 +3054,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
 
     @staticmethod
     def _full_power_w(consumer: ConsumerConfig) -> float:
-        return float(
-            (
-                consumer.nominal_power_w
-                if consumer.control_mode is ControlMode.SWITCH
-                else consumer.max_power_w
-            )
-            or 0
-        )
+        """Power at full command: the nominal power (on/off, or the learned one of
+        a power controlled consumer), else its maximum power."""
+        if consumer.control_mode is ControlMode.SWITCH:
+            return float(consumer.nominal_power_w or 0)
+        return float(consumer.nominal_power_w or consumer.max_power_w or 0)
 
     def thermal_capacity(self, subentry_id: str) -> tuple[float, float] | None:
         """(energy until it cycles, until it is full) in Wh from the temperatures now."""

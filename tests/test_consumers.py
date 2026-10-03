@@ -155,3 +155,21 @@ def test_saturation_ends_when_the_consumer_draws_again() -> None:
     controller._check_drawing_again("rod", snapshot(1900.0))
     assert "rod" not in controller.saturated
     assert requested
+
+
+def test_observed_thermostat_cycling_applies_without_learned_values() -> None:
+    from custom_components.slems.coordinator import SlemsCoordinator
+    from custom_components.slems.learning import ConsumerLearner
+
+    learner = ConsumerLearner.from_dict({"powers": [2500] * 40, "cycles": 2})
+    coordinator = SimpleNamespace(consumer_learners={"rod": learner}, consumer_learning=set())
+    effective = SlemsCoordinator.effective_consumer(coordinator, consumer())
+    assert effective.thermostat_cycles
+    # The learned power is used only with the learned values switched on, and
+    # only for planning: the commanded maximum stays as configured.
+    assert effective.nominal_power_w is None
+    assert SlemsCoordinator._full_power_w(effective) == 3000
+    coordinator.consumer_learning = {"rod"}
+    effective = SlemsCoordinator.effective_consumer(coordinator, consumer())
+    assert effective.max_power_w == 3000
+    assert SlemsCoordinator._full_power_w(effective) == 2500

@@ -901,15 +901,15 @@ the energy flow.
   needs if less), and keeps it running through dips of the surplus for up to
   5 minutes (the batteries or the grid bridge them). Forced runs of a daily
   target are not affected. Set a minimum runtime and pause as well.
-- **Thermostat cycles by itself**: for consumers whose own thermostat switches
-  them on and off while they are commanded (e.g. a heating rod that measures
-  at the element). Normally a consumer that draws nothing although commanded
-  counts as saturated for 15 minutes and keeps its last command (shown as
-  *Planned* with "held"); once it draws half of that command again, SLEMS
-  controls it again at once. With this
-  option SLEMS keeps controlling it: during a pause (no power for 2 response
-  times, 10–60 s) the batteries get its unused power, and as soon as it draws
-  again it gets it back (shown as *thermostat pause*).
+- **Own thermostat** (no setting, observed): a consumer that draws nothing
+  although commanded counts as saturated for 15 minutes and keeps its last
+  command (shown as *Planned* with "held"); once it draws half of that command
+  again, SLEMS controls it again at once. If its own thermostat switches it
+  off and on while it is commanded (e.g. a heating rod that measures at the
+  element: two pauses of 30 s to 10 min within 30 days), SLEMS keeps
+  controlling it instead: during a pause (no power for 2 response times,
+  10–60 s) the batteries get its unused power, and as soon as it draws again
+  it gets it back (shown as *thermostat pause*).
 - **Control active** (switch per controllable consumer, also on its card in
   the dashboard): off means SLEMS only measures the consumer. Switching it off
   in operating mode *active* sets it to 0 W (or off) once; afterwards SLEMS
@@ -1494,7 +1494,7 @@ sensor *Learned values in use* has all learned values as attributes.
 | Control interval and surplus averaging window | the learned report interval of the smart meter (0.8 × and 3 ×) | a few meter reports |
 | Usable capacity (per battery, *Use learned capacity*) | charge and discharge legs over at least 20 % state of charge: DC energy / change of the state of charge (legs with a jump of the state of charge are discarded), median of the last ten | three legs |
 | Morning reserve (*Morning reserve coverage* sets how cautious; shown only while the reserve is automatic) | the morning gap: energy the house needed from battery or grid between the planned takeover of PV (end of the night discharge) and the real one (PV covering the consumption for 15 minutes), in % of the day's forecast consumption; the reserve covers the chosen share of the mornings (90 % = 9 of 10), above 100 % the largest gap times the value (110 % = 10 % more than the worst morning) | 14 measured mornings (also measured while the night discharge is off) |
-| Power and thermostat of a consumer (per consumer, *Use learned values*) | the power while switched on (on/off consumers: replaces the nominal power; power controlled consumers: the highest power, measured while commanded at ≥ 90 % of the maximum power, caps the maximum power) and pauses of its own thermostat while it is commanded, lasting 30 s to 10 min (then treated like *thermostat cycles by itself*; longer pauses, e.g. a dehumidifier at its target humidity, do not count) | 30 samples, two pauses |
+| Power and thermostat of a consumer (per consumer, *Use learned values*) | the power while switched on (on/off consumers: replaces the nominal power; power controlled consumers: the typical power at full load, measured while commanded at ≥ 90 % of the maximum power for at least 15 s or twice its response time, used for planning: forecast, daily target, feed-in cap; it is still commanded up to its maximum power) and pauses of its own thermostat while it is commanded, lasting 30 s to 10 min (two within 30 days: its own thermostat cycles, see *Own thermostat*; applies also without *Use learned values*; longer pauses, e.g. a dehumidifier at its target humidity, do not count) | 30 samples, two pauses |
 
 ### Further settings (entities)
 

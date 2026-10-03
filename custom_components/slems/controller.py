@@ -183,6 +183,11 @@ class RealTimeController:
         settings = self._coordinator.settings
         return self.gain_adapter.gain if settings.auto_gain else settings.control_gain
 
+    def consumer_command_since(self, subentry_id: str) -> float | None:
+        """Monotonic time the current command of a consumer was sent (None: none)."""
+        command = self._consumer_commands.get(subentry_id)
+        return command[1] if command else None
+
     def consumer_response_s(self, subentry_id: str, *, on: bool) -> float | None:
         """Learned time until the consumer's own sensor shows switching on / off."""
         learner = self.consumer_response.get(subentry_id)

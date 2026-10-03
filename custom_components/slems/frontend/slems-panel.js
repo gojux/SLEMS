@@ -191,6 +191,8 @@ const STRINGS = {
     targetEnergyLeft: "about {energy} to go",
     targetEnergyLearning: "energy still being learned",
     targetEnergyEstimated: "about {energy} more (estimated from the last days)",
+    targetEnergyTomorrow: "tomorrow about {energy}",
+    targetEnergyTomorrowEstimated: "tomorrow about {energy} (estimated from the last days)",
     targetForced: "running forced",
     targetBoost: "before the batteries",
     targetMinShort: "min.",
@@ -398,7 +400,7 @@ const STRINGS = {
       learn_capacity:
         "SLEMS always learns the usable capacity from charge and discharge legs of at least 20 % state of charge (DC energy / change of the state of charge; legs with a jump of the state of charge are discarded). On: the learned capacity is used for planning once three legs were measured. Off: the configured capacity applies.",
       consumer_learning:
-        "SLEMS always learns along in operating mode active: the power while on (power controlled consumers: the highest power, measured while commanded at 90 % of the maximum power or more) and whether the own thermostat switches the consumer off while it is commanded. On: it plans with the measured power (on/off consumers) or caps the maximum power at the learned highest power (power controlled consumers) and treats a consumer whose thermostat cycles like \"thermostat cycles by itself\". Off: the configured values apply.",
+        "SLEMS always learns along in operating mode active: the power while on (power controlled consumers: the typical power at full load, measured while commanded at 90 % of the maximum power or more, once the device has followed the command) and whether the own thermostat switches the consumer off while it is commanded. On: it plans with the measured power (on/off consumers) or with the learned full load power (power controlled consumers: forecast, daily target, feed-in cap; they are still commanded up to their maximum power, as their power varies, e.g. with the water temperature). Off: the configured values apply. A thermostat that cycles by itself (two pauses within 30 days) is used either way: SLEMS keeps controlling the consumer during its pauses instead of treating it as saturated.",
       feed_in_cap:
         "Keeps the export at the grid connection point below PV peak power × limit. From the PV and consumption forecasts SLEMS plans how much energy above the limit the batteries must absorb, keeps that space free (night discharge, otherwise feeding in battery energy before the peak, as late as possible and never above the limit) and warns if it does not work out. Takes precedence over grid friendly charging, night discharge and battery priority.",
       pv_peak_power: "Peak power of the PV system the limit refers to.",
@@ -633,6 +635,8 @@ const STRINGS = {
     targetEnergyLeft: "noch ca. {energy}",
     targetEnergyLearning: "Energie wird noch gelernt",
     targetEnergyEstimated: "noch ca. {energy} (geschätzt aus den letzten Tagen)",
+    targetEnergyTomorrow: "morgen ca. {energy}",
+    targetEnergyTomorrowEstimated: "morgen ca. {energy} (geschätzt aus den letzten Tagen)",
     targetForced: "läuft erzwungen",
     targetBoost: "vor der Batterie",
     targetMinShort: "min.",
@@ -840,7 +844,7 @@ const STRINGS = {
       learn_capacity:
         "SLEMS lernt die nutzbare Kapazität immer aus Lade- und Entladevorgängen über mindestens 20 % Ladezustand (DC-Energie / Änderung des Ladezustands; Vorgänge mit einem Sprung des Ladezustands werden verworfen). Ein: Die gelernte Kapazität wird zur Planung verwendet, sobald drei Vorgänge gemessen sind. Aus: Es gilt die eingestellte Kapazität.",
       consumer_learning:
-        "SLEMS lernt im Betriebsmodus Aktiv immer mit: die Leistung im eingeschalteten Zustand (leistungsgeregelte Verbraucher: die Höchstleistung, gemessen bei einer Vorgabe ab 90 % der maximalen Leistung) und ob der eigene Thermostat den Verbraucher trotz Vorgabe abschaltet. Ein: Es plant mit der gemessenen Leistung (Ein/Aus-Verbraucher) bzw. begrenzt die maximale Leistung auf die gelernte Höchstleistung (leistungsgeregelte Verbraucher) und behandelt einen selbst taktenden Thermostat wie „Thermostat taktet selbst“. Aus: Es gelten die eingestellten Werte.",
+        "SLEMS lernt im Betriebsmodus Aktiv immer mit: die Leistung im eingeschalteten Zustand (leistungsgeregelte Verbraucher: die typische Leistung bei Volllast, gemessen bei einer Vorgabe ab 90 % der maximalen Leistung, sobald das Gerät der Vorgabe gefolgt ist) und ob der eigene Thermostat den Verbraucher trotz Vorgabe abschaltet. Ein: Es plant mit der gemessenen Leistung (Ein/Aus-Verbraucher) bzw. mit der gelernten Volllast-Leistung (leistungsgeregelte Verbraucher: Prognose, Tagesziel, Einspeisebegrenzung; angesteuert werden sie weiter bis zu ihrer maximalen Leistung, weil ihre Leistung schwankt, z. B. mit der Wassertemperatur). Aus: Es gelten die eingestellten Werte. Ein selbst taktender Thermostat (zwei Pausen innerhalb von 30 Tagen) wird in jedem Fall berücksichtigt: SLEMS steuert den Verbraucher in seinen Pausen weiter, statt ihn als gesättigt zu behandeln.",
       feed_in_cap:
         "Hält die Einspeisung am Netzanschlusspunkt unter PV-Leistung × Grenze. Aus PV- und Verbrauchsprognose plant SLEMS, wie viel Energie über der Grenze die Batterien aufnehmen müssen, hält dafür Platz frei (Nachtentladung, sonst Einspeisen von Batterieenergie vor der Spitze, möglichst spät und nie über der Grenze) und warnt, wenn es sich nicht ausgeht. Hat Vorrang vor netzdienlichem Laden, Nachtentladung und Batterievorrang.",
       pv_peak_power: "Spitzenleistung der PV-Anlage, auf die sich die Grenze bezieht.",
@@ -3769,7 +3773,14 @@ class SlemsPanel extends HTMLElement {
     parts.push(t.targetUntil.replace("{time}", clock(attrs.target_deadline)));
     const energy = attrs.target_energy_wh;
     if (mode !== "done" && energy > 0) {
-      parts.push((attrs.target_energy_estimated ? t.targetEnergyEstimated : t.targetEnergyLeft).replace("{energy}", `${number(energy / 1000)} kWh`));
+      // Waiting for a later day (after the deadline until midnight, or the earliest
+      // start tomorrow): the energy is that of the coming period.
+      const tomorrow =
+        mode === "waiting" && attrs.target_earliest && new Date(attrs.target_earliest).toDateString() !== new Date().toDateString();
+      const text = tomorrow
+        ? attrs.target_energy_estimated ? t.targetEnergyTomorrowEstimated : t.targetEnergyTomorrow
+        : attrs.target_energy_estimated ? t.targetEnergyEstimated : t.targetEnergyLeft;
+      parts.push(text.replace("{energy}", `${number(energy / 1000)} kWh`));
     }
     else if (mode !== "done" && attrs.target_type === "temperature" && (energy === null || energy === undefined)) {
       parts.push(t.targetEnergyLearning);

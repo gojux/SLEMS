@@ -1294,6 +1294,9 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
             for key in (CONF_PHASES_ENTITY, CONF_START_ENTITY, CONF_START_ON, CONF_START_OFF):
                 self._data.pop(key, None)
             self._data.update(user_input)
+            # Set in earlier versions by hand, now observed; kept until the pauses are learned again.
+            if self._existing().get(CONF_THERMOSTAT_CYCLES):
+                self._data[CONF_THERMOSTAT_CYCLES] = True
             start = user_input.get(CONF_START_ENTITY)
             if start and start.split(".", 1)[0] in ("select", "input_select"):
                 return await self.async_step_start_options()
@@ -1399,9 +1402,6 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
                 domain=["binary_sensor", "input_boolean", "switch", "water_heater"]
             )
         )
-        fields[
-            vol.Required(CONF_THERMOSTAT_CYCLES, default=defaults.get(CONF_THERMOSTAT_CYCLES, False))
-        ] = selector.BooleanSelector()
         temperature = selector.EntitySelector(
             selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
         )

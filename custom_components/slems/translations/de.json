@@ -322,7 +322,6 @@
             "priority": "Priorität",
             "min_on_minutes": "Mindestlaufzeit",
             "min_off_minutes": "Mindestpause",
-            "thermostat_cycles": "Thermostat taktet selbst",
             "temperature_entity": "Temperaturfühler des Speichers",
             "temperature_2_entity": "Zweiter Temperaturfühler",
             "min_current_a": "Mindeststrom",
@@ -340,7 +339,6 @@
             "priority": "1 = höchste Priorität bei der Verteilung von Überschuss.",
             "min_on_minutes": "Optional. Nach dem Einschalten durch SLEMS läuft der Verbraucher mindestens so lange.",
             "min_off_minutes": "Optional. Nach dem Ausschalten durch SLEMS bleibt der Verbraucher mindestens so lange aus.",
-            "thermostat_cycles": "Ein, wenn der eigene Thermostat den Verbraucher während der Ansteuerung ein- und ausschaltet (z. B. ein Heizstab, der die Temperatur am Heizelement misst). SLEMS behält dann in den Pausen die Vorgabe bei und gibt die nicht genutzte Leistung den Batterien, statt den Verbraucher als gesättigt zu behandeln.",
             "temperature_entity": "Optional, z. B. der Fühler des Boilers am Heizstab. SLEMS lernt aus dem Mittel der Fühler, wie viel Energie der Speicher je Grad aufnimmt und ab welcher Temperatur der Thermostat taktet, und plant den Verbraucher bei der Einspeisebegrenzung nur so weit ein, wie er noch Energie aufnehmen kann.",
             "temperature_2_entity": "Optional, z. B. ein Fühler weiter oben im Boiler; macht die Schätzung genauer.",
             "min_current_a": "Unter diesem Strom wird der Verbraucher gestoppt (Fahrzeuge: meist 6 A).",
@@ -953,7 +951,7 @@
         "name": "Gelernte Leistung"
       },
       "learned_max_power": {
-        "name": "Gelernte Höchstleistung"
+        "name": "Gelernte Volllast-Leistung"
       },
       "storage_capacity": {
         "name": "Aufnahmefähigkeit des Speichers"

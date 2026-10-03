@@ -117,6 +117,21 @@ def test_consumer_power_and_thermostat_cycles() -> None:
     assert learner.cycles == 2
 
 
+def test_thermostat_pauses_are_forgotten_after_30_days() -> None:
+    import time
+
+    from custom_components.slems.learning import PAUSE_MEMORY_S
+
+    now = time.time()
+    learner = ConsumerLearner.from_dict({"pauses": [now - PAUSE_MEMORY_S - 60, now - 3600]})
+    assert learner.cycles == 1
+    assert not learner.thermostat_cycles
+    assert learner.cycles_at(now - 86400) == 2
+    # A count of an earlier version still counts.
+    assert ConsumerLearner.from_dict({"cycles": 3}).thermostat_cycles
+    assert ConsumerLearner.from_dict(learner.as_dict()).pauses == learner.pauses
+
+
 def test_morning_gap_and_reserve() -> None:
     from datetime import datetime, timedelta
 

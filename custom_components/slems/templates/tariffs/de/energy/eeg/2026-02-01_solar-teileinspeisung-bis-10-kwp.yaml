@@ -1,7 +1,7 @@
 format: slems-tariff
 version: 1
 id: de/eeg/solar-teileinspeisung-bis-10-kwp/2026-02
-name: Einspeisevergütung PV bis 10 kWp, Inbetriebnahme 01.02.2026–31.07.2026
+name: Inbetriebnahme 02/2026–07/2026, PV bis 10 kWp
 supplier: EEG
 country: DE
 currency: EUR

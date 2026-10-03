@@ -28,6 +28,8 @@ year or commissioning period add the values; earlier files stay.
 
 from __future__ import annotations
 
+import calendar
+from datetime import date
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / "custom_components" / "slems" / "templates" / "tariffs" / "de"
@@ -153,8 +155,11 @@ def _comma(value: float) -> str:
     return f"{value:.2f}".replace(".", ",")
 
 
-def _date(iso: str) -> str:
-    return f"{iso[8:10]}.{iso[5:7]}.{iso[:4]}"
+def _period(first: str, last: str) -> str:
+    """'08/2026–12/2026' for whole months, else the days ('25.02.2025–31.07.2025')."""
+    if first.endswith("-01") and date.fromisoformat(last).day == calendar.monthrange(int(last[:4]), int(last[5:7]))[1]:
+        return f"{first[5:7]}/{first[:4]}–{last[5:7]}/{last[:4]}"
+    return f"{first[8:10]}.{first[5:7]}.{first[:4]}–{last[8:10]}.{last[5:7]}.{last[:4]}"
 
 
 def levies(size: str) -> tuple[Path, str]:
@@ -221,7 +226,8 @@ def eeg(first: str, last: str, price: float, price_40: float, zero_when_negative
     text = (
         "format: slems-tariff\nversion: 1\n"
         f"id: de/eeg/solar-teileinspeisung-bis-10-kwp/{period}\n"
-        f"name: Einspeisevergütung PV bis 10 kWp, Inbetriebnahme {_date(first)}–{_date(last)}\n"
+        # The period first: it tells the templates apart in a narrow list.
+        f"name: Inbetriebnahme {_period(first, last)}, PV bis 10 kWp\n"
         "supplier: EEG\n"
         f"country: DE\ncurrency: EUR\nyear: {first[:4]}\nparts: [energy]\n"
         f"valid_from: {first}\n"

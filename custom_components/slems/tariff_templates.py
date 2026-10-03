@@ -103,7 +103,9 @@ class Template:
     def sort_key(self) -> tuple:
         year = self.meta.get("year") or 0
         first = str(self.meta.get("grid_area") or self.name) if self.area_first else self.provider
-        return (PART_ORDER.index(self.parts[0]) if self.parts else 0, first.lower(), -year, self.name.lower())
+        # Within a provider and year the latest start first.
+        start = -int(str(self.meta.get("valid_from") or "0").replace("-", ""))
+        return (PART_ORDER.index(self.parts[0]) if self.parts else 0, first.lower(), -year, start, self.name.lower())
 
 
 def load_templates(directories: Iterable[tuple[str, Path]]) -> list[Template]:

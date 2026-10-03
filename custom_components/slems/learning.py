@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import math
 import statistics
+import time
 
 # --- forecast errors ------------------------------------------------------------
 
@@ -244,6 +245,8 @@ PAUSE_MAX_S = 600.0
 # no pause before it ran once, unless nothing happens for longer.
 START_DELAY_MAX_S = 300.0
 CYCLES_FOR_THERMOSTAT = 2
+# Pauses count this long (s, wall clock): a replaced device or thermostat is relearned.
+PAUSE_MEMORY_S = 30 * 86400
 
 
 @dataclass
@@ -256,13 +259,19 @@ class ConsumerLearner:
     """
 
     powers: deque = field(default_factory=lambda: deque(maxlen=CONSUMER_KEEP))
-    cycles: int = 0
+    # Wall clock times (epoch s) of the thermostat pauses.
+    pauses: deque = field(default_factory=lambda: deque(maxlen=CONSUMER_KEEP))
     _paused_since: float | None = None
     # Ran since it was switched on: before, no power is its start delay.
     _ran: bool = False
 
     def update(
-        self, now: float, commanded_on: bool, power_w: float | None, full_command: bool = True
+        self,
+        now: float,
+        commanded_on: bool,
+        power_w: float | None,
+        full_command: bool = True,
+        wall_now: float | None = None,
     ) -> None:
         if power_w is None or not commanded_on:
             self._paused_since = None
@@ -270,7 +279,7 @@ class ConsumerLearner:
             return
         if power_w >= CONSUMER_ON_W:
             if self._paused_since is not None and PAUSE_MIN_S <= now - self._paused_since <= PAUSE_MAX_S:
-                self.cycles += 1
+                self.pauses.append(time.time() if wall_now is None else wall_now)
             self._paused_since = None
             self._ran = True
             if full_command:
@@ -291,19 +300,30 @@ class ConsumerLearner:
             return None
         return round(statistics.median(self.powers))
 
+    def cycles_at(self, wall_now: float) -> int:
+        """Thermostat pauses within ``PAUSE_MEMORY_S`` before ``wall_now``."""
+        return sum(1 for moment in self.pauses if moment >= wall_now - PAUSE_MEMORY_S)
+
+    @property
+    def cycles(self) -> int:
+        return self.cycles_at(time.time())
+
     @property
     def thermostat_cycles(self) -> bool:
         return self.cycles >= CYCLES_FOR_THERMOSTAT
 
     def as_dict(self) -> dict:
-        return {"powers": list(self.powers), "cycles": self.cycles, "full_command": True}
+        return {"powers": list(self.powers), "pauses": list(self.pauses), "full_command": True}
 
     @classmethod
     def from_dict(cls, data: dict | None, power_controlled: bool = False) -> ConsumerLearner:
         """``power_controlled``: stored powers without the marker ``full_command``
         may hold throttled set points and are dropped."""
         data = data or {}
-        learner = cls(cycles=data.get("cycles", 0))
+        learner = cls()
+        learner.pauses.extend(data.get("pauses", []))
+        # Earlier versions stored a count: counted as pauses of today.
+        learner.pauses.extend([time.time()] * min(int(data.get("cycles", 0)), CONSUMER_KEEP))
         if not power_controlled or data.get("full_command"):
             learner.powers.extend(data.get("powers", []))
         return learner
