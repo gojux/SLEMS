@@ -57,12 +57,30 @@ SLEMS ──(max. current, mode; through ha-evcc)──▶ evcc ──▶ wallbo
 
 There are two ways to run it:
 
-| | **A: SLEMS controls (recommended)** | **B: evcc decides, SLEMS caps** |
+| | **A: SLEMS controls** | **B: evcc decides, SLEMS caps** |
 |---|---|---|
 | Start and stop | SLEMS through the evcc mode (`now` / `off`) | evcc itself (e.g. mode **Smart**) |
 | Charging current | SLEMS | SLEMS caps the maximum current, evcc controls below it |
 | Battery support and forecasts of SLEMS | fully in effect | only as a cap |
 | Charging plans and vehicle logic of evcc | do not use (use a daily target in SLEMS) | still usable |
+
+**Which one?**
+
+- **A** if SLEMS should optimise the whole household: batteries, feed-in cap,
+  prices and several consumers, the car being one of them. Only one controller
+  acts, and SLEMS can plan the charging (daily target, the car as a buffer
+  before the feed-in cap) and stop it completely.
+- **B** if the car comes first and you want the operation of evcc: modes and
+  charging plans in the evcc app, targets by state of charge ("80 % by
+  7:00"), "charge fast now" with one button. In exchange two systems act on the
+  same meter: evcc decides on start and stop itself, SLEMS only caps. If SLEMS
+  assigns nothing, the smallest current remains (e.g. 6 A, 1.4 kW single phase,
+  4.1 kW three phase); if evcc charges anyway, e.g. by its charging plan, the
+  energy comes from the grid or the home battery. Battery and car may take
+  turns on the surplus, as both controllers react to the same grid power.
+
+Targets by state of charge, charging right away and targets from plugging in
+are on the [roadmap](../README.md#roadmap) for mode A.
 
 ## Prerequisites
 

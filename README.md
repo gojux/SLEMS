@@ -1661,6 +1661,10 @@ Possible extensions:
 
 - Feedback from users with a real wallbox on the
   [evcc guide](docs/wallbox-evcc.md).
+- Wallbox with evcc (mode A) as comfortable as evcc itself: a daily target by
+  the state of charge of the car ("80 % by 7:00", from evcc via ha-evcc), a
+  switch to charge right away with full power (until unplugged or up to a
+  state of charge) and targets that only apply once the car is plugged in.
 - Batteries with an availability (e.g. "car plugged in") and a reserve until
   a time of day: the basis for a car supplying the house (V2H).
 - Learned presence of the car for the planning.

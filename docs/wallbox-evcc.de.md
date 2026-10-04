@@ -56,12 +56,31 @@ SLEMS ──(Max. Ladestrom, Modus; über ha-evcc)──▶ evcc ──▶ Wallb
 
 Es gibt zwei Betriebsarten:
 
-| | **A: SLEMS steuert (empfohlen)** | **B: evcc entscheidet, SLEMS begrenzt** |
+| | **A: SLEMS steuert** | **B: evcc entscheidet, SLEMS begrenzt** |
 |---|---|---|
 | Start und Stopp | SLEMS über den evcc-Modus (`now` / `off`) | evcc selbst (z. B. Modus **Smart**) |
 | Ladestrom | SLEMS | SLEMS begrenzt den Höchststrom, evcc regelt darunter |
 | Batterie-Unterstützung und Prognosen von SLEMS | wirken vollständig | wirken nur als Obergrenze |
 | Ladepläne und Fahrzeuglogik von evcc | nicht nutzen (stattdessen ein Tagesziel in SLEMS) | bleiben nutzbar |
+
+**Welche Betriebsart?**
+
+- **A**, wenn SLEMS den ganzen Haushalt optimieren soll: Batterien,
+  Einspeisegrenze, Preise und mehrere Verbraucher, mit dem Auto als einem
+  davon. Nur einer regelt, und SLEMS kann das Laden einplanen (Tagesziel, das
+  Auto als Puffer vor der Einspeisegrenze) und ganz stoppen.
+- **B**, wenn das Auto die Hauptsache ist und du die Bedienung von evcc willst:
+  Modi und Ladepläne in der evcc-App, Ziele nach Ladestand („80 % bis 7:00“),
+  „jetzt schnell laden“ mit einem Knopf. Dafür regeln zwei Systeme am selben
+  Zähler: evcc entscheidet selbst über Start und Stopp, SLEMS begrenzt nur.
+  Will SLEMS nichts zuteilen, bleibt der kleinste Strom (z. B. 6 A, 1,4 kW
+  einphasig, 4,1 kW dreiphasig); lädt evcc dann trotzdem, z. B. nach seinem
+  Ladeplan, kommt der Strom aus dem Netz oder der Hausbatterie. Batterie und
+  Auto können sich beim Überschuss gegenseitig ablösen, weil beide Regler auf
+  dieselbe Netzleistung reagieren.
+
+Ziele nach Ladestand, sofortiges Laden und Ziele ab dem Anstecken stehen für
+Betriebsart A auf der [Roadmap](../README.de.md#roadmap).
 
 ## Voraussetzungen
 

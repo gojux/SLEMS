@@ -1760,6 +1760,10 @@ Mögliche Erweiterungen:
 
 - Rückmeldungen von Nutzern mit einer echten Wallbox zur
   [evcc-Anleitung](docs/wallbox-evcc.de.md).
+- Wallbox mit evcc (Betriebsart A) so bequem wie evcc selbst: ein Tagesziel
+  nach dem Ladestand des Autos („80 % bis 7:00“, von evcc über ha-evcc), ein
+  Schalter zum sofortigen Laden mit voller Leistung (bis zum Abstecken oder bis
+  zu einem Ladestand) und Ziele, die erst gelten, wenn das Auto angesteckt ist.
 - Batterien mit Verfügbarkeit (z. B. „Auto angesteckt“) und einer Reserve bis
   zu einer Uhrzeit: Grundlage für ein Auto, das das Haus versorgt (V2H).
 - Gelernte Anwesenheit des Autos für die Planung.
