@@ -393,8 +393,8 @@ least the minimum gain than at the latest start); the consumer card shows
 **Estimated prices**: the day-ahead prices of the next day are published
 around 13:00. For the quarter hours after the last known price the price aware
 control plans with estimates: per time of day the median of the last 14 days
-of the same kind (working day or weekend), its swing around the mean of the
-day halved as a safety margin. So the night and a cloudy next day are planned
+of the same kind (working day, or weekend and public holiday of the bidding
+zone), its swing around the mean of the day halved as a safety margin. So the night and a cloudy next day are planned
 before the real prices are known; a new plan follows as soon as they are.
 Only known negative prices start the plan for negative prices. The price
 chart shows the estimates faint.
@@ -1651,6 +1651,10 @@ Possible extensions:
 - Consumers preferred at negative prices (e.g. the heating rod).
 - Price aware control: a more stable plan (changed only when clearly
   better).
+- Estimated prices from the weather: the forecast of wind, solar and load of
+  the bidding zone (Energy-Charts) moves the estimate; with them known
+  exactly, the deviation of the last year would have dropped by about a
+  third.
 - Prices from a Home Assistant entity of the supplier (e.g. the Tibber
   integration, Octopus Germany, Ostrom): a line type with adapters for the
   common forecast formats, stating whether the price already includes the

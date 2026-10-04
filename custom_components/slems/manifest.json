@@ -21,6 +21,7 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/gojux/SLEMS/issues",
   "requirements": [
+    "holidays>=0.40",
     "pymodbus>=3.8.0"
   ],
   "single_config_entry": true,

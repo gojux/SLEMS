@@ -407,8 +407,9 @@ Verbraucherkarte zeigt *ab … im günstigsten Fenster*.
 **Geschätzte Preise**: Die Day-Ahead-Preise des nächsten Tages erscheinen
 gegen 13 Uhr. Für die Viertelstunden nach dem letzten bekannten Preis plant
 die preisbewusste Steuerung mit Schätzungen: je Uhrzeit der Median der
-letzten 14 Tage derselben Art (Werktag oder Wochenende), sein Ausschlag um das
-Tagesmittel als Sicherheitsabschlag halbiert. So werden die Nacht und ein
+letzten 14 Tage derselben Art (Werktag, oder Wochenende und Feiertag des
+Marktgebiets), sein Ausschlag um das Tagesmittel als Sicherheitsabschlag
+halbiert. So werden die Nacht und ein
 trüber Folgetag schon geplant, bevor die echten Preise bekannt sind; sobald
 sie da sind, wird neu geplant. Nur bekannte negative Preise lösen die Planung
 für negative Preise aus. Das Preisdiagramm zeigt die Schätzungen blass.
@@ -1746,6 +1747,9 @@ Mögliche Erweiterungen:
 - Verbraucher bei negativen Preisen bevorzugen (z. B. den Heizstab).
 - Preisbewusste Steuerung: ein stabilerer Plan (nur bei deutlicher
   Verbesserung geändert).
+- Geschätzte Preise nach dem Wetter: die Prognose von Wind, Sonne und Last des
+  Marktgebiets (Energy-Charts) verschiebt die Schätzung; bei genau bekannten
+  Werten wäre die Abweichung im letzten Jahr um etwa ein Drittel gesunken.
 - Preise aus einer Home-Assistant-Entität des Lieferanten (z. B. die
   Tibber-Integration, Octopus Deutschland, Ostrom): eine Posten-Art mit
   Adaptern für die verbreiteten Vorschau-Formate, mit der Angabe, ob der Preis

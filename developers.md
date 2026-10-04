@@ -1556,6 +1556,14 @@ docker compose -f dev/e2e/docker-compose.yml down
 docker run --rm -v "$PWD/custom_components:/github/workspace/custom_components:ro" ghcr.io/home-assistant/hassfest
 ```
 
+How well the estimated prices hit the real ones, from a stored price history
+(variants side by side, see the module docstring):
+
+```bash
+docker compose --profile tests run --rm --entrypoint python -e PYTHONPATH=/repo \
+    tests tools/price_estimate_backtest.py dev/config/.storage/slems.<entry id>.market_prices
+```
+
 The HACS check also looks at the GitHub repository itself: it needs a
 description and topics, and a brand icon in the `home-assistant/brands`
 repository (otherwise its *brands* check fails).
@@ -1691,3 +1699,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-04 | How often the price plans change their decision for the batteries (normal, hold, limit, charge, export, room) is counted per day for the diagnostics only (`PlanChanges`, `price_plan_changes`): back and forth within a quarter hour, changes at a new quarter hour, quarter hours with a plan. Whether a steadier plan (keep the plan unless the new one is better by a margin) is worth it is decided from these counts. A hysteresis would not change the grid import of a hold (it only moves in time), and would cost at most its margin with charging from the grid. |
 | 2026-10-04 | The consumption forecast is raised after a sudden rise (`forecast.recent_excess_w`): the models follow within days (base load correction over 72 h, heat pump over 3 days), in between the night discharge fed in what the house needed (seen when a heat pump started the heating season with only summer data). The last 3 complete hours against what the same models give for them; at least 200 W and 30 % more adds the mean excess to the next 24 hours. Only upwards, as a too low forecast is the risky side; it ends by itself once the models or the consumption catch up, recomputed every hour. Additive rather than a factor, as such rises are mostly a device more running. The charge secured buffer uses a learned part while the other is not learned yet (the larger of it and the set buffer), and the settings show what each learned value still needs (`learning_progress`). |
 | 2026-10-04 | Any error raised by an integration SLEMS calls a service of (consumers, batteries from entities) counts as a failed call (`async_call_service`), not only `HomeAssistantError`: otherwise a single faulty integration aborted the control cycle for every device after it, every cycle. Temperatures of consumers, the weather temperature and the active phases go through the same finite number check as the power values (`state_as_float`). |
+| 2026-10-04 | Estimated prices measured with `tools/price_estimate_backtest.py` (each day estimated as the evening before, against the real prices; 340 days of SMARD DE-LU): mean deviation 2.81 ct/kWh undamped (3.25 with the shipped halving, a deliberate safety margin), rank correlation per day 0.86, against 3.02 / 0.79 for simply yesterday's prices. Public holidays of the bidding zone count like weekends (`holidays`, the zone's country, not the one of Home Assistant): on the 9 holidays 5.38 → 4.66, over the year unchanged. 7 or 28 instead of 14 days change little. Weather: with the residual load known exactly (upper bound, SMARD actuals) the deviation would drop to 1.89 and the rank correlation rise to 0.91; SMARD publishes its forecast of wind and solar for the next day only with the auction, so a weather based estimate needs the multi-day forecast of Energy-Charts (roadmap). |

@@ -136,3 +136,21 @@ def test_estimates_after_the_last_known_price() -> None:
     saturday, _ = day_bounds(date(2026, 10, 3))
     assert estimate_prices(prices, saturday, saturday + 900)[saturday] == pytest.approx(30.0)
     assert estimate_prices({}, monday, monday + 900) == {}
+
+
+def test_public_holidays_count_like_weekends_in_the_estimate() -> None:
+    zone = dt_util.get_default_time_zone()
+    # Two weeks: working days 100 €/MWh, weekends 30.
+    prices = {}
+    day = date(2026, 9, 14)
+    while day <= date(2026, 9, 27):
+        start, end = day_bounds(day)
+        for slot in range(start, end, 900):
+            prices[slot] = 30.0 if day.weekday() >= 5 else 100.0
+        day += timedelta(days=1)
+    monday, _ = day_bounds(date(2026, 9, 28))
+    noon = int(datetime.combine(date(2026, 9, 28), time(12), zone).timestamp())
+    assert estimate_prices(prices, monday, monday + 86400, share=1.0)[noon] == pytest.approx(100.0)
+    # Monday a public holiday: estimated like a Sunday.
+    holiday = estimate_prices(prices, monday, monday + 86400, share=1.0, day_off=lambda d: d == date(2026, 9, 28))
+    assert holiday[noon] == pytest.approx(30.0)

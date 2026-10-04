@@ -16,15 +16,16 @@ are fetched (see reference_values), at most every ``REFERENCE_REFRESH``.
 
 After the last known price the price aware control plans with estimates
 (``estimate_prices``): per local quarter hour of the day the median of the
-last ``ESTIMATE_DAYS`` days of the same kind (working day or weekend), its
-deviation from the mean of that day profile reduced to ``ESTIMATE_SHARE``,
-so an uncertain swing counts less than a known one.
+last ``ESTIMATE_DAYS`` days of the same kind (working day, or weekend and
+public holiday of the bidding zone's country), its deviation from the mean of
+that day profile reduced to ``ESTIMATE_SHARE``, so an uncertain swing counts
+less than a known one. Measured with tools/price_estimate_backtest.py.
 """
 
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 import statistics
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
@@ -32,6 +33,7 @@ import logging
 from typing import Any
 
 import aiohttp
+import holidays
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -73,6 +75,14 @@ class PriceSource(StrEnum):
     ENERGY_CHARTS_AT = "energy_charts_at"
     ENERGY_CHARTS_DE_LU = "energy_charts_de_lu"
 
+
+# Country of the bidding zone: its public holidays count like weekends.
+SOURCE_COUNTRY = {
+    PriceSource.APG: "AT",
+    PriceSource.SMARD: "DE",
+    PriceSource.ENERGY_CHARTS_AT: "AT",
+    PriceSource.ENERGY_CHARTS_DE_LU: "DE",
+}
 
 ATTRIBUTION = {
     PriceSource.APG: "Austrian Power Grid AG (transparency.apg.at)",
@@ -254,9 +264,18 @@ def hourly_means(prices: Mapping[int, float], start: datetime, end: datetime) ->
     return {dt_util.utc_from_timestamp(hour): total / count for hour, (total, count) in sums.items()}
 
 
-def estimate_prices(prices: Mapping[int, float], start: int, end: int) -> dict[int, float]:
+def estimate_prices(
+    prices: Mapping[int, float],
+    start: int,
+    end: int,
+    *,
+    share: float = ESTIMATE_SHARE,
+    days: int = ESTIMATE_DAYS,
+    day_off: Callable[[date], bool] | None = None,
+) -> dict[int, float]:
     """Estimated €/MWh of the quarter hours from ``start`` to ``end`` (epoch s)
-    after the last known price, from the profile of the recent days."""
+    after the last known price, from the profile of the recent ``days``.
+    ``day_off``: days counted like weekends (public holidays)."""
     if not prices:
         return {}
     last = max(prices)
@@ -267,11 +286,12 @@ def estimate_prices(prices: Mapping[int, float], start: int, end: int) -> dict[i
 
     def key(slot: int) -> tuple[bool, int]:
         local = datetime.fromtimestamp(slot, zone)
-        return local.weekday() >= 5, local.hour * 60 + local.minute
+        weekend = local.weekday() >= 5 or (day_off is not None and day_off(local.date()))
+        return weekend, local.hour * 60 + local.minute
 
     samples: dict[tuple[bool, int], list[float]] = {}
     for slot, price in prices.items():
-        if slot > last - ESTIMATE_DAYS * 86400:
+        if slot > last - days * 86400:
             samples.setdefault(key(slot), []).append(price)
 
     def profile(weekend: bool) -> dict[int, float]:
@@ -294,7 +314,7 @@ def estimate_prices(prices: Mapping[int, float], start: int, end: int) -> dict[i
         weekend, minute = key(slot)
         median, mean = profiles[weekend].get(minute), means[weekend]
         if median is not None and mean is not None:
-            estimates[slot] = mean + ESTIMATE_SHARE * (median - mean)
+            estimates[slot] = mean + share * (median - mean)
     return estimates
 
 
@@ -329,6 +349,8 @@ class MarketPrices:
         self.references: dict[str, dict[str, float]] = {}
         self.wanted_references: set[str] = set()
         self.references_update: datetime | None = None
+        # Public holidays of the bidding zone (country, calendar) for the estimates.
+        self._holidays: tuple[str, holidays.HolidayBase] | None = None
 
     @property
     def attribution(self) -> str:
@@ -406,7 +428,13 @@ class MarketPrices:
 
     def estimates(self, start: datetime, end: datetime) -> dict[int, float]:
         """Estimated €/MWh per quarter hour (epoch s) after the last known price."""
-        return estimate_prices(self.prices, int(start.timestamp()), int(end.timestamp()))
+        country = SOURCE_COUNTRY[self.source]
+        if self._holidays is None or self._holidays[0] != country:
+            self._holidays = (country, holidays.country_holidays(country))
+        public = self._holidays[1]
+        return estimate_prices(
+            self.prices, int(start.timestamp()), int(end.timestamp()), day_off=lambda day: day in public
+        )
 
     def hourly_means(self, start: datetime, end: datetime) -> dict[datetime, float]:
         return hourly_means(self.prices, start, end)
