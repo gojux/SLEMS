@@ -199,3 +199,26 @@ def test_plan_timing() -> None:
     timing.add(0.1, 144)
     timing.add(0.3, 140)
     assert timing.as_dict() == {"plans": 2, "last_s": 0.3, "mean_s": 0.2, "max_s": 0.3, "periods": 140}
+
+
+def test_plan_changes_per_day() -> None:
+    from custom_components.slems.grid_charge import PlanChanges, price_decision
+
+    assert price_decision(None, 0.0, 0.0, None) == "normal"
+    assert price_decision(0.0, 0.0, 0.0, None) == "hold"
+    assert price_decision(300.0, 0.0, 0.0, None) == "limit"
+    assert price_decision(None, 2000.0, 0.0, None) == "charge"
+    assert price_decision(None, 0.0, 800.0, None) == "export"
+    assert price_decision(None, 0.0, 0.0, 500.0) == "room"
+    changes = PlanChanges()
+    start = datetime(2026, 10, 4, 19, 0, tzinfo=dt_util.get_default_time_zone())
+    # Back and forth within the quarter hour 19:00, then a change at 19:15.
+    for minute, decision in ((0, "hold"), (3, "normal"), (6, "hold"), (10, "hold"), (15, "normal"), (20, "normal")):
+        changes.add(start + timedelta(minutes=minute), decision)
+    day = changes.as_dict()["2026-10-04"]
+    assert day == {"within_quarter": 2, "at_new_quarter": 1, "planned_quarters": 1}
+    assert PlanChanges.from_dict(changes.as_dict()).as_dict() == changes.as_dict()
+    # Only the last days are kept.
+    for days in range(20):
+        changes.add(start + timedelta(days=days), "hold")
+    assert len(changes.days) == 14

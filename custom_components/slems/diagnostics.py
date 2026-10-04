@@ -176,6 +176,8 @@ def _system(coordinator: SlemsCoordinator) -> dict:
         },
         # Duration of the price plans (quarter hours) since the start.
         "price_plan_timing": coordinator.grid_charge_timing.as_dict(),
+        # How often the price plans changed their decision, per day.
+        "price_plan_changes": coordinator.plan_changes.as_dict(),
         "controller": {
             "status": _plain(controller.status),
             "gain": controller.gain,

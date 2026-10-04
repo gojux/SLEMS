@@ -133,6 +133,67 @@ class PlanTiming:
         }
 
 
+# Days kept by PlanChanges.
+PLAN_CHANGE_DAYS = 14
+
+
+def price_decision(
+    limit_w: float | None, charge_w: float, export_w: float, charge_cap_w: float | None
+) -> str:
+    """What the price plans decide for the batteries right now."""
+    if charge_w > 0:
+        return "charge"
+    if export_w > 0:
+        return "export"
+    if limit_w is not None:
+        return "hold" if limit_w <= 0 else "limit"
+    if charge_cap_w is not None:
+        return "room"
+    return "normal"
+
+
+@dataclass
+class PlanChanges:
+    """How often the price plans change their decision (diagnostics: whether a
+    steadier plan with a hysteresis is needed). Per local day: changes within
+    the same quarter hour (back and forth), changes at the start of a quarter
+    hour, quarter hours with a decision other than normal."""
+
+    days: dict[str, list[int]] = field(default_factory=dict)
+    _slot: datetime | None = None
+    _decision: str | None = None
+    _counted_slot: datetime | None = None
+
+    def add(self, moment: datetime, decision: str) -> None:
+        slot = slot_start(moment)
+        day = self.days.setdefault(slot.date().isoformat(), [0, 0, 0])
+        if self._decision is not None and decision != self._decision:
+            day[0 if slot == self._slot else 1] += 1
+        if decision != "normal" and slot != self._counted_slot:
+            day[2] += 1
+            self._counted_slot = slot
+        self._slot, self._decision = slot, decision
+        for old in sorted(self.days)[:-PLAN_CHANGE_DAYS]:
+            del self.days[old]
+
+    def as_dict(self) -> dict:
+        return {
+            day: {"within_quarter": values[0], "at_new_quarter": values[1], "planned_quarters": values[2]}
+            for day, values in sorted(self.days.items())
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> PlanChanges:
+        changes = cls()
+        for day, values in (data or {}).items():
+            changes.days[day] = [
+                int(values.get("within_quarter", 0)),
+                int(values.get("at_new_quarter", 0)),
+                int(values.get("planned_quarters", 0)),
+            ]
+        return changes
+
+
 def slot_start(moment: datetime, period: timedelta = QUARTER) -> datetime:
     """Local start of the period (a quarter hour or an hour) ``moment`` falls in."""
     local = dt_util.as_local(moment)

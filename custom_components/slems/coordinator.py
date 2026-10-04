@@ -188,7 +188,9 @@ from .grid_charge import (
     QUARTER,
     ChargeBattery,
     GridChargePlan,
+    PlanChanges,
     PlanTiming,
+    price_decision,
     plan_grid_charge,
     slot_start,
 )
@@ -241,6 +243,7 @@ FULL_COMMAND_SHARE = 0.9
 CONSUMER_SETTLE_S = 15.0
 MORNING_GAP_STORE_KEY = "morning_gap"
 PRICE_SAVINGS_STORE_KEY = "price_savings"
+PLAN_CHANGES_STORE_KEY = "price_plan_changes"
 # Hourly statistics of an hour are compiled a little after it ended.
 STATISTICS_DELAY = timedelta(minutes=30)
 HALF_HOUR = timedelta(minutes=30)
@@ -728,6 +731,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._grid_charge_cache: dict[tuple, tuple[float, GridChargePlan | None]] = {}
         # Duration of the price plans made since the start (also for the simulation).
         self.grid_charge_timing = PlanTiming()
+        self.plan_changes = PlanChanges()
         # Last tariff comparison for the dashboard: (monotonic time, result).
         self.tariff_comparison_cache: tuple[float, tuple, dict] | None = None
         # Grid power read over Modbus (see grid_meter); None if not configured
@@ -801,6 +805,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.pv_accuracy.restore(stored.get(PV_ACCURACY_STORE_KEY))
         self.morning_gap = MorningGapLearner.from_dict(stored.get(MORNING_GAP_STORE_KEY))
         self.price_savings = PriceSavings.from_dict(stored.get(PRICE_SAVINGS_STORE_KEY))
+        self.plan_changes = PlanChanges.from_dict(stored.get(PLAN_CHANGES_STORE_KEY))
         consumers = {c.subentry_id: c for c in self.consumers}
         for subentry_id, data in (stored.get(CONSUMERS_STORE_KEY) or {}).items():
             if (consumer := consumers.get(subentry_id)) is not None:
@@ -1253,6 +1258,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         data[PV_ACCURACY_STORE_KEY] = self.pv_accuracy.as_dict()
         data[MORNING_GAP_STORE_KEY] = self.morning_gap.as_dict()
         data[PRICE_SAVINGS_STORE_KEY] = self.price_savings.as_dict()
+        data[PLAN_CHANGES_STORE_KEY] = self.plan_changes.as_dict()
         return data
 
     async def _async_update_data(self) -> SystemSnapshot:
@@ -1869,6 +1875,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         grid_charge_w = forecast_plan.grid_charge.charge_at(wall_now) if forecast_plan.grid_charge else 0.0
         battery_export_w = forecast_plan.grid_charge.export_at(wall_now) if forecast_plan.grid_charge else 0.0
         charge_cap_w = forecast_plan.grid_charge.charge_cap_at(wall_now) if forecast_plan.grid_charge else None
+        if settings.price_control:
+            self.plan_changes.add(wall_now, price_decision(price_limit_w, grid_charge_w, battery_export_w, charge_cap_w))
 
         surplus_w = self._run_surplus(pv_forecast, consumption, load, wall_now)
         requests = [
