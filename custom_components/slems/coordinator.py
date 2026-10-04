@@ -2915,7 +2915,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
 
         for consumer in consumers:
             settings = self.consumer_targets[consumer.subentry_id]
-            if not consumer.controllable:
+            # With its control switched off SLEMS runs it never: nothing planned.
+            if not consumer.controllable or consumer.subentry_id in self.consumer_control_disabled:
                 continue
             estimate = self.target_energy_estimate.get(consumer.subentry_id)
             if settings.type is TargetType.NONE:

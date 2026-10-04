@@ -987,7 +987,9 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
   Karte im Dashboard): aus bedeutet, SLEMS misst den Verbraucher nur. Beim
   Ausschalten im Betriebsmodus *Aktiv* setzt SLEMS ihn einmal auf 0 W (bzw.
   aus); danach lässt SLEMS ihn in Ruhe und plant ihn wie eine ungesteuerte
-  Last.
+  Last: Sein Tagesziel pausiert und nichts von ihm geht in die Prognose ein
+  (die Karte zeigt *Steuerung aus*); läuft er von selbst, sieht die Regelung
+  das live.
 
 ### Stromvorgabe
 

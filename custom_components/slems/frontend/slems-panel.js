@@ -152,6 +152,8 @@ const STRINGS = {
     heldCommand: "held, draws too little",
     resting: "thermostat pause",
     controlOff: "control off",
+    plannedControlOff: "– (control off)",
+    targetPaused: "paused, control off",
     onlyWithControl: "Applies only while the control is active.",
     capSection: "Feed-in cap",
     capRole: "Role",
@@ -599,6 +601,8 @@ const STRINGS = {
     heldCommand: "gehalten, zieht zu wenig",
     resting: "Thermostat-Pause",
     controlOff: "Steuerung aus",
+    plannedControlOff: "– (Steuerung aus)",
+    targetPaused: "pausiert, Steuerung aus",
     onlyWithControl: "Wirkt nur bei aktiver Steuerung.",
     capSection: "Einspeisebegrenzung",
     capRole: "Einsatz",
@@ -3678,7 +3682,11 @@ class SlemsPanel extends HTMLElement {
               : "";
           const progress =
             c.controllable && targetType && targetType !== "none"
-              ? this._row(t.targetProgress, escapeHtml(this._targetText(attrs, this._state("target_source", c.device_id)?.state)), planned?.entity_id)
+              ? this._row(
+                  t.targetProgress,
+                  escapeHtml(this._targetText(attrs, this._state("target_source", c.device_id)?.state, control?.state === "off")),
+                  planned?.entity_id
+                )
               : "";
           const details = expanded
             ? `<dl>
@@ -3703,7 +3711,7 @@ class SlemsPanel extends HTMLElement {
             ${noPower}
             <dl>
               ${this._row(t.measured, escapeHtml(this._format(measured)), c.power_entity)}
-              ${planned ? this._row(t.planned, escapeHtml(this._plannedText(planned)), planned.entity_id) : ""}
+              ${planned ? this._row(t.planned, escapeHtml(this._plannedText(planned, control?.state === "off")), planned.entity_id) : ""}
               ${progress}
               ${supportRow}
             </dl>${details}${toggle}</section>`;
@@ -3713,7 +3721,8 @@ class SlemsPanel extends HTMLElement {
   }
 
   /** Planned power of a consumer; with current control also "(6 A, 3 phases)". */
-  _plannedText(planned) {
+  _plannedText(planned, controlOff = false) {
+    if (controlOff) return this._t.plannedControlOff;
     const a = planned.attributes || {};
     const text = this._format(planned);
     if (a.saturated && this._number(planned) !== null) return `${text} (${this._t.heldCommand})`;
@@ -3771,7 +3780,8 @@ class SlemsPanel extends HTMLElement {
   }
 
   /** "2,5 / 4 h · bis 22:00 · erzwungen ab 19:30" or "43 °C · min. 40 °C · Ziel 55 °C". */
-  _targetText(attrs, source) {
+  /** Progress of a daily target; ``paused``: its consumer's control is off, nothing is planned. */
+  _targetText(attrs, source, paused = false) {
     const t = this._t;
     const language = this._hass?.locale?.language || "en";
     const number = (v) => new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(v);
@@ -3787,6 +3797,7 @@ class SlemsPanel extends HTMLElement {
       parts.push(`${number(attrs.target_got ?? 0)} / ${number(attrs.target_goal)} ${attrs.target_unit}`);
     }
     parts.push(t.targetUntil.replace("{time}", clock(attrs.target_deadline)));
+    if (paused) return [...parts, t.targetPaused].join(" · ");
     const energy = attrs.target_energy_wh;
     if (mode !== "done" && energy > 0) {
       // Waiting for a later day (after the deadline until midnight, or the earliest

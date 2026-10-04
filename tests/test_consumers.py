@@ -173,3 +173,26 @@ def test_observed_thermostat_cycling_applies_without_learned_values() -> None:
     effective = SlemsCoordinator.effective_consumer(coordinator, consumer())
     assert effective.max_power_w == 3000
     assert SlemsCoordinator._full_power_w(effective) == 2500
+
+
+def test_nothing_is_planned_for_a_consumer_with_its_control_off() -> None:
+    from datetime import datetime
+
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.slems.consumer_targets import TargetSettings, TargetType
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    coordinator = SimpleNamespace(
+        consumers=[consumer()],
+        effective_consumer=lambda c: c,
+        consumer_targets={"rod": TargetSettings(type=TargetType.TEMPERATURE)},
+        target_energy_estimate={"rod": 6000.0},
+        consumer_control_disabled={"rod"},
+        settings=SimpleNamespace(feed_in_cap=False),
+    )
+    snapshot = SimpleNamespace(consumption_forecast=None, consumers={})
+    SlemsCoordinator._target_states(coordinator, snapshot, None, None, None, datetime(2026, 10, 4, 9, 0, tzinfo=dt_util.UTC))
+    assert coordinator.target_states == {}
+    assert coordinator.target_load == {}
+    assert coordinator.target_demands == []

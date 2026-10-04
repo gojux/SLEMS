@@ -937,7 +937,9 @@ the energy flow.
 - **Control active** (switch per controllable consumer, also on its card in
   the dashboard): off means SLEMS only measures the consumer. Switching it off
   in operating mode *active* sets it to 0 W (or off) once; afterwards SLEMS
-  leaves it alone and plans it like an uncontrolled load.
+  leaves it alone and plans it like an uncontrolled load: its daily target is
+  paused and nothing of it enters the forecast (the card shows *control off*);
+  if it runs by itself, the control sees it live.
 
 ### Current control
 
