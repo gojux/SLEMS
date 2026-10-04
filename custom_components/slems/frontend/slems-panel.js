@@ -366,6 +366,7 @@ const STRINGS = {
     tariffSource: "Market prices: {source}",
     tariffUnpriced: "* Part of the energy has no market price yet and is not included.",
     tariffNoPrices: "Dynamic tariffs need market prices: switch on “Fetch market prices” on the SLEMS device.",
+    tariffForeignCurrency: "At the moment SLEMS only supports market prices in euro. Tariffs that follow the market price are therefore not computed: {names}.",
     tariffGridPower: "Hours before SLEMS recorded import and feed-in per quarter hour come from the hourly mean of the grid power (less exact) without energy counters; they can be chosen in the SLEMS options.",
     tariffEmpty: "No recorded energy yet.",
     mExport: "Feed-in",
@@ -826,6 +827,7 @@ const STRINGS = {
     tariffSource: "Börsenpreise: {source}",
     tariffUnpriced: "* Für einen Teil der Energie gibt es noch keinen Börsenpreis; er ist nicht enthalten.",
     tariffNoPrices: "Dynamische Tarife brauchen Börsenpreise: Am SLEMS-Gerät „Börsenpreise abrufen“ einschalten.",
+    tariffForeignCurrency: "SLEMS unterstützt zum aktuellen Zeitpunkt nur Börsenpreise in Euro. Tarife, die vom Börsenpreis abhängen, werden deshalb nicht berechnet: {names}.",
     tariffGridPower: "Stunden, bevor SLEMS Bezug und Einspeisung je Viertelstunde aufgezeichnet hat, stammen ohne Energiezähler aus dem Stundenmittel der Netzleistung (ungenauer); die Zähler lassen sich in den SLEMS-Optionen wählen.",
     tariffEmpty: "Noch keine aufgezeichnete Energie.",
     mExport: "Einspeisung",
@@ -3427,9 +3429,11 @@ class SlemsPanel extends HTMLElement {
           })
           .join("")}</div>`
       : `<div class="legend">${sumChip}</div>`;
+    const foreign = tariffs.filter((tariff) => tariff.foreign_currency);
     const notes = [
       unpriced ? t.tariffUnpriced : "",
-      tariffs.some((tariff) => tariff.dynamic) && !result.market_prices ? t.tariffNoPrices : "",
+      tariffs.some((tariff) => tariff.dynamic && !tariff.foreign_currency) && !result.market_prices ? t.tariffNoPrices : "",
+      foreign.length ? t.tariffForeignCurrency.replace("{names}", foreign.map((tariff) => tariff.name).join(", ")) : "",
       result.power_hours > 0 ? t.tariffGridPower : "",
       withSaving.size ? (backtest.grid_charge ? t.tariffSavingHintCharge : t.tariffSavingHint) : "",
       result.measured?.runs

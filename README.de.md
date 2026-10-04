@@ -398,7 +398,11 @@ abrufen** einschaltest (standardmäßig aus). **Preisquelle** wählt woher: APG
 (Österreich), SMARD der Bundesnetzagentur (Deutschland/Luxemburg) oder
 Energy-Charts des Fraunhofer ISE (Österreich, Deutschland/Luxemburg und
 Schweiz); voreingestellt nach dem in Home Assistant eingestellten Land.
-Schweizer Börsenpreise sind wie alle Börsenpreise in Euro. SLEMS lädt dann einmal die letzten
+Schweizer Börsenpreise sind wie alle Börsenpreise in Euro. SLEMS unterstützt
+zum aktuellen Zeitpunkt nur Börsenpreise in Euro: Ist in Home Assistant eine
+andere Währung eingestellt, lassen Tarifvergleich und **Mit einer Rechnung
+vergleichen** Tarife aus, die vom Börsenpreis abhängen; hängt der aktuelle
+Tarif davon ab, weist eine Reparaturmeldung darauf hin. SLEMS lädt dann einmal die letzten
 12 Monate, speichert sie lokal und holt nach der Day-Ahead-Auktion (ab 13 Uhr)
 den nächsten Tag. Der Sensor **Börsenpreis** zeigt den Preis der aktuellen
 Viertelstunde in ct/kWh ohne Gebühren und Steuern, mit der Quelle als

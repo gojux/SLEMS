@@ -1317,6 +1317,10 @@
     "tariff_correction": {
       "title": "Corrected prices for {name}",
       "description": "A template of the tariff {name} was corrected (prices from {date}). Take it over: Settings → Devices & services → SLEMS → the tariff → ⋮ → Reconfigure → Update to the new prices. Lines you changed yourself stay."
+    },
+    "market_price_currency": {
+      "title": "Market prices only in euro",
+      "description": "At the moment SLEMS only supports market prices in euro; Home Assistant is set to {currency}. Your tariff **{name}** follows the market price. SLEMS keeps controlling by cheap and expensive times, but does not convert the market prices (price chart, weighing against the wear costs). The tariff comparison and **Check against a bill** do not compute this tariff."
     }
   }
 }

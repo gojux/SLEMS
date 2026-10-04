@@ -29,6 +29,7 @@ from .const import (
     DOMAIN,
     SUBENTRY_TYPE_TARIFF,
 )
+from .currency import market_prices_usable
 from .energy_history import async_grid_energy
 from .forecast import async_statistic_means
 from .price_backtest import BacktestBattery, play
@@ -144,18 +145,28 @@ def configured_tariffs(entry: SlemsConfigEntry) -> dict[str, Tariff]:
 async def async_tariff_comparison(hass: HomeAssistant, entry: SlemsConfigEntry) -> dict[str, Any]:
     coordinator = entry.runtime_data
     # The backtest follows the battery and price settings: a change of them computes anew.
-    key = (coordinator.backtest_battery(), coordinator.settings.price_min_gain_ct)
+    usable = market_prices_usable(hass)
+    key = (coordinator.backtest_battery(), coordinator.settings.price_min_gain_ct, usable)
     cached = coordinator.tariff_comparison_cache
     if cached is not None and cached[1] == key and monotonic_time.monotonic() - cached[0] < CACHE_S:
         return cached[2]
     tariffs = configured_tariffs(entry)
+    # Market prices in another currency than the tariffs: those following them are not computed.
+    blocked = set() if usable else {key for key, tariff in tariffs.items() if tariff.market_priced}
     result: dict[str, Any] = {
         "tariffs": [
-            {"id": key, "name": tariff.name, "role": tariff.role.value, "dynamic": tariff.dynamic}
+            {
+                "id": key,
+                "name": tariff.name,
+                "role": tariff.role.value,
+                "dynamic": tariff.dynamic,
+                "foreign_currency": key in blocked,
+            }
             for key, tariff in tariffs.items()
         ],
         "months": [],
     }
+    tariffs = {key: tariff for key, tariff in tariffs.items() if key not in blocked}
     if tariffs:
         config = entry.options or entry.data
         zone = dt_util.get_default_time_zone()

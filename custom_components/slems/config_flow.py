@@ -167,7 +167,7 @@ from .tariff import (
     vat_data,
 )
 from . import elcom
-from .currency import SYMBOLS, currency_code, symbols
+from .currency import SYMBOLS, currency_code, market_prices_usable, symbols
 from .reference_values import MARKETS as REFERENCE_MARKETS
 from .tariff_yaml import VERSION as YAML_VERSION
 from .tariff_yaml import TariffYamlError, export_yaml, parse_yaml
@@ -2162,13 +2162,15 @@ class TariffSubentryFlow(ConfigSubentryFlow):
             quarters=coordinator.grid_quarters if coordinator is not None else None,
         )
         tariff = tariff_from_data(self._title, self._data)
+        language = self.hass.config.language
+        words = _CHECK_WORDS["de" if language.startswith("de") else "en"]
+        if tariff.market_priced and not market_prices_usable(self.hass):
+            return {"text": words["foreign_currency"]}
         market = None
         if tariff.dynamic and coordinator is not None:
             market = coordinator.market_prices.period_means(energy.lengths)
         references = coordinator.market_prices.references if coordinator is not None else None
         bill = compute_bill(tariff, start, end, energy.imported, energy.exported, market, references)
-        language = self.hass.config.language
-        words = _CHECK_WORDS["de" if language.startswith("de") else "en"]
         money = symbols(currency_code(self.hass))[0]
         lines = [
             _check_line(language, Side.IMPORT, bill.import_kwh, bill.side_gross(tariff, Side.IMPORT), import_amount, money),
@@ -2294,6 +2296,7 @@ _CHECK_WORDS = {
         "none_of_them": "Keiner davon (nicht mehr anbieten)",
         Unit.SPOT: "Börsenpreis", Unit.MARKET_MONTH: "Monatsmarktpreis",
         "unpriced": "{kwh} kWh ohne Börsenpreis nicht berechnet (Börsenpreise abrufen einschalten oder warten, bis sie geladen sind).",
+        "foreign_currency": "SLEMS unterstützt zum aktuellen Zeitpunkt nur Börsenpreise in Euro. Dieser Tarif hängt vom Börsenpreis ab und wird deshalb nicht berechnet.",
     },
     "en": {
         Side.IMPORT: "Import", Side.EXPORT: "Export", "computed": "computed", "bill": "bill",
@@ -2308,6 +2311,7 @@ _CHECK_WORDS = {
         "none_of_them": "None of them (do not offer again)",
         Unit.SPOT: "spot price", Unit.MARKET_MONTH: "monthly market price",
         "unpriced": "{kwh} kWh without a market price not computed (switch on fetching the market prices or wait until they are loaded).",
+        "foreign_currency": "At the moment SLEMS only supports market prices in euro. This tariff follows the market price and is therefore not computed.",
     },
 }
 

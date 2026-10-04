@@ -209,6 +209,11 @@ class Tariff:
         """Whether it needs the market prices."""
         return any(item.unit.dynamic or item.zero_when_negative for item in self.items)
 
+    @property
+    def market_priced(self) -> bool:
+        """Whether amounts follow the market price (0 at negative prices needs only its sign)."""
+        return any(item.unit.dynamic for item in self.items)
+
 
 @dataclass
 class Bill:

@@ -40,6 +40,8 @@ from homeassistant.helpers.translation import async_get_translations
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, OperatingMode
+from .currency import currency_code, market_prices_usable
+from .tariff_comparison import configured_tariffs
 from .tariff_updates import TARIFF_ISSUE_PREFIX
 from .controller import ControlStatus
 
@@ -52,6 +54,7 @@ CAP_EXCEEDED_AFTER_S = 300.0
 GRID_STALE_ISSUE = "grid_meter_stale"
 GRID_MODBUS_ISSUE = "grid_modbus_unavailable"
 GRID_MODBUS_AFTER_S = 300.0
+MARKET_CURRENCY_ISSUE = "market_price_currency"
 # Feed-in cap problem -> translation key of its notification.
 CAP_NOTIFICATIONS = {
     "battery_too_small": "feed_in_cap_battery_too_small",
@@ -99,7 +102,7 @@ class ProblemReporter:
         coordinator = self._coordinator
         wanted: dict[str, tuple[str, dict[str, str]]] = {}
         # Feed-in cap problems are notifications; issues with their ids are removed.
-        possible = {GRID_STALE_ISSUE, GRID_MODBUS_ISSUE, *CAP_NOTIFICATIONS.values()}
+        possible = {GRID_STALE_ISSUE, GRID_MODBUS_ISSUE, MARKET_CURRENCY_ISSUE, *CAP_NOTIFICATIONS.values()}
         for battery in coordinator.batteries:
             possible |= {
                 _not_responding_issue(battery),
@@ -130,6 +133,14 @@ class ProblemReporter:
             wanted[GRID_MODBUS_ISSUE] = (
                 "grid_modbus_unavailable", {"error": meter.last_error or "–"}
             )
+
+        if not market_prices_usable(self._hass) and coordinator.market_prices.enabled:
+            # The current contract (several current tariffs together) comes first.
+            current = next(iter(configured_tariffs(coordinator.config_entry).values()), None)
+            if current is not None and current.market_priced:
+                wanted[MARKET_CURRENCY_ISSUE] = (
+                    "market_price_currency", {"name": current.name, "currency": currency_code(self._hass)}
+                )
 
         for issue_id, (translation_key, placeholders) in wanted.items():
             if self._active is None or issue_id not in self._active:

@@ -1317,6 +1317,10 @@
     "tariff_correction": {
       "title": "Korrigierte Preise für {name}",
       "description": "Eine Vorlage des Tarifs {name} wurde korrigiert (Preise ab {date}). Übernehmen: Einstellungen → Geräte & Dienste → SLEMS → der Tarif → ⋮ → Neu konfigurieren → Auf neue Preise aktualisieren. Selbst geänderte Posten bleiben."
+    },
+    "market_price_currency": {
+      "title": "Börsenpreise nur in Euro",
+      "description": "SLEMS unterstützt zum aktuellen Zeitpunkt nur Börsenpreise in Euro; Home Assistant ist auf {currency} eingestellt. Dein Tarif **{name}** hängt vom Börsenpreis ab. SLEMS steuert weiter nach günstigen und teuren Zeiten, rechnet die Börsenpreise dabei aber nicht um (Preisdiagramm, Abwägung gegen die Verschleißkosten). Tarifvergleich und **Mit einer Rechnung vergleichen** berechnen diesen Tarif nicht."
     }
   }
 }

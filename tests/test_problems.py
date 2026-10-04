@@ -87,3 +87,36 @@ def test_blocked_duration_text() -> None:
 
     assert _duration(45 * 60) == "45 min"
     assert _duration(3 * 3600 + 20 * 60) == "3 h 20 min"
+
+
+def test_market_prices_in_another_currency_become_a_repair_issue() -> None:
+    from custom_components.slems.tariff import Group, Role, Side, Tariff, TariffItem, Unit
+
+    spot = Tariff("Dynamic", Role.CURRENT, (TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.SPOT, 2.0),), {})
+    negative_zero = Tariff(
+        "Fixed", Role.CURRENT,
+        (TariffItem("Feed-in", Side.EXPORT, Group.ENERGY, Unit.KWH, 8.0, zero_when_negative=True),), {},
+    )
+    hass = SimpleNamespace(config=SimpleNamespace(currency="CHF"))
+    state = coordinator([])
+    state.market_prices = SimpleNamespace(enabled=True)
+    state.config_entry = None
+    registry = FakeIssues(set())
+    reporter = problems.ProblemReporter(hass, state)
+    issue = (DOMAIN, problems.MARKET_CURRENCY_ISSUE)
+    tariffs = {"a": spot}
+    with (
+        patch.object(problems, "ir", registry),
+        patch.object(problems, "configured_tariffs", lambda _entry: tariffs),
+        patch.object(reporter, "_update_cap_notifications", lambda *_: None),
+    ):
+        reporter.update(0.0)
+        assert issue in registry.issues
+        # 0 at negative prices needs only the sign of the price.
+        tariffs = {"a": negative_zero}
+        reporter.update(1.0)
+        assert issue not in registry.issues
+        tariffs = {"a": spot}
+        hass.config.currency = "EUR"
+        reporter.update(2.0)
+        assert issue not in registry.issues
