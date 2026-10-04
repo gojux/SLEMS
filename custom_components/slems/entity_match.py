@@ -38,6 +38,13 @@ CAPACITY = "capacity"
 
 _POWER_UNITS = ("W", "kW")
 _ENERGY_UNITS = ("Wh", "kWh", "MWh")
+# Integrations whose AC side battery power has a name the general rules would
+# take for the house grid: platform -> fragments of that entity.
+_AC_POWER_OF_PLATFORM = {
+    # Marstek local API: "Grid power" (ongrid_power) is the AC power of the
+    # battery, "Power" (bat_power) its DC side.
+    "marstek_local_api": ("grid_power", "grid power"),
+}
 
 
 @dataclass(frozen=True)
@@ -55,6 +62,8 @@ class EntityInfo:
     maximum: float | None = None
     state: str | None = None
     words: frozenset[str] = field(default=frozenset(), compare=False)
+    # Integration of the entity (entity registry platform).
+    platform: str | None = None
 
     @classmethod
     def create(cls, entity_id: str, *names: str | None, **values) -> EntityInfo:
@@ -65,6 +74,15 @@ class EntityInfo:
             words=frozenset(re.split(r"[^a-z0-9äöü]+", text)),
             **values,
         )
+
+    @property
+    def has_value(self) -> bool:
+        """Whether the entity reports a number right now."""
+        try:
+            float(self.state)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return False
+        return True
 
     @property
     def domain(self) -> str:
@@ -101,12 +119,19 @@ def _power(info: EntityInfo) -> float:
     if info.domain != "sensor" or info.unit not in _POWER_UNITS:
         return 0
     score = 1 if info.device_class == "power" else 0
+    ac_fragments = _AC_POWER_OF_PLATFORM.get(info.platform or "")
+    if ac_fragments and info.has(*ac_fragments) and not info.has("off-grid", "offgrid", "off_grid"):
+        # The AC side: what the smart meter sees of the battery.
+        score += 4
+    elif info.has("pv", "solar", "grid", "netz", "house", "home", "haus", "load", "last", "limit", "max"):
+        score -= 2
     if info.has("batter", "akku", "pack"):
         score += 2
     if info.word("ac"):
         score += 1
-    if info.has("pv", "solar", "grid", "netz", "house", "home", "haus", "load", "last", "limit", "max"):
-        score -= 2
+    if info.state is not None and not info.has_value:
+        # Rather one that reports values.
+        score -= 1
     return score
 
 

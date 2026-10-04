@@ -1179,6 +1179,7 @@ def _device_entities(hass: HomeAssistant, device_id: str) -> list[EntityInfo]:
                 minimum=attributes.get("min"),
                 maximum=attributes.get("max"),
                 state=state.state if state else None,
+                platform=entry.platform,
             )
         )
     return infos

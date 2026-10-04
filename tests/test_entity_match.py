@@ -103,3 +103,26 @@ def test_remote_options() -> None:
         "remote_off": "Deaktiviert",
     }
     assert suggest_remote_options(["Red", "Green"]) == {}
+
+
+def test_marstek_local_api_takes_the_ac_side_power() -> None:
+    def m(entity_id: str, name: str, **values) -> EntityInfo:
+        return EntityInfo.create(entity_id, name, platform="marstek_local_api", **values)
+
+    entities = [
+        m("sensor.venus_battery_soc", "Battery SOC", device_class="battery", unit="%", state="55"),
+        m("sensor.venus_battery_power", "Power", device_class="power", unit="W", state="unknown"),
+        m("sensor.venus_battery_power_in", "Power in", device_class="power", unit="W", state="0"),
+        m("sensor.venus_grid_power", "Grid power", device_class="power", unit="W", state="-310"),
+        m("sensor.venus_offgrid_power", "Off-grid power", device_class="power", unit="W", state="0"),
+        m("sensor.venus_ct_phase_a_power", "CT phase A power", device_class="power", unit="W", state="420"),
+    ]
+    assert match_battery_entities(entities)["power_entity"] == "sensor.venus_grid_power"
+
+
+def test_power_sensor_with_values_preferred() -> None:
+    entities = [
+        e("sensor.pack_battery_power", "Battery power", device_class="power", unit="W", state="unavailable"),
+        e("sensor.pack_battery_power_2", "Battery power", device_class="power", unit="W", state="120"),
+    ]
+    assert match_battery_entities(entities)["power_entity"] == "sensor.pack_battery_power_2"
