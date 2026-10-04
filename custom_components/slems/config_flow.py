@@ -1492,6 +1492,12 @@ def _tariff_select(options: list[str], key: str, *, multiple: bool = False) -> s
     )
 
 
+
+def tariff_prompt_url(language: str | None) -> str:
+    """The guide to make a tariff from a bill with an AI, in German or English."""
+    suffix = ".de" if (language or "").startswith("de") else ""
+    return f"https://github.com/gojux/SLEMS/blob/main/docs/tariff-prompt{suffix}.md"
+
 class TariffSubentryFlow(ConfigSubentryFlow):
     """Add or edit a tariff by entering the lines of a bill (see tariff).
 
@@ -1566,15 +1572,21 @@ class TariffSubentryFlow(ConfigSubentryFlow):
             return await self.async_step_template_rest()
         by_label = self._labelled(choices)
         schema = vol.Schema({vol.Optional("energy"): self._template_selector(by_label)})
+        placeholders = {"prompt_url": tariff_prompt_url(self.hass.config.language)}
         if user_input is not None and user_input.get("energy") and user_input["energy"] not in by_label:
-            return self.async_show_form(step_id="template_energy", data_schema=schema, errors={"energy": "template_unknown"})
+            return self.async_show_form(
+                step_id="template_energy",
+                data_schema=schema,
+                errors={"energy": "template_unknown"},
+                description_placeholders=placeholders,
+            )
         if user_input is not None:
             self._energy_template = by_label.get(user_input.get("energy") or "")
             if self._energy_template is not None and (self._energy_template.complete or self._energy_template.feed_in):
                 # Complete, or a feed-in tariff of its own: no grid or levies.
                 return await self._async_combine_templates([self._energy_template])
             return await self.async_step_template_rest()
-        return self.async_show_form(step_id="template_energy", data_schema=schema)
+        return self.async_show_form(step_id="template_energy", data_schema=schema, description_placeholders=placeholders)
 
     async def async_step_template_rest(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         """Grid and levies, preselected: the grid operator the energy template names

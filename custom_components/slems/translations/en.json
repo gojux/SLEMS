@@ -389,7 +389,7 @@
         },
         "template_energy": {
           "title": "Energy",
-          "description": "The energy tariff of your supplier; left empty, OK goes on to the grid and the levies. A feed-in tariff (*Feed-in · …*) becomes a tariff of its own. Templates contain public list prices; compare the tariff with a bill afterwards. Your tariff is missing? Go back and paste it as YAML, e.g. from your bill with the help of an AI (see the README).",
+          "description": "The energy tariff of your supplier.\n\n**Left empty, OK goes on to the grid and the levies.** You then add the prices of your energy tariff with *Add line*.\n\nA feed-in tariff (*Feed-in · …*) always becomes a tariff of its own, next to your import tariff.\n\nTemplates contain public list prices; compare the tariff with a bill afterwards.\n\nYour tariff is missing? Go back and paste it as YAML, e.g. made from your bill with the help of an AI: [guide]({prompt_url}).",
           "data": {
             "energy": "Energy"
           }

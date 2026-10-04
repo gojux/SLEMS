@@ -63,3 +63,14 @@ def test_reconfigured_battery_with_the_same_address_is_not_probed() -> None:
     assert not flow._same_connection({**data, "host": "192.0.2.11"})
     flow.context = {"source": SOURCE_USER}
     assert not flow._same_connection(dict(data))
+
+
+def test_tariff_prompt_link_in_the_language_of_home_assistant() -> None:
+    from custom_components.slems.config_flow import tariff_prompt_url
+
+    assert tariff_prompt_url("de").endswith("/docs/tariff-prompt.de.md")
+    assert tariff_prompt_url("en").endswith("/docs/tariff-prompt.md")
+    assert tariff_prompt_url(None).endswith("/docs/tariff-prompt.md")
+    for name in ("strings.json", "translations/de.json"):
+        texts = json.loads((Path(config_flow.__file__).parent / name).read_text())
+        assert "{prompt_url}" in texts["config_subentries"]["tariff"]["step"]["template_energy"]["description"]

@@ -389,7 +389,7 @@
         },
         "template_energy": {
           "title": "Energie",
-          "description": "Der Energietarif deines Lieferanten; leer gelassen geht es mit OK weiter zu Netz und Abgaben. Ein Einspeisetarif (*Einspeisung · …*) wird ein eigener Tarif. Vorlagen enthalten öffentliche Listenpreise; vergleiche den Tarif danach mit einer Rechnung. Dein Tarif fehlt? Geh zurück und füge ihn als YAML ein, z. B. mit Hilfe einer KI aus deiner Rechnung (siehe README).",
+          "description": "Der Energietarif deines Lieferanten.\n\n**Leer gelassen geht es mit OK weiter zu Netz und Abgaben.** Die Preise deines Energietarifs trägst du danach mit *Posten hinzufügen* ein.\n\nEin Einspeisetarif (*Einspeisung · …*) wird immer ein eigener Tarif, neben deinem Bezugstarif.\n\nVorlagen enthalten öffentliche Listenpreise; vergleiche den Tarif danach mit einer Rechnung.\n\nDein Tarif fehlt? Geh zurück und füge ihn als YAML ein, z. B. mit Hilfe einer KI aus deiner Rechnung erstellt: [Anleitung]({prompt_url}).",
           "data": {
             "energy": "Energie"
           }
