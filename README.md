@@ -1620,7 +1620,13 @@ when they are solved:
   every release is confirmed by reading the battery back),
 - the smart meter does not report while SLEMS is in operating mode **active**,
 - the smart meter could not be read over Modbus for more than 5 minutes
-  (SLEMS uses the entity meanwhile).
+  (SLEMS uses the entity meanwhile),
+- the consumers behind the smart meter report clearly more power together
+  than the whole house for more than 15 minutes (a consumer measures wrong or
+  is not behind the meter; base load and consumption forecast are wrong
+  meanwhile),
+- the current tariff follows the market price while Home Assistant is set to
+  another currency than euro (see market prices).
 
 The dashboard also shows them: a red note on the battery card (**cannot be
 read**, **not responding**), in the energy flow and, for the smart meter, at the

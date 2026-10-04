@@ -1325,6 +1325,10 @@
     "market_price_currency": {
       "title": "Börsenpreise nur in Euro",
       "description": "SLEMS unterstützt zum aktuellen Zeitpunkt nur Börsenpreise in Euro; Home Assistant ist auf {currency} eingestellt. Dein Tarif **{name}** hängt vom Börsenpreis ab. SLEMS steuert weiter nach günstigen und teuren Zeiten, rechnet die Börsenpreise dabei aber nicht um (Preisdiagramm, Abwägung gegen die Verschleißkosten). Tarifvergleich und **Mit einer Rechnung vergleichen** berechnen diesen Tarif nicht."
+    },
+    "consumers_exceed_house": {
+      "title": "Verbraucher passen nicht zum Hausverbrauch",
+      "description": "Die Verbraucher hinter dem Smart Meter meldeten länger als 15 Minuten zusammen mehr Leistung als das ganze Haus: zuletzt {consumers} W bei einem Hausverbrauch von {house} W (aus Netz, PV und Batterien). Das ist nicht möglich. Entweder misst ein Verbraucher falsch (z. B. ein fester oder hängender Wert), oder er hängt nicht hinter dem Smart Meter; dann **Im Smart Meter enthalten** in seinen Einstellungen ausschalten. Verbraucher mit Leistung: {names}. Bis das behoben ist, stimmen Grundverbrauch und Verbrauchsprognose nicht. Die Meldung verschwindet, sobald die Werte wieder zusammenpassen."
     }
   }
 }

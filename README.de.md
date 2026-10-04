@@ -1717,7 +1717,13 @@ verschwinden von selbst, sobald sie behoben sind:
   bestätigt),
 - der Smart Meter meldet nicht, während SLEMS im Betriebsmodus **Aktiv** ist,
 - der Smart Meter kann seit mehr als 5 Minuten nicht per Modbus gelesen werden
-  (SLEMS nutzt bis dahin die Entität).
+  (SLEMS nutzt bis dahin die Entität),
+- die Verbraucher hinter dem Smart Meter melden seit mehr als 15 Minuten
+  zusammen deutlich mehr Leistung als das ganze Haus (ein Verbraucher misst
+  falsch oder hängt nicht hinter dem Zähler; Grundverbrauch und
+  Verbrauchsprognose stimmen so lange nicht),
+- der aktuelle Tarif hängt vom Börsenpreis ab, Home Assistant ist aber auf eine
+  andere Währung als Euro eingestellt (siehe Börsenpreise).
 
 Das Dashboard zeigt sie ebenfalls: ein roter Hinweis auf der Batteriekarte
 (**nicht lesbar**, **reagiert nicht**), im Energiefluss und für den Smart Meter

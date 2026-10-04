@@ -55,6 +55,14 @@ GRID_STALE_ISSUE = "grid_meter_stale"
 GRID_MODBUS_ISSUE = "grid_modbus_unavailable"
 GRID_MODBUS_AFTER_S = 300.0
 MARKET_CURRENCY_ISSUE = "market_price_currency"
+CONSUMERS_EXCEED_ISSUE = "consumers_exceed_house"
+# The consumers behind the meter draw more than the whole house: impossible for
+# longer than the different delays of the sensors, so one of them measures
+# wrong or is not behind the meter.
+CONSUMERS_EXCEED_MIN_W = 300.0
+CONSUMERS_EXCEED_SHARE = 0.2
+CONSUMERS_EXCEED_AFTER_S = 900.0
+CONSUMERS_EXCEED_CLEAR_S = 300.0
 # Feed-in cap problem -> translation key of its notification.
 CAP_NOTIFICATIONS = {
     "battery_too_small": "feed_in_cap_battery_too_small",
@@ -95,6 +103,11 @@ class ProblemReporter:
         self._active: set[str] | None = None
         # Feed-in cap problems with a notification shown.
         self._cap_notified: set[str] = set()
+        # Since when the consumers draw more than the house, since when no longer
+        # (monotonic time), and the values when it was noticed.
+        self._exceed_since: float | None = None
+        self._exceed_ok_since: float | None = None
+        self._exceed_values: dict[str, str] | None = None
 
     @callback
     def update(self, now: float, snapshot: SystemSnapshot | None = None) -> None:
@@ -102,7 +115,10 @@ class ProblemReporter:
         coordinator = self._coordinator
         wanted: dict[str, tuple[str, dict[str, str]]] = {}
         # Feed-in cap problems are notifications; issues with their ids are removed.
-        possible = {GRID_STALE_ISSUE, GRID_MODBUS_ISSUE, MARKET_CURRENCY_ISSUE, *CAP_NOTIFICATIONS.values()}
+        possible = {
+            GRID_STALE_ISSUE, GRID_MODBUS_ISSUE, MARKET_CURRENCY_ISSUE, CONSUMERS_EXCEED_ISSUE,
+            *CAP_NOTIFICATIONS.values(),
+        }
         for battery in coordinator.batteries:
             possible |= {
                 _not_responding_issue(battery),
@@ -134,6 +150,8 @@ class ProblemReporter:
                 "grid_modbus_unavailable", {"error": meter.last_error or "–"}
             )
 
+        if self._consumers_exceed(now, snapshot):
+            wanted[CONSUMERS_EXCEED_ISSUE] = ("consumers_exceed_house", self._exceed_values or {})
         if not market_prices_usable(self._hass) and coordinator.market_prices.enabled:
             # The current contract (several current tariffs together) comes first.
             current = next(iter(configured_tariffs(coordinator.config_entry).values()), None)
@@ -166,6 +184,41 @@ class ProblemReporter:
                 ir.async_delete_issue(self._hass, DOMAIN, issue_id)
         self._active = set(wanted)
         self._update_cap_notifications(now, snapshot)
+
+    def _consumers_exceed(self, now: float, snapshot: SystemSnapshot | None) -> bool:
+        """Whether the consumers behind the meter have drawn clearly more than
+        the house for a longer time (cleared after some time without)."""
+        if snapshot is None:
+            return self._exceed_values is not None
+        house = snapshot.house_power_w
+        drawing = {
+            snapshot.consumer_configs[subentry_id].name: state.power_w
+            for subentry_id, state in snapshot.consumers.items()
+            if snapshot.consumer_configs[subentry_id].included_in_meter and state.power_w
+        }
+        consumers = sum(drawing.values())
+        exceeds = house is not None and consumers - house > max(
+            CONSUMERS_EXCEED_MIN_W, CONSUMERS_EXCEED_SHARE * consumers
+        )
+        if exceeds:
+            self._exceed_ok_since = None
+            if self._exceed_since is None:
+                self._exceed_since = now
+            if self._exceed_values is None and now - self._exceed_since >= CONSUMERS_EXCEED_AFTER_S:
+                self._exceed_values = {
+                    "consumers": f"{consumers:.0f}",
+                    "house": f"{house:.0f}",
+                    "names": ", ".join(f"{name} {power:.0f} W" for name, power in drawing.items()),
+                }
+        else:
+            self._exceed_since = None
+            if self._exceed_values is not None:
+                if self._exceed_ok_since is None:
+                    self._exceed_ok_since = now
+                if now - self._exceed_ok_since >= CONSUMERS_EXCEED_CLEAR_S:
+                    self._exceed_values = None
+                    self._exceed_ok_since = None
+        return self._exceed_values is not None
 
     @callback
     def _update_cap_notifications(self, now: float, snapshot: SystemSnapshot | None) -> None:

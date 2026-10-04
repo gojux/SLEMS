@@ -1325,6 +1325,10 @@
     "market_price_currency": {
       "title": "Market prices only in euro",
       "description": "At the moment SLEMS only supports market prices in euro; Home Assistant is set to {currency}. Your tariff **{name}** follows the market price. SLEMS keeps controlling by cheap and expensive times, but does not convert the market prices (price chart, weighing against the wear costs). The tariff comparison and **Check against a bill** do not compute this tariff."
+    },
+    "consumers_exceed_house": {
+      "title": "Consumers do not match the house consumption",
+      "description": "For more than 15 minutes the consumers behind the smart meter reported more power together than the whole house: last {consumers} W at a house consumption of {house} W (from grid, PV and batteries). That is not possible. Either a consumer measures wrong (e.g. a fixed or stuck value), or it is not behind the smart meter; then switch off **Included in smart meter** in its settings. Consumers drawing power: {names}. Until this is fixed, base load and consumption forecast are wrong. The notice disappears as soon as the values match again."
     }
   }
 }

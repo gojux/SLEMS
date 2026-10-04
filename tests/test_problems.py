@@ -120,3 +120,42 @@ def test_market_prices_in_another_currency_become_a_repair_issue() -> None:
         hass.config.currency = "EUR"
         reporter.update(2.0)
         assert issue not in registry.issues
+
+
+def test_consumers_drawing_more_than_the_house_become_a_repair_issue() -> None:
+    configs = {
+        "wb": SimpleNamespace(name="Wallbox", included_in_meter=True),
+        "hp": SimpleNamespace(name="Heat pump", included_in_meter=True),
+        "ext": SimpleNamespace(name="Outside", included_in_meter=False),
+    }
+    consumers = {
+        "wb": SimpleNamespace(power_w=4140.0),
+        "hp": SimpleNamespace(power_w=800.0),
+        "ext": SimpleNamespace(power_w=5000.0),
+    }
+    snapshot = SimpleNamespace(house_power_w=2700.0, consumer_configs=configs, consumers=consumers)
+    registry = FakeIssues(set())
+    reporter = problems.ProblemReporter(None, coordinator([]))
+    issue = (DOMAIN, problems.CONSUMERS_EXCEED_ISSUE)
+    with (
+        patch.object(problems, "ir", registry),
+        patch.object(reporter, "_update_cap_notifications", lambda *_: None),
+    ):
+        reporter.update(0.0, snapshot)
+        # A short mismatch (sensors with different delays) is no problem.
+        reporter.update(problems.CONSUMERS_EXCEED_AFTER_S - 1, snapshot)
+        assert issue not in registry.issues
+        reporter.update(problems.CONSUMERS_EXCEED_AFTER_S, snapshot)
+        assert issue in registry.issues
+        # Matching again: kept for a while, then removed.
+        consumers["wb"].power_w = 0.0
+        start = problems.CONSUMERS_EXCEED_AFTER_S + 10
+        reporter.update(start, snapshot)
+        assert issue in registry.issues
+        reporter.update(start + problems.CONSUMERS_EXCEED_CLEAR_S, snapshot)
+        assert issue not in registry.issues
+        # Consumers outside the meter and small differences do not count.
+        consumers["hp"].power_w = 2900.0
+        reporter.update(start + 10_000, snapshot)
+        reporter.update(start + 20_000, snapshot)
+        assert issue not in registry.issues
