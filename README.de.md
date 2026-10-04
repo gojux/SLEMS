@@ -396,8 +396,9 @@ gewichtete Mittel.
 SLEMS ruft Börsenpreise erst aus dem Internet ab, wenn du **Börsenpreise
 abrufen** einschaltest (standardmäßig aus). **Preisquelle** wählt woher: APG
 (Österreich), SMARD der Bundesnetzagentur (Deutschland/Luxemburg) oder
-Energy-Charts des Fraunhofer ISE (beide Zonen); voreingestellt nach dem in
-Home Assistant eingestellten Land. SLEMS lädt dann einmal die letzten
+Energy-Charts des Fraunhofer ISE (Österreich, Deutschland/Luxemburg und
+Schweiz); voreingestellt nach dem in Home Assistant eingestellten Land.
+Schweizer Börsenpreise sind wie alle Börsenpreise in Euro. SLEMS lädt dann einmal die letzten
 12 Monate, speichert sie lokal und holt nach der Day-Ahead-Auktion (ab 13 Uhr)
 den nächsten Tag. Der Sensor **Börsenpreis** zeigt den Preis der aktuellen
 Viertelstunde in ct/kWh ohne Gebühren und Steuern, mit der Quelle als
@@ -426,7 +427,8 @@ Verbraucherkarte zeigt **ab … im günstigsten Fenster**.
 gegen 13 Uhr. Für die Viertelstunden nach dem letzten bekannten Preis plant
 die preisbewusste Steuerung mit Schätzungen: je Uhrzeit der Median der
 letzten 14 Tage derselben Art (Werktag, oder Wochenende und Feiertag des
-Marktgebiets), sein Ausschlag um das Tagesmittel als Sicherheitsabschlag
+Marktgebiets; in der Schweiz die Feiertage von mindestens der Hälfte der
+Kantone), sein Ausschlag um das Tagesmittel als Sicherheitsabschlag
 halbiert. So werden die Nacht und ein
 trüber Folgetag schon geplant, bevor die echten Preise bekannt sind; sobald
 sie da sind, wird neu geplant. Nur bekannte negative Preise lösen die Planung

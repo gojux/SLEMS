@@ -74,6 +74,7 @@ class PriceSource(StrEnum):
     SMARD = "smard"
     ENERGY_CHARTS_AT = "energy_charts_at"
     ENERGY_CHARTS_DE_LU = "energy_charts_de_lu"
+    ENERGY_CHARTS_CH = "energy_charts_ch"
 
 
 # Country of the bidding zone: its public holidays count like weekends.
@@ -82,13 +83,27 @@ SOURCE_COUNTRY = {
     PriceSource.SMARD: "DE",
     PriceSource.ENERGY_CHARTS_AT: "AT",
     PriceSource.ENERGY_CHARTS_DE_LU: "DE",
+    PriceSource.ENERGY_CHARTS_CH: "CH",
 }
+
+# Bidding zone of the Energy-Charts sources (parameter bzn).
+ENERGY_CHARTS_ZONE = {
+    PriceSource.ENERGY_CHARTS_AT: "AT",
+    PriceSource.ENERGY_CHARTS_DE_LU: "DE-LU",
+    PriceSource.ENERGY_CHARTS_CH: "CH",
+}
+
+# Countries whose national holidays leave out days off in nearly all regions
+# (in Switzerland Good Friday, Easter and Whit Monday, St Stephen's Day are
+# cantonal): there a day counts if at least half of the regions have it off.
+REGIONAL_HOLIDAY_COUNTRIES = {"CH"}
 
 ATTRIBUTION = {
     PriceSource.APG: "Austrian Power Grid AG (transparency.apg.at)",
     PriceSource.SMARD: "Bundesnetzagentur | SMARD.de (CC BY 4.0)",
     PriceSource.ENERGY_CHARTS_AT: "Energy-Charts.info (Fraunhofer ISE)",
     PriceSource.ENERGY_CHARTS_DE_LU: "Energy-Charts.info (Fraunhofer ISE)",
+    PriceSource.ENERGY_CHARTS_CH: "Energy-Charts.info (Fraunhofer ISE)",
 }
 
 
@@ -97,7 +112,41 @@ class PriceError(Exception):
 
 
 def default_source(country: str | None) -> PriceSource:
-    return PriceSource.APG if country == "AT" else PriceSource.SMARD
+    if country == "AT":
+        return PriceSource.APG
+    if country == "CH":
+        return PriceSource.ENERGY_CHARTS_CH
+    return PriceSource.SMARD
+
+
+class ZoneHolidays:
+    """Public holidays of a bidding zone's country (``day in zone_holidays``)."""
+
+    def __init__(self, country: str) -> None:
+        self.country = country
+        self._days: dict[int, set[date]] = {}
+
+    def __contains__(self, day: object) -> bool:
+        if not isinstance(day, date):
+            return False
+        if day.year not in self._days:
+            self._days[day.year] = self._of_year(day.year)
+        return day in self._days[day.year]
+
+    def _of_year(self, year: int) -> set[date]:
+        national = set(holidays.country_holidays(self.country, years=year))
+        if self.country not in REGIONAL_HOLIDAY_COUNTRIES:
+            return national
+        regions = [
+            region
+            for region in holidays.country_holidays(self.country).subdivisions
+            if region.isupper() and len(region) == 2
+        ]
+        counts: dict[date, int] = {}
+        for region in regions:
+            for day in holidays.country_holidays(self.country, subdiv=region, years=year):
+                counts[day] = counts.get(day, 0) + 1
+        return national | {day for day, count in counts.items() if 2 * count >= len(regions)}
 
 
 def quarter_slots(points: Iterable[tuple[int, float | None]]) -> dict[int, float]:
@@ -209,7 +258,7 @@ async def async_fetch(
             prices.update(parse_smard(await _get_json(session, f"{SMARD_URL}/4169_DE-LU_quarterhour_{week}.json")))
             await asyncio.sleep(REQUEST_PAUSE_S)
     else:
-        zone = "AT" if source is PriceSource.ENERGY_CHARTS_AT else "DE-LU"
+        zone = ENERGY_CHARTS_ZONE[source]
         chunk = start
         while chunk < end:
             chunk_end = min(end, chunk + CHUNK_DAYS * 86400)
@@ -349,8 +398,8 @@ class MarketPrices:
         self.references: dict[str, dict[str, float]] = {}
         self.wanted_references: set[str] = set()
         self.references_update: datetime | None = None
-        # Public holidays of the bidding zone (country, calendar) for the estimates.
-        self._holidays: tuple[str, holidays.HolidayBase] | None = None
+        # Public holidays of the bidding zone for the estimates.
+        self._holidays: ZoneHolidays | None = None
 
     @property
     def attribution(self) -> str:
@@ -429,9 +478,9 @@ class MarketPrices:
     def estimates(self, start: datetime, end: datetime) -> dict[int, float]:
         """Estimated €/MWh per quarter hour (epoch s) after the last known price."""
         country = SOURCE_COUNTRY[self.source]
-        if self._holidays is None or self._holidays[0] != country:
-            self._holidays = (country, holidays.country_holidays(country))
-        public = self._holidays[1]
+        if self._holidays is None or self._holidays.country != country:
+            self._holidays = ZoneHolidays(country)
+        public = self._holidays
         return estimate_prices(
             self.prices, int(start.timestamp()), int(end.timestamp()), day_off=lambda day: day in public
         )

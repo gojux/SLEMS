@@ -740,7 +740,8 @@
           "apg": "APG (Österreich)",
           "smard": "SMARD (Deutschland/Luxemburg)",
           "energy_charts_at": "Energy-Charts (Österreich)",
-          "energy_charts_de_lu": "Energy-Charts (Deutschland/Luxemburg)"
+          "energy_charts_de_lu": "Energy-Charts (Deutschland/Luxemburg)",
+          "energy_charts_ch": "Energy-Charts (Schweiz)"
         }
       }
     },

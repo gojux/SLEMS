@@ -384,8 +384,9 @@ prices, the weighted mean stands in until it is published.
 SLEMS only fetches market prices from the internet once you switch on
 **Fetch market prices** (off by default). **Price source** selects where from:
 APG (Austria), SMARD of the Bundesnetzagentur (Germany/Luxembourg) or
-Energy-Charts of Fraunhofer ISE (both zones); the default follows the country
-set in Home Assistant. SLEMS then loads the last 12 months once, stores them
+Energy-Charts of Fraunhofer ISE (Austria, Germany/Luxembourg and Switzerland);
+the default follows the country set in Home Assistant. Swiss prices are in euro
+like all exchange prices. SLEMS then loads the last 12 months once, stores them
 locally and fetches the next day after the day-ahead auction (from 13:00).
 The sensor **Market price** shows the price of the current quarter hour in
 ct/kWh without fees and VAT, with the source as attribution.
@@ -412,7 +413,7 @@ least the minimum gain than at the latest start); the consumer card shows
 around 13:00. For the quarter hours after the last known price the price aware
 control plans with estimates: per time of day the median of the last 14 days
 of the same kind (working day, or weekend and public holiday of the bidding
-zone), its swing around the mean of the day halved as a safety margin. So the night and a cloudy next day are planned
+zone; in Switzerland the days off in at least half of the cantons), its swing around the mean of the day halved as a safety margin. So the night and a cloudy next day are planned
 before the real prices are known; a new plan follows as soon as they are.
 Only known negative prices start the plan for negative prices. The price
 chart shows the estimates faint.

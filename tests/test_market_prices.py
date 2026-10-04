@@ -109,6 +109,22 @@ def test_default_source_by_country() -> None:
     assert default_source("AT") is PriceSource.APG
     assert default_source("DE") is PriceSource.SMARD
     assert default_source(None) is PriceSource.SMARD
+    assert default_source("CH") is PriceSource.ENERGY_CHARTS_CH
+
+
+def test_swiss_holidays_kept_in_most_cantons() -> None:
+    from custom_components.slems.market_prices import ZoneHolidays
+
+    swiss = ZoneHolidays("CH")
+    # National, and cantonal ones kept in most cantons (Good Friday, Whit Monday).
+    for day in (date(2026, 8, 1), date(2026, 4, 3), date(2026, 5, 25), date(2026, 12, 26)):
+        assert day in swiss
+    # Labour Day and Corpus Christi only in some cantons.
+    assert date(2026, 5, 1) not in swiss
+    assert date(2026, 6, 4) not in swiss
+    german = ZoneHolidays("DE")
+    assert date(2026, 10, 3) in german
+    assert date(2026, 10, 31) not in german
 
 
 def test_estimates_after_the_last_known_price() -> None:

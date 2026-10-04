@@ -29,12 +29,10 @@ from datetime import date, datetime, timedelta
 import json
 import statistics
 
-import holidays
-
 from homeassistant.util import dt as dt_util
 
 from custom_components.slems import market_prices
-from custom_components.slems.market_prices import SLOT_S, day_bounds
+from custom_components.slems.market_prices import SLOT_S, ZoneHolidays, day_bounds
 
 
 def load(path: str) -> dict[int, float]:
@@ -89,17 +87,18 @@ def evaluate(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("store")
-    parser.add_argument("--country", default="DE")
+    parser.add_argument("--country", default="DE", choices=("DE", "AT", "CH"))
     parser.add_argument("--days", type=int, default=300)
     parser.add_argument("--holidays-only", action="store_true", help="only public holidays")
     args = parser.parse_args()
-    dt_util.set_default_time_zone(dt_util.get_time_zone("Europe/Berlin" if args.country == "DE" else "Europe/Vienna"))
+    zones = {"DE": "Europe/Berlin", "AT": "Europe/Vienna", "CH": "Europe/Zurich"}
+    dt_util.set_default_time_zone(dt_util.get_time_zone(zones[args.country]))
     prices = load(args.store)
     last = dt_util.as_local(dt_util.utc_from_timestamp(max(prices))).date()
     first = dt_util.as_local(dt_util.utc_from_timestamp(min(prices))).date() + timedelta(days=15)
     days = [d for d in (last - timedelta(days=n) for n in range(args.days)) if d >= first]
 
-    public = holidays.country_holidays(args.country)
+    public = ZoneHolidays(args.country)
     if args.holidays_only:
         days = [d for d in days if d in public]
 
