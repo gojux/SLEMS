@@ -310,3 +310,21 @@ def test_thermal_storage_energy_per_kelvin_per_sensor() -> None:
     assert learner.sensor_energy_per_k(2) is None
     restored = ThermalLearner.from_dict(learner.as_dict())
     assert restored.sensor_energy_per_k(1) == learner.sensor_energy_per_k(1)
+
+
+def test_secured_buffer_with_one_part_learned() -> None:
+    from types import SimpleNamespace
+
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    settings = SimpleNamespace(charge_secured_buffer_auto=True, charge_secured_buffer_kwh=1.0)
+    coordinator = SimpleNamespace(pv_overestimate=(None, 8), consumption_underestimate=(0.4, 14))
+    # Only the consumption part learned: the larger of it and the set buffer.
+    assert SlemsCoordinator.secured_buffer_wh(coordinator, settings, 20_000, 10_000) == 4000
+    assert SlemsCoordinator.secured_buffer_wh(coordinator, settings, 20_000, 1000) == 1000
+    # Both learned: their sum, also below the set buffer.
+    coordinator.pv_overestimate = (0.01, 14)
+    assert SlemsCoordinator.secured_buffer_wh(coordinator, settings, 20_000, 1000) == pytest.approx(600)
+    # Off: the set buffer.
+    settings.charge_secured_buffer_auto = False
+    assert SlemsCoordinator.secured_buffer_wh(coordinator, settings, 20_000, 10_000) == 1000

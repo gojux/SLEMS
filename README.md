@@ -479,8 +479,13 @@ SLEMS learns the consumption from the long-term statistics of Home Assistant
 and forecasts today and tomorrow hourly. Recent days count more than older
 ones, so changes are followed within days. Heat pumps are forecast from the
 outdoor temperature of the day, so a warm day in the heating season
-immediately predicts less heating energy. Two optional settings help at the
-start:
+immediately predicts less heating energy. After a sudden rise (e.g. the heat
+pump starting the heating season) the forecast is raised at once: if the last
+three hours took on average at least 200 W and 30 % more than forecast, that
+excess is added to the next 24 hours, so the night discharge and the
+grid friendly charging plan with it until the learned forecast has caught up
+(card *Forecast accuracy*: *Raised*). It is never lowered this way. Two
+optional settings help at the start:
 
 - **Outdoor temperature**: a temperature sensor with history. Without it,
   SLEMS records the temperature of the weather entity itself; the heat pump
@@ -1515,7 +1520,7 @@ sensor *Learned values in use* has all learned values as attributes.
 | Value | Learned from | Needs |
 |---|---|---|
 | Grid friendly charging buffer | recorded PV forecasts: of the days with less PV than forecast the shortfall not exceeded on 80 % of them, applied to the PV still expected today | 14 recorded days |
-| Charge secured safety buffer (also the night discharge target) | the same for the PV plus the consumption forecast being too low (backtest), applied to the rest of the day or the next 24 hours | 14 PV days, 7 consumption days |
+| Charge secured safety buffer (also the night discharge target) | the same for the PV plus the consumption forecast being too low (backtest), applied to the rest of the day or the next 24 hours; while only one part is learned, the larger of it and the set buffer | 14 PV days, 7 consumption days |
 | Grid surplus targets while charging and discharging | how far the grid power swings towards import while the batteries control it; charging: the target keeps the grid on the export side 90 % of the time (20–1000 W); discharging: the grid swings around the target, half of the time each side (−100 to 300 W), as a short import costs little there but a permanent export gives battery energy away | some controlling in operating mode *active* |
 | Control interval and surplus averaging window | the learned report interval of the smart meter (0.8 × and 3 ×) | a few meter reports |
 | Usable capacity (per battery, *Use learned capacity*) | charge and discharge legs over at least 20 % state of charge: DC energy / change of the state of charge (legs with a jump of the state of charge are discarded), median of the last ten | three legs |

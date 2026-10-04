@@ -120,6 +120,15 @@ const STRINGS = {
     automatic: "automatic",
     learned: "learned",
     learnedWaiting: "Not enough data to learn yet; this value applies.",
+    learnedProgress: "Not enough data to learn yet ({missing}); this value applies.",
+    learnedPartial: "One part is learned ({value}); until the rest is ({missing}), the larger of it and this value applies.",
+    learnedBasis: {
+      pv: "PV forecast {have} of {need} days",
+      consumption: "consumption forecast {have} of {need} days",
+      morning: "{have} of {need} mornings measured",
+      grid_target_charge: "{have} of {need} samples while charging",
+      grid_target_discharge: "{have} of {need} samples while discharging",
+    },
     cycles: "Charge cycles",
     forecastAccuracy: "Forecast accuracy",
     forecastAccuracyHint: "Consumption: recalculated for the last 14 days; PV: recorded forecasts compared with the production",
@@ -139,6 +148,8 @@ const STRINGS = {
     heatPumpBasis: ", {days} days heat pump with temperature",
     pvBasis: "{days} days recorded",
     tomorrowExpected: "Tomorrow (expected)",
+    nowcast: "Raised",
+    nowcastText: "+{w} W for the next 24 hours: the last hours took clearly more than forecast",
     storedOf: "{stored} of {capacity} kWh",
     powerGridSide: "Power (grid side)",
     setPoint: "SLEMS set point",
@@ -569,6 +580,15 @@ const STRINGS = {
     automatic: "automatisch",
     learned: "gelernt",
     learnedWaiting: "Noch zu wenig Daten zum Lernen; dieser Wert gilt.",
+    learnedProgress: "Noch zu wenig Daten zum Lernen ({missing}); dieser Wert gilt.",
+    learnedPartial: "Ein Teil ist gelernt ({value}); bis auch der Rest gelernt ist ({missing}), gilt der größere Wert aus diesem und dem eingestellten.",
+    learnedBasis: {
+      pv: "PV-Prognose {have} von {need} Tagen",
+      consumption: "Verbrauchsprognose {have} von {need} Tagen",
+      morning: "{have} von {need} Morgen gemessen",
+      grid_target_charge: "{have} von {need} Messwerten beim Laden",
+      grid_target_discharge: "{have} von {need} Messwerten beim Entladen",
+    },
     cycles: "Ladezyklen",
     forecastAccuracy: "Prognosegüte",
     forecastAccuracyHint: "Verbrauch: für die letzten 14 Tage nachgerechnet; PV: gespeicherte Prognosen mit der Erzeugung verglichen",
@@ -588,6 +608,8 @@ const STRINGS = {
     heatPumpBasis: ", {days} Tage Wärmepumpe mit Temperatur",
     pvBasis: "{days} Tage aufgezeichnet",
     tomorrowExpected: "Morgen (erwartet)",
+    nowcast: "Angehoben",
+    nowcastText: "+{w} W für die nächsten 24 Stunden: die letzten Stunden lagen deutlich über der Prognose",
     storedOf: "{stored} von {capacity} kWh",
     powerGridSide: "Leistung (netzseitig)",
     setPoint: "Vorgabe SLEMS",
@@ -947,14 +969,15 @@ const BATTERY_SETTINGS = ["min_soc", "max_soc", "max_charge_limit", "max_dischar
 
 // Settings with a learned value: number key -> [switch key, attribute of the
 // sensor "learned_values" (see learning.py)].
+// The third element: the bases of the value in the attribute "learning_progress".
 const LEARNED_SETTINGS = {
-  grid_friendly_buffer: ["grid_friendly_buffer_auto", "grid_friendly_buffer_kwh"],
-  charge_secured_buffer: ["charge_secured_buffer_auto", "charge_secured_buffer_kwh"],
-  charge_grid_target: ["grid_targets_auto", "charge_grid_target_w"],
-  discharge_grid_target: ["grid_targets_auto", "discharge_grid_target_w"],
-  control_interval: ["timing_auto", "control_interval_s"],
-  surplus_average_window: ["timing_auto", "surplus_average_window_s"],
-  night_reserve: ["night_reserve_auto", "night_reserve_pct"],
+  grid_friendly_buffer: ["grid_friendly_buffer_auto", "grid_friendly_buffer_kwh", ["pv"]],
+  charge_secured_buffer: ["charge_secured_buffer_auto", "charge_secured_buffer_kwh", ["pv", "consumption"]],
+  charge_grid_target: ["grid_targets_auto", "charge_grid_target_w", ["grid_target_charge"]],
+  discharge_grid_target: ["grid_targets_auto", "discharge_grid_target_w", ["grid_target_discharge"]],
+  control_interval: ["timing_auto", "control_interval_s", []],
+  surplus_average_window: ["timing_auto", "surplus_average_window_s", []],
+  night_reserve: ["night_reserve_auto", "night_reserve_pct", ["morning"]],
 };
 
 // Settings tab: translation keys of the system entities per group.
@@ -1305,6 +1328,10 @@ class SlemsPanel extends HTMLElement {
         }
       }
       rows.push([t.dataBasis, basis(a)]);
+      if (a.nowcast_w > 0) {
+        const watts = new Intl.NumberFormat(this._hass?.locale?.language || "en", { maximumFractionDigits: 0 }).format(a.nowcast_w);
+        rows.push([t.nowcast, t.nowcastText.replace("{w}", watts)]);
+      }
       if (a.tomorrow_forecast_kwh !== null && a.tomorrow_forecast_kwh !== undefined) {
         const error = collecting ? null : a.tomorrow_expected_error_kwh;
         rows.push([
@@ -3909,15 +3936,28 @@ class SlemsPanel extends HTMLElement {
     }
     const learned = LEARNED_SETTINGS[key];
     if (learned && this._state(learned[0])?.state === "on") {
-      const value = this._state("learned_values")?.attributes?.[learned[1]];
+      const attributes = this._state("learned_values")?.attributes || {};
+      const value = attributes[learned[1]];
       const unit = stateObj.attributes.unit_of_measurement || "";
+      const language = this._hass?.locale?.language || "en";
+      const format = (v) => `${new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(v)} ${unit}`.trim();
       if (value !== null && value !== undefined) {
-        const language = this._hass?.locale?.language || "en";
-        const text = `${new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(value)} ${unit}`.trim();
-        return `<div class="setting"><span>${name}</span><span class="readonly">${escapeHtml(text)} (${this._t.learned})</span></div>`;
+        return `<div class="setting"><span>${name}</span><span class="readonly">${escapeHtml(format(value))} (${this._t.learned})</span></div>`;
       }
-      // Not enough data yet: the set value applies and stays editable.
-      name += `<span class="setting-hint">${escapeHtml(this._t.learnedWaiting)}</span>`;
+      // Not enough data yet: the set value applies and stays editable; what is missing.
+      const missing = (learned[2] || [])
+        .map((basis) => [basis, (attributes.learning_progress || {})[basis]])
+        .filter(([, progress]) => progress && progress[0] < progress[1])
+        .map(([basis, [have, need]]) => this._t.learnedBasis[basis].replace("{have}", have).replace("{need}", need))
+        .join(", ");
+      const partial = key === "charge_secured_buffer" ? attributes.charge_secured_buffer_partial_kwh : null;
+      const hint =
+        partial !== null && partial !== undefined
+          ? this._t.learnedPartial.replace("{value}", format(partial)).replace("{missing}", missing)
+          : missing
+            ? this._t.learnedProgress.replace("{missing}", missing)
+            : this._t.learnedWaiting;
+      name += `<span class="setting-hint">${escapeHtml(hint)}</span>`;
     }
     if (key === "peak_shaving_grid_limit" && this._state("peak_shaving_auto")?.state === "on") {
       const effective = this._state("peak_shaving_limit");

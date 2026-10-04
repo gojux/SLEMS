@@ -155,3 +155,41 @@ def test_forecast_days_after_local_midnight() -> None:
     result = forecaster._compute(now_utc, history, {}, {}, {}, False)
     days = sorted({dt_util.as_local(start).date() for start in result.total})
     assert days == [date(2026, 9, 24), date(2026, 9, 25)]
+
+
+def test_recent_excess_raises_only_after_a_clear_rise() -> None:
+    from custom_components.slems.forecast import recent_excess_w
+
+    now = datetime(2026, 10, 4, 12, 0, tzinfo=dt_util.UTC)
+    hours = [now - timedelta(hours=back) for back in range(1, 4)]
+    # The heat pump started: 1100 Wh per hour against 300 forecast.
+    assert recent_excess_w(now, {h: 1100.0 for h in hours}, lambda _: 300.0) == 800
+    # A little above: no change.
+    assert recent_excess_w(now, {h: 450.0 for h in hours}, lambda _: 300.0) == 0
+    # 200 W more on a high forecast is less than 30 %: no change.
+    assert recent_excess_w(now, {h: 1400.0 for h in hours}, lambda _: 1150.0) == 0
+    # Below the forecast: never lowered.
+    assert recent_excess_w(now, {h: 100.0 for h in hours}, lambda _: 300.0) == 0
+    # The last hour not compiled yet: the three before it count.
+    late = {now - timedelta(hours=back): 1100.0 for back in range(2, 5)}
+    assert recent_excess_w(now, late, lambda _: 300.0) == 800
+    # Too few hours.
+    assert recent_excess_w(now, {hours[0]: 1100.0}, lambda _: 300.0) == 0
+
+
+def test_forecast_raised_for_the_next_day_after_a_rise() -> None:
+    from datetime import timezone
+    from types import SimpleNamespace
+
+    from custom_components.slems.forecast import NOWCAST_HORIZON, ConsumptionForecaster
+
+    now_utc = datetime(2026, 10, 4, 10, 0, tzinfo=timezone.utc)
+    history = {now_utc - timedelta(hours=h): 400.0 for h in range(4, 28 * 24)}
+    # The last three hours 1.4 kWh each (a heat pump started this morning).
+    history.update({now_utc - timedelta(hours=h): 1400.0 for h in range(1, 4)})
+    forecaster = ConsumptionForecaster(None, SimpleNamespace(heat_pumps=()))
+    result = forecaster._compute(now_utc, history, {}, {}, {}, False)
+    assert result.nowcast_w > 500
+    raised = [start for start in result.total if result.total[start] > result.base[start] + 1]
+    assert min(raised) == now_utc
+    assert max(raised) == now_utc + NOWCAST_HORIZON - timedelta(hours=1)

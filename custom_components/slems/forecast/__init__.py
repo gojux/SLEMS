@@ -3,11 +3,19 @@
 The forecast covers the consumption behind the smart meter that SLEMS does not
 control itself: base load plus heat pumps. Controllable consumers are left
 out because the allocation decides when they run.
+
+After a sudden rise of the consumption (e.g. the heat pump starting the
+heating season) the models need days to follow. Until then the forecast is
+raised (``NOWCAST_*``): if the last complete hours took clearly more than the
+models give for them, the mean excess is added to the next day. Only
+upwards, as a too low forecast is the risky side (the night discharge would
+feed in what the house needs), and it ends by itself once the models or the
+consumption catch up.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 import logging
@@ -31,6 +39,14 @@ from .models import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+NOWCAST_HOURS = 3
+# The last complete hours are looked for within this many hours (statistics
+# of an hour are compiled a little after it).
+NOWCAST_SEARCH_HOURS = 5
+NOWCAST_MIN_W = 200.0
+NOWCAST_MIN_RATIO = 1.3
+NOWCAST_HORIZON = timedelta(hours=24)
 
 
 @dataclass(frozen=True)
@@ -61,6 +77,8 @@ class ConsumptionForecast:
     # Daily mean temperatures used for the heat pump.
     temperature: dict[date, float | None] = field(default_factory=dict)
     created: datetime | None = None
+    # Added to the next day after a rise of the consumption (W, see NOWCAST_*).
+    nowcast_w: float = 0.0
 
     def energy_on_day(self, day: date) -> float | None:
         """Forecast energy of a local day, None if the day is not covered."""
@@ -209,27 +227,43 @@ class ConsumptionForecaster:
 
         today = dt_util.start_of_local_day(dt_util.as_local(now))
         result = ConsumptionForecast(created=now)
+        day_energy: dict[date, float] = {}
+
+        def heat_pump_wh(start: datetime) -> float:
+            if heat_pump_model is None:
+                return 0.0
+            local = dt_util.as_local(start)
+            if local.date() not in day_energy:
+                temperature = _mean_temperature(
+                    local.date(), temperature_history, forecast_temperatures, daily_temperature
+                )
+                day_energy[local.date()] = heat_pump_model.daily(temperature)
+            return heat_pump_model.hourly(day_energy[local.date()], local.hour)
+
         for day_offset in (0, 1):
             day_start = today + timedelta(days=day_offset)
             day = day_start.date()
-            mean_temperature = _mean_temperature(
+            result.temperature[day] = _mean_temperature(
                 day, temperature_history, forecast_temperatures, daily_temperature
             )
-            result.temperature[day] = mean_temperature
-            day_energy = heat_pump_model.daily(mean_temperature) if heat_pump_model else 0.0
             start = day_start
             while start < day_start + timedelta(days=1):
                 base_wh = base_model.predict(start, vacation)
-                hp_wh = (
-                    heat_pump_model.hourly(day_energy, dt_util.as_local(start).hour)
-                    if heat_pump_model
-                    else 0.0
-                )
+                hp_wh = heat_pump_wh(start)
                 key = dt_util.as_utc(start)
                 result.base[key] = base_wh
                 result.heat_pump[key] = hp_wh
                 result.total[key] = base_wh + hp_wh
                 start += timedelta(hours=1)
+        result.nowcast_w = recent_excess_w(
+            now,
+            {start: wh + heat_pump_history.get(start, 0.0) for start, wh in base_history.items()},
+            lambda start: base_model.predict(start, vacation) + heat_pump_wh(start),
+        )
+        if result.nowcast_w:
+            for key in result.total:
+                if now <= key < now + NOWCAST_HORIZON:
+                    result.total[key] += result.nowcast_w
         return result
 
     async def _async_weather_temperatures(self) -> dict[datetime, float]:
@@ -253,6 +287,26 @@ class ConsumptionForecaster:
             if temperatures:
                 return temperatures
         return {}
+
+
+def recent_excess_w(
+    now: datetime, actual: HourlySeries, predicted: Callable[[datetime], float]
+) -> float:
+    """Mean excess (W) of the last complete hours over what the models give
+    for them; 0 unless clearly above (``NOWCAST_MIN_W`` and ``NOWCAST_MIN_RATIO``)."""
+    hours = [
+        start
+        for back in range(1, NOWCAST_SEARCH_HOURS + 1)
+        if (start := now - timedelta(hours=back)) in actual
+    ][:NOWCAST_HOURS]
+    if len(hours) < NOWCAST_HOURS:
+        return 0.0
+    measured = sum(actual[start] for start in hours)
+    expected = sum(predicted(start) for start in hours)
+    excess = (measured - expected) / len(hours)
+    if excess < NOWCAST_MIN_W or measured < NOWCAST_MIN_RATIO * expected:
+        return 0.0
+    return round(excess)
 
 
 def _forecast_temperatures(entries: list[dict], forecast_type: str) -> dict[datetime, float]:

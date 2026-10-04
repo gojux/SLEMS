@@ -500,8 +500,13 @@ SLEMS lernt den Verbrauch aus den Langzeitstatistiken von Home Assistant und
 prognostiziert heute und morgen stundenweise. Jüngere Tage zählen mehr als
 ältere, Änderungen werden so innerhalb weniger Tage übernommen. Wärmepumpen
 werden über die Außentemperatur des Tages prognostiziert, ein warmer Tag in
-der Heizsaison ergibt also sofort weniger Heizenergie. Zwei optionale
-Einstellungen helfen beim Start:
+der Heizsaison ergibt also sofort weniger Heizenergie. Nach einem plötzlichen
+Anstieg (z. B. wenn die Wärmepumpe die Heizsaison beginnt) hebt SLEMS die
+Prognose sofort an: Lagen die letzten drei Stunden im Mittel mindestens 200 W
+und 30 % über der Prognose, kommt dieser Mehrverbrauch auf die nächsten 24
+Stunden, damit Nachtentladung und netzdienliches Laden damit planen, bis die
+gelernte Prognose aufgeholt hat (Karte *Prognosegüte*: *Angehoben*). Abgesenkt
+wird so nie. Zwei optionale Einstellungen helfen beim Start:
 
 - **Außentemperatur**: ein Temperatursensor mit Historie. Ohne ihn zeichnet
   SLEMS die Temperatur der Wetter-Entity selbst auf; das Wärmepumpenmodell
@@ -1602,7 +1607,7 @@ alle gelernten Werte als Attribute.
 | Wert | Gelernt aus | Braucht |
 |---|---|---|
 | Puffer netzdienliches Laden | aufgezeichneten PV-Prognosen: von den Tagen mit weniger PV als prognostiziert die Abweichung, die an 80 % davon nicht überschritten wurde, angewendet auf die heute noch erwartete PV | 14 aufgezeichnete Tage |
-| Sicherheitspuffer gesicherte Ladung (auch Ziel der Nachtentladung) | dasselbe für die PV plus zu niedrige Verbrauchsprognose (Rückrechnung), angewendet auf den restlichen Tag bzw. die nächsten 24 Stunden | 14 PV-Tage, 7 Verbrauchstage |
+| Sicherheitspuffer gesicherte Ladung (auch Ziel der Nachtentladung) | dasselbe für die PV plus zu niedrige Verbrauchsprognose (Rückrechnung), angewendet auf den restlichen Tag bzw. die nächsten 24 Stunden; solange nur ein Teil gelernt ist, der größere Wert aus diesem und dem eingestellten Puffer | 14 PV-Tage, 7 Verbrauchstage |
 | Ziel-Netzüberschuss beim Laden und Entladen | wie weit die Netzleistung Richtung Bezug schwankt, während die Batterien regeln; Laden: das Ziel hält das Netz 90 % der Zeit auf der Einspeiseseite (20–1000 W); Entladen: das Netz schwankt um das Ziel, je die Hälfte der Zeit auf jeder Seite (−100 bis 300 W), weil ein kurzer Bezug dort wenig kostet, dauerhaftes Einspeisen aber Batterieenergie verschenkt | etwas Regelbetrieb im Modus *Aktiv* |
 | Regelintervall und Mittelungsfenster | dem gelernten Meldeintervall des Smart Meters (0,8 × und 3 ×) | einige Meldungen des Zählers |
 | Nutzbare Kapazität (je Batterie, *Gelernte Kapazität verwenden*) | Lade- und Entladevorgängen über mindestens 20 % Ladezustand: DC-Energie / Änderung des Ladezustands (Vorgänge mit einem Sprung des Ladezustands werden verworfen), Median der letzten zehn | drei Vorgänge |

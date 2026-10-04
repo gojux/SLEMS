@@ -40,6 +40,7 @@ from .full_charge import is_due
 from .consumer_targets import target_fits, target_temperature, window_start
 from .const import ControlMode, TargetType
 from .grid_friendly import correction_weight
+from .learning import CONSUMPTION_MIN_DAYS, MORNING_MIN_DAYS, PV_MIN_DAYS, TARGET_MIN_SAMPLES
 from .problems import CAP_EXCEEDED_AFTER_S
 from .pv_forecast import energy_on_day
 
@@ -153,6 +154,8 @@ def _consumption_accuracy_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> 
     )
     attributes["history_days"] = accuracy.history_days if accuracy else 0
     attributes["heat_pump_days"] = accuracy.heat_pump_days if accuracy else 0
+    # Raised after a rise of the consumption (see forecast, NOWCAST_*).
+    attributes["nowcast_w"] = forecast.nowcast_w if forecast else 0.0
     return attributes
 
 
@@ -239,6 +242,10 @@ def _learned_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
     next_pv, next_consumption = c._next_day_energy(s, now)
     both = pv_share is not None and consumption_share is not None
     timing = c.learned_timing
+    # The part learned while the other one is not (see secured_buffer_wh).
+    partial = None
+    if not both and (pv_share is not None or consumption_share is not None):
+        partial = (pv_share or 0.0) * today_pv + (consumption_share or 0.0) * today_consumption
 
     def kwh(wh: float | None) -> float | None:
         return None if wh is None else round(wh / 1000, 2)
@@ -252,6 +259,7 @@ def _learned_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
         "charge_secured_buffer_kwh": kwh(
             pv_share * today_pv + consumption_share * today_consumption if both else None
         ),
+        "charge_secured_buffer_partial_kwh": kwh(partial),
         "night_buffer_kwh": kwh(
             pv_share * next_pv + consumption_share * next_consumption if both else None
         ),
@@ -262,6 +270,14 @@ def _learned_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
         "surplus_average_window_s": timing[1] if timing else None,
         "night_reserve_pct": c.morning_gap.reserve_pct(c.settings.night_reserve_coverage_pct),
         "morning_days": len(c.morning_gap.days),
+        # Data per basis of the learned values: [recorded, needed].
+        "learning_progress": {
+            "pv": [pv_days, PV_MIN_DAYS],
+            "consumption": [consumption_days, CONSUMPTION_MIN_DAYS],
+            "morning": [len(c.morning_gap.days), MORNING_MIN_DAYS],
+            "grid_target_charge": [len(c.grid_targets.charge), TARGET_MIN_SAMPLES],
+            "grid_target_discharge": [len(c.grid_targets.discharge), TARGET_MIN_SAMPLES],
+        },
     }
 
 

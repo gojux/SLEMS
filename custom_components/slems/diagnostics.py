@@ -213,7 +213,7 @@ def _system(coordinator: SlemsCoordinator) -> dict:
         "snapshot": _plain(snapshot),
         "consumption_forecast": None
         if forecast is None
-        else {"created": _plain(forecast.created), "hours": len(forecast.total)},
+        else {"created": _plain(forecast.created), "hours": len(forecast.total), "nowcast_w": forecast.nowcast_w},
         "pv_accuracy_days": _plain(coordinator.pv_accuracy.days),
         "consumers": [_plain(consumer) for consumer in coordinator.consumers],
         "consumer_learning": {

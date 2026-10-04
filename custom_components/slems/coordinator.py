@@ -2047,12 +2047,20 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     def secured_buffer_wh(
         self, settings: ControlSettings, pv_wh: float, consumption_wh: float
     ) -> float:
-        """Buffer of charge secured and night discharge: PV too high plus consumption too low."""
+        """Buffer of charge secured and night discharge: PV too high plus
+        consumption too low. While only one part is learned, the larger of it
+        and the set buffer."""
+        fixed = settings.charge_secured_buffer_kwh * 1000
+        if not settings.charge_secured_buffer_auto:
+            return fixed
         pv_share = self.pv_overestimate[0]
         consumption_share = self.consumption_underestimate[0]
-        if settings.charge_secured_buffer_auto and pv_share is not None and consumption_share is not None:
-            return pv_share * pv_wh + consumption_share * consumption_wh
-        return settings.charge_secured_buffer_kwh * 1000
+        pv_part = None if pv_share is None else pv_share * pv_wh
+        consumption_part = None if consumption_share is None else consumption_share * consumption_wh
+        if pv_part is not None and consumption_part is not None:
+            return pv_part + consumption_part
+        learned = pv_part if pv_part is not None else consumption_part
+        return fixed if learned is None else max(fixed, learned)
 
     def grid_target_w(self, settings: ControlSettings, *, charging: bool) -> float:
         learned = self.grid_targets.target_w(charging)
