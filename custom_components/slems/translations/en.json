@@ -212,7 +212,7 @@
           },
           "data_description": {
             "setpoint_inverted": "SLEMS writes positive = charging. Enable if the entity expects discharging as positive.",
-            "remote_entity": "Switch or select that puts the battery under external control (e.g. *Manual battery control* of Omnibattery). SLEMS switches it on before the first set point and off when it releases the battery to *Automatic*, so the battery controls itself again (e.g. its zero export). Without it, *Automatic* is only possible with a mode option for automatic; leave it empty if you switch it yourself and choose *Standby* when released."
+            "remote_entity": "Switch or select that puts the battery under external control (e.g. **Manual battery control** of Omnibattery). SLEMS switches it on before the first set point and off when it releases the battery to **Automatic**, so the battery controls itself again (e.g. its zero export). Without it, **Automatic** is only possible with a mode option for automatic; leave it empty if you switch it yourself and choose **Standby** when released."
           }
         },
         "ha_split": {
@@ -225,7 +225,7 @@
           },
           "data_description": {
             "mode_entity": "Select that switches between charging, discharging and standby (e.g. a force mode); the options are assigned in the next step.",
-            "remote_entity": "Switch or select that puts the battery under external control (e.g. *Manual battery control* of Omnibattery). SLEMS switches it on before the first set point and off when it releases the battery to *Automatic*, so the battery controls itself again (e.g. its zero export). Without it, *Automatic* is only possible with a mode option for automatic; leave it empty if you switch it yourself and choose *Standby* when released."
+            "remote_entity": "Switch or select that puts the battery under external control (e.g. **Manual battery control** of Omnibattery). SLEMS switches it on before the first set point and off when it releases the battery to **Automatic**, so the battery controls itself again (e.g. its zero export). Without it, **Automatic** is only possible with a mode option for automatic; leave it empty if you switch it yourself and choose **Standby** when released."
           }
         },
         "ha_script": {
@@ -333,8 +333,8 @@
             "avoid_cycling": "Avoid short runs"
           },
           "data_description": {
-            "control_entity": "Switch for on/off consumers, number entity in W for power controlled ones, in A for current controlled ones (e.g. the charging current of a wallbox); with current control also a select with ampere options (e.g. *Max. charging current* of an evcc loadpoint in ha-evcc).",
-            "nominal_power_w": "A rough estimate is enough if *Use learned values* is on: SLEMS then measures the real power while it runs the consumer (operating mode active) and uses it after about 30 samples. Rather estimate a little too low than too high: too high, SLEMS waits for a larger surplus and may never switch the consumer on, so nothing is learned.",
+            "control_entity": "Switch for on/off consumers, number entity in W for power controlled ones, in A for current controlled ones (e.g. the charging current of a wallbox); with current control also a select with ampere options (e.g. **Max. charging current** of an evcc loadpoint in ha-evcc).",
+            "nominal_power_w": "A rough estimate is enough if **Use learned values** is on: SLEMS then measures the real power while it runs the consumer (operating mode active) and uses it after about 30 samples. Rather estimate a little too low than too high: too high, SLEMS waits for a larger surplus and may never switch the consumer on, so nothing is learned.",
             "block_entity": "SLEMS does not control the consumer while it is blocked (e.g. by the device or an automation): a water heater while its operation mode is \"off\", other entities while they are \"on\".",
             "priority": "1 = highest priority when distributing surplus power.",
             "min_on_minutes": "Optional. Once switched on by SLEMS, the consumer keeps running at least this long.",
@@ -389,7 +389,7 @@
         },
         "template_energy": {
           "title": "Energy",
-          "description": "The energy tariff of your supplier.\n\n**Left empty, OK goes on to the grid and the levies.** You then add the prices of your energy tariff with *Add line*.\n\nA feed-in tariff (*Feed-in · …*) always becomes a tariff of its own, next to your import tariff.\n\nTemplates contain public list prices; compare the tariff with a bill afterwards.\n\nYour tariff is missing? Go back and paste it as YAML, e.g. made from your bill with the help of an AI: [guide]({prompt_url}).",
+          "description": "The energy tariff of your supplier.\n\n**Left empty, OK goes on to the grid and the levies.** You then add the prices of your energy tariff with **Add line**.\n\nA feed-in tariff (**Feed-in · …**) always becomes a tariff of its own, next to your import tariff.\n\nTemplates contain public list prices; compare the tariff with a bill afterwards.\n\nYour tariff is missing? Go back and paste it as YAML, e.g. made from your bill with the help of an AI: [guide]({prompt_url}).",
           "data": {
             "energy": "Energy"
           }
@@ -486,12 +486,12 @@
             "delete": "Remove this line"
           },
           "data_description": {
-            "unit": "Spot price and monthly market price use the market prices of the *Price source* in the SLEMS settings (group *Prices*); *Fetch market prices* must be on.",
+            "unit": "Spot price and monthly market price use the market prices of the **Price source** in the SLEMS settings (group **Prices**); **Fetch market prices** must be on.",
             "price": "Net (without VAT) in hundredths per kWh (ct, Rp.) or per year (€, CHF), in the currency of Home Assistant, as on the bill; a discount is negative. On the feed-in side the energy price is the credit you get. For spot price and monthly market price: the fixed markup in hundredths per kWh (negative: deduction). Percent of the group: e.g. 7 for a levy of 7 % on the other items of the same side and group.",
             "factor_pct": "Only for spot price and monthly market price: price = market price × (1 + percent) + price. E.g. −10 % for a credit of 90 % of the market price.",
             "month_prices": "Optional, only for the monthly market price: published values in hundredths per kWh, e.g. \"2026-01: 8.5; 2026-02: 7.9\". Months without a value: mean of the spot prices weighted by your feed-in.",
             "market": "Only for the monthly market price: the official monthly value the price follows. It is fetched with the market prices; until a month is published, the day-ahead mean weighted by your feed-in stands in.",
-            "zero_when_negative": "On: the item is 0 in hours or quarter hours with a negative day-ahead price, e.g. the German EEG feed-in credit of plants since 25 February 2025. Needs *Fetch market prices*.",
+            "zero_when_negative": "On: the item is 0 in hours or quarter hours with a negative day-ahead price, e.g. the German EEG feed-in credit of plants since 25 February 2025. Needs **Fetch market prices**.",
             "valid_from": "Optional. For a price change: add the line again with the new price and this date.",
             "valid_to": "Optional: the last day of the line, e.g. when a price level ends.",
             "months": "Optional, e.g. for a reduced summer price.",

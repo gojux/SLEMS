@@ -13,7 +13,7 @@ How to do it:
 2. Copy the prompt below into a new chat and attach the bill (PDF or photo).
 3. Check the answer, especially lines marked `# uncertain`.
 4. Paste the YAML in SLEMS and then compare the tariff with the same bill
-   using *Check against a bill*: the difference per side should be a few
+   using **Check against a bill**: the difference per side should be a few
    percent at most.
 
 An AI can misread or miscalculate. The comparison with the bill shows you
@@ -101,6 +101,6 @@ Rules:
 ## Suggest a tariff as a template
 
 A tariff with publicly available list prices (e.g. from a supplier's price
-sheet) can help others as a template. Export it in SLEMS with *Export as
-YAML*, remove personal discounts and report it as an
+sheet) can help others as a template. Export it in SLEMS with **Export as
+YAML**, remove personal discounts and report it as an
 [issue](https://github.com/gojux/SLEMS/issues) with the source of the prices.

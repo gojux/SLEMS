@@ -14,8 +14,8 @@ So gehst du vor:
 2. Kopiere den Prompt unten in einen neuen Chat und hänge die Rechnung (PDF
    oder Foto) an.
 3. Prüfe die Antwort, vor allem Zeilen mit `# unsicher`.
-4. Füge das YAML in SLEMS ein und vergleiche den Tarif danach mit *Mit einer
-   Rechnung vergleichen* mit derselben Rechnung: Die Abweichung je Seite
+4. Füge das YAML in SLEMS ein und vergleiche den Tarif danach mit **Mit einer
+   Rechnung vergleichen** mit derselben Rechnung: Die Abweichung je Seite
    sollte nur wenige Prozent betragen.
 
 Eine KI kann sich verlesen oder verrechnen. Der Vergleich mit der Rechnung
@@ -105,5 +105,5 @@ Regeln:
 
 Ein Tarif mit öffentlich verfügbaren Listenpreisen (z. B. aus einem
 Preisblatt des Lieferanten) kann anderen als Vorlage helfen. Exportiere ihn in
-SLEMS mit *Als YAML exportieren*, entferne persönliche Rabatte und melde ihn
+SLEMS mit **Als YAML exportieren**, entferne persönliche Rabatte und melde ihn
 als [Issue](https://github.com/gojux/SLEMS/issues) mit der Quelle der Preise.

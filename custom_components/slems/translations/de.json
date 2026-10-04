@@ -22,9 +22,9 @@
           "pv_power_entity": "Aktuelle PV-Erzeugung. Wird für den Energiefluss und die Bilanz des Hausverbrauchs verwendet.",
           "weather_entity": "Optional. Verbessert die Verbrauchsprognose (z. B. Bedarf der Wärmepumpe).",
           "pv_forecast_entries": "Integrationen mit Solarprognose (z. B. Forecast.Solar, Solcast). Mehrere Einträge, z. B. einer je Dachfläche, werden addiert.",
-          "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entity selbst auf.",
+          "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entität selbst auf.",
           "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Wird für die Zeit verwendet, bevor SLEMS eigene Werte aufgezeichnet hat.",
-          "grid_modbus": "Optional. Liest die Netzleistung direkt von einem SunSpec-Zähler (z. B. am SolarEdge-Wechselrichter, über einen Modbus-Proxy) im Bruchteil einer Sekunde. Die Regelung sieht jeden Wert früher als über die Entity; die Entity bleibt Rückfallebene und Historie.",
+          "grid_modbus": "Optional. Liest die Netzleistung direkt von einem SunSpec-Zähler (z. B. am SolarEdge-Wechselrichter, über einen Modbus-Proxy) im Bruchteil einer Sekunde. Die Regelung sieht jeden Wert früher als über die Entität; die Entität bleibt Rückfallebene und Historie.",
           "grid_import_energy_entity": "Optional. Energiezähler des Smart Meters für den Bezug (kWh). Für Tarife und Rechnungen; ohne ihn nutzt SLEMS das Stundenmittel der Netzleistung, das Bezug und Einspeisung innerhalb einer Stunde verrechnet.",
           "grid_export_energy_entity": "Optional. Energiezähler des Smart Meters für die Einspeisung (kWh)."
         }
@@ -42,7 +42,7 @@
         "data_description": {
           "grid_modbus_unit_id": "SolarEdge: 1.",
           "grid_modbus_interval_s": "0,5 s reicht für die Regelung; kürzer belastet die Verbindung stärker.",
-          "grid_modbus_sign": "Automatisch: SLEMS vergleicht einige Werte mit der Netzleistungs-Entity (braucht etwas Netzbezug oder Einspeisung)."
+          "grid_modbus_sign": "Automatisch: SLEMS vergleicht einige Werte mit der Netzleistungs-Entität (braucht etwas Netzbezug oder Einspeisung)."
         }
       },
       "grid_meter": {
@@ -60,8 +60,8 @@
       "grid_modbus_failed": "Modbus-Lesen fehlgeschlagen: {error}",
       "no_sunspec": "Das Gerät meldet keine SunSpec-Modellkette (Register 40000, 0 oder 50000).",
       "no_meter": "Die SunSpec-Modellkette enthält keinen Zähler (Modell 201 bis 204).",
-      "sign_undecidable": "Die Netzleistung ist zu klein, um das Vorzeichen zu vergleichen (Modbus {modbus} W, Entity {entity} W). Später erneut versuchen oder das Vorzeichen wählen.",
-      "sign_mismatch": "Modbus ({modbus} W) und Entity ({entity} W) passen mit keinem Vorzeichen zusammen. Ist der richtige Zähler gewählt? Sonst das Vorzeichen wählen."
+      "sign_undecidable": "Die Netzleistung ist zu klein, um das Vorzeichen zu vergleichen (Modbus {modbus} W, Entität {entity} W). Später erneut versuchen oder das Vorzeichen wählen.",
+      "sign_mismatch": "Modbus ({modbus} W) und Entität ({entity} W) passen mit keinem Vorzeichen zusammen. Ist der richtige Zähler gewählt? Sonst das Vorzeichen wählen."
     }
   },
   "options": {
@@ -85,9 +85,9 @@
           "grid_power_inverted": "Aktivieren, wenn dein Zähler Einspeisung positiv meldet.",
           "pv_forecast_entries": "Integrationen mit Solarprognose (z. B. Forecast.Solar, Solcast). Mehrere Einträge, z. B. einer je Dachfläche, werden addiert.",
           "weather_entity": "Optional. Verbessert die Verbrauchsprognose (z. B. Bedarf der Wärmepumpe).",
-          "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entity selbst auf.",
+          "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entität selbst auf.",
           "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Wird für die Zeit verwendet, bevor SLEMS eigene Werte aufgezeichnet hat.",
-          "grid_modbus": "Optional. Liest die Netzleistung direkt von einem SunSpec-Zähler (z. B. am SolarEdge-Wechselrichter, über einen Modbus-Proxy) im Bruchteil einer Sekunde. Die Regelung sieht jeden Wert früher als über die Entity; die Entity bleibt Rückfallebene und Historie.",
+          "grid_modbus": "Optional. Liest die Netzleistung direkt von einem SunSpec-Zähler (z. B. am SolarEdge-Wechselrichter, über einen Modbus-Proxy) im Bruchteil einer Sekunde. Die Regelung sieht jeden Wert früher als über die Entität; die Entität bleibt Rückfallebene und Historie.",
           "grid_import_energy_entity": "Optional. Energiezähler des Smart Meters für den Bezug (kWh). Für Tarife und Rechnungen; ohne ihn nutzt SLEMS das Stundenmittel der Netzleistung, das Bezug und Einspeisung innerhalb einer Stunde verrechnet.",
           "grid_export_energy_entity": "Optional. Energiezähler des Smart Meters für die Einspeisung (kWh)."
         }
@@ -105,7 +105,7 @@
         "data_description": {
           "grid_modbus_unit_id": "SolarEdge: 1.",
           "grid_modbus_interval_s": "0,5 s reicht für die Regelung; kürzer belastet die Verbindung stärker.",
-          "grid_modbus_sign": "Automatisch: SLEMS vergleicht einige Werte mit der Netzleistungs-Entity (braucht etwas Netzbezug oder Einspeisung)."
+          "grid_modbus_sign": "Automatisch: SLEMS vergleicht einige Werte mit der Netzleistungs-Entität (braucht etwas Netzbezug oder Einspeisung)."
         }
       },
       "grid_meter": {
@@ -120,8 +120,8 @@
       "grid_modbus_failed": "Modbus-Lesen fehlgeschlagen: {error}",
       "no_sunspec": "Das Gerät meldet keine SunSpec-Modellkette (Register 40000, 0 oder 50000).",
       "no_meter": "Die SunSpec-Modellkette enthält keinen Zähler (Modell 201 bis 204).",
-      "sign_undecidable": "Die Netzleistung ist zu klein, um das Vorzeichen zu vergleichen (Modbus {modbus} W, Entity {entity} W). Später erneut versuchen oder das Vorzeichen wählen.",
-      "sign_mismatch": "Modbus ({modbus} W) und Entity ({entity} W) passen mit keinem Vorzeichen zusammen. Ist der richtige Zähler gewählt? Sonst das Vorzeichen wählen."
+      "sign_undecidable": "Die Netzleistung ist zu klein, um das Vorzeichen zu vergleichen (Modbus {modbus} W, Entität {entity} W). Später erneut versuchen oder das Vorzeichen wählen.",
+      "sign_mismatch": "Modbus ({modbus} W) und Entität ({entity} W) passen mit keinem Vorzeichen zusammen. Ist der richtige Zähler gewählt? Sonst das Vorzeichen wählen."
     }
   },
   "config_subentries": {
@@ -173,15 +173,15 @@
           }
         },
         "ha_device": {
-          "title": "Batterie aus vorhandenen Entities",
-          "description": "Wähle das Gerät der Batterie in Home Assistant: SLEMS schlägt in den nächsten Schritten seine Entities vor, du prüfst und korrigierst sie. Leer lassen, um alle Entities selbst zu wählen.",
+          "title": "Batterie aus vorhandenen Entitäten",
+          "description": "Wähle das Gerät der Batterie in Home Assistant: SLEMS schlägt in den nächsten Schritten seine Entitäten vor, du prüfst und korrigierst sie. Leer lassen, um alle Entitäten selbst zu wählen.",
           "data": {
             "device": "Gerät"
           }
         },
         "ha_entities": {
-          "title": "Batterie aus vorhandenen Entities",
-          "description": "Aus dem Gerät vorgeschlagene Entities sind eingetragen; bitte prüfen. Nur lesen: SLEMS sendet nie Befehle (z. B. solange eine andere Integration die Batterie steuert). Steuern: die eigene Regelung der Batterie (z. B. Nulleinspeisung) in ihrer Integration ausschalten, sonst regeln beide gleichzeitig.",
+          "title": "Batterie aus vorhandenen Entitäten",
+          "description": "Aus dem Gerät vorgeschlagene Entitäten sind eingetragen; bitte prüfen. Nur lesen: SLEMS sendet nie Befehle (z. B. solange eine andere Integration die Batterie steuert). Steuern: die eigene Regelung der Batterie (z. B. Nulleinspeisung) in ihrer Integration ausschalten, sonst regeln beide gleichzeitig.",
           "data": {
             "name": "Name",
             "soc_entity": "Ladezustand",
@@ -197,7 +197,7 @@
           "data_description": {
             "power_entity": "Pflicht, wenn SLEMS die Batterie steuert: sie geht in die für die Regelung verfügbare Leistung ein.",
             "power_inverted": "SLEMS erwartet positiv = Laden. Aktivieren, wenn der Sensor Entladen positiv meldet.",
-            "battery_control": "Sollwert: eine Number-Entity mit der Leistung mit Vorzeichen. Getrennt: je eine Number für Laden und Entladen, optional eine Modus-Auswahl. Skript: ein Skript erhält die Leistung als Variable power_w (+Laden / -Entladen).",
+            "battery_control": "Sollwert: eine Number-Entität mit der Leistung mit Vorzeichen. Getrennt: je eine Number für Laden und Entladen, optional eine Modus-Auswahl. Skript: ein Skript erhält die Leistung als Variable power_w (+Laden / -Entladen).",
             "battery_temperature_entity": "Optional: ermöglicht die Ladebegrenzung nach Temperatur.",
             "max_cell_voltage_entity": "Optional, zusammen mit der niedrigsten Zellspannung: sanftes Laden nahe voll, Zell-Delta und Zellausgleich (LFP-Zellen).",
             "charged_energy_entity": "Optional, zusammen mit der entladenen Energie: Wirkungsgrad aus den Batteriezählern."
@@ -211,8 +211,8 @@
             "remote_entity": "Fernsteuerung (optional)"
           },
           "data_description": {
-            "setpoint_inverted": "SLEMS schreibt positiv = Laden. Aktivieren, wenn die Entity Entladen positiv erwartet.",
-            "remote_entity": "Schalter oder Auswahl, die die Batterie unter externe Steuerung stellt (z. B. *Manuelle Batteriesteuerung* bei Omnibattery). SLEMS schaltet sie vor dem ersten Sollwert ein und bei der Freigabe an die *Automatik* wieder aus, damit die Batterie wieder selbst regelt (z. B. ihre Nulleinspeisung). Ohne sie ist *Automatik* nur mit einer Modus-Option für Automatik möglich; leer lassen, wenn du sie selbst schaltest, und bei Freigabe *Standby* wählen."
+            "setpoint_inverted": "SLEMS schreibt positiv = Laden. Aktivieren, wenn die Entität Entladen positiv erwartet.",
+            "remote_entity": "Schalter oder Auswahl, die die Batterie unter externe Steuerung stellt (z. B. **Manuelle Batteriesteuerung** bei Omnibattery). SLEMS schaltet sie vor der ersten Vorgabe ein und bei der Freigabe an die **Automatik** wieder aus, damit die Batterie wieder selbst regelt (z. B. ihre Nulleinspeisung). Ohne sie ist **Automatik** nur mit einer Modus-Option für Automatik möglich; leer lassen, wenn du sie selbst schaltest, und bei Freigabe **Standby** wählen."
           }
         },
         "ha_split": {
@@ -225,12 +225,12 @@
           },
           "data_description": {
             "mode_entity": "Auswahl, die zwischen Laden, Entladen und Standby umschaltet (z. B. ein Force-Modus); die Optionen werden im nächsten Schritt zugeordnet.",
-            "remote_entity": "Schalter oder Auswahl, die die Batterie unter externe Steuerung stellt (z. B. *Manuelle Batteriesteuerung* bei Omnibattery). SLEMS schaltet sie vor dem ersten Sollwert ein und bei der Freigabe an die *Automatik* wieder aus, damit die Batterie wieder selbst regelt (z. B. ihre Nulleinspeisung). Ohne sie ist *Automatik* nur mit einer Modus-Option für Automatik möglich; leer lassen, wenn du sie selbst schaltest, und bei Freigabe *Standby* wählen."
+            "remote_entity": "Schalter oder Auswahl, die die Batterie unter externe Steuerung stellt (z. B. **Manuelle Batteriesteuerung** bei Omnibattery). SLEMS schaltet sie vor der ersten Vorgabe ein und bei der Freigabe an die **Automatik** wieder aus, damit die Batterie wieder selbst regelt (z. B. ihre Nulleinspeisung). Ohne sie ist **Automatik** nur mit einer Modus-Option für Automatik möglich; leer lassen, wenn du sie selbst schaltest, und bei Freigabe **Standby** wählen."
           }
         },
         "ha_script": {
           "title": "Steuerung über Skript",
-          "description": "Das Leistungs-Skript wird mit jedem Sollwert gestartet und erhält die Variable power_w (W, +Laden / -Entladen, 0 = Standby).",
+          "description": "Das Leistungs-Skript wird mit jeder Vorgabe gestartet und erhält die Variable power_w (W, +Laden / -Entladen, 0 = Standby).",
           "data": {
             "power_script": "Leistungs-Skript",
             "release_script": "Freigabe-Skript (optional)"
@@ -240,7 +240,7 @@
           }
         },
         "ha_options": {
-          "title": "Optionen der Auswahl-Entities",
+          "title": "Optionen der Auswahl-Entitäten",
           "description": "Welche Option was bedeutet. Leer gelassene Optionen werden nicht verwendet.",
           "data": {
             "mode_charge": "Modus: Laden",
@@ -261,7 +261,7 @@
             "round_trip_efficiency_pct": "Gesamtwirkungsgrad",
             "release_state": "Zustand, wenn SLEMS die Batterie freigibt",
             "min_command_interval_s": "Mindestabstand zwischen Befehlen",
-            "keepalive_s": "Sollwert wiederholen alle",
+            "keepalive_s": "Vorgabe wiederholen alle",
             "purchase_price_eur": "Anschaffungspreis",
             "rated_cycles": "Zyklen laut Hersteller"
           },
@@ -280,7 +280,7 @@
         "cannot_connect": "Keine Verbindung zur Batterie möglich.",
         "none_found": "Im Netz wurde keine Marstek Venus gefunden. Adresse von Hand eingeben (siehe README: IP-Adresse finden); andere Integrationen, die die Batterie verwenden, vorher stoppen.",
         "power_required": "SLEMS braucht die Batterieleistung, um die Batterie zu steuern.",
-        "no_auto_release": "Automatik braucht eine Fernsteuerungs-Entity, eine Modus-Option für Automatik oder ein Freigabe-Skript; sonst Standby wählen."
+        "no_auto_release": "Automatik braucht eine Fernsteuerungs-Entität, eine Modus-Option für Automatik oder ein Freigabe-Skript; sonst Standby wählen."
       },
       "abort": {
         "reconfigure_successful": "Batterie aktualisiert."
@@ -314,7 +314,7 @@
         "control": {
           "title": "Steuerung",
           "data": {
-            "control_entity": "Steuer-Entity",
+            "control_entity": "Steuer-Entität",
             "nominal_power_w": "Leistung im eingeschalteten Zustand",
             "min_power_w": "Minimale Leistung",
             "max_power_w": "Maximale Leistung",
@@ -327,15 +327,15 @@
             "min_current_a": "Mindeststrom",
             "max_current_a": "Höchststrom",
             "phases": "Phasen",
-            "phases_entity": "Entity der aktiven Phasen",
+            "phases_entity": "Entität der aktiven Phasen",
             "voltage_v": "Spannung",
-            "start_entity": "Start/Stopp-Entity",
+            "start_entity": "Start/Stopp-Entität",
             "avoid_cycling": "Takten vermeiden"
           },
           "data_description": {
-            "control_entity": "Schalter für Ein/Aus-Verbraucher, Number-Entity in W für leistungsgeregelte, in A für stromgeregelte Verbraucher (z. B. Ladestrom einer Wallbox); bei Stromvorgabe auch eine Auswahl mit Ampere-Optionen (z. B. *Max. Ladestrom* eines evcc-Ladepunkts in ha-evcc).",
-            "nominal_power_w": "Eine grobe Schätzung reicht, wenn *Gelernte Werte verwenden* an ist: SLEMS misst dann die tatsächliche Leistung, während es den Verbraucher betreibt (Betriebsmodus Aktiv), und verwendet sie nach etwa 30 Messwerten. Lieber etwas zu niedrig als zu hoch schätzen: Zu hoch wartet SLEMS auf mehr Überschuss und schaltet den Verbraucher womöglich nie ein, dann wird auch nichts gelernt.",
-            "block_entity": "Solange der Verbraucher gesperrt ist (z. B. vom Gerät oder einer Automation), steuert SLEMS ihn nicht: ein Water Heater bei Betriebsart „off“, andere Entities, solange sie „on“ sind.",
+            "control_entity": "Schalter für Ein/Aus-Verbraucher, Number-Entität in W für leistungsgeregelte, in A für stromgeregelte Verbraucher (z. B. Ladestrom einer Wallbox); bei Stromvorgabe auch eine Auswahl mit Ampere-Optionen (z. B. **Max. Ladestrom** eines evcc-Ladepunkts in ha-evcc).",
+            "nominal_power_w": "Eine grobe Schätzung reicht, wenn **Gelernte Werte verwenden** an ist: SLEMS misst dann die tatsächliche Leistung, während es den Verbraucher betreibt (Betriebsmodus Aktiv), und verwendet sie nach etwa 30 Messwerten. Lieber etwas zu niedrig als zu hoch schätzen: Zu hoch wartet SLEMS auf mehr Überschuss und schaltet den Verbraucher womöglich nie ein, dann wird auch nichts gelernt.",
+            "block_entity": "Solange der Verbraucher gesperrt ist (z. B. vom Gerät oder einer Automation), steuert SLEMS ihn nicht: ein Water Heater bei Betriebsart „off“, andere Entitäten, solange sie „on“ sind.",
             "priority": "1 = höchste Priorität bei der Verteilung von Überschuss.",
             "min_on_minutes": "Optional. Nach dem Einschalten durch SLEMS läuft der Verbraucher mindestens so lange.",
             "min_off_minutes": "Optional. Nach dem Ausschalten durch SLEMS bleibt der Verbraucher mindestens so lange aus.",
@@ -343,10 +343,10 @@
             "temperature_2_entity": "Optional, z. B. ein Fühler weiter oben im Boiler; macht die Schätzung genauer.",
             "min_current_a": "Unter diesem Strom wird der Verbraucher gestoppt (Fahrzeuge: meist 6 A).",
             "max_current_a": "Höchster Strom, den SLEMS vorgibt.",
-            "phases": "Phasen, mit denen der Verbraucher lädt, wenn keine Entity die aktiven nennt.",
+            "phases": "Phasen, mit denen der Verbraucher lädt, wenn keine Entität die aktiven nennt.",
             "phases_entity": "Optional. Sensor mit der Zahl der aktiven Phasen (1 oder 3), z. B. eines evcc-Ladepunkts oder einer Wallbox, die selbst umschaltet; der Leistungsbereich folgt ihm.",
             "voltage_v": "Spannung je Phase.",
-            "start_entity": "Optional. Schalter, oder eine Auswahl (dann werden als Nächstes die Optionen für ein und aus abgefragt, z. B. Modus eines evcc-Ladepunkts: now / off). Ohne sie stoppt SLEMS, indem es den kleinsten Strom setzt, den die Steuer-Entity zulässt (0 A, wenn erlaubt); bei evcc mit seinem Mindeststrom entscheidet evcc dann selbst über Start und Stopp.",
+            "start_entity": "Optional. Schalter, oder eine Auswahl (dann werden als Nächstes die Optionen für ein und aus abgefragt, z. B. Modus eines evcc-Ladepunkts: now / off). Ohne sie stoppt SLEMS, indem es den kleinsten Strom setzt, den die Steuer-Entität zulässt (0 A, wenn erlaubt); bei evcc mit seinem Mindeststrom entscheidet evcc dann selbst über Start und Stopp.",
             "avoid_cycling": "Nur einschalten, wenn der prognostizierte Überschuss für einen ganzen Lauf reicht (die Mindestlaufzeit, oder was das Tagesziel noch braucht, wenn weniger), und bei Einbrüchen des Überschusses bis zu 5 Minuten weiterlaufen (Batterien oder Netz überbrücken). Für Geräte, die nicht oft ein- und ausgeschaltet werden sollen, z. B. mit Kompressor; dazu eine Mindestlaufzeit und -pause setzen."
           }
         },
@@ -389,7 +389,7 @@
         },
         "template_energy": {
           "title": "Energie",
-          "description": "Der Energietarif deines Lieferanten.\n\n**Leer gelassen geht es mit OK weiter zu Netz und Abgaben.** Die Preise deines Energietarifs trägst du danach mit *Posten hinzufügen* ein.\n\nEin Einspeisetarif (*Einspeisung · …*) wird immer ein eigener Tarif, neben deinem Bezugstarif.\n\nVorlagen enthalten öffentliche Listenpreise; vergleiche den Tarif danach mit einer Rechnung.\n\nDein Tarif fehlt? Geh zurück und füge ihn als YAML ein, z. B. mit Hilfe einer KI aus deiner Rechnung erstellt: [Anleitung]({prompt_url}).",
+          "description": "Der Energietarif deines Lieferanten.\n\n**Leer gelassen geht es mit OK weiter zu Netz und Abgaben.** Die Preise deines Energietarifs trägst du danach mit **Posten hinzufügen** ein.\n\nEin Einspeisetarif (**Einspeisung · …**) wird immer ein eigener Tarif, neben deinem Bezugstarif.\n\nVorlagen enthalten öffentliche Listenpreise; vergleiche den Tarif danach mit einer Rechnung.\n\nDein Tarif fehlt? Geh zurück und füge ihn als YAML ein, z. B. mit Hilfe einer KI aus deiner Rechnung erstellt: [Anleitung]({prompt_url}).",
           "data": {
             "energy": "Energie"
           }
@@ -486,12 +486,12 @@
             "delete": "Diesen Posten entfernen"
           },
           "data_description": {
-            "unit": "Börsenpreis und Monatsmarktpreis nutzen die Börsenpreise der *Preisquelle* in den SLEMS-Einstellungen (Gruppe *Preise*); *Börsenpreise abrufen* muss an sein.",
+            "unit": "Börsenpreis und Monatsmarktpreis nutzen die Börsenpreise der **Preisquelle** in den SLEMS-Einstellungen (Gruppe **Preise**); **Börsenpreise abrufen** muss an sein.",
             "price": "Netto (ohne USt.) in Hundertstel pro kWh (ct, Rp.) oder pro Jahr (€, CHF), in der Währung von Home Assistant, wie auf der Rechnung; ein Rabatt ist negativ. Auf der Einspeiseseite ist der Energiepreis die Vergütung, die du bekommst. Bei Börsenpreis und Monatsmarktpreis: der feste Aufschlag in Hundertstel pro kWh (negativ: Abzug). Prozent der Gruppe: z. B. 7 für eine Abgabe von 7 % auf die anderen Posten derselben Seite und Gruppe.",
             "factor_pct": "Nur bei Börsenpreis und Monatsmarktpreis: Preis = Börsenpreis × (1 + Prozent) + Preis. Z. B. −10 % für eine Vergütung von 90 % des Marktpreises.",
             "month_prices": "Optional, nur beim Monatsmarktpreis: veröffentlichte Werte in Hundertstel pro kWh, z. B. „2026-01: 8,5; 2026-02: 7,9“. Monate ohne Wert: Mittel der Börsenpreise, gewichtet mit deiner Einspeisung.",
             "market": "Nur beim Monatsmarktpreis: der offizielle Monatswert, dem der Preis folgt. Er wird mit den Börsenpreisen abgerufen; bis ein Monat veröffentlicht ist, gilt das Mittel der Börsenpreise, gewichtet mit deiner Einspeisung.",
-            "zero_when_negative": "Ein: Der Posten ist 0 in Stunden oder Viertelstunden mit negativem Day-Ahead-Preis, z. B. die deutsche EEG-Einspeisevergütung von Anlagen seit 25. Februar 2025. Braucht *Börsenpreise abrufen*.",
+            "zero_when_negative": "Ein: Der Posten ist 0 in Stunden oder Viertelstunden mit negativem Day-Ahead-Preis, z. B. die deutsche EEG-Einspeisevergütung von Anlagen seit 25. Februar 2025. Braucht **Börsenpreise abrufen**.",
             "valid_from": "Optional. Bei einer Preisänderung: den Posten mit dem neuen Preis und diesem Datum noch einmal anlegen.",
             "valid_to": "Optional: der letzte Tag des Postens, z. B. wenn ein Preisstand endet.",
             "months": "Optional, z. B. für einen günstigeren Sommerpreis.",
@@ -560,7 +560,7 @@
     "model": {
       "options": {
         "marstek_venus_e3": "Marstek Venus E 3.0 (Modbus TCP)",
-        "ha_entities": "Vorhandene Home-Assistant-Entities (lesen oder steuern)"
+        "ha_entities": "Vorhandene Home-Assistant-Entitäten (lesen oder steuern)"
       }
     },
     "consumer_type": {
@@ -828,7 +828,7 @@
           "feed_in_cap": "Einspeisebegrenzung",
           "price_hold": "Für teure Stunden halten",
           "grid_charge": "Netzladen",
-          "battery_export": "Einspeisen aus Akku",
+          "battery_export": "Einspeisen aus den Batterien",
           "price_room": "Platz für günstigere Stunden"
         }
       },
@@ -1049,10 +1049,10 @@
         "name": "Preisbewusste Steuerung"
       },
       "grid_charge": {
-        "name": "Akku aus dem Netz laden"
+        "name": "Batterien aus dem Netz laden"
       },
       "battery_export": {
-        "name": "Akku ins Netz entladen"
+        "name": "Batterien ins Netz entladen"
       }
     },
     "number": {
@@ -1277,7 +1277,7 @@
       "message": "Die maximale Dauer von 24 Stunden wurde erreicht"
     },
     "target_missed_blocked_message": {
-      "message": "{name} hat bis {deadline} {got} von {goal} erreicht; er war in dieser Zeit {blocked} extern gesperrt. Kommt das öfter vor, prüfe die Sperr-Entity auf seiner Karte (z. B. eine Sperrzeit des Netzbetreibers oder eine Automation)."
+      "message": "{name} hat bis {deadline} {got} von {goal} erreicht; er war in dieser Zeit {blocked} extern gesperrt. Kommt das öfter vor, prüfe die Sperr-Entität auf seiner Karte (z. B. eine Sperrzeit des Netzbetreibers oder eine Automation)."
     }
   },
   "issues": {
@@ -1291,15 +1291,15 @@
     },
     "grid_meter_stale": {
       "title": "Smart Meter meldet nicht",
-      "description": "Die Smart-Meter-Entity hat länger keinen Wert gemeldet. SLEMS hat die Batterien an ihre eigene Logik übergeben und regelt wieder, sobald der Zähler meldet. Prüfe den Smart Meter und seine Integration."
+      "description": "Die Smart-Meter-Entität hat länger keinen Wert gemeldet. SLEMS hat die Batterien an ihre eigene Logik übergeben und regelt wieder, sobald der Zähler meldet. Prüfe den Smart Meter und seine Integration."
     },
     "grid_modbus_unavailable": {
       "title": "Smart Meter per Modbus nicht erreichbar",
-      "description": "SLEMS kann die Netzleistung nicht per Modbus lesen ({error}) und nutzt bis dahin die Smart-Meter-Entity. Verbindung, Proxy und die Einstellungen unter Optionen prüfen."
+      "description": "SLEMS kann die Netzleistung nicht per Modbus lesen ({error}) und nutzt bis dahin die Smart-Meter-Entität. Verbindung, Proxy und die Einstellungen unter Optionen prüfen."
     },
     "battery_release_failed": {
       "title": "{name} konnte nicht freigegeben werden",
-      "description": "SLEMS konnte {name} nicht an ihre eigene Logik zurückgeben, z. B. weil die Verbindung unterbrochen ist. Die Batterie läuft womöglich noch mit dem letzten Sollwert weiter. SLEMS versucht es laufend erneut; prüfe die Verbindung oder die Batterie (z. B. in ihrer App)."
+      "description": "SLEMS konnte {name} nicht an ihre eigene Logik zurückgeben, z. B. weil die Verbindung unterbrochen ist. Die Batterie läuft womöglich noch mit der letzten Vorgabe weiter. SLEMS versucht es laufend erneut; prüfe die Verbindung oder die Batterie (z. B. in ihrer App)."
     },
     "tariff_update": {
       "title": "Neue Preise für {name}",

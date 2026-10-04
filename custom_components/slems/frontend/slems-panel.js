@@ -358,7 +358,7 @@ const STRINGS = {
     tariffSumSides: "Sum import and feed-in",
     tariffSidesHint: "Per tariff the costs of the import and the credit for the feed-in (less its fees).",
     tariffSigns: "Costs: import minus feed-in credit; positive you pay, negative you get money.",
-    tariffDiffHint: "Below each comparison tariff the difference to the current one: green better, red worse. Click a tariff to show or hide it.",
+    tariffDiffHint: "Below each comparison tariff the difference to the current one: green better, red worse. Select a tariff to show or hide it.",
     tariffSavingHint:
       "Saving price control: estimate of what keeping the battery energy for the expensive hours would have saved, from the recorded consumption and PV with a simple battery model and a perfect forecast (an upper bound).",
     tariffSavingHintCharge:
@@ -671,8 +671,8 @@ const STRINGS = {
     targetMinShort: "min.",
     targetGoalTemp: "Ziel",
     targetBoostChip: "Vorrang",
-    batteryExportText: "Einspeisen aus Akku: {energy} ab {time}",
-    batteryExportNoEffect: "Akku ins Netz entladen ohne Wirkung mit deinem Einspeisetarif (keine stündliche Vergütung nach Börsenpreis)",
+    batteryExportText: "Einspeisen aus den Batterien: {energy} ab {time}",
+    batteryExportNoEffect: "Batterien ins Netz entladen ohne Wirkung mit deinem Einspeisetarif (keine stündliche Vergütung nach Börsenpreis)",
     priceRoomText: "Lädt bis {time} nur begrenzt und speist ein: Platz für den Überschuss günstigerer (negativer) Zeiten",
     gridChargeText: "Netzladen: {energy} ab {time} (spart etwa {saving})",
     priceHoldText: "Batterien decken die Zeiten ab {price}; Netz für {duration} zu günstigeren Zeiten bis {until}",
@@ -730,7 +730,7 @@ const STRINGS = {
     meterAge: "Alter des letzten Werts",
     roundTrip: "Antwortzeit (Median / p95 / max)",
     meterErrors: "Fehler",
-    meterFallback: "Heute über die Entity",
+    meterFallback: "Heute über die Entität",
     allBatteries: "Alle Batterien",
     notLearned: "noch nicht gelernt",
     exportBelowTarget:
@@ -818,7 +818,7 @@ const STRINGS = {
     tariffSumSides: "Bezug und Einspeisung summieren",
     tariffSidesHint: "Je Tarif die Kosten des Bezugs und die Vergütung der Einspeisung (abzüglich ihrer Gebühren).",
     tariffSigns: "Kosten: Bezug minus Einspeisevergütung; positiv zahlst du, negativ bekommst du Geld.",
-    tariffDiffHint: "Unter jedem Vergleichstarif der Unterschied zum aktuellen: grün besser, rot schlechter. Klick auf einen Tarif blendet ihn ein oder aus.",
+    tariffDiffHint: "Unter jedem Vergleichstarif der Unterschied zum aktuellen: grün besser, rot schlechter. Wähle einen Tarif, um ihn ein- oder auszublenden.",
     tariffSavingHint:
       "Ersparnis Preissteuerung: Schätzung, was das Zurückhalten der Batterieenergie für die teuren Stunden gespart hätte, aus aufgezeichnetem Verbrauch und PV mit einem einfachen Batteriemodell und perfekter Prognose (eine Obergrenze).",
     tariffSavingHintCharge:
