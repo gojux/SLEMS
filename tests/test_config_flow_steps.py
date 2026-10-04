@@ -65,6 +65,14 @@ def test_reconfigured_battery_with_the_same_address_is_not_probed() -> None:
     assert not flow._same_connection(dict(data))
 
 
+def test_item_form_shows_the_symbols_of_the_currency() -> None:
+    from custom_components.slems.config_flow import _price_symbols
+
+    assert _price_symbols("EUR") == ("€", "ct")
+    assert _price_symbols("CHF") == ("CHF", "Rp.")
+    assert _price_symbols("SEK") == ("SEK", "1/100 SEK")
+
+
 def test_tariff_prompt_link_in_the_language_of_home_assistant() -> None:
     from custom_components.slems.config_flow import tariff_prompt_url
 

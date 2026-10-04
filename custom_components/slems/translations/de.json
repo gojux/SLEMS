@@ -487,9 +487,9 @@
           },
           "data_description": {
             "unit": "Börsenpreis und Monatsmarktpreis nutzen die Börsenpreise der **Preisquelle** in den SLEMS-Einstellungen (Gruppe **Preise**); **Börsenpreise abrufen** muss an sein.",
-            "price": "Netto (ohne USt.) in Hundertstel pro kWh (ct, Rp.) oder pro Jahr (€, CHF), in der Währung von Home Assistant, wie auf der Rechnung; ein Rabatt ist negativ. Auf der Einspeiseseite ist der Energiepreis die Vergütung, die du bekommst. Bei Börsenpreis und Monatsmarktpreis: der feste Aufschlag in Hundertstel pro kWh (negativ: Abzug). Prozent der Gruppe: z. B. 7 für eine Abgabe von 7 % auf die anderen Posten derselben Seite und Gruppe.",
+            "price": "Netto (ohne USt.) in {minor}/kWh oder {major} pro Jahr, wie auf der Rechnung; ein Rabatt ist negativ. Auf der Einspeiseseite ist der Energiepreis die Vergütung, die du bekommst. Bei Börsenpreis und Monatsmarktpreis: der feste Aufschlag in {minor}/kWh (negativ: Abzug). Prozent der Gruppe: z. B. 7 für eine Abgabe von 7 % auf die anderen Posten derselben Seite und Gruppe.",
             "factor_pct": "Nur bei Börsenpreis und Monatsmarktpreis: Preis = Börsenpreis × (1 + Prozent) + Preis. Z. B. −10 % für eine Vergütung von 90 % des Marktpreises.",
-            "month_prices": "Optional, nur beim Monatsmarktpreis: veröffentlichte Werte in Hundertstel pro kWh, z. B. „2026-01: 8,5; 2026-02: 7,9“. Monate ohne Wert: Mittel der Börsenpreise, gewichtet mit deiner Einspeisung.",
+            "month_prices": "Optional, nur beim Monatsmarktpreis: veröffentlichte Werte in {minor}/kWh, z. B. „2026-01: 8,5; 2026-02: 7,9“. Monate ohne Wert: Mittel der Börsenpreise, gewichtet mit deiner Einspeisung.",
             "market": "Nur beim Monatsmarktpreis: der offizielle Monatswert, dem der Preis folgt. Er wird mit den Börsenpreisen abgerufen; bis ein Monat veröffentlicht ist, gilt das Mittel der Börsenpreise, gewichtet mit deiner Einspeisung.",
             "zero_when_negative": "Ein: Der Posten ist 0 in Stunden oder Viertelstunden mit negativem Day-Ahead-Preis, z. B. die deutsche EEG-Einspeisevergütung von Anlagen seit 25. Februar 2025. Braucht **Börsenpreise abrufen**.",
             "valid_from": "Optional. Bei einer Preisänderung: den Posten mit dem neuen Preis und diesem Datum noch einmal anlegen.",
@@ -639,9 +639,9 @@
     },
     "tariff_unit": {
       "options": {
-        "kwh": "Hundertstel/kWh (ct, Rp.)",
-        "year": "pro Jahr (€, CHF)",
-        "spot": "Börsenpreis (stündlich)",
+        "kwh": "{minor}/kWh",
+        "year": "{major}/Jahr",
+        "spot": "Börsenpreis (viertelstündlich)",
         "market_month": "Monatsmarktpreis",
         "percent": "Prozent der Gruppe (%)"
       }

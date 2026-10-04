@@ -33,6 +33,7 @@ from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er, selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.translation import async_get_translations
 from homeassistant.util import dt as dt_util
 from modbus_connection import ModbusTcpParams
 
@@ -166,7 +167,7 @@ from .tariff import (
     vat_data,
 )
 from . import elcom
-from .currency import currency_code, symbols
+from .currency import SYMBOLS, currency_code, symbols
 from .reference_values import MARKETS as REFERENCE_MARKETS
 from .tariff_yaml import VERSION as YAML_VERSION
 from .tariff_yaml import TariffYamlError, export_yaml, parse_yaml
@@ -1481,6 +1482,12 @@ _PERCENT = selector.NumberSelector(
 )
 
 
+def _price_symbols(code: str) -> tuple[str, str]:
+    """(symbol, symbol of a hundredth) for the item form; "1/100 XYZ" for an unknown currency."""
+    major, minor = symbols(code)
+    return (major, minor) if code in SYMBOLS else (code, f"1/100 {code}")
+
+
 def _tariff_select(options: list[str], key: str, *, multiple: bool = False) -> selector.SelectSelector:
     return selector.SelectSelector(
         selector.SelectSelectorConfig(
@@ -2047,6 +2054,7 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         )
         if isinstance(current.get("month_prices"), dict):
             current["month_prices"] = format_month_prices(sorted(current["month_prices"].items())) or None
+        major, minor = _price_symbols(currency_code(self.hass))
         schema: dict = {
             vol.Required("name", default=current.get("name", vol.UNDEFINED)): str,
             vol.Required("side", default=current.get("side", Side.IMPORT.value)): _tariff_select(
@@ -2055,10 +2063,13 @@ class TariffSubentryFlow(ConfigSubentryFlow):
             vol.Required("group", default=current.get("group", Group.ENERGY.value)): _tariff_select(
                 [group.value for group in Group], "tariff_group"
             ),
-            vol.Required("unit", default=current.get("unit", Unit.KWH.value)): _tariff_select(
-                [unit.value for unit in Unit], "tariff_unit"
+            vol.Required("unit", default=current.get("unit", Unit.KWH.value)): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=await self._unit_options(major, minor), mode=selector.SelectSelectorMode.DROPDOWN
+                )
             ),
-            vol.Required("price", default=current.get("price", vol.UNDEFINED)): selector.NumberSelector(
+            # Without a default the frontend fills a required number with its minimum.
+            vol.Required("price", default=current.get("price", 0.0)): selector.NumberSelector(
                 selector.NumberSelectorConfig(min=-10_000, max=10_000, step="any", mode=selector.NumberSelectorMode.BOX)
             ),
             vol.Optional("factor_pct", default=current.get("factor_pct") or 0.0): selector.NumberSelector(
@@ -2084,7 +2095,23 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         }
         if self._edit_index is not None:
             schema[vol.Optional("delete", default=False)] = selector.BooleanSelector()
-        return self.async_show_form(step_id="item", data_schema=vol.Schema(schema), errors=errors)
+        return self.async_show_form(
+            step_id="item",
+            data_schema=vol.Schema(schema),
+            errors=errors,
+            description_placeholders={"major": major, "minor": minor},
+        )
+
+    async def _unit_options(self, major: str, minor: str) -> list[selector.SelectOptionDict]:
+        """Units with the symbols of the currency of Home Assistant."""
+        strings = await async_get_translations(self.hass, self.hass.config.language, "selector", {DOMAIN})
+        options = []
+        for unit in Unit:
+            template = strings.get(f"component.{DOMAIN}.selector.tariff_unit.options.{unit.value}", unit.value)
+            options.append(
+                selector.SelectOptionDict(value=unit.value, label=template.format(major=major, minor=minor))
+            )
+        return options
 
     async def async_step_check(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         """Compare with a bill: its period and amounts (incl. VAT)."""

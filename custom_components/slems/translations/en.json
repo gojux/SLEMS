@@ -487,9 +487,9 @@
           },
           "data_description": {
             "unit": "Spot price and monthly market price use the market prices of the **Price source** in the SLEMS settings (group **Prices**); **Fetch market prices** must be on.",
-            "price": "Net (without VAT) in hundredths per kWh (ct, Rp.) or per year (€, CHF), in the currency of Home Assistant, as on the bill; a discount is negative. On the feed-in side the energy price is the credit you get. For spot price and monthly market price: the fixed markup in hundredths per kWh (negative: deduction). Percent of the group: e.g. 7 for a levy of 7 % on the other items of the same side and group.",
+            "price": "Net (without VAT) in {minor}/kWh or {major} per year, as on the bill; a discount is negative. On the feed-in side the energy price is the credit you get. For spot price and monthly market price: the fixed markup in {minor}/kWh (negative: deduction). Percent of the group: e.g. 7 for a levy of 7 % on the other items of the same side and group.",
             "factor_pct": "Only for spot price and monthly market price: price = market price × (1 + percent) + price. E.g. −10 % for a credit of 90 % of the market price.",
-            "month_prices": "Optional, only for the monthly market price: published values in hundredths per kWh, e.g. \"2026-01: 8.5; 2026-02: 7.9\". Months without a value: mean of the spot prices weighted by your feed-in.",
+            "month_prices": "Optional, only for the monthly market price: published values in {minor}/kWh, e.g. \"2026-01: 8.5; 2026-02: 7.9\". Months without a value: mean of the spot prices weighted by your feed-in.",
             "market": "Only for the monthly market price: the official monthly value the price follows. It is fetched with the market prices; until a month is published, the day-ahead mean weighted by your feed-in stands in.",
             "zero_when_negative": "On: the item is 0 in hours or quarter hours with a negative day-ahead price, e.g. the German EEG feed-in credit of plants since 25 February 2025. Needs **Fetch market prices**.",
             "valid_from": "Optional. For a price change: add the line again with the new price and this date.",
@@ -639,9 +639,9 @@
     },
     "tariff_unit": {
       "options": {
-        "kwh": "hundredths/kWh (ct, Rp.)",
-        "year": "per year (€, CHF)",
-        "spot": "Spot price (hourly)",
+        "kwh": "{minor}/kWh",
+        "year": "{major}/year",
+        "spot": "Spot price (quarter-hourly)",
         "market_month": "Monthly market price",
         "percent": "Percent of the group (%)"
       }
