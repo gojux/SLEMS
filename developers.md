@@ -20,6 +20,28 @@
 - License: GPL-3.0 (compatible with Omnibattery, from which the Marstek
   register map and control sequence are taken).
 
+### Texts
+
+User facing texts (translations, panel, READMEs, docs) follow the Home
+Assistant [translation](https://developers.home-assistant.io/docs/translations/)
+and [style](https://developers.home-assistant.io/docs/documenting/general-style-guide)
+guidelines:
+
+- Address the user directly: "you" in English, "du" (lower case) in German,
+  never "Sie"; correct German imperatives ("gib", not "gebe").
+- Names of UI elements (settings, switches, options, menu items, steps,
+  sensors) in **bold**, also in translations and form help; italics only for
+  real emphasis or a term being introduced.
+- "Select" / "auswählen" instead of "click" / "klicken" (also touch screens).
+- Sentence case for titles, headings and labels: only the first word and
+  proper names capitalised.
+- German terms: "Batterie(n)" for the home batteries (not "Akku" or
+  "Speicher"); "Entität", "Entitäten", "Entitäts-ID" as in Home Assistant;
+  "Vorgabe" for what SLEMS commands ("Sollwert" only for the control type of
+  a battery from entities); "Standby" for an idle battery (not "Ruhe").
+- No URLs in translations (hassfest): pass them as description placeholders.
+- English and German stay alike in structure (READMEs, translations).
+
 ## Development environment
 
 Everything runs in Docker Compose; no local Python setup is needed.
