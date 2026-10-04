@@ -172,6 +172,30 @@ def test_nan_and_inf_are_no_values() -> None:
     assert state_as_float(state("nan")) is None
     assert state_as_float(state("inf")) is None
     assert state_as_float(state("12.5")) == 12.5
+    # Neither as the active phases nor as a temperature of a storage.
+    from custom_components.slems.consumers import _temperature
+    from custom_components.slems.coordinator import _weather_temperature
+
+    for value in ("inf", "nan"):
+        hass = FakeHass({"sensor.phases": state(value)})
+        assert active_phases(hass, wallbox(phases_entity="sensor.phases")) == 3
+        assert _temperature(state(value)) is None
+        assert _weather_temperature(SimpleNamespace(attributes={"temperature": float(value)})) is None
+    assert _weather_temperature(SimpleNamespace(attributes={"temperature": "warm"})) is None
+    assert _temperature(state("68", unit_of_measurement="°F")) == 20
+
+
+async def test_any_error_of_a_called_integration_is_a_failed_call() -> None:
+    import pytest
+
+    from custom_components.slems.util import ServiceCallError, async_call_service
+
+    async def broken(domain, service, data, blocking=False):
+        raise ValueError("bad value")
+
+    hass = SimpleNamespace(services=SimpleNamespace(async_call=broken))
+    with pytest.raises(ServiceCallError, match="ValueError"):
+        await async_call_service(hass, "number", "set_value", {})
 
 
 async def test_no_cycle_after_shutdown() -> None:

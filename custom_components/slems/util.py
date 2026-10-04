@@ -28,7 +28,11 @@ class ServiceCallError(Exception):
 async def async_call_service(
     hass: HomeAssistant, domain: str, service: str, data: dict[str, Any]
 ) -> None:
-    """Call a service and wait until it is done (raises ``ServiceCallError``)."""
+    """Call a service and wait until it is done (raises ``ServiceCallError``).
+
+    Any error of the called integration counts as a failed call, so one faulty
+    device cannot stop the control of the others in the same cycle.
+    """
     try:
         async with asyncio.timeout(SERVICE_TIMEOUT_S):
             await hass.services.async_call(domain, service, data, blocking=True)
@@ -36,6 +40,8 @@ async def async_call_service(
         raise ServiceCallError(f"{domain}.{service}: no answer within {SERVICE_TIMEOUT_S:.0f} s") from err
     except (HomeAssistantError, vol.Invalid) as err:
         raise ServiceCallError(f"{domain}.{service}: {err}") from err
+    except Exception as err:  # noqa: BLE001 - the called integration may raise anything
+        raise ServiceCallError(f"{domain}.{service}: {type(err).__name__}: {err}") from err
 
 _POWER_FACTORS: dict[str, float] = {
     UnitOfPower.WATT: 1.0,

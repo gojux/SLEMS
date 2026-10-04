@@ -3470,10 +3470,11 @@ def _weather_temperature(state) -> float | None:
     """Current temperature of a weather entity in °C."""
     if state is None:
         return None
-    temperature = state.attributes.get("temperature")
-    if temperature is None:
+    try:
+        temperature = float(state.attributes.get("temperature"))
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(temperature):
         return None
     unit = state.attributes.get("temperature_unit", UnitOfTemperature.CELSIUS)
-    return TemperatureConverter.convert(
-        float(temperature), unit, UnitOfTemperature.CELSIUS
-    )
+    return TemperatureConverter.convert(temperature, unit, UnitOfTemperature.CELSIUS)

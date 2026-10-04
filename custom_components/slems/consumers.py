@@ -54,7 +54,7 @@ from .const import (
     ConsumerType,
     ControlMode,
 )
-from .util import state_as_kwh, state_as_watts
+from .util import state_as_float, state_as_kwh, state_as_watts
 
 
 @dataclass(frozen=True)
@@ -185,13 +185,9 @@ def current_option(state: State, amps: float) -> str | None:
 def active_phases(hass: HomeAssistant, consumer: ConsumerConfig) -> int:
     """Phases in use: from the phases entity (1-3), otherwise the configured number."""
     if consumer.phases_entity_id:
-        state = hass.states.get(consumer.phases_entity_id)
-        try:
-            value = round(float(state.state)) if state is not None else None
-        except ValueError:
-            value = None
-        if value is not None and 1 <= value <= 3:
-            return value
+        value = state_as_float(hass.states.get(consumer.phases_entity_id))
+        if value is not None and 1 <= round(value) <= 3:
+            return round(value)
     return consumer.phases
 
 
@@ -235,11 +231,8 @@ def read_consumer_state(hass: HomeAssistant, consumer: ConsumerConfig) -> Consum
 
 def _temperature(state) -> float | None:
     """Temperature in °C (sensors in °F are converted)."""
-    if state is None:
-        return None
-    try:
-        value = float(state.state)
-    except (TypeError, ValueError):
+    value = state_as_float(state)
+    if value is None:
         return None
     if state.attributes.get("unit_of_measurement") == "°F":
         return (value - 32) * 5 / 9
