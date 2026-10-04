@@ -1689,6 +1689,10 @@ Possible extensions:
   program and add the rest of a running program to the forecast of the next
   hours (helps the evening and night planning); later possibly starting them
   with surplus if the device allows a remote start.
+- Public holidays in the consumption forecast: a holiday at home planned like
+  a weekend day, from a calendar of the Home Assistant integration
+  **Holiday** for the own canton or state (else the national holidays of
+  the country set in Home Assistant).
 - Further battery models via the driver interface.
 
 ## Development

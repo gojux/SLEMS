@@ -352,10 +352,14 @@
         },
         "start_options": {
           "title": "Optionen für Start und Stopp",
-          "description": "Optionen von {entity}, die den Verbraucher starten und stoppen.",
+          "description": "Optionen von {entity}, mit denen SLEMS den Verbraucher startet und stoppt. SLEMS wählt sie selbst aus; eine Änderung von außen gilt nicht als Wunsch des Geräts und wird zurückgestellt, solange SLEMS den Verbraucher steuert.",
           "data": {
             "start_on": "Option für ein",
             "start_off": "Option für aus"
+          },
+          "data_description": {
+            "start_on": "Wird ausgewählt, wenn der Verbraucher laufen soll. Wähle die Option, in der das Gerät ohne eigene Logik läuft, bei evcc **Schnell**: Bei **Smart** würde evcc selbst nach Überschuss regeln und gegen SLEMS arbeiten.",
+            "start_off": "Wird ausgewählt, wenn der Verbraucher aus sein soll, bei evcc **Aus**."
           }
         }
       },

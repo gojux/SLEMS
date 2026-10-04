@@ -352,10 +352,14 @@
         },
         "start_options": {
           "title": "Options for start and stop",
-          "description": "Options of {entity} that start and stop the consumer.",
+          "description": "Options of {entity} SLEMS uses to start and stop the consumer. SLEMS selects them itself; a change from outside is not taken as a request of the device and is set back while SLEMS controls the consumer.",
           "data": {
             "start_on": "Option for on",
             "start_off": "Option for off"
+          },
+          "data_description": {
+            "start_on": "Selected when the consumer should run. Choose the option in which the device runs without its own logic, with evcc **Fast**: with **Smart** evcc would follow the surplus itself and work against SLEMS.",
+            "start_off": "Selected when the consumer should be off, with evcc **Off**."
           }
         }
       },

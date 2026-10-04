@@ -164,7 +164,6 @@ const STRINGS = {
     resting: "thermostat pause",
     controlOff: "control off",
     plannedControlOff: "– (control off)",
-    targetPaused: "paused, control off",
     onlyWithControl: "Applies only while the control is active.",
     capSection: "Feed-in cap",
     capRole: "Role",
@@ -625,7 +624,6 @@ const STRINGS = {
     resting: "Thermostat-Pause",
     controlOff: "Steuerung aus",
     plannedControlOff: "– (Steuerung aus)",
-    targetPaused: "pausiert, Steuerung aus",
     onlyWithControl: "Wirkt nur bei aktiver Steuerung.",
     capSection: "Einspeisebegrenzung",
     capRole: "Einsatz",
@@ -3711,14 +3709,18 @@ class SlemsPanel extends HTMLElement {
             support && support.state !== "always"
               ? this._row(t.batterySupport, escapeHtml(this._supportText(support)), support.entity_id)
               : "";
+          // Control off: no targets, only the temperature (if there is one).
+          const temperature = this._consumerTemperature(c);
           const progress =
-            c.controllable && targetType && targetType !== "none"
-              ? this._row(
-                  t.targetProgress,
-                  escapeHtml(this._targetText(attrs, this._state("target_source", c.device_id)?.state, control?.state === "off")),
-                  planned?.entity_id
-                )
-              : "";
+            control?.state === "off"
+              ? temperature ? this._row(t.temperature, escapeHtml(temperature), planned?.entity_id) : ""
+              : c.controllable && targetType && targetType !== "none"
+                ? this._row(
+                    t.targetProgress,
+                    escapeHtml(this._targetText(attrs, this._state("target_source", c.device_id)?.state)),
+                    planned?.entity_id
+                  )
+                : "";
           const details = expanded
             ? `<dl>
               ${c.controllable ? this._row(t.consumerResponseTime, response, planned?.entity_id) : ""}
@@ -3812,7 +3814,7 @@ class SlemsPanel extends HTMLElement {
 
   /** "2,5 / 4 h · bis 22:00 · erzwungen ab 19:30" or "43 °C · min. 40 °C · Ziel 55 °C". */
   /** Progress of a daily target; ``paused``: its consumer's control is off, nothing is planned. */
-  _targetText(attrs, source, paused = false) {
+  _targetText(attrs, source) {
     const t = this._t;
     const language = this._hass?.locale?.language || "en";
     const number = (v) => new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(v);
@@ -3828,7 +3830,6 @@ class SlemsPanel extends HTMLElement {
       parts.push(`${number(attrs.target_got ?? 0)} / ${number(attrs.target_goal)} ${attrs.target_unit}`);
     }
     parts.push(t.targetUntil.replace("{time}", clock(attrs.target_deadline)));
-    if (paused) return [...parts, t.targetPaused].join(" · ");
     const energy = attrs.target_energy_wh;
     if (mode !== "done" && energy > 0) {
       // Waiting for a later day (after the deadline until midnight, or the earliest

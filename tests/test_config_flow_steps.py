@@ -82,3 +82,28 @@ def test_tariff_prompt_link_in_the_language_of_home_assistant() -> None:
     for name in ("strings.json", "translations/de.json"):
         texts = json.loads((Path(config_flow.__file__).parent / name).read_text())
         assert "{prompt_url}" in texts["config_subentries"]["tariff"]["step"]["template_energy"]["description"]
+
+
+def test_select_options_named_as_their_integration_shows_them() -> None:
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    entry = SimpleNamespace(platform="evcc_intg", domain="select", translation_key="mode")
+    registry = SimpleNamespace(async_get=lambda _entity_id: entry)
+    strings = {"component.evcc_intg.entity.select.mode.state.now": "Schnell"}
+
+    async def translations(*_args):
+        return strings
+
+    hass = SimpleNamespace(config=SimpleNamespace(language="de"))
+    with (
+        patch.object(config_flow.er, "async_get", lambda _hass: registry),
+        patch.object(config_flow, "async_get_translations", translations),
+    ):
+        options = asyncio.run(config_flow._option_labels(hass, "select.evcc_garage_mode", ["off", "now"]))
+        assert [(o["value"], o["label"]) for o in options] == [("off", "off"), ("now", "Schnell")]
+        # Without a registry entry (e.g. an input_select from YAML): the options themselves.
+        registry.async_get = lambda _entity_id: None
+        options = asyncio.run(config_flow._option_labels(hass, "input_select.mode", ["a"]))
+        assert [(o["value"], o["label"]) for o in options] == [("a", "a")]

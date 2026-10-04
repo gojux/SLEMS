@@ -1787,6 +1787,10 @@ Mögliche Erweiterungen:
   Programms lernen und den Rest eines laufenden Programms in die Prognose der
   nächsten Stunden aufnehmen (hilft der Abend- und Nachtplanung); später
   eventuell bei Überschuss starten, wenn das Gerät einen Fernstart erlaubt.
+- Feiertage in der Verbrauchsprognose: ein Feiertag zu Hause wie ein
+  Wochenendtag geplant, aus einem Kalender der Home-Assistant-Integration
+  **Holiday** für den eigenen Kanton oder das eigene Bundesland (sonst die
+  landesweiten Feiertage des in Home Assistant eingestellten Landes).
 - Weitere Batteriemodelle über die Treiber-Schnittstelle.
 
 ## Entwicklung

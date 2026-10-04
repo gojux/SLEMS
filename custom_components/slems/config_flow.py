@@ -1141,6 +1141,22 @@ def _select_options(hass: HomeAssistant, entity_id: str) -> list[str]:
     return list(state.attributes.get("options") or []) if state else []
 
 
+async def _option_labels(hass: HomeAssistant, entity_id: str, options: list[str]) -> list[selector.SelectOptionDict]:
+    """Options of a select with the names its integration shows for them (else the option itself)."""
+    entry = er.async_get(hass).async_get(entity_id)
+    strings: dict[str, str] = {}
+    if entry is not None and entry.translation_key:
+        strings = await async_get_translations(hass, hass.config.language, "entity", {entry.platform})
+    prefix = (
+        f"component.{entry.platform}.entity.{entry.domain}.{entry.translation_key}.state."
+        if entry is not None
+        else ""
+    )
+    return [
+        selector.SelectOptionDict(value=option, label=strings.get(prefix + option, option)) for option in options
+    ]
+
+
 def _device_entities(hass: HomeAssistant, device_id: str) -> list[EntityInfo]:
     """The enabled entities of a device as the matcher sees them."""
     infos = []
@@ -1434,7 +1450,9 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
         options = list(state.attributes.get("options", [])) if state else []
         defaults = self._existing()
         option = selector.SelectSelector(
-            selector.SelectSelectorConfig(options=options, custom_value=not options)
+            selector.SelectSelectorConfig(
+                options=await _option_labels(self.hass, entity_id, options), custom_value=not options
+            )
         )
         return self.async_show_form(
             step_id="start_options",
@@ -1444,7 +1462,7 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
                     vol.Required(CONF_START_OFF, default=defaults.get(CONF_START_OFF, vol.UNDEFINED)): option,
                 }
             ),
-            description_placeholders={"entity": entity_id},
+            description_placeholders={"entity": f"{state.name} ({entity_id})" if state else entity_id},
         )
 
     def _async_finish(self) -> SubentryFlowResult:

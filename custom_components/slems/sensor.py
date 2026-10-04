@@ -917,7 +917,8 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             return self.coordinator.controller.consumer_command(subentry_id)
         if data.allocation is None:
             return None
-        return data.allocation.consumer_power_w.get(subentry_id)
+        # Blocked, resting or with control off: nothing assigned.
+        return data.allocation.consumer_power_w.get(subentry_id, 0.0)
 
     @property
     def extra_state_attributes(self) -> dict:
