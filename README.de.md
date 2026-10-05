@@ -43,6 +43,7 @@ lustiges Wort für ein sehr interessantes Tier) und *EMS*
   - [Wirkungsgrad der Batterie](#wirkungsgrad-der-batterie)
   - [Umstieg von einer anderen Batterie-Integration](#umstieg-von-einer-anderen-batterie-integration)
   - [Zell-Delta und aktiver Zellausgleich](#zell-delta-und-aktiver-zellausgleich)
+  - [Selbsttest einer Batterie](#selbsttest-einer-batterie)
   - [Firmware-Updates und Batterie-Menü](#firmware-updates-und-batterie-menü)
   - [Grenzen und Schutz der Batterien](#grenzen-und-schutz-der-batterien)
 - [Verbraucher](#verbraucher)
@@ -177,6 +178,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Grenzen je Batterie: minimaler/maximaler Ladezustand, Grenze Lade-/Entladeleistung (z. B. 800 W), Ladebegrenzung nach Temperatur | ✅ |
 | Erkennung von Batterien, die die vorgegebene Leistung nicht liefern, Bestätigung der Vorgaben | ✅ |
 | Zell-Delta und aktiver Zellausgleich (Marstek Venus E 3.0) | ✅ |
+| Selbsttest einer Batterie: Wirkung am Smart Meter, Vorzeichen und Einheit der Leistung, Energiezähler, Ladezustand, Reaktionszeit | ✅ |
 | Regelmäßige Vollladung zur SoC-Kalibrierung der LFP-Zellen (immer eine Batterie, aus dem Überschuss, beim Entladen geschont) | ✅ |
 
 | Verbraucher | Status |
@@ -864,6 +866,63 @@ noch nicht fertig ist; außerhalb des Betriebsmodus
 weiter. Zum Ende wird die Batterie an ihre eigene Logik zurückgegeben und
 kehrt danach in die normale Planung zurück. Der Sensor **Phase Zellausgleich**
 zeigt die Phase und das Ergebnis des letzten Laufs.
+
+### Selbsttest einer Batterie
+
+Der Selbsttest prüft, ob eine gesteuerte Batterie tut, was SLEMS vorgibt, und
+ob ihre Werte stimmen. Er ist vor allem für Batterien über Home-Assistant-
+Entitäten gedacht, bei denen Vorzeichen, Einheiten und Verzögerungen der
+Integration oft anders sind als erwartet. Beim Hinzufügen einer Batterie ist
+**Nach dem Speichern einen Selbsttest machen** vorausgewählt; er startet, sobald
+SLEMS im Betriebsmodus **Aktiv** ist. Jederzeit lässt er sich im Batterie-Menü
+(⋮ → **Selbsttest starten**) oder mit dem Schalter **Selbsttest** starten.
+
+Ablauf, zusammen etwa 5–10 Minuten:
+
+1. Entlädt die Batterie gerade, übergibt sie zuerst sanft.
+2. 60 Sekunden Ruhe (0 W): der Bezugswert.
+3. Laden mit einem Viertel der kleineren Höchstleistung, mindestens 300 W,
+   höchstens 800 W, bis Smart Meter und Batterie mindestens die Hälfte davon
+   zeigen, dann noch 45 Sekunden und bis sich der Ladezähler bewegt hat
+   (höchstens 4 Minuten).
+4. 60 Sekunden Ruhe, dann Entladen wie beim Laden.
+5. Rückgabe an die eigene Logik der Batterie, danach normale Planung.
+
+Darf die Batterie gerade nicht laden (z. B. voll) oder nicht entladen (leer),
+fällt dieser Schritt aus. Während der Messung halten die anderen Batterien und
+die Verbraucher ihre letzten Vorgaben, damit der Smart Meter nur die Wirkung der
+getesteten Batterie zeigt; es kann also etwas Energie aus dem Netz kommen oder
+eingespeist werden. SLEMS rechnet die gemessene Leistung der anderen Batterien
+zusätzlich heraus.
+
+Geprüft wird:
+
+- **Wirkung am Smart Meter**: Bewegt er sich um mindestens die Hälfte der
+  Vorgabe in die richtige Richtung? Bewegt er sich nicht, kommt der Befehl
+  nicht an (falsche Entität oder falsches Register, Fernsteuerung nicht
+  freigegeben, Batterie nicht hinter dem Smart Meter); in die Gegenrichtung:
+  die Vorgabe ist invertiert.
+- **Vorzeichen und Höhe der Batterieleistung**: Ändert sich die gemeldete
+  Leistung wie am Smart Meter? Erkennt ein umgekehrtes Vorzeichen und einen
+  falschen Faktor (z. B. kW statt W); eine kleinere Abweichung deutet auf die
+  DC- statt der AC-Leistung.
+- **Reaktionszeit** bis zur Wirkung am Smart Meter (über 60 Sekunden: träge).
+- **Energiezähler**: der Ladezähler steigt beim Laden, der Entladezähler beim
+  Entladen, nicht der andere und nicht um ein Vielfaches. Bewegen sich grobe
+  Zähler im kurzen Test nicht, gilt das nicht als Fehler.
+- **Ladezustand**: zwischen 0 und 100 %, ohne Sprünge, nicht gegen die
+  Richtung.
+- **Rückgabe** an die eigene Logik.
+
+Schwankt der Hausverbrauch während der Ruhe stark, sind die Prüfungen am Smart
+Meter **unklar** statt fehlerhaft; dann den Test zu einer ruhigeren Zeit
+wiederholen. Das Ergebnis erscheint als Benachrichtigung, auf der Batteriekarte
+(bei Auffälligkeiten oder Fehlern) und mit einer Erklärung je Prüfung unter
+⋮ → **Details**; der Sensor **Selbsttest Ergebnis** hält es fest. Abgebrochen
+wird er außerhalb des Betriebsmodus **Aktiv**, bei pausierter Kommunikation,
+wenn der Smart Meter nicht meldet oder die Batterie 30 Sekunden nicht lesbar
+ist; ein Neustart von Home Assistant beendet ihn ebenfalls. Es läuft immer nur
+ein Selbsttest, nicht während eines Zellausgleichs.
 
 ### Firmware-Updates und Batterie-Menü
 
@@ -1801,6 +1860,19 @@ Mögliche Erweiterungen:
   Wochenendtag geplant, aus einem Kalender der Home-Assistant-Integration
   **Holiday** für den eigenen Kanton oder das eigene Bundesland (sonst die
   landesweiten Feiertage des in Home Assistant eingestellten Landes).
+- Laufende Prüfung der Batterien im Betrieb: saubere Änderungen der Vorgabe
+  (eine Batterie, kein schaltender Verbraucher, ruhiger Smart Meter) mit dem
+  Smart Meter und der gemeldeten Leistung verglichen; nach vielen
+  übereinstimmenden Abweichungen (z. B. ein durch ein Update der Integration
+  gedrehtes Vorzeichen) rät eine Reparaturmeldung zum Selbsttest. Zuerst nur in
+  den Diagnosedaten gezählt, um die Grenzen mit echten Daten festzulegen.
+- Modbus-Profile für Batterien: eine Beschreibung der Register (Messwerte,
+  Schritte zum Laden, Entladen und Freigeben), die SLEMS über die
+  Modbus-Verbindung von Home Assistant nutzt, geteilt mit anderen
+  Integrationen; Profile für bekannte Modelle liefert SLEMS mit, ein eigenes
+  wird als YAML eingefügt (mit einem KI-Prompt aus dem Handbuch erstellt) und
+  mit dem Selbsttest geprüft. Experimentell und neben dem direkten
+  Venus-Treiber, der Standard bleibt.
 - Weitere Batteriemodelle über die Treiber-Schnittstelle.
 
 ## Entwicklung

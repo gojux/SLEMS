@@ -121,6 +121,7 @@ from .battery_limits import (
     power_limits,
 )
 from .cell_balancing import BalancingPhase, CellBalancer, CellMonitor
+from .self_test import Phase as SelfTestPhase, Sample, SelfTest, self_test_power_w, step_power_w
 from .delivery_monitor import Action, DeliveryMonitor
 from .full_charge import REST_S as FULL_CHARGE_REST_S, FullChargeCandidate, due_battery
 from .feed_in_cap import CAP_MARGIN_W, CapConsumer, CapPlan, CapSettings, auto_buffer, plan_cap
@@ -218,6 +219,8 @@ STORAGE_VERSION = 1
 STORAGE_SAVE_DELAY_S = 600
 # Start, phase changes and end of a balancing run are saved sooner.
 BALANCING_SAVE_DELAY_S = 5
+# A self-test ends when the battery cannot be read for this long.
+SELF_TEST_UNREADABLE_S = 30.0
 # Charging from the grid is planned at most this far ahead without a refill.
 MAX_GRID_CHARGE_HORIZON = timedelta(hours=36)
 GRID_CHARGE_REPLAN_S = 60.0
@@ -274,6 +277,15 @@ class BatteryRuntime:
     balancing_power_w: float | None = None
     # Outcome of the last run: "done", "cancelled", "timeout" or "telemetry".
     balancing_result: str | None = None
+    # Running self-test, None without one. Like a balancing run the battery is
+    # measured but not planned with meanwhile.
+    self_test: SelfTest | None = None
+    # Power the self-test wants (+charge / -discharge), None while nothing is sent.
+    self_test_power_w: float | None = None
+    # Result of the last self-test (SelfTest.as_dict), kept over restarts.
+    self_test_last: dict | None = None
+    # A self-test was asked for when the battery was added and has not run yet.
+    self_test_pending: bool = False
     # Monotonic time of the first failed read since the last successful one.
     unreadable_since: float | None = None
     # Monotonic time since a release (hand back to its own logic) is
@@ -315,6 +327,10 @@ class BatteryRuntime:
         return self.balancer is not None
 
     @property
+    def self_test_requested(self) -> bool:
+        return self.self_test is not None
+
+    @property
     def not_responding(self) -> bool:
         """Excluded for a while because it did not deliver the commanded power."""
         return self.delivery.excluded(time.monotonic())
@@ -327,7 +343,8 @@ class BatteryRuntime:
     def participating(self) -> bool:
         """Planned and controlled (or still ramping out) by the normal operation."""
         return (
-            (self.enabled and not self.balancing_requested) or self.leaving_until is not None
+            (self.enabled and not self.balancing_requested and not self.self_test_requested)
+            or self.leaving_until is not None
         ) and not self.not_responding and not self.communication_paused
 
     @property
@@ -336,6 +353,7 @@ class BatteryRuntime:
         return (
             self.enabled
             and not self.balancing_requested
+            and not self.self_test_requested
             and not self.not_responding
             and not self.communication_paused
         )
@@ -847,6 +865,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 battery.balancer = CellBalancer.from_dict(
                     balancer, battery.driver.capabilities.max_charge_power_w
                 )
+            battery.self_test_last = data.get("self_test_last")
+            if data.get("self_test_on_setup_done"):
+                battery.self_test_pending = False
 
         grid_entity = self._config[CONF_GRID_POWER_ENTITY]
         self._add_grid_sample(self.hass.states.get(grid_entity))
@@ -1231,6 +1252,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 "paused_until": b.paused_until,
                 "pause_reason": b.pause_reason,
                 "capacity_learner": b.capacity_learner.as_dict(),
+                "self_test_last": b.self_test_last,
+                "self_test_on_setup_done": not b.self_test_pending,
             }
             for b in self.batteries
         }
@@ -1355,6 +1378,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # depends on the other batteries.
         for battery in self.batteries:
             self._update_cells(battery, snapshot, now)
+            self._update_self_test(battery, snapshot, now)
         self._update_full_charge(snapshot, now)
         self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
 
@@ -1664,6 +1688,129 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             battery.device_info = await battery.driver.read_device_info() or battery.device_info
         except BatteryDriverError as err:
             _LOGGER.debug("Battery %s: device information not read: %s", battery.name, err)
+
+    @property
+    def self_test_holds(self) -> bool:
+        """A self-test measures: the other batteries and the consumers keep their set points."""
+        return any(b.self_test is not None and b.self_test.holds_others for b in self.batteries)
+
+    def self_test_blocked(self, battery: BatteryRuntime) -> str | None:
+        """Why a self-test of the battery cannot start now (translation key), None if it can."""
+        if not battery.driver.capabilities.controllable:
+            return "self_test_not_controllable"
+        if self.settings.operating_mode is not OperatingMode.ACTIVE:
+            return "self_test_requires_active"
+        if not battery.enabled:
+            return "self_test_disabled"
+        if battery.communication_paused:
+            return "self_test_communication_paused"
+        if battery.balancing_requested:
+            return "self_test_balancing"
+        if any(b.self_test is not None for b in self.batteries if b is not battery):
+            return "self_test_other_running"
+        if battery.power_limits is None or battery.unreadable_since is not None:
+            return "self_test_unreadable"
+        return None
+
+    @callback
+    def start_self_test(self, battery: BatteryRuntime) -> None:
+        """Start a self-test (check ``self_test_blocked`` first)."""
+        capabilities = battery.driver.capabilities
+        power = self_test_power_w(capabilities.max_charge_power_w, capabilities.max_discharge_power_w)
+        limits = battery.power_limits
+        battery.self_test = SelfTest(
+            step_power_w(power, limits.charge_w if limits else 0.0),
+            step_power_w(power, limits.discharge_w if limits else 0.0),
+            dt_util.utcnow().timestamp(),
+        )
+        battery.self_test_power_w = None
+        battery.self_test_pending = False
+        # A discharging battery hands over smoothly, like when it is disabled.
+        self.controller.disable_battery(battery)
+        self.controller.request()
+        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+
+    @callback
+    def end_self_test(self, battery: BatteryRuntime, reason: str | None = None) -> None:
+        """End a self-test: early with ``reason`` ("cancelled", ...), or after the release."""
+        test = battery.self_test
+        if test is None:
+            return
+        if reason is not None:
+            test.stop(reason, dt_util.utcnow().timestamp())
+        battery.self_test = None
+        battery.self_test_power_w = None
+        battery.leaving_until = None
+        battery.self_test_last = test.as_dict()
+        if test.result != "cancelled":
+            self.config_entry.async_create_background_task(
+                self.hass,
+                self.problems.async_notify_self_test(battery, test),
+                "slems self-test notification",
+            )
+        _LOGGER.info("Self-test of %s: %s", battery.name, test.result)
+        self.controller.request()
+        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+
+    @callback
+    def cancel_self_test(self, battery: BatteryRuntime) -> None:
+        """Cancel a running self-test, or no longer wait for the one asked for at the setup."""
+        battery.self_test_pending = False
+        self.end_self_test(battery, "cancelled")
+        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+
+    def _update_self_test(self, battery: BatteryRuntime, snapshot: SystemSnapshot, now: float) -> None:
+        """One step of a running self-test, or the start of one asked for at the setup."""
+        test = battery.self_test
+        if test is None:
+            if battery.self_test_pending and self.self_test_blocked(battery) is None:
+                self.start_self_test(battery)
+            return
+        wall = dt_util.utcnow().timestamp()
+        if not battery.enabled:
+            self.end_self_test(battery, "cancelled")
+            return
+        if test.phase is SelfTestPhase.DONE:
+            self.end_self_test(battery)
+            return
+        if test.phase is SelfTestPhase.RELEASE:
+            if not self.controller.has_override(battery.subentry_id):
+                # Released by the controller (None: nothing was sent before).
+                test.released(self.controller.pop_release_result(battery.subentry_id), wall)
+                self.end_self_test(battery)
+            return
+        if self.settings.operating_mode is not OperatingMode.ACTIVE:
+            self.end_self_test(battery, "not_active")
+            return
+        if battery.communication_paused:
+            self.end_self_test(battery, "paused")
+            return
+        if self.controller.status is ControlStatus.GRID_STALE:
+            # Nothing is sent, and the meter is the reference.
+            self.end_self_test(battery, "grid_stale")
+            return
+        telemetry = snapshot.batteries.get(battery.subentry_id)
+        if telemetry is None:
+            if battery.unreadable_since is not None and now - battery.unreadable_since >= SELF_TEST_UNREADABLE_S:
+                self.end_self_test(battery, "unreadable")
+            return
+        others = [
+            power
+            for other in self.batteries
+            if other is not battery
+            and (other_telemetry := snapshot.batteries.get(other.subentry_id)) is not None
+            and (power := other_telemetry.grid_side_power_w) is not None
+        ]
+        grid = snapshot.grid_power_w
+        sample = Sample(
+            now,
+            None if grid is None else grid - sum(others),
+            telemetry.grid_side_power_w,
+            telemetry.soc_pct,
+            telemetry.extra.get("total_charging_energy"),
+            telemetry.extra.get("total_discharging_energy"),
+        )
+        battery.self_test_power_w = test.step(now, sample, ready=battery.leaving_until is None)
 
     @callback
     def start_balancing(self, battery: BatteryRuntime) -> None:

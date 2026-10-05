@@ -12,6 +12,7 @@ from homeassistant.helpers import device_registry as dr
 
 from .const import DOMAIN
 from .coordinator import SlemsConfigEntry
+from .self_test import self_test_power_w
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -69,6 +70,10 @@ def _panel_config(hass: HomeAssistant, entry: SlemsConfigEntry) -> dict:
                 "id": battery.subentry_id,
                 "name": battery.name,
                 "device_id": device_id(battery.subentry_id),
+                "test_power_w": self_test_power_w(
+                    battery.driver.capabilities.max_charge_power_w,
+                    battery.driver.capabilities.max_discharge_power_w,
+                ),
             }
             for battery in coordinator.batteries
         ],

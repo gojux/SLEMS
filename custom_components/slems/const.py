@@ -48,6 +48,8 @@ CONF_CAPACITY_WH: Final = "capacity_wh"
 CONF_MAX_CHARGE_POWER_W: Final = "max_charge_power_w"
 CONF_MAX_DISCHARGE_POWER_W: Final = "max_discharge_power_w"
 CONF_SKIP_CONNECTION_TEST: Final = "skip_connection_test"
+# New battery: run a self-test as soon as possible (operating mode active).
+CONF_SELF_TEST_ON_SETUP: Final = "self_test_on_setup"
 CONF_SOC_ENTITY: Final = "soc_entity"
 CONF_POWER_ENTITY: Final = "power_entity"
 CONF_POWER_INVERTED: Final = "power_inverted"

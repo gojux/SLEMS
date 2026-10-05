@@ -120,6 +120,8 @@ class RealTimeController:
         self._direction_since: dict[str, float] = {}
         # battery id -> (balancing power, monotonic time of the last full write)
         self._balancing_commands: dict[str, tuple[float, float]] = {}
+        # Self-test: whether the release at its end succeeded, until the coordinator takes it.
+        self._self_test_releases: dict[str, bool] = {}
         # consumer id -> (commanded power, monotonic time of the command)
         self._consumer_commands: dict[str, tuple[float, float]] = {}
         # consumer id -> power last sent to the device; it stays set on the
@@ -410,7 +412,8 @@ class RealTimeController:
         new_total = await self._async_apply_batteries(snapshot, latest_total)
         if new_total is not None and coordinator.settings.auto_gain:
             self.gain_adapter.observe(start, new_total - latest_total)
-        await self._async_apply_consumers(snapshot)
+        if not coordinator.self_test_holds:
+            await self._async_apply_consumers(snapshot)
         self.observe_consumers(snapshot)
         coordinator.publish(snapshot)
 
@@ -482,9 +485,9 @@ class RealTimeController:
                 self._battery_history.pop(battery.subentry_id, None)
                 self._battery_refreshed.pop(battery.subentry_id, None)
                 self._direction_since.pop(battery.subentry_id, None)
-                if battery.balancing_requested:
-                    # The balancing run takes over with its next step.
-                    _LOGGER.debug("Battery %s: ramp-out finished, cell balancing", battery.name)
+                if battery.balancing_requested or battery.self_test_requested:
+                    # The balancing run or self-test takes over with its next step.
+                    _LOGGER.debug("Battery %s: ramp-out finished, balancing or self-test", battery.name)
                 else:
                     _LOGGER.debug("Battery %s: ramp-out finished, released", battery.name)
                     await self._release(battery)
@@ -505,6 +508,8 @@ class RealTimeController:
         new_total = 0.0
         changes: dict[str, float] = {}
         reversed_ids: set[str] = set()
+        # A self-test measures the effect of its battery: the others keep their set points.
+        hold = self._coordinator.self_test_holds
         # Batteries that reduce their power are written first: while power
         # moves between batteries, the short gap between the writes then
         # causes a little import instead of feeding battery energy into the grid.
@@ -513,6 +518,8 @@ class RealTimeController:
                 continue
             target = round(snapshot.distribution.power_w.get(battery.subentry_id, 0.0))
             latest = self._latest_command(battery.subentry_id)
+            if hold and latest is not None:
+                target = round(latest)
             last_refresh = self._battery_refreshed.get(battery.subentry_id, 0.0)
             refresh = now - last_refresh >= (battery.driver.keepalive_s or BATTERY_KEEPALIVE_S)
             history = self._battery_history.get(battery.subentry_id)
@@ -549,23 +556,34 @@ class RealTimeController:
             self.battery_reversal_response.cancel()
         return new_total
 
-    async def _async_apply_balancing(self) -> None:
-        """Send the powers of active cell balancing runs.
+    def has_override(self, battery_id: str) -> bool:
+        """Whether a balancing run or self-test has sent a set point not yet released."""
+        return battery_id in self._balancing_commands
 
-        A balancing battery is not part of the planning; its power shows up in
-        the grid meter like an uncontrolled load or source (see ``plan``).
-        When a run ends, the battery is released (as in Omnibattery) and taken
-        over again by the normal operation if it can be read.
+    def pop_release_result(self, battery_id: str) -> bool | None:
+        """Whether the release after a self-test succeeded; None if nothing was released."""
+        return self._self_test_releases.pop(battery_id, None)
+
+    async def _async_apply_balancing(self) -> None:
+        """Send the powers of active cell balancing runs and self-tests.
+
+        Such a battery is not part of the planning; its power shows up in the
+        grid meter like an uncontrolled load or source (see ``plan``). When a
+        run ends, the battery is released (as in Omnibattery) and taken over
+        again by the normal operation if it can be read.
         """
         now = time.monotonic()
         for battery in self._coordinator.batteries:
             battery_id = battery.subentry_id
-            if not battery.balancing_requested:
+            testing = battery.self_test is not None and battery.self_test.commanding
+            if not battery.balancing_requested and not testing:
                 if self._balancing_commands.pop(battery_id, None) is not None:
-                    _LOGGER.debug("Battery %s: cell balancing ended, released", battery.name)
+                    _LOGGER.debug("Battery %s: cell balancing or self-test ended, released", battery.name)
                     await self._release(battery)
+                    if battery.self_test is not None:
+                        self._self_test_releases[battery_id] = battery.release_pending_since is None
                 continue
-            target = battery.balancing_power_w
+            target = battery.balancing_power_w if battery.balancing_requested else battery.self_test_power_w
             if target is None:
                 continue
             target = round(target)
@@ -577,7 +595,7 @@ class RealTimeController:
                 same_direction = (previous[0] > 0) == (target > 0) and (previous[0] < 0) == (target < 0)
                 if abs(previous[0] - target) < BATTERY_DEADBAND_W and same_direction:
                     continue
-            _LOGGER.debug("Battery %s: cell balancing set point %d W", battery.name, target)
+            _LOGGER.debug("Battery %s: balancing or self-test set point %d W", battery.name, target)
             if await self._apply(battery, target, refresh):
                 # The time of the last complete write is kept for the keep-alive.
                 self._balancing_commands[battery_id] = (

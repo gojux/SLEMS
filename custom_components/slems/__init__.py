@@ -18,6 +18,7 @@ from .const import (
     CONF_CAPACITY_WH,
     CONF_PURCHASE_PRICE_EUR,
     CONF_RATED_CYCLES,
+    CONF_SELF_TEST_ON_SETUP,
     DEFAULT_ROUND_TRIP_EFFICIENCY_PCT,
     DOMAIN,
     MANUFACTURER,
@@ -77,6 +78,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
                     subentry.data.get(CONF_RATED_CYCLES),
                     subentry.data.get(CONF_CAPACITY_WH),
                 ),
+                self_test_pending=bool(subentry.data.get(CONF_SELF_TEST_ON_SETUP))
+                and driver.capabilities.controllable,
             )
         )
     consumers = [

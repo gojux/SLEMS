@@ -43,6 +43,7 @@ system).
   - [Battery efficiency](#battery-efficiency)
   - [Switching from another battery integration](#switching-from-another-battery-integration)
   - [Cell delta and active cell balancing](#cell-delta-and-active-cell-balancing)
+  - [Self-test of a battery](#self-test-of-a-battery)
   - [Firmware updates and battery menu](#firmware-updates-and-battery-menu)
   - [Battery limits and protection](#battery-limits-and-protection)
 - [Consumers](#consumers)
@@ -175,6 +176,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Battery limits: minimum/maximum SoC, charge/discharge power limit (e.g. 800 W), temperature charge limit | ✅ |
 | Detection of batteries that do not deliver the commanded power, confirmation of set points | ✅ |
 | Cell delta and active cell balancing (Marstek Venus E 3.0) | ✅ |
+| Self-test of a battery: effect at the smart meter, sign and unit of the power, energy counters, state of charge, response time | ✅ |
 | Regular full charge for the SoC calibration of LFP cells (one battery at a time, from the surplus, spared when discharging) | ✅ |
 
 | Consumers | Status |
@@ -821,6 +823,60 @@ final discharge has not finished 2 hours after the 24 hours; it pauses outside o
 continues after a restart of Home Assistant. When it ends, the battery is
 handed back to its own logic and then returns to the normal planning. The
 sensor **Cell balancing phase** shows the phase and the result of the last run.
+
+### Self-test of a battery
+
+The self-test checks whether a controlled battery does what SLEMS commands and
+whether its values are right. It is meant above all for batteries through Home
+Assistant entities, where sign, units and delays of the integration often
+differ from what is expected. When adding a battery, **Run a self-test after
+saving** is preselected; it starts as soon as SLEMS is in operating mode
+**Active**. It can be started at any time from the battery menu (⋮ → **Run
+self-test**) or with the switch **Self-test**.
+
+Steps, about 5–10 minutes together:
+
+1. A discharging battery first hands over smoothly.
+2. 60 seconds of rest (0 W): the reference.
+3. Charging with a quarter of the smaller maximum power, at least 300 W, at
+   most 800 W, until smart meter and battery show at least half of it, then 45
+   seconds more and until the charge counter moved (at most 4 minutes).
+4. 60 seconds of rest, then discharging like the charging.
+5. Hand-back to the battery's own logic, then normal planning.
+
+If the battery may not charge right now (e.g. full) or not discharge (empty),
+that step is left out. While measuring, the other batteries and the consumers
+keep their last set points, so the smart meter shows the effect of the tested
+battery alone; a little energy may come from the grid or go into it meanwhile.
+SLEMS also takes the measured power of the other batteries out.
+
+Checked are:
+
+- **Effect at the smart meter**: does it move by at least half of the command
+  in the right direction? If it does not move, the command does not arrive
+  (wrong entity or register, remote control not enabled, battery not behind
+  the smart meter); the other way round: the set point is inverted.
+- **Sign and size of the battery power**: does the reported power change like
+  the smart meter? Finds an inverted sign and a wrong factor (e.g. kW instead
+  of W); a smaller difference points to the DC instead of the AC power.
+- **Response time** until the effect at the smart meter (above 60 seconds:
+  slow).
+- **Energy counters**: the charge counter rises while charging, the discharge
+  counter while discharging, not the other one and not by a multiple. Coarse
+  counters that do not move in the short test are no error.
+- **State of charge**: between 0 and 100 %, without jumps, not against the
+  direction.
+- **Hand-back** to its own logic.
+
+If the house consumption changes a lot during the rest, the checks at the smart
+meter are **unclear** instead of failed; repeat the test at a quieter time
+then. The result appears as a notification, on the battery card (if something
+is conspicuous or wrong) and with an explanation per check under ⋮ →
+**Details**; the sensor **Self-test result** keeps it. It stops outside
+operating mode **Active**, with paused communication, when the smart meter does
+not report or the battery cannot be read for 30 seconds; a restart of Home
+Assistant ends it too. Only one self-test runs at a time, not during a cell
+balancing run.
 
 ### Firmware updates and battery menu
 
@@ -1703,6 +1759,18 @@ Possible extensions:
   a weekend day, from a calendar of the Home Assistant integration
   **Holiday** for the own canton or state (else the national holidays of
   the country set in Home Assistant).
+- Ongoing check of the batteries in normal operation: clean set point changes
+  (one battery, no consumer switching, a quiet smart meter) compared with the
+  smart meter and the reported power; after many consistent mismatches (e.g. a
+  sign turned by an update of the integration) a repair issue suggests the
+  self-test. First only counted in the diagnostics to set the limits with real
+  data.
+- Modbus profiles for batteries: a description of the registers (read
+  values, steps to charge, discharge and release) that SLEMS uses through the
+  Modbus connection of Home Assistant, shared with other integrations; profiles
+  for known models ship with SLEMS, an own one is pasted as YAML (made with an
+  AI prompt from the manual) and checked with the self-test. Experimental and
+  next to the direct Venus driver, which stays the default.
 - Further battery models via the driver interface.
 
 ## Development

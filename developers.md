@@ -529,6 +529,37 @@ switch. Simulator: `SIM_OTA_FILE` (default `/tmp/venus_ota`) makes it report
 the update. Device information (`read_device_info`) is read after connecting
 and every 6 h and shown in the dashboard's details dialog.
 
+### Self-test
+
+`self_test.py` (steps and evaluation, no HA dependency), `coordinator.py`
+(`self_test_blocked`, `start_self_test`, `_update_self_test`, `end_self_test`,
+`self_test_holds`), `controller.py` (the set points go the way of a balancing
+run, `_async_apply_balancing`; `has_override` / `pop_release_result` for the
+release), `switch.py` (`SelfTestSwitch`), `sensor.py` (`SelfTestSensor`, the
+last result in its attributes), notification in `problems.py`.
+
+- The tested battery leaves the planning like a balancing one
+  (`self_test_requested` in `participating`/`plannable`), ramping out first.
+  From the first rest on (`SelfTest.holds_others`) the controller sends the
+  other batteries their latest command again (keep-alive writes go on) and no
+  consumer commands, so the meter shows the tested battery alone.
+- Sample per poll: meter = grid power minus the grid side power of the other
+  batteries, the battery's grid side power, SoC and the extras
+  `total_charging_energy` / `total_discharging_energy`. Means over the last
+  30 s of a phase; the rests are the references (charge against IDLE,
+  discharge against REST). A step also waits until the counter of its
+  direction moved (0.01 kWh at 200 W take 3 min), at most 4 min.
+- Test power `self_test_power_w`: 25 % of the smaller maximum, 300–800 W;
+  per direction limited by the allowed power at the start (below 100 W the
+  direction is skipped).
+- Outcomes ok / warning / failed / unclear / skipped; the result is the worst,
+  unclear counts as warning (repeat), skipped not. A meter spread in the rest
+  above 30 % of the test power makes a missing effect unclear.
+- A battery added with `self_test_on_setup` (subentry data) is tested once as
+  soon as `self_test_blocked` allows it; the store keeps
+  `self_test_on_setup_done` and `self_test_last`. A running test is not
+  stored; after a restart the battery is in normal operation again.
+
 ### Cell balancing
 
 `cell_balancing.py` (monitor and state machine, no HA dependency),
@@ -1724,3 +1755,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-04 | Estimated prices measured with `tools/price_estimate_backtest.py` (each day estimated as the evening before, against the real prices; 340 days of SMARD DE-LU): mean deviation 2.81 ct/kWh undamped (3.25 with the shipped halving, a deliberate safety margin), rank correlation per day 0.86, against 3.02 / 0.79 for simply yesterday's prices. Public holidays of the bidding zone count like weekends (`holidays`, the zone's country, not the one of Home Assistant): on the 9 holidays 5.38 → 4.66, over the year unchanged. 7 or 28 instead of 14 days change little. Weather: with the residual load known exactly (upper bound, SMARD actuals) the deviation would drop to 1.89 and the rank correlation rise to 0.91; SMARD publishes its forecast of wind and solar for the next day only with the auction, so a weather based estimate needs the multi-day forecast of Energy-Charts (roadmap). |
 | 2026-10-04 | Switzerland: day-ahead prices of the bidding zone CH from Energy-Charts (the only source with an open API; default when Home Assistant is set to CH; in €/MWh like all exchange prices, no conversion). Swiss national holidays leave out Good Friday, Easter and Whit Monday and St Stephen's Day, which are cantonal but kept almost everywhere, so for CH a day counts as a holiday of the zone if at least half of the 26 cantons have it (`ZoneHolidays`); for DE and AT the national holidays stay, a majority rule there would add days such as Reformation Day that most of the population works on. |
 | 2026-10-04 | Market prices are always in euro (APG, SMARD, Energy-Charts, E-Control) and are not converted (no exchange rate source without a further service). With another currency in Home Assistant, tariffs whose amounts follow the market price (`Tariff.market_priced`: spot or monthly market price; 0 at negative prices needs only the sign) are left out of the comparison, the backtest and the bill check instead of showing wrong amounts; the control keeps using them, as the order of cheap and expensive times stays right, and the repair issue `market_price_currency` says so for the current tariff. |
+| 2026-10-05 | Self-test of a battery against the smart meter instead of trusting its own values: the meter is the only independent measurement in every installation. During the measuring phases the other batteries and the consumers keep their set points (a few minutes, a few Wh from or to the grid) instead of compensating the test power, which would hide it from the meter. Phases end once meter and battery show half of the command plus 45 s (at most 4 min), so slow integrations (e.g. 60 s polling) are measured instead of failing. Coarse energy counters that do not move in the short test are "not checkable", not an error. No automatic active test (it moves energy and interrupts the control): offered when adding a battery and from the battery menu. |

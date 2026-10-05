@@ -129,6 +129,7 @@ from .const import (
     CONF_PV_FORECAST_ENTRIES,
     CONF_PV_POWER_ENTITY,
     CONF_SKIP_CONNECTION_TEST,
+    CONF_SELF_TEST_ON_SETUP,
     CONF_SOC_ENTITY,
     CONF_UNIT_ID,
     CONF_WEATHER_ENTITY,
@@ -730,6 +731,7 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                     default=defaults.get(CONF_RELEASE_STATE, ReleaseState.AUTO.value),
                 ): _release_state_selector(),
                 vol.Optional(CONF_SKIP_CONNECTION_TEST, default=False): selector.BooleanSelector(),
+                **self._self_test_schema(),
             }
         )
         return self.async_show_form(
@@ -980,6 +982,7 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                     vol.Required(
                         CONF_KEEPALIVE_S, default=data.get(CONF_KEEPALIVE_S, 60)
                     ): _SECONDS,
+                    **self._self_test_schema(),
                 }
             )
         return self.async_show_form(
@@ -1050,9 +1053,17 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             return {CONF_NAME: subentry.title, **subentry.data}
         return {}
 
+    def _self_test_schema(self) -> dict:
+        """Offer a self-test after adding a controlled battery."""
+        if self.source == SOURCE_RECONFIGURE:
+            return {}
+        return {vol.Optional(CONF_SELF_TEST_ON_SETUP, default=True): selector.BooleanSelector()}
+
     def _async_finish(self, user_input: dict[str, Any]) -> SubentryFlowResult:
         data = _battery_data(user_input, self._model)
         title = data.pop(CONF_NAME)
+        if self.source == SOURCE_RECONFIGURE or not data.get(CONF_SELF_TEST_ON_SETUP):
+            data.pop(CONF_SELF_TEST_ON_SETUP, None)
         if self.source == SOURCE_RECONFIGURE:
             return self.async_update_and_abort(
                 self._get_entry(), self._get_reconfigure_subentry(), title=title, data=data

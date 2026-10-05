@@ -733,6 +733,7 @@ async def async_setup_entry(
                     [
                         AllowedPowerSensor(coordinator, battery, charging=True),
                         AllowedPowerSensor(coordinator, battery, charging=False),
+                        SelfTestSensor(coordinator, battery),
                     ]
                     if battery.driver.capabilities.controllable
                     else []
@@ -867,6 +868,57 @@ class EfficiencySensor(SlemsBatteryEntity, SensorEntity):
     def extra_state_attributes(self) -> dict:
         efficiency = self.battery.efficiency
         return {"mode": efficiency.mode.value, "measured": efficiency.is_learned}
+
+
+SELF_TEST_STATES = [
+    "pending", "running", "ok", "warning", "failed",
+    "not_active", "paused", "grid_stale", "unreadable", "cancelled",
+]
+
+
+class SelfTestSensor(SlemsBatteryEntity, SensorEntity):
+    """State of the self-test: asked for, running, or the result of the last one."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = SELF_TEST_STATES
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:battery-check-outline"
+
+    def __init__(self, coordinator: SlemsCoordinator, battery) -> None:
+        super().__init__(coordinator, battery, "self_test_result")
+
+    @property
+    def native_value(self) -> str | None:
+        battery = self.battery
+        if battery.self_test is not None:
+            return "running"
+        if battery.self_test_pending:
+            return "pending"
+        last = battery.self_test_last
+        return last.get("result") if last else None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        battery = self.battery
+        test = battery.self_test
+        data = test.as_dict() if test is not None else dict(battery.self_test_last or {})
+
+        def iso(timestamp: float | None) -> str | None:
+            return None if timestamp is None else dt_util.utc_from_timestamp(timestamp).isoformat()
+
+        return {
+            "phase": data.get("phase"),
+            "phase_since": iso(
+                None if test is None or test.phase_start is None
+                else dt_util.utcnow().timestamp() - (time.monotonic() - test.phase_start)
+            ),
+            "power_w": battery.self_test_power_w,
+            "charge_w": data.get("charge_w"),
+            "discharge_w": data.get("discharge_w"),
+            "started_at": iso(data.get("started_at")),
+            "finished_at": iso(data.get("finished_at")),
+            "checks": data.get("checks") or [],
+        }
 
 
 class WearCostSensor(SlemsBatteryEntity, SensorEntity):

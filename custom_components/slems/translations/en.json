@@ -161,7 +161,8 @@
             "round_trip_efficiency_pct": "Round trip efficiency",
             "release_state": "State when SLEMS releases the battery",
             "purchase_price_eur": "Purchase price",
-            "rated_cycles": "Rated cycles"
+            "rated_cycles": "Rated cycles",
+            "self_test_on_setup": "Run a self-test after saving"
           },
           "data_description": {
             "skip_connection_test": "Save without testing the connection, e.g. while another integration still holds the Modbus connection.",
@@ -169,7 +170,8 @@
             "round_trip_efficiency_pct": "Energy out / energy in (AC). Fixed value in manual mode, otherwise used until enough data has been measured.",
             "release_state": "Automatic: the battery's own logic takes over again (e.g. its zero export). Standby: the battery stays idle at 0 W until something else takes it over. Applies when SLEMS stops controlling it, e.g. in operating mode Off, without smart meter values or when the battery is removed from SLEMS.",
             "purchase_price_eur": "Optional, with the rated cycles: for the wear costs per kWh (price ÷ (cycles × usable capacity)) used by price aware actions that cost a cycle, e.g. charging from the grid. 0: no wear costs (home storage systems age mostly with time, temperature and state of charge, often before their rated cycles are used up). Without it SLEMS assumes a low estimate of 1 ct/kWh.",
-            "rated_cycles": "Optional: full cycles according to the manufacturer (e.g. from the data sheet or warranty)."
+            "rated_cycles": "Optional: full cycles according to the manufacturer (e.g. from the data sheet or warranty).",
+            "self_test_on_setup": "Recommended: SLEMS charges and discharges the battery with little power for a few minutes and checks whether smart meter and readings match (sign, units, counters, state of charge). It starts as soon as SLEMS is in operating mode **Active**; the result appears as a notification."
           }
         },
         "ha_device": {
@@ -263,7 +265,8 @@
             "min_command_interval_s": "Minimum time between commands",
             "keepalive_s": "Repeat set point every",
             "purchase_price_eur": "Purchase price",
-            "rated_cycles": "Rated cycles"
+            "rated_cycles": "Rated cycles",
+            "self_test_on_setup": "Run a self-test after saving"
           },
           "data_description": {
             "efficiency_mode": "Battery counters: from the total charged and discharged energy. Learned (recommended without counters): from the measured battery power; needs about three full charge cycles, until then the start value is used. Manual: fixed value.",
@@ -272,7 +275,8 @@
             "min_command_interval_s": "For integrations with a rate limit (often cloud based); 0 = no limit.",
             "keepalive_s": "Some batteries fall back to their own logic without new commands; 0 = SLEMS default (60 s).",
             "purchase_price_eur": "Optional, with the rated cycles: for the wear costs per kWh (price ÷ (cycles × usable capacity)) used by price aware actions that cost a cycle, e.g. charging from the grid. 0: no wear costs (home storage systems age mostly with time, temperature and state of charge, often before their rated cycles are used up). Without it SLEMS assumes a low estimate of 1 ct/kWh.",
-            "rated_cycles": "Optional: full cycles according to the manufacturer (e.g. from the data sheet or warranty)."
+            "rated_cycles": "Optional: full cycles according to the manufacturer (e.g. from the data sheet or warranty).",
+            "self_test_on_setup": "Recommended: SLEMS charges and discharges the battery with little power for a few minutes and checks whether smart meter and readings match (sign, units, counters, state of charge). It starts as soon as SLEMS is in operating mode **Active**; the result appears as a notification."
           }
         }
       },
@@ -972,6 +976,21 @@
       },
       "price_saving": {
         "name": "Saving price control"
+      },
+      "self_test_result": {
+        "name": "Self-test result",
+        "state": {
+          "pending": "Scheduled",
+          "running": "Running",
+          "ok": "OK",
+          "warning": "Conspicuous",
+          "failed": "Errors found",
+          "not_active": "Stopped (not active)",
+          "paused": "Stopped (communication paused)",
+          "grid_stale": "Stopped (smart meter not reporting)",
+          "unreadable": "Stopped (battery not readable)",
+          "cancelled": "Cancelled"
+        }
       }
     },
     "switch": {
@@ -1058,6 +1077,9 @@
       },
       "battery_export": {
         "name": "Feed in from the batteries"
+      },
+      "self_test": {
+        "name": "Self-test"
       }
     },
     "number": {
@@ -1283,6 +1305,93 @@
     },
     "target_missed_blocked_message": {
       "message": "{name} got {got} of {goal} by {deadline}; it was blocked externally for {blocked} of the period. If that happens more often, check the block entity on its card (e.g. a lock period of the grid operator or an automation)."
+    },
+    "self_test_not_controllable": {
+      "message": "This battery is only read, not controlled; a self-test is not possible."
+    },
+    "self_test_requires_active": {
+      "message": "The self-test can only be started in operating mode \"Active\"."
+    },
+    "self_test_disabled": {
+      "message": "The battery is disabled."
+    },
+    "self_test_communication_paused": {
+      "message": "The communication with the battery is paused."
+    },
+    "self_test_balancing": {
+      "message": "A cell balancing run is active for the battery."
+    },
+    "self_test_other_running": {
+      "message": "The self-test of another battery is already running."
+    },
+    "self_test_unreadable": {
+      "message": "The battery cannot be read right now."
+    },
+    "self_test_title": {
+      "message": "Self-test of {name}"
+    },
+    "self_test_ok_message": {
+      "message": "The self-test of {name} is OK.\n\n{checks}"
+    },
+    "self_test_warning_message": {
+      "message": "The self-test of {name} found something conspicuous. The SLEMS dashboard explains it: on the battery card ⋮ → **Details**. \"Unclear\" means the house consumption changed too much during the test; repeat it at a quieter time then.\n\n{checks}"
+    },
+    "self_test_failed_message": {
+      "message": "The self-test of {name} found errors. Check the settings of the battery; the SLEMS dashboard explains them: on the battery card ⋮ → **Details**.\n\n{checks}"
+    },
+    "self_test_stopped_message": {
+      "message": "The self-test of {name} was stopped: {reason}. The battery is back in normal operation."
+    },
+    "self_test_reason_not_active": {
+      "message": "SLEMS is no longer in operating mode \"Active\""
+    },
+    "self_test_reason_paused": {
+      "message": "the communication with the battery was paused"
+    },
+    "self_test_reason_grid_stale": {
+      "message": "the smart meter does not report"
+    },
+    "self_test_reason_unreadable": {
+      "message": "the battery could not be read"
+    },
+    "self_test_check_effect_charge": {
+      "message": "Charging shows at the smart meter"
+    },
+    "self_test_check_effect_discharge": {
+      "message": "Discharging shows at the smart meter"
+    },
+    "self_test_check_power_sign": {
+      "message": "Sign of the battery power"
+    },
+    "self_test_check_power_scale": {
+      "message": "Size of the battery power"
+    },
+    "self_test_check_response": {
+      "message": "Response time"
+    },
+    "self_test_check_counters": {
+      "message": "Energy counters"
+    },
+    "self_test_check_soc": {
+      "message": "State of charge"
+    },
+    "self_test_check_release": {
+      "message": "Hand-back to its own logic"
+    },
+    "self_test_outcome_ok": {
+      "message": "OK"
+    },
+    "self_test_outcome_warning": {
+      "message": "conspicuous"
+    },
+    "self_test_outcome_failed": {
+      "message": "error"
+    },
+    "self_test_outcome_unclear": {
+      "message": "unclear"
+    },
+    "balancing_self_test": {
+      "message": "Cell balancing cannot be started during a self-test."
     }
   },
   "issues": {

@@ -115,6 +115,11 @@ def _battery(coordinator: SlemsCoordinator, battery: BatteryRuntime) -> dict:
             "power_w": battery.balancing_power_w,
         },
         "balancing_result": battery.balancing_result,
+        "self_test": None
+        if battery.self_test is None
+        else {**_plain(battery.self_test.as_dict()), "power_w": battery.self_test_power_w},
+        "self_test_pending": battery.self_test_pending,
+        "self_test_last": battery.self_test_last,
         "learn_capacity": battery.learn_capacity,
         "capacity_in_use_wh": battery.capacity_wh,
         "capacity_learner": battery.capacity_learner.as_dict(),

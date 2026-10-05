@@ -161,7 +161,8 @@
             "round_trip_efficiency_pct": "Gesamtwirkungsgrad",
             "release_state": "Zustand, wenn SLEMS die Batterie freigibt",
             "purchase_price_eur": "Anschaffungspreis",
-            "rated_cycles": "Zyklen laut Hersteller"
+            "rated_cycles": "Zyklen laut Hersteller",
+            "self_test_on_setup": "Nach dem Speichern einen Selbsttest machen"
           },
           "data_description": {
             "skip_connection_test": "Ohne Verbindungstest speichern, z. B. solange eine andere Integration die Modbus-Verbindung belegt.",
@@ -169,7 +170,8 @@
             "round_trip_efficiency_pct": "Entnommene / eingespeicherte Energie (AC). Im manuellen Modus fester Wert, sonst Startwert, bis genug Messdaten vorliegen.",
             "release_state": "Automatik: die eigene Logik der Batterie übernimmt wieder (z. B. ihre Nulleinspeisung). Standby: die Batterie bleibt bei 0 W stehen, bis etwas anderes sie übernimmt. Gilt, wenn SLEMS die Steuerung beendet, z. B. im Betriebsmodus Aus, ohne Werte des Smart Meters oder wenn die Batterie aus SLEMS entfernt wird.",
             "purchase_price_eur": "Optional, mit den Zyklen: für die Verschleißkosten je kWh (Preis ÷ (Zyklen × nutzbare Kapazität)), die preisbewusste Aktionen mit zusätzlichem Zyklus berücksichtigen, z. B. Laden aus dem Netz. 0: keine Verschleißkosten (Heimspeicher altern vor allem mit der Zeit, der Temperatur und dem Ladezustand, oft bevor ihre Zyklen aufgebraucht sind). Ohne Angabe nimmt SLEMS einen niedrigen Schätzwert von 1 ct/kWh an.",
-            "rated_cycles": "Optional: volle Zyklen laut Hersteller (z. B. aus Datenblatt oder Garantie)."
+            "rated_cycles": "Optional: volle Zyklen laut Hersteller (z. B. aus Datenblatt oder Garantie).",
+            "self_test_on_setup": "Empfohlen: SLEMS lädt und entlädt die Batterie für einige Minuten mit kleiner Leistung und prüft, ob Smart Meter und Messwerte passen (Vorzeichen, Einheiten, Zähler, Ladezustand). Er startet, sobald SLEMS im Betriebsmodus **Aktiv** ist; das Ergebnis erscheint als Benachrichtigung."
           }
         },
         "ha_device": {
@@ -263,7 +265,8 @@
             "min_command_interval_s": "Mindestabstand zwischen Befehlen",
             "keepalive_s": "Vorgabe wiederholen alle",
             "purchase_price_eur": "Anschaffungspreis",
-            "rated_cycles": "Zyklen laut Hersteller"
+            "rated_cycles": "Zyklen laut Hersteller",
+            "self_test_on_setup": "Nach dem Speichern einen Selbsttest machen"
           },
           "data_description": {
             "efficiency_mode": "Batteriezähler: aus der insgesamt geladenen und entladenen Energie. Gelernt (empfohlen ohne Zähler): aus der gemessenen Batterieleistung; braucht etwa drei volle Ladezyklen, bis dahin gilt der Startwert. Manuell: fester Wert.",
@@ -272,7 +275,8 @@
             "min_command_interval_s": "Für Integrationen mit begrenzter Befehlsrate (oft über eine Cloud); 0 = keine Begrenzung.",
             "keepalive_s": "Manche Batterien fallen ohne neue Befehle auf ihre eigene Logik zurück; 0 = Standard von SLEMS (60 s).",
             "purchase_price_eur": "Optional, mit den Zyklen: für die Verschleißkosten je kWh (Preis ÷ (Zyklen × nutzbare Kapazität)), die preisbewusste Aktionen mit zusätzlichem Zyklus berücksichtigen, z. B. Laden aus dem Netz. 0: keine Verschleißkosten (Heimspeicher altern vor allem mit der Zeit, der Temperatur und dem Ladezustand, oft bevor ihre Zyklen aufgebraucht sind). Ohne Angabe nimmt SLEMS einen niedrigen Schätzwert von 1 ct/kWh an.",
-            "rated_cycles": "Optional: volle Zyklen laut Hersteller (z. B. aus Datenblatt oder Garantie)."
+            "rated_cycles": "Optional: volle Zyklen laut Hersteller (z. B. aus Datenblatt oder Garantie).",
+            "self_test_on_setup": "Empfohlen: SLEMS lädt und entlädt die Batterie für einige Minuten mit kleiner Leistung und prüft, ob Smart Meter und Messwerte passen (Vorzeichen, Einheiten, Zähler, Ladezustand). Er startet, sobald SLEMS im Betriebsmodus **Aktiv** ist; das Ergebnis erscheint als Benachrichtigung."
           }
         }
       },
@@ -972,6 +976,21 @@
       },
       "price_saving": {
         "name": "Ersparnis Preissteuerung"
+      },
+      "self_test_result": {
+        "name": "Selbsttest Ergebnis",
+        "state": {
+          "pending": "Geplant",
+          "running": "Läuft",
+          "ok": "In Ordnung",
+          "warning": "Auffällig",
+          "failed": "Fehler gefunden",
+          "not_active": "Abgebrochen (nicht aktiv)",
+          "paused": "Abgebrochen (Kommunikation pausiert)",
+          "grid_stale": "Abgebrochen (Smart Meter meldet nicht)",
+          "unreadable": "Abgebrochen (Batterie nicht lesbar)",
+          "cancelled": "Abgebrochen"
+        }
       }
     },
     "switch": {
@@ -1058,6 +1077,9 @@
       },
       "battery_export": {
         "name": "Batterien ins Netz entladen"
+      },
+      "self_test": {
+        "name": "Selbsttest"
       }
     },
     "number": {
@@ -1283,6 +1305,93 @@
     },
     "target_missed_blocked_message": {
       "message": "{name} hat bis {deadline} {got} von {goal} erreicht; er war in dieser Zeit {blocked} extern gesperrt. Kommt das öfter vor, prüfe die Sperr-Entität auf seiner Karte (z. B. eine Sperrzeit des Netzbetreibers oder eine Automation)."
+    },
+    "self_test_not_controllable": {
+      "message": "Diese Batterie wird nur gelesen, nicht gesteuert; ein Selbsttest ist nicht möglich."
+    },
+    "self_test_requires_active": {
+      "message": "Der Selbsttest kann nur im Betriebsmodus „Aktiv“ gestartet werden."
+    },
+    "self_test_disabled": {
+      "message": "Die Batterie ist deaktiviert."
+    },
+    "self_test_communication_paused": {
+      "message": "Die Kommunikation mit der Batterie ist pausiert."
+    },
+    "self_test_balancing": {
+      "message": "Für die Batterie läuft ein Zellausgleich."
+    },
+    "self_test_other_running": {
+      "message": "Es läuft bereits der Selbsttest einer anderen Batterie."
+    },
+    "self_test_unreadable": {
+      "message": "Die Batterie kann gerade nicht gelesen werden."
+    },
+    "self_test_title": {
+      "message": "Selbsttest von {name}"
+    },
+    "self_test_ok_message": {
+      "message": "Der Selbsttest von {name} ist in Ordnung.\n\n{checks}"
+    },
+    "self_test_warning_message": {
+      "message": "Der Selbsttest von {name} hat Auffälligkeiten ergeben. Was sie bedeuten, zeigt das SLEMS-Dashboard: auf der Batteriekarte ⋮ → **Details**. Bei „unklar“ hat sich der Hausverbrauch während des Tests zu stark verändert; wiederhole ihn dann in einer ruhigeren Zeit.\n\n{checks}"
+    },
+    "self_test_failed_message": {
+      "message": "Der Selbsttest von {name} hat Fehler gefunden. Prüfe die Einstellungen der Batterie; was die Fehler bedeuten, zeigt das SLEMS-Dashboard: auf der Batteriekarte ⋮ → **Details**.\n\n{checks}"
+    },
+    "self_test_stopped_message": {
+      "message": "Der Selbsttest von {name} wurde abgebrochen: {reason}. Die Batterie ist wieder im normalen Betrieb."
+    },
+    "self_test_reason_not_active": {
+      "message": "SLEMS ist nicht mehr im Betriebsmodus „Aktiv“"
+    },
+    "self_test_reason_paused": {
+      "message": "die Kommunikation mit der Batterie wurde pausiert"
+    },
+    "self_test_reason_grid_stale": {
+      "message": "der Smart Meter meldet nicht"
+    },
+    "self_test_reason_unreadable": {
+      "message": "die Batterie konnte nicht gelesen werden"
+    },
+    "self_test_check_effect_charge": {
+      "message": "Laden wirkt am Smart Meter"
+    },
+    "self_test_check_effect_discharge": {
+      "message": "Entladen wirkt am Smart Meter"
+    },
+    "self_test_check_power_sign": {
+      "message": "Vorzeichen der Batterieleistung"
+    },
+    "self_test_check_power_scale": {
+      "message": "Höhe der Batterieleistung"
+    },
+    "self_test_check_response": {
+      "message": "Reaktionszeit"
+    },
+    "self_test_check_counters": {
+      "message": "Energiezähler"
+    },
+    "self_test_check_soc": {
+      "message": "Ladezustand"
+    },
+    "self_test_check_release": {
+      "message": "Rückgabe an die eigene Logik"
+    },
+    "self_test_outcome_ok": {
+      "message": "in Ordnung"
+    },
+    "self_test_outcome_warning": {
+      "message": "auffällig"
+    },
+    "self_test_outcome_failed": {
+      "message": "Fehler"
+    },
+    "self_test_outcome_unclear": {
+      "message": "unklar"
+    },
+    "balancing_self_test": {
+      "message": "Der Zellausgleich kann nicht während eines Selbsttests gestartet werden."
     }
   },
   "issues": {

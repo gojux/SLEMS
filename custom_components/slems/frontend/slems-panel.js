@@ -475,6 +475,68 @@ const STRINGS = {
     balancingNeedsActive: "Cell balancing can only be started in operating mode active.",
     balancingNeedsEnabled: "Cell balancing needs an enabled battery.",
     balancingNeedsCommunication: "Cell balancing cannot be started while the communication is paused.",
+    balancingNeedsNoSelfTest: "Not during a self-test.",
+    selfTestStart: "Run self-test",
+    selfTestCancel: "Cancel self-test",
+    selfTestTitle: "Self-test of {name}",
+    selfTestText:
+      "For a few minutes SLEMS rests the battery, charges it with {power}, rests it again and discharges it with {power}. Meanwhile the other batteries and the consumers keep their set points, so a little energy may come from the grid or go into it. SLEMS compares the effect at the smart meter with the values of the battery: sign, units, energy counters, state of charge, response time. Best at a quiet time (no large consumers switching, little change of PV).",
+    selfTestConfirm: "Start",
+    selfTestNeedsActive: "The self-test can only be started in operating mode active.",
+    selfTestNeedsEnabled: "The self-test needs an enabled battery.",
+    selfTestNeedsCommunication: "The self-test cannot be started while the communication is paused.",
+    selfTestNeedsNoBalancing: "Not during a cell balancing run.",
+    selfTestOtherRunning: "The self-test of another battery is running.",
+    selfTestRunningChip: "Self-test",
+    selfTestPendingChip: "Self-test scheduled",
+    selfTestRunning: "Self-test running: {phase}. The other batteries and the consumers keep their set points meanwhile.",
+    selfTestPhases: { prepare: "taking over", idle: "resting", charge: "charging", rest: "resting", discharge: "discharging", release: "handing back" },
+    selfTestProblem: { warning: "Self-test conspicuous", failed: "Self-test found errors" },
+    selfTestProblemText: "see ⋮ → Details",
+    selfTestSection: "Self-test",
+    selfTestLast: "Last self-test",
+    selfTestResults: { ok: "OK", warning: "conspicuous", failed: "errors found", cancelled: "cancelled", not_active: "stopped (not active)", paused: "stopped (communication paused)", grid_stale: "stopped (smart meter not reporting)", unreadable: "stopped (battery not readable)" },
+    selfTestOutcomes: { ok: "OK", warning: "conspicuous", failed: "error", unclear: "unclear", skipped: "not checked" },
+    selfTestChecks: {
+      effect_charge: "Charging shows at the smart meter",
+      effect_discharge: "Discharging shows at the smart meter",
+      power_sign: "Sign of the battery power",
+      power_scale: "Size of the battery power",
+      response: "Response time",
+      counters: "Energy counters",
+      soc: "State of charge",
+      release: "Hand-back to its own logic",
+    },
+    selfTestExplain: {
+      effect_ok: "Smart meter {meter} at a command of {expected}.",
+      effect_none: "The smart meter did not move ({meter} at a command of {expected}): the command does not arrive. Wrong entity or register, remote control not enabled, or the battery is not behind the smart meter.",
+      effect_reversed: "The smart meter moved the other way ({meter} at a command of {expected}): the set point is inverted (setting “Invert set point sign”) or charge and discharge are swapped.",
+      effect_partial: "Only part of it arrived ({meter} at a command of {expected}): the battery limits itself (state of charge, temperature, own limits) or the set point has a wrong factor.",
+      effect_unclear: "The house consumption changed too much (±{spread}); repeat the test at a quieter time.",
+      power_sign_ok: "The battery reports its power with the right sign.",
+      power_sign_failed: "The battery reports its power with the opposite sign: switch the setting “Invert power sign”.",
+      power_scale_ok: "The reported power matches the smart meter (factor {factor}).",
+      power_scale_warning: "The reported power differs from the smart meter by the factor {factor}, e.g. DC instead of AC power or large losses; prefer the AC power sensor if there is one.",
+      power_scale_failed: "The reported power differs from the smart meter by the factor {factor}: wrong unit (e.g. kW instead of W) or a wrong factor.",
+      power_unclear: "Not checkable: the smart meter did not show the command clearly.",
+      power_skipped: "No power sensor configured.",
+      response_ok: "Until the smart meter shows it: charging {charge}, discharging {discharge}.",
+      response_warning: "Slow: charging {charge}, discharging {discharge} until the smart meter shows it. SLEMS controls this battery more slowly; check the polling interval of its integration.",
+      response_unclear: "The smart meter did not show the command clearly.",
+      counters_ok: "The charge counter rose while charging, the discharge counter while discharging.",
+      counters_swapped: "Charge and discharge counter are swapped.",
+      counters_falling: "A counter fell instead of rising.",
+      counters_unit: "A counter rose by a multiple of the energy moved: wrong unit (e.g. Wh instead of kWh).",
+      counters_both: "Both counters rose at the same time.",
+      counters_resolution: "Not checkable: the counters did not move in the short test (too coarse); no error.",
+      counters_skipped: "No energy counters configured.",
+      soc_ok: "Between {min} and {max}, without jumps.",
+      soc_range: "The state of charge was outside 0–100 % ({min}–{max}): wrong register or factor.",
+      soc_jump: "The state of charge jumped by {jump} percentage points.",
+      soc_against: "The state of charge moved against the direction of the power.",
+      release_ok: "The battery runs on its own logic again.",
+      release_failed: "The battery could not be handed back to its own logic; SLEMS keeps trying.",
+    },
     lastBalancing: "Last cell balancing",
     balancingResults: {
       done: "completed",
@@ -935,6 +997,68 @@ const STRINGS = {
     balancingNeedsActive: "Der Zellausgleich kann nur im Betriebsmodus „Aktiv“ gestartet werden.",
     balancingNeedsEnabled: "Der Zellausgleich braucht eine aktivierte Batterie.",
     balancingNeedsCommunication: "Der Zellausgleich kann nicht gestartet werden, solange die Kommunikation pausiert ist.",
+    balancingNeedsNoSelfTest: "Nicht während eines Selbsttests.",
+    selfTestStart: "Selbsttest starten",
+    selfTestCancel: "Selbsttest abbrechen",
+    selfTestTitle: "Selbsttest von {name}",
+    selfTestText:
+      "SLEMS lässt die Batterie einige Minuten ruhen, lädt sie mit {power}, lässt sie wieder ruhen und entlädt sie mit {power}. So lange halten die anderen Batterien und die Verbraucher ihre Vorgaben; es kann also etwas Energie aus dem Netz kommen oder eingespeist werden. SLEMS vergleicht die Wirkung am Smart Meter mit den Werten der Batterie: Vorzeichen, Einheiten, Energiezähler, Ladezustand, Reaktionszeit. Am besten zu einer ruhigen Zeit (keine großen Verbraucher, die schalten, wenig wechselnde PV).",
+    selfTestConfirm: "Starten",
+    selfTestNeedsActive: "Der Selbsttest kann nur im Betriebsmodus „Aktiv“ gestartet werden.",
+    selfTestNeedsEnabled: "Der Selbsttest braucht eine aktivierte Batterie.",
+    selfTestNeedsCommunication: "Der Selbsttest kann nicht gestartet werden, solange die Kommunikation pausiert ist.",
+    selfTestNeedsNoBalancing: "Nicht während eines Zellausgleichs.",
+    selfTestOtherRunning: "Der Selbsttest einer anderen Batterie läuft.",
+    selfTestRunningChip: "Selbsttest",
+    selfTestPendingChip: "Selbsttest geplant",
+    selfTestRunning: "Selbsttest läuft: {phase}. So lange halten die anderen Batterien und die Verbraucher ihre Vorgaben.",
+    selfTestPhases: { prepare: "Übernahme", idle: "Ruhe", charge: "Laden", rest: "Ruhe", discharge: "Entladen", release: "Rückgabe" },
+    selfTestProblem: { warning: "Selbsttest auffällig", failed: "Selbsttest hat Fehler gefunden" },
+    selfTestProblemText: "siehe ⋮ → Details",
+    selfTestSection: "Selbsttest",
+    selfTestLast: "Letzter Selbsttest",
+    selfTestResults: { ok: "in Ordnung", warning: "auffällig", failed: "Fehler gefunden", cancelled: "abgebrochen", not_active: "abgebrochen (nicht aktiv)", paused: "abgebrochen (Kommunikation pausiert)", grid_stale: "abgebrochen (Smart Meter meldet nicht)", unreadable: "abgebrochen (Batterie nicht lesbar)" },
+    selfTestOutcomes: { ok: "in Ordnung", warning: "auffällig", failed: "Fehler", unclear: "unklar", skipped: "nicht geprüft" },
+    selfTestChecks: {
+      effect_charge: "Laden wirkt am Smart Meter",
+      effect_discharge: "Entladen wirkt am Smart Meter",
+      power_sign: "Vorzeichen der Batterieleistung",
+      power_scale: "Höhe der Batterieleistung",
+      response: "Reaktionszeit",
+      counters: "Energiezähler",
+      soc: "Ladezustand",
+      release: "Rückgabe an die eigene Logik",
+    },
+    selfTestExplain: {
+      effect_ok: "Smart Meter {meter} bei einer Vorgabe von {expected}.",
+      effect_none: "Der Smart Meter hat sich nicht bewegt ({meter} bei einer Vorgabe von {expected}): Der Befehl kommt nicht an. Falsche Entität oder falsches Register, Fernsteuerung nicht freigegeben, oder die Batterie hängt nicht hinter dem Smart Meter.",
+      effect_reversed: "Der Smart Meter hat sich in die Gegenrichtung bewegt ({meter} bei einer Vorgabe von {expected}): Die Vorgabe ist invertiert (Einstellung „Vorzeichen des Sollwerts umkehren“) oder Laden und Entladen sind vertauscht.",
+      effect_partial: "Nur ein Teil kam an ({meter} bei einer Vorgabe von {expected}): Die Batterie begrenzt selbst (Ladezustand, Temperatur, eigene Grenzen) oder die Vorgabe hat einen falschen Faktor.",
+      effect_unclear: "Der Hausverbrauch hat zu stark geschwankt (±{spread}); wiederhole den Test zu einer ruhigeren Zeit.",
+      power_sign_ok: "Die Batterie meldet ihre Leistung mit dem richtigen Vorzeichen.",
+      power_sign_failed: "Die Batterie meldet ihre Leistung mit umgekehrtem Vorzeichen: Einstellung „Vorzeichen der Leistung umkehren“ umschalten.",
+      power_scale_ok: "Die gemeldete Leistung passt zum Smart Meter (Faktor {factor}).",
+      power_scale_warning: "Die gemeldete Leistung weicht um den Faktor {factor} vom Smart Meter ab, z. B. DC- statt AC-Leistung oder große Verluste; nimm den Sensor der AC-Leistung, wenn es einen gibt.",
+      power_scale_failed: "Die gemeldete Leistung weicht um den Faktor {factor} vom Smart Meter ab: falsche Einheit (z. B. kW statt W) oder falscher Faktor.",
+      power_unclear: "Nicht prüfbar: Der Smart Meter hat den Befehl nicht deutlich gezeigt.",
+      power_skipped: "Kein Leistungssensor eingerichtet.",
+      response_ok: "Bis der Smart Meter es zeigt: Laden {charge}, Entladen {discharge}.",
+      response_warning: "Träge: Laden {charge}, Entladen {discharge}, bis der Smart Meter es zeigt. SLEMS regelt mit dieser Batterie langsamer; prüfe das Abfrageintervall ihrer Integration.",
+      response_unclear: "Der Smart Meter hat den Befehl nicht deutlich gezeigt.",
+      counters_ok: "Der Ladezähler stieg beim Laden, der Entladezähler beim Entladen.",
+      counters_swapped: "Lade- und Entladezähler sind vertauscht.",
+      counters_falling: "Ein Zähler ist gefallen statt gestiegen.",
+      counters_unit: "Ein Zähler stieg um ein Vielfaches der bewegten Energie: falsche Einheit (z. B. Wh statt kWh).",
+      counters_both: "Beide Zähler stiegen gleichzeitig.",
+      counters_resolution: "Nicht prüfbar: Die Zähler haben sich im kurzen Test nicht bewegt (zu grob); kein Fehler.",
+      counters_skipped: "Keine Energiezähler eingerichtet.",
+      soc_ok: "Zwischen {min} und {max}, ohne Sprünge.",
+      soc_range: "Der Ladezustand lag außerhalb von 0–100 % ({min}–{max}): falsches Register oder falscher Faktor.",
+      soc_jump: "Der Ladezustand sprang um {jump} Prozentpunkte.",
+      soc_against: "Der Ladezustand bewegte sich gegen die Richtung der Leistung.",
+      release_ok: "Die Batterie läuft wieder nach ihrer eigenen Logik.",
+      release_failed: "Die Batterie konnte nicht an ihre eigene Logik zurückgegeben werden; SLEMS versucht es weiter.",
+    },
     lastBalancing: "Letzter Zellausgleich",
     balancingResults: {
       done: "abgeschlossen",
@@ -1550,6 +1674,16 @@ class SlemsPanel extends HTMLElement {
           : item("balancing-on", t.startBalancing, ` data-entity="${balancing.entity_id}" data-name="${name}" data-delta="${escapeHtml(s("top_cell_delta")?.state ?? "")}"${blocked ? ` disabled title="${escapeHtml(blocked)}"` : ""}`)
       );
     }
+    const selfTest = s("self_test");
+    if (selfTest) {
+      const blocked = this._selfTestBlocked(battery.device_id);
+      const power = this._selfTestPower(battery.device_id);
+      items.push(
+        selfTest.state === "on"
+          ? item("self-test-off", t.selfTestCancel, ` data-entity="${selfTest.entity_id}"`)
+          : item("self-test-on", t.selfTestStart, ` data-entity="${selfTest.entity_id}" data-name="${name}" data-power="${escapeHtml(power)}"${blocked ? ` disabled title="${escapeHtml(blocked)}"` : ""}`)
+      );
+    }
     items.push(item("menu-details", t.details, ` data-device="${battery.device_id}"`));
     items.push(item("menu-device", t.deviceView, ` data-device="${battery.device_id}"`));
     return `<div class="menu-wrap">${button}<div class="menu" role="menu">${items.join("")}</div></div>`;
@@ -1561,7 +1695,27 @@ class SlemsPanel extends HTMLElement {
     if (this._state("battery_enabled", deviceId)?.state === "off") return t.balancingNeedsEnabled;
     if (this._state("communication_paused", deviceId)?.state === "on") return t.balancingNeedsCommunication;
     if (this._state("operating_mode")?.state !== "active") return t.balancingNeedsActive;
+    if (this._state("self_test", deviceId)?.state === "on") return t.balancingNeedsNoSelfTest;
     return null;
+  }
+
+  /** Why a self-test cannot be started right now (null if it can). */
+  _selfTestBlocked(deviceId) {
+    const t = this._t;
+    if (this._state("battery_enabled", deviceId)?.state === "off") return t.selfTestNeedsEnabled;
+    if (this._state("communication_paused", deviceId)?.state === "on") return t.selfTestNeedsCommunication;
+    if (this._state("operating_mode")?.state !== "active") return t.selfTestNeedsActive;
+    if (this._state("cell_balancing", deviceId)?.state === "on") return t.selfTestNeedsNoBalancing;
+    const other = (this._config.batteries || []).some(
+      (b) => b.device_id !== deviceId && this._state("self_test_result", b.device_id)?.state === "running"
+    );
+    return other ? t.selfTestOtherRunning : null;
+  }
+
+  /** Power of the test steps (see self_test.self_test_power_w). */
+  _selfTestPower(deviceId) {
+    const power = this._config.batteries?.find((b) => b.device_id === deviceId)?.test_power_w;
+    return power ? this._watts(Math.round(power)) : "–";
   }
 
   /** Enabled items of the ⋮ menu of a battery. */
@@ -1601,7 +1755,9 @@ class SlemsPanel extends HTMLElement {
       if (this._openMenu) this._menuItems(this._openMenu)[0]?.focus();
       return true;
     }
-    const item = event.target.closest(".menu-item, [data-action='menu-resume'], [data-action='menu-extend']");
+    const item = event.target.closest(
+      ".menu-item, [data-action='menu-resume'], [data-action='menu-extend'], [data-action='self-test-off'], .problem [data-action='menu-details']"
+    );
     const wasOpen = this._openMenu;
     if (wasOpen && !event.target.closest(".menu-wrap")) {
       this._openMenu = null;
@@ -1632,6 +1788,18 @@ class SlemsPanel extends HTMLElement {
         );
         break;
       case "menu-resume":
+        this._hass.callService("switch", "turn_off", { entity_id: entityId });
+        break;
+      case "self-test-on":
+        this._confirm(
+          t.selfTestTitle.replace("{name}", item.dataset.name),
+          t.selfTestText.replaceAll("{power}", item.dataset.power),
+          t.selfTestConfirm,
+          () => this._hass.callService("switch", "turn_on", { entity_id: entityId }),
+          false
+        );
+        break;
+      case "self-test-off":
         this._hass.callService("switch", "turn_off", { entity_id: entityId });
         break;
       case "menu-extend":
@@ -1730,9 +1898,70 @@ class SlemsPanel extends HTMLElement {
     this.shadowRoot.getElementById("details-close").textContent = t.close;
     // Estimated wear costs: where to enter the real values.
     const wearHint = s("wear_cost")?.attributes?.estimated ? `<dd class="muted dl-note">${escapeHtml(t.wearHint)}</dd>` : "";
-    this.shadowRoot.getElementById("details-body").innerHTML = rows.length
-      ? rows.map(([label, value, entityId]) => this._row(label, escapeHtml(String(value)), entityId)).join("") + wearHint
-      : `<dd class="muted">${t.noDetails}</dd>`;
+    this.shadowRoot.getElementById("details-body").innerHTML =
+      (rows.length
+        ? rows.map(([label, value, entityId]) => this._row(label, escapeHtml(String(value)), entityId)).join("") + wearHint
+        : `<dd class="muted">${t.noDetails}</dd>`) + this._selfTestDetails(s("self_test_result"));
+  }
+
+  /** Result of the last self-test with an explanation per check. */
+  _selfTestDetails(stateObj) {
+    const t = this._t;
+    const a = stateObj?.attributes;
+    if (!a?.finished_at || !a.checks) return "";
+    const result = t.selfTestResults[stateObj.state] ?? stateObj.state;
+    const head = this._row(t.selfTestLast, escapeHtml(`${this._moment(a.finished_at)} · ${result}`), stateObj.entity_id);
+    const lines = a.checks
+      .map((check) => {
+        const outcome = t.selfTestOutcomes[check.outcome] || check.outcome;
+        const text = this._selfTestExplain(check);
+        return `<li class="self-test-${escapeHtml(check.outcome)}"><b>${escapeHtml(t.selfTestChecks[check.key] || check.key)}: ${escapeHtml(outcome)}</b>${
+          text ? `<br>${escapeHtml(text)}` : ""
+        }</li>`;
+      })
+      .join("");
+    return `<h3 class="card-subheading self-test-heading">${t.selfTestSection}</h3>${head}${lines ? `<ul class="self-test-checks">${lines}</ul>` : ""}`;
+  }
+
+  /** Explanation of one self-test check with its measured values. */
+  _selfTestExplain(check) {
+    const texts = this._t.selfTestExplain;
+    const language = this._hass?.locale?.language || "en";
+    const number = (v, digits = 1) => new Intl.NumberFormat(language, { maximumFractionDigits: digits }).format(v);
+    const watts = (v) => (v === null || v === undefined ? "–" : this._watts(Math.abs(v)));
+    const signed = (v) => (v === null || v === undefined ? "–" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${this._watts(Math.abs(v))}`);
+    const seconds = (v) => (v === null || v === undefined ? "–" : `${number(v)} s`);
+    const percent = (v) => (v === null || v === undefined ? "–" : `${number(v)} %`);
+    const fill = (key) =>
+      (texts[key] || "")
+        .replace("{meter}", signed(check.meter_w))
+        .replace("{expected}", signed(check.expected_w))
+        .replace("{spread}", watts(check.spread_w))
+        .replace("{factor}", check.factor ?? check.ratio ?? "–")
+        .replace("{charge}", seconds(check.charge_s))
+        .replace("{discharge}", seconds(check.discharge_s))
+        .replace("{min}", percent(check.min_pct))
+        .replace("{max}", percent(check.max_pct))
+        .replace("{jump}", check.jump_pct ?? "–");
+    const outcome = check.outcome;
+    if (check.key.startsWith("effect_")) {
+      if (outcome === "ok") return fill("effect_ok");
+      if (outcome === "unclear") return fill("effect_unclear");
+      return fill(`effect_${check.reason}`);
+    }
+    if (check.key === "power_sign" || check.key === "power_scale") {
+      if (outcome === "skipped" || outcome === "unclear") return check.key === "power_sign" ? fill(`power_${outcome}`) : "";
+      return fill(`${check.key}_${outcome}`);
+    }
+    if (check.key === "response") return fill(`response_${outcome}`);
+    if (check.key === "counters") {
+      if (outcome === "ok") return fill("counters_ok");
+      if (outcome === "skipped") return fill(check.reason === "resolution" ? "counters_resolution" : "counters_skipped");
+      return fill(`counters_${check.reason}`);
+    }
+    if (check.key === "soc") return outcome === "ok" ? fill("soc_ok") : check.reason ? fill(`soc_${check.reason}`) : "";
+    if (check.key === "release") return fill(`release_${outcome}`);
+    return "";
   }
 
   /** Details dialog of the control: timing, smart meter (Modbus statistics), battery response. */
@@ -3594,9 +3823,26 @@ class SlemsPanel extends HTMLElement {
               .replace("{time}", retry);
             problem = `<div class="problem"><ha-icon icon="mdi:alert-circle"></ha-icon><span><b>${t.notResponding}</b> – ${escapeHtml(text)}</span></div>`;
           }
+          const selfTest = s("self_test_result");
+          if (!problem && selfTest?.state === "running") {
+            const phase = t.selfTestPhases[selfTest.attributes.phase] || selfTest.attributes.phase || "–";
+            problem = `<div class="info-box"><ha-icon icon="mdi:battery-check-outline"></ha-icon><span>${escapeHtml(
+              t.selfTestRunning.replace("{phase}", phase)
+            )}</span><button class="link" data-action="self-test-off" data-entity="${s("self_test")?.entity_id}">${t.selfTestCancel}</button></div>`;
+          } else if (!problem && (selfTest?.state === "warning" || selfTest?.state === "failed")) {
+            problem = `<div class="problem"><ha-icon icon="mdi:battery-alert-variant-outline"></ha-icon><span><b>${
+              t.selfTestProblem[selfTest.state]
+            }</b> – </span><button class="link" data-action="menu-details" data-device="${b.device_id}">${t.selfTestProblemText}</button></div>`;
+          }
+          const selfTestChip =
+            selfTest?.state === "running"
+              ? `<span class="chip">${t.selfTestRunningChip}</span>`
+              : selfTest?.state === "pending"
+                ? `<span class="chip">${t.selfTestPendingChip}</span>`
+                : "";
           return `<section class="card">
             <div class="card-head"><h2>${escapeHtml(b.name)}</h2>
-              <div class="chips">${enabled?.state === "off" ? `<span class="chip">${t.disabled}</span>` : ""}${
+              <div class="chips">${selfTestChip}${enabled?.state === "off" ? `<span class="chip">${t.disabled}</span>` : ""}${
                 s("last_full_charge")?.attributes?.preferred ? `<span class="chip" title="${escapeHtml(t.fullChargeDueHint)}">${t.fullChargeDue}</span>` : ""
               }${this._batteryMenu(b)}</div></div>
             ${problem}
@@ -4399,6 +4645,12 @@ const STYLE = `
   .card-toggle { display: flex; align-items: center; gap: 4px; margin: 8px 0 -6px auto; font-size: 13px; }
   .card-toggle ha-icon { --mdc-icon-size: 18px; }
   .card-subheading { margin: 0 0 6px; font-size: 14px; font-weight: 500; color: var(--primary-text-color); }
+  .self-test-checks { grid-column: 1 / -1; margin: 0; padding-left: 18px; font-size: 13px; color: var(--secondary-text-color); }
+  dl .self-test-heading { grid-column: 1 / -1; margin: 10px 0 0; }
+  .self-test-checks li { margin: 6px 0; }
+  .self-test-checks b { color: var(--primary-text-color); font-weight: 500; }
+  .self-test-checks .self-test-failed b { color: var(--error-color); }
+  .self-test-checks .self-test-warning b, .self-test-checks .self-test-unclear b { color: var(--warning-color); }
   .card-subheading.disabled { color: var(--secondary-text-color); }
   .setting.disabled > span:first-child { color: var(--secondary-text-color); }
   .setting select:disabled { opacity: 0.5; }

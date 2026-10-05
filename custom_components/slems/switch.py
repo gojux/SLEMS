@@ -59,6 +59,8 @@ async def async_setup_entry(
         ]
         if battery.supports_balancing:
             entities.append(CellBalancingSwitch(coordinator, battery))
+        if battery.driver.capabilities.controllable:
+            entities.append(SelfTestSwitch(coordinator, battery))
         if battery.driver.has_connection:
             entities.append(CommunicationPauseSwitch(coordinator, battery))
         async_add_entities(entities, config_subentry_id=battery.subentry_id)
@@ -265,11 +267,44 @@ class CellBalancingSwitch(SlemsBatteryEntity, SwitchEntity):
             raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key="balancing_communication_paused"
             )
+        if self.battery.self_test_requested:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="balancing_self_test")
         self.coordinator.start_balancing(self.battery)
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self.coordinator.end_balancing(self.battery, "cancelled")
+        self.async_write_ha_state()
+
+
+class SelfTestSwitch(SlemsBatteryEntity, SwitchEntity):
+    """Start or cancel a self-test of the battery (see self_test).
+
+    On: the battery leaves the normal operation for a few minutes, the other
+    batteries and the consumers keep their set points meanwhile. Off: the test
+    is cancelled (or one asked for at the setup is no longer waited for). It
+    switches itself off at the end; the result is shown by the sensor.
+    """
+
+    _attr_icon = "mdi:battery-check-outline"
+
+    def __init__(self, coordinator: SlemsCoordinator, battery: BatteryRuntime) -> None:
+        super().__init__(coordinator, battery, "self_test")
+
+    @property
+    def is_on(self) -> bool:
+        return self.battery.self_test_requested or self.battery.self_test_pending
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        if self.battery.self_test_requested:
+            return
+        if blocked := self.coordinator.self_test_blocked(self.battery):
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key=blocked)
+        self.coordinator.start_self_test(self.battery)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self.coordinator.cancel_self_test(self.battery)
         self.async_write_ha_state()
 
 

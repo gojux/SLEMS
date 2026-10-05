@@ -47,6 +47,7 @@ from .controller import ControlStatus
 
 if TYPE_CHECKING:
     from .coordinator import BatteryRuntime, SlemsCoordinator, SystemSnapshot
+    from .self_test import SelfTest
 
 UNREADABLE_AFTER_S = 300.0
 RELEASE_FAILED_AFTER_S = 300.0
@@ -321,6 +322,26 @@ class ProblemReporter:
             notification_id=f"{DOMAIN}_balancing_{battery.subentry_id}",
         )
 
+
+    async def async_notify_self_test(self, battery: BatteryRuntime, test: SelfTest) -> None:
+        """Notification about the end of a self-test (not for a cancelled one)."""
+        text = await self._texts()
+        result = test.result or "failed"
+        if result in ("ok", "warning", "failed"):
+            lines = "\n".join(
+                f"- {text(f'self_test_check_{check.key}')}: {text(f'self_test_outcome_{check.outcome.value}')}"
+                for check in test.checks
+                if check.outcome.value != "skipped"
+            )
+            message = text(f"self_test_{result}_message", name=battery.name, checks=lines)
+        else:
+            message = text("self_test_stopped_message", name=battery.name, reason=text(f"self_test_reason_{result}"))
+        persistent_notification.async_create(
+            self._hass,
+            message,
+            title=text("self_test_title", name=battery.name),
+            notification_id=f"{DOMAIN}_self_test_{battery.subentry_id}",
+        )
 
     async def async_notify_target_missed(
         self,
