@@ -27,6 +27,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from .currency import currency_code, symbols
+from .display_hold import STRATEGY_HOLD_S, DisplayHold
 from .const import CONF_PV_FORECAST_ENTRIES, CONF_WEATHER_ENTITY, FEED_IN_CAP_MIN_BUFFER_PCT
 from .coordinator import SlemsConfigEntry, SlemsCoordinator, SystemSnapshot
 from .drivers import BatteryTelemetry
@@ -695,7 +696,9 @@ async def async_setup_entry(
     coordinator = entry.runtime_data
     config = entry.options or entry.data
     async_add_entities(
-        SystemSensor(coordinator, description)
+        (StrategySensor if description.key == "allocation_strategy" else SystemSensor)(
+            coordinator, description
+        )
         for description in SYSTEM_SENSORS
         if (config.get(CONF_PV_FORECAST_ENTRIES) or not description.key.startswith("pv_forecast"))
         and (config.get(CONF_WEATHER_ENTITY) or description.key != "outdoor_temperature")
@@ -780,6 +783,24 @@ class SystemSensor(SlemsSystemEntity, SensorEntity):
         if self.entity_description.attributes_fn is None:
             return None
         return self.entity_description.attributes_fn(self.coordinator.data, self.coordinator)
+
+
+class StrategySensor(SystemSensor):
+    """Strategy of the allocation; shows a new strategy only once it lasted.
+
+    The control switches the strategy for a second or two when a short load
+    peak causes feed-in; such changes would fill the history and the logbook.
+    """
+
+    def __init__(
+        self, coordinator: SlemsCoordinator, description: SystemSensorDescription
+    ) -> None:
+        super().__init__(coordinator, description)
+        self._hold = DisplayHold(STRATEGY_HOLD_S)
+
+    @property
+    def native_value(self) -> str | None:
+        return self._hold.update(super().native_value, time.monotonic())
 
 
 class BatterySensor(SlemsBatteryEntity, SensorEntity):

@@ -1278,8 +1278,9 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
   Antwortzeit, Fehlern und der Zeit über die Entität heute, und die
   Reaktionszeiten der Batterien).
 - **Kennzahlen**: Status (zuerst Probleme – Smart Meter ohne Werte, Batterie
-  nicht lesbar oder reagiert nicht –, sonst der Betriebsmodus), Strategie,
-  Ladezustand, gespeicherte Energie und Kapazität, Einspeisegrenze, Prognosen
+  nicht lesbar oder reagiert nicht –, sonst der Betriebsmodus), Strategie
+  (ein Wechsel erscheint erst, wenn er 30 Sekunden besteht; die Regelung
+  wechselt sofort), Ladezustand, gespeicherte Energie und Kapazität, Einspeisegrenze, Prognosen
   und die **erwartete Einspeisung heute**: die seit Mitternacht gemessene
   Einspeisung plus die, die der Plan noch erwartet (die blaue Linie des
   Diagramms).

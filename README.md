@@ -1211,7 +1211,8 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar.
   response times).
 - **Key figures**: status (problems first – smart meter without values,
   battery unreadable or not responding – otherwise the operating mode),
-  strategy, state of charge, feed-in limit, stored energy and capacity,
+  strategy (a change shows once it lasted 30 seconds; the control switches
+  at once), state of charge, feed-in limit, stored energy and capacity,
   forecasts, and the **expected export today**: the export measured since
   midnight plus the export the plan still expects (the blue line of the chart).
 - **Forecast chart** (mean power per half hour in kW):
