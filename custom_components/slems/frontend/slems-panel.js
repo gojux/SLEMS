@@ -437,14 +437,14 @@ const STRINGS = {
       target_sensor:
         "Which temperature the minimum and target temperature apply to: the mean of both sensors, or one of them (e.g. the upper sensor for the hot water at the tap). Sensor 1 is the temperature sensor of the storage, sensor 2 the second one in the consumer's configuration. The latest start is estimated with the energy per degree learned for the chosen sensor (the mean's until it is learned).",
       battery_support:
-        "Whether the batteries may supply the consumer while it runs without PV surplus (switched on by hand, minimum runtime, a forced run of its daily target). Always: like any other load. Automatic: only with the energy the batteries can spare until PV charges them again. Never: from the grid. The source of the daily target decides something else: whether SLEMS switches the consumer on without surplus to meet its target; with the source surplus + battery such a run uses the batteries regardless of this setting.",
+        "Whether the batteries may supply the consumer while it runs without PV surplus (switched on by hand, minimum runtime, a forced run of its daily target).\n**Always**: like any other load.\n**Automatic**: only with the energy the batteries can spare until PV charges them again.\n**Never**: from the grid.\nThe source of the daily target decides something else: whether SLEMS switches the consumer on without surplus to meet its target; with the source surplus + battery such a run uses the batteries regardless of this setting.",
       target_source:
         "What may cover the rest if the surplus is not enough by the deadline. With the batteries (and the grid) the consumer runs from the latest start on regardless of the surplus. Only surplus: the target may be missed (notification).",
       target_priority:
         "The consumer gets the surplus before the batteries if the forecast surplus until the deadline is short for the rest of its target plus filling the batteries.",
       target_deadline: "End of the daily period, e.g. 22:00; also across midnight (06:00 = until the next morning).",
       cap_mode:
-        "Supporting: gets no other surplus while the feed-in cap is on, only the surplus above the limit the batteries cannot absorb. If the forecast shows that a peak does not fit into the batteries, it runs from the start of the peak so its power is used for the whole peak. Normal: surplus as without the feed-in cap; above the limit it takes what the batteries and the supporting consumers cannot, before it is curtailed. Never: surplus as without the feed-in cap, never the surplus above the limit.",
+        "**Supporting**: gets no other surplus while the feed-in cap is on, only the surplus above the limit the batteries cannot absorb. If the forecast shows that a peak does not fit into the batteries, it runs from the start of the peak so its power is used for the whole peak.\n**Normal**: surplus as without the feed-in cap; above the limit it takes what the batteries and the supporting consumers cannot, before it is curtailed.\n**Never**: surplus as without the feed-in cap, never the surplus above the limit.",
       feed_in_cap_auto_buffer:
         "Uses the recorded PV forecast errors instead of the fixed buffer: of the days with more PV than forecast, the underestimation not exceeded on 80 % of them raises the PV forecast. Needs 14 recorded days; until then the fixed buffer applies.",
       peak_shaving_grid_limit:
@@ -966,14 +966,14 @@ const STRINGS = {
       target_sensor:
         "Für welche Temperatur Mindest- und Zieltemperatur gelten: das Mittel beider Fühler oder einer davon (z. B. der obere Fühler für das Warmwasser am Hahn). Fühler 1 ist der Temperaturfühler des Speichers, Fühler 2 der zweite in der Konfiguration des Verbrauchers. Die späteste Startzeit wird mit der für den gewählten Fühler gelernten Energie pro Grad geschätzt (bis sie gelernt ist, mit der des Mittelwerts).",
       battery_support:
-        "Ob die Batterien den Verbraucher versorgen dürfen, während er ohne PV-Überschuss läuft (von Hand eingeschaltet, Mindestlaufzeit, erzwungener Lauf des Tagesziels). Immer: wie jede andere Last. Automatisch: nur mit der Energie, die die Batterien bis zum nächsten Laden durch PV übrig haben. Nie: aus dem Netz. Die Quelle des Tagesziels entscheidet etwas anderes: ob SLEMS den Verbraucher ohne Überschuss einschaltet, um sein Ziel zu erreichen; mit der Quelle „Überschuss + Batterie“ nutzt ein solcher Lauf die Batterien unabhängig von dieser Einstellung.",
+        "Ob die Batterien den Verbraucher versorgen dürfen, während er ohne PV-Überschuss läuft (von Hand eingeschaltet, Mindestlaufzeit, erzwungener Lauf des Tagesziels).\n**Immer**: wie jede andere Last.\n**Automatisch**: nur mit der Energie, die die Batterien bis zum nächsten Laden durch PV übrig haben.\n**Nie**: aus dem Netz.\nDie Quelle des Tagesziels entscheidet etwas anderes: ob SLEMS den Verbraucher ohne Überschuss einschaltet, um sein Ziel zu erreichen; mit der Quelle „Überschuss + Batterie“ nutzt ein solcher Lauf die Batterien unabhängig von dieser Einstellung.",
       target_source:
         "Was den Rest decken darf, wenn der Überschuss bis zur Frist nicht reicht. Mit Batterie (und Netz) läuft der Verbraucher ab der spätesten Startzeit unabhängig vom Überschuss. Nur Überschuss: Das Ziel kann verfehlt werden (Benachrichtigung).",
       target_priority:
         "Der Verbraucher bekommt den Überschuss vor den Batterien, wenn der prognostizierte Überschuss bis zur Frist für den Rest seines Ziels plus das Füllen der Batterien knapp ist.",
       target_deadline: "Ende des Tageszeitraums, z. B. 22:00; auch über Mitternacht (06:00 = bis zum nächsten Morgen).",
       cap_mode:
-        "Unterstützend: bekommt bei aktiver Einspeisebegrenzung keinen sonstigen Überschuss, nur den Überschuss über der Grenze, den die Batterien nicht aufnehmen können. Zeigt die Prognose, dass eine Spitze nicht in die Batterien passt, läuft er ab Beginn der Spitze, damit seine Leistung über die ganze Spitze genutzt wird. Normal: Überschuss wie ohne Einspeisebegrenzung; über der Grenze nimmt er, was Batterien und unterstützende Verbraucher nicht schaffen, bevor abgeregelt wird. Nie: Überschuss wie ohne Einspeisebegrenzung, nie den Überschuss über der Grenze.",
+        "**Unterstützend**: bekommt bei aktiver Einspeisebegrenzung keinen sonstigen Überschuss, nur den Überschuss über der Grenze, den die Batterien nicht aufnehmen können. Zeigt die Prognose, dass eine Spitze nicht in die Batterien passt, läuft er ab Beginn der Spitze, damit seine Leistung über die ganze Spitze genutzt wird.\n**Normal**: Überschuss wie ohne Einspeisebegrenzung; über der Grenze nimmt er, was Batterien und unterstützende Verbraucher nicht schaffen, bevor abgeregelt wird.\n**Nie**: Überschuss wie ohne Einspeisebegrenzung, nie den Überschuss über der Grenze.",
       feed_in_cap_auto_buffer:
         "Verwendet statt des festen Puffers die aufgezeichneten Abweichungen der PV-Prognose: Von den Tagen mit mehr PV als prognostiziert hebt die Unterschätzung, die an 80 % davon nicht überschritten wurde, die PV-Prognose an. Braucht 14 aufgezeichnete Tage; bis dahin gilt der feste Puffer.",
       peak_shaving_grid_limit:
@@ -1311,6 +1311,10 @@ function focusSelector(element) {
 
 const escapeHtml = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+// Hint texts may mark words bold with **…** and break lines with \n (e.g. the options of a setting).
+const hintHtml = (text) => escapeHtml(text).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replaceAll("\n", "<br>");
+const hintPlain = (text) => String(text ?? "").replaceAll("**", "");
 
 class SlemsPanel extends HTMLElement {
   constructor() {
@@ -2380,9 +2384,9 @@ class SlemsPanel extends HTMLElement {
           if (key === "expected_export") return this._exportTile();
           const hint = t.tileHints[key];
           const info = hint
-            ? `<button class="info" data-action="toggle-hint" data-key="${key}" title="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}"><ha-icon icon="mdi:information-outline"></ha-icon></button>`
+            ? `<button class="info" data-action="toggle-hint" data-key="${key}" title="${escapeHtml(hintPlain(hint))}" aria-label="${escapeHtml(hintPlain(hint))}"><ha-icon icon="mdi:information-outline"></ha-icon></button>`
             : "";
-          const open = hint && this._openHints.has(key) ? `<span class="setting-hint">${escapeHtml(hint)}</span>` : "";
+          const open = hint && this._openHints.has(key) ? `<span class="setting-hint">${hintHtml(hint)}</span>` : "";
           const priority = key === "allocation_strategy" ? this._priorityText() : "";
           return `<div class="tile" data-more-info="${s.entity_id}"><span class="label">${escapeHtml(this._name(s))}${info}</span>
                   <span class="value">${escapeHtml(this._tileValue(s))}</span>${priority ? `<span class="sub">${escapeHtml(priority)}</span>` : ""}${open}</div>`;
@@ -3724,8 +3728,8 @@ class SlemsPanel extends HTMLElement {
     const name = label ?? (stateObj ? this._name(stateObj) : key);
     const hint = entity ? t.settingHints[entity] : null;
     const info = hint
-      ? `<button class="info" data-action="toggle-hint" data-key="${entity}" title="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}"><ha-icon icon="mdi:information-outline"></ha-icon></button>${
-          this._openHints.has(entity) ? `<span class="setting-hint">${escapeHtml(hint)}</span>` : ""
+      ? `<button class="info" data-action="toggle-hint" data-key="${entity}" title="${escapeHtml(hintPlain(hint))}" aria-label="${escapeHtml(hintPlain(hint))}"><ha-icon icon="mdi:information-outline"></ha-icon></button>${
+          this._openHints.has(entity) ? `<span class="setting-hint">${hintHtml(hint)}</span>` : ""
         }`
       : "";
     if (typeof value === "boolean") {
@@ -4229,8 +4233,8 @@ class SlemsPanel extends HTMLElement {
     // Title for the mouse, a click on the icon opens the text (touch screens).
     const title = label ?? this._name(stateObj);
     let name = hint
-      ? `${escapeHtml(title)}<button class="info" data-action="toggle-hint" data-key="${key}" title="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}"><ha-icon icon="mdi:information-outline"></ha-icon></button>${
-          this._openHints.has(key) ? `<span class="setting-hint">${escapeHtml(hint)}</span>` : ""
+      ? `${escapeHtml(title)}<button class="info" data-action="toggle-hint" data-key="${key}" title="${escapeHtml(hintPlain(hint))}" aria-label="${escapeHtml(hintPlain(hint))}"><ha-icon icon="mdi:information-outline"></ha-icon></button>${
+          this._openHints.has(key) ? `<span class="setting-hint">${hintHtml(hint)}</span>` : ""
         }`
       : escapeHtml(title);
     if (domain === "switch") {
@@ -4259,7 +4263,7 @@ class SlemsPanel extends HTMLElement {
           : missing
             ? this._t.learnedProgress.replace("{missing}", missing)
             : this._t.learnedWaiting;
-      name += `<span class="setting-hint">${escapeHtml(hint)}</span>`;
+      name += `<span class="setting-hint">${hintHtml(hint)}</span>`;
     }
     if (key === "peak_shaving_grid_limit" && this._state("peak_shaving_auto")?.state === "on") {
       const effective = this._state("peak_shaving_limit");
