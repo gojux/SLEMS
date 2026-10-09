@@ -54,7 +54,7 @@ items:
     price: 12.34
 
 Optionale Felder je Posten:
-  factor_pct: 5             # nur spot/market_month: Börsenpreis × (1 + 5 %)
+  factor_pct: 5             # nur spot/market_month: Börsenpreis + 5 % seines Betrags
   valid_from: 2026-04-01    # Preis gilt ab diesem Tag (ein Posten je Preisstand)
   months: [4, 5, 6, 7, 8, 9]          # nur in diesen Monaten
   weekdays: [mon, tue, wed, thu, fri] # nur an diesen Wochentagen
@@ -73,7 +73,8 @@ Regeln:
   (z. B. ein Messentgelt für die Einspeisung) sind eigene Posten.
 - Bei dynamischen Tarifen: unit spot oder market_month, price ist der
   Aufschlag in ct/kWh (negativ bei einem Abschlag), factor_pct ein
-  prozentualer Aufschlag auf den Marktpreis.
+  prozentualer Aufschlag vom Betrag des Marktpreises (auch bei negativem
+  Marktpreis ein Aufschlag).
 - Die Rechnung eines dynamischen Tarifs (Preis je Stunde oder Viertelstunde
   nach der Börse) zeigt nur einen Durchschnittspreis des Zeitraums. Nimm ihn
   nie als festen Preis: Der Energiepreis ist unit spot mit dem Aufschlag aus

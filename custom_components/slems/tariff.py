@@ -10,7 +10,9 @@ A tariff is a list of items, each as a line of a bill:
   day-ahead price of the hour) or ``market_month`` (a monthly market price:
   entered per month, else the mean day-ahead price of the month weighted by
   the export, which approximates the market price of PV feed-in); for the
-  last two the price is spot × (1 + ``factor_pct`` / 100) + ``price`` ct/kWh,
+  last two the price is spot + |spot| × ``factor_pct`` / 100 + ``price``
+  ct/kWh (the percentage of the amount, as suppliers bill it: a markup stays
+  a markup at a negative price),
   or ``percent`` (``price`` % of the net amount of the other items of its
   side and group, e.g. a municipal levy of 7 % on the energy),
 * optional time window (months, weekdays, hours ``from`` – ``to`` local time,
@@ -149,7 +151,7 @@ class TariffItem:
             return self.price
         if market_ct is None:
             return None
-        return market_ct * (1 + self.factor_pct / 100) + self.price
+        return market_ct + abs(market_ct) * self.factor_pct / 100 + self.price
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> TariffItem:

@@ -2368,7 +2368,8 @@ def _describe_item(item: TariffItem, language: str, currency: str = "EUR") -> st
     if item.unit.dynamic:
         price = words[item.unit]
         if item.factor_pct:
-            price += f" × {short(1 + item.factor_pct / 100)}"
+            # Percent of the amount of the market price.
+            price += f" {'+' if item.factor_pct > 0 else '−'} {short(abs(item.factor_pct))} %"
         if item.price:
             price += f" {'+' if item.price > 0 else '−'} {short(abs(item.price))} {symbols(currency)[1]}/kWh"
     else:

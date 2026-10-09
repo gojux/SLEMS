@@ -52,7 +52,7 @@ items:
     price: 12.34
 
 Optional fields per item:
-  factor_pct: 5             # spot/market_month only: market price × (1 + 5 %)
+  factor_pct: 5             # spot/market_month only: market price + 5 % of its amount
   valid_from: 2026-04-01    # price applies from this day (one item per price level)
   months: [4, 5, 6, 7, 8, 9]          # only in these months
   weekdays: [mon, tue, wed, thu, fri] # only on these weekdays
@@ -71,7 +71,8 @@ Rules:
 - Feed-in credits are positive prices on the export side; deductions from
   them (e.g. a metering fee for the feed-in) are items of their own.
 - Dynamic tariffs: unit spot or market_month, price is the markup in ct/kWh
-  (negative for a discount), factor_pct a markup in % on the market price.
+  (negative for a discount), factor_pct a markup in % of the amount of the
+  market price (a markup also at a negative market price).
 - The bill of a dynamic tariff (price per hour or quarter hour following the
   exchange) shows only a mean price of the period. Never take it as a fixed
   price: the energy price is unit spot with the markup of the contract

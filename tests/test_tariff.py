@@ -199,7 +199,7 @@ def test_month_prices_parsing_and_description() -> None:
     with pytest.raises(ValueError):
         parse_month_prices("January: 8")
     item = TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.SPOT, 1.5, factor_pct=10.0)
-    assert _describe_item(item, "en") == "Energy: spot price × 1.1 + 1.5 ct/kWh (Import, energy)"
+    assert _describe_item(item, "en") == "Energy: spot price + 10 % + 1.5 ct/kWh (Import, energy)"
     assert TariffItem.from_dict(item.as_dict()) == item
 
 
@@ -327,3 +327,10 @@ def test_mixed_tariff_takes_one_side_from_each() -> None:
     assert mixed.vat(Side.EXPORT, Group.ENERGY) == 0.0
     assert mixed.name == "Dynamic + Current"
     assert mixed.name_for(Side.EXPORT) == "Current"
+
+
+def test_percent_markup_of_the_amount_stays_a_markup_at_negative_prices() -> None:
+    item = TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.SPOT, 1.8, factor_pct=3.0)
+    assert item.ct_per_kwh(10.0) == pytest.approx(10.0 + 0.3 + 1.8)
+    # Salzburg AG FlexSpot: 3 % of the absolute amount, also at a negative price.
+    assert item.ct_per_kwh(-10.0) == pytest.approx(-10.0 + 0.3 + 1.8)
