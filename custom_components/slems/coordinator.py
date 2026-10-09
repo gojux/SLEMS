@@ -288,6 +288,10 @@ class BatteryRuntime:
     self_test_pending: bool = False
     # Monotonic time of the first failed read since the last successful one.
     unreadable_since: float | None = None
+    # Last polled AC power (+charge / -discharge) and its monotonic time; the
+    # controller trusts it over a command the battery does not follow.
+    measured_power_w: float | None = None
+    measured_at: float | None = None
     # Monotonic time since a release (hand back to its own logic) is
     # outstanding: it failed and is tried again until it succeeds.
     release_pending_since: float | None = None
@@ -1368,6 +1372,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if telemetry.ac_power_w is not None:
                 battery.loss_curve.add(telemetry.ac_power_w, telemetry.power_w)
             battery.soc_window.update(telemetry.soc_pct, battery.limits)
+            battery.delivery.update_stop(telemetry.soc_pct, telemetry.grid_side_power_w)
+            battery.measured_power_w = telemetry.grid_side_power_w
+            battery.measured_at = now
             battery.top_taper.update(telemetry.extra.get("max_cell_voltage"))
             battery.capacity_learner.update(
                 now, telemetry.soc_pct, telemetry.power_w, battery.driver.capabilities.capacity_wh
@@ -1586,6 +1593,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             full_charge=battery.subentry_id == self.full_charge_battery,
             # Read-only batteries charge by their own logic.
             top_taper=battery.top_taper.active and caps.controllable,
+            bms_stop=battery.delivery.discharge_stopped,
         )
 
     def _check_delivery(
@@ -1610,6 +1618,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if action is Action.WAKE:
             self.controller.force_refresh(battery.subentry_id)
         elif action is Action.EXCLUDE:
+            self.controller.request()
+        elif action is Action.BMS_STOP:
+            battery.power_limits = self._power_limits(battery, telemetry)
             self.controller.request()
 
     def _balancing_surplus_w(self, battery: BatteryRuntime, snapshot: SystemSnapshot) -> float:

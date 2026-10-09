@@ -94,6 +94,7 @@ def _battery(coordinator: SlemsCoordinator, battery: BatteryRuntime) -> dict:
             "excluded_for_s": None
             if battery.delivery.excluded_until is None
             else round(battery.delivery.excluded_until - now, 1),
+            "discharge_stopped_soc": battery.delivery.discharge_stopped_soc,
         },
         "cell_monitor": {
             "last": _plain(monitor.last),

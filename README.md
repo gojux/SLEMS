@@ -935,6 +935,15 @@ Every controllable battery has these settings (dashboard: **Settings**):
   friendly charging, the charge secured check and the projection; the minimum
   is the lowest target of the night discharge. Active cell balancing ignores
   the SoC window (it needs the top of the charge).
+
+  Near the minimum the BMS may stop discharging earlier than set, e.g. when a
+  weak cell sags under a high load. If a battery delivers nothing below 20 %
+  for three polls in a row although SLEMS asks it to discharge, SLEMS blocks
+  its discharging (reason `bms` at **Allowed discharge power**) until it was
+  charged or its SoC rose by 2 %; the other batteries and the grid take over.
+  Independently, the control counts a battery that measurably does not follow
+  its set point with its measured power, so the house consumption and the
+  consumption forecast do not contain power that does not flow.
 - **Charge power limit** and **Discharge power limit** (default: the maximum of
   the battery), e.g. 800 W for a plug-in system.
 

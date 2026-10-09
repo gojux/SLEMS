@@ -114,7 +114,8 @@ class PowerLimits:
 
     charge_w: float
     discharge_w: float
-    # Why charging/discharging is limited: "soc", "power", "temperature", "top".
+    # Why charging/discharging is limited: "soc", "power", "temperature", "top",
+    # "bms" (the BMS stopped discharging, see delivery_monitor).
     charge_reason: str | None = None
     discharge_reason: str | None = None
 
@@ -130,6 +131,7 @@ def power_limits(
     use_soc_window: bool = True,
     full_charge: bool = False,
     top_taper: bool = False,
+    bms_stop: bool = False,
 ) -> PowerLimits:
     """Combine capability, user power limits, SoC window and temperature.
 
@@ -152,4 +154,6 @@ def power_limits(
         discharge, discharge_reason = settings.discharge_limit_w, "power"
     if use_soc_window and window.discharge_blocked:
         discharge, discharge_reason = 0.0, "soc"
+    elif use_soc_window and bms_stop:
+        discharge, discharge_reason = 0.0, "bms"
     return PowerLimits(max(0.0, charge), max(0.0, discharge), charge_reason, discharge_reason)

@@ -9,7 +9,12 @@ operating mode active:
   point that reads back differently (see the driver).
 * Not a failure: no charging at ``FULL_SOC_PCT`` or more (BMS full), no
   discharging at ``BMS_DISCHARGE_CUTOFF_SOC_PCT`` or less (the BMS may cut off
-  early, e.g. with a weak cell).
+  early, e.g. with a weak cell sagging under a high load).
+* A battery that does not discharge at that low SoC for ``FAIL_THRESHOLD``
+  consecutive polls is *stopped by the BMS*: its discharging is blocked
+  (communication works, nothing is excluded) until it charged or its SoC rose
+  by ``BMS_STOP_RELEASE_PCT`` above the SoC at the stop. Without the block the
+  battery would stay planned with power it does not deliver.
 * After ``FAIL_THRESHOLD`` consecutive failures the first time a wake attempt
   (all control registers are written again, RS485 control included) and the
   count starts again; the next time the battery is excluded for
@@ -32,12 +37,14 @@ MIN_JUDGED_W = 100.0
 DELIVERY_RATIO = 0.1
 FULL_SOC_PCT = 99.0
 BMS_DISCHARGE_CUTOFF_SOC_PCT = 20.0
+BMS_STOP_RELEASE_PCT = 2.0
 
 
 class Action(StrEnum):
     NONE = "none"
     WAKE = "wake"
     EXCLUDE = "exclude"
+    BMS_STOP = "bms_stop"
 
 
 class DeliveryMonitor:
@@ -49,6 +56,9 @@ class DeliveryMonitor:
         self.reason: str | None = None
         self.excluded_until: float | None = None
         self._wake_used = False
+        # SoC (%) at which the BMS stopped discharging; None while not stopped.
+        self.discharge_stopped_soc: float | None = None
+        self._stop_count = 0
 
     def excluded(self, now: float) -> bool:
         return self.excluded_until is not None and now < self.excluded_until
@@ -67,6 +77,26 @@ class DeliveryMonitor:
         self.fail_count = 0
         self.reason = None
         self._wake_used = False
+        self._stop_count = 0
+
+    @property
+    def discharge_stopped(self) -> bool:
+        return self.discharge_stopped_soc is not None
+
+    def update_stop(self, soc_pct: float | None, delivered_w: float | None) -> bool:
+        """End a BMS stop once the battery charged or its SoC rose; True if ended.
+
+        ``delivered_w`` is the measured AC power (+charge / -discharge).
+        """
+        if self.discharge_stopped_soc is None:
+            return False
+        charged = delivered_w is not None and delivered_w >= MIN_JUDGED_W
+        risen = soc_pct is not None and soc_pct >= self.discharge_stopped_soc + BMS_STOP_RELEASE_PCT
+        if not (charged or risen):
+            return False
+        _LOGGER.info("Battery %s: discharging allowed again after the BMS stop", self._name)
+        self.discharge_stopped_soc = None
+        return True
 
     def observe(
         self,
@@ -86,13 +116,26 @@ class DeliveryMonitor:
         if delivered >= DELIVERY_RATIO * abs(commanded_w):
             self.clear()
             return Action.NONE
-        if soc_pct is not None and (
-            (charging and soc_pct >= FULL_SOC_PCT)
-            or (not charging and soc_pct <= BMS_DISCHARGE_CUTOFF_SOC_PCT)
-        ):
+        if charging and soc_pct is not None and soc_pct >= FULL_SOC_PCT:
             # The BMS protects the battery; communication works.
             self.clear()
             return Action.NONE
+        if not charging and soc_pct is not None and soc_pct <= BMS_DISCHARGE_CUTOFF_SOC_PCT:
+            # The BMS protects the battery; communication works, but the
+            # battery must not stay planned with power it does not deliver.
+            self.fail_count = 0
+            self.reason = None
+            self._stop_count += 1
+            if self._stop_count < FAIL_THRESHOLD:
+                return Action.NONE
+            self._stop_count = 0
+            self.discharge_stopped_soc = soc_pct
+            _LOGGER.info(
+                "Battery %s: the BMS stopped discharging at %.1f %% "
+                "(commanded %.0f W, delivered %.0f W)",
+                self._name, soc_pct, commanded_w, delivered_w,
+            )
+            return Action.BMS_STOP
         detail = f"commanded {commanded_w:.0f} W, delivered {delivered_w:.0f} W"
         return self._fail(now, "charge_not_delivered" if charging else "discharge_not_delivered", detail, True)
 

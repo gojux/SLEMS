@@ -1356,7 +1356,7 @@ class AllowedPowerSensor(SlemsBatteryEntity, SensorEntity):
         limits = self.battery.power_limits
         if limits is None:
             return {"reason": None}
-        # soc / power / temperature, None when not limited
+        # soc / power / temperature / top / bms, None when not limited
         return {"reason": limits.charge_reason if self._charging else limits.discharge_reason}
 
 

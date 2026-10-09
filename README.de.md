@@ -985,6 +985,16 @@ Jede steuerbare Batterie hat diese Einstellungen (Dashboard: **Einstellungen**):
   und die Prognose; das Minimum ist das niedrigste Ziel der Nachtentladung.
   Der aktive Zellausgleich ignoriert diese Grenzen (er braucht das obere
   Ladeende).
+
+  Nahe am Minimum kann das BMS das Entladen früher beenden als eingestellt,
+  z. B. wenn eine schwache Zelle unter hoher Last einbricht. Liefert eine
+  Batterie unter 20 % bei drei Abfragen in Folge nichts, obwohl SLEMS sie
+  entladen lässt, sperrt SLEMS ihr Entladen (Grund `bms` bei **Erlaubte
+  Entladeleistung**), bis sie geladen wurde oder ihr Ladezustand um 2 %
+  gestiegen ist; die anderen Batterien und das Netz übernehmen. Unabhängig
+  davon rechnet die Regelung eine Batterie, die ihrer Vorgabe messbar nicht
+  folgt, mit ihrer gemessenen Leistung, damit Hausverbrauch und
+  Verbrauchsprognose keine Leistung enthalten, die nicht fließt.
 - **Grenze Ladeleistung** und **Grenze Entladeleistung** (Standard: das Maximum
   der Batterie), z. B. 800 W für ein Steckergerät.
 

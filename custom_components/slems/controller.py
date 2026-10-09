@@ -10,6 +10,12 @@ command only after a while:
 * The battery power assumed in the energy balance is the one the meter can
   already see: the last command older than the learned battery response time
   (see ``response``). Newer commands are not counted twice.
+* A battery that measurably does not follow its command (e.g. stopped by its
+  BMS) counts with its measured power instead (``trusted_power``): the last
+  poll, taken long enough after the command became constant, deviates by more
+  than ``MISMATCH_MIN_W`` and ``MISMATCH_RATIO`` of the command. Otherwise the
+  energy balance, the house consumption and what is learned from it would
+  contain power that does not flow.
 * Each cycle corrects only a share of the remaining deviation (control gain),
   like a proportional controller. The gain adapts itself to the observed
   behaviour (see ``adaptive_gain``) unless the user fixed it.
@@ -89,6 +95,13 @@ SATURATION_DELAY_RANGE_S = (30.0, 600.0)
 RESTING_RESPONSE_FACTOR = 2
 RESTING_DELAY_RANGE_S = (10.0, 60.0)
 RAMP_STEP_S = 1.0
+# Measured battery power replaces the command only beyond this deviation.
+MISMATCH_MIN_W = 200.0
+MISMATCH_RATIO = 0.5
+# A measurement counts once taken this long (s) after the command plus the
+# battery's response time, and as long as it is at most this old.
+MISMATCH_SETTLE_S = 3.0
+MISMATCH_MAX_AGE_S = 60.0
 
 
 class ControlStatus(StrEnum):
@@ -387,12 +400,23 @@ class RealTimeController:
                     # Back to its own logic until it is retried.
                     await self._release(battery)
 
-        seen = {
-            battery_id: power
-            for battery_id in self._battery_history
-            if (power := self._seen_command(battery_id, start - self.battery_response_s(battery_id)))
-            is not None
-        }
+        runtimes = {battery.subentry_id: battery for battery in coordinator.batteries}
+        seen = {}
+        for battery_id in self._battery_history:
+            response_s = self.battery_response_s(battery_id)
+            power = self._seen_command(battery_id, start - response_s)
+            if power is None:
+                continue
+            if (runtime := runtimes.get(battery_id)) is not None:
+                power = trusted_power(
+                    power,
+                    self._constant_since(battery_id, power),
+                    runtime.measured_power_w,
+                    runtime.measured_at,
+                    start,
+                    response_s,
+                )
+            seen[battery_id] = power
         latest_total = sum(
             power
             for battery_id in self._battery_history
@@ -462,6 +486,15 @@ class RealTimeController:
             if issued <= before:
                 return power
         return None
+
+    def _constant_since(self, battery_id: str, power: float) -> float | None:
+        """Since when the commands stayed within the dead band of ``power``."""
+        since = None
+        for issued, commanded in reversed(self._battery_history.get(battery_id, [])):
+            if abs(commanded - power) > BATTERY_DEADBAND_W:
+                break
+            since = issued
+        return since
 
     def _record_command(self, battery_id: str, power: float, now: float) -> None:
         latest = self._latest_command(battery_id)
@@ -850,4 +883,29 @@ def seen_consumer_power(
         return before_w
     if elapsed_s < sensor_delay_s or measured_w is None:
         return target_w
+    return measured_w
+
+
+def trusted_power(
+    commanded_w: float,
+    constant_since: float | None,
+    measured_w: float | None,
+    measured_at: float | None,
+    now: float,
+    response_s: float,
+) -> float:
+    """Battery power to count in the balance: the command, or the measurement
+    if the battery measurably does not follow it.
+
+    The measurement must have been taken after the command (constant since
+    ``constant_since``) took effect, and must not be too old.
+    """
+    if measured_w is None or measured_at is None or constant_since is None:
+        return commanded_w
+    if measured_at < constant_since + response_s + MISMATCH_SETTLE_S:
+        return commanded_w
+    if now - measured_at > MISMATCH_MAX_AGE_S:
+        return commanded_w
+    if abs(measured_w - commanded_w) <= max(MISMATCH_MIN_W, MISMATCH_RATIO * abs(commanded_w)):
+        return commanded_w
     return measured_w
