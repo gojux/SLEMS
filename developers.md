@@ -1528,6 +1528,18 @@ Firmware quirks handled in `modbus_client.py`:
   never reconnect per request,
 - retries inside pymodbus (same transaction id) so late replies still match.
 
+Every frame costs 150 ms, whatever its size (a Venus answers 1 or 6
+registers in about 10 ms). Adjacent registers are read in one frame
+(`TELEMETRY_BLOCKS`: 30001–30006, 34002–34003, 37007–37008, 33000–33003;
+42000–42010 is refused because of its unassigned registers). A block that
+fails while its registers answer one by one is not asked again until a
+restart. Slowly changing values (`SLOW_KEYS`: voltage, temperature,
+cycle count, energy counters) are read at most every `SLOW_READ_S` (60 s) and
+keep their last value meanwhile; a self-test reads all of them every cycle
+(`read_telemetry(complete=True)`), since it watches the counters. The cell
+voltages stay in every read (top taper, cell balancing). The duration of the
+last read is `telemetry_read_s` in the diagnostics of the battery.
+
 SoC register: Omnibattery's code uses 37005 for v3, its register table
 (`site-docs/reference/registers.md`) lists 34002 for `e_v3`. On a real Venus
 E 3.0 (2026-09-24, `tools/read_registers.py`) 37005 and 32104 show the state
@@ -1573,6 +1585,15 @@ python3 tools/read_registers.py <battery-ip> --registers 37005 34002 32104 --sam
 
 The battery allows one Modbus connection only: disable other integrations
 using it (e.g. Omnibattery) while the script runs.
+
+`tools/read_blocks.py` tests whether the Venus answers several adjacent
+registers in one frame (each block and its first register alone, with the
+response time); the default blocks are the ones the driver reads one by one:
+
+```bash
+python3 tools/read_blocks.py <battery-ip>
+python3 tools/read_blocks.py <battery-ip> --blocks 30001:6 42000:11 --rounds 5
+```
 
 `tools/set_power.py` charges or discharges a Venus with a fixed power (same
 control registers as the driver: RS485 control, set points, force mode, set
@@ -1786,3 +1807,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-09 | Refill only on a day whose forecast PV surplus (per hour at most the charge power) fills the batteries from the minimum to the maximum SoC (`next_refill`, for the price plans and the support budget; peak shaving already worked so). A few 100 Wh of surplus on a dull afternoon ended the plan before the expensive evening: no grid charging at a cheap noon, energy left valued at nothing, the budget too generous. The grid charge plan now also runs in a surplus and keeps the PV surplus in its periods instead of setting it to 0 (the dynamic programming modelled it for negative prices already), so the longer horizon does not charge from the grid what PV brings. The night discharge leaves the energy the price plan still needs (level minus the lowest level after it): otherwise it fed in at night what was charged from the grid for the next evening. |
 | 2026-10-09 | Recorder size: the control runs every half second and every change of a state or of its attributes is a row in the recorder, also when the changed attributes are unrecorded. Numeric sensor states are rounded to their display precision (`rounded_state`; precision 0 gives an int, so 0 and 0.0 do not alternate, no -0.0), large or noisy attributes (day plans at **Feed-in limit**, the feed-in cap attributes, the Modbus diagnostics of the meter) are computed anew at most every 60 s unless the settings changed (`attributes_interval_s`). Dev instance: 441 → 12 rows per minute. |
 | 2026-10-09 | Bad weather mode until the morning after the next evening instead of until the evening: ending in the evening let the night discharge of the following night give away what the mode stored. The morning is the first surplus hour after the evening, where the night discharge ends as well; sunrise and sunset only replace a missing surplus hour (the sunrise lies hours before PV takes over, and the summer sunset long after the surplus ends). Without a surplus hour in the forecast the mode goes on until the sunrise after its end. |
+| 2026-10-09 | Venus telemetry: voltage, temperature, cycle count and energy counters only every 60 s, adjacent registers in one frame (tested with `tools/read_blocks.py` on a Venus E 3.0: blocks answer in about 10 ms like single registers, 42000–42010 is refused); 13 → 6 frames of 150 ms in most reads, 8 once a minute. The duration of each read is in the diagnostics. Learned from [Omnibattery #411](https://github.com/ffunes/Omnibattery/issues/411): the 150 ms wait belongs to the Modbus TCP server of the v3 firmware, behind an RS485 gateway (e.g. Elfin EW11) about 30 ms are enough. An option for that waits for a user with a gateway (we cannot test it). |

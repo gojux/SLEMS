@@ -4,6 +4,7 @@ import pytest
 
 from custom_components.slems.const import ReleaseState
 from custom_components.slems.drivers.base import BatteryDriverError
+from custom_components.slems.drivers import marstek_venus_e3 as venus
 from custom_components.slems.drivers.marstek_venus_e3 import (
     FORCE_CHARGE,
     FORCE_DISCHARGE,
@@ -76,6 +77,76 @@ async def test_read_telemetry_decodes_values() -> None:
     assert telemetry.extra["inverter_state"] == "discharge"
     assert telemetry.extra["cycle_count"] == 12
     assert telemetry.extra["rs485_control"] is True
+
+
+async def test_slow_values_are_read_once_a_minute(monkeypatch: pytest.MonkeyPatch) -> None:
+    clock = [1000.0]
+    monkeypatch.setattr(venus.time, "monotonic", lambda: clock[0])
+    link = FakeLink({34002: 644, 34003: 12, 30001: 500, 30100: 5230, 37007: 3400})
+    driver = make_driver(link)
+    reads: list[int] = []
+    original = link.read
+
+    async def counting(address: int, count: int) -> list[int] | None:
+        reads.append(address)
+        return await original(address, count)
+
+    link.read = counting
+    await driver.read_telemetry()
+    assert 30100 in reads and 33000 in reads
+    # Within the minute the slow values keep their last value; the cell voltages are read.
+    reads.clear()
+    link.registers[34003] = 13
+    clock[0] += 30
+    telemetry = await driver.read_telemetry()
+    assert 30100 not in reads and 37007 in reads
+    assert telemetry.extra["cycle_count"] == 12 and telemetry.extra["battery_voltage"] == pytest.approx(52.3)
+    # A complete read (self-test) and the next minute read them again.
+    assert (await driver.read_telemetry(complete=True)).extra["cycle_count"] == 13
+    reads.clear()
+    clock[0] += 61
+    await driver.read_telemetry()
+    assert 30100 in reads
+
+
+async def test_adjacent_registers_are_read_in_one_frame() -> None:
+    link = FakeLink({34002: 644, 34003: 12, 30001: 500, 30006: 0x10000 - 480, 37007: 3400, 37008: 3390, 33000: 0})
+    link.registers.update({33001: 13098, 33002: 0, 33003: 10417})
+    reads: list[tuple[int, int]] = []
+    original = link.read
+
+    async def counting(address: int, count: int) -> list[int] | None:
+        reads.append((address, count))
+        return await original(address, count)
+
+    link.read = counting
+    telemetry = await make_driver(link).read_telemetry()
+    assert {(30001, 6), (34002, 2), (37007, 2), (33000, 4)} <= set(reads)
+    assert len(reads) == 9
+    assert telemetry.power_w == 500 and telemetry.ac_power_w == 480
+    assert telemetry.extra["cycle_count"] == 12 and telemetry.extra["min_cell_voltage"] == pytest.approx(3.39)
+    assert telemetry.extra["total_charging_energy"] == pytest.approx(130.98)
+    assert telemetry.extra["total_discharging_energy"] == pytest.approx(104.17)
+
+
+async def test_a_refused_block_is_read_one_by_one() -> None:
+    link = FakeLink({34002: 644, 34003: 12, 30001: 500, 30006: 0, 37007: 3400, 37008: 3390})
+    reads: list[tuple[int, int]] = []
+    original = link.read
+
+    async def refusing(address: int, count: int) -> list[int] | None:
+        reads.append((address, count))
+        return None if (address, count) == (37007, 2) else await original(address, count)
+
+    link.read = refusing
+    driver = make_driver(link)
+    telemetry = await driver.read_telemetry()
+    assert telemetry.extra["max_cell_voltage"] == pytest.approx(3.4)
+    assert (37007, 1) in reads and (37008, 1) in reads
+    # Not asked again.
+    reads.clear()
+    await driver.read_telemetry()
+    assert (37007, 2) not in reads and (37007, 1) in reads
 
 
 async def test_read_telemetry_without_answer_raises() -> None:

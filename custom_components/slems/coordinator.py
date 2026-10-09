@@ -287,6 +287,8 @@ class BatteryRuntime:
     self_test_last: dict | None = None
     # A self-test was asked for when the battery was added and has not run yet.
     self_test_pending: bool = False
+    # Duration of the last telemetry read (s), None before the first one.
+    telemetry_read_s: float | None = None
     # Monotonic time of the first failed read since the last successful one.
     unreadable_since: float | None = None
     # Last polled AC power (+charge / -discharge) and its monotonic time; the
@@ -1358,13 +1360,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 self.resume_communication(battery)
             if battery.release_pending_since is not None and not self.controls(battery):
                 await self.async_release_battery(battery)
+            read_start = time.monotonic()
             try:
-                telemetry = await battery.driver.read_telemetry()
+                telemetry = await battery.driver.read_telemetry(complete=battery.self_test is not None)
             except BatteryDriverError as err:
                 _LOGGER.debug("Battery %s unavailable: %s", battery.name, err)
                 if battery.unreadable_since is None:
                     battery.unreadable_since = now
                 continue
+            finally:
+                battery.telemetry_read_s = round(time.monotonic() - read_start, 3)
             battery.unreadable_since = None
             if telemetry.extra.get("inverter_state") == "ota_upgrade":
                 # A firmware update is running: no further Modbus traffic.

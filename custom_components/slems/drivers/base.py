@@ -97,9 +97,11 @@ class BatteryDriver(ABC):
         """Close the link. Safe to call when already closed."""
 
     @abstractmethod
-    async def read_telemetry(self) -> BatteryTelemetry:
+    async def read_telemetry(self, *, complete: bool = False) -> BatteryTelemetry:
         """Read and return the current telemetry.
 
+        A driver may read slowly changing values less often and report their
+        last value meanwhile; ``complete`` reads them now (e.g. for a self-test).
         Raise BatteryDriverError if the battery could not be reached at all.
         """
 

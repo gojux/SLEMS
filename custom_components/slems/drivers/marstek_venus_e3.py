@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 import logging
+import time
 
 from ..const import ReleaseState
 from .base import (
@@ -92,6 +93,19 @@ TELEMETRY_REGISTERS: tuple[RegisterSpec, ...] = (
     RegisterSpec("force_mode", REG_FORCE_MODE, "uint16"),
 )
 
+# Adjacent telemetry registers read in one frame (start, count). Measured on
+# a Venus E 3.0 (2026-10-09): a block answers as fast as a single register;
+# ranges with unassigned registers (e.g. 42000-42010) are refused.
+TELEMETRY_BLOCKS: tuple[tuple[int, int], ...] = ((30001, 6), (34002, 2), (37007, 2), (33000, 4))
+
+# Slowly changing values: read at most every SLOW_READ_S (each read costs
+# 150 ms on the v3 firmware). The cell voltages stay in every read, the top
+# taper and the cell balancing follow them.
+SLOW_KEYS = frozenset(
+    {"battery_voltage", "internal_temperature", "cycle_count", "total_charging_energy", "total_discharging_energy"}
+)
+SLOW_READ_S = 60.0
+
 INVERTER_STATES: dict[int, str] = {
     0: "sleep",
     1: "standby",
@@ -130,6 +144,11 @@ class MarstekVenusE3Driver(BatteryDriver):
         # Last value written per control register; unchanged values are not
         # written again (each write costs 150 ms on the v3 firmware).
         self._written: dict[int, int] = {}
+        # Last slowly changing values and when they were read (monotonic).
+        self._slow: dict[str, float] = {}
+        self._slow_read_at: float | None = None
+        # Blocks this firmware refuses (their registers answered one by one).
+        self._refused_blocks: set[tuple[int, int]] = set()
         self._capabilities = BatteryCapabilities(
             capacity_wh=capacity_wh,
             max_charge_power_w=min(max_charge_power_w, HARDWARE_MAX_POWER_W),
@@ -179,11 +198,13 @@ class MarstekVenusE3Driver(BatteryDriver):
         if not self._link.connected:
             await self.connect()
 
-    async def read_telemetry(self) -> BatteryTelemetry:
+    async def read_telemetry(self, *, complete: bool = False) -> BatteryTelemetry:
         await self._ensure_connected()
+        now = time.monotonic()
+        slow_due = complete or self._slow_read_at is None or now - self._slow_read_at >= SLOW_READ_S
         values: dict[str, float] = {}
-        for spec in TELEMETRY_REGISTERS:
-            words = await self._link.read(spec.address, register_count(spec.data_type))
+        specs = [spec for spec in TELEMETRY_REGISTERS if slow_due or spec.key not in SLOW_KEYS]
+        for spec, words in (await self._read_registers(specs)).items():
             raw = decode_registers(words, spec.data_type) if words else None
             if raw is not None:
                 values[spec.key] = round(raw * spec.scale, 3) if spec.scale != 1.0 else raw
@@ -196,6 +217,11 @@ class MarstekVenusE3Driver(BatteryDriver):
             # Nothing answered: drop the socket so the next poll reconnects.
             await self._link.close()
             raise BatteryDriverError("Marstek Venus E 3.0 did not answer")
+        if slow_due:
+            self._slow = {key: value for key, value in values.items() if key in SLOW_KEYS}
+            self._slow_read_at = now
+        else:
+            values.update(self._slow)
 
         extra = {
             key: value
@@ -215,6 +241,40 @@ class MarstekVenusE3Driver(BatteryDriver):
             ac_power_w=-ac_power if ac_power is not None else None,
             extra=extra,
         )
+
+    async def _read_registers(self, specs: list[RegisterSpec]) -> dict[RegisterSpec, list[int] | None]:
+        """Read the registers, adjacent ones of a block in one frame (each frame costs 150 ms)."""
+        words_at: dict[int, int] = {}
+        failed: dict[tuple[int, int], list[RegisterSpec]] = {}
+        for block in TELEMETRY_BLOCKS:
+            if block in self._refused_blocks:
+                continue
+            start, count = block
+            inside = [
+                spec
+                for spec in specs
+                if start <= spec.address and spec.address + register_count(spec.data_type) <= start + count
+            ]
+            if len(inside) < 2:
+                continue
+            first = min(spec.address for spec in inside)
+            end = max(spec.address + register_count(spec.data_type) for spec in inside)
+            if (words := await self._link.read(first, end - first)) is not None:
+                words_at.update(zip(range(first, end), words, strict=False))
+            else:
+                failed[block] = inside
+        result: dict[RegisterSpec, list[int] | None] = {}
+        for spec in specs:
+            addresses = range(spec.address, spec.address + register_count(spec.data_type))
+            if all(address in words_at for address in addresses):
+                result[spec] = [words_at[address] for address in addresses]
+            else:
+                result[spec] = await self._link.read(spec.address, len(addresses))
+        # A block whose registers answer one by one is refused by this firmware.
+        for block, inside in failed.items():
+            if all(result[spec] is not None for spec in inside):
+                self._refused_blocks.add(block)
+        return result
 
     async def apply_power(self, net_power_w: int, *, refresh: bool = False) -> bool:
         await self._ensure_connected()

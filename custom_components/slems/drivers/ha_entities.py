@@ -210,7 +210,7 @@ class HomeAssistantEntityDriver(BatteryDriver):
     async def close(self) -> None:
         """Nothing to close."""
 
-    async def read_telemetry(self) -> BatteryTelemetry:
+    async def read_telemetry(self, *, complete: bool = False) -> BatteryTelemetry:
         config = self._config
         soc = state_as_float(self._hass.states.get(config.soc_entity_id))
         if soc is None:

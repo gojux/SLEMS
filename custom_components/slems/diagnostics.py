@@ -67,6 +67,7 @@ def _battery(coordinator: SlemsCoordinator, battery: BatteryRuntime) -> dict:
         "plannable": battery.plannable,
         "leaving_in_s": None if battery.leaving_until is None else round(battery.leaving_until - now, 1),
         "unreadable_for_s": _ago(battery.unreadable_since, now),
+        "telemetry_read_s": battery.telemetry_read_s,
         "communication_paused": battery.communication_paused,
         "paused_until": battery.paused_until,
         "pause_reason": battery.pause_reason,
