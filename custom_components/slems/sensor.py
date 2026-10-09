@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
+import math
 import time
 
 from homeassistant.components.sensor import (
@@ -46,12 +47,35 @@ from .problems import CAP_EXCEEDED_AFTER_S
 from .pv_forecast import energy_on_day
 
 
+ATTRIBUTES_INTERVAL_S = 60.0
+
+
+def rounded_state(value, precision: int | None):
+    """A numeric state rounded to the display precision.
+
+    The control runs every half second; every change of a state, even in
+    the tenth decimal, is a row in the recorder. -0.0 becomes 0.0 and with
+    precision 0 the state is an int, so it does not switch between 0 and 0.0.
+    """
+    if precision is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value
+    if not math.isfinite(value):
+        return value
+    if precision <= 0:
+        return int(round(value))
+    return round(float(value), precision) + 0.0
+
+
 @dataclass(frozen=True, kw_only=True)
 class SystemSensorDescription(SensorEntityDescription):
     """Describes a system level sensor."""
 
     value_fn: Callable[[SystemSnapshot, SlemsCoordinator], float | None]
     attributes_fn: Callable[[SystemSnapshot, SlemsCoordinator], dict] | None = None
+    # Attributes computed anew at most this often (s) unless the settings
+    # changed: every change of them is a row in the recorder, also of
+    # attributes it does not record.
+    attributes_interval_s: float | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -419,6 +443,7 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda _, c: c.controller.meter.interval_s,
+        attributes_interval_s=ATTRIBUTES_INTERVAL_S,
         attributes_fn=lambda _, c: {
             "source": c.grid_source,
             "modbus": c.grid_meter.diagnostics(time.monotonic()) if c.grid_meter else None,
@@ -450,6 +475,7 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
     SystemSensorDescription(
         **_power("feed_in_limit"),
         value_fn=lambda s, _: s.feed_in_limit_w,
+        attributes_interval_s=ATTRIBUTES_INTERVAL_S,
         attributes_fn=lambda s, c: {
             # disabled / no_forecast / not_enough_surplus; None with a limit
             "reason": s.feed_in_limit_reason,
@@ -522,6 +548,7 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         suggested_display_precision=1,
         value_fn=_cap_absorb_kwh,
         attributes_fn=_cap_attributes,
+        attributes_interval_s=ATTRIBUTES_INTERVAL_S,
     ),
     SystemSensorDescription(
         key="feed_in_cap_export",
@@ -773,16 +800,35 @@ class SystemSensor(SlemsSystemEntity, SensorEntity):
     ) -> None:
         super().__init__(coordinator, description.key)
         self.entity_description = description
+        # (monotonic time, settings, attributes) of the last computation.
+        self._attributes: tuple[float, object, dict] | None = None
 
     @property
     def native_value(self) -> float | None:
-        return self.entity_description.value_fn(self.coordinator.data, self.coordinator)
+        return rounded_state(
+            self.entity_description.value_fn(self.coordinator.data, self.coordinator),
+            self.suggested_display_precision,
+        )
 
     @property
     def extra_state_attributes(self) -> dict | None:
-        if self.entity_description.attributes_fn is None:
+        description = self.entity_description
+        if description.attributes_fn is None:
             return None
-        return self.entity_description.attributes_fn(self.coordinator.data, self.coordinator)
+        now = time.monotonic()
+        settings = self.coordinator.settings
+        cached = self._attributes
+        if (
+            description.attributes_interval_s is not None
+            and cached is not None
+            and now - cached[0] < description.attributes_interval_s
+            and cached[1] == settings
+        ):
+            return cached[2]
+        attributes = description.attributes_fn(self.coordinator.data, self.coordinator)
+        # A copy: the settings are changed in place.
+        self._attributes = (now, replace(settings), attributes)
+        return attributes
 
 
 class StrategySensor(SystemSensor):
@@ -817,7 +863,7 @@ class BatterySensor(SlemsBatteryEntity, SensorEntity):
         telemetry = self.coordinator.data.batteries.get(self.battery.subentry_id)
         if telemetry is None:
             return None
-        return self.entity_description.value_fn(telemetry)
+        return rounded_state(self.entity_description.value_fn(telemetry), self.suggested_display_precision)
 
 
 class FirmwareSensor(SlemsBatteryEntity, SensorEntity):
@@ -859,7 +905,9 @@ class StoredEnergySensor(SlemsBatteryEntity, SensorEntity):
         telemetry = self.coordinator.data.batteries.get(self.battery.subentry_id)
         if telemetry is None or telemetry.soc_pct is None:
             return None
-        return telemetry.soc_pct / 100 * self.battery.capacity_wh / 1000
+        return rounded_state(
+            telemetry.soc_pct / 100 * self.battery.capacity_wh / 1000, self.suggested_display_precision
+        )
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -883,7 +931,7 @@ class EfficiencySensor(SlemsBatteryEntity, SensorEntity):
 
     @property
     def native_value(self) -> float:
-        return self.battery.efficiency.round_trip * 100
+        return rounded_state(self.battery.efficiency.round_trip * 100, self.suggested_display_precision)
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -987,11 +1035,15 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
         subentry_id = self.consumer.subentry_id
         if subentry_id in data.saturated:
             # Not distributed meanwhile; the last command stays on the device.
-            return self.coordinator.controller.consumer_command(subentry_id)
+            return rounded_state(
+                self.coordinator.controller.consumer_command(subentry_id), self.suggested_display_precision
+            )
         if data.allocation is None:
             return None
         # Blocked, resting or with control off: nothing assigned.
-        return data.allocation.consumer_power_w.get(subentry_id, 0.0)
+        return rounded_state(
+            data.allocation.consumer_power_w.get(subentry_id, 0.0), self.suggested_display_precision
+        )
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -1169,7 +1221,7 @@ class ConsumptionForecastSensor(SlemsSystemEntity, SensorEntity):
         if forecast is None:
             return None
         energy = forecast.energy_on_day(self._day())
-        return None if energy is None else energy / 1000
+        return None if energy is None else rounded_state(energy / 1000, self.suggested_display_precision)
 
     @property
     def extra_state_attributes(self) -> dict | None:
@@ -1211,11 +1263,13 @@ class PlannedBatteryPowerSensor(SlemsBatteryEntity, SensorEntity):
     def native_value(self) -> float | None:
         if self.battery.balancing_requested and not self.battery.participating:
             # Set point of the cell balancing run (None while it is paused).
-            return self.battery.balancing_power_w
+            return rounded_state(self.battery.balancing_power_w, self.suggested_display_precision)
         distribution = self.coordinator.data.distribution
         if distribution is None or not self.battery.participating:
             return None
-        return distribution.power_w.get(self.battery.subentry_id, 0.0)
+        return rounded_state(
+            distribution.power_w.get(self.battery.subentry_id, 0.0), self.suggested_display_precision
+        )
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -1349,7 +1403,9 @@ class AllowedPowerSensor(SlemsBatteryEntity, SensorEntity):
         limits = self.battery.power_limits
         if limits is None:
             return None
-        return limits.charge_w if self._charging else limits.discharge_w
+        return rounded_state(
+            limits.charge_w if self._charging else limits.discharge_w, self.suggested_display_precision
+        )
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -1405,7 +1461,7 @@ class LearnedCapacitySensor(SlemsBatteryEntity, SensorEntity):
     @property
     def native_value(self) -> float | None:
         learned = self.battery.capacity_learner.capacity_wh
-        return None if learned is None else learned / 1000
+        return None if learned is None else rounded_state(learned / 1000, self.suggested_display_precision)
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -1438,7 +1494,7 @@ class LearnedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
 
     @property
     def native_value(self) -> float | None:
-        return self._learner.nominal_w
+        return rounded_state(self._learner.nominal_w, self.suggested_display_precision)
 
     @property
     def extra_state_attributes(self) -> dict:
