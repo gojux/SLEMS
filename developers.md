@@ -1533,7 +1533,19 @@ Firmware quirks handled in `modbus_client.py`:
 - ≥150 ms between frames,
 - a single TCP connection slot that is released slowly → wait 1 s before reconnecting,
   never reconnect per request,
-- retries inside pymodbus (same transaction id) so late replies still match.
+- retries inside pymodbus (same transaction id) so late replies still match,
+- some firmware accepts the TCP connection and then ignores every frame → a
+  request without an answer drops the connection at once, so the rest of the
+  read fails without waiting (a silent battery costs one timeout, about 9 s,
+  instead of one per frame); only an answer (an exception response counts)
+  proves a connection, until then reconnects wait `BACKOFF_S` (5, 10, 20, 40,
+  then every 60 s).
+
+The coordinator reads all batteries in parallel (`asyncio.gather`; each has
+its own connection and lock) and evaluates them afterwards in their order, so
+a slow or silent battery does not delay the others. Set points are still
+written one after another (the order of the writes matters, see the
+controller).
 
 Every frame costs 150 ms, whatever its size (a Venus answers 1 or 6
 registers in about 10 ms). Adjacent registers are read in one frame

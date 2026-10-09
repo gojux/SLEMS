@@ -10,6 +10,10 @@ https://github.com/ffunes/Omnibattery, GPL-3.0):
   reconnects wait before opening a new socket and never happen per request.
 * Retries are done inside pymodbus (same transaction id) so late replies from a
   stalled MCU are still matched.
+* Some firmware accepts the TCP connection and then ignores every frame. A
+  request without an answer therefore drops the connection at once (the
+  remaining requests of a read fail without waiting), and only an answer
+  proves a connection: until one arrives, reconnects wait ``BACKOFF_S``.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import time
 
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.exceptions import ModbusException
@@ -25,6 +30,9 @@ _LOGGER = logging.getLogger(__name__)
 
 _PYMODBUS_RETRIES = 2
 _RECONNECT_SETTLE_S = 1.0
+# Wait before the next connect after connections without an answer (s), by
+# the number of such connections in a row.
+BACKOFF_S = (5.0, 10.0, 20.0, 40.0, 60.0)
 
 
 def fix_v3_exception_frame(sending: bool, data: bytes) -> bytes:
@@ -87,20 +95,36 @@ class ModbusTcpLink:
         self._client: AsyncModbusTcpClient | None = None
         self._lock = asyncio.Lock()
         self._unit_kwarg = "device_id"
+        # Whether the battery answered on the current connection, connections
+        # in a row without an answer and the earliest next connect (monotonic).
+        self._answered = False
+        self._silent_count = 0
+        self._connect_at = 0.0
 
     @property
     def connected(self) -> bool:
         """Return True if the socket is open."""
         return self._client is not None and self._client.connected
 
+    @property
+    def retry_in_s(self) -> float:
+        """Seconds until the next connect is allowed (0: now)."""
+        return max(0.0, self._connect_at - time.monotonic())
+
     async def connect(self) -> bool:
-        """Open a fresh connection, releasing any previous socket first."""
+        """Open a fresh connection, releasing any previous socket first.
+
+        Returns False without trying while connections stay unanswered (see
+        ``retry_in_s``); after a closed socket waits until its slot is free.
+        """
         async with self._lock:
             if self._client is not None:
-                self._client.close()
-                self._client = None
-                # The single TCP slot is not freed instantly on close.
-                await asyncio.sleep(_RECONNECT_SETTLE_S)
+                self._drop()
+            wait = self.retry_in_s
+            if wait > _RECONNECT_SETTLE_S:
+                return False
+            if wait > 0:
+                await asyncio.sleep(wait)
             client = AsyncModbusTcpClient(
                 host=self._host,
                 port=self._port,
@@ -112,18 +136,35 @@ class ModbusTcpLink:
             if self._patch_v3_frames:
                 client.trace_packet = fix_v3_exception_frame
             self._unit_kwarg = _detect_unit_kwarg(client)
-            if not await client.connect():
-                client.close()
-                return False
             self._client = client
+            if not await client.connect():
+                self._drop()
+                return False
             return True
 
     async def close(self) -> None:
         """Close the connection."""
         async with self._lock:
             if self._client is not None:
-                self._client.close()
-                self._client = None
+                self._drop()
+
+    def _drop(self) -> None:
+        """Close the socket; without an answer on it the next connect waits."""
+        if self._client is not None:
+            self._client.close()
+            self._client = None
+        if self._answered:
+            self._silent_count = 0
+            # The single TCP slot is not freed instantly on close.
+            self._connect_at = time.monotonic() + _RECONNECT_SETTLE_S
+        else:
+            self._silent_count += 1
+            wait = BACKOFF_S[min(self._silent_count, len(BACKOFF_S)) - 1]
+            self._connect_at = time.monotonic() + wait
+            _LOGGER.debug(
+                "No answer from %s:%d, next connect in %.0f s", self._host, self._port, wait
+            )
+        self._answered = False
 
     async def read(self, address: int, count: int) -> list[int] | None:
         """Read holding registers; return raw words or None on failure."""
@@ -139,9 +180,12 @@ class ModbusTcpLink:
                 )
             except (ModbusException, TimeoutError) as err:
                 _LOGGER.debug("Read of register %d failed: %s", address, err)
+                self._drop()
                 return None
             finally:
                 await asyncio.sleep(self._message_wait_s)
+            # Also an exception response (e.g. a refused block) is an answer.
+            self._answered = True
             if result.isError() or len(result.registers) < count:
                 _LOGGER.debug("Read of register %d returned %s", address, result)
                 return None
@@ -161,9 +205,11 @@ class ModbusTcpLink:
                 )
             except (ModbusException, TimeoutError) as err:
                 _LOGGER.debug("Write of register %d failed: %s", address, err)
+                self._drop()
                 return False
             finally:
                 await asyncio.sleep(self._message_wait_s)
+            self._answered = True
             return not result.isError()
 
 

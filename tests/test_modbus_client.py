@@ -1,6 +1,11 @@
-"""Tests for Modbus register decoding and the v3 frame fix."""
+"""Tests for Modbus register decoding, the v3 frame fix and the link."""
 
+import pytest
+from pymodbus.exceptions import ModbusIOException
+
+from custom_components.slems.drivers import modbus_client
 from custom_components.slems.drivers.modbus_client import (
+    ModbusTcpLink,
     decode_registers,
     fix_v3_exception_frame,
 )
@@ -25,3 +30,116 @@ def test_v3_exception_frame_is_patched() -> None:
     assert fix_v3_exception_frame(True, broken) == broken
     regular = bytes([0, 1, 0, 0, 0, 4, 1, 0x03, 2])
     assert fix_v3_exception_frame(False, regular) == regular
+
+
+class FakeResult:
+    def __init__(self, registers: list[int], error: bool = False) -> None:
+        self.registers = registers
+        self._error = error
+
+    def isError(self) -> bool:  # noqa: N802 (pymodbus API)
+        return self._error
+
+
+class FakeClient:
+    """Stands in for AsyncModbusTcpClient; ``mode`` is shared by all instances."""
+
+    mode = "answer"
+    created = 0
+    requests = 0
+
+    def __init__(self, **_kwargs: object) -> None:
+        FakeClient.created += 1
+        self.connected = False
+
+    async def connect(self) -> bool:
+        self.connected = FakeClient.mode != "refuse"
+        return self.connected
+
+    def close(self) -> None:
+        self.connected = False
+
+    async def read_holding_registers(self, address: int, count: int, device_id: int) -> FakeResult:
+        FakeClient.requests += 1
+        if FakeClient.mode == "silent":
+            raise ModbusIOException("no response")
+        if FakeClient.mode == "exception":
+            return FakeResult([], error=True)
+        return FakeResult([address] * count)
+
+    async def write_register(self, address: int, value: int, device_id: int) -> FakeResult:
+        FakeClient.requests += 1
+        if FakeClient.mode == "silent":
+            raise ModbusIOException("no response")
+        return FakeResult([])
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def monotonic(self) -> float:
+        return self.now
+
+
+@pytest.fixture
+def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
+    clock = Clock()
+    FakeClient.mode, FakeClient.created, FakeClient.requests = "answer", 0, 0
+    monkeypatch.setattr(modbus_client, "AsyncModbusTcpClient", FakeClient)
+    monkeypatch.setattr(modbus_client.time, "monotonic", clock.monotonic)
+
+    async def no_sleep(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr(modbus_client.asyncio, "sleep", no_sleep)
+    return clock
+
+
+def make_link() -> ModbusTcpLink:
+    return ModbusTcpLink("host", 502, 1, message_wait_s=0.15, timeout_s=3.0, patch_v3_frames=True)
+
+
+async def test_a_request_without_answer_drops_the_connection(clock: Clock) -> None:
+    link = make_link()
+    assert await link.connect()
+    FakeClient.mode = "silent"
+    assert await link.read(100, 1) is None
+    assert not link.connected
+    # The rest of a read fails at once instead of waiting for each timeout.
+    assert await link.read(101, 1) is None
+    assert await link.write(200, 1) is False
+    assert FakeClient.requests == 1
+
+
+async def test_connections_without_answer_back_off(clock: Clock) -> None:
+    link = make_link()
+    FakeClient.mode = "silent"
+    for wait in modbus_client.BACKOFF_S + (modbus_client.BACKOFF_S[-1],):
+        # A TCP accept alone does not prove the battery is back.
+        assert await link.connect()
+        assert await link.read(100, 1) is None
+        assert link.retry_in_s == wait
+        assert not await link.connect()
+        clock.now += wait
+    created = FakeClient.created
+    assert await link.connect()
+    assert FakeClient.created == created + 1
+
+
+async def test_an_answer_ends_the_back_off(clock: Clock) -> None:
+    link = make_link()
+    FakeClient.mode = "refuse"
+    assert not await link.connect()
+    assert link.retry_in_s == modbus_client.BACKOFF_S[0]
+    clock.now += modbus_client.BACKOFF_S[0]
+    FakeClient.mode = "exception"
+    assert await link.connect()
+    # An exception response (e.g. a refused block) is an answer as well.
+    assert await link.read(100, 2) is None
+    assert link.connected
+    FakeClient.mode = "silent"
+    assert await link.read(100, 1) is None
+    # Only the settle time of the TCP slot: the battery answered before.
+    assert link.retry_in_s == pytest.approx(1.0)
+    assert await link.connect()

@@ -1353,31 +1353,20 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if weather := config.get(CONF_WEATHER_ENTITY):
             snapshot.outdoor_temperature_c = _weather_temperature(self.hass.states.get(weather))
 
-        # A failing battery must not take the whole system down: it is simply
-        # missing from the snapshot and its entities become unavailable.
-        for battery in self.batteries:
-            if battery.paused_until is not None:
-                if battery.communication_paused:
-                    continue
-                self.resume_communication(battery)
-            if battery.release_pending_since is not None and not self.controls(battery):
-                await self.async_release_battery(battery)
-            read_start = time.monotonic()
-            try:
-                telemetry = await battery.driver.read_telemetry(complete=battery.self_test is not None)
-            except BatteryDriverError as err:
-                _LOGGER.debug("Battery %s unavailable: %s", battery.name, err)
-                if battery.unreadable_since is None:
-                    battery.unreadable_since = now
+        # The batteries are read in parallel (each has its own connection), so
+        # a slow one does not delay the others. A failing battery must not take
+        # the whole system down: it is simply missing from the snapshot and its
+        # entities become unavailable.
+        readings = await asyncio.gather(
+            *(self._async_read_battery(battery, now) for battery in self.batteries)
+        )
+        for battery, telemetry in zip(self.batteries, readings, strict=True):
+            if telemetry is None:
                 continue
-            finally:
-                battery.telemetry_read_s = round(time.monotonic() - read_start, 3)
-            battery.unreadable_since = None
             if telemetry.extra.get("inverter_state") == "ota_upgrade":
                 # A firmware update is running: no further Modbus traffic.
                 await self.async_pause_communication(battery, "firmware_update")
                 continue
-            await self._async_read_device_info(battery, now)
             snapshot.batteries[battery.subentry_id] = telemetry
             self._update_efficiency(battery, telemetry, now)
             if telemetry.ac_power_w is not None:
@@ -1700,6 +1689,29 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         battery.paused_until = None
         battery.pause_reason = None
         self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+
+    async def _async_read_battery(self, battery: BatteryRuntime, now: float) -> BatteryTelemetry | None:
+        """Read one battery (an outstanding release first); None if not read."""
+        if battery.paused_until is not None:
+            if battery.communication_paused:
+                return None
+            self.resume_communication(battery)
+        if battery.release_pending_since is not None and not self.controls(battery):
+            await self.async_release_battery(battery)
+        read_start = time.monotonic()
+        try:
+            telemetry = await battery.driver.read_telemetry(complete=battery.self_test is not None)
+        except BatteryDriverError as err:
+            _LOGGER.debug("Battery %s unavailable: %s", battery.name, err)
+            if battery.unreadable_since is None:
+                battery.unreadable_since = now
+            return None
+        finally:
+            battery.telemetry_read_s = round(time.monotonic() - read_start, 3)
+        battery.unreadable_since = None
+        if telemetry.extra.get("inverter_state") != "ota_upgrade":
+            await self._async_read_device_info(battery, now)
+        return telemetry
 
     async def _async_read_device_info(self, battery: BatteryRuntime, now: float) -> None:
         """Read the device information once after connecting and then every few hours."""
