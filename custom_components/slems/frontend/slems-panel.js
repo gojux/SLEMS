@@ -417,6 +417,8 @@ const STRINGS = {
         "Learns the safety buffer (charge secured and night discharge target) from the PV forecast being too high and the consumption forecast being too low, each the error not exceeded on 80 % of such days, applied to the forecasts of the rest of the day or the next 24 hours.",
       grid_targets_auto:
         "Learns both grid surplus targets from how far the grid power swings towards import while the batteries control it: while charging the target keeps the grid on the export side 90 % of the time (20–1000 W), while discharging the grid swings around it, half of the time each side (−100 to 300 W): a short import costs little there, a permanent export gives battery energy away. Needs some controlling in operating mode active first.",
+      grid_targets_no_import:
+        "The learned grid surplus target while discharging stays at 0 W or above: the batteries aim at no grid import instead of a slight one, at the cost of feeding in a little more battery energy.",
       timing_auto:
         "Derives the control interval (0.8 × the report interval of the smart meter) and the averaging window (3 × the report interval) from the learned smart meter interval.",
       regular_full_charge:
@@ -949,6 +951,8 @@ const STRINGS = {
         "Lernt den Sicherheitspuffer (gesicherte Ladung und Ziel der Nachtentladung) aus zu hoher PV- und zu niedriger Verbrauchsprognose, jeweils die Abweichung, die an 80 % solcher Tage nicht überschritten wurde, angewendet auf die Prognosen des restlichen Tages bzw. der nächsten 24 Stunden.",
       grid_targets_auto:
         "Lernt beide Ziel-Netzüberschüsse daraus, wie weit die Netzleistung Richtung Bezug schwankt, während die Batterien regeln: Beim Laden hält das Ziel das Netz 90 % der Zeit auf der Einspeiseseite (20–1000 W), beim Entladen schwankt das Netz um das Ziel, je die Hälfte der Zeit auf jeder Seite (−100 bis 300 W): ein kurzer Bezug kostet dort wenig, dauerhaftes Einspeisen verschenkt Batterieenergie. Braucht zuerst etwas Regelbetrieb im Modus Aktiv.",
+      grid_targets_no_import:
+        "Der gelernte Ziel-Netzüberschuss beim Entladen bleibt bei 0 W oder darüber: Die Batterien zielen auf keinen Netzbezug statt auf einen leichten, dafür speisen sie etwas mehr Batterieenergie ein.",
       timing_auto:
         "Leitet Regelintervall (0,8 × Meldeintervall des Smart Meters) und Mittelungsfenster (3 × Meldeintervall) aus dem gelernten Meldeintervall ab.",
       regular_full_charge:
@@ -1128,6 +1132,7 @@ const LEARNED_SETTINGS = {
 // Settings shown only while the switch they belong to is on.
 const SETTING_SHOWN_WITH = {
   night_reserve_coverage: "night_reserve_auto",
+  grid_targets_no_import: "grid_targets_auto",
   full_charge_interval: "regular_full_charge",
 };
 
@@ -1158,6 +1163,7 @@ const SETTING_GROUPS = [
       "charge_secured_buffer_auto",
       "charge_secured_buffer",
       "grid_targets_auto",
+      "grid_targets_no_import",
       "charge_grid_target",
       "discharge_grid_target",
       "discharge_max_grid_export",

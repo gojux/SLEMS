@@ -935,7 +935,7 @@ known):
   control status active, strategy charging or self consumption, battery power
   not near its limit), from 300 of the last 3000 samples. Charging: 90 %
   quantile of `max(0, grid + target)`, 20–1000 W. Discharging: median,
-  −100 to 300 W. Not stored (relearned within an hour).
+  −100 to 300 W (0 to 300 W with `grid_targets_no_import`). Not stored (relearned within an hour).
 - `control_interval_s` / `average_window_s`: `auto_timing` of
   `controller.meter.interval_s`; used by the controller and the grid filter.
 - `BatteryRuntime.capacity_wh`: learned capacity if `learn_capacity` and

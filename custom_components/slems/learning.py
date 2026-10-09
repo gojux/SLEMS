@@ -202,7 +202,8 @@ class GridTargetLearner:
         else:
             self.discharge.append(deviation)
 
-    def target_w(self, charging: bool) -> float | None:
+    def target_w(self, charging: bool, no_import: bool = False) -> float | None:
+        """``no_import``: the discharge target aims at no grid import (at least 0 W)."""
         samples = self.charge if charging else self.discharge
         if len(samples) < TARGET_MIN_SAMPLES:
             return None
@@ -210,6 +211,8 @@ class GridTargetLearner:
             low, high = TARGET_LIMITS_W
             return min(high, max(low, quantile(samples, TARGET_QUANTILE)))
         low, high = DISCHARGE_TARGET_LIMITS_W
+        if no_import:
+            low = max(low, 0.0)
         return min(high, max(low, quantile(samples, DISCHARGE_TARGET_QUANTILE)))
 
 

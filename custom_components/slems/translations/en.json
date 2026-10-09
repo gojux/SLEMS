@@ -1042,6 +1042,9 @@
       "grid_targets_auto": {
         "name": "Automatic grid surplus targets"
       },
+      "grid_targets_no_import": {
+        "name": "No negative grid surplus target"
+      },
       "timing_auto": {
         "name": "Automatic control timing"
       },

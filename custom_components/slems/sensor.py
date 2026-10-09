@@ -289,7 +289,7 @@ def _learned_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
             pv_share * next_pv + consumption_share * next_consumption if both else None
         ),
         "charge_grid_target_w": c.grid_targets.target_w(True),
-        "discharge_grid_target_w": c.grid_targets.target_w(False),
+        "discharge_grid_target_w": c.grid_targets.target_w(False, c.settings.grid_targets_no_import),
         "grid_target_samples": [len(c.grid_targets.charge), len(c.grid_targets.discharge)],
         "control_interval_s": timing[0] if timing else None,
         "surplus_average_window_s": timing[1] if timing else None,

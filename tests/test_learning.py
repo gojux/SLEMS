@@ -85,6 +85,8 @@ def test_discharge_target_is_the_median_and_may_allow_import() -> None:
     for _ in range(400):
         learner.add(False, -400, 0)
     assert learner.target_w(charging=False) == -100
+    # Without import: at least 0 W.
+    assert learner.target_w(charging=False, no_import=True) == 0
     # Large swings towards import: at most 300 W export.
     learner = GridTargetLearner()
     for _ in range(400):

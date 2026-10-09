@@ -31,6 +31,7 @@ SETTING_SWITCHES: dict[str, str] = {
     "grid_friendly_buffer_auto": "grid_friendly_buffer_auto",
     "charge_secured_buffer_auto": "charge_secured_buffer_auto",
     "grid_targets_auto": "grid_targets_auto",
+    "grid_targets_no_import": "grid_targets_no_import",
     "timing_auto": "timing_auto",
     "night_reserve_auto": "night_reserve_auto",
     "regular_full_charge": "regular_full_charge",

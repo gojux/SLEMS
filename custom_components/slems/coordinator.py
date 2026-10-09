@@ -424,6 +424,8 @@ class ControlSettings:
     grid_friendly_buffer_auto: bool = False
     charge_secured_buffer_auto: bool = False
     grid_targets_auto: bool = False
+    # The learned discharge grid target is at least 0 W (no import aimed at).
+    grid_targets_no_import: bool = False
     timing_auto: bool = False
     # Charge into the PV feed-in peak instead of as early as possible.
     grid_friendly_charging: bool = True
@@ -2243,7 +2245,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         return fixed if learned is None else max(fixed, learned)
 
     def grid_target_w(self, settings: ControlSettings, *, charging: bool) -> float:
-        learned = self.grid_targets.target_w(charging)
+        learned = self.grid_targets.target_w(charging, settings.grid_targets_no_import)
         if settings.grid_targets_auto and learned is not None:
             return learned
         return settings.charge_grid_target_w if charging else settings.discharge_grid_target_w

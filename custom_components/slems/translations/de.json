@@ -1042,6 +1042,9 @@
       "grid_targets_auto": {
         "name": "Ziel-Netzüberschuss automatisch"
       },
+      "grid_targets_no_import": {
+        "name": "Kein negativer Ziel-Netzüberschuss"
+      },
       "timing_auto": {
         "name": "Regelzeiten automatisch"
       },
