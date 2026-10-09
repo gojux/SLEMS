@@ -3220,6 +3220,8 @@ class SlemsPanel extends HTMLElement {
       value === null || value === undefined
         ? ""
         : `<div><span class="swatch" style="background:${color}"></span>${label}<b>${escapeHtml(this._watts(value))}</b></div>`;
+    // Series hidden in the legend are left out.
+    const v = (key) => (this._hiddenSeries.has(key) ? null : row[key]);
     const stripesCss = `repeating-linear-gradient(45deg, ${c.battery} 0 2px, ${c.grid} 2px 4px)`;
     const actual = v("actualGridCharge")
       ? entry(c.grid, t.actualGridCharge, v("actualCharge"))
@@ -3230,8 +3232,6 @@ class SlemsPanel extends HTMLElement {
       value === null || value === undefined
         ? ""
         : `<div><span class="swatch" style="background:${color}"></span>${label}<b>${escapeHtml(this._percent(value))}</b></div>`;
-    // Series hidden in the legend are left out.
-    const v = (key) => (this._hiddenSeries.has(key) ? null : row[key]);
     tooltip.innerHTML = `<div class="tt-title">${slotTime(slot)}–${slotTime(slot + 1)}</div>
       ${entry(c.pv, t.pvForecast, v("pvForecast"))}${entry(c.pv, t.pvActual, v("pvActual"))}
       ${entry(c.house, t.consumptionForecast, v("consumptionForecast"))}${entry(c.house, t.consumptionActual, v("consumptionActual"))}
