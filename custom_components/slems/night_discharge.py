@@ -10,8 +10,11 @@ including charge losses) can still fill the batteries. Per hour the batteries
 take at most their charge power, and the part of the daily targets expected
 from the surplus must fit besides the refill.
 
-With the feed-in cap the target is lowered so that the batteries have the
-free space the cap needs when PV takes over (``max_target``).
+With the price aware control the target is at least the stored energy the
+price plan keeps when PV takes over (``keep``, e.g. for expensive hours after
+a dull day); the feed-in cap goes first. With the feed-in cap the target is
+lowered so that the batteries have the free space the cap needs when PV
+takes over (``max_target``).
 
 The discharge power is recomputed every cycle from the remaining energy and
 time, so deviations correct themselves.
@@ -85,6 +88,7 @@ def plan_night_discharge(
     full_wh: float | None = None,
     max_charge_w: float | None = None,
     demands: Sequence[SurplusDemand] = (),
+    keep: Callable[[datetime], float | None] | None = None,
 ) -> NightDischargePlan | None:
     """Plan the night discharge; None if not applicable right now.
 
@@ -93,8 +97,9 @@ def plan_night_discharge(
     on top of it. ``max_target`` gives the highest stored energy allowed at
     a moment (feed-in cap), ``full_wh`` the stored energy at the maximum SoC
     (default: the capacity), ``max_charge_w`` the charge power of the
-    batteries (AC) and ``demands`` the parts of the daily targets expected
-    from the surplus. Not applicable while PV already
+    batteries (AC), ``demands`` the parts of the daily targets expected
+    from the surplus and ``keep`` the stored energy the price plan keeps at
+    a moment (None: no plan then). Not applicable while PV already
     exceeds consumption, or if no crossover is found within the lookahead.
     """
     pv_forecast = hourly(pv_forecast)
@@ -123,6 +128,9 @@ def plan_night_discharge(
     rechargeable = max(0.0, min(chargeable, surplus - demand) - buffer_wh) * charge_efficiency
     full = capacity_wh if full_wh is None else full_wh
     target = min(full, max(min_wh + reserve, full - rechargeable, 0.0))
+    kept = keep(crossover) if keep is not None else None
+    if kept is not None:
+        target = max(target, min(full, kept))
     if max_target is not None:
         target = max(min_wh, min(target, max_target(crossover)))
 

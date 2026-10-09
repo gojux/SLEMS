@@ -281,7 +281,10 @@ otherwise the hour from the counters or the hourly mean of the grid power.
 
 ### Price hold
 
-`price_hold.py`: until the next refill (`battery_support.next_refill`) the
+`price_hold.py`: until the next refill (`battery_support.next_refill`: the
+first surplus hour of a day whose forecast surplus, per hour at most the
+charge power, reaches the AC energy from the minimum to the maximum SoC;
+also the end of the support budget) the
 usable energy (above the minimum SoC, AC) against the hourly deficits
 (consumption incl. target load minus PV minus the grid load of battery
 support). If it does not last, the most expensive hours are covered (greedy
@@ -303,8 +306,10 @@ becomes forced from that start; `forced_load` and the plans follow it.
 ### Grid charging
 
 `grid_charge.py`: dynamic programming over the stored energy (1 % steps of
-the capacity, at least 25 Wh) per hour from now (only in a deficit) until the
-refill (`next_refill`) or the last known price (no refill within 36 h: winter).
+the capacity, at least 25 Wh) per hour from now until the refill
+(`next_refill`) or the last known price (no refill within 36 h: winter).
+Smaller PV surpluses before the refill are periods of the plan (absorb, cap,
+charge on top), also when the current period is a surplus.
 Options per hour: cover the whole deficit (exact; the cost to go is
 interpolated between the levels, so rounding does not favour a part), a part
 in steps, hold, or charge in steps. Costs: price × import, per kWh charged
@@ -315,7 +320,13 @@ the feed-in cap at the horizon), charge power, import limit of peak shaving.
 The plan replaces the price hold when grid charging is on; `forecast_plan`
 passes its charging to `project_soc(grid_charge=…)` and its limits as grid
 load, `allocate(grid_charge_w=…)` charges outside a surplus (strategy
-`grid_charge`).
+`grid_charge`). `GridChargePlan.keep_wh` / `PriceHold.delivered_from` give
+the stored energy the plan still needs at a moment (the level minus the
+lowest level after it, plus the minimum; for the hold the minimum plus the
+energy of the covered periods after it); `coordinator._price_keep` passes it
+to `plan_night_discharge(keep=…)` and `project_soc(night_keep=…)`, the
+night discharge target is at least that at the PV takeover (the feed-in cap
+goes first).
 
 Feeding in from the batteries (`battery_export`): an extra option per hour
 after the whole deficit is covered, in steps, valued with the hour's export
@@ -1769,3 +1780,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-04 | Market prices are always in euro (APG, SMARD, Energy-Charts, E-Control) and are not converted (no exchange rate source without a further service). With another currency in Home Assistant, tariffs whose amounts follow the market price (`Tariff.market_priced`: spot or monthly market price; 0 at negative prices needs only the sign) are left out of the comparison, the backtest and the bill check instead of showing wrong amounts; the control keeps using them, as the order of cheap and expensive times stays right, and the repair issue `market_price_currency` says so for the current tariff. |
 | 2026-10-05 | Self-test of a battery against the smart meter instead of trusting its own values: the meter is the only independent measurement in every installation. During the measuring phases the other batteries and the consumers keep their set points (a few minutes, a few Wh from or to the grid) instead of compensating the test power, which would hide it from the meter. Phases end once meter and battery show half of the command plus 45 s (at most 4 min), so slow integrations (e.g. 60 s polling) are measured instead of failing. Coarse energy counters that do not move in the short test are "not checkable", not an error. No automatic active test (it moves energy and interrupts the control): offered when adding a battery and from the battery menu. |
 | 2026-10-09 | After a BMS stop near the minimum SLEMS first retries with half the power (at least 300 W) before blocking the discharging: the BMS stops earlier under a high load, as the weakest cell sags more (Venus with a cell delta of 148 mV: 12.4 % at 2.5 kW). Learning the stop SoC per battery for the night discharge and the projection is left out for now: a few 100 Wh, and the learned value would have to expire, e.g. after cell balancing. |
+| 2026-10-09 | Refill only on a day whose forecast PV surplus (per hour at most the charge power) fills the batteries from the minimum to the maximum SoC (`next_refill`, for the price plans and the support budget; peak shaving already worked so). A few 100 Wh of surplus on a dull afternoon ended the plan before the expensive evening: no grid charging at a cheap noon, energy left valued at nothing, the budget too generous. The grid charge plan now also runs in a surplus and keeps the PV surplus in its periods instead of setting it to 0 (the dynamic programming modelled it for negative prices already), so the longer horizon does not charge from the grid what PV brings. The night discharge leaves the energy the price plan still needs (level minus the lowest level after it): otherwise it fed in at night what was charged from the grid for the next evening. |

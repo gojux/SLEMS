@@ -90,6 +90,10 @@ class GridChargePlan:
     hourly_limits_w: Mapping[datetime, float] = field(default_factory=dict)
     hourly_export_w: Mapping[datetime, float] = field(default_factory=dict)
     hourly_caps_w: Mapping[datetime, float] = field(default_factory=dict)
+    # Per local period start: the stored energy (Wh) the plan needs at its
+    # start, the minimum plus what it still uses later (the stored energy
+    # above the lowest level after it is not needed until the end).
+    keep_wh: Mapping[datetime, float] = field(default_factory=dict)
 
     def charge_at(self, moment: datetime) -> float:
         return self.charge_w.get(slot_start(moment, self.period), 0.0)
@@ -102,6 +106,10 @@ class GridChargePlan:
 
     def charge_cap_at(self, moment: datetime) -> float | None:
         return self.charge_caps_w.get(slot_start(moment, self.period))
+
+    def kept_wh(self, moment: datetime) -> float | None:
+        """Stored energy the plan needs at ``moment`` (None: outside the plan)."""
+        return self.keep_wh.get(slot_start(moment, self.period))
 
 
 @dataclass
@@ -363,6 +371,7 @@ def plan_grid_charge(
     limits: dict[datetime, float] = {}
     exports: dict[datetime, float] = {}
     caps: dict[datetime, float] = {}
+    levels_wh: dict[datetime, float] = {}
     # Per period: what the batteries would deliver to the house or take of
     # the PV surplus as usual (W), for the hourly sums of the limits and caps.
     delivered: dict[datetime, float] = {}
@@ -375,6 +384,7 @@ def plan_grid_charge(
             chosen, key=lambda option: option[3] + after(stages[index + 1], option[1])
         )
         span = share * length
+        levels_wh[hour] = level * step
         # The first option covers the whole deficit or takes the whole surplus.
         usual_kind, _, usual_energy, _, _ = chosen[0]
         (absorbed if usual_kind == "absorb" else delivered)[hour] = usual_energy / span
@@ -391,6 +401,12 @@ def plan_grid_charge(
         level = target
     if not charge and not limits and not exports and not caps:
         return None
+    # From the end backwards: the lowest level from each period on.
+    keep: dict[datetime, float] = {}
+    lowest = level
+    for hour in reversed(list(levels_wh)):
+        lowest = min(lowest, levels_wh[hour] / step)
+        keep[hour] = (levels_wh[hour] / step - lowest + floor) * step
     usual = _usual_money(battery, hours, deficits, credits, step, eff, floor, full_top, stored, length)
     starts = [hour for hour, _, _ in hours]
     return GridChargePlan(
@@ -405,6 +421,7 @@ def plan_grid_charge(
         hourly_limits_w=hourly_means(limits, starts, delivered),
         hourly_export_w=hourly_means(exports, starts),
         hourly_caps_w=hourly_means(caps, starts, absorbed),
+        keep_wh=keep,
     )
 
 

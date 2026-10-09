@@ -39,6 +39,19 @@ def test_next_refill_at_night_and_during_the_surplus() -> None:
     assert next_refill(at(11), {}, consumption) is None
 
 
+def test_next_refill_skips_a_day_whose_surplus_does_not_fill_the_batteries() -> None:
+    pv, consumption = forecasts()
+    # Day 1 is dull: 300 Wh surplus from 15 to 17 o'clock only.
+    for h in range(24):
+        pv[at(h, 1)] = 800 if 15 <= h < 17 else 0
+    # 13.5 kWh surplus on a sunny day (9 h × 1.5 kWh), 0.6 kWh on the dull one.
+    assert next_refill(at(22), pv, consumption, needed_wh=10000) == at(8, day=2)
+    assert next_refill(at(22), pv, consumption, needed_wh=500) == at(15, day=1)
+    # The charge power limits what a day can refill: 9 h × 1 kWh.
+    assert next_refill(at(3), pv, consumption, needed_wh=10000, max_charge_w=1000) is None
+    assert next_refill(at(3), pv, consumption, needed_wh=9000, max_charge_w=1000) == at(8)
+
+
 def test_budget_is_the_lowest_projected_energy_above_the_floor() -> None:
     soc = {at(h): 80 - (h - 18) * 5 for h in range(18, 24)} | {at(h, 1): 50 + h for h in range(10)}
     # Lowest until the refill at 08:00: 50 % of 10 kWh (hour 0 of the next day).

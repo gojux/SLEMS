@@ -121,3 +121,14 @@ def test_refill_limited_by_charge_power_and_daily_targets() -> None:
     # One the surplus covers besides the refill changes nothing.
     small = SurplusDemand(500, 2000, _day(1).replace(hour=8), _day(1).replace(hour=18))
     assert plan(80, 1400, max_charge_w=500, demands=[small]).target_wh == pytest.approx(7000)
+
+
+def test_target_not_below_what_the_price_plan_keeps() -> None:
+    # Without the price plan: down to the reserve (2.4 kWh).
+    crossover = _day(1).replace(hour=8)
+    kept = {crossover: 5000.0}
+    result = plan(soc=80, pv_per_hour=2400, keep=kept.get)
+    assert result.target_wh == pytest.approx(5000)
+    # Outside the price plan, or below the target: no change.
+    assert plan(soc=80, pv_per_hour=2400, keep=lambda _moment: None).target_wh == pytest.approx(2400)
+    assert plan(soc=80, pv_per_hour=2400, keep=lambda _moment: 1000.0).target_wh == pytest.approx(2400)

@@ -397,8 +397,9 @@ The sensor **Market price** shows the price of the current quarter hour in
 ct/kWh without fees and VAT, with the source as attribution.
 
 **Price aware control** (switch, off by default; needs a tariff): if the
-stored energy does not last for every hour until PV refills the batteries,
-they cover the hours with the highest import price of the current tariff and
+stored energy does not last for every hour until PV refills the batteries
+(a day whose forecast PV surplus fills them from the minimum to the maximum
+state of charge; a little surplus on a dull day does not count), they cover the hours with the highest import price of the current tariff and
 keep their energy in hours that are cheaper by at least the **minimum gain**
 (default 2 ct/kWh); there the house draws from the grid. The grid import
 stays the same, it only moves to cheaper hours – no charging from the grid
@@ -424,16 +425,18 @@ Only known negative prices start the plan for negative prices. The price
 chart shows the estimates faint.
 
 **Charge batteries from the grid** (switch, off by default; only with price
-aware control): in a deficit SLEMS plans until PV refills the batteries (after
-the last known price with the estimated ones) which hours the batteries cover, which they
-hold and in which they charge from the grid. A charge must pay after the
+aware control): SLEMS plans until PV refills the batteries (as above; at most
+until the last known price, after it with the estimated ones) which hours the
+batteries cover, which they hold and in which they charge from the grid. A
+smaller PV surplus before is part of the plan: the batteries take it, and
+only what is still missing for the expensive hours is charged from the grid
+(e.g. at a cheap noon before an expensive evening after a dull day). A charge must pay after the
 charge and discharge losses, the [wear costs](#battery-wear-costs) and the
 minimum gain; of equal plans the later charge wins, as home storage ages
 mostly with time at a high state of charge. Limits: **Highest state of charge
 from the grid** (default 90 %), **Highest grid charge power** (0 = the charge
 power of the batteries), the import limit of peak shaving and the space the
-feed-in cap needs when PV takes over. With a surplus nothing is charged from
-the grid. The plan includes the price hold; the strategy shows **Grid charging** with the energy, the
+feed-in cap needs when PV takes over. Your own PV surplus is taken first. The plan includes the price hold; the strategy shows **Grid charging** with the energy, the
 start and the expected saving, the day chart the planned charging.
 
 **Negative prices**: with price aware control and a negative import price or
@@ -1093,7 +1096,9 @@ no PV surplus.
   the minimum state of charge, the **morning reserve** and the safety buffer;
   with import peak shaving also its SoC threshold. "Until the next charge"
   is the coming morning at night and the morning after the coming night
-  during a surplus. The budget is computed anew from the current state of
+  during a surplus, on a day whose forecast PV surplus fills the batteries
+  from the minimum to the maximum state of charge (a little surplus on a
+  dull day does not count, the budget then looks to the next such day). The budget is computed anew from the current state of
   charge all the time and shrinks while the batteries cover the consumer;
   once used up the consumer runs from the grid until the budget is back at
   0.2 kWh. Several consumers on automatic share the budget. Energy the night
@@ -1657,7 +1662,9 @@ sensor **Learned values in use** has all learned values as attributes.
   applies). If tomorrow's PV forecast cannot refill the batteries from the
   reserve, a higher reserve is kept; the refill counts per hour at most the
   charge power of the batteries, and the surplus that daily targets of
-  consumers are expected to take that day must fit besides it. Requires the
+  consumers are expected to take that day must fit besides it. With price
+  aware control it leaves the energy the price plan still needs for
+  expensive hours (e.g. the next evening after a dull day). Requires the
   consumption forecast.
 - **Surplus averaging window** (0–300 s, default 5 s, 0 = off) – the grid power
   is averaged; the less favourable of average and current value is used, so
@@ -1757,6 +1764,10 @@ Possible extensions:
 - Consumers preferred at negative prices (e.g. the heating rod).
 - Price aware control: a more stable plan (changed only when clearly
   better).
+- One planning for all battery goals: charging, discharging and feeding in
+  per quarter hour by costs over the next 36–48 hours (prices, night
+  discharge, feed-in cap, grid friendly charging), instead of separate rules
+  each with its own horizon.
 - Estimated prices from the weather: the forecast of wind, solar and load of
   the bidding zone (Energy-Charts) moves the estimate; with them known
   exactly, the deviation of the last year would have dropped by about a

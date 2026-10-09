@@ -412,7 +412,9 @@ Quellenangabe.
 
 **Preisbewusste Steuerung** (Schalter, standardmäßig aus; braucht einen
 Tarif): Reicht die gespeicherte Energie nicht für alle Stunden, bis die PV die
-Batterien wieder füllt, decken sie die Stunden mit dem höchsten Bezugspreis
+Batterien wieder füllt (ein Tag, dessen prognostizierter PV-Überschuss sie
+vom minimalen bis zum maximalen Ladezustand füllt; etwas Überschuss an einem
+trüben Tag zählt nicht), decken sie die Stunden mit dem höchsten Bezugspreis
 des aktuellen Tarifs und halten ihre Energie in Stunden zurück, die um
 mindestens den **Mindestgewinn** (Standard 2 ct/kWh) günstiger sind; dort
 bezieht das Haus aus dem Netz. Der Netzbezug bleibt gleich, er wandert nur in
@@ -441,17 +443,21 @@ sie da sind, wird neu geplant. Nur bekannte negative Preise lösen die Planung
 für negative Preise aus. Das Preisdiagramm zeigt die Schätzungen blass.
 
 **Batterien aus dem Netz laden** (Schalter, standardmäßig aus; nur mit
-preisbewusster Steuerung): In einem Defizit plant SLEMS bis zur nächsten
-PV-Übernahme (nach dem letzten bekannten Preis mit den geschätzten), in welchen Stunden
-die Batterien decken, halten oder aus dem Netz laden. Laden muss sich nach
+preisbewusster Steuerung): SLEMS plant bis zum Nachladen durch PV (wie oben;
+höchstens bis zum letzten bekannten Preis, danach mit den geschätzten), in
+welchen Stunden die Batterien decken, halten oder aus dem Netz laden. Ein
+kleinerer PV-Überschuss davor ist Teil des Plans: Die Batterien nehmen ihn,
+und nur was für die teuren Stunden noch fehlt, wird aus dem Netz geladen
+(z. B. an einem günstigen Mittag vor einem teuren Abend nach einem trüben
+Tag). Laden muss sich nach
 Lade- und Entladeverlusten, den
 [Verschleißkosten](#verschleißkosten-der-batterie) und dem Mindestgewinn
 lohnen; bei gleichen Kosten gewinnt das spätere Laden, weil Heimspeicher vor
 allem mit der Zeit bei hohem Ladezustand altern. Grenzen: **Höchster
 Ladezustand aus dem Netz** (Standard 90 %), **Höchste Netzladeleistung** (0 =
 Ladeleistung der Batterien), die Bezugsgrenze von Bezugsspitzen abfangen und
-der Platz, den die Einspeisebegrenzung zur PV-Übernahme braucht. Bei
-Überschuss wird nicht aus dem Netz geladen. Der Plan schließt das Halten ein;
+der Platz, den die Einspeisebegrenzung zur PV-Übernahme braucht. Dein
+eigener PV-Überschuss geht vor. Der Plan schließt das Halten ein;
 die Strategie zeigt
 **Netzladen** mit Energie, Beginn und erwarteter Ersparnis, das Tagesdiagramm
 das geplante Laden.
@@ -1154,7 +1160,10 @@ dürfen, wenn kein PV-Überschuss da ist.
   Nachtentladung) minus minimalem Ladezustand, **Morgenreserve** und
   Sicherheitspuffer; mit Bezugsspitzen-Kappung auch deren SoC-Schwelle. „Bis
   zur nächsten Ladung“ heißt nachts bis zum kommenden Morgen, während eines
-  Überschusses bis zum Morgen nach der kommenden Nacht. Der Spielraum wird
+  Überschusses bis zum Morgen nach der kommenden Nacht, an einem Tag, dessen
+  prognostizierter PV-Überschuss die Batterien vom minimalen bis zum
+  maximalen Ladezustand füllt (etwas Überschuss an einem trüben Tag zählt
+  nicht, der Spielraum schaut dann bis zum nächsten solchen Tag). Der Spielraum wird
   laufend aus dem aktuellen Ladezustand neu berechnet und schrumpft, solange
   die Batterien den Verbraucher decken; ist er aufgebraucht, läuft der
   Verbraucher aus dem Netz, bis wieder 0,2 kWh Spielraum da sind. Mehrere
@@ -1757,7 +1766,9 @@ alle gelernten Werte als Attribute.
   eine höhere Reserve; beim Nachladen zählt je Stunde höchstens die
   Ladeleistung der Batterien, und der Überschuss, den Tagesziele von
   Verbrauchern an dem Tag voraussichtlich nehmen, muss daneben Platz haben.
-  Benötigt die Verbrauchsprognose.
+  Mit preisbewusster Steuerung lässt sie die Energie in den Batterien, die
+  der Preisplan noch für teure Stunden braucht (z. B. den nächsten Abend
+  nach einem trüben Tag). Benötigt die Verbrauchsprognose.
 - **Mittelungsfenster Überschuss** (0–300 s, Standard 5 s, 0 = aus): Die
   Netzleistung wird gemittelt; es gilt der ungünstigere Wert aus Mittelwert
   und aktuellem Wert, damit die Regelung bei schwankender PV nicht
@@ -1858,6 +1869,10 @@ Mögliche Erweiterungen:
   aufgezeichneten Jahr gebracht hätten (das Batteriemodell der Schätzung mit
   den Einstellungen der Simulation).
 - Verbraucher bei negativen Preisen bevorzugen (z. B. den Heizstab).
+- Eine gemeinsame Planung für alle Batterieziele: Laden, Entladen und
+  Einspeisen je Viertelstunde nach Kosten über die nächsten 36–48 Stunden
+  (Preise, Nachtentladung, Einspeisebegrenzung, netzdienliches Laden) statt
+  getrennter Regeln mit jeweils eigenem Horizont.
 - Preisbewusste Steuerung: ein stabilerer Plan (nur bei deutlicher
   Verbesserung geändert).
 - Geschätzte Preise nach dem Wetter: die Prognose von Wind, Sonne und Last des

@@ -222,3 +222,31 @@ def test_plan_changes_per_day() -> None:
     for days in range(20):
         changes.add(start + timedelta(days=days), "hold")
     assert len(changes.days) == 14
+
+
+def test_energy_the_plan_needs_later() -> None:
+    h = hours(8)
+    # Expensive at first and at the end, cheap in between: the end needs energy kept.
+    prices = dict(zip(h, [40.0] + [10.0] * 4 + [40.0] * 3))
+    deficits = {hour: 500.0 for hour in h}
+    plan = plan_grid_charge(night(), battery(stored=2500), deficits, prices, night() + timedelta(hours=8), 2.0)
+    assert plan is not None
+    # Before the expensive end the plan needs about its 1.5 kWh (plus losses) above the minimum.
+    assert plan.kept_wh(h[5]) == pytest.approx(500 + 1500 / 0.95, abs=60)
+    # At the end nothing more is needed.
+    assert plan.kept_wh(h[7]) == pytest.approx(500 + 500 / 0.95, abs=60)
+    assert plan.kept_wh(night() + timedelta(hours=9)) is None
+
+
+def test_surplus_hours_are_part_of_the_plan() -> None:
+    h = hours(24)
+    # A dull afternoon (small surplus) between a cheap midday and an expensive evening.
+    prices = {hour: (20.0 if 10 <= hour.hour < 15 else 32.0 if hour.hour >= 17 else 30.0) for hour in h}
+    deficits = {hour: (-300.0 if 15 <= hour.hour < 17 else 500.0) for hour in h}
+    start = night() + timedelta(hours=10)
+    plan = plan_grid_charge(start, battery(stored=500), deficits, prices, None, 2.0)
+    assert plan is not None
+    # Charged at midday for the evening, less the small surplus taken in the afternoon.
+    charged = sum(plan.charge_w.values())
+    assert 0 < charged < 7 * 500 / 0.95**2
+    assert all(10 <= hour.hour < 15 for hour in plan.charge_w)

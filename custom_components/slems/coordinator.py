@@ -2071,6 +2071,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 full_wh=battery.full_soc_pct / 100 * battery.capacity_wh,
                 max_charge_w=battery.max_charge_w,
                 demands=self.target_demands,
+                keep=_price_keep(forecast_plan.grid_charge, forecast_plan.price_hold, battery),
             )
         cap_control = (
             CapControl(
@@ -2400,7 +2401,18 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     bad_weather_until=self.bad_weather.until,
                 )
             grid_load, budget_load = self._support_loads()
-            until = next_refill(wall_now, pv_hourly, consumption_hourly) if consumption_hourly else None
+            until = (
+                next_refill(
+                    wall_now,
+                    pv_hourly,
+                    consumption_hourly,
+                    (battery.full_soc_pct - battery.min_soc_pct) / 100 * battery.capacity_wh
+                    / (battery.charge_efficiency or 1.0),
+                    battery.max_charge_w,
+                )
+                if consumption_hourly
+                else None
+            )
             if settings.price_control and consumption_hourly:
                 result.grid_charge = self._grid_charge(
                     battery, wall_now, pv_forecast, pv_hourly, consumption_hourly, grid_load, until, settings,
@@ -2457,6 +2469,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 grid_charge=result.grid_charge.hourly_charge_w if result.grid_charge else None,
                 battery_export=result.grid_charge.hourly_export_w if result.grid_charge else None,
                 charge_caps=result.grid_charge.hourly_caps_w if result.grid_charge else None,
+                night_keep=_price_keep(result.grid_charge, result.price_hold, battery),
             )
         pv_power = power_lookup(self._pv_native(snapshot, wall_now))
         result.day_plan = self._day_plan(
@@ -2570,12 +2583,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     ) -> GridChargePlan | None:
         """Price plan of the batteries (see grid_charge).
 
-        Usually only in a deficit and until the refill: with a surplus the
-        existing rules charge the batteries. With a negative import or feed-in
-        price ahead the plan covers the surplus hours too, until the last known
-        price: it keeps room for the PV surplus of the negative hours (feeding
-        in before at a positive price) and charges from the grid when the
-        import price is negative. Not into the space the feed-in cap needs.
+        Until the refill (a day whose PV surplus fills the batteries, see
+        next_refill) or the last known price; smaller PV surpluses before are
+        part of the plan. With a negative import or feed-in price ahead the
+        plan goes on until the last known price: it keeps room for the PV
+        surplus of the negative hours (feeding in before at a positive price)
+        and charges from the grid when the import price is negative. Not into
+        the space the feed-in cap needs.
         """
         local_now = dt_util.as_local(wall_now)
         # Whole hours, so the prices are computed once per quarter hour.
@@ -2595,12 +2609,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if not negative:
             if not (settings.grid_charge or settings.battery_export):
                 return None
-            horizon = until or horizon
+            horizon = min(until, horizon) if until is not None else horizon
         nets = _quarter_nets(wall_now, horizon, pv_forecast, consumption_hourly, grid_load)
-        if not negative:
-            if nets.get(slot_start(local_now), 0.0) < 0:
-                return None
-            nets = {start: max(0.0, wh) for start, wh in nets.items()}
         capacity = battery.capacity_wh
         enabled = [b for b in self.batteries if b.enabled]
         weights = [b.driver.capabilities.capacity_wh or 1.0 for b in enabled]
@@ -3603,6 +3613,27 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     )
         for battery in self.batteries:
             await battery.driver.close()
+
+
+def _price_keep(
+    grid_charge: GridChargePlan | None, price_hold: PriceHold | None, battery: BatteryGroup
+) -> Callable[[datetime], float | None] | None:
+    """Stored energy the price plan keeps at a moment (None: outside the plan),
+    for the night discharge: the grid charge plan's level, or for the price
+    hold the minimum plus what the batteries deliver after the moment."""
+    if grid_charge is not None:
+        return grid_charge.kept_wh
+    if price_hold is None:
+        return None
+    floor = battery.min_soc_pct / 100 * battery.capacity_wh
+    efficiency = battery.charge_efficiency or 1.0
+
+    def kept(moment: datetime) -> float | None:
+        if moment >= price_hold.until:
+            return None
+        return floor + price_hold.delivered_from(moment) / efficiency
+
+    return kept
 
 
 def _quarter_nets(

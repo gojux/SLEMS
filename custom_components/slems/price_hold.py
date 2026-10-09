@@ -48,6 +48,13 @@ class PriceHold:
     # Per local hour start with a limit: the mean power the batteries deliver
     # in it (for the SoC projection).
     hourly_limits_w: Mapping[datetime, float] = field(default_factory=dict)
+    # Per local period start the energy (Wh, AC) the batteries deliver in a covered period.
+    covered_wh: Mapping[datetime, float] = field(default_factory=dict)
+
+    def delivered_from(self, moment: datetime) -> float:
+        """Energy (Wh, AC) the batteries deliver from ``moment`` until ``until``."""
+        first = slot_start(moment, self.period)
+        return sum(wh for start, wh in self.covered_wh.items() if start >= first)
 
     def holds(self, moment: datetime) -> bool:
         return slot_start(moment, self.period) in self.hold_slots
@@ -169,6 +176,9 @@ def plan_price_hold(
     full_w = {
         start: wh / ((first_share if start == first else 1.0) * length) for start, wh in needs.items()
     }
+    covered_wh = {start: needs[start] for start in covered}
+    if left < 0:
+        covered_wh[partial] = needs[partial] + left
     return PriceHold(
         hold_slots=held,
         until=until,
@@ -177,4 +187,5 @@ def plan_price_hold(
         held_up_to_ct=max(prices[hour] for hour in held),
         period=period,
         hourly_limits_w=hourly_means(limits, starts, full_w),
+        covered_wh=covered_wh,
     )

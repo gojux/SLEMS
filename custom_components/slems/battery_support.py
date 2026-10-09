@@ -45,11 +45,18 @@ def next_refill(
     now: datetime,
     pv: Mapping[datetime, float],
     consumption: Mapping[datetime, float],
+    needed_wh: float = 0.0,
+    max_charge_w: float | None = None,
 ) -> datetime | None:
-    """Start of the next hour with PV above consumption after the next deficit.
+    """Start of the next hour with PV above consumption after the next deficit,
+    on a day whose PV surplus refills the batteries.
 
-    ``pv`` and ``consumption`` are hourly local buckets (Wh). None without
-    such an hour within ``LOOKAHEAD``.
+    ``pv`` and ``consumption`` are hourly local buckets (Wh). The surplus of
+    the hours of that day with PV above consumption from that hour on (per
+    hour at most ``max_charge_w``) must reach ``needed_wh`` (AC energy from
+    the minimum to the maximum SoC); a smaller surplus only slows the
+    discharge and the search goes on with the next day. None without such a
+    day within ``LOOKAHEAD``.
     """
     hour = dt_util.as_local(now).replace(minute=0, second=0, microsecond=0)
     end = hour + LOOKAHEAD
@@ -59,9 +66,28 @@ def next_refill(
         if not surplus:
             deficit_seen = True
         elif deficit_seen:
-            return hour
+            next_day = dt_util.start_of_local_day(hour) + timedelta(days=1)
+            if _day_surplus(hour, next_day, pv, consumption, max_charge_w) >= needed_wh:
+                return hour
+            hour = next_day
+            continue
         hour += PERIOD
     return None
+
+
+def _day_surplus(
+    start: datetime,
+    end: datetime,
+    pv: Mapping[datetime, float],
+    consumption: Mapping[datetime, float],
+    max_charge_w: float | None,
+) -> float:
+    total = 0.0
+    while start < end:
+        surplus = max(0.0, pv.get(start, 0.0) - consumption.get(start, 0.0))
+        total += surplus if max_charge_w is None else min(surplus, max_charge_w * PERIOD.total_seconds() / 3600)
+        start += PERIOD
+    return total
 
 
 def support_budget_wh(

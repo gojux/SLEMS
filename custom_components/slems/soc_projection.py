@@ -40,7 +40,7 @@ in active cell balancing are left out.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -105,6 +105,7 @@ def project_soc(
     grid_charge: Mapping[datetime, float] | None = None,
     battery_export: Mapping[datetime, float] | None = None,
     charge_caps: Mapping[datetime, float] | None = None,
+    night_keep: Callable[[datetime], float | None] | None = None,
 ) -> SocProjection:
     """Project until the end of tomorrow.
 
@@ -117,7 +118,8 @@ def project_soc(
     ``grid_load`` (Wh per hour, part of ``consumption``) comes from the grid,
     ``budget_load`` from the batteries only while ``budget_wh`` (stored
     energy) lasts, until ``budget_until``; later, or without a budget, the
-    batteries cover it.
+    batteries cover it. ``night_keep``: stored energy the price plan keeps at
+    a moment, the night discharge stays above it (see night_discharge).
     """
     result = SocProjection()
     capacity = battery.capacity_wh
@@ -212,6 +214,7 @@ def project_soc(
                 settings,
                 cap,
                 demands,
+                night_keep,
             )
             if (export := (battery_export or {}).get(hour)):
                 # Planned feed-in from the batteries on top (see grid_charge).
@@ -273,6 +276,7 @@ def _discharge(
     settings: ProjectionSettings,
     cap: CapPlan | None = None,
     demands: Sequence[SurplusDemand] = (),
+    night_keep: Callable[[datetime], float | None] | None = None,
 ) -> float:
     """Stored energy after covering ``deficit_w`` for ``share`` of an hour."""
     capacity = battery.capacity_wh
@@ -303,6 +307,7 @@ def _discharge(
         full_wh=battery.full_soc_pct / 100 * capacity,
         max_charge_w=battery.max_charge_w,
         demands=demands,
+        keep=night_keep,
     )
     if plan is None:
         return after

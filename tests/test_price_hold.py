@@ -121,3 +121,15 @@ def test_holds_in_cheap_quarter_hours() -> None:
     assert plan.limit_w(starts[4]) is None
     # Hourly: nothing in the first hour, half of the deficit (600 W) in the second.
     assert plan.hourly_limits_w == {now: 0.0, starts[4]: pytest.approx(300.0)}
+
+
+def test_energy_delivered_after_a_moment() -> None:
+    now = evening()
+    night = hours(now, 6)
+    deficits = {hour: 1000.0 for hour in night}
+    prices = dict(zip(night, [30.0, 32.0, 25.0, 20.0, 18.0, 18.0]))
+    plan = plan_price_hold(now, 2500.0, deficits, prices, now + timedelta(hours=6), 2.0)
+    # 18:00 and 19:00 whole, 20:00 half.
+    assert plan.delivered_from(now) == pytest.approx(2500)
+    assert plan.delivered_from(night[1]) == pytest.approx(1500)
+    assert plan.delivered_from(night[3]) == 0
