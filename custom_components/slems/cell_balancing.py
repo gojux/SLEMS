@@ -83,12 +83,8 @@ BMS_FULL_SOC_PCT = 99.5
 # which the BMS may end the charge (BMS_END_CELL_V).
 TOP_EXIT_CELL_V = 3.40
 TOP_EXIT_SOC_PCT = 97.0
-# The BMS ended the charge below the charge stop voltage (as Omnibattery's
-# BMS cut-off detector): commanded to charge with at least this power ...
-BMS_END_MIN_COMMAND_W = 100.0
-# ... the battery charges with less than IDLE_POWER_W for this long ...
-BMS_END_S = 120.0
-# ... near the top: from this SoC or this highest cell voltage.
+# The BMS may end the charge below the charge stop voltage from this highest
+# cell voltage on, without cell voltages from this SoC (see delivery_monitor).
 BMS_END_SOC_PCT = 98.0
 BMS_END_CELL_V = 3.45
 
@@ -150,8 +146,6 @@ class CellMonitor:
         # the top right now (None: not known yet after a start).
         self.last_full: float | None = None
         self._at_top: bool | None = None
-        # Since when the battery charges nothing near the top although commanded.
-        self._refused_since: float | None = None
 
     def observe_full(
         self,
@@ -159,24 +153,21 @@ class CellMonitor:
         soc_pct: float | None,
         wall_timestamp: float,
         *,
-        now: float | None = None,
-        commanded_w: float | None = None,
-        power_w: float | None = None,
+        bms_full: bool = False,
     ) -> None:
         """Keep the moment the battery last became full (with or without a rest).
 
         Full is the charge stop voltage of the highest cell, the SoC the BMS
-        reports when full, or the BMS ending the charge near the top: commanded
-        to charge (``commanded_w``) the battery takes nothing (``power_w``) for
-        ``BMS_END_S`` from ``BMS_END_SOC_PCT`` or ``BMS_END_CELL_V`` on. The
-        battery counts as having left the top below ``TOP_EXIT_CELL_V`` (cells)
-        or ``TOP_EXIT_SOC_PCT`` without cell voltages. A battery already full at a
+        reports when full, or the BMS ending the charge below them
+        (``bms_full``, detected by the delivery monitor). The battery counts as
+        having left the top below ``TOP_EXIT_CELL_V`` (cells) or
+        ``TOP_EXIT_SOC_PCT`` without cell voltages. A battery already full at a
         start keeps the stored time.
         """
         full = (max_cell_v is not None and max_cell_v >= CHARGE_STOP_V) or (
             soc_pct is not None and soc_pct >= BMS_FULL_SOC_PCT
         )
-        if not full and self._bms_ended(max_cell_v, soc_pct, now, commanded_w, power_w):
+        if not full and bms_full:
             full = True
             # The top of this charge: the rest afterwards gives a measurement.
             if self._armed and self._at_top is not True:
@@ -190,32 +181,6 @@ class CellMonitor:
             max_cell_v is None and soc_pct is not None and soc_pct < TOP_EXIT_SOC_PCT
         ):
             self._at_top = False
-
-    def _bms_ended(
-        self,
-        max_cell_v: float | None,
-        soc_pct: float | None,
-        now: float | None,
-        commanded_w: float | None,
-        power_w: float | None,
-    ) -> bool:
-        near_top = (soc_pct is not None and soc_pct >= BMS_END_SOC_PCT) or (
-            max_cell_v is not None and max_cell_v >= BMS_END_CELL_V
-        )
-        refused = (
-            now is not None
-            and near_top
-            and commanded_w is not None
-            and commanded_w >= BMS_END_MIN_COMMAND_W
-            and power_w is not None
-            and power_w < IDLE_POWER_W
-        )
-        if not refused:
-            self._refused_since = None
-            return False
-        if self._refused_since is None:
-            self._refused_since = now
-        return now - self._refused_since >= BMS_END_S
 
     def update(
         self,

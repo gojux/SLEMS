@@ -905,9 +905,8 @@ leads to the device page of the battery with all its entities.
 
 The last full charge (sensor **Last full charge**) is the moment the battery
 last reached the top: the highest cell at the charge stop voltage, the SoC the
-BMS reports when full, or the BMS ending the charge near the top (it takes
-nothing for 2 minutes although SLEMS commands at least 100 W, from 98 % or
-3.45 V on), also if it was discharged again right away. A new full charge
+BMS reports when full, or the BMS ending the charge below that (see the SoC
+window above), also if it was discharged again right away. A new full charge
 counts once the battery has left the top (highest cell below 3.40 V, without
 cell voltages below 97 %). LFP batteries recalibrate their state of charge
 only when full, so it should happen regularly.
@@ -947,6 +946,18 @@ Every controllable battery has these settings (dashboard: **Settings**):
   either, SLEMS blocks its discharging. Both (reason `bms` at **Allowed
   discharge power**) last until it was charged or its SoC rose by 2 %; the
   other batteries and the grid take over.
+
+  At the top the BMS ends the charge as soon as one cell is full; with unequal
+  cells that can be well below 100 % (some firmware keeps the SoC then, e.g.
+  at 88 %). If a battery whose highest cell is at 3.45 V or more (without cell
+  voltages: at 98 % or more) takes nothing for three polls although SLEMS asks
+  it to charge, it counts as full: SLEMS blocks its charging (reason `bms` at
+  **Allowed charge power**, a note in the dashboard) until it discharged or
+  its highest cell fell below 3.40 V (without cell voltages: its SoC fell by
+  2 %). A battery that alternates between charging and standby every few
+  seconds counts as charging again only after three charging polls in a row.
+  Such an early end often comes from a large cell delta; it is measured at
+  that moment (see cell delta).
   Independently, the control counts a battery that measurably does not follow
   its set point with its measured power, so the house consumption and the
   consumption forecast do not contain power that does not flow.
@@ -977,9 +988,9 @@ battery delivers the commanded power. A battery that delivers less than 10 %
 of a command of at least 100 W (after 30 s in that direction) three polls in a
 row first gets all control registers written again; if that does not help, it
 is excluded for 5 minutes (like a disabled battery, handed back to its own
-logic, the others take over) and then retried. A full battery that stops
+logic, the others take over) and then retried. A battery at the top that stops
 charging or a battery at 20 % or less that stops discharging does not count
-(the BMS protects it). The Venus also reads its control registers back after
+(the BMS protects it, see the SoC window). The Venus also reads its control registers back after
 every complete write (first command and every 60 s); a write that is not
 confirmed counts as well. The binary sensor **Not responding** and the dashboard
 show an excluded battery.

@@ -516,7 +516,16 @@ every complete write (`refresh`, i.e. the first write and the keep-alive
 every 60 s; 0.2 s settle time, tolerance max(100 W, 10 %)) — not after every
 write, to keep the control cycle short. A BMS stop below 20 % SoC sets
 `bms_limit_w` (passed to `power_limits`): first half the command (at least
-300 W, judged again after `ENGAGE_GRACE_S`), after a second stop 0.
+300 W, judged again after `ENGAGE_GRACE_S`), after a second stop 0. At the
+top (highest cell ≥ `BMS_END_CELL_V` 3.45 V, without cell voltages SoC ≥
+`BMS_END_SOC_PCT` 98 %) three refused charging polls set `bms_full_soc`
+(`Action.BMS_FULL`; `power_limits(bms_full=True)` blocks charging with reason
+`bms`, `_battery_group` counts the battery as full); one charging poll does
+not reset the count, three in a row do (a v3 whose BMS cuts at ~3.58 V
+without resetting the SoC flaps Charge ↔ Standby every few seconds).
+`update_full` ends it after a discharge ≥ 100 W or below `TOP_EXIT_CELL_V`
+(3.40 V; without cell voltages 2 % below the SoC at the stop). Not stored
+(like the discharge stop); attribute `bms_full_soc` of *Not responding*.
 
 `problems.py`: `ProblemReporter.update` runs after every poll and keeps the
 repair issues (`issue_registry`, not fixable, warning) in line with the state:
@@ -603,9 +612,8 @@ and `blueprints/marstek_active_balance_blueprint.yaml` of Omnibattery.
 - **Last full charge** (`CellMonitor.observe_full`, every poll, also during a
   balancing run and for batteries without cell voltages): the wall clock time
   the battery reached the top (highest cell ≥ 3.60 V or SoC ≥ 99.5 %, or the
-  BMS ended the charge near the top: commanded ≥ 100 W, power < 25 W for
-  120 s from SoC ≥ 98 % or a cell ≥ 3.45 V, as Omnibattery's BMS cut-off
-  detector; that also arms a top delta measurement), without waiting for a
+  BMS ended the charge below that: `bms_full` of the delivery monitor; that
+  also arms a top delta measurement), without waiting for a
   rest. A new one counts after leaving the top (highest cell < 3.40 V, below
   the BMS end voltage, or SoC < 97 % without cell voltages); after a start while full the
   stored time stays (`_at_top` unknown). Stored under `cell_monitor.last_full`;
@@ -1828,3 +1836,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-09 | Bad weather mode until the morning after the next evening instead of until the evening: ending in the evening let the night discharge of the following night give away what the mode stored. The morning is the first surplus hour after the evening, where the night discharge ends as well; sunrise and sunset only replace a missing surplus hour (the sunrise lies hours before PV takes over, and the summer sunset long after the surplus ends). Without a surplus hour in the forecast the mode goes on until the sunrise after its end. |
 | 2026-10-09 | Venus telemetry: voltage, temperature, cycle count and energy counters only every 60 s, adjacent registers in one frame (tested with `tools/read_blocks.py` on a Venus E 3.0: blocks answer in about 10 ms like single registers, 42000–42010 is refused); 13 → 6 frames of 150 ms in most reads, 8 once a minute. The duration of each read is in the diagnostics. Learned from [Omnibattery #411](https://github.com/ffunes/Omnibattery/issues/411): the 150 ms wait belongs to the Modbus TCP server of the v3 firmware, behind an RS485 gateway (e.g. Elfin EW11) about 30 ms are enough. An option for that waits for a user with a gateway (we cannot test it). |
 | 2026-10-09 | The plans ahead use the battery powers without the SoC window and with full batteries (`_battery_group(planning=True)`), the control keeps the limits right now. With the powers right now, as long as a battery was full or blocked by its SoC window, the plans had no charging up to the end of the next day: the night discharge expected no refill (target too high), the projection and the price plans no surplus charging, and the simulation offered 0 W charge power. With several batteries one full battery's power is counted as if it could still take energy; the projection limits the charging by the room left anyway. |
+| 2026-10-09 | A BMS that ends the charge at the top below 100 % (one cell full, e.g. 88 % with a large cell delta or firmware that keeps the SoC) counts as full instead of as not delivering: the delivery monitor detects it after three refused polls with a hysteresis against Charge ↔ Standby flapping, and the cell monitor uses that state instead of its own 120 s timer (which one accepted sample reset). Correcting the SoC (recalibration) is left out: the plans ahead still see the room the SoC reports. |

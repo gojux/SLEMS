@@ -7,9 +7,20 @@ operating mode active:
   longer than ``ENGAGE_GRACE_S`` ago in that direction, while the battery
   delivers less than ``DELIVERY_RATIO`` of it; also a failed write or a set
   point that reads back differently (see the driver).
-* Not a failure: no charging at ``FULL_SOC_PCT`` or more (BMS full), no
-  discharging at ``BMS_DISCHARGE_CUTOFF_SOC_PCT`` or less (the BMS may cut off
-  early, e.g. with a weak cell sagging under a high load).
+* Not a failure: no charging at ``FULL_SOC_PCT`` or more (BMS full) or at the
+  top of the charge (see below), no discharging at
+  ``BMS_DISCHARGE_CUTOFF_SOC_PCT`` or less (the BMS may cut off early, e.g.
+  with a weak cell sagging under a high load).
+* A battery that does not charge at the top of the charge (highest cell at
+  ``BMS_END_CELL_V`` or more, without cell voltages a SoC of
+  ``BMS_END_SOC_PCT`` or more) for ``FAIL_THRESHOLD`` polls is *full by the
+  BMS*: the BMS ends the charge once one cell is full, with unequal cells
+  well below 100 % SoC, and some firmware keeps the SoC then. Such a battery
+  may alternate between charging and standby every few seconds, so only
+  ``FAIL_THRESHOLD`` charging polls in a row count it again. Charging stays
+  blocked until it discharged or left the top (highest cell below
+  ``TOP_EXIT_CELL_V``, without cell voltages the SoC
+  ``BMS_STOP_RELEASE_PCT`` below the SoC at the stop).
 * A battery that does not discharge at that low SoC for ``FAIL_THRESHOLD``
   consecutive polls is *stopped by the BMS* (communication works, nothing is
   excluded). The BMS stops earlier under a high load, so the first stop only
@@ -31,6 +42,8 @@ from __future__ import annotations
 from enum import StrEnum
 import logging
 
+from .cell_balancing import BMS_END_CELL_V, BMS_END_SOC_PCT, TOP_EXIT_CELL_V
+
 _LOGGER = logging.getLogger(__name__)
 
 FAIL_THRESHOLD = 3
@@ -50,6 +63,7 @@ class Action(StrEnum):
     WAKE = "wake"
     EXCLUDE = "exclude"
     BMS_STOP = "bms_stop"
+    BMS_FULL = "bms_full"
 
 
 class DeliveryMonitor:
@@ -67,6 +81,11 @@ class DeliveryMonitor:
         self.bms_limit_w: float | None = None
         self._bms_limited_at = 0.0
         self._stop_count = 0
+        # SoC (%) at which the BMS ended the charge at the top; None while not
+        # full by the BMS. Refused and accepted charging polls in a row before.
+        self.bms_full_soc: float | None = None
+        self._refused_top = 0
+        self._accepted_top = 0
 
     def excluded(self, now: float) -> bool:
         return self.excluded_until is not None and now < self.excluded_until
@@ -86,6 +105,27 @@ class DeliveryMonitor:
         self.reason = None
         self._wake_used = False
         self._stop_count = 0
+
+    @property
+    def bms_full(self) -> bool:
+        return self.bms_full_soc is not None
+
+    def update_full(
+        self, soc_pct: float | None, delivered_w: float | None, max_cell_v: float | None
+    ) -> bool:
+        """End a full stop once the battery discharged or left the top; True if ended."""
+        if self.bms_full_soc is None:
+            return False
+        discharged = delivered_w is not None and delivered_w <= -MIN_JUDGED_W
+        if max_cell_v is not None:
+            left_top = max_cell_v < TOP_EXIT_CELL_V
+        else:
+            left_top = soc_pct is not None and soc_pct <= self.bms_full_soc - BMS_STOP_RELEASE_PCT
+        if not (discharged or left_top):
+            return False
+        _LOGGER.info("Battery %s: charging allowed again after the BMS ended the charge", self._name)
+        self.bms_full_soc = None
+        return True
 
     def update_stop(self, soc_pct: float | None, delivered_w: float | None) -> bool:
         """End a BMS stop once the battery charged or its SoC rose; True if ended.
@@ -110,6 +150,7 @@ class DeliveryMonitor:
         direction_since: float,
         delivered_w: float | None,
         soc_pct: float | None,
+        max_cell_v: float | None = None,
     ) -> Action:
         """Judge one poll: commanded and delivered AC power (+charge / -discharge)."""
         if self.excluded(now) or delivered_w is None:
@@ -120,11 +161,30 @@ class DeliveryMonitor:
         delivered = delivered_w if charging else -delivered_w
         if delivered >= DELIVERY_RATIO * abs(commanded_w):
             self.clear()
+            if charging:
+                self._accepted_top += 1
+                if self._accepted_top >= FAIL_THRESHOLD:
+                    self._refused_top = 0
             return Action.NONE
         if charging and soc_pct is not None and soc_pct >= FULL_SOC_PCT:
             # The BMS protects the battery; communication works.
             self.clear()
             return Action.NONE
+        if charging and self._at_top(soc_pct, max_cell_v):
+            # The BMS ended the charge below 100 % SoC; communication works.
+            self.fail_count = 0
+            self.reason = None
+            self._accepted_top = 0
+            self._refused_top += 1
+            if self._refused_top < FAIL_THRESHOLD or self.bms_full_soc is not None:
+                return Action.NONE
+            self._refused_top = 0
+            self.bms_full_soc = soc_pct if soc_pct is not None else 100.0
+            _LOGGER.info(
+                "Battery %s: the BMS ended the charge at %s %% (highest cell %s V), charging blocked",
+                self._name, soc_pct, max_cell_v,
+            )
+            return Action.BMS_FULL
         if not charging and soc_pct is not None and soc_pct <= BMS_DISCHARGE_CUTOFF_SOC_PCT:
             # The BMS protects the battery; communication works, but the
             # battery must not stay planned with power it does not deliver.
@@ -154,6 +214,12 @@ class DeliveryMonitor:
             return Action.BMS_STOP
         detail = f"commanded {commanded_w:.0f} W, delivered {delivered_w:.0f} W"
         return self._fail(now, "charge_not_delivered" if charging else "discharge_not_delivered", detail, True)
+
+    @staticmethod
+    def _at_top(soc_pct: float | None, max_cell_v: float | None) -> bool:
+        if max_cell_v is not None:
+            return max_cell_v >= BMS_END_CELL_V
+        return soc_pct is not None and soc_pct >= BMS_END_SOC_PCT
 
     def record_comm_failure(self, now: float) -> Action:
         """A write failed or the set point did not read back as written."""

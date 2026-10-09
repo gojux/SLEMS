@@ -132,12 +132,14 @@ def power_limits(
     full_charge: bool = False,
     top_taper: bool = False,
     bms_limit_w: float | None = None,
+    bms_full: bool = False,
 ) -> PowerLimits:
     """Combine capability, user power limits, SoC window and temperature.
 
     ``full_charge``: the battery is due for its regular full charge and may
     charge above its maximum SoC. ``bms_limit_w``: allowed discharge power
-    after the BMS stopped discharging (0: blocked).
+    after the BMS stopped discharging (0: blocked). ``bms_full``: the BMS
+    ended the charge below the maximum SoC (no charging).
     """
     charge, charge_reason = max_charge_w, None
     if settings.charge_limit_w is not None and settings.charge_limit_w < charge:
@@ -149,6 +151,8 @@ def power_limits(
         charge, charge_reason = TOP_TAPER_W, "top"
     if use_soc_window and window.charge_blocked and not full_charge:
         charge, charge_reason = 0.0, "soc"
+    elif use_soc_window and bms_full:
+        charge, charge_reason = 0.0, "bms"
 
     discharge, discharge_reason = max_discharge_w, None
     if settings.discharge_limit_w is not None and settings.discharge_limit_w < discharge:

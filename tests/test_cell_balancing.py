@@ -54,21 +54,18 @@ def test_full_when_the_bms_ends_the_charge() -> None:
     monitor = CellMonitor()
     monitor.update(0, 3.40, 3.38, 800, 1000, soc_pct=90)  # below the top: armed
     monitor.observe_full(3.40, 90, 1000)
-    # Commanded 200 W, the BMS stops at 99 % and 3.46 V.
-    for t in range(0, 120, 5):
-        monitor.observe_full(3.46, 99, 2000 + t, now=float(t), commanded_w=200, power_w=-13)
+    # The delivery monitor reports the end of the charge at 88 % and 3.58 V.
+    monitor.observe_full(3.58, 88, 2000)
     assert monitor.last_full is None
-    monitor.observe_full(3.46, 99, 2125, now=125.0, commanded_w=200, power_w=-13)
+    monitor.observe_full(3.58, 88, 2125, bms_full=True)
     assert monitor.last_full == 2125
-    # Charging again later without leaving the top: no new full charge.
-    for t in range(200, 400, 5):
-        monitor.observe_full(3.46, 99, 2000 + t, now=float(t), commanded_w=200, power_w=-13)
+    # The rest afterwards gives a top measurement.
+    monitor.update(100, 3.56, 3.34, -13, 2200, soc_pct=88)
+    monitor.update(161, 3.55, 3.33, -13, 2261, soc_pct=88)
+    assert monitor.last.delta_mv == 220.0
+    # Still at the top later: no new full charge.
+    monitor.observe_full(3.55, 88, 2400, bms_full=True)
     assert monitor.last_full == 2125
-    # Still charging: not ended.
-    fresh = CellMonitor()
-    for t in range(0, 300, 5):
-        fresh.observe_full(3.46, 99, 1000 + t, now=float(t), commanded_w=200, power_w=200)
-    assert fresh.last_full is None
 
 
 def test_monitor_records_after_the_top_and_a_rest() -> None:

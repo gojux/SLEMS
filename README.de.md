@@ -956,8 +956,8 @@ ihren Entitäten.
 Die letzte Vollladung (Sensor **Letzte Vollladung**) ist der Zeitpunkt, an dem
 die Batterie zuletzt oben angekommen ist: höchste Zelle auf der
 Ladeschlussspannung, der Ladezustand, den das BMS bei voll meldet, oder das
-BMS beendet die Ladung kurz vor oben (sie nimmt 2 Minuten lang nichts auf,
-obwohl SLEMS mindestens 100 W vorgibt, ab 98 % oder 3,45 V), auch wenn sie
+BMS beendet die Ladung schon vorher (siehe Ladezustandsfenster oben), auch
+wenn sie
 gleich danach wieder entladen wurde. Eine neue Vollladung zählt, wenn die
 Batterie den oberen Bereich verlassen hat (höchste Zelle unter 3,40 V, ohne
 Zellspannungen unter 97 %). LFP-Batterien kalibrieren ihren Ladezustand nur
@@ -1000,7 +1000,21 @@ Jede steuerbare Batterie hat diese Einstellungen (Dashboard: **Einstellungen**):
   liefert sie auch damit nichts, sperrt SLEMS ihr Entladen. Beides (Grund
   `bms` bei **Erlaubte Entladeleistung**) gilt, bis sie geladen wurde oder
   ihr Ladezustand um 2 % gestiegen ist; die anderen Batterien und das Netz
-  übernehmen. Unabhängig
+  übernehmen.
+
+  Oben beendet das BMS die Ladung, sobald eine Zelle voll ist; bei ungleich
+  geladenen Zellen kann das deutlich unter 100 % sein (manche Firmware behält
+  dann den Ladezustand bei, z. B. 88 %). Nimmt eine Batterie, deren höchste
+  Zelle bei 3,45 V oder mehr steht (ohne Zellspannungen: ab 98 %), bei drei
+  Abfragen nichts auf, obwohl SLEMS sie laden lässt, gilt sie als voll: SLEMS
+  sperrt ihr Laden (Grund `bms` bei **Erlaubte Ladeleistung**, ein Hinweis im
+  Dashboard), bis sie entladen hat oder ihre höchste Zelle unter 3,40 V
+  gefallen ist (ohne Zellspannungen: ihr Ladezustand um 2 % gesunken ist).
+  Eine Batterie, die alle paar Sekunden zwischen Laden und Standby wechselt,
+  gilt erst nach drei Abfragen in Folge mit Ladeleistung wieder als ladend.
+  Ein solches frühes Ende kommt oft von einem großen Zell-Delta; es wird in
+  diesem Moment gemessen (siehe Zell-Delta).
+  Unabhängig
   davon rechnet die Regelung eine Batterie, die ihrer Vorgabe messbar nicht
   folgt, mit ihrer gemessenen Leistung, damit Hausverbrauch und
   Verbrauchsprognose keine Leistung enthalten, die nicht fließt.
@@ -1033,8 +1047,9 @@ mindestens 100 W (nach 30 s in dieser Richtung) dreimal hintereinander weniger
 als 10 % davon, werden zuerst alle Steuerregister neu geschrieben; hilft das
 nicht, wird sie für 5 Minuten ausgeschlossen (wie eine deaktivierte Batterie,
 an ihre eigene Logik übergeben, die anderen übernehmen) und danach wieder
-versucht. Eine volle Batterie, die nicht mehr lädt, oder eine Batterie bei
-höchstens 20 %, die nicht mehr entlädt, zählt nicht (das BMS schützt sie). Die
+versucht. Eine Batterie am oberen Ladeende, die nicht mehr lädt, oder eine
+Batterie bei höchstens 20 %, die nicht mehr entlädt, zählt nicht (das BMS
+schützt sie, siehe Ladezustandsfenster). Die
 Venus liest außerdem nach jedem vollständigen Schreiben (erster Befehl und
 alle 60 s) ihre Steuerregister zurück; ein nicht bestätigter Befehl zählt
 ebenfalls. Der Binärsensor **Reagiert nicht** und das Dashboard zeigen eine

@@ -1,5 +1,11 @@
 """Tests for the detection of batteries that do not deliver power."""
 
+from custom_components.slems.battery_limits import (
+    BatteryLimitSettings,
+    SocWindow,
+    TemperatureLimit,
+    power_limits,
+)
 from custom_components.slems.delivery_monitor import (
     COOLDOWN_S,
     ENGAGE_GRACE_S,
@@ -102,3 +108,68 @@ def test_communication_failures_exclude_without_wake() -> None:
     monitor = DeliveryMonitor("test")
     actions = [monitor.record_comm_failure(t) for t in range(FAIL_THRESHOLD)]
     assert actions[-1] is Action.EXCLUDE
+
+
+def test_bms_full_below_100_percent_blocks_charging_without_failure() -> None:
+    monitor = DeliveryMonitor("test")
+    actions = [monitor.observe(40 + 5 * i, 200, 0, 0, 88, 3.58) for i in range(FAIL_THRESHOLD)]
+    assert actions[-1] is Action.BMS_FULL
+    assert all(action is Action.NONE for action in actions[:-1])
+    assert monitor.bms_full and monitor.bms_full_soc == 88
+    assert monitor.fail_count == 0 and not monitor.excluded(100)
+    # Below the top of the charge it is a failure as before.
+    other = DeliveryMonitor("other")
+    for i in range(FAIL_THRESHOLD):
+        other.observe(40 + 5 * i, 200, 0, 0, 88, 3.40)
+    assert not other.bms_full and other.fail_count == 0 and other._wake_used
+
+
+def test_bms_full_despite_charging_and_standby_alternating() -> None:
+    monitor = DeliveryMonitor("test")
+    t = 40.0
+    action = Action.NONE
+    for delivered in (0, 150, 0, 160, 0):
+        action = monitor.observe(t, 200, 0, delivered, 88, 3.58)
+        t += 5
+    assert action is Action.BMS_FULL
+    # Charging polls in a row count the battery again.
+    fresh = DeliveryMonitor("fresh")
+    for delivered in (0, 0, 150, 150, 150, 0, 0):
+        assert fresh.observe(t, 200, 0, delivered, 88, 3.58) is Action.NONE
+        t += 5
+    assert not fresh.bms_full
+
+
+def test_bms_full_without_cell_voltages_needs_a_high_soc() -> None:
+    monitor = DeliveryMonitor("test")
+    for i in range(FAIL_THRESHOLD):
+        monitor.observe(40 + 5 * i, 200, 0, 0, 98.5)
+    assert monitor.bms_full
+    assert not monitor.update_full(97.0, 0, None)
+    assert monitor.update_full(96.5, 0, None)  # 2 % below the SoC at the stop
+    assert not monitor.bms_full
+
+
+def test_bms_full_ends_after_discharging_or_leaving_the_top() -> None:
+    monitor = DeliveryMonitor("test")
+    for i in range(FAIL_THRESHOLD):
+        monitor.observe(40 + 5 * i, 200, 0, 0, 88, 3.58)
+    assert not monitor.update_full(88, 0, 3.50)
+    assert monitor.update_full(88, -300, 3.50)
+    for i in range(FAIL_THRESHOLD):
+        monitor.observe(100 + 5 * i, 200, 0, 0, 88, 3.58)
+    assert monitor.update_full(87, 0, 3.38)
+
+
+def test_bms_full_blocks_the_charge_power() -> None:
+    limits = power_limits(
+        2500, 2500, BatteryLimitSettings(), SocWindow(), None, TemperatureLimit(), bms_full=True
+    )
+    assert (limits.charge_w, limits.charge_reason) == (0.0, "bms")
+    assert limits.discharge_w == 2500
+    # The plans ahead ignore it (like the SoC window).
+    ahead = power_limits(
+        2500, 2500, BatteryLimitSettings(), SocWindow(), None, TemperatureLimit(),
+        use_soc_window=False, bms_full=True,
+    )
+    assert ahead.charge_w == 2500

@@ -1373,6 +1373,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 battery.loss_curve.add(telemetry.ac_power_w, telemetry.power_w)
             battery.soc_window.update(telemetry.soc_pct, battery.limits)
             battery.delivery.update_stop(telemetry.soc_pct, telemetry.grid_side_power_w)
+            battery.delivery.update_full(
+                telemetry.soc_pct, telemetry.grid_side_power_w, telemetry.extra.get("max_cell_voltage")
+            )
             battery.measured_power_w = telemetry.grid_side_power_w
             battery.measured_at = now
             battery.top_taper.update(telemetry.extra.get("max_cell_voltage"))
@@ -1500,14 +1503,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         power = telemetry.power_w if telemetry else None
         wall = dt_util.utcnow().timestamp()
         if telemetry is not None:
-            command = self.controller.command_state(battery.subentry_id)
             battery.cell_monitor.observe_full(
-                max_cell,
-                telemetry.soc_pct,
-                wall,
-                now=now,
-                commanded_w=command[0] if command else None,
-                power_w=power,
+                max_cell, telemetry.soc_pct, wall, bms_full=battery.delivery.bms_full
             )
         balancer = battery.balancer
         if balancer is None:
@@ -1594,6 +1591,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             # Read-only batteries charge by their own logic.
             top_taper=battery.top_taper.active and caps.controllable,
             bms_limit_w=battery.delivery.bms_limit_w,
+            bms_full=battery.delivery.bms_full,
         )
 
     def _check_delivery(
@@ -1613,13 +1611,18 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             return
         commanded, since = command
         action = battery.delivery.observe(
-            now, commanded, since, telemetry.grid_side_power_w, telemetry.soc_pct
+            now,
+            commanded,
+            since,
+            telemetry.grid_side_power_w,
+            telemetry.soc_pct,
+            telemetry.extra.get("max_cell_voltage"),
         )
         if action is Action.WAKE:
             self.controller.force_refresh(battery.subentry_id)
         elif action is Action.EXCLUDE:
             self.controller.request()
-        elif action is Action.BMS_STOP:
+        elif action in (Action.BMS_STOP, Action.BMS_FULL):
             battery.power_limits = self._power_limits(battery, telemetry)
             self.controller.request()
 
@@ -1954,7 +1957,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 maximum = 100.0
             full_soc += maximum * battery.capacity_wh
             # A full battery takes nothing, whatever its power limit says.
-            if battery_full(telemetry.soc_pct, maximum):
+            if battery_full(telemetry.soc_pct, maximum) or battery.delivery.bms_full:
                 if planning:
                     max_charge += limits.charge_w
                 continue

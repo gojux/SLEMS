@@ -237,6 +237,7 @@ const STRINGS = {
     gridStale: "Smart meter does not report",
     gridStaleText: "The batteries follow their own logic until the smart meter reports again.",
     notRespondingText: "does not deliver the commanded power ({reason}); handed back to its own logic, retried at {time}",
+    bmsFullText: "The BMS ended the charge at {soc} % because one cell is full; no charging until the battery has discharged.",
     notRespondingReasons: {
       charge_not_delivered: "no charging",
       discharge_not_delivered: "no discharging",
@@ -771,6 +772,7 @@ const STRINGS = {
     gridStale: "Smart Meter meldet nicht",
     gridStaleText: "Die Batterien folgen ihrer eigenen Logik, bis der Smart Meter wieder meldet.",
     notRespondingText: "liefert die vorgegebene Leistung nicht ({reason}); an die eigene Logik übergeben, neuer Versuch um {time}",
+    bmsFullText: "Das BMS hat die Ladung bei {soc} % beendet, weil eine Zelle voll ist; geladen wird erst wieder, nachdem die Batterie entladen hat.",
     notRespondingReasons: {
       charge_not_delivered: "lädt nicht",
       discharge_not_delivered: "entlädt nicht",
@@ -3929,6 +3931,9 @@ class SlemsPanel extends HTMLElement {
               .replace("{reason}", t.notRespondingReasons[attrs.reason] || attrs.reason || "–")
               .replace("{time}", retry);
             problem = `<div class="problem"><ha-icon icon="mdi:alert-circle"></ha-icon><span><b>${t.notResponding}</b> – ${escapeHtml(text)}</span></div>`;
+          } else if (notResponding?.attributes?.bms_full_soc != null) {
+            const text = t.bmsFullText.replace("{soc}", Math.round(notResponding.attributes.bms_full_soc));
+            problem = `<div class="info-box"><ha-icon icon="mdi:battery-check-outline"></ha-icon><span>${escapeHtml(text)}</span></div>`;
           }
           const selfTest = s("self_test_result");
           if (!problem && selfTest?.state === "running") {

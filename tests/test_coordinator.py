@@ -98,6 +98,7 @@ def test_planning_powers_of_a_full_or_blocked_battery() -> None:
             driver=SimpleNamespace(capabilities=SimpleNamespace(controllable=True)),
             limits=SimpleNamespace(min_soc_pct=10.0, max_soc_pct=100.0),
             efficiency=SimpleNamespace(one_way=0.95),
+            delivery=SimpleNamespace(bms_full=False),
             # Right now: the full one takes nothing, the other is blocked by its SoC window.
             power_limits=PowerLimits(charge_w=0.0, discharge_w=2500.0),
         )
