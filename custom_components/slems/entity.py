@@ -56,6 +56,27 @@ class SlemsBatteryEntity(CoordinatorEntity[SlemsCoordinator]):
         )
 
 
+# Entities of a consumer's daily target and release; for a heat pump with a
+# hot water release they are named after the hot water ("hot_water_" keys).
+HOT_WATER_KEYS = frozenset(
+    {
+        "target_type",
+        "target_source",
+        "target_sensor",
+        "target_priority",
+        "target_earliest_enabled",
+        "target_hours",
+        "target_energy",
+        "target_min_temperature",
+        "target_max_temperature",
+        "target_deadline",
+        "target_earliest",
+        "release",
+        "latest_start",
+    }
+)
+
+
 class SlemsConsumerEntity(CoordinatorEntity[SlemsCoordinator]):
     """Entity belonging to one consumer device."""
 
@@ -66,7 +87,9 @@ class SlemsConsumerEntity(CoordinatorEntity[SlemsCoordinator]):
     ) -> None:
         super().__init__(coordinator)
         self.consumer = consumer
-        self._attr_translation_key = key
+        hot_water = consumer.hot_water_release and key in HOT_WATER_KEYS
+        self._attr_translation_key = f"hot_water_{key}" if hot_water else key
+        # The same id in both namings: switching the control mode keeps the history.
         self._attr_unique_id = f"{consumer.subentry_id}_{key}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, consumer.subentry_id)},

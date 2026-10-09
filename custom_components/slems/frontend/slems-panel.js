@@ -161,6 +161,12 @@ const STRINGS = {
     temperature: "Temperature",
     enabled: "Enabled",
     measured: "Measured",
+    release: "Release",
+    hotWaterRelease: "Hot water release",
+    releaseOn: "on",
+    releaseOff: "off",
+    releaseForced: "on (forced)",
+    releaseLatest: "latest start {time}",
     blocked: "blocked",
     saturated: "saturated",
     heldCommand: "held, draws too little",
@@ -171,6 +177,7 @@ const STRINGS = {
     capSection: "Feed-in cap",
     capRole: "Role",
     targetSection: "Daily target",
+    hotWaterTargetSection: "Hot water daily target",
     batterySupport: "Battery support",
     supportBudget: "budget {kwh}",
     supportFromGrid: "the batteries do not cover it",
@@ -195,6 +202,7 @@ const STRINGS = {
     targetSource: "Source",
     targetPriority: "Before the batteries when short",
     targetProgress: "Today",
+    hotWaterTargetProgress: "Hot water today",
     targetUntil: "until {time}",
     wearCost: "Wear costs",
     wearEstimated: "estimated",
@@ -696,6 +704,12 @@ const STRINGS = {
     temperature: "Temperatur",
     enabled: "Aktiviert",
     measured: "Gemessen",
+    release: "Freigabe",
+    hotWaterRelease: "Warmwasser-Freigabe",
+    releaseOn: "an",
+    releaseOff: "aus",
+    releaseForced: "an (erzwungen)",
+    releaseLatest: "spätester Start {time}",
     blocked: "gesperrt",
     saturated: "gesättigt",
     heldCommand: "gehalten, zieht zu wenig",
@@ -706,6 +720,7 @@ const STRINGS = {
     capSection: "Einspeisebegrenzung",
     capRole: "Einsatz",
     targetSection: "Tagesziel",
+    hotWaterTargetSection: "Warmwasser-Tagesziel",
     batterySupport: "Batterie-Unterstützung",
     supportBudget: "Spielraum {kwh}",
     supportFromGrid: "Batterie deckt ihn nicht",
@@ -730,6 +745,7 @@ const STRINGS = {
     targetSource: "Quelle",
     targetPriority: "Vor der Batterie, wenn knapp",
     targetProgress: "Heute",
+    hotWaterTargetProgress: "Warmwasser heute",
     targetUntil: "bis {time}",
     wearCost: "Verschleißkosten",
     wearEstimated: "geschätzt",
@@ -1438,8 +1454,12 @@ class SlemsPanel extends HTMLElement {
 
   _entityId(key, deviceId) {
     const device = deviceId ?? this._config?.system_device_id;
+    // Daily target and release of a heat pump's hot water are "hot_water_" keys.
     const entry = Object.values(this._hass.entities || {}).find(
-      (e) => e.platform === DOMAIN && e.translation_key === key && (!device || e.device_id === device)
+      (e) =>
+        e.platform === DOMAIN &&
+        (e.translation_key === key || e.translation_key === `hot_water_${key}`) &&
+        (!device || e.device_id === device)
     );
     return entry?.entity_id;
   }
@@ -2087,6 +2107,20 @@ class SlemsPanel extends HTMLElement {
   }
 
   /** A dt/dd pair; with an entity both open its more-info dialog on click. */
+  /** Release of a consumer started by the user's automation, with its latest start. */
+  _releaseRow(consumer) {
+    const release = this._state("release", consumer.device_id);
+    if (!release) return "";
+    const hotWater = this._hass.entities?.[release.entity_id]?.translation_key === "hot_water_release";
+    const t = this._t;
+    let text = release.state !== "on" ? t.releaseOff : release.attributes?.forced ? t.releaseForced : t.releaseOn;
+    const latest = this._state("latest_start", consumer.device_id)?.state;
+    if (latest && !["unknown", "unavailable"].includes(latest)) {
+      text += ` · ${t.releaseLatest.replace("{time}", this._clock(latest))}`;
+    }
+    return this._row(hotWater ? t.hotWaterRelease : t.release, escapeHtml(text), release.entity_id);
+  }
+
   _row(label, valueHtml, entityId) {
     const moreInfo = entityId ? ` data-more-info="${entityId}"` : "";
     return `<dt${moreInfo}>${label}</dt><dd${moreInfo}>${valueHtml}</dd>`;
@@ -4074,7 +4108,7 @@ class SlemsPanel extends HTMLElement {
               ? temperature ? this._row(t.temperature, escapeHtml(temperature), planned?.entity_id) : ""
               : c.controllable && targetType && targetType !== "none"
                 ? this._row(
-                    t.targetProgress,
+                    this._hotWater(c) ? t.hotWaterTargetProgress : t.targetProgress,
                     escapeHtml(this._targetText(attrs, this._state("target_source", c.device_id)?.state)),
                     planned?.entity_id
                   )
@@ -4102,6 +4136,7 @@ class SlemsPanel extends HTMLElement {
             ${noPower}
             <dl>
               ${this._row(t.measured, escapeHtml(this._format(measured)), c.power_entity)}
+              ${this._releaseRow(c)}
               ${planned ? this._row(t.planned, escapeHtml(this._plannedText(planned, control?.state === "off")), planned.entity_id) : ""}
               ${progress}
               ${supportRow}
@@ -4134,6 +4169,12 @@ class SlemsPanel extends HTMLElement {
   }
 
   /** Settings of a consumer's daily target (only the ones of its kind). */
+  /** Whether the consumer's daily target is the hot water of a heat pump. */
+  _hotWater(c) {
+    const id = this._entityId("target_type", c.device_id);
+    return Boolean(id && this._hass.entities?.[id]?.translation_key === "hot_water_target_type");
+  }
+
   _targetSection(c) {
     const t = this._t;
     const s = (key) => this._state(key, c.device_id);
@@ -4164,7 +4205,8 @@ class SlemsPanel extends HTMLElement {
           type === "energy" ? t.targetNoFitEnergy : t.targetNoFit
         )}</span></div>`
       : "";
-    return `<div class="settings card-setting"><h3 class="card-subheading">${t.targetSection}</h3>${warning}${controls
+    const heading = this._hotWater(c) ? t.hotWaterTargetSection : t.targetSection;
+    return `<div class="settings card-setting"><h3 class="card-subheading">${heading}</h3>${warning}${controls
       .filter(([st]) => st)
       .map(([st, label]) => this._control(st, { label }))
       .join("")}</div>`;

@@ -184,8 +184,8 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Verbraucher | Status |
 |---|---|
 | Verbraucher mit eigenen Leistungs-/Energiesensoren, im oder außerhalb des Smart Meters | ✅ |
-| Wärmepumpe als Verbrauchertyp (wetterabhängige Prognose) | ✅ |
-| Steuerung von Verbrauchern: Ein/Aus oder Leistungsvorgabe, Priorität, Mindestlaufzeit/-pause, Takten vermeiden, externe Sperre, Steuerung je Verbraucher abschaltbar | ✅ |
+| Wärmepumpe als Verbrauchertyp (wetterabhängige Prognose), optional Freigabe ihrer Warmwasserladung (Betriebsmodus, gelernte Warmwasserleistung) | ✅ |
+| Steuerung von Verbrauchern: Ein/Aus, Leistungsvorgabe oder Freigabe für eine eigene Automation (mit spätestem Start), Priorität, Mindestlaufzeit/-pause, Takten vermeiden, externe Sperre, Steuerung je Verbraucher abschaltbar | ✅ |
 | Verbraucher mit eigenem Thermostat: Pausen erkannt, ihre Leistung geht solange an die Batterien | ✅ |
 | Temperaturfühler eines Speichers: gelernte Energie pro Grad, noch aufnehmbare Energie | ✅ |
 | Einsatz eines Verbrauchers in der Einspeisebegrenzung (unterstützend, normal, nie) | ✅ |
@@ -1084,8 +1084,9 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
   Vorgaben sind Stromvorgabe, 6–16 A, 3 Phasen, 5 Minuten Mindestlaufzeit und
   Mindestpause und Batterie-Unterstützung **Automatisch**.
 - **Steuerung**: keine (nur Messung), Ein/Aus über einen Schalter, eine
-  Leistungsvorgabe über eine Number-Entität in W oder eine
-  [Stromvorgabe](#stromvorgabe) in A. Für gesteuerte Verbraucher
+  Leistungsvorgabe über eine Number-Entität in W, eine
+  [Stromvorgabe](#stromvorgabe) in A oder eine **Freigabe** für eine eigene
+  Automation. Für gesteuerte Verbraucher
   kann eine Entität für eine externe Sperre gewählt werden (SLEMS steuert den
   Verbraucher nicht, solange ein Schalter oder Binärsensor eingeschaltet ist
   oder ein Water Heater in der Betriebsart **off** steht), dazu eine Priorität
@@ -1093,6 +1094,65 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
   Ein/Aus-Verbrauchern reicht für die Leistung im eingeschalteten Zustand eine
   grobe Schätzung, wenn **Gelernte Werte verwenden** an ist; lieber zu niedrig
   als zu hoch, weil SLEMS nur lernt, während es den Verbraucher betreibt.
+- **Freigabe** (Steuerung): Für Geräte, die eine eigene Automation startet,
+  weil sie mehr wissen muss als SLEMS (z. B. eine Waschmaschine mit
+  Startbefehl, oder die Warmwasserladung einer Wärmepumpe über SG Ready nur,
+  wenn ihr Kompressor gerade stabil läuft). SLEMS schaltet selbst nichts,
+  plant den Verbraucher aber wie einen Ein/Aus-Verbraucher mit der
+  eingestellten Leistung und stellt bereit:
+  - **Freigabe** (Binärsensor): an, solange SLEMS den Verbraucher einschalten
+    würde (genug Überschuss, mit **Takten vermeiden** für einen ganzen Lauf,
+    oder ab dem spätesten Start seines Tagesziels). Das Attribut **forced**
+    ist ab dem spätesten Start an: dann sofort starten, auch ohne Überschuss.
+  - **Spätester Start** (Sensor, Zeitpunkt): wann das Tagesziel spätestens
+    starten muss; leer, wenn es erreicht ist.
+
+  Startet die Automation das Gerät noch nicht, zieht es nichts: SLEMS lässt
+  die Freigabe dann an und gibt den Überschuss solange den Batterien (wie bei
+  einem gesättigten Verbraucher).
+
+  **Wärmepumpe mit Freigabe** (Warmwasser): Mit dem Typ **Wärmepumpe** gilt
+  die Freigabe ihrer Warmwasserladung. Dazu gehören der **Betriebsmodus**
+  (z. B. ihr Sensor **Status**) und im nächsten Schritt die Zustände, die
+  Warmwasser bedeuten; vorausgewählt ist, was nach Warmwasser klingt (z. B.
+  `hot_water`, `dhw`, „Warmwasser“). Nur in diesen Zuständen zählt ihre
+  gemessene Leistung als gesteuert; das Heizen bleibt eine ungesteuerte Last
+  und ihre Prognose unverändert. Die Leistung im eingeschalteten Zustand ist
+  ein Startwert: Mit **Gelernte Werte verwenden** lernt SLEMS sie im
+  Warmwasserbetrieb, sie folgt so der Leistungszahl. Mit den Fühlern des
+  Boilers als Temperaturfühler eignet sich ein Tagesziel **Temperatur**
+  (z. B. Minimum 42 °C, Ziel 50 °C, Frist 16:00); die Entitäten heißen
+  **Warmwasser-Freigabe** und **Warmwasser spätester Start**. Ein Tagesziel
+  **Energie** passt hier nicht, weil der Energiezähler das Heizen enthält.
+  Beispiel einer Automation:
+
+  ```yaml
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.waermepumpe_warmwasser_freigabe
+      to: "on"
+    - trigger: state
+      entity_id: binary_sensor.heat_pump_running  # deine eigene Bedingung
+      to: "on"
+  conditions:
+    - condition: state
+      entity_id: binary_sensor.waermepumpe_warmwasser_freigabe
+      state: "on"
+    - or:
+        - condition: state
+          entity_id: binary_sensor.waermepumpe_warmwasser_freigabe
+          attribute: forced
+          state: true
+        - condition: state
+          entity_id: binary_sensor.heat_pump_running
+          state: "on"
+  actions:
+    - action: number.set_value
+      target:
+        entity_id: number.heat_pump_smart_grid_offset
+      data:
+        value: 38
+  ```
 - **Takten vermeiden** (z. B. ein Gerät mit Kompressor): SLEMS schaltet den
   Verbraucher nur ein, wenn der prognostizierte Überschuss für einen ganzen
   Lauf reicht (seine Mindestlaufzeit, ohne eine 15 Minuten, oder was sein

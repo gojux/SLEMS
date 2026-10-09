@@ -659,6 +659,13 @@ class RealTimeController:
             previous = self._consumer_commands.get(subentry_id)
             if previous is not None and now - previous[1] < CONSUMER_COMMAND_INTERVAL_S:
                 continue
+            if consumer.control_mode is ControlMode.RELEASE:
+                # Only published (release sensor); the user's automation starts it.
+                if previous is not None and (previous[0] > 0) == (target > 0):
+                    self._device_commands[subentry_id] = target
+                    continue
+                self._remember_consumer_command(subentry_id, target, snapshot, now)
+                continue
             state = self._hass.states.get(consumer.control_entity_id)
             if state is None:
                 continue
@@ -695,19 +702,25 @@ class RealTimeController:
                     {ATTR_ENTITY_ID: consumer.control_entity_id, "value": value},
                 ):
                     continue
-            measured = snapshot.consumers[subentry_id].power_w
-            # The power the meter still shows until the command arrives there.
-            self._consumer_before[subentry_id] = self.consumer_power_seen(subentry_id, measured, now)
-            self._consumer_commands[subentry_id] = (target, now)
-            self._device_commands[subentry_id] = target
-            learner = self.consumer_response.setdefault(
-                subentry_id, DirectionalResponse(DEFAULT_CONSUMER_RESPONSE_S, CONSUMER_MIN_STEP_W)
-            )
-            learner.command(now, measured, target - (measured or 0.0))
-            # More consumption raises the grid power (+import).
-            self.consumer_grid_response.setdefault(
-                subentry_id, DirectionalResponse(DEFAULT_CONSUMER_RESPONSE_S)
-            ).command(now, self._last_grid_w, target - self._consumer_before[subentry_id])
+            self._remember_consumer_command(subentry_id, target, snapshot, now)
+
+    def _remember_consumer_command(
+        self, subentry_id: str, target: float, snapshot: SystemSnapshot, now: float
+    ) -> None:
+        """Remember a command sent (or published) and start learning its response."""
+        measured = snapshot.consumers[subentry_id].power_w
+        # The power the meter still shows until the command arrives there.
+        self._consumer_before[subentry_id] = self.consumer_power_seen(subentry_id, measured, now)
+        self._consumer_commands[subentry_id] = (target, now)
+        self._device_commands[subentry_id] = target
+        learner = self.consumer_response.setdefault(
+            subentry_id, DirectionalResponse(DEFAULT_CONSUMER_RESPONSE_S, CONSUMER_MIN_STEP_W)
+        )
+        learner.command(now, measured, target - (measured or 0.0))
+        # More consumption raises the grid power (+import).
+        self.consumer_grid_response.setdefault(
+            subentry_id, DirectionalResponse(DEFAULT_CONSUMER_RESPONSE_S)
+        ).command(now, self._last_grid_w, target - self._consumer_before[subentry_id])
 
     async def _async_apply_current(
         self, consumer: ConsumerConfig, target_w: float, state: State
@@ -793,7 +806,7 @@ class RealTimeController:
         self._device_commands.pop(subentry_id, None)
         self._low_since.pop(subentry_id, None)
         self._resting.discard(subentry_id)
-        if not self._active or not consumer.controllable:
+        if not self._active or not consumer.controllable or consumer.control_mode is ControlMode.RELEASE:
             return
         state = self._hass.states.get(consumer.control_entity_id)
         if state is None:

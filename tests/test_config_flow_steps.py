@@ -107,3 +107,45 @@ def test_select_options_named_as_their_integration_shows_them() -> None:
         registry.async_get = lambda _entity_id: None
         options = asyncio.run(config_flow._option_labels(hass, "input_select.mode", ["a"]))
         assert [(o["value"], o["label"]) for o in options] == [("a", "a")]
+
+
+
+def test_hot_water_states_preselected_by_name() -> None:
+    from custom_components.slems.config_flow import hot_water_guess
+
+    def option(value: str, label: str | None = None) -> dict:
+        return {"value": value, "label": label or value}
+
+    hoval = [option(v) for v in ("switched_off", "heating_mode", "hot_water", "defrost", "frost_protection")]
+    assert hot_water_guess(hoval) == ["hot_water"]
+    # By the label its integration shows, or other names for it.
+    assert hot_water_guess([option("3", "Warmwasser"), option("1", "Heizen")]) == ["3"]
+    assert hot_water_guess([option("DHW"), option("Heating")]) == ["DHW"]
+    assert hot_water_guess([option("heating"), option("cooling")]) == []
+
+
+def test_heat_pump_release_asks_for_its_hot_water_states() -> None:
+    import asyncio
+
+    from custom_components.slems.config_flow import ConsumerSubentryFlow
+    from custom_components.slems.const import (
+        CONF_CONSUMER_TYPE,
+        CONF_CONTROL_MODE,
+        CONF_MODE_ENTITY,
+        CONF_NOMINAL_POWER_W,
+        CONF_PRIORITY,
+        ControlMode,
+    )
+
+    flow = ConsumerSubentryFlow()
+    flow._existing = lambda: {}
+    flow._data = {CONF_CONSUMER_TYPE: "heat_pump", CONF_CONTROL_MODE: ControlMode.RELEASE.value}
+
+    async def states():
+        return "hot_water_states"
+
+    flow.async_step_hot_water_states = states
+    result = asyncio.run(
+        flow.async_step_control({CONF_MODE_ENTITY: "sensor.hp_status", CONF_NOMINAL_POWER_W: 2500, CONF_PRIORITY: 1})
+    )
+    assert result == "hot_water_states"

@@ -7,6 +7,12 @@ loadpoint that switches between one and three phases itself). The planned
 power is sent as whole amperes, rounded down so the charging stays within
 the power planned for it, to a number entity or a select with ampere
 options (the maximum current of an evcc loadpoint in ha-evcc).
+
+A heat pump with a hot water release (control mode release with an
+operating mode entity) is controlled only while it heats hot water: its
+power counts for the control only in the hot water states of its mode, the
+heating stays an uncontrolled load (``total_power_w`` keeps the whole
+measurement).
 """
 
 from __future__ import annotations
@@ -25,9 +31,11 @@ from .const import (
     CONF_CONTROL_ENTITY,
     CONF_CONTROL_MODE,
     CONF_ENERGY_ENTITY,
+    CONF_HOT_WATER_STATES,
     CONF_INCLUDED_IN_METER,
     CONF_MAX_CURRENT_A,
     CONF_MAX_POWER_W,
+    CONF_MODE_ENTITY,
     CONF_MIN_CURRENT_A,
     CONF_MIN_OFF_MINUTES,
     CONF_MIN_ON_MINUTES,
@@ -104,10 +112,20 @@ class ConsumerConfig:
     start_entity_id: str | None = None
     start_on: str | None = None
     start_off: str | None = None
+    # Heat pump with a hot water release: operating mode and its hot water states.
+    mode_entity_id: str | None = None
+    hot_water_states: tuple[str, ...] = ()
 
     @property
     def controllable(self) -> bool:
+        if self.control_mode is ControlMode.RELEASE:
+            return True
         return self.control_mode is not ControlMode.NONE and bool(self.control_entity_id)
+
+    @property
+    def hot_water_release(self) -> bool:
+        """A heat pump released only for its hot water charge."""
+        return self.control_mode is ControlMode.RELEASE and self.mode_entity_id is not None
 
     def with_phases(self, phases: int) -> ConsumerConfig:
         """A current controlled consumer with ``phases`` active: its power range follows."""
@@ -156,6 +174,10 @@ class ConsumerConfig:
             start_entity_id=data.get(CONF_START_ENTITY),
             start_on=data.get(CONF_START_ON),
             start_off=data.get(CONF_START_OFF),
+            mode_entity_id=(
+                data.get(CONF_MODE_ENTITY) if data[CONF_CONTROL_MODE] == ControlMode.RELEASE else None
+            ),
+            hot_water_states=tuple(data.get(CONF_HOT_WATER_STATES) or ()),
         ).with_phases(int(data.get(CONF_PHASES, DEFAULT_PHASES)))
 
 
@@ -202,6 +224,13 @@ class ConsumerState:
     temperature_c: float | None = None
     # Each sensor in the order of the configuration (None if unknown).
     temperatures_c: tuple[float | None, ...] = ()
+    # The whole measured power; differs from ``power_w`` (the power that
+    # counts for the control) only for a heat pump with a hot water release.
+    total_power_w: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.total_power_w is None:
+            self.total_power_w = self.power_w
 
 
 def read_consumer_state(hass: HomeAssistant, consumer: ConsumerConfig) -> ConsumerState:
@@ -216,8 +245,15 @@ def read_consumer_state(hass: HomeAssistant, consumer: ConsumerConfig) -> Consum
         else:
             blocked = block_state.state == STATE_ON
     temperatures = [_temperature(hass.states.get(e)) for e in consumer.temperature_entity_ids]
+    measured = state_as_watts(hass.states.get(consumer.power_entity_id))
+    power = measured
+    if consumer.hot_water_release and measured is not None:
+        mode = hass.states.get(consumer.mode_entity_id)
+        if mode is None or mode.state not in consumer.hot_water_states:
+            power = 0.0
     return ConsumerState(
-        power_w=state_as_watts(hass.states.get(consumer.power_entity_id)),
+        power_w=power,
+        total_power_w=measured,
         energy_kwh=state_as_kwh(hass.states.get(consumer.energy_entity_id)),
         blocked=blocked,
         temperature_c=(

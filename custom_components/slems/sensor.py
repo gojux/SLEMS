@@ -782,6 +782,11 @@ async def async_setup_entry(
                         if consumer.temperature_entity_ids
                         else []
                     ),
+                    *(
+                        [LatestStartSensor(coordinator, consumer)]
+                        if consumer.control_mode is ControlMode.RELEASE
+                        else []
+                    ),
                 ],
                 config_subentry_id=consumer.subentry_id,
             )
@@ -1350,6 +1355,20 @@ class TopCellDeltaSensor(SlemsBatteryEntity, SensorEntity):
         }
 
 
+class LatestStartSensor(SlemsConsumerEntity, SensorEntity):
+    """Latest start of the consumer's daily target (release: for the user's automation)."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(self, coordinator: SlemsCoordinator, consumer) -> None:
+        super().__init__(coordinator, consumer, "latest_start")
+
+    @property
+    def native_value(self) -> datetime | None:
+        target = self.coordinator.target_states.get(self.consumer.subentry_id)
+        return target.latest_start if target is not None else None
+
+
 class LastFullChargeSensor(SlemsBatteryEntity, SensorEntity):
     """Moment the battery last became full (see CellMonitor.observe_full)."""
 
@@ -1485,7 +1504,7 @@ class LearnedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
 
     def __init__(self, coordinator: SlemsCoordinator, consumer) -> None:
         super().__init__(coordinator, consumer, "learned_power")
-        if consumer.control_mode is not ControlMode.SWITCH:
+        if not consumer.control_mode.on_off:
             self._attr_translation_key = "learned_max_power"
 
     @property

@@ -312,7 +312,8 @@
           "data_description": {
             "consumer_type": "Heat pump consumption is forecast from the weather; a heating rod is typically used for hot water in summer. A wallbox is never part of the house consumption forecast; the next step defaults to current control, 6–16 A and 5 minutes minimum runtime and pause, and its battery support to automatic.",
             "included_in_meter": "Enable if the consumer is behind the smart meter, i.e. its consumption is already part of the measured grid power.",
-            "show_in_flow": "Shows the consumer as its own box in the energy flow of the dashboard. Off: its consumption still counts in the house; the consumer card shows it."
+            "show_in_flow": "Shows the consumer as its own box in the energy flow of the dashboard. Off: its consumption still counts in the house; the consumer card shows it.",
+            "control_mode": "**Release**: SLEMS switches nothing itself but provides the binary sensor **Release** (on when SLEMS would switch the consumer on now; attribute **forced** from the latest start of the daily target on) and the sensor **Latest start**; an automation of your own starts the device. For a heat pump the release is for its hot water charge: only what it draws in hot water mode is controlled, the heating stays uncontrolled."
           }
         },
         "control": {
@@ -334,11 +335,12 @@
             "phases_entity": "Active phases entity",
             "voltage_v": "Voltage",
             "start_entity": "Start/stop entity",
-            "avoid_cycling": "Avoid short runs"
+            "avoid_cycling": "Avoid short runs",
+            "mode_entity": "Operating mode"
           },
           "data_description": {
             "control_entity": "Switch for on/off consumers, number entity in W for power controlled ones, in A for current controlled ones (e.g. the charging current of a wallbox); with current control also a select with ampere options (e.g. **Max. charging current** of an evcc loadpoint in ha-evcc).",
-            "nominal_power_w": "A rough estimate is enough if **Use learned values** is on: SLEMS then measures the real power while it runs the consumer (operating mode active) and uses it after about 30 samples. Rather estimate a little too low than too high: too high, SLEMS waits for a larger surplus and may never switch the consumer on, so nothing is learned.",
+            "nominal_power_w": "A rough estimate is enough if **Use learned values** is on: SLEMS then measures the real power while it runs the consumer (operating mode active) and uses it after about 30 samples. Rather estimate a little too low than too high: too high, SLEMS waits for a larger surplus and may never switch the consumer on, so nothing is learned. For a heat pump with **Release**: its power for hot water; SLEMS learns it in hot water mode, so it follows the coefficient of performance.",
             "block_entity": "SLEMS does not control the consumer while it is blocked (e.g. by the device or an automation): a water heater while its operation mode is \"off\", other entities while they are \"on\".",
             "priority": "1 = highest priority when distributing surplus power.",
             "min_on_minutes": "Optional. Once switched on by SLEMS, the consumer keeps running at least this long.",
@@ -351,7 +353,8 @@
             "phases_entity": "Optional. Sensor with the number of active phases (1 or 3), e.g. of an evcc loadpoint or a wallbox that switches phases itself; the power range follows it.",
             "voltage_v": "Voltage per phase.",
             "start_entity": "Optional. Switch, or a select (then the options for on and off are asked next, e.g. the mode of an evcc loadpoint: now / off). Without it SLEMS stops by setting the lowest current the control entity takes (0 A if allowed); with evcc and its minimum current evcc then decides itself when to start and stop.",
-            "avoid_cycling": "Start only when the forecast surplus lasts for a whole run (the minimum runtime, or what the daily target still needs if less) and keep running through dips of the surplus for up to 5 minutes (the batteries or the grid bridge them). For devices that should not be switched on and off often, e.g. with a compressor; set a minimum runtime and pause as well."
+            "avoid_cycling": "Start only when the forecast surplus lasts for a whole run (the minimum runtime, or what the daily target still needs if less) and keep running through dips of the surplus for up to 5 minutes (the batteries or the grid bridge them). For devices that should not be switched on and off often, e.g. with a compressor; set a minimum runtime and pause as well.",
+            "mode_entity": "Entity that shows the operating mode of the heat pump (e.g. **Status** with heating, hot water, defrost); next you select the states that mean hot water."
           }
         },
         "start_options": {
@@ -365,10 +368,23 @@
             "start_on": "Selected when the consumer should run. Choose the option in which the device runs without its own logic, with evcc **Fast**: with **Smart** evcc would follow the surplus itself and work against SLEMS.",
             "start_off": "Selected when the consumer should be off, with evcc **Off**."
           }
+        },
+        "hot_water_states": {
+          "title": "States for hot water",
+          "description": "States of {entity} (now: {state}) in which the heat pump heats hot water. Preselected is what sounds like hot water; check the selection. Only in these states its power counts as controlled.",
+          "data": {
+            "hot_water_states": "Hot water states"
+          },
+          "data_description": {
+            "hot_water_states": "Several possible; a state that is not listed can be typed in."
+          }
         }
       },
       "abort": {
         "reconfigure_successful": "Consumer updated."
+      },
+      "error": {
+        "hot_water_states_required": "Select at least one state for hot water."
       }
     },
     "tariff": {
@@ -584,7 +600,8 @@
         "none": "None (measurement only)",
         "switch": "On/off (switch)",
         "power": "Power set point (number)",
-        "current": "Current set point (A)"
+        "current": "Current set point (A)",
+        "release": "Release (an automation starts it)"
       }
     },
     "efficiency_mode": {
@@ -750,6 +767,32 @@
           "energy_charts_at": "Energy-Charts (Austria)",
           "energy_charts_de_lu": "Energy-Charts (Germany/Luxembourg)",
           "energy_charts_ch": "Energy-Charts (Switzerland)"
+        }
+      },
+      "hot_water_target_type": {
+        "name": "Hot water daily target",
+        "state": {
+          "none": "None",
+          "runtime": "Runtime",
+          "enabled": "Enabled time",
+          "energy": "Energy",
+          "temperature": "Temperature"
+        }
+      },
+      "hot_water_target_source": {
+        "name": "Hot water daily target source",
+        "state": {
+          "surplus": "Surplus only",
+          "battery": "Surplus + batteries",
+          "grid": "Surplus + batteries + grid"
+        }
+      },
+      "hot_water_target_sensor": {
+        "name": "Hot water daily target sensor",
+        "state": {
+          "mean": "Mean",
+          "first": "Sensor 1",
+          "second": "Sensor 2"
         }
       }
     },
@@ -991,6 +1034,12 @@
           "unreadable": "Stopped (battery not readable)",
           "cancelled": "Cancelled"
         }
+      },
+      "latest_start": {
+        "name": "Latest start"
+      },
+      "hot_water_latest_start": {
+        "name": "Hot water latest start"
       }
     },
     "switch": {
@@ -1083,6 +1132,12 @@
       },
       "self_test": {
         "name": "Self-test"
+      },
+      "hot_water_target_priority": {
+        "name": "Hot water daily target before the batteries"
+      },
+      "hot_water_target_earliest_enabled": {
+        "name": "Hot water daily target earliest start"
       }
     },
     "number": {
@@ -1205,6 +1260,18 @@
       },
       "grid_import_max": {
         "name": "Highest grid import while charging from the grid"
+      },
+      "hot_water_target_hours": {
+        "name": "Hot water daily target hours"
+      },
+      "hot_water_target_energy": {
+        "name": "Hot water daily target energy"
+      },
+      "hot_water_target_min_temperature": {
+        "name": "Hot water minimum temperature"
+      },
+      "hot_water_target_max_temperature": {
+        "name": "Hot water target temperature"
       }
     },
     "binary_sensor": {
@@ -1213,6 +1280,22 @@
       },
       "not_responding": {
         "name": "Not responding"
+      },
+      "release": {
+        "name": "Release",
+        "state_attributes": {
+          "forced": {
+            "name": "Forced"
+          }
+        }
+      },
+      "hot_water_release": {
+        "name": "Hot water release",
+        "state_attributes": {
+          "forced": {
+            "name": "Forced"
+          }
+        }
       }
     },
     "time": {
@@ -1221,6 +1304,12 @@
       },
       "target_earliest": {
         "name": "Daily target earliest from"
+      },
+      "hot_water_target_deadline": {
+        "name": "Hot water daily target deadline"
+      },
+      "hot_water_target_earliest": {
+        "name": "Hot water daily target earliest from"
       }
     }
   },

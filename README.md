@@ -182,8 +182,8 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Consumers | Status |
 |---|---|
 | Consumers with own power/energy sensors, inside or outside the smart meter | ✅ |
-| Heat pump as consumer type (weather dependent forecast) | ✅ |
-| Control of consumers: on/off or power set point, priority, minimum runtime/pause, avoid short runs, external blocking, control switchable per consumer | ✅ |
+| Heat pump as consumer type (weather dependent forecast), optionally a release of its hot water charge (operating mode, learned hot water power) | ✅ |
+| Control of consumers: on/off, power set point or release for an automation of your own (with latest start), priority, minimum runtime/pause, avoid short runs, external blocking, control switchable per consumer | ✅ |
 | Consumers with their own thermostat: pauses recognised, their power goes to the batteries meanwhile | ✅ |
 | Temperature sensors of a storage: learned energy per degree, remaining capacity | ✅ |
 | Role of a consumer in the feed-in cap (supporting, normal, never) | ✅ |
@@ -1024,14 +1024,71 @@ the energy flow.
   its defaults are current control, 6–16 A, 3 phases, 5 minutes minimum
   runtime and pause and battery support **automatic**.
 - **Control**: none (measurement only), on/off via a switch, a power set
-  point via a number entity in W, or a [current set point](#current-control)
-  in A. For controlled consumers an entity can be
+  point via a number entity in W, a [current set point](#current-control)
+  in A, or a **Release** for an automation of your own. For controlled consumers an entity can be
   selected that blocks them externally (SLEMS leaves the consumer alone while
   a switch or binary sensor is on, or while a water heater is in operation
   mode **off**), a priority (1 = highest) and optionally a minimum runtime and a
   minimum pause. For on/off consumers a rough estimate of the power when on is
   enough if **Use learned values** is on; rather too low than too high, because
   SLEMS only learns while it runs the consumer.
+- **Release** (control): for devices an automation of your own starts,
+  because it has to know more than SLEMS (e.g. a washing machine with a start
+  command, or the hot water charge of a heat pump via SG Ready only while its
+  compressor runs steadily). SLEMS switches nothing itself, but plans the
+  consumer like an on/off consumer with the configured power and provides:
+  - **Release** (binary sensor): on while SLEMS would switch the consumer on
+    (enough surplus, with **Avoid short runs** for a whole run, or from the
+    latest start of its daily target on). The attribute **forced** is on from
+    the latest start on: then start at once, also without surplus.
+  - **Latest start** (sensor, timestamp): when the daily target has to start
+    at the latest; empty once it is met.
+
+  While the automation has not started the device, it draws nothing: SLEMS
+  keeps the release on and gives the surplus to the batteries meanwhile (as
+  for a saturated consumer).
+
+  **Heat pump with release** (hot water): with the type **Heat pump** the
+  release is for its hot water charge. It needs the **Operating mode** (e.g.
+  its sensor **Status**) and, in the next step, the states that mean hot
+  water; preselected is what sounds like hot water (e.g. `hot_water`, `dhw`,
+  "Warmwasser"). Only in these states its measured power counts as
+  controlled; the heating stays an uncontrolled load and its forecast
+  unchanged. The power when on is a starting value: with **Use learned
+  values** SLEMS learns it in hot water mode, so it follows the coefficient of
+  performance. With the boiler's sensors as temperature sensors a daily target
+  **Temperature** fits (e.g. minimum 42 °C, target 50 °C, deadline 16:00); the
+  entities are called **Hot water release** and **Hot water latest start**. A
+  daily target **Energy** does not fit here, as the energy counter includes
+  the heating. Example automation:
+
+  ```yaml
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.heat_pump_hot_water_release
+      to: "on"
+    - trigger: state
+      entity_id: binary_sensor.heat_pump_running  # your own condition
+      to: "on"
+  conditions:
+    - condition: state
+      entity_id: binary_sensor.heat_pump_hot_water_release
+      state: "on"
+    - or:
+        - condition: state
+          entity_id: binary_sensor.heat_pump_hot_water_release
+          attribute: forced
+          state: true
+        - condition: state
+          entity_id: binary_sensor.heat_pump_running
+          state: "on"
+  actions:
+    - action: number.set_value
+      target:
+        entity_id: number.heat_pump_smart_grid_offset
+      data:
+        value: 38
+  ```
 - **Avoid short runs** (e.g. a device with a compressor): SLEMS switches the
   consumer on only when the forecast surplus lasts for a whole run (its
   minimum runtime, 15 minutes without one, or what its daily target still

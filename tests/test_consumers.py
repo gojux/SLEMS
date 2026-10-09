@@ -196,3 +196,72 @@ def test_nothing_is_planned_for_a_consumer_with_its_control_off() -> None:
     assert coordinator.target_states == {}
     assert coordinator.target_load == {}
     assert coordinator.target_demands == []
+
+
+def test_release_is_published_without_a_service_call() -> None:
+    import asyncio
+
+    release = ConsumerConfig(
+        subentry_id="boiler",
+        name="Boiler",
+        consumer_type=ConsumerType.OTHER,
+        power_entity_id="sensor.boiler_power",
+        energy_entity_id="sensor.boiler_energy",
+        included_in_meter=True,
+        control_mode=ControlMode.RELEASE,
+        control_entity_id=None,
+        nominal_power_w=1500,
+        min_power_w=None,
+        max_power_w=None,
+        block_entity_id=None,
+        priority=1,
+    )
+    controller = RealTimeController.__new__(RealTimeController)
+    controller._coordinator = SimpleNamespace(consumers=[release], effective_consumer=lambda c: c)
+    controller._consumer_commands = {}
+    controller._consumer_before = {}
+    controller._device_commands = {}
+    controller._low_since = {}
+    controller._resting = set()
+    controller._saturated_until = {}
+    controller.consumer_response = {}
+    controller.consumer_grid_response = {}
+    controller.battery_response = SimpleNamespace(value=5.0)
+    controller._last_grid_w = 0.0
+
+    async def no_call(*args, **kwargs):
+        raise AssertionError("a release calls no service")
+
+    controller._call = no_call
+    controller._hass = None
+    snapshot = SimpleNamespace(
+        allocation=SimpleNamespace(consumer_power_w={"boiler": 1500.0}),
+        consumers={"boiler": ConsumerState()},
+        saturated=frozenset(),
+        is_controllable_now=lambda subentry_id: True,
+    )
+    asyncio.run(controller._async_apply_consumers(snapshot))
+    assert controller.consumer_command("boiler") == 1500
+
+
+def test_heat_pump_power_counts_for_the_control_only_in_hot_water_mode() -> None:
+    from dataclasses import replace
+
+    heat_pump = replace(
+        consumer(),
+        consumer_type=ConsumerType.HEAT_PUMP,
+        power_entity_id="sensor.hp_power",
+        control_mode=ControlMode.RELEASE,
+        control_entity_id=None,
+        mode_entity_id="sensor.hp_status",
+        hot_water_states=("hot_water",),
+    )
+    assert heat_pump.hot_water_release
+    heating = read_consumer_state(hass_with({"sensor.hp_power": "1800", "sensor.hp_status": "heating_mode"}), heat_pump)
+    assert heating.power_w == 0
+    assert heating.total_power_w == 1800
+    hot_water = read_consumer_state(hass_with({"sensor.hp_power": "2400", "sensor.hp_status": "hot_water"}), heat_pump)
+    assert hot_water.power_w == hot_water.total_power_w == 2400
+    # Without a mode it is not known to heat hot water.
+    unknown = read_consumer_state(hass_with({"sensor.hp_power": "2400"}), heat_pump)
+    assert unknown.power_w == 0

@@ -112,6 +112,8 @@ from .const import (
     CONF_INCLUDED_IN_METER,
     CONF_MAX_POWER_W,
     CONF_MIN_POWER_W,
+    CONF_MODE_ENTITY,
+    CONF_HOT_WATER_STATES,
     CONF_NOMINAL_POWER_W,
     CONF_PRIORITY,
     DEFAULT_PRIORITY,
@@ -1255,11 +1257,13 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
     """Add or reconfigure a consumer.
 
     Every consumer must provide its own power and energy sensor. Control via a
-    switch or a power set point is optional.
+    switch, a power set point or a release is optional; a heat pump's release is
+    one for its hot water charge (operating mode and its hot water states).
     """
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
+        self._hot_water_labels: list[selector.SelectOptionDict] = []
 
     def _existing(self) -> dict[str, Any]:
         if self.source == SOURCE_RECONFIGURE:
@@ -1336,6 +1340,8 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
             start = user_input.get(CONF_START_ENTITY)
             if start and start.split(".", 1)[0] in ("select", "input_select"):
                 return await self.async_step_start_options()
+            if user_input.get(CONF_MODE_ENTITY):
+                return await self.async_step_hot_water_states()
             return self._async_finish()
 
         defaults = self._existing()
@@ -1401,6 +1407,16 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
                     domain=["switch", "input_boolean", "select", "input_select"]
                 )
             )
+        elif mode is ControlMode.RELEASE:
+            if ConsumerType(self._data[CONF_CONSUMER_TYPE]) is ConsumerType.HEAT_PUMP:
+                fields[
+                    vol.Required(CONF_MODE_ENTITY, default=defaults.get(CONF_MODE_ENTITY, vol.UNDEFINED))
+                ] = selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["sensor", "select", "input_select"])
+                )
+            fields[
+                vol.Required(CONF_NOMINAL_POWER_W, default=defaults.get(CONF_NOMINAL_POWER_W, vol.UNDEFINED))
+            ] = _watts(100_000)
         elif mode is ControlMode.SWITCH:
             fields[
                 vol.Required(CONF_CONTROL_ENTITY, default=defaults.get(CONF_CONTROL_ENTITY, vol.UNDEFINED))
@@ -1449,6 +1465,48 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
             selector.NumberSelectorConfig(min=1, max=10, step=1, mode=selector.NumberSelectorMode.SLIDER)
         )
         return self.async_show_form(step_id="control", data_schema=vol.Schema(fields))
+
+    async def async_step_hot_water_states(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """States of the heat pump's operating mode that mean hot water (preselected by name)."""
+        entity_id = self._data[CONF_MODE_ENTITY]
+        if user_input is not None:
+            if not user_input.get(CONF_HOT_WATER_STATES):
+                return self._hot_water_form(entity_id, user_input, {CONF_HOT_WATER_STATES: "hot_water_states_required"})
+            self._data.update(user_input)
+            return self._async_finish()
+        state = self.hass.states.get(entity_id)
+        options = [str(o) for o in (state.attributes.get("options") or [])] if state else []
+        labels = await _option_labels(self.hass, entity_id, options)
+        existing = self._existing()
+        if existing.get(CONF_MODE_ENTITY) == entity_id and existing.get(CONF_HOT_WATER_STATES):
+            chosen = list(existing[CONF_HOT_WATER_STATES])
+        else:
+            chosen = hot_water_guess(labels)
+        self._hot_water_labels = labels
+        return self._hot_water_form(entity_id, {CONF_HOT_WATER_STATES: chosen}, {})
+
+    def _hot_water_form(self, entity_id: str, values: dict[str, Any], errors: dict[str, str]) -> SubentryFlowResult:
+        labels = self._hot_water_labels
+        state = self.hass.states.get(entity_id)
+        return self.async_show_form(
+            step_id="hot_water_states",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_HOT_WATER_STATES, description={"suggested_value": values.get(CONF_HOT_WATER_STATES) or []}
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=labels, multiple=True, custom_value=True)
+                    )
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "entity": f"{state.name} ({entity_id})" if state else entity_id,
+                "state": state.state if state else "–",
+            },
+        )
 
     async def async_step_start_options(
         self, user_input: dict[str, Any] | None = None
@@ -1510,6 +1568,26 @@ _TARIFF_VAT_FIELDS = {
 _PERCENT = selector.NumberSelector(
     selector.NumberSelectorConfig(min=0, max=100, step=0.1, unit_of_measurement="%", mode=selector.NumberSelectorMode.BOX)
 )
+
+
+# Parts of an operating mode's state or name that mean hot water.
+_HOT_WATER_WORDS = (
+    "hot_water", "hotwater", "dhw", "domestic", "warmwasser", "brauchwasser", "sanitary", "tap_water",
+    "water_heating", "eau_chaude",
+)
+
+
+def hot_water_guess(options: list[selector.SelectOptionDict]) -> list[str]:
+    """Options of an operating mode that probably mean hot water (value or label)."""
+
+    def normal(text: str) -> str:
+        return text.lower().replace("-", "_").replace(" ", "_")
+
+    return [
+        option["value"]
+        for option in options
+        if any(word in normal(option["value"]) or word in normal(option["label"]) for word in _HOT_WATER_WORDS)
+    ]
 
 
 def _price_symbols(code: str) -> tuple[str, str]:

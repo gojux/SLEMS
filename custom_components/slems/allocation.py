@@ -168,13 +168,13 @@ class ConsumerRequest:
 
     @property
     def minimum_running_power_w(self) -> float:
-        if self.control_mode is ControlMode.SWITCH:
+        if self.control_mode.on_off:
             return self.nominal_power_w
         return self.min_power_w
 
     @property
     def full_power_w(self) -> float:
-        if self.control_mode is ControlMode.SWITCH:
+        if self.control_mode.on_off:
             return self.nominal_power_w
         return self.max_power_w
 
@@ -470,7 +470,7 @@ def _distribute(
     is switched on first.
     """
     consumers = sorted(
-        consumers, key=lambda c: not (c.control_mode is ControlMode.SWITCH and c.running)
+        consumers, key=lambda c: not (c.control_mode.on_off and c.running)
     )
     for consumer in consumers:
         if budget <= 0:
@@ -478,7 +478,7 @@ def _distribute(
         if consumer.must_stay_off:
             continue
         current = consumer_power[consumer.subentry_id]
-        if consumer.control_mode is ControlMode.SWITCH:
+        if consumer.control_mode.on_off:
             if current == 0 and budget >= consumer.nominal_power_w:
                 consumer_power[consumer.subentry_id] = consumer.nominal_power_w
                 budget -= consumer.nominal_power_w

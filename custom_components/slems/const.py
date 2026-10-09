@@ -122,6 +122,10 @@ CONF_VOLTAGE_V: Final = "voltage_v"
 CONF_START_ENTITY: Final = "start_entity"
 CONF_START_ON: Final = "start_on"
 CONF_START_OFF: Final = "start_off"
+# Heat pump with a hot water release: its operating mode and the states of it
+# that mean hot water.
+CONF_MODE_ENTITY: Final = "mode_entity"
+CONF_HOT_WATER_STATES: Final = "hot_water_states"
 DEFAULT_MIN_CURRENT_A: Final = 6
 DEFAULT_MAX_CURRENT_A: Final = 16
 DEFAULT_PHASES: Final = 3
@@ -233,6 +237,14 @@ class ControlMode(StrEnum):
     POWER = "power"
     # Current set point via a number entity (A), with the phases and voltage.
     CURRENT = "current"
+    # On/off like a switch, but SLEMS only publishes the release (binary sensor)
+    # and the latest start; an automation of the user starts the device.
+    RELEASE = "release"
+
+    @property
+    def on_off(self) -> bool:
+        """Planned with its nominal power, either on or off."""
+        return self in (ControlMode.SWITCH, ControlMode.RELEASE)
 
 
 class TargetType(StrEnum):

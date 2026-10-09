@@ -582,7 +582,7 @@ class SystemSnapshot:
 
     def _consumer_power_w(self, included_in_meter: bool) -> float:
         return sum(
-            state.power_w or 0.0
+            state.total_power_w or 0.0
             for subentry_id, state in self.consumers.items()
             if self.consumer_configs[subentry_id].included_in_meter == included_in_meter
         )
@@ -845,7 +845,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         for subentry_id, data in (stored.get(CONSUMERS_STORE_KEY) or {}).items():
             if (consumer := consumers.get(subentry_id)) is not None:
                 self.consumer_learners[subentry_id] = ConsumerLearner.from_dict(
-                    data, consumer.control_mode is not ControlMode.SWITCH
+                    data, not consumer.control_mode.on_off
                 )
         for subentry_id, data in (stored.get(THERMAL_STORE_KEY) or {}).items():
             if subentry_id in self.thermal_learners:
@@ -952,9 +952,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         estimates: dict[str, float] = {}
         energy_today: dict[str, tuple[float, float | None]] = {}
         for consumer in self.consumers:
+            # A hot water release: its counter includes the heating.
             if (
                 not consumer.controllable
                 or consumer.consumer_type is ConsumerType.WALLBOX
+                or consumer.hot_water_release
                 or not consumer.energy_entity_id
             ):
                 continue
@@ -2316,7 +2318,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         nominal = learner.nominal_w
         if nominal is None:
             return consumer
-        if consumer.control_mode is not ControlMode.SWITCH:
+        if not consumer.control_mode.on_off:
             nominal = max(nominal, consumer.min_power_w or 0)
         return replace(consumer, nominal_power_w=nominal)
 
@@ -2937,7 +2939,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 support.append(self.cap_consumer(consumer, power))
             elif mode is CapMode.NORMAL:
                 normal.append(
-                    CapConsumer(power_w=power, switch=consumer.control_mode is ControlMode.SWITCH)
+                    CapConsumer(power_w=power, switch=consumer.control_mode.on_off)
                 )
         return plan_cap(
             wall_now,
@@ -3203,7 +3205,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self.target_energy_wh[consumer.subentry_id] = energy
             # The batteries must deliver an on/off consumer's full power, a
             # power controlled one at least its minimum (it is then limited).
-            needed = power if consumer.control_mode is ControlMode.SWITCH else max(consumer.min_power_w or 0, 1.0)
+            needed = power if consumer.control_mode.on_off else max(consumer.min_power_w or 0, 1.0)
             battery_need = battery.energy_to_full_wh if battery else 0.0
             self.target_states[consumer.subentry_id] = self._price_window(
                 settings,
@@ -3318,7 +3320,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     def _full_power_w(consumer: ConsumerConfig) -> float:
         """Power at full command: the nominal power (on/off, or the learned one of
         a power controlled consumer), else its maximum power."""
-        if consumer.control_mode is ControlMode.SWITCH:
+        if consumer.control_mode.on_off:
             return float(consumer.nominal_power_w or 0)
         return float(consumer.nominal_power_w or consumer.max_power_w or 0)
 
@@ -3332,7 +3334,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
 
     def cap_consumer(self, consumer: ConsumerConfig, power_w: float) -> CapConsumer:
         """Supporting consumer for the cap planning (capacity from the temperatures)."""
-        switch = consumer.control_mode is ControlMode.SWITCH
+        switch = consumer.control_mode.on_off
         capacity = self.thermal_capacity(consumer.subentry_id)
         if capacity is None:
             return CapConsumer(power_w=power_w, switch=switch)

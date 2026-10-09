@@ -444,3 +444,13 @@ def test_room_kept_and_grid_charging_in_a_surplus() -> None:
     charged = allocate(800, battery(50), [], SETTINGS, None, grid_charge_w=4000.0, grid_import_limit_w=1000.0)
     assert charged.strategy is Strategy.GRID_CHARGE
     assert charged.battery_power_w == pytest.approx(1800)
+
+
+def test_release_is_planned_like_a_switch() -> None:
+    release = ConsumerRequest(
+        subentry_id="boiler", priority=1, control_mode=ControlMode.RELEASE, nominal_power_w=1500,
+    )
+    result = allocate(2000, battery(100), [release], SETTINGS, expected_surplus_wh=0)
+    assert result.consumer_power_w["boiler"] == 1500
+    result = allocate(1000, battery(100), [release], SETTINGS, expected_surplus_wh=0)
+    assert result.consumer_power_w["boiler"] == 0

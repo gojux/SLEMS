@@ -312,7 +312,8 @@
           "data_description": {
             "consumer_type": "Der Verbrauch einer Wärmepumpe wird wetterabhängig prognostiziert; eine Heizpatrone wird typischerweise im Sommer für Warmwasser genutzt. Eine Wallbox gehört nie zur Prognose des Hausverbrauchs; im nächsten Schritt sind Stromvorgabe, 6–16 A und 5 Minuten Mindestlaufzeit und -pause vorgegeben, die Batterie-Unterstützung steht auf Automatisch.",
             "included_in_meter": "Aktivieren, wenn der Verbraucher hinter dem Smart Meter hängt, sein Verbrauch also bereits in der gemessenen Netzleistung enthalten ist.",
-            "show_in_flow": "Zeigt den Verbraucher als eigene Box im Energiefluss des Dashboards. Aus: Sein Verbrauch zählt weiter im Haus; die Verbraucherkarte zeigt ihn."
+            "show_in_flow": "Zeigt den Verbraucher als eigene Box im Energiefluss des Dashboards. Aus: Sein Verbrauch zählt weiter im Haus; die Verbraucherkarte zeigt ihn.",
+            "control_mode": "**Freigabe**: SLEMS schaltet selbst nichts, sondern stellt den Binärsensor **Freigabe** (an, wenn SLEMS den Verbraucher jetzt einschalten würde; Attribut **forced** ab dem spätesten Start des Tagesziels) und den Sensor **Spätester Start** bereit; eine eigene Automation startet das Gerät. Bei einer Wärmepumpe gilt die Freigabe ihrer Warmwasserladung: Gesteuert wird nur, was sie im Warmwasserbetrieb zieht, das Heizen bleibt ungesteuert."
           }
         },
         "control": {
@@ -334,11 +335,12 @@
             "phases_entity": "Entität der aktiven Phasen",
             "voltage_v": "Spannung",
             "start_entity": "Start/Stopp-Entität",
-            "avoid_cycling": "Takten vermeiden"
+            "avoid_cycling": "Takten vermeiden",
+            "mode_entity": "Betriebsmodus"
           },
           "data_description": {
             "control_entity": "Schalter für Ein/Aus-Verbraucher, Number-Entität in W für leistungsgeregelte, in A für stromgeregelte Verbraucher (z. B. Ladestrom einer Wallbox); bei Stromvorgabe auch eine Auswahl mit Ampere-Optionen (z. B. **Max. Ladestrom** eines evcc-Ladepunkts in ha-evcc).",
-            "nominal_power_w": "Eine grobe Schätzung reicht, wenn **Gelernte Werte verwenden** an ist: SLEMS misst dann die tatsächliche Leistung, während es den Verbraucher betreibt (Betriebsmodus Aktiv), und verwendet sie nach etwa 30 Messwerten. Lieber etwas zu niedrig als zu hoch schätzen: Zu hoch wartet SLEMS auf mehr Überschuss und schaltet den Verbraucher womöglich nie ein, dann wird auch nichts gelernt.",
+            "nominal_power_w": "Eine grobe Schätzung reicht, wenn **Gelernte Werte verwenden** an ist: SLEMS misst dann die tatsächliche Leistung, während es den Verbraucher betreibt (Betriebsmodus Aktiv), und verwendet sie nach etwa 30 Messwerten. Lieber etwas zu niedrig als zu hoch schätzen: Zu hoch wartet SLEMS auf mehr Überschuss und schaltet den Verbraucher womöglich nie ein, dann wird auch nichts gelernt. Bei einer Wärmepumpe mit **Freigabe**: ihre Leistung beim Warmwasser; SLEMS lernt sie im Warmwasserbetrieb, sie folgt so der Leistungszahl.",
             "block_entity": "Solange der Verbraucher gesperrt ist (z. B. vom Gerät oder einer Automation), steuert SLEMS ihn nicht: ein Water Heater bei Betriebsart „off“, andere Entitäten, solange sie „on“ sind.",
             "priority": "1 = höchste Priorität bei der Verteilung von Überschuss.",
             "min_on_minutes": "Optional. Nach dem Einschalten durch SLEMS läuft der Verbraucher mindestens so lange.",
@@ -351,7 +353,8 @@
             "phases_entity": "Optional. Sensor mit der Zahl der aktiven Phasen (1 oder 3), z. B. eines evcc-Ladepunkts oder einer Wallbox, die selbst umschaltet; der Leistungsbereich folgt ihm.",
             "voltage_v": "Spannung je Phase.",
             "start_entity": "Optional. Schalter, oder eine Auswahl (dann werden als Nächstes die Optionen für ein und aus abgefragt, z. B. Modus eines evcc-Ladepunkts: now / off). Ohne sie stoppt SLEMS, indem es den kleinsten Strom setzt, den die Steuer-Entität zulässt (0 A, wenn erlaubt); bei evcc mit seinem Mindeststrom entscheidet evcc dann selbst über Start und Stopp.",
-            "avoid_cycling": "Nur einschalten, wenn der prognostizierte Überschuss für einen ganzen Lauf reicht (die Mindestlaufzeit, oder was das Tagesziel noch braucht, wenn weniger), und bei Einbrüchen des Überschusses bis zu 5 Minuten weiterlaufen (Batterien oder Netz überbrücken). Für Geräte, die nicht oft ein- und ausgeschaltet werden sollen, z. B. mit Kompressor; dazu eine Mindestlaufzeit und -pause setzen."
+            "avoid_cycling": "Nur einschalten, wenn der prognostizierte Überschuss für einen ganzen Lauf reicht (die Mindestlaufzeit, oder was das Tagesziel noch braucht, wenn weniger), und bei Einbrüchen des Überschusses bis zu 5 Minuten weiterlaufen (Batterien oder Netz überbrücken). Für Geräte, die nicht oft ein- und ausgeschaltet werden sollen, z. B. mit Kompressor; dazu eine Mindestlaufzeit und -pause setzen.",
+            "mode_entity": "Entität, die den Betriebsmodus der Wärmepumpe zeigt (z. B. **Status** mit Heizen, Warmwasser, Abtauen); als Nächstes wählst du die Zustände, die Warmwasser bedeuten."
           }
         },
         "start_options": {
@@ -365,10 +368,23 @@
             "start_on": "Wird ausgewählt, wenn der Verbraucher laufen soll. Wähle die Option, in der das Gerät ohne eigene Logik läuft, bei evcc **Schnell**: Bei **Smart** würde evcc selbst nach Überschuss regeln und gegen SLEMS arbeiten.",
             "start_off": "Wird ausgewählt, wenn der Verbraucher aus sein soll, bei evcc **Aus**."
           }
+        },
+        "hot_water_states": {
+          "title": "Zustände für Warmwasser",
+          "description": "Zustände von {entity} (jetzt: {state}), in denen die Wärmepumpe Warmwasser bereitet. Vorausgewählt ist, was nach Warmwasser klingt; prüfe die Auswahl. Nur in diesen Zuständen zählt ihre Leistung als gesteuert.",
+          "data": {
+            "hot_water_states": "Warmwasser-Zustände"
+          },
+          "data_description": {
+            "hot_water_states": "Mehrere möglich; ein Zustand, der nicht in der Liste steht, lässt sich eintippen."
+          }
         }
       },
       "abort": {
         "reconfigure_successful": "Verbraucher aktualisiert."
+      },
+      "error": {
+        "hot_water_states_required": "Mindestens einen Zustand für Warmwasser auswählen."
       }
     },
     "tariff": {
@@ -584,7 +600,8 @@
         "none": "Keine (nur Messung)",
         "switch": "Ein/Aus (Schalter)",
         "power": "Leistungsvorgabe (Number)",
-        "current": "Stromvorgabe (A)"
+        "current": "Stromvorgabe (A)",
+        "release": "Freigabe (Automation startet)"
       }
     },
     "efficiency_mode": {
@@ -750,6 +767,32 @@
           "energy_charts_at": "Energy-Charts (Österreich)",
           "energy_charts_de_lu": "Energy-Charts (Deutschland/Luxemburg)",
           "energy_charts_ch": "Energy-Charts (Schweiz)"
+        }
+      },
+      "hot_water_target_type": {
+        "name": "Warmwasser-Tagesziel",
+        "state": {
+          "none": "Keins",
+          "runtime": "Laufzeit",
+          "enabled": "Freigabezeit",
+          "energy": "Energie",
+          "temperature": "Temperatur"
+        }
+      },
+      "hot_water_target_source": {
+        "name": "Warmwasser-Tagesziel Quelle",
+        "state": {
+          "surplus": "Nur Überschuss",
+          "battery": "Überschuss + Batterie",
+          "grid": "Überschuss + Batterie + Netz"
+        }
+      },
+      "hot_water_target_sensor": {
+        "name": "Warmwasser-Tagesziel Fühler",
+        "state": {
+          "mean": "Mittelwert",
+          "first": "Fühler 1",
+          "second": "Fühler 2"
         }
       }
     },
@@ -991,6 +1034,12 @@
           "unreadable": "Abgebrochen (Batterie nicht lesbar)",
           "cancelled": "Abgebrochen"
         }
+      },
+      "latest_start": {
+        "name": "Spätester Start"
+      },
+      "hot_water_latest_start": {
+        "name": "Spätester Warmwasser-Start"
       }
     },
     "switch": {
@@ -1083,6 +1132,12 @@
       },
       "self_test": {
         "name": "Selbsttest"
+      },
+      "hot_water_target_priority": {
+        "name": "Warmwasser-Tagesziel vor der Batterie"
+      },
+      "hot_water_target_earliest_enabled": {
+        "name": "Warmwasser-Tagesziel frühester Beginn"
       }
     },
     "number": {
@@ -1205,6 +1260,18 @@
       },
       "grid_import_max": {
         "name": "Höchster Netzbezug beim Netzladen"
+      },
+      "hot_water_target_hours": {
+        "name": "Warmwasser-Tagesziel Stunden"
+      },
+      "hot_water_target_energy": {
+        "name": "Warmwasser-Tagesziel Energie"
+      },
+      "hot_water_target_min_temperature": {
+        "name": "Warmwasser-Mindesttemperatur"
+      },
+      "hot_water_target_max_temperature": {
+        "name": "Warmwasser-Zieltemperatur"
       }
     },
     "binary_sensor": {
@@ -1213,6 +1280,22 @@
       },
       "not_responding": {
         "name": "Reagiert nicht"
+      },
+      "release": {
+        "name": "Freigabe",
+        "state_attributes": {
+          "forced": {
+            "name": "Erzwungen"
+          }
+        }
+      },
+      "hot_water_release": {
+        "name": "Warmwasser-Freigabe",
+        "state_attributes": {
+          "forced": {
+            "name": "Erzwungen"
+          }
+        }
       }
     },
     "time": {
@@ -1221,6 +1304,12 @@
       },
       "target_earliest": {
         "name": "Tagesziel frühestens ab"
+      },
+      "hot_water_target_deadline": {
+        "name": "Warmwasser-Tagesziel bis"
+      },
+      "hot_water_target_earliest": {
+        "name": "Warmwasser-Tagesziel frühestens ab"
       }
     }
   },
