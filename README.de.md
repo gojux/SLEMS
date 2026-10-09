@@ -989,9 +989,12 @@ Jede steuerbare Batterie hat diese Einstellungen (Dashboard: **Einstellungen**):
   Nahe am Minimum kann das BMS das Entladen früher beenden als eingestellt,
   z. B. wenn eine schwache Zelle unter hoher Last einbricht. Liefert eine
   Batterie unter 20 % bei drei Abfragen in Folge nichts, obwohl SLEMS sie
-  entladen lässt, sperrt SLEMS ihr Entladen (Grund `bms` bei **Erlaubte
-  Entladeleistung**), bis sie geladen wurde oder ihr Ladezustand um 2 %
-  gestiegen ist; die anderen Batterien und das Netz übernehmen. Unabhängig
+  entladen lässt, begrenzt SLEMS ihr Entladen zuerst auf die halbe Leistung
+  (mindestens 300 W), weil das BMS bei geringerer Last später abschaltet;
+  liefert sie auch damit nichts, sperrt SLEMS ihr Entladen. Beides (Grund
+  `bms` bei **Erlaubte Entladeleistung**) gilt, bis sie geladen wurde oder
+  ihr Ladezustand um 2 % gestiegen ist; die anderen Batterien und das Netz
+  übernehmen. Unabhängig
   davon rechnet die Regelung eine Batterie, die ihrer Vorgabe messbar nicht
   folgt, mit ihrer gemessenen Leistung, damit Hausverbrauch und
   Verbrauchsprognose keine Leistung enthalten, die nicht fließt.

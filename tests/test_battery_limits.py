@@ -92,13 +92,19 @@ def test_top_taper_with_hysteresis() -> None:
     assert power_limits(2500, 2500, low, SocWindow(), None, TemperatureLimit(), top_taper=True).charge_w == 150
 
 
-def test_bms_stop_blocks_discharging() -> None:
+def test_bms_stop_limits_or_blocks_discharging() -> None:
     settings = BatteryLimitSettings()
-    limits = power_limits(2500, 2500, settings, SocWindow(), 20, ON, bms_stop=True)
+    limits = power_limits(2500, 2500, settings, SocWindow(), 20, ON, bms_limit_w=0)
     assert limits.discharge_w == 0 and limits.discharge_reason == "bms"
     assert limits.charge_w == 2500
+    limits = power_limits(2500, 2500, settings, SocWindow(), 20, ON, bms_limit_w=1250)
+    assert limits.discharge_w == 1250 and limits.discharge_reason == "bms"
+    # A lower user limit stays the reason.
+    low = BatteryLimitSettings(discharge_limit_w=800)
+    limits = power_limits(2500, 2500, low, SocWindow(), 20, ON, bms_limit_w=1250)
+    assert limits.discharge_w == 800 and limits.discharge_reason == "power"
     # Cell balancing ignores it like the SoC window.
     limits = power_limits(
-        2500, 2500, settings, SocWindow(), 20, ON, bms_stop=True, use_soc_window=False
+        2500, 2500, settings, SocWindow(), 20, ON, bms_limit_w=0, use_soc_window=False
     )
     assert limits.discharge_w == 2500

@@ -45,13 +45,34 @@ def test_bms_limits_are_no_failure() -> None:
     assert monitor.fail_count == 0
 
 
-def test_bms_discharge_stop_blocks_without_failure() -> None:
+def test_bms_discharge_stop_retries_lower_then_blocks_without_failure() -> None:
     monitor = DeliveryMonitor("test")
     actions = [monitor.observe(40 + 5 * i, -2500, 0, 0, 12.4) for i in range(FAIL_THRESHOLD)]
     assert actions[-1] is Action.BMS_STOP
     assert all(action is Action.NONE for action in actions[:-1])
-    assert monitor.discharge_stopped and monitor.discharge_stopped_soc == 12.4
+    assert monitor.bms_limit_w == 1250 and monitor.bms_stop_soc == 12.4
     assert monitor.fail_count == 0 and not monitor.excluded(100)
+    # The lower power gets time to take effect.
+    for t in range(55, 55 + int(ENGAGE_GRACE_S), 5):
+        assert monitor.observe(t, -1250, 0, 0, 12.2) is Action.NONE
+    # It delivers: the lower limit stays.
+    monitor.observe(90, -1250, 0, -1200, 12.2)
+    assert monitor.bms_limit_w == 1250
+    actions = [monitor.observe(95 + 5 * i, -1250, 0, 0, 12.0) for i in range(FAIL_THRESHOLD)]
+    assert actions[-1] is Action.BMS_STOP
+    assert monitor.bms_limit_w == 0 and monitor.bms_stop_soc == 12.4
+    assert monitor.fail_count == 0 and not monitor.excluded(200)
+
+
+def test_bms_stop_at_low_power_blocks_at_once() -> None:
+    monitor = DeliveryMonitor("test")
+    for i in range(FAIL_THRESHOLD):
+        monitor.observe(40 + 5 * i, -300, 0, 0, 12.4)
+    assert monitor.bms_limit_w == 0
+    monitor = DeliveryMonitor("test")
+    for i in range(FAIL_THRESHOLD):
+        monitor.observe(40 + 5 * i, -500, 0, 0, 12.4)
+    assert monitor.bms_limit_w == 300
 
 
 def test_bms_stop_needs_consecutive_polls() -> None:
@@ -59,7 +80,7 @@ def test_bms_stop_needs_consecutive_polls() -> None:
     monitor.observe(40, -2500, 0, 0, 12.4)
     monitor.observe(45, -2500, 0, -2400, 12.4)  # delivers again
     monitor.observe(50, -2500, 0, 0, 12.4)
-    assert not monitor.discharge_stopped
+    assert monitor.bms_limit_w is None
 
 
 def test_bms_stop_ends_after_charging_or_rising_soc() -> None:
@@ -67,14 +88,14 @@ def test_bms_stop_ends_after_charging_or_rising_soc() -> None:
     for i in range(FAIL_THRESHOLD):
         monitor.observe(40 + 5 * i, -2500, 0, 0, 12.4)
     assert not monitor.update_stop(13.0, 0)
-    assert monitor.discharge_stopped
+    assert monitor.bms_limit_w is not None
     assert monitor.update_stop(13.0, 500)  # charging
-    assert not monitor.discharge_stopped
+    assert monitor.bms_limit_w is None and monitor.bms_stop_soc is None
 
     for i in range(FAIL_THRESHOLD):
         monitor.observe(100 + 5 * i, -2500, 0, 0, 12.4)
     assert monitor.update_stop(14.4, 0)  # SoC rose by 2 %
-    assert not monitor.discharge_stopped
+    assert monitor.bms_limit_w is None
 
 
 def test_communication_failures_exclude_without_wake() -> None:

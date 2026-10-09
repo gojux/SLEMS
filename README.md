@@ -938,9 +938,12 @@ Every controllable battery has these settings (dashboard: **Settings**):
 
   Near the minimum the BMS may stop discharging earlier than set, e.g. when a
   weak cell sags under a high load. If a battery delivers nothing below 20 %
-  for three polls in a row although SLEMS asks it to discharge, SLEMS blocks
-  its discharging (reason `bms` at **Allowed discharge power**) until it was
-  charged or its SoC rose by 2 %; the other batteries and the grid take over.
+  for three polls in a row although SLEMS asks it to discharge, SLEMS first
+  limits its discharging to half the power (at least 300 W), as the BMS
+  stops later under a lower load; if it delivers nothing at that power
+  either, SLEMS blocks its discharging. Both (reason `bms` at **Allowed
+  discharge power**) last until it was charged or its SoC rose by 2 %; the
+  other batteries and the grid take over.
   Independently, the control counts a battery that measurably does not follow
   its set point with its measured power, so the house consumption and the
   consumption forecast do not contain power that does not flow.

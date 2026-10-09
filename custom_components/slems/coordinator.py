@@ -1593,7 +1593,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             full_charge=battery.subentry_id == self.full_charge_battery,
             # Read-only batteries charge by their own logic.
             top_taper=battery.top_taper.active and caps.controllable,
-            bms_stop=battery.delivery.discharge_stopped,
+            bms_limit_w=battery.delivery.bms_limit_w,
         )
 
     def _check_delivery(
