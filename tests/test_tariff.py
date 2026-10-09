@@ -304,3 +304,26 @@ def test_percent_item_on_the_other_items_of_its_group() -> None:
     assert bill.groups[(Side.IMPORT, Group.GRID)] == pytest.approx(0.10)
     # A kWh: 10 ct × 1.07 with 20 % VAT, plus 5 ct grid without VAT.
     assert kwh_price(tariff, Side.IMPORT, local(day, 9), None, None) == pytest.approx(10 * 1.07 * 1.2 + 5)
+
+
+def test_mixed_tariff_takes_one_side_from_each() -> None:
+    from custom_components.slems.tariff import mixed_tariff
+
+    current = Tariff("Current", Role.CURRENT, (
+        TariffItem("E", Side.IMPORT, Group.ENERGY, Unit.KWH, 20.0),
+        TariffItem("C", Side.EXPORT, Group.ENERGY, Unit.KWH, 7.0),
+    ), {(Side.IMPORT, Group.ENERGY): 20.0, (Side.EXPORT, Group.ENERGY): 0.0})
+    dynamic = Tariff("Dynamic", Role.COMPARISON, (
+        TariffItem("E", Side.IMPORT, Group.ENERGY, Unit.SPOT, 1.0),
+        TariffItem("C", Side.EXPORT, Group.ENERGY, Unit.SPOT, -1.0),
+    ), {(Side.IMPORT, Group.ENERGY): 10.0, (Side.EXPORT, Group.ENERGY): 20.0})
+    assert mixed_tariff(current, current) is current
+    mixed = mixed_tariff(dynamic, current)
+    assert [(item.side, item.unit) for item in mixed.items] == [
+        (Side.IMPORT, Unit.SPOT),
+        (Side.EXPORT, Unit.KWH),
+    ]
+    assert mixed.vat(Side.IMPORT, Group.ENERGY) == 10.0
+    assert mixed.vat(Side.EXPORT, Group.ENERGY) == 0.0
+    assert mixed.name == "Dynamic + Current"
+    assert mixed.name_for(Side.EXPORT) == "Current"

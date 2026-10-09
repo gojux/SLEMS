@@ -328,6 +328,9 @@ const STRINGS = {
     simMaxSoc: "Maximum state of charge",
     simChargePower: "Charge power",
     simDischargePower: "Discharge power",
+    simImportTariff: "Tariff for import",
+    simExportTariff: "Tariff for feed-in",
+    simCurrentTariff: "current tariff",
     simMetricsToday: "Key figures today (from now on)",
     simMetricsTomorrow: "Key figures tomorrow",
     simCurrent: "Current settings",
@@ -374,6 +377,10 @@ const STRINGS = {
     mMaxExport: "Highest feed-in",
     mCurtailed: "Curtailed",
     mSocEnd: "State of charge at midnight",
+    mImportCost: "Import costs",
+    mExportCredit: "Feed-in credit",
+    mNetCost: "Costs less credit",
+    simCostNote: "Costs: the planned grid energy with the per kWh prices incl. VAT (without yearly fees), the simulation with its tariffs, the current settings with the current tariff.",
     exportCompare: "Feed-in (current settings)",
     socCompare: "State of charge (current settings)",
     status: "Status",
@@ -848,6 +855,9 @@ const STRINGS = {
     simCapacity: "Nutzbare Kapazität",
     simMinSoc: "Minimaler Ladezustand",
     simMaxSoc: "Maximaler Ladezustand",
+    simImportTariff: "Tarif für Bezug",
+    simExportTariff: "Tarif für Einspeisung",
+    simCurrentTariff: "aktueller Tarif",
     simChargePower: "Ladeleistung",
     simDischargePower: "Entladeleistung",
     simMetricsToday: "Kennzahlen heute (ab jetzt)",
@@ -896,6 +906,10 @@ const STRINGS = {
     mMaxExport: "Höchste Einspeisung",
     mCurtailed: "Abgeregelt",
     mSocEnd: "Ladezustand um Mitternacht",
+    mImportCost: "Bezugskosten",
+    mExportCredit: "Einspeisevergütung",
+    mNetCost: "Kosten abzüglich Vergütung",
+    simCostNote: "Kosten: die geplante Netzenergie mit den Preisen je kWh inkl. USt. (ohne Jahresgebühren), die Simulation mit ihren Tarifen, die aktuellen Einstellungen mit dem aktuellen Tarif.",
     exportCompare: "Einspeisung (aktuelle Einstellungen)",
     socCompare: "Ladezustand (aktuelle Einstellungen)",
     status: "Status",
@@ -3200,13 +3214,14 @@ class SlemsPanel extends HTMLElement {
   //
   // Below the day chart (overview and simulation), on the same time axis: the
   // price of a kWh with the current tariff per quarter hour (import, feed-in
-  // credit) and the market price. Only shown when a tariff exists.
+  // credit; in the simulation with the tariffs chosen there) and the market
+  // price. Only shown when a tariff exists.
 
-  async _loadPrices(day) {
+  async _loadPrices(day, tariffs) {
     const state = this._prices;
     state.loading = true;
     try {
-      const result = await this._hass.callWS({ type: `${DOMAIN}/price_chart`, day });
+      const result = await this._hass.callWS({ type: `${DOMAIN}/price_chart`, day, ...tariffs });
       Object.assign(state, { day, result, at: Date.now() });
     } catch (err) {
       console.error("SLEMS: prices failed", err);
@@ -3223,14 +3238,19 @@ class SlemsPanel extends HTMLElement {
     // New prices for another day, every 15 minutes, after midnight and when
     // fetching the market prices or the price aware control is switched.
     const switches = `${this._state("market_prices")?.state}/${this._state("price_control")?.state}`;
+    const form = this._tab === "simulation" ? this._sim.form : null;
+    const tariffs = { import_tariff: form?.import_tariff || "", export_tariff: form?.export_tariff || "" };
+    const tariffKey = `${tariffs.import_tariff}/${tariffs.export_tariff}`;
     const stale =
       state.switches !== switches ||
+      state.tariffs !== tariffKey ||
       state.day !== day ||
       Date.now() - state.at > 15 * 60 * 1000 ||
       (state.result?.slots?.length && !state.result.slots[0].start.startsWith(this._localDate(day)));
     if (stale && !state.loading && this._hass) {
       state.switches = switches;
-      this._loadPrices(day);
+      state.tariffs = tariffKey;
+      this._loadPrices(day, tariffs);
     }
     const result = state.day === day ? state.result : null;
     if (!result?.available) {
@@ -3465,6 +3485,8 @@ class SlemsPanel extends HTMLElement {
       battery: { ...(base?.battery || {}) },
       pv_pct: 0,
       consumption_pct: 0,
+      import_tariff: "",
+      export_tariff: "",
     };
   }
 
@@ -3530,6 +3552,20 @@ class SlemsPanel extends HTMLElement {
       [t.mCurtailed, "curtailed_kwh", kwh],
       [t.mSocEnd, "soc_end_pct", percent],
     ];
+    const costs = "import_cost" in simulated && "import_cost" in real;
+    if (costs) {
+      const language = this._hass?.locale?.language || "en";
+      const money = new Intl.NumberFormat(language, { style: "currency", currency: this._currency() });
+      const amount = (v) => (v === null || v === undefined ? "–" : money.format(v));
+      const net = (m) => (m.import_cost === null || m.export_credit === null ? null : Math.round((m.import_cost - m.export_credit) * 100) / 100);
+      real.net_cost = net(real);
+      simulated.net_cost = net(simulated);
+      rows.push(
+        [t.mImportCost, "import_cost", amount],
+        [t.mExportCredit, "export_credit", amount],
+        [t.mNetCost, "net_cost", amount]
+      );
+    }
     return `<h3>${escapeHtml(day === "today" ? t.simMetricsToday : t.simMetricsTomorrow)}</h3>
       <div class="table-wrap"><table class="sim-metrics">
       <thead><tr><th></th><th>${escapeHtml(t.simCurrent)}</th><th>${escapeHtml(t.simSimulated)}</th></tr></thead>
@@ -3539,7 +3575,7 @@ class SlemsPanel extends HTMLElement {
           return `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(format(real[key]))}</td>
             <td class="${changed ? "changed" : ""}">${escapeHtml(format(simulated[key]))}</td></tr>`;
         })
-        .join("")}</tbody></table></div>`;
+        .join("")}</tbody></table></div>${costs ? `<p class="hint">${escapeHtml(t.simCostNote)}</p>` : ""}`;
   }
 
   // Passive comparison of the recorded months with each tariff (see tariff_comparison.py).
@@ -3704,6 +3740,18 @@ class SlemsPanel extends HTMLElement {
         min="${min ?? a.min ?? ""}" max="${max ?? a.max ?? ""}" step="${stepValue}"${disabled ? " disabled" : ""}><span class="unit">${escapeHtml(unit ?? a.unit_of_measurement ?? "")}</span></span></div>`;
   }
 
+  // A comparison tariff whose import or feed-in side the price aware control
+  // plans with (empty: the current tariff); only with comparison tariffs for that side.
+  _simTariff(key, side, label) {
+    const choices = this._sim.result?.base?.tariffs?.[side] || [];
+    if (!choices.length) return "";
+    const value = this._sim.form?.[key] || "";
+    const options = [{ id: "", name: this._t.simCurrentTariff }, ...choices];
+    return `<div class="setting"><span>${escapeHtml(label)}</span><select data-sim="${key}" data-kind="sim-select" aria-label="${escapeHtml(label)}">
+      ${options.map((o) => `<option value="${escapeHtml(o.id)}" ${o.id === value ? "selected" : ""}>${escapeHtml(o.name)}</option>`).join("")}
+      </select></div>`;
+  }
+
   _simControls() {
     const t = this._t;
     const s = this._sim.form?.settings || {};
@@ -3736,7 +3784,9 @@ class SlemsPanel extends HTMLElement {
         setting("grid_friendly_buffer_kwh", "grid_friendly_buffer"))}
       ${option(t.groups.night, "night_discharge", "night_discharge", setting("night_reserve_pct", "night_reserve"))}
       ${option(t.groups.price, "price_control", "price_control",
-        setting("price_min_gain_ct", "price_min_gain") +
+        this._simTariff("import_tariff", "import", t.simImportTariff) +
+          this._simTariff("export_tariff", "export", t.simExportTariff) +
+          setting("price_min_gain_ct", "price_min_gain") +
           setting("grid_charge", "grid_charge") +
           (s.grid_charge
             ? setting("grid_charge_max_soc_pct", "grid_charge_max_soc") +
@@ -3762,6 +3812,7 @@ class SlemsPanel extends HTMLElement {
     const form = this._sim.form;
     let value;
     if (target.dataset.kind === "sim-bool") value = target.checked;
+    else if (target.dataset.kind === "sim-select") value = target.value;
     else {
       value = parseFloat(target.value);
       if (!Number.isFinite(value)) return;

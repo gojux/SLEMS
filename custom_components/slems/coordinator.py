@@ -199,7 +199,7 @@ from .energy_history import async_grid_energy, async_hourly_changes
 from .price_backtest import BacktestBattery, measured_saving
 from .price_savings import PriceSavings
 from .price_hold import PriceHold, cheapest_start, plan_price_hold
-from .tariff import Side, Unit
+from .tariff import Side, Tariff, Unit
 from .tariff_comparison import configured_tariffs
 from .peak_shaving import auto_limit, hours_until_refill
 from .pv_forecast import (
@@ -2333,13 +2333,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         settings: ControlSettings,
         balancing_wh: float = 0.0,
         power_w: tuple[float, float] | None = None,
+        tariff: Tariff | None = None,
     ) -> ForecastPlan:
         """Plans from the forecasts with ``settings``: feed-in limit, feed-in
         cap, peak shaving and the SoC projection with the day plans.
 
-        Used for the real planning and, with other settings, battery and
-        forecasts, for the simulation. ``power_w`` replaces the charge and
-        discharge power of the batteries for the feed-in cap.
+        Used for the real planning and, with other settings, battery,
+        forecasts and ``tariff`` (instead of the current one), for the
+        simulation. ``power_w`` replaces the charge and discharge power of the
+        batteries for the feed-in cap.
         """
         result = ForecastPlan()
         consumption = snapshot.consumption_forecast
@@ -2402,11 +2404,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if settings.price_control and consumption_hourly:
                 result.grid_charge = self._grid_charge(
                     battery, wall_now, pv_forecast, pv_hourly, consumption_hourly, grid_load, until, settings,
-                    result.peak_limit_w, cap,
+                    result.peak_limit_w, cap, tariff,
                 )
                 if result.grid_charge is None:
                     result.price_hold = self._price_hold(
-                        battery, wall_now, pv_forecast, consumption_hourly, grid_load, until, settings
+                        battery, wall_now, pv_forecast, consumption_hourly, grid_load, until, settings, tariff
                     )
                 limits = (result.grid_charge or result.price_hold)
                 if limits is not None:
@@ -2535,11 +2537,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         grid_load: Mapping[datetime, float],
         until: datetime | None,
         settings: ControlSettings,
+        tariff: Tariff | None = None,
     ) -> PriceHold | None:
         """Quarter hours in which the batteries keep their energy for more expensive ones."""
         if until is None:
             return None
-        prices = self._import_prices(wall_now, until)
+        prices = self._import_prices(wall_now, until, tariff=tariff)
         if prices is None:
             return None
         deficits = {
@@ -2563,6 +2566,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         settings: ControlSettings,
         peak_limit_w: float,
         cap: CapPlan | None,
+        tariff: Tariff | None = None,
     ) -> GridChargePlan | None:
         """Price plan of the batteries (see grid_charge).
 
@@ -2576,16 +2580,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         local_now = dt_util.as_local(wall_now)
         # Whole hours, so the prices are computed once per quarter hour.
         horizon = local_now.replace(minute=0, second=0, microsecond=0) + MAX_GRID_CHARGE_HORIZON
-        prices = self._import_prices(wall_now, horizon)
+        prices = self._import_prices(wall_now, horizon, tariff=tariff)
         if prices is None:
             return None
-        credits = self._import_prices(wall_now, horizon, Side.EXPORT) or {}
+        credits = self._import_prices(wall_now, horizon, Side.EXPORT, tariff=tariff) or {}
         # Only known negative prices plan for them; the estimates are means of past days.
         negative = any(
             v is not None and v < 0
             for v in [
-                *(self._import_prices(wall_now, horizon, estimate=False) or {}).values(),
-                *(self._import_prices(wall_now, horizon, Side.EXPORT, estimate=False) or {}).values(),
+                *(self._import_prices(wall_now, horizon, estimate=False, tariff=tariff) or {}).values(),
+                *(self._import_prices(wall_now, horizon, Side.EXPORT, estimate=False, tariff=tariff) or {}).values(),
             ]
         )
         if not negative:
@@ -2648,6 +2652,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             export_max,
             settings.battery_export,
             self.market_prices.last_update,
+            None if tariff is None else (tariff.items, tuple(sorted(tariff.vat_pct.items()))),
         )
         monotonic = time.monotonic()
         cached = self._grid_charge_cache.get(key)
@@ -2715,11 +2720,20 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         return self._forecast_sources()
 
     def _import_prices(
-        self, wall_now: datetime, until: datetime, side: Side = Side.IMPORT, *, estimate: bool = True
+        self,
+        wall_now: datetime,
+        until: datetime,
+        side: Side = Side.IMPORT,
+        *,
+        estimate: bool = True,
+        tariff: Tariff | None = None,
     ) -> dict[datetime, float | None] | None:
         """Import price (or feed-in credit) per quarter hour with the current
         tariff, after the last known market price estimated (see
-        market_prices.estimate_prices), kept per quarter hour; None without tariff."""
+        market_prices.estimate_prices), kept per quarter hour; None without tariff.
+        With ``tariff`` (the simulation) its prices, not kept."""
+        if tariff is not None:
+            return period_import_prices(tariff, self.market_prices, wall_now, until, side, estimate=estimate)
         tariffs = configured_tariffs(self.config_entry)
         if not tariffs:
             return None

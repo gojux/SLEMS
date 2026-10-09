@@ -1360,12 +1360,18 @@ Andere Einstellungen ausprobieren, ohne etwas zu ändern.
   wie in den Einstellungen unter dem jeweiligen Schalter. Auch die Batterien
   (Kapazität, minimaler/maximaler Ladezustand, Lade- und Entladeleistung), der
   Sicherheitspuffer der Nachtentladung, die maximale Einspeisung beim Entladen
-  und die PV- und Verbrauchsprognose (±%) lassen sich ändern.
+  und die PV- und Verbrauchsprognose (±%) lassen sich ändern. Mit
+  Vergleichstarifen ([Tarife](#tarife-optional)) kann die preisbewusste
+  Steuerung mit einem anderen **Tarif für Bezug** und **Tarif für
+  Einspeisung** planen (z. B. einem dynamischen Tarif); das Preisdiagramm
+  zeigt dann deren Preise.
 - **Ergebnis**: SLEMS rechnet die Tagespläne wie die echten, ab dem aktuellen
   Ladezustand mit den aktuellen Prognosen; der Plan mit den aktuellen
   Einstellungen ist zum Vergleich grau gepunktet, darunter stehen Kennzahlen
   nebeneinander (Einspeisung, Netzbezug, höchster Bezug und höchste
-  Einspeisung, abgeregelte Energie, Ladezustand um Mitternacht).
+  Einspeisung, abgeregelte Energie, Ladezustand um Mitternacht; mit einem
+  Tarif auch Bezugskosten, Einspeisevergütung und beides zusammen, aus den
+  Preisen je kWh inkl. USt. ohne Jahresgebühren).
 - **Nichts davon wird gespeichert** oder für die Regelung verwendet; jeder
   Besuch beginnt mit den aktuellen Einstellungen.
 - **Heute** wird ab jetzt simuliert (die Werte davor sind gemessen); am

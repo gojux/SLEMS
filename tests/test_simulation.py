@@ -37,3 +37,20 @@ def test_metrics_of_the_projected_hours() -> None:
     assert result["max_import_w"] == 1500
     assert result["max_export_w"] == 4000
     assert result["soc_end_pct"] == 40
+
+
+def test_costs_of_the_planned_grid_energy() -> None:
+    day = datetime(2026, 6, 1, tzinfo=dt_util.get_default_time_zone())
+    plan = rows({10: 400, 11: -2000, 20: 1500}, {})
+    hours = {day + timedelta(hours=h): h for h in range(24)}
+    import_prices = {hour: 30.0 for hour in hours}
+    credits = {hour: 10.0 for hour in hours}
+    result = _metrics(plan, day + timedelta(hours=10, minutes=30), None, (import_prices, credits))
+    # 0.2 + 1.5 kWh at 30 ct, 2 kWh at 10 ct.
+    assert result["import_cost"] == pytest.approx(0.51)
+    assert result["export_credit"] == pytest.approx(0.2)
+    # A missing price where energy flows: unknown.
+    import_prices[day + timedelta(hours=20)] = None
+    result = _metrics(plan, day, None, (import_prices, credits))
+    assert result["import_cost"] is None and result["export_credit"] == pytest.approx(0.2)
+    assert "import_cost" not in _metrics(plan, day, None)

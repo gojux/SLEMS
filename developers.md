@@ -344,7 +344,9 @@ total is kept in the coordinator store (`price_savings`), sensor
 `price_chart.py` (websocket `slems/price_chart`, `day` today / tomorrow): per
 quarter hour of the local day (iterated in UTC, so clock changes give 92 / 100
 slots) `tariff.kwh_price` of the first current tariff for import and export
-(incl. VAT, without yearly items) and the stored market price. The panel draws
+(incl. VAT, without yearly items) and the stored market price; with
+`import_tariff` / `export_tariff` (the simulation tab) the tariff of
+`chosen_tariff`. The panel draws
 it below the day chart with the margins of the day chart
 (`_chartGeometry`), so the hours line up.
 
@@ -981,14 +983,22 @@ mornings. Used by the real night discharge plan and the projection.
 run in `async_setup_entry`). The request carries `settings` (fields of
 `ControlSettings` listed in `SETTINGS`, the ones that change the plans),
 `battery` (total capacity, min/max SoC, charge/discharge power of the group)
-and `pv_pct` / `consumption_pct`. It builds a `ControlSettings` copy, a
+`pv_pct` / `consumption_pct` and `import_tariff` / `export_tariff` (subentry
+ids of comparison tariffs, empty: the current tariff's side;
+`tariff_comparison.chosen_tariff` joins them with `tariff.mixed_tariff`; the
+choices per side are in `base.tariffs`). The tariff reaches the price plans
+through `forecast_plan(tariff=…)` → `_grid_charge` / `_price_hold` /
+`_import_prices` (not cached there; part of the grid charge cache key). It
+builds a `ControlSettings` copy, a
 modified `BatteryGroup` (the SoC in % stays) and a snapshot copy with scaled
 forecasts, and calls `SlemsCoordinator.forecast_plan` – the same method the
 real `plan()` uses for the feed-in limit, feed-in cap, peak shaving limit, SoC
 projection and day plans. The reply has the day plans, key figures per day
 from `grid_w` of the rows (`_metrics`: export/import energy of the projected
-part, peaks, energy above the cap limit, last SoC) for the simulation and the
-real plan, and the starting values (`base`). Nothing is stored; the panel
+part, peaks, energy above the cap limit, last SoC; with a tariff
+`import_cost` / `export_credit` from hourly `period_import_prices`, the
+simulation with its tariff, the real plan with the current one) for the
+simulation and the real plan, and the starting values (`base`). Nothing is stored; the panel
 starts from `base` on every visit (`_sim` state, 250 ms debounce). The chart
 reuses `_chartRows(plans, compare)` / `_renderDayChart(options)`; the real
 plan appears as `socCompare` / `exportCompare` (grey dotted, drawn first).

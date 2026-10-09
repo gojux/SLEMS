@@ -49,3 +49,40 @@ def test_costs_per_month_and_tariff() -> None:
     # No market price in June.
     assert june_row["costs"]["b"]["unpriced_kwh"] == pytest.approx(2.0)
     assert june_row["import_kwh"] == 2.0 and june_row["export_kwh"] == 4.0
+
+
+def test_tariff_choices_and_chosen_tariff() -> None:
+    from types import SimpleNamespace
+
+    from custom_components.slems.const import SUBENTRY_TYPE_TARIFF
+    from custom_components.slems.tariff_comparison import chosen_tariff, tariff_choices
+
+    def item(side: str, unit: str, price: float) -> dict:
+        return {"name": "E", "side": side, "group": "energy", "unit": unit, "price": price}
+
+    def subentry(key: str, title: str, role: str, *items: dict) -> SimpleNamespace:
+        return SimpleNamespace(
+            subentry_id=key,
+            subentry_type=SUBENTRY_TYPE_TARIFF,
+            title=title,
+            data={"role": role, "items": list(items)},
+        )
+
+    entry = SimpleNamespace(
+        subentries={
+            "a": subentry("a", "Fixed", "current", item("import", "kwh", 25), item("export", "kwh", 8)),
+            "b": subentry("b", "Dynamic", "comparison", item("import", "spot", 2)),
+            "c": subentry("c", "Spot feed-in", "comparison", item("export", "spot", -1)),
+        }
+    )
+    assert tariff_choices(entry) == {
+        "import": [{"id": "b", "name": "Dynamic"}],
+        "export": [{"id": "c", "name": "Spot feed-in"}],
+    }
+    assert chosen_tariff(entry, "", "").name == "Fixed"
+    tariff = chosen_tariff(entry, "b", "c")
+    assert [(i.side, i.unit) for i in tariff.items] == [(Side.IMPORT, Unit.SPOT), (Side.EXPORT, Unit.SPOT)]
+    # A tariff without the side or an unknown id keeps the current side.
+    tariff = chosen_tariff(entry, "c", "gone")
+    assert tariff.name == "Fixed"
+    assert chosen_tariff(SimpleNamespace(subentries={}), "b", "") is None

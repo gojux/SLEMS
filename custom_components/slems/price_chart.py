@@ -20,7 +20,7 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN
 from .market_prices import SLOT_S
 from .tariff import Side, Tariff, Unit, kwh_price
-from .tariff_comparison import configured_tariffs, month_start
+from .tariff_comparison import chosen_tariff, month_start
 
 if TYPE_CHECKING:
     from .market_prices import MarketPrices
@@ -134,6 +134,9 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     {
         vol.Required("type"): f"{DOMAIN}/price_chart",
         vol.Optional("day", default="today"): vol.In(["today", "tomorrow"]),
+        # Sides of comparison tariffs, as in the simulation (empty: the current contract).
+        vol.Optional("import_tariff", default=""): str,
+        vol.Optional("export_tariff", default=""): str,
     }
 )
 @callback
@@ -147,11 +150,10 @@ def _ws_price_chart(hass: HomeAssistant, connection: websocket_api.ActiveConnect
         connection.send_error(msg["id"], "not_loaded", "SLEMS is not loaded")
         return
     entry = entries[0]
-    tariffs = configured_tariffs(entry)
-    if not tariffs:
+    tariff = chosen_tariff(entry, msg["import_tariff"], msg["export_tariff"])
+    if tariff is None:
         connection.send_result(msg["id"], {"available": False})
         return
-    tariff = next(iter(tariffs.values()))
     coordinator = entry.runtime_data
     prices = coordinator.market_prices
     day = dt_util.now().date() + timedelta(days=1 if msg["day"] == "tomorrow" else 0)

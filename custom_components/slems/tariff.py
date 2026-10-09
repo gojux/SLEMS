@@ -484,6 +484,20 @@ def _with_side(target: Tariff, source: Tariff, side: Side) -> Tariff:
     )
 
 
+def mixed_tariff(import_source: Tariff, export_source: Tariff) -> Tariff:
+    """The import side of ``import_source`` with the feed-in side of ``export_source``."""
+    if import_source is export_source:
+        return import_source
+    empty = Tariff(name="", role=Role.CURRENT, items=(), vat_pct={})
+    tariff = _with_side(_with_side(empty, import_source, Side.IMPORT), export_source, Side.EXPORT)
+    names = {Side.IMPORT: import_source.name_for(Side.IMPORT), Side.EXPORT: export_source.name_for(Side.EXPORT)}
+    return replace(
+        tariff,
+        name=" + ".join(dict.fromkeys(names.values())),
+        side_names=names,
+    )
+
+
 def combine_tariffs(tariffs: Mapping[str, Tariff]) -> dict[str, Tariff]:
     """The current contract first, then the comparison tariffs, each complete.
 

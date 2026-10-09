@@ -9,11 +9,16 @@ charge and the current forecasts:
   plans, ``SETTINGS``),
 * ``battery``: total capacity (kWh), minimum and maximum SoC (%), charge and
   discharge power (W) of all batteries; the state of charge in % stays,
-* ``pv_pct`` / ``consumption_pct``: change of the forecasts in %.
+* ``pv_pct`` / ``consumption_pct``: change of the forecasts in %,
+* ``import_tariff`` / ``export_tariff``: id of a comparison tariff whose import
+  or feed-in side the price aware control plans with (empty: the current
+  contract's).
 
 The reply contains the day plans of today and tomorrow, key figures per day
-for the simulation and for the real plan, and the starting values (the real
-settings and batteries).
+for the simulation and for the real plan (with a tariff also the import costs
+and the feed-in credit of the planned grid energy: per kWh items incl. VAT,
+the simulation with its tariff, the real plan with the current one), and the starting values (the real
+settings and batteries, the comparison tariffs per side).
 """
 
 from __future__ import annotations
@@ -29,6 +34,9 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
+from .price_chart import period_import_prices
+from .tariff import Side, Tariff
+from .tariff_comparison import chosen_tariff, tariff_choices
 
 if TYPE_CHECKING:
     from .coordinator import ControlSettings, SlemsCoordinator
@@ -63,10 +71,20 @@ BATTERY_KEYS = ("capacity_kwh", "min_soc_pct", "max_soc_pct", "max_charge_w", "m
 HOUR = timedelta(hours=1)
 
 
-def _metrics(rows: list[dict], start: datetime, cap_limit_w: float | None) -> dict:
-    """Key figures of the projected hours of a day plan (from ``start`` on)."""
+# Hourly import prices and feed-in credits (ct/kWh) per local hour start.
+Prices = tuple[dict[datetime, float | None], dict[datetime, float | None]]
+
+
+def _metrics(
+    rows: list[dict], start: datetime, cap_limit_w: float | None, prices: Prices | None = None
+) -> dict:
+    """Key figures of the projected hours of a day plan (from ``start`` on);
+    with ``prices`` the import costs and the feed-in credit (currency of Home Assistant, None with an
+    hour without price)."""
     export = imported = curtailed = 0.0
     max_import = max_export = 0.0
+    cost: float | None = 0.0
+    credit: float | None = 0.0
     soc_end = None
     for row in rows:
         if row.get("soc_pct") is not None:
@@ -86,7 +104,10 @@ def _metrics(rows: list[dict], start: datetime, cap_limit_w: float | None) -> di
         imported += max(0.0, grid) * share
         max_import = max(max_import, grid)
         max_export = max(max_export, exported)
-    return {
+        if prices is not None:
+            cost = _add_cost(cost, max(0.0, grid) * share, prices[0].get(hour))
+            credit = _add_cost(credit, exported * share, prices[1].get(hour))
+    result = {
         "export_kwh": round(export / 1000, 2),
         "import_kwh": round(imported / 1000, 2),
         "curtailed_kwh": round(curtailed / 1000, 2),
@@ -94,13 +115,41 @@ def _metrics(rows: list[dict], start: datetime, cap_limit_w: float | None) -> di
         "max_export_w": round(max_export),
         "soc_end_pct": soc_end,
     }
+    if prices is not None:
+        result["import_cost"] = None if cost is None else round(cost, 2)
+        result["export_credit"] = None if credit is None else round(credit, 2)
+    return result
 
 
-def _day_metrics(day_plan: list[dict], tomorrow: list[dict], now: datetime, settings) -> dict:
+def _add_cost(total: float | None, wh: float, ct_per_kwh: float | None) -> float | None:
+    if total is None or wh <= 0:
+        return total
+    if ct_per_kwh is None:
+        return None
+    return total + wh / 1000 * ct_per_kwh / 100
+
+
+def _prices(coordinator: SlemsCoordinator, tariff: Tariff | None, now: datetime) -> Prices | None:
+    """Hourly prices of today and tomorrow with ``tariff`` (estimated after the
+    last known market price, as the price aware control plans)."""
+    if tariff is None:
+        return None
+    start = dt_util.start_of_local_day(now)
+    end = start + timedelta(days=2)
+    market = coordinator.market_prices
+    return (
+        period_import_prices(tariff, market, start, end, Side.IMPORT, HOUR, estimate=market.enabled),
+        period_import_prices(tariff, market, start, end, Side.EXPORT, HOUR, estimate=market.enabled),
+    )
+
+
+def _day_metrics(
+    day_plan: list[dict], tomorrow: list[dict], now: datetime, settings, prices: Prices | None
+) -> dict:
     cap = settings.feed_in_cap_limit_w if settings.feed_in_cap else None
     return {
-        "today": _metrics(day_plan, now, cap),
-        "tomorrow": _metrics(tomorrow, now, cap),
+        "today": _metrics(day_plan, now, cap, prices),
+        "tomorrow": _metrics(tomorrow, now, cap, prices),
     }
 
 
@@ -121,6 +170,7 @@ def simulate(coordinator: SlemsCoordinator, request: dict[str, Any]) -> dict[str
             "max_charge_w": round(battery.max_charge_w),
             "max_discharge_w": round(battery.max_discharge_w),
         },
+        "tariffs": tariff_choices(coordinator.config_entry),
     }
     if snapshot is None or battery is None or snapshot.pv_forecast is None:
         return {"available": False, "base": base}
@@ -152,6 +202,10 @@ def simulate(coordinator: SlemsCoordinator, request: dict[str, Any]) -> dict[str
         if forecast is None
         else replace(forecast, total={k: v * load_factor for k, v in forecast.total.items()}),
     )
+    tariff = chosen_tariff(
+        coordinator.config_entry, request.get("import_tariff"), request.get("export_tariff")
+    )
+    current = chosen_tariff(coordinator.config_entry, None, None)
     house = snapshot.house_power_w
     load = None if house is None else house * load_factor
     plan = coordinator.forecast_plan(
@@ -161,6 +215,7 @@ def simulate(coordinator: SlemsCoordinator, request: dict[str, Any]) -> dict[str
         load,
         settings,
         power_w=(values["max_charge_w"], values["max_discharge_w"]),
+        tariff=tariff,
     )
     return {
         "available": True,
@@ -168,8 +223,12 @@ def simulate(coordinator: SlemsCoordinator, request: dict[str, Any]) -> dict[str
         "day_plan": plan.day_plan,
         "day_plan_tomorrow": plan.day_plan_tomorrow,
         "cap_limit_w": settings.feed_in_cap_limit_w if settings.feed_in_cap else None,
-        "metrics": _day_metrics(plan.day_plan, plan.day_plan_tomorrow, now, settings),
-        "real_metrics": _day_metrics(snapshot.day_plan, snapshot.day_plan_tomorrow, now, real),
+        "metrics": _day_metrics(
+            plan.day_plan, plan.day_plan_tomorrow, now, settings, _prices(coordinator, tariff, now)
+        ),
+        "real_metrics": _day_metrics(
+            snapshot.day_plan, snapshot.day_plan_tomorrow, now, real, _prices(coordinator, current, now)
+        ),
     }
 
 
@@ -190,6 +249,8 @@ def async_register_websocket(hass: HomeAssistant) -> None:
         vol.Optional("battery", default={}): dict,
         vol.Optional("pv_pct", default=0): vol.Coerce(float),
         vol.Optional("consumption_pct", default=0): vol.Coerce(float),
+        vol.Optional("import_tariff", default=""): str,
+        vol.Optional("export_tariff", default=""): str,
     }
 )
 @callback

@@ -1286,12 +1286,17 @@ Try other settings without changing anything.
   switch as in the settings. The batteries (capacity, minimum/maximum state of
   charge, charge and discharge power), the night discharge buffer, the maximum
   grid export while discharging and the PV and consumption forecasts (±%) can
-  be changed too.
+  be changed too. With comparison [tariffs](#tariffs-optional) the price
+  aware control can plan with another **Tariff for import** and **Tariff for
+  feed-in** (e.g. a dynamic tariff); the price chart then shows their
+  prices.
 - **Result**: SLEMS calculates the day plans like the real ones, from the
   current state of charge and the current forecasts; the plan with the current
   settings is shown grey dotted for comparison, key figures (feed-in, grid
   import, highest import and feed-in, curtailed energy, state of charge at
-  midnight) side by side below.
+  midnight; with a tariff also the import costs, the feed-in credit and both
+  together, from the per kWh prices incl. VAT without yearly fees) side by
+  side below.
 - **Nothing is saved** or used for the control; every visit starts with the
   current settings.
 - **Today** is simulated from now on (the values before are measured); in the

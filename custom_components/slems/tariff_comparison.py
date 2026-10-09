@@ -33,7 +33,7 @@ from .currency import market_prices_usable
 from .energy_history import async_grid_energy
 from .forecast import async_statistic_means
 from .price_backtest import BacktestBattery, play
-from .tariff import Side, Tariff, combine_tariffs, compute_bill, tariff_from_data
+from .tariff import Role, Side, Tariff, combine_tariffs, compute_bill, mixed_tariff, tariff_from_data
 
 if TYPE_CHECKING:
     from .coordinator import SlemsConfigEntry
@@ -140,6 +140,51 @@ def configured_tariffs(entry: SlemsConfigEntry) -> dict[str, Tariff]:
             if subentry.subentry_type == SUBENTRY_TYPE_TARIFF
         }
     )
+
+
+def _comparison_tariffs(entry: SlemsConfigEntry) -> dict[str, Tariff]:
+    """The comparison tariffs of the entry as entered (without the current contract's sides)."""
+    return {
+        subentry.subentry_id: tariff
+        for subentry in entry.subentries.values()
+        if subentry.subentry_type == SUBENTRY_TYPE_TARIFF
+        and (tariff := tariff_from_data(subentry.title, subentry.data)).role is Role.COMPARISON
+    }
+
+
+def tariff_choices(entry: SlemsConfigEntry) -> dict[str, list[dict[str, str]]]:
+    """Comparison tariffs per side that has items in them, for the simulation."""
+    tariffs = _comparison_tariffs(entry)
+    return {
+        side.value: [
+            {"id": key, "name": tariff.name}
+            for key, tariff in tariffs.items()
+            if any(item.side is side for item in tariff.items)
+        ]
+        for side in Side
+    }
+
+
+def chosen_tariff(
+    entry: SlemsConfigEntry, import_id: str | None, export_id: str | None
+) -> Tariff | None:
+    """The current contract with the import and/or feed-in side of a comparison
+    tariff (None or an unknown id: the current side); None without tariff."""
+    tariffs = configured_tariffs(entry)
+    if not tariffs:
+        return None
+    current = next(iter(tariffs.values()))
+    if not import_id and not export_id:
+        return current
+    comparison = _comparison_tariffs(entry)
+
+    def source(key: str | None, side: Side) -> Tariff:
+        tariff = comparison.get(key or "")
+        if tariff is None or not any(item.side is side for item in tariff.items):
+            return current
+        return tariff
+
+    return mixed_tariff(source(import_id, Side.IMPORT), source(export_id, Side.EXPORT))
 
 
 async def async_tariff_comparison(hass: HomeAssistant, entry: SlemsConfigEntry) -> dict[str, Any]:
