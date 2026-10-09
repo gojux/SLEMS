@@ -506,7 +506,11 @@ SLEMS learns the consumption from the long-term statistics of Home Assistant
 and forecasts today and tomorrow hourly. Recent days count more than older
 ones, so changes are followed within days. Heat pumps are forecast from the
 outdoor temperature of the day, so a warm day in the heating season
-immediately predicts less heating energy. After a sudden rise (e.g. the heat
+immediately predicts less heating energy. The share that does not depend on
+the temperature (mostly hot water) comes from the last two weeks only, the
+dependency on the temperature from the whole year: if a heating rod heats the
+hot water in summer and the heat pump in winter, the forecast follows the
+switch within days. After a sudden rise (e.g. the heat
 pump starting the heating season) the forecast is raised at once: if the last
 three hours took on average at least 200 W and 30 % more than forecast, that
 excess is added to the next 24 hours, so the night discharge and the

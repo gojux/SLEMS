@@ -11,6 +11,13 @@ least squares on (daily mean outdoor temperature, daily energy). The forecast
 temperature of the day drives the heating share, so a warm spell in the
 heating season immediately predicts less energy. The daily energy is spread
 over the hours with the recent hourly shape.
+
+The temperature independent share ``a`` (mostly hot water) is taken from the
+last weeks only (``RECENT_BASE_*``): it changes with the season when the hot
+water is heated otherwise in summer (heating rod, solar thermal), while the
+slope ``b`` needs the temperatures of the whole year. It is the mean of the
+recent daily energies minus their heating share, so the forecast fits the
+recent days even if the slope is somewhat off.
 """
 
 from __future__ import annotations
@@ -40,6 +47,9 @@ BIAS_LIMITS = (0.8, 1.25)
 # Candidate heating limits (°C) for the heat pump model.
 HEATING_LIMITS = tuple(range(10, 21))
 MIN_HEAT_PUMP_DAYS = 7
+RECENT_BASE_DAYS = 14
+RECENT_BASE_HALF_LIFE_DAYS = 5
+MIN_RECENT_BASE_DAYS = 5
 # Hours whose level defines the absence (vacation) profile.
 NIGHT_HOURS = range(1, 5)
 
@@ -188,6 +198,15 @@ class HeatPumpModel:
             if best is None or error < best[0]:
                 best = (error, base, slope, limit)
         _, base, slope, limit = best
+        recent = [d for d in days if (today - d).days <= RECENT_BASE_DAYS]
+        if len(recent) >= MIN_RECENT_BASE_DAYS:
+            residuals = np.array(
+                [daily_energy[d] - slope * max(0.0, limit - daily_temperature[d]) for d in recent]
+            )
+            recent_weights = np.array(
+                [_decay_weight((today - d).days, RECENT_BASE_HALF_LIFE_DAYS) for d in recent]
+            )
+            base = max(0.0, float(np.average(residuals, weights=recent_weights)))
         model = cls(
             base_wh=base,
             slope_wh_per_k=slope,
@@ -200,7 +219,8 @@ class HeatPumpModel:
         if recent_days:
             residuals = [daily_energy[d] - model.daily(daily_temperature[d]) for d in recent_days]
             correction = sum(residuals) / len(residuals)
-            limit_wh = 0.3 * max(1.0, model.daily(float(np.mean(temperature[-3:]))))
+            actual = sum(daily_energy[d] for d in recent_days) / len(recent_days)
+            limit_wh = 0.3 * max(1.0, actual, model.daily(float(np.mean(temperature[-3:]))))
             model.correction_wh = max(-limit_wh, min(limit_wh, correction))
         return model
 

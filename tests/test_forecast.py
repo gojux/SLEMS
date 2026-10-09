@@ -95,6 +95,23 @@ def test_heat_pump_model_recovers_parameters() -> None:
     assert model.daily(0) == pytest.approx(15000, rel=0.02)
 
 
+def test_heat_pump_hot_water_share_follows_the_last_weeks() -> None:
+    # Hot water by a heating rod until 10 days ago, since then by the heat pump.
+    switch = (NOW - timedelta(days=10)).date()
+    history = {}
+    temperatures = {}
+    for start in hours(60):
+        temperature = (start.date().toordinal() % 20) - 5
+        temperatures[start] = temperature
+        hot_water = 3000 if start.date() >= switch else 0
+        history[start] = (hot_water + 800 * max(0.0, 15 - temperature)) / 24
+    model = HeatPumpModel.fit(history, daily_mean_temperature(temperatures), NOW)
+    # The slope learned across the switch is somewhat low; the recent share
+    # makes up for it around the recent temperatures.
+    assert model.daily(20) == pytest.approx(3000, rel=0.15)
+    assert model.daily(0) == pytest.approx(15000, rel=0.15)
+
+
 def test_heat_pump_without_temperatures_uses_recent_mean() -> None:
     history, _ = _heat_pump_history(lambda day: 5)
     model = HeatPumpModel.fit(history, {}, NOW)

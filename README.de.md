@@ -533,7 +533,11 @@ SLEMS lernt den Verbrauch aus den Langzeitstatistiken von Home Assistant und
 prognostiziert heute und morgen stundenweise. Jüngere Tage zählen mehr als
 ältere, Änderungen werden so innerhalb weniger Tage übernommen. Wärmepumpen
 werden über die Außentemperatur des Tages prognostiziert, ein warmer Tag in
-der Heizsaison ergibt also sofort weniger Heizenergie. Nach einem plötzlichen
+der Heizsaison ergibt also sofort weniger Heizenergie. Der Anteil ohne
+Temperaturabhängigkeit (vor allem Warmwasser) kommt nur aus den letzten zwei
+Wochen, die Abhängigkeit von der Temperatur aus dem ganzen Jahr: Heizt im
+Sommer eine Heizpatrone das Warmwasser und im Winter die Wärmepumpe, folgt die
+Prognose dem Wechsel in wenigen Tagen. Nach einem plötzlichen
 Anstieg (z. B. wenn die Wärmepumpe die Heizsaison beginnt) hebt SLEMS die
 Prognose sofort an: Lagen die letzten drei Stunden im Mittel mindestens 200 W
 und 30 % über der Prognose, kommt dieser Mehrverbrauch auf die nächsten 24
