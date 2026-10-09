@@ -1372,7 +1372,9 @@ Andere Einstellungen ausprobieren, ohne etwas zu ändern.
   morgen) lassen sich netzdienliches Laden, Nachtentladung, Bezugsspitzen
   abfangen und Einspeisebegrenzung ein- und ausschalten; ihre Werte erscheinen
   wie in den Einstellungen unter dem jeweiligen Schalter. Auch die Batterien
-  (Kapazität, minimaler/maximaler Ladezustand, Lade- und Entladeleistung), der
+  (Kapazität, minimaler/maximaler Ladezustand, Lade- und Entladeleistung;
+  vorgegeben ist die Leistung der Batterien ohne die momentanen Grenzen durch
+  den Ladezustand), der
   Sicherheitspuffer der Nachtentladung, die maximale Einspeisung beim Entladen
   und die PV- und Verbrauchsprognose (±%) lassen sich ändern. Mit
   Vergleichstarifen ([Tarife](#tarife-optional)) kann die preisbewusste

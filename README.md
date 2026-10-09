@@ -1294,7 +1294,9 @@ Try other settings without changing anything.
   tomorrow) grid friendly charging, night discharge, import peak shaving and
   the feed-in cap can be switched on and off; their values appear below each
   switch as in the settings. The batteries (capacity, minimum/maximum state of
-  charge, charge and discharge power), the night discharge buffer, the maximum
+  charge, charge and discharge power; the default is the power of the
+  batteries without the momentary limits of their state of charge), the night
+  discharge buffer, the maximum
   grid export while discharging and the PV and consumption forecasts (±%) can
   be changed too. With comparison [tariffs](#tariffs-optional) the price
   aware control can plan with another **Tariff for import** and **Tariff for

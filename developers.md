@@ -489,7 +489,13 @@ replace the capabilities in `BatteryUnit` (distribution) and `BatteryGroup`
 `full_soc_pct`: `energy_to_full_wh` and `is_full` use the maximum SoC, the
 night discharge target (`min_wh`) and the SoC projection the minimum.
 The group is full only when every battery is (`all_full`, `battery_full`),
-and a full battery adds nothing to `max_charge_w`.
+and a full battery adds nothing to `max_charge_w`. These are the powers right
+now, for the control. The plans ahead (`forecast_plan`: SoC projection, grid
+charge plan, price hold, support budget; the night discharge refill, the
+simulation and the backtest) get `_battery_group(planning=True)`: the limits
+without the SoC window and full batteries included, like the feed-in cap, so
+a battery full or blocked right now still charges and discharges in later
+hours.
 Balancing runs use `power_limits(..., use_soc_window=False)`. Read-only
 batteries ignore the SoC window. Settings: per battery `BatteryNumber`
 (RestoreNumber; a power limit at the capability is stored as `None`),
@@ -1808,3 +1814,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-09 | Recorder size: the control runs every half second and every change of a state or of its attributes is a row in the recorder, also when the changed attributes are unrecorded. Numeric sensor states are rounded to their display precision (`rounded_state`; precision 0 gives an int, so 0 and 0.0 do not alternate, no -0.0), large or noisy attributes (day plans at **Feed-in limit**, the feed-in cap attributes, the Modbus diagnostics of the meter) are computed anew at most every 60 s unless the settings changed (`attributes_interval_s`). Dev instance: 441 → 12 rows per minute. |
 | 2026-10-09 | Bad weather mode until the morning after the next evening instead of until the evening: ending in the evening let the night discharge of the following night give away what the mode stored. The morning is the first surplus hour after the evening, where the night discharge ends as well; sunrise and sunset only replace a missing surplus hour (the sunrise lies hours before PV takes over, and the summer sunset long after the surplus ends). Without a surplus hour in the forecast the mode goes on until the sunrise after its end. |
 | 2026-10-09 | Venus telemetry: voltage, temperature, cycle count and energy counters only every 60 s, adjacent registers in one frame (tested with `tools/read_blocks.py` on a Venus E 3.0: blocks answer in about 10 ms like single registers, 42000–42010 is refused); 13 → 6 frames of 150 ms in most reads, 8 once a minute. The duration of each read is in the diagnostics. Learned from [Omnibattery #411](https://github.com/ffunes/Omnibattery/issues/411): the 150 ms wait belongs to the Modbus TCP server of the v3 firmware, behind an RS485 gateway (e.g. Elfin EW11) about 30 ms are enough. An option for that waits for a user with a gateway (we cannot test it). |
+| 2026-10-09 | The plans ahead use the battery powers without the SoC window and with full batteries (`_battery_group(planning=True)`), the control keeps the limits right now. With the powers right now, as long as a battery was full or blocked by its SoC window, the plans had no charging up to the end of the next day: the night discharge expected no refill (target too high), the projection and the price plans no surplus charging, and the simulation offered 0 W charge power. With several batteries one full battery's power is counted as if it could still take energy; the projection limits the charging by the room left anyway. |

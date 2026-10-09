@@ -82,3 +82,37 @@ def test_negative_house_power_keeps_the_last_valid_value() -> None:
     stale = snapshot(-2500)
     hold.check(stale, 5 + HousePowerHold.HOLD_S)
     assert stale.house_power_w is None  # unknown
+
+
+def test_planning_powers_of_a_full_or_blocked_battery() -> None:
+    from types import SimpleNamespace
+
+    from custom_components.slems.battery_limits import PowerLimits
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    def battery(battery_id: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            subentry_id=battery_id,
+            plannable=True,
+            capacity_wh=5000.0,
+            driver=SimpleNamespace(capabilities=SimpleNamespace(controllable=True)),
+            limits=SimpleNamespace(min_soc_pct=10.0, max_soc_pct=100.0),
+            efficiency=SimpleNamespace(one_way=0.95),
+            # Right now: the full one takes nothing, the other is blocked by its SoC window.
+            power_limits=PowerLimits(charge_w=0.0, discharge_w=2500.0),
+        )
+
+    coordinator = SlemsCoordinator.__new__(SlemsCoordinator)
+    coordinator.batteries = [battery("full"), battery("blocked")]
+    coordinator.full_charge_battery = None
+    coordinator._power_limits = lambda battery, telemetry, use_soc_window=True: (
+        PowerLimits(charge_w=0.0, discharge_w=2500.0) if use_soc_window else PowerLimits(2500.0, 2500.0)
+    )
+    snapshot = SimpleNamespace(
+        batteries={"full": SimpleNamespace(soc_pct=100.0), "blocked": SimpleNamespace(soc_pct=95.0)}
+    )
+    now = coordinator._battery_group(snapshot)
+    planning = coordinator._battery_group(snapshot, planning=True)
+    assert now.max_charge_w == 0.0
+    assert planning.max_charge_w == 5000.0 and planning.max_discharge_w == 5000.0
+    assert planning.soc_pct == now.soc_pct and planning.all_full == now.all_full

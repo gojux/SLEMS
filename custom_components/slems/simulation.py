@@ -158,7 +158,7 @@ def simulate(coordinator: SlemsCoordinator, request: dict[str, Any]) -> dict[str
     snapshot = coordinator.data
     now = dt_util.now()
     real: ControlSettings = coordinator.settings
-    battery = coordinator._battery_group(snapshot) if snapshot is not None else None
+    battery = coordinator._battery_group(snapshot, planning=True) if snapshot is not None else None
     base = {
         "settings": {key: getattr(real, key) for key in SETTINGS},
         "battery": None

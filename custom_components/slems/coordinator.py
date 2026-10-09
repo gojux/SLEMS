@@ -1909,7 +1909,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             extra.get("total_discharging_energy"),
         )
 
-    def _battery_group(self, snapshot: SystemSnapshot) -> BatteryGroup | None:
+    def _battery_group(self, snapshot: SystemSnapshot, *, planning: bool = False) -> BatteryGroup | None:
+        """All plannable batteries as one; their powers are the limits right now.
+
+        ``planning``: the powers for the plans ahead, like the feed-in cap
+        (without the SoC window, full batteries included), so a battery full
+        or blocked right now still charges and discharges in later hours.
+        """
         energy = capacity = max_charge = max_discharge = weighted_eff = 0.0
         min_soc = full_soc = 0.0
         all_full = True
@@ -1918,7 +1924,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if not battery.plannable or telemetry is None or telemetry.soc_pct is None:
                 continue
             caps = battery.driver.capabilities
-            limits = battery.power_limits or self._power_limits(battery, telemetry)
+            if planning:
+                limits = self._power_limits(battery, telemetry, use_soc_window=False)
+            else:
+                limits = battery.power_limits or self._power_limits(battery, telemetry)
             energy += telemetry.soc_pct * battery.capacity_wh
             capacity += battery.capacity_wh
             max_discharge += limits.discharge_w
@@ -1932,6 +1941,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             full_soc += maximum * battery.capacity_wh
             # A full battery takes nothing, whatever its power limit says.
             if battery_full(telemetry.soc_pct, maximum):
+                if planning:
+                    max_charge += limits.charge_w
                 continue
             all_full = False
             max_charge += limits.charge_w
@@ -2015,6 +2026,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if snapshot.expected_surplus_wh is not None:
             snapshot.expected_surplus_wh = max(0.0, snapshot.expected_surplus_wh - balancing_wh)
         battery = self._battery_group(snapshot)
+        plan_battery = self._battery_group(snapshot, planning=True)
         settings = self.settings
         # The daily targets first: their forced runs are a load in the plans.
         self._target_states(snapshot, battery, pv_forecast, load, wall_now)
@@ -2024,7 +2036,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self._with_target_load(consumption.total) if consumption else None,
         ):
             self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
-        forecast_plan = self.forecast_plan(snapshot, battery, wall_now, load, settings, balancing_wh)
+        forecast_plan = self.forecast_plan(snapshot, plan_battery, wall_now, load, settings, balancing_wh)
         self.support_budget.update(forecast_plan.support_budget_wh)
         cap = forecast_plan.cap
         snapshot.feed_in_cap = cap
@@ -2078,7 +2090,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 if cap is not None
                 else None,
                 full_wh=battery.full_soc_pct / 100 * battery.capacity_wh,
-                max_charge_w=battery.max_charge_w,
+                max_charge_w=plan_battery.max_charge_w,
                 demands=self.target_demands,
                 keep=_price_keep(forecast_plan.grid_charge, forecast_plan.price_hold, battery),
             )
@@ -2701,7 +2713,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     def backtest_battery(self) -> BacktestBattery | None:
         """The batteries and price settings for the backtest of the price aware control."""
         snapshot = self.data
-        battery = self._battery_group(snapshot) if snapshot is not None else None
+        battery = self._battery_group(snapshot, planning=True) if snapshot is not None else None
         if battery is None:
             return None
         settings = self.settings
