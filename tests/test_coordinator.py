@@ -116,3 +116,33 @@ def test_planning_powers_of_a_full_or_blocked_battery() -> None:
     assert now.max_charge_w == 0.0
     assert planning.max_charge_w == 5000.0 and planning.max_discharge_w == 5000.0
     assert planning.soc_pct == now.soc_pct and planning.all_full == now.all_full
+
+
+def test_grid_target_samples_the_target_aimed_at() -> None:
+    from types import SimpleNamespace
+
+    from custom_components.slems.allocation import Allocation, Strategy
+    from custom_components.slems.const import OperatingMode
+    from custom_components.slems.controller import ControlStatus
+    from custom_components.slems.coordinator import ControlSettings, SlemsCoordinator
+    from custom_components.slems.learning import GridTargetLearner
+
+    coordinator = SlemsCoordinator.__new__(SlemsCoordinator)
+    coordinator.grid_targets = GridTargetLearner()
+    coordinator.controller = SimpleNamespace(status=ControlStatus.ACTIVE)
+    settings = ControlSettings(operating_mode=OperatingMode.ACTIVE, discharge_grid_target_w=50.0)
+    battery = SimpleNamespace(max_charge_w=2500.0, max_discharge_w=2500.0)
+    snapshot = SimpleNamespace(grid_power_w=0.0)
+
+    # Discharging with the maximum grid export at 0 W: the batteries aim at
+    # 0 W, the grid at 0 W is no deviation.
+    discharge = Allocation(strategy=Strategy.SELF_CONSUMPTION, battery_power_w=-500.0)
+    coordinator._learn_grid_target(snapshot, discharge, battery, settings, 0.0)
+    assert list(coordinator.grid_targets.discharge) == [0.0]
+    coordinator._learn_grid_target(snapshot, discharge, battery, settings, 5000.0)
+    assert list(coordinator.grid_targets.discharge) == [0.0, 50.0]
+
+    # Grid friendly charging holds the batteries back on purpose.
+    charge = Allocation(strategy=Strategy.GRID_FRIENDLY, battery_power_w=500.0)
+    coordinator._learn_grid_target(snapshot, charge, battery, settings, 5000.0)
+    assert not coordinator.grid_targets.charge

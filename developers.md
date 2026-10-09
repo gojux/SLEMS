@@ -932,8 +932,9 @@ known):
   projection).
 - `grid_target_w(settings, charging)`: `GridTargetLearner` samples
   `grid + target` in `plan()` during controller cycles (active mode,
-  control status active, strategy charging or self consumption, battery power
-  not near its limit), from 300 of the last 3000 samples. Charging: 90 %
+  control status active, strategy battery priority, shared or self
+  consumption, battery power not near its limit; the discharge target capped
+  by the maximum grid export, as the control aims at that), from 300 of the last 3000 samples. Charging: 90 %
   quantile of `max(0, grid + target)`, 20–1000 W. Discharging: median,
   −100 to 300 W (0 to 300 W with `grid_targets_no_import`). Not stored (relearned within an hour).
 - `control_interval_s` / `average_window_s`: `auto_timing` of

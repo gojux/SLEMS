@@ -2154,15 +2154,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             allocation.battery_power_w = previous_total_w + gain * (
                 allocation.battery_power_w - previous_total_w
             )
+        max_export_w = max_discharge_export_w(settings.allocation_settings(), cap_control)
         if snapshot.grid_power_w is not None:
             allocation.battery_power_w = limit_discharge_export(
-                allocation.battery_power_w,
-                enabled_battery_w,
-                snapshot.grid_power_w,
-                max_discharge_export_w(settings.allocation_settings(), cap_control),
+                allocation.battery_power_w, enabled_battery_w, snapshot.grid_power_w, max_export_w
             )
         if previous_total_w is not None:
-            self._learn_grid_target(snapshot, allocation, battery, settings)
+            self._learn_grid_target(snapshot, allocation, battery, settings, max_export_w)
         for subentry_id, power in allocation.consumer_power_w.items():
             self._runtime.update(subentry_id, power > 0, now)
         snapshot.allocation = allocation
@@ -2329,8 +2327,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         allocation: Allocation,
         battery: BatteryGroup | None,
         settings: ControlSettings,
+        max_export_w: float,
     ) -> None:
-        """Sample the grid deviation while the batteries control the grid (active mode)."""
+        """Sample the grid deviation while the batteries control the grid (active mode).
+
+        The deviation is taken from the target the batteries really aim at: the
+        maximum grid export while discharging lowers the discharge target, and
+        grid friendly charging holds the batteries back on purpose (not sampled).
+        """
         grid = snapshot.grid_power_w
         if (
             grid is None
@@ -2341,12 +2345,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             return
         power = allocation.battery_power_w
         # Not at a limit, otherwise the batteries cannot correct the deviation.
-        if allocation.strategy in (Strategy.BATTERY_PRIORITY, Strategy.SHARED, Strategy.GRID_FRIENDLY):
+        if allocation.strategy in (Strategy.BATTERY_PRIORITY, Strategy.SHARED):
             if 50 < power < 0.9 * battery.max_charge_w:
                 self.grid_targets.add(True, grid, self.grid_target_w(settings, charging=True))
         elif allocation.strategy is Strategy.SELF_CONSUMPTION:
             if -0.9 * battery.max_discharge_w < power < -50:
-                self.grid_targets.add(False, grid, self.grid_target_w(settings, charging=False))
+                target = min(self.grid_target_w(settings, charging=False), max_export_w)
+                self.grid_targets.add(False, grid, target)
 
     def forecast_plan(
         self,
