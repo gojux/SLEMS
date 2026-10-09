@@ -1757,7 +1757,12 @@ alle gelernten Werte als Attribute.
 ### Weitere Einstellungen (Entitäten)
 
 - **Urlaub** (Schalter): Der Haushalt ist abwesend; manuell oder per Automation
-  schalten.
+  schalten. Tage, an denen der Schalter irgendwann an war, lässt SLEMS ganz aus
+  dem gelernten Verbrauch heraus (Verbrauchsprognose samt Wärmepumpe,
+  Sicherheitspuffer, Bezugsspitzen, Reserve der Nachtentladung, übliche
+  Tagesenergie der Verbraucher), damit die Prognose nach der Rückkehr nicht
+  wochenlang zu tief liegt. Blieben in den letzten 56 Tagen weniger als 7 Tage
+  übrig, zählen alle Tage.
 - **Batterievorrang unter Ladezustand** (Standard 30 %), **Sicherheitspuffer
   gesicherte Ladung** (Standard 1 kWh) und **Batterieanteil bei gesicherter
   Ladung** (Standard 75 %): Die Batterien bekommen den gesamten Überschuss, bis

@@ -11,6 +11,11 @@ models give for them, the mean excess is added to the next day. Only
 upwards, as a too low forecast is the risky side (the night discharge would
 feed in what the house needs), and it ends by itself once the models or the
 consumption catch up.
+
+Days on which the vacation mode was on (``VacationDays``) are left out of the
+history, whole days: the absence would pull the profiles down for weeks after
+the return. With fewer than ``MIN_KEPT_DAYS`` days left within the base load
+lookback all days count, so a long absence still has a forecast.
 """
 
 from __future__ import annotations
@@ -31,6 +36,7 @@ from homeassistant.util import dt as dt_util
 from ..peak_shaving import PROFILE_DAYS, PeakProfile
 from .accuracy import ConsumptionAccuracy, backtest_consumption
 from .models import (
+    BASE_LOOKBACK_DAYS,
     HEAT_PUMP_LOOKBACK_DAYS,
     BaseLoadProfile,
     HeatPumpModel,
@@ -47,6 +53,7 @@ NOWCAST_SEARCH_HOURS = 5
 NOWCAST_MIN_W = 200.0
 NOWCAST_MIN_RATIO = 1.3
 NOWCAST_HORIZON = timedelta(hours=24)
+MIN_KEPT_DAYS = 7
 
 
 @dataclass(frozen=True)
@@ -65,6 +72,46 @@ class ForecastSources:
     controllable: tuple[str, ...]
     temperature: str | None
     weather: str | None
+
+
+@dataclass
+class VacationDays:
+    """Local days on which the vacation mode was on at some time."""
+
+    days: set[date] = field(default_factory=set)
+
+    def mark(self, day: date) -> bool:
+        """Add ``day``; True if it is new. Days older than the longest lookback are dropped."""
+        oldest = day - timedelta(days=HEAT_PUMP_LOOKBACK_DAYS + 1)
+        self.days = {d for d in self.days if d >= oldest}
+        if day in self.days:
+            return False
+        self.days.add(day)
+        return True
+
+    def as_list(self) -> list[str]:
+        return [day.isoformat() for day in sorted(self.days)]
+
+    @classmethod
+    def from_list(cls, data: Iterable[str] | None) -> VacationDays:
+        return cls({date.fromisoformat(day) for day in data or ()})
+
+
+def without_days(series: HourlySeries, days: frozenset[date]) -> HourlySeries:
+    """``series`` without the hours of the local ``days``."""
+    if not days:
+        return series
+    return {start: value for start, value in series.items() if dt_util.as_local(start).date() not in days}
+
+
+def usable_exclusion(history: HourlySeries, days: frozenset[date], now: datetime) -> frozenset[date]:
+    """``days``, or none if fewer than ``MIN_KEPT_DAYS`` days of ``history``
+    within the base load lookback would be left."""
+    if not days:
+        return days
+    oldest = now - timedelta(days=BASE_LOOKBACK_DAYS)
+    seen = {dt_util.as_local(start).date() for start in history if oldest <= start < now}
+    return days if len(seen - days) >= MIN_KEPT_DAYS else frozenset()
 
 
 @dataclass
@@ -153,9 +200,14 @@ class ConsumptionForecaster:
         self.accuracy: ConsumptionAccuracy | None = None
         # Consumption peaks per hour of the day (automatic peak shaving limit).
         self.peak_profile: PeakProfile | None = None
+        # Days left out of the last refit (see VacationDays).
+        self.excluded_days: frozenset[date] = frozenset()
 
-    async def async_refresh(self, vacation: bool) -> ConsumptionForecast | None:
-        """Refit all models from the statistics and update the forecast."""
+    async def async_refresh(
+        self, vacation: bool, excluded: frozenset[date] = frozenset()
+    ) -> ConsumptionForecast | None:
+        """Refit all models from the statistics, without the ``excluded`` local
+        days, and update the forecast."""
         now = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
         sources = self.sources
         means = await async_statistic_means(
@@ -175,10 +227,16 @@ class ConsumptionForecaster:
         house = build_house_history(sources, means)
         heat_pump = _sum_series(means.get(h, {}) for h in sources.heat_pumps)
         controllable = _sum_series(means.get(c, {}) for c in sources.controllable)
-        base = {
-            start: wh - heat_pump.get(start, 0.0) - controllable.get(start, 0.0)
-            for start, wh in house.items()
-        }
+        excluded = usable_exclusion(house, excluded, now)
+        self.excluded_days = excluded
+        base = without_days(
+            {
+                start: wh - heat_pump.get(start, 0.0) - controllable.get(start, 0.0)
+                for start, wh in house.items()
+            },
+            excluded,
+        )
+        heat_pump = without_days(heat_pump, excluded)
         temperatures = means.get(sources.temperature or "", {})
         forecast_temperatures = await self._async_weather_temperatures()
 
@@ -192,17 +250,17 @@ class ConsumptionForecaster:
             daily_mean_temperature(temperatures),
             now,
         )
-        self.peak_profile = await self._async_peak_profile()
+        self.peak_profile = await self._async_peak_profile(excluded)
         return self.forecast
 
-    async def _async_peak_profile(self) -> PeakProfile | None:
+    async def _async_peak_profile(self, excluded: frozenset[date]) -> PeakProfile | None:
         """Profile from the 5 minute statistics of the first house source with data."""
         end = dt_util.utcnow()
         for statistic_id in self.sources.house:
             means = await async_statistic_means(
                 self._hass, [statistic_id], end - timedelta(days=PROFILE_DAYS), end, "5minute"
             )
-            if values := means.get(statistic_id):
+            if values := without_days(means.get(statistic_id, {}), excluded):
                 return await self._hass.async_add_executor_job(PeakProfile.from_means, values)
         return None
 

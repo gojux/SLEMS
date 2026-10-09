@@ -37,6 +37,7 @@ The target counts for the sensor chosen when it was reached.
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
@@ -648,14 +649,20 @@ ESTIMATE_MIN_DAYS = 2
 ESTIMATE_MIN_DAY_WH = 50.0
 
 
-def daily_energy_estimate(hourly_wh: dict[datetime, float], today: date) -> float | None:
-    """Mean energy (Wh) of the last ``ESTIMATE_DAYS`` full days with consumption."""
+def daily_energy_estimate(
+    hourly_wh: dict[datetime, float], today: date, excluded: Collection[date] = ()
+) -> float | None:
+    """Mean energy (Wh) of the last ``ESTIMATE_DAYS`` full days with consumption,
+    without the ``excluded`` days (vacation) as long as enough days are left."""
     days: dict[date, float] = {}
     for hour, wh in hourly_wh.items():
         day = dt_util.as_local(hour).date()
         if today - timedelta(days=ESTIMATE_DAYS) <= day < today:
             days[day] = days.get(day, 0.0) + max(0.0, wh)
     used = [wh for wh in days.values() if wh >= ESTIMATE_MIN_DAY_WH]
+    kept = [wh for day, wh in days.items() if wh >= ESTIMATE_MIN_DAY_WH and day not in excluded]
+    if len(kept) >= ESTIMATE_MIN_DAYS:
+        used = kept
     if len(used) < ESTIMATE_MIN_DAYS:
         return None
     return sum(used) / len(used)

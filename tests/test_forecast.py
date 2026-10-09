@@ -193,3 +193,43 @@ def test_forecast_raised_for_the_next_day_after_a_rise() -> None:
     raised = [start for start in result.total if result.total[start] > result.base[start] + 1]
     assert min(raised) == now_utc
     assert max(raised) == now_utc + NOWCAST_HORIZON - timedelta(hours=1)
+
+
+def test_vacation_days_left_out_of_the_profile() -> None:
+    from custom_components.slems.forecast import VacationDays, usable_exclusion, without_days
+
+    vacation = VacationDays()
+    away = [(NOW - timedelta(days=d)).date() for d in range(1, 15)]
+    for day in away:
+        vacation.mark(day)
+    assert not vacation.mark(away[0])
+    # Two weeks away at 100 W, before that 500 W.
+    history = {start: 100.0 if start.date() in away else 500.0 for start in hours(56)}
+    excluded = usable_exclusion(history, frozenset(vacation.days), NOW)
+    assert excluded == frozenset(away)
+    model = BaseLoadProfile.fit(without_days(history, excluded), NOW)
+    assert model.predict(NOW.replace(hour=12)) == pytest.approx(500)
+    assert VacationDays.from_list(vacation.as_list()) == vacation
+
+
+def test_vacation_days_all_count_when_too_few_are_left() -> None:
+    from custom_components.slems.forecast import MIN_KEPT_DAYS, usable_exclusion
+
+    history = dict.fromkeys(hours(10), 300.0)
+    days = frozenset((NOW - timedelta(days=d)).date() for d in range(1, 10 - MIN_KEPT_DAYS + 2))
+    assert usable_exclusion(history, days, NOW) == frozenset()
+    days = frozenset((NOW - timedelta(days=d)).date() for d in range(1, 10 - MIN_KEPT_DAYS + 1))
+    assert usable_exclusion(history, days, NOW) == days
+
+
+def test_vacation_days_dropped_after_the_longest_lookback() -> None:
+    from custom_components.slems.forecast import VacationDays
+    from custom_components.slems.forecast.models import HEAT_PUMP_LOOKBACK_DAYS
+
+    vacation = VacationDays()
+    start = date(2026, 1, 1)
+    vacation.mark(start)
+    vacation.mark(start + timedelta(days=HEAT_PUMP_LOOKBACK_DAYS + 1))
+    assert start in vacation.days
+    vacation.mark(start + timedelta(days=HEAT_PUMP_LOOKBACK_DAYS + 2))
+    assert start not in vacation.days

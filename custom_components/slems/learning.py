@@ -29,7 +29,8 @@ the value set by the user applies.
 * Reserve of the night discharge (``MorningGapLearner``): the energy the house
   needed from battery or grid between the moment PV should have taken over
   (end of the night discharge as planned) and the moment it really did, as a
-  share of the day's forecast consumption.
+  share of the day's forecast consumption. Days with the vacation mode are
+  left out.
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 import math
 import statistics
 import time
@@ -618,6 +619,11 @@ class MorningGapLearner:
                 for old in sorted(self.days)[:-MORNING_KEEP_DAYS]:
                     del self.days[old]
             self.planned = None
+
+    def forget(self, days: Iterable[date]) -> None:
+        """Drop the gaps of ``days`` (vacation: the house needs less in the morning)."""
+        for day in days:
+            self.days.pop(day.isoformat(), None)
 
     def reserve_pct(self, coverage_pct: float) -> float | None:
         """Reserve that covers ``coverage_pct`` of the mornings (above 100: the

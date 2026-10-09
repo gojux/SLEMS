@@ -1653,7 +1653,11 @@ sensor **Learned values in use** has all learned values as attributes.
 ### Further settings (entities)
 
 - **Vacation** (switch) – the household is away; switch manually or by an
-  automation.
+  automation. Days on which the switch was on at some time are left out of the
+  learned consumption entirely (consumption forecast including the heat pump,
+  safety buffer, import peaks, reserve of the night discharge, usual daily
+  energy of the consumers), so the forecast is not too low for weeks after the
+  return. With fewer than 7 days left within the last 56 days, all days count.
 - **Battery priority below state of charge** (default 30 %), **Charge secured
   safety buffer** (default 1 kWh) and **Battery share when charge is secured**
   (default 75 %) – the batteries get all surplus until their charge is

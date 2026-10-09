@@ -132,6 +132,7 @@ from .forecast import (
     ConsumptionForecast,
     ConsumptionForecaster,
     ForecastSources,
+    VacationDays,
     async_statistic_means,
 )
 from .forecast.accuracy import PvAccuracyTracker
@@ -248,6 +249,7 @@ CONSUMER_SETTLE_S = 15.0
 MORNING_GAP_STORE_KEY = "morning_gap"
 PRICE_SAVINGS_STORE_KEY = "price_savings"
 PLAN_CHANGES_STORE_KEY = "price_plan_changes"
+VACATION_DAYS_STORE_KEY = "vacation_days"
 # Hourly statistics of an hour are compiled a little after it ended.
 STATISTICS_DELAY = timedelta(minutes=30)
 HALF_HOUR = timedelta(minutes=30)
@@ -780,6 +782,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.cap_exceeded_since: float | None = None
         self.grid_targets = GridTargetLearner()
         self.morning_gap = MorningGapLearner()
+        # Days left out of the learned consumption (see forecast).
+        self.vacation_days = VacationDays()
         self.consumer_learners = {c.subentry_id: ConsumerLearner() for c in consumers}
         self.thermal_learners = {
             c.subentry_id: ThermalLearner() for c in consumers if c.temperature_entity_ids
@@ -836,6 +840,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.morning_gap = MorningGapLearner.from_dict(stored.get(MORNING_GAP_STORE_KEY))
         self.price_savings = PriceSavings.from_dict(stored.get(PRICE_SAVINGS_STORE_KEY))
         self.plan_changes = PlanChanges.from_dict(stored.get(PLAN_CHANGES_STORE_KEY))
+        self.vacation_days = VacationDays.from_list(stored.get(VACATION_DAYS_STORE_KEY))
         consumers = {c.subentry_id: c for c in self.consumers}
         for subentry_id, data in (stored.get(CONSUMERS_STORE_KEY) or {}).items():
             if (consumer := consumers.get(subentry_id)) is not None:
@@ -925,8 +930,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     async def async_refresh_forecast(self) -> None:
         """Refit the consumption forecast from the recorder statistics."""
         self.forecaster.sources = self._forecast_sources()
+        if self.settings.vacation and self.vacation_days.mark(dt_util.now().date()):
+            self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
+        excluded = frozenset(self.vacation_days.days)
+        self.morning_gap.forget(excluded)
         try:
-            await self.forecaster.async_refresh(self.settings.vacation)
+            await self.forecaster.async_refresh(self.settings.vacation, excluded)
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Consumption forecast failed")
         try:
@@ -951,7 +960,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 continue
             counter = state_as_kwh(self.hass.states.get(consumer.energy_entity_id))
             hourly = await async_hourly_changes(self.hass, consumer.energy_entity_id, start, now)
-            if (estimate := daily_energy_estimate(hourly, today)) is not None:
+            if (estimate := daily_energy_estimate(hourly, today, self.vacation_days.days)) is not None:
                 estimates[consumer.subentry_id] = estimate
             so_far = sum(wh for hour, wh in hourly.items() if hour >= end)
             energy_today[consumer.subentry_id] = (so_far, counter)
@@ -1294,6 +1303,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         data[MORNING_GAP_STORE_KEY] = self.morning_gap.as_dict()
         data[PRICE_SAVINGS_STORE_KEY] = self.price_savings.as_dict()
         data[PLAN_CHANGES_STORE_KEY] = self.plan_changes.as_dict()
+        data[VACATION_DAYS_STORE_KEY] = self.vacation_days.as_list()
         return data
 
     async def _async_update_data(self) -> SystemSnapshot:

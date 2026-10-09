@@ -163,6 +163,8 @@ def test_morning_gap_and_reserve() -> None:
     # Above 100 %: the largest gap plus 10 %.
     assert learner.reserve_pct(110) == 7.2
     assert MorningGapLearner.from_dict(learner.as_dict()).days == learner.days
+    learner.forget([day.date()])
+    assert "2026-09-28" not in learner.days
 
 
 def test_morning_gap_zero_when_pv_is_early() -> None:

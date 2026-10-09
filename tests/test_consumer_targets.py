@@ -391,6 +391,12 @@ def test_daily_energy_estimate_from_the_last_days() -> None:
     assert daily_energy_estimate(hourly, today) == pytest.approx(3000)
     # One day with consumption is not enough.
     assert daily_energy_estimate({local(10, day=5): 2000.0}, today) is None
+    # A vacation day is left out as long as two days are left, otherwise all count.
+    hourly[local(10, day=4)] = 300.0
+    assert daily_energy_estimate(hourly, today) == pytest.approx(2100)
+    assert daily_energy_estimate(hourly, today, {local(10, day=4).date()}) == pytest.approx(3000)
+    vacation = {local(10, day=d).date() for d in (4, 5)}
+    assert daily_energy_estimate(hourly, today, vacation) == pytest.approx(2100)
 
 
 def test_next_period_demand() -> None:
