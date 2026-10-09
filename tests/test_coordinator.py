@@ -84,6 +84,44 @@ def test_negative_house_power_keeps_the_last_valid_value() -> None:
     assert stale.house_power_w is None  # unknown
 
 
+def test_unread_battery_keeps_its_last_power_then_house_power_unknown() -> None:
+    from types import SimpleNamespace
+
+    from custom_components.slems.coordinator import UNREAD_BATTERY_HOLD_S, SlemsCoordinator
+
+    def battery(battery_id: str, *, enabled: bool = True, controllable: bool = True) -> SimpleNamespace:
+        return SimpleNamespace(
+            subentry_id=battery_id,
+            enabled=enabled,
+            driver=SimpleNamespace(capabilities=SimpleNamespace(controllable=controllable)),
+            measured_power_w=-800.0,
+            measured_at=100.0,
+        )
+
+    coordinator = SimpleNamespace(
+        batteries=[battery("a"), battery("b"), battery("off", enabled=False), battery("ro", controllable=False)]
+    )
+    snapshot = SystemSnapshot(
+        grid_power_w=200,
+        pv_power_w=0,
+        batteries={"a": BatteryTelemetry(soc_pct=50, power_w=-500)},
+    )
+    unread = SlemsCoordinator._unread_battery_power_w
+    snapshot.unread_battery_power_w = unread(coordinator, snapshot, 100 + UNREAD_BATTERY_HOLD_S)
+    # b still discharges with its last 800 W; disabled and read-only batteries do not count.
+    assert snapshot.unread_battery_power_w == -800
+    assert snapshot.battery_power_w == -1300
+    assert snapshot.house_power_w == 1500
+    snapshot.unread_battery_power_w = unread(coordinator, snapshot, 101 + UNREAD_BATTERY_HOLD_S)
+    assert snapshot.battery_power_w is None
+    assert snapshot.house_power_w is None
+    assert snapshot.base_load_w is None
+    assert snapshot.total_consumption_w is None
+    # Never read since the start: unknown at once.
+    coordinator.batteries[1].measured_at = None
+    assert unread(coordinator, snapshot, 100) is None
+
+
 def test_planning_powers_of_a_full_or_blocked_battery() -> None:
     from types import SimpleNamespace
 

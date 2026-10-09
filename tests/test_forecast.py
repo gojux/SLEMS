@@ -141,6 +141,25 @@ def test_house_history_prefers_explicit_sources() -> None:
     assert build_house_history(sources, means)[hour_a] == 600  # 100 + 1000 - 500
 
 
+def test_house_history_skips_hours_without_a_battery_value() -> None:
+    hours = [NOW - timedelta(hours=h) for h in range(5, 0, -1)]
+    sources = ForecastSources(
+        house=(), grid="sensor.grid", grid_inverted=False, pv="sensor.pv",
+        batteries=("sensor.battery_a", "sensor.battery_b"), heat_pumps=(), controllable=(),
+        temperature=None, weather=None,
+    )
+    means = {
+        "sensor.grid": dict.fromkeys(hours, 100),
+        "sensor.pv": dict.fromkeys(hours, 1000),
+        "sensor.battery_a": {hours[1]: 500, hours[3]: 500},
+        # Added later: no value before its first hour.
+        "sensor.battery_b": {hours[3]: 200, hours[4]: 200},
+    }
+    house = build_house_history(sources, means)
+    # hours[2] is a gap of battery a, hours[4] lies after its last value.
+    assert house == {hours[0]: 1100, hours[1]: 600, hours[3]: 400, hours[4]: 900}
+
+
 def test_mean_temperature_combines_measured_and_forecast() -> None:
     day = NOW.date()
     measured = {NOW + timedelta(hours=h): 2.0 for h in range(10)}

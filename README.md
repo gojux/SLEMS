@@ -564,6 +564,11 @@ The sensor **House consumption** (used for the forecast and shown in the energy
 flow) is calculated as grid + PV − batteries. The smart meter often reports a
 change later than PV and batteries; a momentarily negative result is therefore
 replaced by the last valid value (for at most 30 seconds, then unknown).
+If an enabled, controllable battery cannot be read, it counts with its last
+measured power for up to 5 minutes, since it keeps its last set point without
+new commands. After that the house consumption is unknown until the battery can
+be read again, instead of adding its power to the house. The consumption
+forecast leaves out hours in which the statistics of a battery lack a value.
 
 ## Without batteries
 

@@ -225,6 +225,10 @@ STORAGE_SAVE_DELAY_S = 600
 BALANCING_SAVE_DELAY_S = 5
 # A self-test ends when the battery cannot be read for this long.
 SELF_TEST_UNREADABLE_S = 30.0
+# An unread battery counts with its last measured power for this long: the
+# Venus keeps its last set point without new commands (measured for 90 s).
+# Afterwards it may have reached a SoC limit, the house power is unknown.
+UNREAD_BATTERY_HOLD_S = 300.0
 # Charging from the grid is planned at most this far ahead without a refill.
 MAX_GRID_CHARGE_HORIZON = timedelta(hours=36)
 GRID_CHARGE_REPLAN_S = 60.0
@@ -522,6 +526,9 @@ class SystemSnapshot:
     pv_power_w: float | None = None
     # Per battery subentry id; missing if the battery could not be read.
     batteries: dict[str, BatteryTelemetry] = field(default_factory=dict)
+    # Last measured power of the enabled, controllable batteries that could
+    # not be read this time (see UNREAD_BATTERY_HOLD_S); None: unknown.
+    unread_battery_power_w: float | None = 0.0
     consumer_configs: dict[str, ConsumerConfig] = field(default_factory=dict)
     consumers: dict[str, ConsumerState] = field(default_factory=dict)
     # Consumers that did not draw the commanded power (own thermostat); they
@@ -575,13 +582,18 @@ class SystemSnapshot:
 
     @property
     def battery_power_w(self) -> float | None:
-        """Total AC battery power (+charge / -discharge) of all readable batteries."""
+        """Total AC battery power (+charge / -discharge), with the held power of
+        unread batteries; None while one of them is unknown."""
+        if self.unread_battery_power_w is None:
+            return None
         powers = [
             power
             for b in self.batteries.values()
             if (power := b.grid_side_power_w) is not None
         ]
-        return sum(powers) if powers else None
+        if not powers and not self.unread_battery_power_w:
+            return None
+        return sum(powers) + self.unread_battery_power_w
 
     def _consumer_power_w(self, included_in_meter: bool) -> float:
         return sum(
@@ -615,9 +627,11 @@ class SystemSnapshot:
         """Consumption behind the smart meter from the energy balance, unchecked.
 
         Negative for a moment when the smart meter reports a change later than
-        the PV and battery measurements.
+        the PV and battery measurements. Unknown while an enabled battery
+        could not be read for longer than UNREAD_BATTERY_HOLD_S: it keeps
+        its last set point, its power would end up in the house.
         """
-        if self.grid_power_w is None:
+        if self.grid_power_w is None or self.unread_battery_power_w is None:
             return None
         return (
             self.grid_power_w
@@ -1419,6 +1433,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._update_full_charge(snapshot, now)
         self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
 
+        snapshot.unread_battery_power_w = self._unread_battery_power_w(snapshot, now)
         self._house_hold.check(snapshot, now)
         self._learn_morning_gap(snapshot, now)
         snapshot.saturated = self.controller.saturated
@@ -1719,6 +1734,22 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         battery.paused_until = None
         battery.pause_reason = None
         self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+
+    def _unread_battery_power_w(self, snapshot: SystemSnapshot, now: float) -> float | None:
+        """Last measured power of the enabled, controllable batteries missing
+        from ``snapshot``; None if one was not read for UNREAD_BATTERY_HOLD_S."""
+        total = 0.0
+        for battery in self.batteries:
+            if (
+                battery.subentry_id in snapshot.batteries
+                or not battery.enabled
+                or not battery.driver.capabilities.controllable
+            ):
+                continue
+            if battery.measured_at is None or now - battery.measured_at > UNREAD_BATTERY_HOLD_S:
+                return None
+            total += battery.measured_power_w or 0.0
+        return total
 
     async def _async_read_battery(self, battery: BatteryRuntime, now: float) -> BatteryTelemetry | None:
         """Read one battery (an outstanding release first); None if not read."""

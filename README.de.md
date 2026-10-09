@@ -593,6 +593,12 @@ Energiefluss) wird als Netz + PV − Batterien berechnet. Der Smart Meter meldet
 eine Änderung oft später als PV und Batterien; ein kurzzeitig negatives
 Ergebnis wird daher durch den letzten gültigen Wert ersetzt (höchstens 30
 Sekunden, danach unbekannt).
+Kann eine aktivierte, steuerbare Batterie nicht gelesen werden, zählt sie bis
+zu 5 Minuten mit ihrer zuletzt gemessenen Leistung, weil sie ihre letzte
+Vorgabe ohne neue Befehle weiterführt. Danach ist der Hausverbrauch unbekannt,
+bis die Batterie wieder lesbar ist, statt ihre Leistung dem Haus zuzurechnen.
+Stunden, in denen der Statistik einer Batterie ein Wert fehlt, lässt die
+Verbrauchsprognose aus.
 
 ## Ohne Batterien
 

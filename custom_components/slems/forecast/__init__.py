@@ -179,8 +179,15 @@ def build_house_history(
     house: dict[datetime, float] = {}
     grid = means.get(sources.grid or "", {})
     pv = means.get(sources.pv or "", {})
-    batteries = _sum_series(means.get(b, {}) for b in sources.batteries)
+    series = [means.get(b, {}) for b in sources.batteries]
+    batteries = _sum_series(series)
+    # An hour without the value of a battery within its recorded span is a
+    # gap (counted as 0 it would put the battery power into the house);
+    # before its first or after its last value the battery did not exist.
+    spans = [(min(values), max(values), values) for values in series if values]
     for start, grid_wh in grid.items():
+        if any(first <= start <= last and start not in values for first, last, values in spans):
+            continue
         if sources.grid_inverted:
             grid_wh = -grid_wh
         house[start] = grid_wh + pv.get(start, 0.0) - batteries.get(start, 0.0)
