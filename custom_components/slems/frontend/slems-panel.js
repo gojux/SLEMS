@@ -68,7 +68,10 @@ const STRINGS = {
     consumerForecast: "Consumers (planned)",
     consumptionActual: "Consumption measured",
     plannedCharge: "Planned charging",
+    plannedGridCharge: "Planned charging from the grid",
     actualCharge: "Charging measured",
+    actualGridCharge: "Charging measured from the grid",
+    actualMixedCharge: "Charging measured from PV and grid",
     exportForecast: "Feed-in forecast",
     exportActual: "Feed-in measured",
     socForecast: "State of charge forecast",
@@ -597,7 +600,10 @@ const STRINGS = {
     consumerForecast: "Verbraucher (geplant)",
     consumptionActual: "Verbrauch gemessen",
     plannedCharge: "Geplantes Laden",
+    plannedGridCharge: "Geplantes Laden aus dem Netz",
     actualCharge: "Laden gemessen",
+    actualGridCharge: "Laden gemessen aus dem Netz",
+    actualMixedCharge: "Laden gemessen aus PV und Netz",
     exportForecast: "Einspeisung (Prognose)",
     exportActual: "Einspeisung gemessen",
     socForecast: "Ladezustand-Prognose",
@@ -1355,7 +1361,7 @@ class SlemsPanel extends HTMLElement {
     this._chartDay = "today";
     // Settings whose explanation is shown (translation keys).
     this._openHints = new Set();
-    this._stats = { pv: {}, house: {}, soc: {}, charge: {}, export: {} };
+    this._stats = { pv: {}, house: {}, soc: {}, charge: {}, gridCharge: {}, export: {} };
     this._statsFetched = 0;
     this._sections = {};
     this._renderQueued = false;
@@ -2815,12 +2821,19 @@ class SlemsPanel extends HTMLElement {
         }
         return Object.fromEntries(Object.entries(sums).map(([slot, [sum, n]]) => [slot, sum / n]));
       };
+      // Charging while importing: up to the smaller of both from the grid.
+      const importAt = new Map((result[gridId] || []).map((row) => [row.start, Math.max(0, row.mean ?? 0)]));
+      const gridCharge = (result[batteryId] || []).map((row) => ({
+        start: row.start,
+        mean: row.mean === null || row.mean === undefined ? null : Math.min(Math.max(0, row.mean), importAt.get(row.start) ?? 0),
+      }));
       this._stats = {
         pv: bySlot(result[pvId]),
         house: bySlot(result[houseId]),
         soc: bySlot(result[socId]),
         // Battery power is +charge / -discharge; only the charging part.
         charge: bySlot(result[batteryId], (v) => Math.max(0, v)),
+        gridCharge: bySlot(gridCharge),
         // Grid power is +import / -export; only the export.
         export: bySlot(result[gridId], (v) => Math.max(0, -v)),
       };
@@ -2863,6 +2876,7 @@ class SlemsPanel extends HTMLElement {
           // Part of it: planned load of the consumers' daily targets.
           consumerForecast: row.consumer_wh || null,
           plannedCharge: row.planned_charge_w,
+          plannedGridCharge: row.planned_grid_charge_w ?? null,
           // With the feed-in cap the inverter curtails the export above the limit.
           exportForecast: exportOf(row),
           socCompare: !compare
@@ -2895,6 +2909,15 @@ class SlemsPanel extends HTMLElement {
           consumptionActual: today ? this._stats.house[slot] ?? null : null,
           socActual: today ? this._stats.soc[slot] ?? null : null,
           actualCharge: today ? this._stats.charge[slot] ?? null : null,
+          // The measured charging again, by where it mostly came from.
+          ...(() => {
+            const source = today ? chargeSource(this._stats.charge[slot], this._stats.gridCharge[slot]) : null;
+            const charge = this._stats.charge[slot];
+            return {
+              actualGridCharge: source === "grid" ? charge : null,
+              actualMixedCharge: source === "mixed" ? charge : null,
+            };
+          })(),
           exportActual: today ? this._stats.export[slot] ?? null : null,
         };
       })
@@ -2959,6 +2982,8 @@ class SlemsPanel extends HTMLElement {
       return `<button class="legend-item${hidden ? " off" : ""}" data-action="toggle-series" data-series="${key}" aria-pressed="${!hidden}"><svg width="22" height="10">${
         style === "bar"
           ? `<rect x="4" y="0" width="14" height="10" rx="2" fill="${color}"/>`
+          : style === "stripes"
+          ? `${stripes(`legend-${key}`, ...color)}<rect x="4" y="0" width="14" height="10" rx="2" fill="url(#legend-${key})"/>`
           : `<line x1="1" y1="5" x2="21" y2="5" stroke="${color}" stroke-width="2" stroke-linecap="round" ${
               style === "dash" ? 'stroke-dasharray="4 3"' : style === "dot" ? `stroke-dasharray="${COMPARE_DASH}"` : ""
             }/>`
@@ -2970,7 +2995,9 @@ class SlemsPanel extends HTMLElement {
       ${item("consumptionForecast", c.house, t.consumptionForecast, "dash")}${item("consumptionActual", c.house, t.consumptionActual, "solid")}
       ${item("consumerForecast", c.consumer, t.consumerForecast, "dash")}
       ${item("exportForecast", c.grid, t.exportForecast, "dash")}${item("exportActual", c.grid, t.exportActual, "solid")}
-      ${item("plannedCharge", `${c.battery}66`, t.plannedCharge, "bar")}${item("actualCharge", c.battery, t.actualCharge, "bar")}
+      ${item("plannedCharge", `${c.battery}66`, t.plannedCharge, "bar")}${item("plannedGridCharge", `${c.grid}66`, t.plannedGridCharge, "bar")}
+      ${item("actualCharge", c.battery, t.actualCharge, "bar")}${item("actualGridCharge", c.grid, t.actualGridCharge, "bar")}
+      ${item("actualMixedCharge", [c.battery, c.grid], t.actualMixedCharge, "stripes")}
       ${item("socForecast", c.battery, t.socForecast, "dash")}${item("socActual", c.battery, t.socActual, "solid")}
       ${item("exportCompare", c.muted, t.exportCompare, "dot")}${item("socCompare", c.muted, t.socCompare, "dot")}
       ${item("capLine", c.muted, t.capLine, "dash")}${item("capExcess", `${c.pv}73`, t.capExcess, "bar")}
@@ -3055,10 +3082,23 @@ class SlemsPanel extends HTMLElement {
       const h = Math.max(1, plotH - (y(r[key]) - pad.top));
       return `<path d="${roundedTopBar(x(r.hour) + offset, y(r[key]), barW, h)}" fill="${color}"/>`;
     };
+    // The planned charging from the grid on top of the part from PV.
+    const plannedBar = (r) => {
+      const fromGrid = shown("plannedGridCharge") ? Math.min(r.plannedGridCharge || 0, r.plannedCharge) : 0;
+      if (!fromGrid) return bar(r, "plannedCharge", gap / 2, `${c.battery}66`);
+      const left = x(r.hour) + gap / 2;
+      const split = y(r.plannedCharge - fromGrid);
+      return `${fromGrid < r.plannedCharge ? `<rect x="${left}" y="${split}" width="${barW}" height="${Math.max(0, plotBottom - split)}" fill="${c.battery}66"/>` : ""}<path d="${roundedTopBar(
+        left, y(r.plannedCharge), barW, Math.max(1, (fromGrid < r.plannedCharge ? split : plotBottom) - y(r.plannedCharge))
+      )}" fill="${c.grid}66"/>`;
+    };
+    // The measured charging in the colour of its source, striped when both charged.
+    const actualColor = (r) =>
+      r.actualGridCharge && shown("actualGridCharge") ? c.grid : r.actualMixedCharge && shown("actualMixedCharge") ? "url(#chart-stripes)" : c.battery;
     const bars = rows
       .map((r) =>
-        (r.plannedCharge > 0 && shown("plannedCharge") ? bar(r, "plannedCharge", gap / 2, `${c.battery}66`) : "") +
-        (r.actualCharge > 0 && shown("actualCharge") ? bar(r, "actualCharge", slot / 2 + gap / 2, c.battery) : "")
+        (r.plannedCharge > 0 && shown("plannedCharge") ? plannedBar(r) : "") +
+        (r.actualCharge > 0 && shown("actualCharge") ? bar(r, "actualCharge", slot / 2 + gap / 2, actualColor(r)) : "")
       )
       .join("");
     // Hourly values (both halves equal) get one point in the middle of the hour
@@ -3107,7 +3147,7 @@ class SlemsPanel extends HTMLElement {
     const showNow = this._chartDay === "today";
     return `
       <div class="chart-wrap"><svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="chart" role="img" aria-label="${this._t.dayChart}">
-        ${hourLines}${gridLines.join("")}${hourTicks}${bars}${capBars}${capLine}
+        ${stripes("chart-stripes", c.battery, c.grid)}${hourLines}${gridLines.join("")}${hourTicks}${bars}${capBars}${capLine}
         ${path("pvForecast", c.pv, true)}${path("pvActual", c.pv, false)}
         ${path("consumptionForecast", c.house, true)}${path("consumptionActual", c.house, false)}
         ${path("consumerForecast", c.consumer, true)}
@@ -3127,12 +3167,12 @@ class SlemsPanel extends HTMLElement {
     const cap = rows.some((r) => r.capLine !== null && r.capLine !== undefined);
     return `<div class="table-wrap"><table>
       <thead><tr><th>${t.hour}</th><th>${t.pvForecast}</th><th>${t.pvActual}</th><th>${t.consumptionForecast}</th>
-      <th>${t.consumptionActual}</th><th>${t.consumerForecast}</th><th>${t.exportForecast}</th><th>${t.exportActual}</th><th>${t.plannedCharge}</th><th>${t.actualCharge}</th><th>${t.socForecast}</th><th>${t.socActual}</th>
+      <th>${t.consumptionActual}</th><th>${t.consumerForecast}</th><th>${t.exportForecast}</th><th>${t.exportActual}</th><th>${t.plannedCharge}</th><th>${t.plannedGridCharge}</th><th>${t.actualCharge}</th><th>${t.socForecast}</th><th>${t.socActual}</th>
       ${cap ? `<th>${t.capLine}</th><th>${t.capExcess}</th><th>${t.capCurtailed}</th>` : ""}</tr></thead>
       <tbody>${rows
         .map(
           (r) => `<tr><td>${slotTime(r.slot)}</td><td>${cell(r.pvForecast)}</td><td>${cell(r.pvActual)}</td>
-          <td>${cell(r.consumptionForecast)}</td><td>${cell(r.consumptionActual)}</td><td>${cell(r.consumerForecast)}</td><td>${cell(r.exportForecast)}</td><td>${cell(r.exportActual)}</td><td>${cell(r.plannedCharge)}</td><td>${cell(r.actualCharge)}</td>
+          <td>${cell(r.consumptionForecast)}</td><td>${cell(r.consumptionActual)}</td><td>${cell(r.consumerForecast)}</td><td>${cell(r.exportForecast)}</td><td>${cell(r.exportActual)}</td><td>${cell(r.plannedCharge)}</td><td>${cell(r.plannedGridCharge)}</td><td>${cell(r.actualCharge)}</td>
           <td>${percent(r.socForecast)}</td><td>${percent(r.socActual)}</td>${
             cap ? `<td>${cell(r.capLine)}</td><td>${cell(r.capExcess)}</td><td>${cell(r.capCurtailed)}</td>` : ""
           }</tr>`
@@ -3174,6 +3214,12 @@ class SlemsPanel extends HTMLElement {
       value === null || value === undefined
         ? ""
         : `<div><span class="swatch" style="background:${color}"></span>${label}<b>${escapeHtml(this._watts(value))}</b></div>`;
+    const stripesCss = `repeating-linear-gradient(45deg, ${c.battery} 0 2px, ${c.grid} 2px 4px)`;
+    const actual = v("actualGridCharge")
+      ? entry(c.grid, t.actualGridCharge, v("actualCharge"))
+      : v("actualMixedCharge")
+        ? entry(stripesCss, t.actualMixedCharge, v("actualCharge"))
+        : entry(c.battery, t.actualCharge, v("actualCharge"));
     const percentEntry = (color, label, value) =>
       value === null || value === undefined
         ? ""
@@ -3185,7 +3231,7 @@ class SlemsPanel extends HTMLElement {
       ${entry(c.house, t.consumptionForecast, v("consumptionForecast"))}${entry(c.house, t.consumptionActual, v("consumptionActual"))}
       ${entry(c.consumer, t.consumerForecast, v("consumerForecast"))}
       ${entry(c.grid, t.exportForecast, v("exportForecast"))}${entry(c.grid, t.exportActual, v("exportActual"))}
-      ${entry(c.battery, t.plannedCharge, v("plannedCharge"))}${entry(c.battery, t.actualCharge, v("actualCharge"))}
+      ${entry(c.battery, t.plannedCharge, v("plannedCharge"))}${v("plannedGridCharge") > 0 ? entry(c.grid, t.plannedGridCharge, v("plannedGridCharge")) : ""}${actual}
       ${percentEntry(c.battery, t.socForecast, v("socForecast"))}${percentEntry(c.battery, t.socActual, v("socActual"))}
       ${entry(c.muted, t.exportCompare, v("exportCompare"))}${percentEntry(c.muted, t.socCompare, v("socCompare"))}
       ${v("capExcess") > 0 ? entry(c.pv, t.capExcess, v("capExcess")) : ""}${
@@ -4494,6 +4540,18 @@ function roundedPath(points, radius) {
   }
   const last = points[points.length - 1];
   return `${d} L${last[0]},${last[1]}`;
+}
+
+/** Where measured charging mostly came from: "pv", "grid" or "mixed" (both, striped). */
+function chargeSource(charge, fromGrid) {
+  if (!(charge > 0)) return null;
+  const share = (fromGrid || 0) / charge;
+  return share < 0.1 ? "pv" : share > 0.9 ? "grid" : "mixed";
+}
+
+/** Pattern of diagonal stripes in two colours (charging from PV and grid at once). */
+function stripes(id, first, second) {
+  return `<defs><pattern id="${id}" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)"><rect width="3" height="6" fill="${first}"/><rect x="3" width="3" height="6" fill="${second}"/></pattern></defs>`;
 }
 
 function roundedTopBar(x, y, width, height) {

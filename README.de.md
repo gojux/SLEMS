@@ -1316,6 +1316,11 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
     Verbrauchsprognose), dazu den prognostizierten Gesamt-Ladezustand
     (gestrichelt) und den gemessenen (durchgezogen) mit ihrer Skala in %
     rechts.
+  - Laden aus dem Netz ist blau: beim geplanten Laden der Teil aus dem Netz
+    oben auf dem Teil aus PV. Das gemessene Laden ist grün, wenn es fast nur
+    aus PV kam, blau, wenn es fast nur aus dem Netz kam (geladen bei
+    gleichzeitigem Netzbezug), und grün-blau gestreift, wenn beides zugleich
+    lud.
   - **Morgen** zeigt Prognosen, geplantes Laden und Ladezustand des nächsten
     Tages, fortgeführt aus der Prognose von heute.
   - Die Prognose folgt der Planung: Laden nur mit dem geplanten Überschuss,

@@ -1241,6 +1241,11 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar.
     (pink, dashed; part of the consumption forecast), plus the projected total
     state of charge (dashed) and the measured one (solid) with their scale in %
     on the right.
+  - Charging from the grid is blue: in the planned charging the part from the
+    grid on top of the part from PV. The measured charging is green when it
+    came almost only from PV, blue when it came almost only from the grid
+    (charged while importing), and striped green and blue when both charged
+    at once.
   - **Tomorrow** shows the forecasts, planned charging and state of charge of
     the next day, continued from today's projection.
   - The projection follows the planning: charging only with the planned

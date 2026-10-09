@@ -196,6 +196,18 @@ def test_bad_weather_mode() -> None:
     assert result.planned_charge_w[at(8, day=1)] > 0
 
 
+def test_planned_grid_charging_is_shown_as_its_own_part() -> None:
+    pv, consumption = forecasts()
+    grid_charge = {at(3): 2000.0, at(8): 2000.0}
+    result = project_soc(at(0), battery(20), pv, consumption, None, settings(), None, grid_charge=grid_charge)
+    # At night all of it comes from the grid, at 08:00 the part beyond the surplus (100 W).
+    assert result.planned_grid_charge_w[at(3)] == result.planned_charge_w[at(3)] == 2000
+    assert result.planned_charge_w[at(8)] == 2000
+    assert result.planned_grid_charge_w[at(8)] == pytest.approx(1900)
+    # Charging from the surplus alone has no grid part.
+    assert result.planned_charge_w[at(10)] > 0 and at(10) not in result.planned_grid_charge_w
+
+
 def test_battery_support_loads() -> None:
     pv, consumption = forecasts()
     # A forced run of 2 kWh at 20:00 (part of the consumption).

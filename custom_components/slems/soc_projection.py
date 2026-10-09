@@ -82,6 +82,8 @@ class SocProjection:
 
     soc_pct: dict[datetime, float] = field(default_factory=dict)
     planned_charge_w: dict[datetime, float] = field(default_factory=dict)
+    # Part of it from the grid (planned grid charging beyond the surplus).
+    planned_grid_charge_w: dict[datetime, float] = field(default_factory=dict)
     grid_w: dict[datetime, float] = field(default_factory=dict)
     # Mean power of the consumers' daily targets taken from the surplus.
     consumer_w: dict[datetime, float] = field(default_factory=dict)
@@ -181,6 +183,8 @@ def project_soc(
                 charge = max(charge, cap.hourly[hour].absorbed_wh / share)
                 charge = min(charge, max(0.0, full - stored) / (share * efficiency))
             result.planned_charge_w[hour] = charge
+            if charge > pv_w - load:
+                result.planned_grid_charge_w[hour] = charge - (pv_w - load)
             stored = min(max(stored, full), stored + charge * share * efficiency)
             consumers = _take_surplus(
                 demands, left, max(0.0, pv_w - load - charge) * share, start, hour + PERIOD
@@ -194,6 +198,8 @@ def project_soc(
             room = max(0.0, full - stored)
             charge = min(charge, room / (share * efficiency))
             result.planned_charge_w[hour] = charge
+            if charge > 0:
+                result.planned_grid_charge_w[hour] = charge
             stored += charge * share * efficiency
         else:
             deficit = load - pv_w

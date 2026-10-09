@@ -3418,6 +3418,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         day_start += timedelta(days=day_offset)
         consumption_hourly = consumption_hourly or {}
         planned = projection.planned_charge_w if projection else {}
+        planned_grid = projection.planned_grid_charge_w if projection else {}
         soc = projection.soc_pct if projection else {}
         grid = projection.grid_w if projection else {}
         from_surplus = projection.consumer_w if projection else {}
@@ -3439,6 +3440,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     # Part of it: planned load of the consumers' daily targets.
                     "consumer_wh": round(consumers) if consumers else None,
                     "planned_charge_w": round(planned[start]) if start in planned else None,
+                    # Part of it from the grid.
+                    "planned_grid_charge_w": (
+                        round(planned_grid[start]) if start in planned_grid else None
+                    ),
                     "soc_pct": round(soc[start], 1) if start in soc else None,
                     # Expected grid power (+ import / − export) from the projection.
                     "grid_w": round(grid[start]) if start in grid else None,
