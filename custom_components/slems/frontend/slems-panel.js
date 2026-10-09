@@ -233,6 +233,7 @@ const STRINGS = {
     storageUntilCycling: "{energy} until it cycles",
     storageUntilFull: "{cycling} until it cycles, {full} until full",
     controlActive: "Control active",
+    controlShort: "Control",
     consumerResponseTime: "Response time on/off (own sensor)",
     gridResponseTime: "Response time on/off at the meter",
     notControlled: "measured only",
@@ -778,6 +779,7 @@ const STRINGS = {
     storageUntilCycling: "{energy} bis zum Takten",
     storageUntilFull: "{cycling} bis zum Takten, {full} bis voll",
     controlActive: "Steuerung aktiv",
+    controlShort: "Steuerung",
     consumerResponseTime: "Reaktionszeit an/aus (eigener Sensor)",
     gridResponseTime: "Reaktionszeit an/aus am Zähler",
     notControlled: "nur gemessen",
@@ -4136,7 +4138,7 @@ class SlemsPanel extends HTMLElement {
               )}</span></div>`
             : "";
           return `<section class="card">
-            <div class="card-head"><h2>${escapeHtml(c.name)}</h2><div class="chips">${chips}${control ? this._toggle(control, t.controlActive) : ""}</div></div>
+            <div class="card-head"><h2>${escapeHtml(c.name)}</h2><div class="chips">${chips}${control ? `<span class="switch-label">${escapeHtml(t.controlShort)}</span>${this._toggle(control, t.controlActive)}` : ""}</div></div>
             ${noPower}
             <dl>
               ${this._row(t.measured, escapeHtml(this._format(measured)), c.power_entity)}
@@ -4795,6 +4797,7 @@ const STYLE = `
   .soc-bar { flex: 1; height: 8px; border-radius: 4px; background: var(--divider-color); overflow: hidden; }
   .soc-bar div { height: 100%; background: var(--c-battery); border-radius: 4px; }
   .chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .switch-label { font-size: 12px; color: var(--secondary-text-color); }
   .chip { font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--divider-color);
     color: var(--secondary-text-color); margin-left: 4px; }
   .settings { display: flex; flex-direction: column; gap: 10px; }

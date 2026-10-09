@@ -248,6 +248,10 @@ def _system(coordinator: SlemsCoordinator) -> dict:
             "control_interval_s": coordinator.control_interval_s,
             "morning_gap": coordinator.morning_gap.as_dict(),
             "vacation_days": coordinator.vacation_days.as_list(),
+            "outdoor_power": {
+                subentry_id: {**learner.as_dict(), "model": learner.model()}
+                for subentry_id, learner in coordinator.outdoor_power.items()
+            },
             "consumption_excluded_days": sorted(day.isoformat() for day in coordinator.forecaster.excluded_days),
             "night_reserve_pct": coordinator.night_reserve_pct(coordinator.settings),
             "average_window_s": coordinator.average_window_s,

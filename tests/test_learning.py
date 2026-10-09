@@ -332,3 +332,39 @@ def test_secured_buffer_with_one_part_learned() -> None:
     # Off: the set buffer.
     settings.charge_secured_buffer_auto = False
     assert SlemsCoordinator.secured_buffer_wh(coordinator, settings, 20_000, 10_000) == 1000
+
+
+def test_outdoor_power_of_the_runs() -> None:
+    from custom_components.slems.learning import OUTDOOR_MIN_RUNS, OutdoorPowerLearner
+
+    learner = OutdoorPowerLearner()
+    t = 0.0
+
+    def run(outdoor: float, power: float, minutes: int = 30) -> bool:
+        nonlocal t
+        for _ in range(minutes * 6):
+            learner.update(t, power, outdoor)
+            t += 10
+        # Off for longer than the gap: the run is recorded.
+        learner.update(t, 0.0, outdoor)
+        t += 200
+        return learner.update(t, 0.0, outdoor)
+
+    # Air source heat pump: 3000 W at −5 °C, 2000 W at 15 °C.
+    for outdoor in (-5, 0, 5, 10, 15):
+        assert run(outdoor, 2750 - 50 * outdoor)
+    assert learner.model() is None  # too few runs
+    assert run(15, 2000)
+    assert len(learner.runs) == OUTDOOR_MIN_RUNS
+    assert learner.power_at(-5) == pytest.approx(3000, rel=0.02)
+    assert learner.power_at(15) == pytest.approx(2000, rel=0.02)
+    # Outside the learned span: its border.
+    assert learner.power_at(30) == pytest.approx(learner.power_at(15))
+    # A short run does not count.
+    assert not run(5, 2500, minutes=5)
+    assert OutdoorPowerLearner.from_dict(learner.as_dict()).runs == learner.runs
+
+    # Ground source or heating rod: no dependency, no effect.
+    flat = OutdoorPowerLearner(runs=[(t, 2000.0 + (t % 3)) for t in (-5, 0, 5, 10, 15, 20)])
+    assert flat.model() is None
+    assert flat.power_at(0) is None

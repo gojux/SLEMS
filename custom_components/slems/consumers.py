@@ -244,7 +244,7 @@ def read_consumer_state(hass: HomeAssistant, consumer: ConsumerConfig) -> Consum
             blocked = block_state.state == STATE_OFF
         else:
             blocked = block_state.state == STATE_ON
-    temperatures = [_temperature(hass.states.get(e)) for e in consumer.temperature_entity_ids]
+    temperatures = [temperature_c_of(hass.states.get(e)) for e in consumer.temperature_entity_ids]
     measured = state_as_watts(hass.states.get(consumer.power_entity_id))
     power = measured
     if consumer.hot_water_release and measured is not None:
@@ -265,7 +265,7 @@ def read_consumer_state(hass: HomeAssistant, consumer: ConsumerConfig) -> Consum
     )
 
 
-def _temperature(state) -> float | None:
+def temperature_c_of(state) -> float | None:
     """Temperature in °C (sensors in °F are converted)."""
     value = state_as_float(state)
     if value is None:

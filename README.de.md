@@ -427,9 +427,15 @@ Simulation berücksichtigen es. Die Preispläne arbeiten in Viertelstunden
 wird gleichmäßig auf ihre Viertelstunden verteilt, die PV kommt aus der
 Prognose; das Tagesdiagramm zeigt ihre Stundenmittel. Tagesziele mit der Quelle **+ Netz**: Reicht der
 prognostizierte Überschuss ohnehin nicht, startet der erzwungene Lauf im
-Fenster mit dem niedrigsten mittleren Bezugspreis vor der Frist (um
-mindestens den Mindestgewinn günstiger als zum spätesten Start); die
-Verbraucherkarte zeigt **ab … im günstigsten Fenster**.
+Fenster mit den niedrigsten Kosten vor der Frist (um mindestens den
+Mindestgewinn je kWh günstiger als zum spätesten Start); die
+Verbraucherkarte zeigt **ab … im günstigsten Fenster**. Die Kosten je
+Viertelstunde: Was der prognostizierte Überschuss deckt, zählt mit der
+Einspeisevergütung, der Rest mit dem Bezugspreis. Bei einem
+Ein/Aus-Verbraucher, dessen Leistung deutlich von der Außentemperatur
+abhängt (z. B. die Warmwasserladung einer Luft-Wärmepumpe), zählt seine
+gelernte Leistung bei der prognostizierten Temperatur der Stunde: Ein warmer
+Nachmittag kann so einen kalten Morgen mit billigerem Strom schlagen.
 
 **Geschätzte Preise**: Die Day-Ahead-Preise des nächsten Tages erscheinen
 gegen 13 Uhr. Für die Viertelstunden nach dem letzten bekannten Preis plant
@@ -1817,6 +1823,7 @@ alle gelernten Werte als Attribute.
 | Ziel-Netzüberschuss beim Laden und Entladen | wie weit die Netzleistung Richtung Bezug schwankt, während die Batterien regeln; Laden: das Ziel hält das Netz 90 % der Zeit auf der Einspeiseseite (20–1000 W); Entladen: das Netz schwankt um das Ziel, je die Hälfte der Zeit auf jeder Seite (−100 bis 300 W, mit **Kein negativer Ziel-Netzüberschuss** 0 bis 300 W), weil ein kurzer Bezug dort wenig kostet, dauerhaftes Einspeisen aber Batterieenergie verschenkt | etwas Regelbetrieb im Modus **Aktiv** |
 | Regelintervall und Mittelungsfenster | dem gelernten Meldeintervall des Smart Meters (0,8 × und 3 ×) | einige Meldungen des Zählers |
 | Nutzbare Kapazität (je Batterie, **Gelernte Kapazität verwenden**) | Lade- und Entladevorgängen über mindestens 20 % Ladezustand: DC-Energie / Änderung des Ladezustands (Vorgänge mit einem Sprung des Ladezustands werden verworfen), Median der letzten zehn | drei Vorgänge |
+| Leistung eines Ein/Aus-Verbrauchers nach der Außentemperatur | mittlerer Leistung und Außentemperatur (eigener Fühler, sonst Wetter-Entität) jedes Laufs ab 10 Minuten, die letzten 60 Läufe; eine Gerade, nur genutzt bei mindestens 8 K Spanne und mindestens 10 % Änderung der Leistung darüber (eine Sole-Wärmepumpe oder ein Heizstab zeigt keine, dann wirkt es nicht); Attribute des Sensors **Gelernte Leistung** | 6 Läufe |
 | Morgenreserve (**Deckung der Morgenreserve** bestimmt, wie vorsichtig; nur sichtbar, solange die Reserve automatisch ist) | der Morgenlücke: Energie, die das Haus zwischen der geplanten Übernahme durch die PV (Ende der Nachtentladung) und der tatsächlichen (PV deckt den Verbrauch 15 Minuten lang) aus Batterie oder Netz brauchte, in % des prognostizierten Tagesverbrauchs; die Reserve deckt den gewählten Anteil der Morgen (90 % = 9 von 10), über 100 % die größte Lücke mal dem Wert (110 % = 10 % mehr als der schlechteste Morgen) | 14 gemessene Morgen (gemessen wird auch bei ausgeschalteter Nachtentladung) |
 | Leistung und Thermostat eines Verbrauchers (je Verbraucher, **Gelernte Werte verwenden**) | der Leistung im eingeschalteten Zustand (Ein/Aus-Verbraucher: ersetzt die Nennleistung; leistungsgeregelte Verbraucher: die typische Leistung bei Volllast, gemessen bei einer Vorgabe ab 90 % der maximalen Leistung seit mindestens 15 s bzw. der doppelten Reaktionszeit, für die Planung: Prognose, Tagesziel, Einspeisebegrenzung; angesteuert wird weiter bis zur maximalen Leistung) und Pausen des eigenen Thermostats trotz Vorgabe von 30 s bis 10 min (zwei innerhalb von 30 Tagen: der eigene Thermostat taktet, siehe **Eigener Thermostat**; gilt auch ohne **Gelernte Werte verwenden**; längere Pausen, z. B. ein Luftentfeuchter bei erreichter Zielfeuchte, zählen nicht) | 30 Messwerte, zwei Pausen |
 

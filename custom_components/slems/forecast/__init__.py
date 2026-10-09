@@ -202,6 +202,8 @@ class ConsumptionForecaster:
         self.peak_profile: PeakProfile | None = None
         # Days left out of the last refit (see VacationDays).
         self.excluded_days: frozenset[date] = frozenset()
+        # Hourly forecast temperatures of the weather entity (UTC hour start -> °C).
+        self.forecast_temperatures: dict[datetime, float] = {}
 
     async def async_refresh(
         self, vacation: bool, excluded: frozenset[date] = frozenset()
@@ -239,6 +241,7 @@ class ConsumptionForecaster:
         heat_pump = without_days(heat_pump, excluded)
         temperatures = means.get(sources.temperature or "", {})
         forecast_temperatures = await self._async_weather_temperatures()
+        self.forecast_temperatures = forecast_temperatures
 
         self.forecast = await self._hass.async_add_executor_job(
             self._compute, now, base, heat_pump, temperatures, forecast_temperatures, vacation

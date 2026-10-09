@@ -147,3 +147,44 @@ def test_grid_target_samples_the_target_aimed_at() -> None:
     charge = Allocation(strategy=Strategy.GRID_FRIENDLY, battery_power_w=500.0)
     coordinator._learn_grid_target(snapshot, charge, battery, settings, 5000.0)
     assert not coordinator.grid_targets.charge
+
+
+def test_run_costs_follow_the_outdoor_temperature_and_the_surplus() -> None:
+    from datetime import datetime, timedelta
+    from types import SimpleNamespace
+
+    import pytest
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.slems.coordinator import SlemsCoordinator
+    from custom_components.slems.learning import OutdoorPowerLearner
+    from custom_components.slems.tariff import Side
+
+    dt_util.set_default_time_zone(dt_util.get_time_zone("Europe/Vienna"))
+    now = datetime(2026, 10, 10, 10, 0, tzinfo=dt_util.get_default_time_zone())
+    end = now + timedelta(hours=6)
+    quarters = [now + timedelta(minutes=15 * i) for i in range(24)]
+    # Air source heat pump: 3000 W at −5 °C, 2000 W at 15 °C.
+    learner = OutdoorPowerLearner(runs=[(t, 2750.0 - 50 * t) for t in (-5, 0, 5, 10, 15, 15)])
+
+    def prices(wall_now, until, side=Side.IMPORT, **_):
+        return {q: 30.0 if side is Side.IMPORT else 8.0 for q in quarters}
+
+    fake = SimpleNamespace(
+        _import_prices=prices,
+        outdoor_power={"hp": learner},
+        forecaster=SimpleNamespace(
+            forecast_temperatures={now + timedelta(hours=h): (0.0 if h < 3 else 10.0) for h in range(6)}
+        ),
+    )
+    consumer = SimpleNamespace(subentry_id="hp")
+    # 15:00: a forecast surplus of 1000 W (consumption below the PV).
+    consumption = SimpleNamespace(total={now + timedelta(hours=h): (-1000.0 if h == 5 else 500.0) for h in range(6)})
+    costs = SlemsCoordinator._run_prices(fake, consumer, 2500.0, now, end, None, consumption)
+    assert costs[now] == pytest.approx(30 * 2750 / 2500)  # cold morning: more power
+    assert costs[now + timedelta(hours=3)] == pytest.approx(30 * 2250 / 2500)  # warmer afternoon
+    # The surplus covers 1000 W at the feed-in credit.
+    assert costs[now + timedelta(hours=5)] == pytest.approx((1250 * 30 + 1000 * 8) / 2500)
+    # Without a learned dependency the nominal power counts.
+    fake.outdoor_power = {}
+    assert SlemsCoordinator._run_prices(fake, consumer, 2500.0, now, end, None, consumption)[now] == pytest.approx(30)

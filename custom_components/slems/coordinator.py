@@ -103,6 +103,7 @@ from .consumers import (
     amps_for,
     cycling_holds,
     read_consumer_state,
+    temperature_c_of,
 )
 from .drivers import BatteryDriver, BatteryDriverError, BatteryTelemetry
 from .battery_distribution import (
@@ -148,6 +149,7 @@ from .learning import (
     ConsumerLearner,
     GridTargetLearner,
     MorningGapLearner,
+    OutdoorPowerLearner,
     ThermalLearner,
     auto_timing,
     consumption_underestimate,
@@ -250,6 +252,7 @@ MORNING_GAP_STORE_KEY = "morning_gap"
 PRICE_SAVINGS_STORE_KEY = "price_savings"
 PLAN_CHANGES_STORE_KEY = "price_plan_changes"
 VACATION_DAYS_STORE_KEY = "vacation_days"
+OUTDOOR_POWER_STORE_KEY = "outdoor_power"
 # Hourly statistics of an hour are compiled a little after it ended.
 STATISTICS_DELAY = timedelta(minutes=30)
 HALF_HOUR = timedelta(minutes=30)
@@ -782,6 +785,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.cap_exceeded_since: float | None = None
         self.grid_targets = GridTargetLearner()
         self.morning_gap = MorningGapLearner()
+        # Power of the on/off consumers' runs against the outdoor temperature.
+        self.outdoor_power = {c.subentry_id: OutdoorPowerLearner() for c in consumers if c.control_mode.on_off}
         # Days left out of the learned consumption (see forecast).
         self.vacation_days = VacationDays()
         self.consumer_learners = {c.subentry_id: ConsumerLearner() for c in consumers}
@@ -841,6 +846,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.price_savings = PriceSavings.from_dict(stored.get(PRICE_SAVINGS_STORE_KEY))
         self.plan_changes = PlanChanges.from_dict(stored.get(PLAN_CHANGES_STORE_KEY))
         self.vacation_days = VacationDays.from_list(stored.get(VACATION_DAYS_STORE_KEY))
+        for subentry_id, data in (stored.get(OUTDOOR_POWER_STORE_KEY) or {}).items():
+            if subentry_id in self.outdoor_power:
+                self.outdoor_power[subentry_id] = OutdoorPowerLearner.from_dict(data)
         consumers = {c.subentry_id: c for c in self.consumers}
         for subentry_id, data in (stored.get(CONSUMERS_STORE_KEY) or {}).items():
             if (consumer := consumers.get(subentry_id)) is not None:
@@ -1306,6 +1314,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         data[PRICE_SAVINGS_STORE_KEY] = self.price_savings.as_dict()
         data[PLAN_CHANGES_STORE_KEY] = self.plan_changes.as_dict()
         data[VACATION_DAYS_STORE_KEY] = self.vacation_days.as_list()
+        data[OUTDOOR_POWER_STORE_KEY] = {
+            subentry_id: learner.as_dict() for subentry_id, learner in self.outdoor_power.items()
+        }
         return data
 
     async def _async_update_data(self) -> SystemSnapshot:
@@ -1364,6 +1375,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         snapshot.consumption_forecast = self.forecaster.forecast
         if weather := config.get(CONF_WEATHER_ENTITY):
             snapshot.outdoor_temperature_c = _weather_temperature(self.hass.states.get(weather))
+        outdoor = self._live_outdoor_c(snapshot)
+        for subentry_id, outdoor_learner in self.outdoor_power.items():
+            if outdoor_learner.update(now, snapshot.consumers[subentry_id].power_w, outdoor):
+                self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
 
         # The batteries are read in parallel (each has its own connection), so
         # a slow one does not delay the others. A failing battery must not take
@@ -3208,6 +3223,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             needed = power if consumer.control_mode.on_off else max(consumer.min_power_w or 0, 1.0)
             battery_need = battery.energy_to_full_wh if battery else 0.0
             self.target_states[consumer.subentry_id] = self._price_window(
+                consumer,
                 settings,
                 evaluate(
                     settings,
@@ -3222,6 +3238,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 ),
                 wall_now,
                 short=energy is not None and surplus < energy + battery_need,
+                power_w=power,
+                pv_forecast=pv_forecast,
+                consumption=consumption,
             )
             # A heat pump's consumption is already in its own forecast model.
             if consumer.consumer_type is ConsumerType.HEAT_PUMP:
@@ -3261,11 +3280,65 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if following is not None:
                 self.target_demands.append(following)
 
+    def _live_outdoor_c(self, snapshot: SystemSnapshot) -> float | None:
+        """Outdoor temperature now: the configured sensor, else the weather entity."""
+        if entity := self._config.get(CONF_OUTDOOR_TEMPERATURE_ENTITY):
+            value = temperature_c_of(self.hass.states.get(entity))
+            if value is not None:
+                return value
+        return snapshot.outdoor_temperature_c
+
+    def _run_prices(
+        self,
+        consumer: ConsumerConfig,
+        power_w: float,
+        wall_now: datetime,
+        end: datetime,
+        pv_forecast: PvForecast | None,
+        consumption: ConsumptionForecast | None,
+    ) -> dict[datetime, float | None] | None:
+        """Cost (ct) of a run per kWh of the consumer's power, per quarter hour:
+        its power at the forecast outdoor temperature (see OutdoorPowerLearner),
+        the part the forecast surplus covers at the feed-in credit, the rest at
+        the import price. Without a learned dependency and surplus the import
+        price."""
+        prices = self._import_prices(wall_now, end)
+        if prices is None or power_w <= 0:
+            return prices
+        credits = self._import_prices(wall_now, end, Side.EXPORT) or {}
+        nets = _quarter_nets(wall_now, end, pv_forecast, consumption.total if consumption else {}, {})
+        learner = self.outdoor_power.get(consumer.subentry_id)
+        temperatures = self.forecaster.forecast_temperatures
+        result: dict[datetime, float | None] = {}
+        for start, price in prices.items():
+            if price is None:
+                result[start] = None
+                continue
+            power = power_w
+            if learner is not None:
+                expected = learner.power_at(temperatures.get(start.replace(minute=0)))
+                if expected is not None:
+                    power = expected
+            surplus_w = max(0.0, -nets.get(start, 0.0)) / (QUARTER / timedelta(hours=1))
+            covered = min(power, surplus_w)
+            result[start] = ((power - covered) * price + covered * (credits.get(start) or 0.0)) / power_w
+        return result
+
     def _price_window(
-        self, settings: TargetSettings, state: TargetState, wall_now: datetime, *, short: bool
+        self,
+        consumer: ConsumerConfig,
+        settings: TargetSettings,
+        state: TargetState,
+        wall_now: datetime,
+        *,
+        short: bool,
+        power_w: float,
+        pv_forecast: PvForecast | None,
+        consumption: ConsumptionForecast | None,
     ) -> TargetState:
         """Move the forced run of a target with the source "grid" into a cheaper
-        window if the surplus is short for it anyway (see price_hold)."""
+        window if the surplus is short for it anyway (see price_hold); a
+        window's cost from ``_run_prices``."""
         if (
             not self.settings.price_control
             or not short
@@ -3275,7 +3348,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             or state.end is None
         ):
             return state
-        prices = self._import_prices(wall_now, state.end)
+        prices = self._run_prices(consumer, power_w, wall_now, state.end, pv_forecast, consumption)
         if prices is None:
             return state
         local_now = dt_util.as_local(wall_now)

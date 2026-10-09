@@ -411,9 +411,14 @@ prices change every quarter hour): the hourly consumption forecast is spread
 evenly over its quarters, PV comes from the forecast; the day chart shows
 their hourly means. Daily targets with the source **+ grid**: if the
 forecast surplus is short for them anyway, the forced run starts in the
-window with the lowest mean import price before the deadline (cheaper by at
-least the minimum gain than at the latest start); the consumer card shows
-**from … in the cheapest window**.
+window with the lowest cost before the deadline (cheaper by at least the
+minimum gain per kWh than at the latest start); the consumer card shows
+**from … in the cheapest window**. The cost per quarter hour: what the
+forecast surplus covers counts at the feed-in credit, the rest at the import
+price. For an on/off consumer whose power clearly depends on the outdoor
+temperature (e.g. the hot water charge of an air source heat pump) its
+learned power at the forecast temperature of the hour counts: a warm
+afternoon can so beat a cold morning with cheaper electricity.
 
 **Estimated prices**: the day-ahead prices of the next day are published
 around 13:00. For the quarter hours after the last known price the price aware
@@ -1710,6 +1715,7 @@ sensor **Learned values in use** has all learned values as attributes.
 | Grid surplus targets while charging and discharging | how far the grid power swings towards import while the batteries control it; charging: the target keeps the grid on the export side 90 % of the time (20–1000 W); discharging: the grid swings around the target, half of the time each side (−100 to 300 W, with **No negative grid surplus target** 0 to 300 W), as a short import costs little there but a permanent export gives battery energy away | some controlling in operating mode **active** |
 | Control interval and surplus averaging window | the learned report interval of the smart meter (0.8 × and 3 ×) | a few meter reports |
 | Usable capacity (per battery, **Use learned capacity**) | charge and discharge legs over at least 20 % state of charge: DC energy / change of the state of charge (legs with a jump of the state of charge are discarded), median of the last ten | three legs |
+| Power of an on/off consumer by the outdoor temperature | the mean power and outdoor temperature (own sensor, else the weather entity) of each run of 10 minutes or more, the last 60 runs; a straight line, used only with a span of at least 8 K and a change of the power of at least 10 % over it (a ground source heat pump or a heating rod shows none, then it has no effect); attributes of the sensor **Learned power** | 6 runs |
 | Morning reserve (**Morning reserve coverage** sets how cautious; shown only while the reserve is automatic) | the morning gap: energy the house needed from battery or grid between the planned takeover of PV (end of the night discharge) and the real one (PV covering the consumption for 15 minutes), in % of the day's forecast consumption; the reserve covers the chosen share of the mornings (90 % = 9 of 10), above 100 % the largest gap times the value (110 % = 10 % more than the worst morning) | 14 measured mornings (also measured while the night discharge is off) |
 | Power and thermostat of a consumer (per consumer, **Use learned values**) | the power while switched on (on/off consumers: replaces the nominal power; power controlled consumers: the typical power at full load, measured while commanded at ≥ 90 % of the maximum power for at least 15 s or twice its response time, used for planning: forecast, daily target, feed-in cap; it is still commanded up to its maximum power) and pauses of its own thermostat while it is commanded, lasting 30 s to 10 min (two within 30 days: its own thermostat cycles, see **Own thermostat**; applies also without **Use learned values**; longer pauses, e.g. a dehumidifier at its target humidity, do not count) | 30 samples, two pauses |
 

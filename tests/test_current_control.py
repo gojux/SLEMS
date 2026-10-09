@@ -173,16 +173,16 @@ def test_nan_and_inf_are_no_values() -> None:
     assert state_as_float(state("inf")) is None
     assert state_as_float(state("12.5")) == 12.5
     # Neither as the active phases nor as a temperature of a storage.
-    from custom_components.slems.consumers import _temperature
+    from custom_components.slems.consumers import temperature_c_of
     from custom_components.slems.coordinator import _weather_temperature
 
     for value in ("inf", "nan"):
         hass = FakeHass({"sensor.phases": state(value)})
         assert active_phases(hass, wallbox(phases_entity="sensor.phases")) == 3
-        assert _temperature(state(value)) is None
+        assert temperature_c_of(state(value)) is None
         assert _weather_temperature(SimpleNamespace(attributes={"temperature": float(value)})) is None
     assert _weather_temperature(SimpleNamespace(attributes={"temperature": "warm"})) is None
-    assert _temperature(state("68", unit_of_measurement="°F")) == 20
+    assert temperature_c_of(state("68", unit_of_measurement="°F")) == 20
 
 
 async def test_any_error_of_a_called_integration_is_a_failed_call() -> None:

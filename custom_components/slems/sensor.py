@@ -1517,11 +1517,18 @@ class LearnedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {
+        attributes = {
             "thermostat_pauses": self._learner.cycles,
             "thermostat_cycles": self._learner.thermostat_cycles,
             "in_use": self.consumer.subentry_id in self.coordinator.consumer_learning,
         }
+        if (outdoor := self.coordinator.outdoor_power.get(self.consumer.subentry_id)) is not None:
+            model = outdoor.model()
+            # Runs recorded and, with a clear dependency, the power at 0 °C and per kelvin.
+            attributes["outdoor_runs"] = len(outdoor.runs)
+            attributes["outdoor_power_0c_w"] = round(model[0]) if model else None
+            attributes["outdoor_power_per_k_w"] = round(model[1], 1) if model else None
+        return attributes
 
 
 class StorageCapacitySensor(SlemsConsumerEntity, SensorEntity):

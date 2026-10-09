@@ -31,6 +31,11 @@ the value set by the user applies.
   (end of the night discharge as planned) and the moment it really did, as a
   share of the day's forecast consumption. Days with the vacation mode are
   left out.
+* Power of an on/off consumer against the outdoor temperature
+  (``OutdoorPowerLearner``): the mean power and outdoor temperature of each
+  run; e.g. the hot water charge of an air source heat pump draws more when it
+  is cold. Used for the cost of a run at the forecast temperature (see the
+  daily targets), only with a clear dependency.
 """
 
 from __future__ import annotations
@@ -651,3 +656,101 @@ class MorningGapLearner:
             planned=datetime.fromisoformat(planned) if planned else None,
             forecast_wh=data.get("forecast_wh"),
         )
+
+
+# Runs of at least this length count for the outdoor temperature model; a run
+# ends when the consumer draws nothing for longer than the gap.
+OUTDOOR_RUN_MIN_S = 10 * 60
+OUTDOOR_RUN_GAP_S = 120.0
+OUTDOOR_KEEP_RUNS = 60
+# The model is used only from this many runs over at least this span of
+# outdoor temperatures, if the power changes by this share over the span.
+OUTDOOR_MIN_RUNS = 6
+OUTDOOR_MIN_SPAN_K = 8.0
+OUTDOOR_MIN_EFFECT = 0.1
+
+
+@dataclass
+class OutdoorPowerLearner:
+    """Mean power of a consumer's runs against the outdoor temperature.
+
+    A straight line P = a + b × T through the runs (mean outdoor temperature,
+    mean power). The source of the heat is not asked for: an air source heat
+    pump shows the dependency, a ground source one or a heating rod do not,
+    and then ``power_at`` stays None (no effect).
+    """
+
+    runs: list[tuple[float, float]] = field(default_factory=list)
+    _start: float | None = None
+    _last: float | None = None
+    _last_on: float | None = None
+    _seconds: float = 0.0
+    _energy: float = 0.0
+    _temperature: float = 0.0
+
+    def update(self, now: float, power_w: float | None, outdoor_c: float | None) -> bool:
+        """One poll: ``power_w`` of the consumer, ``outdoor_c`` the outdoor
+        temperature. True when a run was recorded."""
+        running = power_w is not None and power_w >= CONSUMER_ON_W and outdoor_c is not None
+        if running:
+            if self._start is None:
+                self._start = now
+            elif self._last is not None and 0 < now - self._last <= OUTDOOR_RUN_GAP_S:
+                elapsed = now - self._last
+                self._seconds += elapsed
+                self._energy += power_w * elapsed
+                self._temperature += outdoor_c * elapsed
+            self._last = self._last_on = now
+        elif self._start is not None and self._last_on is not None and now - self._last_on > OUTDOOR_RUN_GAP_S:
+            return self._finish()
+        return False
+
+    def _finish(self) -> bool:
+        recorded = self._seconds >= OUTDOOR_RUN_MIN_S
+        if recorded:
+            self.runs.append(
+                (round(self._temperature / self._seconds, 2), round(self._energy / self._seconds, 1))
+            )
+            del self.runs[:-OUTDOOR_KEEP_RUNS]
+        self._start = self._last = self._last_on = None
+        self._seconds = self._energy = self._temperature = 0.0
+        return recorded
+
+    def model(self) -> tuple[float, float] | None:
+        """(a, b) of P = a + b × T, None without a clear dependency."""
+        if len(self.runs) < OUTDOOR_MIN_RUNS:
+            return None
+        temperatures = [t for t, _ in self.runs]
+        powers = [p for _, p in self.runs]
+        span = max(temperatures) - min(temperatures)
+        if span < OUTDOOR_MIN_SPAN_K:
+            return None
+        mean_t = statistics.fmean(temperatures)
+        mean_p = statistics.fmean(powers)
+        variance = sum((t - mean_t) ** 2 for t in temperatures)
+        slope = sum((t - mean_t) * (p - mean_p) for t, p in self.runs) / variance
+        if mean_p <= 0 or abs(slope) * span < OUTDOOR_MIN_EFFECT * mean_p:
+            return None
+        return mean_p - slope * mean_t, slope
+
+    def power_at(self, outdoor_c: float | None) -> float | None:
+        """Expected power at ``outdoor_c``, within the learned span; None without a model."""
+        model = self.model()
+        if model is None or outdoor_c is None:
+            return None
+        temperatures = [t for t, _ in self.runs]
+        clamped = min(max(outdoor_c, min(temperatures)), max(temperatures))
+        return max(0.0, model[0] + model[1] * clamped)
+
+    def as_dict(self) -> dict:
+        return {"runs": [list(run) for run in self.runs]}
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> OutdoorPowerLearner:
+        runs = []
+        for run in (data or {}).get("runs", []):
+            try:
+                runs.append((float(run[0]), float(run[1])))
+            except (TypeError, ValueError, IndexError):
+                continue
+        return cls(runs=runs[-OUTDOOR_KEEP_RUNS:])
