@@ -56,7 +56,7 @@ class SlemsBatteryEntity(CoordinatorEntity[SlemsCoordinator]):
         )
 
 
-# Entities of a consumer's daily target and release; for a heat pump with a
+# Entities of a consumer's daily target, release and control; for a heat pump with a
 # hot water release they are named after the hot water ("hot_water_" keys).
 HOT_WATER_KEYS = frozenset(
     {
@@ -73,6 +73,7 @@ HOT_WATER_KEYS = frozenset(
         "target_earliest",
         "release",
         "latest_start",
+        "consumer_control",
     }
 )
 

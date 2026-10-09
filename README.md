@@ -1067,8 +1067,11 @@ the energy flow.
   unchanged. The power when on is a starting value: with **Use learned
   values** SLEMS learns it in hot water mode, so it follows the coefficient of
   performance. With the boiler's sensors as temperature sensors a daily target
-  **Temperature** fits (e.g. minimum 42 °C, target 50 °C, deadline 16:00); the
-  entities are called **Hot water release** and **Hot water latest start**. A
+  **Temperature** fits (e.g. minimum 42 °C, target 50 °C, deadline 16:00). The
+  entities of the daily target, the release and the control carry "hot water"
+  in their names (e.g. **Hot water release**, **Hot water latest start**,
+  **Hot water control active**); the consumer card shows the control switch as
+  **Hot water control** instead of next to the name. A
   daily target **Energy** does not fit here, as the energy counter includes
   the heating. Example automation:
 

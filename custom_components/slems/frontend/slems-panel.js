@@ -233,7 +233,7 @@ const STRINGS = {
     storageUntilCycling: "{energy} until it cycles",
     storageUntilFull: "{cycling} until it cycles, {full} until full",
     controlActive: "Control active",
-    controlShort: "Control",
+    hotWaterControl: "Hot water control",
     consumerResponseTime: "Response time on/off (own sensor)",
     gridResponseTime: "Response time on/off at the meter",
     notControlled: "measured only",
@@ -779,7 +779,7 @@ const STRINGS = {
     storageUntilCycling: "{energy} bis zum Takten",
     storageUntilFull: "{cycling} bis zum Takten, {full} bis voll",
     controlActive: "Steuerung aktiv",
-    controlShort: "Steuerung",
+    hotWaterControl: "Warmwasser-Steuerung",
     consumerResponseTime: "Reaktionszeit an/aus (eigener Sensor)",
     gridResponseTime: "Reaktionszeit an/aus am Zähler",
     notControlled: "nur gemessen",
@@ -4067,6 +4067,7 @@ class SlemsPanel extends HTMLElement {
           const planned = this._state("planned_power", c.device_id);
           const attrs = planned?.attributes || {};
           const control = this._state("consumer_control", c.device_id);
+          const hotWater = this._hotWater(c);
           // Only while the feed-in cap is on.
           const capMode = this._state("cap_mode", c.device_id);
           const learning = this._state("consumer_learning", c.device_id);
@@ -4138,7 +4139,7 @@ class SlemsPanel extends HTMLElement {
               )}</span></div>`
             : "";
           return `<section class="card">
-            <div class="card-head"><h2>${escapeHtml(c.name)}</h2><div class="chips">${chips}${control ? `<span class="switch-label">${escapeHtml(t.controlShort)}</span>${this._toggle(control, t.controlActive)}` : ""}</div></div>
+            <div class="card-head"><h2>${escapeHtml(c.name)}</h2><div class="chips">${chips}${control && !hotWater ? this._toggle(control, t.controlActive) : ""}</div></div>
             ${noPower}
             <dl>
               ${this._row(t.measured, escapeHtml(this._format(measured)), c.power_entity)}
@@ -4146,7 +4147,10 @@ class SlemsPanel extends HTMLElement {
               ${planned ? this._row(t.planned, escapeHtml(this._plannedText(planned, control?.state === "off")), planned.entity_id) : ""}
               ${progress}
               ${supportRow}
-            </dl>${details}${toggle}</section>`;
+            </dl>${
+              // A heat pump: the switch controls only its hot water, not the heat pump.
+              control && hotWater ? `<div class="settings card-setting">${this._control(control, { label: t.hotWaterControl })}</div>` : ""
+            }${details}${toggle}</section>`;
         })
         .join("")
     );
@@ -4797,7 +4801,6 @@ const STYLE = `
   .soc-bar { flex: 1; height: 8px; border-radius: 4px; background: var(--divider-color); overflow: hidden; }
   .soc-bar div { height: 100%; background: var(--c-battery); border-radius: 4px; }
   .chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-  .switch-label { font-size: 12px; color: var(--secondary-text-color); }
   .chip { font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--divider-color);
     color: var(--secondary-text-color); margin-left: 4px; }
   .settings { display: flex; flex-direction: column; gap: 10px; }

@@ -1133,8 +1133,11 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
   ein Startwert: Mit **Gelernte Werte verwenden** lernt SLEMS sie im
   Warmwasserbetrieb, sie folgt so der Leistungszahl. Mit den Fühlern des
   Boilers als Temperaturfühler eignet sich ein Tagesziel **Temperatur**
-  (z. B. Minimum 42 °C, Ziel 50 °C, Frist 16:00); die Entitäten heißen
-  **Warmwasser-Freigabe** und **Warmwasser spätester Start**. Ein Tagesziel
+  (z. B. Minimum 42 °C, Ziel 50 °C, Frist 16:00). Die Entitäten des
+  Tagesziels, der Freigabe und der Steuerung tragen „Warmwasser“ im Namen
+  (z. B. **Warmwasser-Freigabe**, **Spätester Warmwasser-Start**,
+  **Warmwasser-Steuerung aktiv**); die Verbraucherkarte zeigt den Schalter der
+  Steuerung als **Warmwasser-Steuerung** statt neben dem Namen. Ein Tagesziel
   **Energie** passt hier nicht, weil der Energiezähler das Heizen enthält.
   Beispiel einer Automation:
 
