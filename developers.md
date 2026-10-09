@@ -459,9 +459,12 @@ sends commands.
 - **Bad weather mode** (`bad_weather.py`, switch `bad_weather`): until
   `BadWeatherMode.until` the feed-in limit is off (reason `bad_weather`) and
   no night discharge is planned; the projection gets the same end
-  (`ProjectionSettings.bad_weather_until`). The end is the evening of the day
-  chosen when switching on, recomputed from every forecast as long as it still
-  has a surplus hour of that day; stored in the control data.
+  (`ProjectionSettings.bad_weather_until`). The end is the morning (first
+  surplus hour, as `pv_takeover`) after the next evening (`evening_of`: end
+  of the last surplus hour, else the sunset from `get_astral_event_date`),
+  without a surplus hour in the forecast the sunrise after its end. The
+  evening is fixed when switching on, the morning recomputed from every
+  forecast until it has come; both stored in the control data.
 - **Grid meter stale** (no report within max(60 s, 10 × meter interval),
   based on `last_reported`, or of the Modbus value while it is the source): all batteries are handed back to their internal logic until the meter reports
   again (status *grid meter stale*).
@@ -1782,3 +1785,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-09 | After a BMS stop near the minimum SLEMS first retries with half the power (at least 300 W) before blocking the discharging: the BMS stops earlier under a high load, as the weakest cell sags more (Venus with a cell delta of 148 mV: 12.4 % at 2.5 kW). Learning the stop SoC per battery for the night discharge and the projection is left out for now: a few 100 Wh, and the learned value would have to expire, e.g. after cell balancing. |
 | 2026-10-09 | Refill only on a day whose forecast PV surplus (per hour at most the charge power) fills the batteries from the minimum to the maximum SoC (`next_refill`, for the price plans and the support budget; peak shaving already worked so). A few 100 Wh of surplus on a dull afternoon ended the plan before the expensive evening: no grid charging at a cheap noon, energy left valued at nothing, the budget too generous. The grid charge plan now also runs in a surplus and keeps the PV surplus in its periods instead of setting it to 0 (the dynamic programming modelled it for negative prices already), so the longer horizon does not charge from the grid what PV brings. The night discharge leaves the energy the price plan still needs (level minus the lowest level after it): otherwise it fed in at night what was charged from the grid for the next evening. |
 | 2026-10-09 | Recorder size: the control runs every half second and every change of a state or of its attributes is a row in the recorder, also when the changed attributes are unrecorded. Numeric sensor states are rounded to their display precision (`rounded_state`; precision 0 gives an int, so 0 and 0.0 do not alternate, no -0.0), large or noisy attributes (day plans at **Feed-in limit**, the feed-in cap attributes, the Modbus diagnostics of the meter) are computed anew at most every 60 s unless the settings changed (`attributes_interval_s`). Dev instance: 441 → 12 rows per minute. |
+| 2026-10-09 | Bad weather mode until the morning after the next evening instead of until the evening: ending in the evening let the night discharge of the following night give away what the mode stored. The morning is the first surplus hour after the evening, where the night discharge ends as well; sunrise and sunset only replace a missing surplus hour (the sunrise lies hours before PV takes over, and the summer sunset long after the surplus ends). Without a surplus hour in the forecast the mode goes on until the sunrise after its end. |

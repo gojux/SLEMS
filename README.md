@@ -1362,17 +1362,21 @@ The entity **SLEMS Operating mode** switches between:
 
 When bad weather is coming, the switch **Bad weather mode** (also in the menu
 of the SLEMS logo in the energy flow) stores as much of today's surplus as
-possible:
+possible and keeps it over the next night:
 
 - The batteries charge every surplus at once instead of charging grid
   friendly, and the night discharge is off.
 - The target grid surplus, the feed-in cap and the battery limits stay.
-- It ends by itself in the evening: at the end of the last hour in which the
-  PV forecast is above the consumption forecast (without such an hour at the
-  end of the PV production), recomputed with every new forecast. Switched on
-  after that moment, e.g. in the evening before a rainy day, it lasts until
-  the evening of the next day, so the night discharge of this night is off as
-  well. The attribute `until` shows the end.
+- It ends by itself in the morning after the next evening: switched on during
+  the day the next morning, switched on at night (after the evening or before
+  the morning) the morning after next.
+- The evening is the end of the last hour in which the PV forecast is above
+  the consumption forecast (without such an hour the sunset). The morning is
+  the start of the first hour after it in which the PV forecast is above the
+  consumption forecast again, as the night discharge plans until then.
+- Without such an hour in the forecast (several dull days) it goes on until
+  the sunrise after the end of the forecast. The end follows every new
+  forecast; the attribute `until` shows it.
 - While it is on, the logo carries a rain cloud; the forecast chart and the
   expected export follow it.
 

@@ -252,7 +252,7 @@ const STRINGS = {
     badWeatherOff: "End bad weather mode (until {time})",
     badWeatherTitle: "Switch on bad weather mode?",
     badWeatherText:
-      "Until the evening (the end of the last hour in which the PV forecast is above the consumption) the batteries store every surplus at once instead of charging grid friendly, and the night discharge is off. The target grid surplus, the feed-in cap and the battery limits stay. Switched on after that moment, it lasts until the evening of the next day. It ends by itself.",
+      "Until the morning after the next evening the batteries store every surplus at once instead of charging grid friendly, and the night discharge is off: switched on during the day until the next morning, at night until the morning after next. The morning is the first hour in which the PV forecast is above the consumption again; without one in the forecast the mode goes on. The target grid surplus, the feed-in cap and the battery limits stay. It ends by itself.",
     badWeatherConfirm: "Switch on",
     controlDetails: "Control details",
     sectionControl: "Control",
@@ -781,7 +781,7 @@ const STRINGS = {
     badWeatherOff: "Schlechtwetter-Modus beenden (bis {time})",
     badWeatherTitle: "Schlechtwetter-Modus einschalten?",
     badWeatherText:
-      "Bis zum Abend (Ende der letzten Stunde, in der die PV-Prognose über dem Verbrauch liegt) speichern die Batterien jeden Überschuss sofort, statt netzdienlich zu laden, und die Nachtentladung ist aus. Ziel-Netzüberschuss, Einspeisebegrenzung und die Grenzen der Batterien bleiben. Nach diesem Zeitpunkt eingeschaltet, gilt er bis zum Abend des nächsten Tages. Er endet von selbst.",
+      "Bis zum Morgen nach dem nächsten Abend speichern die Batterien jeden Überschuss sofort, statt netzdienlich zu laden, und die Nachtentladung ist aus: tagsüber eingeschaltet bis zum nächsten Morgen, nachts bis zum übernächsten Morgen. Der Morgen ist die erste Stunde, in der die PV-Prognose wieder über dem Verbrauch liegt; ohne eine solche Stunde in der Prognose läuft der Modus weiter. Ziel-Netzüberschuss, Einspeisebegrenzung und die Grenzen der Batterien bleiben. Er endet von selbst.",
     badWeatherConfirm: "Einschalten",
     controlDetails: "Details der Regelung",
     sectionControl: "Regelung",

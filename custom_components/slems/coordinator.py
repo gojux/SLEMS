@@ -22,6 +22,7 @@ from homeassistant.helpers.event import (
     async_track_time_interval,
 )
 from homeassistant.helpers.storage import Store
+from homeassistant.helpers.sun import get_astral_event_date
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.const import UnitOfTemperature
 from homeassistant.util import dt as dt_util
@@ -760,7 +761,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # or not available (then grid_meter_error says why).
         self.grid_meter: ModbusGridMeter | None = None
         self.grid_meter_error: str | None = None
-        self.bad_weather = BadWeatherMode()
+        self.bad_weather = BadWeatherMode(
+            lambda day: get_astral_event_date(hass, "sunrise", day),
+            lambda day: get_astral_event_date(hass, "sunset", day),
+        )
         # Battery support per consumer (restored by its select entity) and the
         # budget of the consumers on "automatic".
         self.battery_support: dict[str, BatterySupport] = {}
@@ -1116,7 +1120,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         return grid
 
     def set_bad_weather(self, on: bool) -> None:
-        """Switch the bad weather mode on (until the evening, see bad_weather) or off."""
+        """Switch the bad weather mode on (until the next morning, see bad_weather) or off."""
         if on:
             data = self.data
             now = dt_util.now()

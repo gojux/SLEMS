@@ -182,7 +182,7 @@ def test_after_the_night_discharge_the_limit_follows_the_lower_state_of_charge()
     assert max(result.soc_pct[at(hour)] for hour in range(8, 17)) == pytest.approx(100)
 
 
-def test_bad_weather_mode_until_the_evening() -> None:
+def test_bad_weather_mode() -> None:
     pv, consumption = forecasts()
     mode = settings(grid_friendly_charging=True, night_discharge=True, bad_weather_until=at(17, day=1))
     normal = project_soc(at(22), battery(80), pv, consumption, None, settings(

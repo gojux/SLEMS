@@ -108,7 +108,7 @@ class SettingSwitch(SlemsSystemEntity, SwitchEntity, RestoreEntity):
 
 
 class BadWeatherSwitch(SlemsSystemEntity, SwitchEntity):
-    """Bad weather mode until the evening (see bad_weather); stored by the coordinator."""
+    """Bad weather mode until the next morning (see bad_weather); stored by the coordinator."""
 
     _attr_icon = "mdi:weather-pouring"
 

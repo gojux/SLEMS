@@ -1,67 +1,94 @@
-"""Bad weather mode: store as much of the PV surplus as possible until the evening.
+"""Bad weather mode: keep as much energy as possible until PV takes over again.
 
 Switched on by the user (or an automation) when bad weather is coming. Until
 ``until`` the batteries charge every surplus at once (no grid friendly
 charging) and the night discharge is off; the target grid surplus, the
 feed-in cap and the battery limits stay.
 
+The mode covers the next night: it lasts until the morning after the next
+evening. Switched on during the day this is the next morning; switched on at
+night (after the evening or before the morning) the morning after next.
+
 The evening is the end of the last hour of the day in which the PV forecast
-is above the consumption forecast; without such an hour the end of the PV
-production, without a forecast ``FALLBACK_HOUR``. Switched on after that
-moment, the mode lasts until the evening of the next day (the night
-discharge of this night is off as well). The end is recomputed with every
-new forecast for the day chosen when switching on.
+is above the consumption forecast, without such an hour the sunset. The
+morning is the start of the first hour after the evening in which the PV
+forecast is above the consumption forecast, as the night discharge plans
+until then. Without such an hour in the forecast the mode goes on: until the
+sunrise after the end of the forecast, recomputed with every new forecast.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import date, datetime, time, timedelta
 
 from homeassistant.util import dt as dt_util
 
 PERIOD = timedelta(hours=1)
-FALLBACK_HOUR = 20
+# Used where the sun neither rises nor sets on a day.
+FALLBACK_SUNRISE_HOUR = 6
+FALLBACK_SUNSET_HOUR = 20
+
+# Sunrise or sunset of a day (None if there is none).
+SunEvent = Callable[[date], datetime | None]
 
 
-def _producing(day: date, pv: Mapping[datetime, float] | None) -> list[datetime]:
-    return sorted(
-        hour for hour in (pv or {}) if dt_util.as_local(hour).date() == day and pv[hour] > 0
-    )
-
-
-def surplus_end(
-    day: date,
+def _surplus_hours(
     pv: Mapping[datetime, float] | None,
     consumption: Mapping[datetime, float] | None,
-) -> datetime | None:
-    """End of the last hour of ``day`` with PV above consumption (hourly Wh)."""
-    if consumption is None:
-        return None
-    surplus = [hour for hour in _producing(day, pv) if pv[hour] > consumption.get(hour, 0.0)]
-    return surplus[-1] + PERIOD if surplus else None
+) -> list[datetime]:
+    if pv is None or consumption is None:
+        return []
+    return sorted(hour for hour, wh in pv.items() if wh > consumption.get(hour, 0.0))
 
 
-def evening(
-    day: date,
-    pv: Mapping[datetime, float] | None,
-    consumption: Mapping[datetime, float] | None,
-) -> datetime:
-    """The evening of ``day``: end of the surplus, else of the PV production."""
-    if (end := surplus_end(day, pv, consumption)) is not None:
-        return end
-    if hours := _producing(day, pv):
-        return hours[-1] + PERIOD
-    return datetime.combine(day, time(FALLBACK_HOUR), tzinfo=dt_util.get_default_time_zone())
+def _local(day: date, hour: int) -> datetime:
+    return datetime.combine(day, time(hour), tzinfo=dt_util.get_default_time_zone())
 
 
 class BadWeatherMode:
     """State of the bad weather mode (stored with the learned data)."""
 
-    def __init__(self) -> None:
-        # Day whose evening ends the mode, and that evening; None when off.
-        self.day: date | None = None
+    def __init__(self, sunrise: SunEvent, sunset: SunEvent) -> None:
+        self._sunrise = sunrise
+        self._sunset = sunset
+        # Evening before the night the mode covers, and its end; None when off.
+        self.evening: datetime | None = None
         self.until: datetime | None = None
+
+    def sunrise(self, day: date) -> datetime:
+        return self._sunrise(day) or _local(day, FALLBACK_SUNRISE_HOUR)
+
+    def sunset(self, day: date) -> datetime:
+        return self._sunset(day) or _local(day, FALLBACK_SUNSET_HOUR)
+
+    def evening_of(
+        self,
+        day: date,
+        pv: Mapping[datetime, float] | None,
+        consumption: Mapping[datetime, float] | None,
+    ) -> datetime:
+        """End of the last hour of ``day`` with PV above consumption (hourly Wh), else the sunset."""
+        surplus = [hour for hour in _surplus_hours(pv, consumption) if dt_util.as_local(hour).date() == day]
+        return surplus[-1] + PERIOD if surplus else self.sunset(day)
+
+    def morning_after(
+        self,
+        evening: datetime,
+        pv: Mapping[datetime, float] | None,
+        consumption: Mapping[datetime, float] | None,
+    ) -> datetime:
+        """Start of the first hour after ``evening`` with PV above consumption.
+
+        Without one the sunrise after the end of the forecast (after the
+        evening without a forecast).
+        """
+        if surplus := [hour for hour in _surplus_hours(pv, consumption) if hour >= evening]:
+            return surplus[0]
+        last = max(evening, max(pv) + PERIOD) if pv else evening
+        day = dt_util.as_local(last).date()
+        sunrise = self.sunrise(day)
+        return sunrise if sunrise >= last else self.sunrise(day + timedelta(days=1))
 
     def active(self, now: datetime) -> bool:
         return self.until is not None and now < self.until
@@ -72,15 +99,14 @@ class BadWeatherMode:
         pv: Mapping[datetime, float] | None,
         consumption: Mapping[datetime, float] | None,
     ) -> None:
-        today = dt_util.as_local(now).date()
-        until = evening(today, pv, consumption)
-        if until <= now:
-            today += timedelta(days=1)
-            until = evening(today, pv, consumption)
-        self.day, self.until = today, until
+        day = dt_util.as_local(now).date()
+        evening = self.evening_of(day, pv, consumption)
+        if evening <= now:
+            evening = self.evening_of(day + timedelta(days=1), pv, consumption)
+        self.evening, self.until = evening, self.morning_after(evening, pv, consumption)
 
     def switch_off(self) -> None:
-        self.day = self.until = None
+        self.evening = self.until = None
 
     def update(
         self,
@@ -88,28 +114,28 @@ class BadWeatherMode:
         pv: Mapping[datetime, float] | None,
         consumption: Mapping[datetime, float] | None,
     ) -> bool:
-        """Follow a new forecast; switches off once the evening has passed.
+        """Follow a new forecast; switches off once the morning has come.
 
         Returns True if the mode was switched off.
         """
-        if self.day is None:
+        if self.evening is None:
             return False
-        # Only a surplus hour moves the end: a forecast without the past hours
-        # of the day must not stretch it to the end of the production.
-        if (end := surplus_end(self.day, pv, consumption)) is not None:
-            self.until = end
+        # Checked first: once the morning has come, a forecast without the past
+        # hours must not move it to the next surplus.
+        if now < self.until and pv is not None and consumption is not None:
+            self.until = self.morning_after(self.evening, pv, consumption)
         if now >= self.until:
             self.switch_off()
             return True
         return False
 
     def as_dict(self) -> dict | None:
-        if self.day is None:
+        if self.evening is None:
             return None
-        return {"day": self.day.isoformat(), "until": self.until.isoformat()}
+        return {"evening": self.evening.isoformat(), "until": self.until.isoformat()}
 
     def restore(self, data: dict | None) -> None:
-        if not data:
+        if not data or "evening" not in data:
             return
-        self.day = date.fromisoformat(data["day"])
+        self.evening = datetime.fromisoformat(data["evening"])
         self.until = datetime.fromisoformat(data["until"])

@@ -1446,18 +1446,23 @@ Die Entität **SLEMS Betriebsmodus** schaltet zwischen:
 
 Kommt schlechtes Wetter, speichert der Schalter **Schlechtwetter-Modus** (auch
 im Menü des SLEMS-Logos im Energiefluss) möglichst viel des heutigen
-Überschusses:
+Überschusses und behält ihn über die nächste Nacht:
 
 - Die Batterien laden jeden Überschuss sofort, statt netzdienlich zu laden,
   und die Nachtentladung ist aus.
 - Ziel-Netzüberschuss, Einspeisebegrenzung und die Grenzen der Batterien
   bleiben.
-- Er endet von selbst am Abend: am Ende der letzten Stunde, in der die
-  PV-Prognose über der Verbrauchsprognose liegt (ohne eine solche Stunde am
-  Ende der PV-Produktion), mit jeder neuen Prognose nachgeführt. Nach diesem
-  Zeitpunkt eingeschaltet, z. B. am Abend vor einem Regentag, gilt er bis zum
-  Abend des nächsten Tages; auch die Nachtentladung dieser Nacht entfällt
-  dann. Das Attribut `until` zeigt das Ende.
+- Er endet von selbst am Morgen nach dem nächsten Abend: tagsüber
+  eingeschaltet am nächsten Morgen, nachts eingeschaltet (nach dem Abend oder
+  vor dem Morgen) am übernächsten Morgen.
+- Der Abend ist das Ende der letzten Stunde, in der die PV-Prognose über der
+  Verbrauchsprognose liegt (ohne eine solche Stunde der Sonnenuntergang). Der
+  Morgen ist der Beginn der ersten Stunde danach, in der die PV-Prognose
+  wieder über der Verbrauchsprognose liegt, denn bis dahin plant die
+  Nachtentladung.
+- Ohne eine solche Stunde in der Prognose (mehrere trübe Tage) läuft er
+  weiter bis zum Sonnenaufgang nach dem Ende der Prognose. Das Ende folgt
+  jeder neuen Prognose; das Attribut `until` zeigt es.
 - Solange er an ist, trägt das Logo eine Regenwolke; Prognose-Diagramm und
   erwartete Einspeisung berücksichtigen ihn.
 
