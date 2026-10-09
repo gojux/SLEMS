@@ -444,8 +444,10 @@ const STRINGS = {
       feed_in_cap_limit: "Share of the PV peak power that may be fed in at most, e.g. 60 %.",
       feed_in_cap_buffer:
         "Extra space on top of the forecast energy above the limit, in % of it, against a too low PV forecast. Negative values plan with less.",
+      target_hours:
+        "Hours the daily target needs per period (from one deadline to the next), in half hours. Runtime counts the time the consumer draws power (from 50 W; for a heat pump with hot water release only in hot water mode). Enabled time counts the time SLEMS has it switched on or released, also while it draws nothing (e.g. because its own thermostat or your automation has not started it yet).",
       target_type:
-        "Runtime: time the consumer draws power. Enabled time: time SLEMS has it switched on, for devices with their own control (a dehumidifier with a hygrostat). Energy: kWh. Temperature: minimum and target temperature of its storage (temperature sensors). Counted from one deadline to the next; met from the surplus first. A temperature target applies from midnight to the deadline: after the deadline the consumer stays off until midnight, also with surplus.",
+        "Runtime: time the consumer draws power. Enabled time: time SLEMS has it switched on, for devices with their own control (a dehumidifier with a hygrostat). Energy: kWh. Temperature: minimum and target temperature of its storage (temperature sensors). Counted from one deadline to the next; met from the surplus first. A temperature target applies from midnight (or the earliest start) to the deadline: after the deadline the consumer stays off until then, also with surplus.",
       target_earliest_enabled:
         "Not switched on before the earliest start, also with surplus (e.g. a dehumidifier only from 10:00). Counted until the deadline; the latest start is never before it.",
       target_sensor:
@@ -987,8 +989,10 @@ const STRINGS = {
       feed_in_cap_limit: "Anteil der PV-Spitzenleistung, der höchstens eingespeist werden darf, z. B. 60 %.",
       feed_in_cap_buffer:
         "Zusätzlicher Platz zur prognostizierten Energie über der Grenze, in % davon, gegen eine zu niedrige PV-Prognose. Negative Werte planen mit weniger.",
+      target_hours:
+        "Wie viele Stunden das Tagesziel je Zeitraum braucht (von einer Frist zur nächsten), in halben Stunden. Bei Laufzeit zählt die Zeit, in der der Verbraucher Leistung zieht (ab 50 W; bei einer Wärmepumpe mit Warmwasser-Freigabe nur im Warmwasserbetrieb). Bei Freigabezeit zählt die Zeit, in der SLEMS ihn eingeschaltet bzw. freigegeben hat, auch wenn er dabei nichts zieht (z. B. weil sein eigener Thermostat oder deine Automation ihn noch nicht gestartet hat).",
       target_type:
-        "Laufzeit: Zeit, in der der Verbraucher Leistung zieht. Freigabezeit: Zeit, in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung (Luftentfeuchter mit Hygrostat). Energie: kWh. Temperatur: Mindest- und Zieltemperatur seines Speichers (Temperaturfühler). Gezählt von Frist zu Frist; zuerst aus dem Überschuss. Ein Temperaturziel gilt von Mitternacht bis zur Frist: Nach der Frist bleibt der Verbraucher bis Mitternacht aus, auch mit Überschuss.",
+        "Laufzeit: Zeit, in der der Verbraucher Leistung zieht. Freigabezeit: Zeit, in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung (Luftentfeuchter mit Hygrostat). Energie: kWh. Temperatur: Mindest- und Zieltemperatur seines Speichers (Temperaturfühler). Gezählt von Frist zu Frist; zuerst aus dem Überschuss. Ein Temperaturziel gilt von Mitternacht (oder dem frühesten Beginn) bis zur Frist: Nach der Frist bleibt der Verbraucher bis dahin aus, auch mit Überschuss.",
       target_earliest_enabled:
         "Vor dem frühesten Beginn wird der Verbraucher nicht eingeschaltet, auch nicht mit Überschuss (z. B. ein Luftentfeuchter erst ab 10:00). Gezählt bis zur Frist; die späteste Startzeit liegt nie davor.",
       target_sensor:
@@ -4191,7 +4195,7 @@ class SlemsPanel extends HTMLElement {
         [s("target_max_temperature"), t.targetMax]
       );
     }
-    if (type !== "none" && type !== "temperature") {
+    if (type !== "none") {
       const earliest = s("target_earliest_enabled");
       controls.push([earliest, t.targetEarliestOn]);
       if (earliest?.state === "on") controls.push([s("target_earliest"), t.targetEarliest]);
@@ -4328,7 +4332,8 @@ class SlemsPanel extends HTMLElement {
   _control(stateObj, { label = null, disabledNote = null } = {}) {
     const domain = stateObj.entity_id.split(".")[0];
     const key = this._hass.entities?.[stateObj.entity_id]?.translation_key;
-    const hint = this._t.settingHints[key];
+    // The hot water entities of a heat pump share the hints of their daily target.
+    const hint = this._t.settingHints[key] ?? this._t.settingHints[key?.replace(/^hot_water_/, "")];
     // Title for the mouse, a click on the icon opens the text (touch screens).
     const title = label ?? this._name(stateObj);
     let name = hint

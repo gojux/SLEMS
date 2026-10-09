@@ -12,11 +12,11 @@ deliver), also the batteries and the grid. From the latest start
 (deadline − remaining time × ``TIME_FACTOR`` − ``START_MARGIN``) on the
 consumer runs regardless of the surplus (*forced*).
 
-An earliest start (runtime, enabled time, energy; optional) restricts the
-period to the time from the last earliest start before the deadline: before
-it SLEMS keeps the consumer off, also with surplus (*waiting*). A temperature
-target always starts at midnight: after its deadline the consumer waits for
-the next day.
+An earliest start (optional) restricts the period to the time from the last
+earliest start before the deadline: before it SLEMS keeps the consumer off,
+also with surplus (*waiting*). A temperature target starts at midnight
+without one: after its deadline the consumer waits for the next day (or its
+earliest start).
 
 The planning (day chart, SoC projection, night discharge) counts the forced
 run as an extra load from the latest start on (``forced_load``): the worst
@@ -88,15 +88,15 @@ class TargetSettings:
 def window_start(settings: TargetSettings, end: datetime) -> datetime | None:
     """Earliest start before the deadline ``end``, None without one.
 
-    A temperature target applies to the calendar day: from midnight to the
-    deadline, off after the deadline until midnight.
+    A temperature target without one applies to the calendar day: from
+    midnight to the deadline, off after the deadline until midnight.
     """
-    if settings.type is TargetType.TEMPERATURE:
+    if settings.earliest_enabled:
+        start = end.replace(hour=settings.earliest.hour, minute=settings.earliest.minute, second=0, microsecond=0)
+    elif settings.type is TargetType.TEMPERATURE:
         start = end.replace(hour=0, minute=0, second=0, microsecond=0)
-        return start if start < end else start - timedelta(days=1)
-    if not settings.earliest_enabled:
+    else:
         return None
-    start = end.replace(hour=settings.earliest.hour, minute=settings.earliest.minute)
     return start if start < end else start - timedelta(days=1)
 
 
@@ -358,7 +358,7 @@ def evaluate(
             duration = timedelta(hours=missing_k * wh_per_k / power_w * TIME_FACTOR)
         else:
             duration = TEMPERATURE_FALLBACK
-        latest = end - duration - START_MARGIN
+        latest = max(end - duration - START_MARGIN, earliest) if earliest is not None else end - duration - START_MARGIN
         mode = TargetMode.FORCED if may_force and local_now >= latest else TargetMode.BOOST
         return TargetState(mode, missing_k, latest, end)
 

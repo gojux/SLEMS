@@ -1219,7 +1219,7 @@ Per controlled consumer, on its card under **Daily target**.
   configuration).
 - **Period**: counted from one deadline (**Until**, default 22:00, also across
   midnight) to the next and met from the surplus first.
-- **Earliest start** (runtime, enabled time, energy): before this time SLEMS
+- **Earliest start** (optional): before this time SLEMS
   does not switch the consumer on, not even with surplus (e.g. a dehumidifier
   only from 10:00); the latest start is never before it. If the hours (or the
   energy at full power) do not fit between the earliest start and the
@@ -1251,7 +1251,9 @@ Per controlled consumer, on its card under **Daily target**.
   target temperature it is off for the rest of the day; if a higher target
   temperature is set later in the day, it heats on. A temperature target
   applies to the calendar day: after the deadline the consumer stays off until
-  midnight (**waits until 00:00**), also with surplus. If the temperature falls
+  midnight (**waits until 00:00**), also with surplus; with an earliest start
+  until then (e.g. hot water by a heat pump only from 11:00, when the air is
+  warmer and there is surplus). If the temperature falls
   below the minimum again (e.g. after drawing hot water), the target is open
   again: up to the minimum with priority, then with the surplus up to the
   target. Choosing another sensor starts the target open again.

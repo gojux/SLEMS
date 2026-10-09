@@ -183,6 +183,23 @@ def test_temperature_target_waits_after_the_deadline_until_midnight() -> None:
 
 
 
+def test_temperature_target_with_an_earliest_start() -> None:
+    settings = TargetSettings(
+        type=TargetType.TEMPERATURE, min_temp_c=40, target_temp_c=55, deadline=time(16, 0),
+        source=TargetSource.GRID, earliest_enabled=True, earliest=time(11, 0),
+    )
+    progress = TargetProgress(end=local(16))
+    # Before 11:00 it waits, also below the minimum.
+    assert state(settings, progress, local(8), temperature_c=30).mode is TargetMode.WAITING
+    assert state(settings, progress, local(12), temperature_c=30).mode is TargetMode.BOOST
+    # Without the energy per kelvin 2 h before the deadline, never before the earliest start.
+    late = TargetSettings(**{**settings.__dict__, "deadline": time(12, 0)})
+    target = state(late, TargetProgress(end=local(12)), local(11, 30), temperature_c=30)
+    assert target.latest_start == local(11)
+    assert target.mode is TargetMode.FORCED
+
+
+
 def test_forced_load_for_the_planning() -> None:
     settings = TargetSettings(type=TargetType.RUNTIME, hours=2.0, source=TargetSource.BATTERY)
     progress = TargetProgress(end=local(22))

@@ -1293,7 +1293,7 @@ Je gesteuertem Verbraucher, auf seiner Karte unter **Tagesziel**.
   Reihenfolge der Konfiguration des Verbrauchers).
 - **Zeitraum**: gezählt von Frist (**Bis**, Standard 22:00, auch über
   Mitternacht) zu Frist und zuerst aus dem Überschuss erfüllt.
-- **Frühester Beginn** (Laufzeit, Freigabezeit, Energie): Vorher schaltet
+- **Frühester Beginn** (optional): Vorher schaltet
   SLEMS den Verbraucher nicht ein, auch nicht mit Überschuss (z. B. ein
   Luftentfeuchter erst ab 10:00); die späteste Startzeit liegt nie davor.
   Passen die Stunden (oder die Energie bei voller Leistung) nicht zwischen
@@ -1326,7 +1326,9 @@ Je gesteuertem Verbraucher, auf seiner Karte unter **Tagesziel**.
   Zieltemperatur ist er für den Rest des Tages aus; wird später am Tag eine
   höhere Zieltemperatur eingestellt, heizt er weiter. Ein Temperaturziel gilt
   für den Kalendertag: Nach der Frist bleibt der Verbraucher bis Mitternacht
-  aus (**wartet bis 00:00**), auch mit Überschuss. Fällt die Temperatur wieder
+  aus (**wartet bis 00:00**), auch mit Überschuss; mit einem frühesten Beginn
+  bis dahin (z. B. Warmwasser über eine Wärmepumpe erst ab 11:00, wenn die
+  Luft wärmer ist und Überschuss da ist). Fällt die Temperatur wieder
   unter das Minimum (z. B. nach Warmwasserentnahme), ist das Ziel wieder
   offen: bis zum Minimum mit Vorrang, danach mit dem Überschuss bis zum Ziel.
   Wird ein anderer Fühler gewählt, gilt das Ziel wieder als offen.
