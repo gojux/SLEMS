@@ -75,6 +75,7 @@ HOT_WATER_KEYS = frozenset(
         "forced",
         "release_window",
         "window_before_forced",
+        "surplus_window",
         "latest_start",
         "consumer_control",
     }

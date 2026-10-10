@@ -105,7 +105,7 @@ def test_consumer_power_and_thermostat_cycles() -> None:
     t = 0
     for _ in range(40):
         learner.update(t, True, 2000 + (t % 3) * 10)
-        t += 5
+        t += 30
     assert learner.nominal_w == pytest.approx(2010, abs=10)
     for cycle in range(2):
         for _ in range(10):  # 50 s pause of the thermostat
@@ -240,12 +240,42 @@ def test_consumer_power_only_at_full_command() -> None:
     t = 0
     for _ in range(40):
         learner.update(t, True, 800, full_command=False)
-        t += 5
+        t += 30
     assert learner.nominal_w is None
     for _ in range(40):
         learner.update(t, True, 3400, full_command=True)
-        t += 5
+        t += 30
     assert learner.nominal_w == 3400
+
+
+def test_consumer_power_over_an_hour_of_running() -> None:
+    # A heat pump charging hot water: 3 minutes at 1.2 kW, then about 3 kW.
+    learner = ConsumerLearner()
+    t = 0
+    for power, seconds in ((1200, 180), (3000, 2700)):
+        for _ in range(seconds // 5):
+            learner.update(t, True, power)
+            t += 5
+    # Sampled every 30 s, not every poll.
+    assert len(learner.powers) == (180 + 2700) // 30
+    assert learner.nominal_w == 3000
+
+
+def test_full_command() -> None:
+    from types import SimpleNamespace
+
+    from custom_components.slems.const import ControlMode
+    from custom_components.slems.coordinator import is_full_command
+
+    on_off = SimpleNamespace(control_mode=ControlMode.RELEASE)
+    power = SimpleNamespace(control_mode=ControlMode.POWER)
+    # On/off: on is full, also below the configured power (its learned power).
+    assert is_full_command(on_off, 1200.0, 2800.0)
+    assert not is_full_command(on_off, 0.0, 2800.0)
+    assert not is_full_command(on_off, None, 2800.0)
+    # Power controlled: only at 90 % of its full power.
+    assert is_full_command(power, 2600.0, 2800.0)
+    assert not is_full_command(power, 1200.0, 2800.0)
 
 
 def test_consumer_powers_without_marker_dropped_when_power_controlled() -> None:
@@ -368,3 +398,59 @@ def test_outdoor_power_of_the_runs() -> None:
     flat = OutdoorPowerLearner(runs=[(t, 2000.0 + (t % 3)) for t in (-5, 0, 5, 10, 15, 20)])
     assert flat.model() is None
     assert flat.power_at(0) is None
+
+
+def test_cooling_per_hour_of_the_day() -> None:
+    from datetime import datetime, timedelta
+
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.slems.learning import CoolingLearner
+
+    zone = dt_util.get_time_zone("Europe/Vienna")
+    learner = CoolingLearner()
+    start = datetime(2026, 10, 1, 0, 0, 30, tzinfo=zone)
+    temperature = 50.0
+    for minute in range(3 * 24 * 60):
+        moment = start + timedelta(minutes=minute)
+        # 0.5 K per hour, 3 K more in the hour of the morning shower (7:00).
+        temperature -= (3.5 if moment.hour == 7 else 0.5) / 60
+        # Heated from 12:00 to 13:00 back to 50 °C: that hour does not count.
+        heating = moment.hour == 12
+        if heating:
+            temperature = 50.0
+        learner.update(minute * 60.0, moment, temperature, heating)
+    # First to last sample of an hour: 59 of its 60 minutes.
+    assert learner.drop_k(7) == pytest.approx(3.5, abs=0.1)
+    assert learner.drop_k(3) == pytest.approx(0.5, abs=0.02)
+    # The heated hour has no value of its own: the mean of the others.
+    assert 12 not in learner.drops
+    assert learner.drop_k(12) == pytest.approx((22 * 0.5 + 3.5) / 23, abs=0.05)
+    # From 6:00 to 9:00: 0.5 + 3.5 + 0.5 K.
+    morning = datetime(2026, 10, 4, 6, 0, tzinfo=zone)
+    assert learner.forecast_c(48.0, morning, morning + timedelta(hours=3)) == pytest.approx(43.5, abs=0.1)
+    # Another sensor choice starts anew.
+    learner.use_sensor("mean")
+    learner.use_sensor("first")
+    assert learner.drops == {}
+    assert learner.forecast_c(48.0, morning, morning + timedelta(hours=3)) is None
+
+
+def test_cooling_needs_whole_hours_read_throughout() -> None:
+    from datetime import datetime, timedelta
+
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.slems.learning import CoolingLearner
+
+    zone = dt_util.get_time_zone("Europe/Vienna")
+    learner = CoolingLearner()
+    start = datetime(2026, 10, 1, 10, 30, tzinfo=zone)
+    # Started in the middle of 10:00, a gap of 5 minutes in 11:00, read fine in 12:00.
+    for minute in range(151):
+        if 70 <= minute < 75:
+            continue
+        learner.update(minute * 60.0, start + timedelta(minutes=minute), 50.0 - minute / 60, False)
+    assert set(learner.drops) == {12}
+    stored = CoolingLearner.from_dict(learner.as_dict())
+    assert {h: list(v) for h, v in stored.drops.items()} == {12: [pytest.approx(59 / 60, abs=0.01)]}

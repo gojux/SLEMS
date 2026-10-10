@@ -340,7 +340,7 @@
           },
           "data_description": {
             "control_entity": "Switch for on/off consumers, number entity in W for power controlled ones, in A for current controlled ones (e.g. the charging current of a wallbox); with current control also a select with ampere options (e.g. **Max. charging current** of an evcc loadpoint in ha-evcc).",
-            "nominal_power_w": "A rough estimate is enough if **Use learned values** is on: SLEMS then measures the real power while it runs the consumer (operating mode active) and uses it after about 30 samples. Rather estimate a little too low than too high: too high, SLEMS waits for a larger surplus and may never switch the consumer on, so nothing is learned. For a heat pump with **Release**: its power for hot water; SLEMS learns it in hot water mode, so it follows the coefficient of performance.",
+            "nominal_power_w": "A rough estimate is enough if **Use learned values** is on: SLEMS then measures the real power while it runs the consumer (operating mode active) and uses it after about 15 minutes of running (the median of its last hour of running). Rather estimate a little too low than too high: too high, SLEMS waits for a larger surplus and may never switch the consumer on, so nothing is learned. For a heat pump with **Release**: its power for hot water; SLEMS learns it in hot water mode, so it follows the coefficient of performance.",
             "block_entity": "SLEMS does not control the consumer while it is blocked (e.g. by the device or an automation): a water heater while its operation mode is \"off\", other entities while they are \"on\".",
             "priority": "1 = highest priority when distributing surplus power.",
             "min_on_minutes": "Optional. Once switched on by SLEMS, the consumer keeps running at least this long.",
@@ -709,6 +709,22 @@
   },
   "entity": {
     "select": {
+      "surplus_window": {
+        "name": "Surplus window",
+        "state": {
+          "off": "Off",
+          "show": "Show only",
+          "release": "Release"
+        }
+      },
+      "hot_water_surplus_window": {
+        "name": "Hot water surplus window",
+        "state": {
+          "off": "Off",
+          "show": "Show only",
+          "release": "Release"
+        }
+      },
       "operating_mode": {
         "name": "Operating mode",
         "state": {

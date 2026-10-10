@@ -268,6 +268,16 @@ class TargetSensor(StrEnum):
     SECOND = "second"
 
 
+class SurplusWindow(StrEnum):
+    """Planned window of a release consumer for its run from the surplus."""
+
+    OFF = "off"
+    # Planned and shown; released as before, with the surplus there.
+    SHOW = "show"
+    # Released for the planned window, also while the surplus dips.
+    RELEASE = "release"
+
+
 class TargetSource(StrEnum):
     """What may cover a daily target the surplus does not reach in time."""
 

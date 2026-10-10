@@ -233,6 +233,32 @@ def test_release_window_before_the_forced_run() -> None:
     assert state(runtime, TargetProgress(end=local(22)), local(19, 30)).mode is TargetMode.FORCED
 
 
+def test_temperature_target_with_the_forecast_cooling() -> None:
+    settings = TargetSettings(
+        type=TargetType.TEMPERATURE, min_temp_c=40, target_temp_c=48, deadline=time(15, 30),
+        source=TargetSource.BATTERY, earliest_enabled=True, earliest=time(11, 0),
+    )
+    progress = TargetProgress(end=local(15, 30))
+    # 45 °C now, 37 °C forecast at 15:30: 3 K missing, 100 Wh/K at 2500 W:
+    # 7.2 min × 1.2 → latest start 15:30 − 8.64 min − 10 min.
+    early = state(settings, progress, local(8), temperature_c=45, temperature_at_end_c=37, wh_per_k=100, power_w=2500)
+    assert early.mode is TargetMode.WAITING
+    assert early.missing == 3
+    assert early.latest_start == local(15, 30) - timedelta(minutes=18.64)
+    noon = state(settings, progress, local(12), temperature_c=45, temperature_at_end_c=37, wh_per_k=100, power_w=2500)
+    assert noon.mode is TargetMode.SURPLUS
+    late = state(settings, progress, local(15, 15), temperature_c=41, temperature_at_end_c=37, wh_per_k=100, power_w=2500)
+    assert late.mode is TargetMode.FORCED
+    # Stays above the minimum until the deadline: nothing forced, no latest start.
+    warm = state(settings, progress, local(8), temperature_c=45, temperature_at_end_c=42)
+    assert warm.mode is TargetMode.WAITING and warm.latest_start is None
+    assert state(settings, progress, local(12), temperature_c=45, temperature_at_end_c=42).mode is TargetMode.SURPLUS
+    # Reached the target, but it cools below the minimum: done until the forced run.
+    full = state(settings, progress, local(12), temperature_c=49, temperature_at_end_c=38)
+    assert full.mode is TargetMode.DONE and full.latest_start is not None
+    assert forced_load(settings, full, local(12), power_w=2500, wh_per_k=100)
+
+
 def test_forced_load_for_the_planning() -> None:
     settings = TargetSettings(type=TargetType.RUNTIME, hours=2.0, source=TargetSource.BATTERY)
     progress = TargetProgress(end=local(22))
@@ -481,3 +507,26 @@ def test_daily_demands_without_a_target() -> None:
     # Over the change from summer time (25 hours): midnight to midnight.
     _, longer = daily_demands(5000, 0, local(12, day=24), power_w=3000)
     assert (longer.start, longer.end) == (local(0, day=25), local(0, day=26))
+
+
+def test_planned_surplus_window() -> None:
+    from custom_components.slems.consumer_targets import plan_surplus_window
+
+    # Forecast surplus: 1 kW at 10:00, 3 kW at 11:00 and 12:00, 2 kW at 13:00.
+    surplus = {local(10): 1000.0, local(11): 3000.0, local(12): 3000.0, local(13): 2000.0}
+    window = plan_surplus_window(
+        surplus, local(9), local(15, 30), run=timedelta(hours=1), power_w=2800, window=timedelta(minutes=150)
+    )
+    # The run 11:00–12:00 (the earliest of the best), the window 150 min around it.
+    assert window == (local(10, 15), local(12, 45))
+    # Kept within the bounds: from 11:30 on.
+    window = plan_surplus_window(
+        surplus, local(11, 30), local(15, 30), run=timedelta(hours=1), power_w=2800, window=timedelta(minutes=150)
+    )
+    assert window == (local(11, 30), local(14))
+    # Without a window: just the run.
+    assert plan_surplus_window(
+        surplus, local(9), local(15, 30), run=timedelta(hours=1), power_w=2800, window=timedelta(0)
+    ) == (local(11), local(12))
+    # No surplus: no window.
+    assert plan_surplus_window({}, local(9), local(15), run=timedelta(hours=1), power_w=2800, window=timedelta(0)) is None

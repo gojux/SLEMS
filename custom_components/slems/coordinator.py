@@ -86,6 +86,7 @@ from .const import (
     DOMAIN,
     SCAN_INTERVAL,
     CapMode,
+    SurplusWindow,
     TargetSensor,
     TargetSource,
     TargetType,
@@ -147,6 +148,7 @@ from .market_prices import MarketPrices
 from .learning import (
     CapacityLearner,
     ConsumerLearner,
+    CoolingLearner,
     GridTargetLearner,
     MorningGapLearner,
     OutdoorPowerLearner,
@@ -165,6 +167,7 @@ from .grid_friendly import (
     remaining_surplus_by_hour,
 )
 from .consumer_targets import (
+    RUNNING_W,
     TargetMode,
     TargetProgress,
     TargetSettings,
@@ -181,6 +184,7 @@ from .consumer_targets import (
     next_period_demand,
     period_end,
     no_power_threshold_s,
+    plan_surplus_window,
     remaining,
     surplus_demand,
     target_temperature,
@@ -244,6 +248,7 @@ CONTROL_STORE_KEY = "control"
 PV_ACCURACY_STORE_KEY = "pv_accuracy"
 CONSUMERS_STORE_KEY = "consumers"
 THERMAL_STORE_KEY = "thermal"
+COOLING_STORE_KEY = "cooling"
 TARGETS_STORE_KEY = "targets"
 NO_POWER_STORE_KEY = "no_power"
 # Share of the learned storage capacity the feed-in cap planning relies on.
@@ -714,6 +719,18 @@ class HousePowerHold:
 type SlemsConfigEntry = ConfigEntry[SlemsCoordinator]
 
 
+def is_full_command(consumer: ConsumerConfig, command: float | None, full_power_w: float) -> bool:
+    """Commanded at its full power, so its measured power is the one to learn.
+
+    An on/off consumer takes its power whenever it is on: its command is the
+    planned power (the learned one once in use) and may be below the
+    configured power without throttling it.
+    """
+    if command is None or command <= 0:
+        return False
+    return consumer.control_mode.on_off or command >= FULL_COMMAND_SHARE * full_power_w
+
+
 class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     """Polls all batteries, reads the measurement entities and allocates power."""
 
@@ -808,6 +825,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.thermal_learners = {
             c.subentry_id: ThermalLearner() for c in consumers if c.temperature_entity_ids
         }
+        self.cooling_learners = {
+            c.subentry_id: CoolingLearner() for c in consumers if c.temperature_entity_ids
+        }
         # Consumers whose learned power and thermostat behaviour are used.
         self.consumer_learning: set[str] = set()
         # Daily targets of the consumers (see consumer_targets): settings
@@ -836,6 +856,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.target_energy_estimated: set[str] = set()
         self._energy_today: dict[str, tuple[float, float | None]] = {}
         self.target_demands: list[SurplusDemand] = []
+        # Forecast temperature of a temperature target's storage at its deadline
+        # without heating (None while the cooling is not learned).
+        self.target_forecast_c: dict[str, float | None] = {}
+        # Planned surplus window of a release consumer: (opens, closes, deadline).
+        self.surplus_windows: dict[str, tuple[datetime, datetime, datetime]] = {}
         # Battery due for its regular full charge (see full_charge), batteries
         # resting after it (monotonic end) and the last full charge seen.
         self.full_charge_battery: str | None = None
@@ -878,6 +903,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             # (data stored before the sensors were recorded is kept).
             if data.get("sensors", sensors) == sensors:
                 self.thermal_learners[subentry_id] = ThermalLearner.from_dict(data)
+        for subentry_id, data in (stored.get(COOLING_STORE_KEY) or {}).items():
+            # Learned with other temperature sensors: starts anew.
+            if subentry_id in self.cooling_learners and data.get("sensors") == list(
+                consumers[subentry_id].temperature_entity_ids
+            ):
+                self.cooling_learners[subentry_id] = CoolingLearner.from_dict(data)
         for subentry_id, data in (stored.get(TARGETS_STORE_KEY) or {}).items():
             if subentry_id in self.target_progress:
                 self.target_progress[subentry_id] = TargetProgress.from_dict(data)
@@ -1316,6 +1347,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             subentry_id: {**learner.as_dict(), "sensors": sensors[subentry_id]}
             for subentry_id, learner in self.thermal_learners.items()
         }
+        data[COOLING_STORE_KEY] = {
+            subentry_id: {**learner.as_dict(), "sensors": sensors[subentry_id]}
+            for subentry_id, learner in self.cooling_learners.items()
+        }
         data[TARGETS_STORE_KEY] = {
             subentry_id: progress.as_dict() for subentry_id, progress in self.target_progress.items()
         }
@@ -1373,7 +1408,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             since = self.controller.consumer_command_since(consumer.subentry_id)
             response = self.controller.consumer_response_s(consumer.subentry_id, on=True) or 0.0
             settled = since is None or now - since >= max(CONSUMER_SETTLE_S, 2 * response)
-            full_command = command is not None and command >= FULL_COMMAND_SHARE * full_power and settled
+            full_command = settled and is_full_command(consumer, command, full_power)
             learner.update(now, command is not None and command > 0, state.power_w, full_command)
             if thermal := self.thermal_learners.get(consumer.subentry_id):
                 thermal.update(
@@ -1384,6 +1419,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     learner.nominal_w or full_power,
                     full_command,
                     state.temperatures_c,
+                )
+            if cooling := self.cooling_learners.get(consumer.subentry_id):
+                settings = self.consumer_targets[consumer.subentry_id]
+                cooling.use_sensor(settings.sensor.value)
+                cooling.update(
+                    now,
+                    dt_util.now(),
+                    target_temperature(settings, state.temperature_c, state.temperatures_c),
+                    heating=state.power_w is not None and state.power_w >= RUNNING_W,
                 )
             self._count_target(consumer, state, now, command is not None and command > 0)
 
@@ -2640,7 +2684,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             state = self.target_states.get(subentry_id)
             if (
                 state is not None
-                and state.mode in (TargetMode.FORCED, TargetMode.WINDOW)
+                and state.mode in (TargetMode.FORCED, TargetMode.WINDOW, TargetMode.PLANNED)
                 and self.consumer_targets[subentry_id].source is TargetSource.BATTERY
             ):
                 continue
@@ -3049,7 +3093,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         consumers.cycling_holds); a run is the minimum runtime, or what its
         daily target still needs if less."""
         subentry_id = consumer.subentry_id
-        if not consumer.avoid_cycling or mode in (TargetMode.FORCED, TargetMode.WINDOW, TargetMode.BOOST):
+        if not consumer.avoid_cycling or mode in (
+            TargetMode.FORCED, TargetMode.WINDOW, TargetMode.PLANNED, TargetMode.BOOST
+        ):
             self._short_since.pop(subentry_id, None)
             return False, False
         power = self._full_power_w(consumer)
@@ -3109,15 +3155,82 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             or (mode in (TargetMode.DONE, TargetMode.WAITING) and not must_stay_on),
             cap_mode=self.cap_mode(consumer.subentry_id),
             boost=mode is TargetMode.BOOST,
-            forced=mode in (TargetMode.FORCED, TargetMode.WINDOW),
+            forced=mode in (TargetMode.FORCED, TargetMode.WINDOW, TargetMode.PLANNED),
             forced_max_w=(
                 battery.max_discharge_w
-                if mode in (TargetMode.FORCED, TargetMode.WINDOW)
+                if mode in (TargetMode.FORCED, TargetMode.WINDOW, TargetMode.PLANNED)
                 and battery is not None
                 and self.consumer_targets[consumer.subentry_id].source is TargetSource.BATTERY
                 else None
             ),
         )
+
+    def _surplus_window(
+        self,
+        consumer: ConsumerConfig,
+        settings: TargetSettings,
+        state: TargetState,
+        wall_now: datetime,
+        *,
+        hourly_surplus: Mapping[datetime, float] | None,
+        power_w: float,
+    ) -> TargetState:
+        """Planned window of a release consumer for its run from the surplus
+        (see consumer_targets.plan_surplus_window); with the option "release"
+        it is released for it (*planned*).
+
+        Before the window opens it follows the forecast; once open it is kept
+        until it closes, so the automation gets one window.
+        """
+        subentry_id = consumer.subentry_id
+        if (
+            consumer.control_mode is not ControlMode.RELEASE
+            or settings.surplus_window is SurplusWindow.OFF
+            or state.mode in (TargetMode.NONE, TargetMode.DONE)
+            or state.end is None
+            or power_w <= 0
+        ):
+            self.surplus_windows.pop(subentry_id, None)
+            return state
+        local_now = dt_util.as_local(wall_now)
+        kept = self.surplus_windows.get(subentry_id)
+        if kept is not None and kept[2] == state.end and kept[0] <= local_now < kept[1]:
+            window = kept[:2]
+        else:
+            start = max(local_now, window_start(settings, state.end) or local_now)
+            # Up to the forced run: from then on it runs anyway.
+            end = state.end
+            if settings.source is not TargetSource.SURPLUS and state.latest_start is not None:
+                end = min(end, state.latest_start)
+            energy = self.target_energy_wh.get(subentry_id)
+            run = (
+                timedelta(hours=energy / power_w)
+                if energy
+                else timedelta(minutes=settings.release_window_min or 60)
+            )
+            window = (
+                plan_surplus_window(
+                    hourly_surplus,
+                    start,
+                    end,
+                    run=run,
+                    power_w=power_w,
+                    window=timedelta(minutes=settings.release_window_min),
+                )
+                if hourly_surplus is not None and end > start
+                else None
+            )
+            if window is None:
+                self.surplus_windows.pop(subentry_id, None)
+                return state
+            self.surplus_windows[subentry_id] = (*window, state.end)
+        if (
+            settings.surplus_window is SurplusWindow.RELEASE
+            and window[0] <= local_now < window[1]
+            and state.mode in (TargetMode.SURPLUS, TargetMode.BOOST)
+        ):
+            return replace(state, mode=TargetMode.PLANNED)
+        return state
 
     def _window_holds(self, consumer: ConsumerConfig, now: float, mode: TargetMode) -> bool:
         """A release stays open for its window (see consumer_targets), unless
@@ -3238,6 +3351,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.target_load_grid = {}
         self.target_energy_wh = {}
         self.target_energy_estimated = set()
+        self.target_forecast_c = {}
         self.target_demands = []
         consumers = sorted(map(self.effective_consumer, self.consumers), key=lambda c: c.priority)
         # A supporting consumer only takes the surplus above the feed-in cap's
@@ -3294,6 +3408,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             # power controlled one at least its minimum (it is then limited).
             needed = power if consumer.control_mode.on_off else max(consumer.min_power_w or 0, 1.0)
             battery_need = battery.energy_to_full_wh if battery else 0.0
+            cooling = self.cooling_learners.get(consumer.subentry_id)
+            forecast_c = (
+                cooling.forecast_c(
+                    temperature, local_now, progress.end or period_end(local_now, settings.deadline)
+                )
+                if settings.type is TargetType.TEMPERATURE and cooling is not None and temperature is not None
+                else None
+            )
+            self.target_forecast_c[consumer.subentry_id] = forecast_c
             self.target_states[consumer.subentry_id] = self._price_window(
                 consumer,
                 settings,
@@ -3307,12 +3430,30 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     expected_surplus_wh=surplus,
                     battery_need_wh=battery_need,
                     battery_can_supply=battery is not None and battery.max_discharge_w >= needed,
+                    temperature_at_end_c=forecast_c,
                 ),
                 wall_now,
                 short=energy is not None and surplus < energy + battery_need,
                 power_w=power,
                 pv_forecast=pv_forecast,
                 consumption=consumption,
+            )
+            self.target_states[consumer.subentry_id] = self._surplus_window(
+                consumer,
+                settings,
+                self.target_states[consumer.subentry_id],
+                wall_now,
+                hourly_surplus=(
+                    {
+                        start: surplus_w
+                        for start, surplus_w, _ in remaining_surplus_by_hour(
+                            pv_forecast, consumption.total if consumption else None, load, wall_now, end
+                        )
+                    }
+                    if pv_forecast is not None and end is not None
+                    else None
+                ),
+                power_w=power,
             )
             # A heat pump's consumption is already in its own forecast model.
             if consumer.consumer_type is ConsumerType.HEAT_PUMP:

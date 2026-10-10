@@ -390,3 +390,42 @@ def test_avoiding_short_runs_with_a_temperature_target_needs_the_charge_only() -
     assert runs == [5400.0, 3600.0, 5400.0]
     # The window before the forced run opens without surplus.
     assert holds(coordinator, config, 0.0, TargetMode.WINDOW, 0.0, run_surplus) == (False, False)
+
+
+def test_surplus_window_is_kept_once_open_and_releases() -> None:
+    from datetime import datetime, timedelta
+
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.slems.const import SurplusWindow, TargetType
+    from custom_components.slems.consumer_targets import TargetMode, TargetSettings, TargetState
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    zone = dt_util.get_default_time_zone()
+    day = datetime(2026, 10, 12, tzinfo=zone)
+    release = replace(consumer(), control_mode=ControlMode.RELEASE)
+    settings = TargetSettings(type=TargetType.TEMPERATURE, surplus_window=SurplusWindow.SHOW, release_window_min=120)
+    coordinator = SimpleNamespace(surplus_windows={}, target_energy_wh={"rod": 2800.0})
+    state = TargetState(TargetMode.SURPLUS, end=day.replace(hour=15, minute=30))
+    plan = SlemsCoordinator._surplus_window
+    surplus = {day.replace(hour=12): 3000.0}
+
+    def at(hour: int, minute: int = 0, forecast=surplus, current=settings):
+        return plan(
+            coordinator, release, current, state, day.replace(hour=hour, minute=minute),
+            hourly_surplus=forecast, power_w=2800.0,
+        )
+
+    # Shown only: planned 11:30–13:30, the mode unchanged.
+    assert at(9).mode is TargetMode.SURPLUS
+    assert coordinator.surplus_windows["rod"][:2] == (day.replace(hour=11, minute=30), day.replace(hour=13, minute=30))
+    # Released: open from 11:30; kept while open although the forecast moved.
+    released = replace(settings, surplus_window=SurplusWindow.RELEASE)
+    assert at(11, current=released).mode is TargetMode.SURPLUS
+    assert at(11, 45, current=released).mode is TargetMode.PLANNED
+    later = {day.replace(hour=14): 3000.0}
+    assert at(12, forecast=later, current=released).mode is TargetMode.PLANNED
+    assert coordinator.surplus_windows["rod"][0] == day.replace(hour=11, minute=30)
+    # Off: no window.
+    assert at(12, current=replace(settings, surplus_window=SurplusWindow.OFF)).mode is TargetMode.SURPLUS
+    assert "rod" not in coordinator.surplus_windows

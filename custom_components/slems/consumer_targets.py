@@ -16,7 +16,9 @@ A consumer with a release (started by the user's automation) may keep its
 release open for a window (``release_window_min``), e.g. so the automation
 can wait for a heat pump's compressor run. Optionally the window lies before
 the latest start (*window*): released without surplus from latest start −
-window on, forced only from the latest start.
+window on, forced only from the latest start. A planned surplus window
+(``surplus_window``) is the time the forecast surplus covers the run best
+(``plan_surplus_window``): shown, or also released for (*planned*).
 
 An earliest start (optional) restricts the period to the time from the last
 earliest start before the deadline: before it SLEMS keeps the consumer off,
@@ -43,14 +45,14 @@ The target counts for the sensor chosen when it was reached.
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 
 from homeassistant.util import dt as dt_util
 
-from .const import TargetSensor, TargetSource, TargetType
+from .const import SurplusWindow, TargetSensor, TargetSource, TargetType
 
 TIME_FACTOR = 1.2
 START_MARGIN = timedelta(minutes=10)
@@ -69,6 +71,8 @@ class TargetMode(StrEnum):
     DONE = "done"
     SURPLUS = "surplus"
     BOOST = "boost"
+    # Released for the planned window of the run from the surplus.
+    PLANNED = "planned"
     # Released before the latest start (window before the forced run).
     WINDOW = "window"
     FORCED = "forced"
@@ -95,6 +99,7 @@ class TargetSettings:
     # optionally opens this long before the latest start.
     release_window_min: float = 0.0
     window_before_forced: bool = False
+    surplus_window: SurplusWindow = SurplusWindow.OFF
 
 
 def window_start(settings: TargetSettings, end: datetime) -> datetime | None:
@@ -338,13 +343,15 @@ def evaluate(
     expected_surplus_wh: float,
     battery_need_wh: float,
     battery_can_supply: bool,
+    temperature_at_end_c: float | None = None,
 ) -> TargetState:
     """Mode of the consumer right now.
 
     ``power_w`` is its power while on, ``expected_surplus_wh`` the forecast
     surplus until the deadline, ``battery_need_wh`` the energy that fills the
     batteries, ``battery_can_supply`` whether the batteries can deliver its
-    power now.
+    power now, ``temperature_at_end_c`` the forecast temperature of a storage
+    at the deadline without heating (see learning.CoolingLearner).
     """
     if settings.type is TargetType.NONE:
         return TargetState(TargetMode.NONE)
@@ -355,28 +362,35 @@ def evaluate(
 
     if settings.type is TargetType.TEMPERATURE:
         earliest = window_start(settings, end)
-        if earliest is not None and local_now < earliest:
-            return TargetState(TargetMode.WAITING, end=end)
+        waiting = earliest is not None and local_now < earliest
         if temperature_c is None:
-            return TargetState(TargetMode.SURPLUS, end=end)
-        # Below the minimum it heats in any case; a reached target is open
-        # again then (see TargetProgress.track_temperature).
-        if temperature_c >= settings.min_temp_c:
-            if progress.done_for(settings) or temperature_c >= settings.target_temp_c:
-                return TargetState(TargetMode.DONE, end=end)
-            return TargetState(TargetMode.SURPLUS, end=end)
-        missing_k = settings.min_temp_c - temperature_c
+            return TargetState(TargetMode.WAITING if waiting else TargetMode.SURPLUS, end=end)
+        # What the storage misses at the deadline: by then it cools down (as
+        # forecast), heated late it has to make up for that.
+        lowest = temperature_c if temperature_at_end_c is None else min(temperature_c, temperature_at_end_c)
+        missing_k = settings.min_temp_c - lowest
+        reached = progress.done_for(settings) or temperature_c >= settings.target_temp_c
+        if missing_k <= 0:
+            if waiting:
+                return TargetState(TargetMode.WAITING, end=end)
+            return TargetState(TargetMode.DONE if reached else TargetMode.SURPLUS, end=end)
         if wh_per_k and power_w > 0:
             duration = timedelta(hours=missing_k * wh_per_k / power_w * TIME_FACTOR)
         else:
             duration = TEMPERATURE_FALLBACK
         latest = max(end - duration - START_MARGIN, earliest) if earliest is not None else end - duration - START_MARGIN
+        if waiting:
+            return TargetState(TargetMode.WAITING, missing_k, latest, end)
         if may_force and local_now >= latest:
             mode = TargetMode.FORCED
         elif may_force and _in_window(settings, latest, local_now):
             mode = TargetMode.WINDOW
-        else:
+        elif temperature_c < settings.min_temp_c:
+            # Below the minimum it heats in any case; a reached target is open
+            # again then (see TargetProgress.track_temperature).
             mode = TargetMode.BOOST
+        else:
+            mode = TargetMode.DONE if reached else TargetMode.SURPLUS
         return TargetState(mode, missing_k, latest, end)
 
     missing = remaining(settings, progress)
@@ -403,6 +417,54 @@ def evaluate(
     if settings.priority and expected_surplus_wh < energy + battery_need_wh:
         return TargetState(TargetMode.BOOST, missing, latest, end)
     return TargetState(TargetMode.SURPLUS, missing, latest, end)
+
+
+SURPLUS_WINDOW_STEP = timedelta(minutes=15)
+
+
+def plan_surplus_window(
+    surplus_w: Mapping[datetime, float],
+    start: datetime,
+    end: datetime,
+    *,
+    run: timedelta,
+    power_w: float,
+    window: timedelta,
+) -> tuple[datetime, datetime] | None:
+    """Window between ``start`` and ``end`` around the run the forecast surplus
+    covers best, None without any surplus for it.
+
+    ``surplus_w`` is the mean forecast surplus per hour (start of the hour ->
+    W). The run of length ``run`` at ``power_w`` covers ``min(surplus,
+    power)`` per hour; of equal runs the earliest. The window is ``window``
+    long (at least the run), centred on the run and kept within the bounds.
+    """
+    run = min(run, end - start)
+    if run <= timedelta(0) or power_w <= 0:
+        return None
+
+    def covered_wh(begin: datetime) -> float:
+        total, moment, until = 0.0, begin, begin + run
+        while moment < until:
+            hour = moment.replace(minute=0, second=0, microsecond=0)
+            step = min(hour + timedelta(hours=1), until)
+            total += min(surplus_w.get(hour, 0.0), power_w) * ((step - moment) / timedelta(hours=1))
+            moment = step
+        return total
+
+    first = start.replace(second=0, microsecond=0)
+    first += timedelta(minutes=-first.minute % 15)
+    best, best_wh, moment = None, 0.0, first
+    while moment + run <= end:
+        if (wh := covered_wh(moment)) > best_wh + 1e-6:
+            best, best_wh = moment, wh
+        moment += SURPLUS_WINDOW_STEP
+    if best is None:
+        return None
+    length = max(window, run)
+    opens = max(start, best + run / 2 - length / 2)
+    closes = min(end, opens + length)
+    return max(start, closes - length), closes
 
 
 def window_opens(settings: TargetSettings, latest: datetime) -> datetime | None:
@@ -545,9 +607,10 @@ def forced_load(
     From the latest start (or now) at ``power_w`` until the rest is covered or
     the deadline; nothing with the source "surplus only" or once met.
     """
+    # A reached target with a latest start cools below its minimum by the deadline.
     if (
         settings.source is TargetSource.SURPLUS
-        or state.mode in (TargetMode.NONE, TargetMode.DONE)
+        or state.mode is TargetMode.NONE
         or state.latest_start is None
         or state.end is None
         or power_w <= 0

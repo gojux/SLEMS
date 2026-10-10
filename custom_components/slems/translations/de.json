@@ -340,7 +340,7 @@
           },
           "data_description": {
             "control_entity": "Schalter für Ein/Aus-Verbraucher, Number-Entität in W für leistungsgeregelte, in A für stromgeregelte Verbraucher (z. B. Ladestrom einer Wallbox); bei Stromvorgabe auch eine Auswahl mit Ampere-Optionen (z. B. **Max. Ladestrom** eines evcc-Ladepunkts in ha-evcc).",
-            "nominal_power_w": "Eine grobe Schätzung reicht, wenn **Gelernte Werte verwenden** an ist: SLEMS misst dann die tatsächliche Leistung, während es den Verbraucher betreibt (Betriebsmodus Aktiv), und verwendet sie nach etwa 30 Messwerten. Lieber etwas zu niedrig als zu hoch schätzen: Zu hoch wartet SLEMS auf mehr Überschuss und schaltet den Verbraucher womöglich nie ein, dann wird auch nichts gelernt. Bei einer Wärmepumpe mit **Freigabe**: ihre Leistung beim Warmwasser; SLEMS lernt sie im Warmwasserbetrieb, sie folgt so der Leistungszahl.",
+            "nominal_power_w": "Eine grobe Schätzung reicht, wenn **Gelernte Werte verwenden** an ist: SLEMS misst dann die tatsächliche Leistung, während es den Verbraucher betreibt (Betriebsmodus Aktiv), und verwendet sie nach etwa 15 Minuten Betrieb (den Median seiner letzten Betriebsstunde). Lieber etwas zu niedrig als zu hoch schätzen: Zu hoch wartet SLEMS auf mehr Überschuss und schaltet den Verbraucher womöglich nie ein, dann wird auch nichts gelernt. Bei einer Wärmepumpe mit **Freigabe**: ihre Leistung beim Warmwasser; SLEMS lernt sie im Warmwasserbetrieb, sie folgt so der Leistungszahl.",
             "block_entity": "Solange der Verbraucher gesperrt ist (z. B. vom Gerät oder einer Automation), steuert SLEMS ihn nicht: ein Water Heater bei Betriebsart „off“, andere Entitäten, solange sie „on“ sind.",
             "priority": "1 = höchste Priorität bei der Verteilung von Überschuss.",
             "min_on_minutes": "Optional. Nach dem Einschalten durch SLEMS läuft der Verbraucher mindestens so lange.",
@@ -709,6 +709,22 @@
   },
   "entity": {
     "select": {
+      "surplus_window": {
+        "name": "Überschuss-Fenster",
+        "state": {
+          "off": "Aus",
+          "show": "Nur anzeigen",
+          "release": "Freigeben"
+        }
+      },
+      "hot_water_surplus_window": {
+        "name": "Warmwasser-Überschuss-Fenster",
+        "state": {
+          "off": "Aus",
+          "show": "Nur anzeigen",
+          "release": "Freigeben"
+        }
+      },
       "operating_mode": {
         "name": "Betriebsmodus",
         "state": {

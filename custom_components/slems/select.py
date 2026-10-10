@@ -9,7 +9,16 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .battery_support import BatterySupport
-from .const import LEGACY_CAP_MODES, CapMode, OperatingMode, TargetSensor, TargetSource, TargetType
+from .const import (
+    LEGACY_CAP_MODES,
+    CapMode,
+    ControlMode,
+    OperatingMode,
+    SurplusWindow,
+    TargetSensor,
+    TargetSource,
+    TargetType,
+)
 from .consumers import ConsumerConfig
 from .coordinator import SlemsConfigEntry, SlemsCoordinator
 from .entity import SlemsConsumerEntity, SlemsSystemEntity
@@ -40,6 +49,11 @@ async def async_setup_entry(
                     *(
                         [ConsumerTargetSensorSelect(coordinator, consumer)]
                         if len(consumer.temperature_entity_ids) >= 2
+                        else []
+                    ),
+                    *(
+                        [SurplusWindowSelect(coordinator, consumer)]
+                        if consumer.control_mode is ControlMode.RELEASE
                         else []
                     ),
                 ],
@@ -230,3 +244,14 @@ class ConsumerTargetSensorSelect(_TargetSelect):
 
     def __init__(self, coordinator: SlemsCoordinator, consumer: ConsumerConfig) -> None:
         super().__init__(coordinator, consumer, "target_sensor")
+
+
+class SurplusWindowSelect(_TargetSelect):
+    """Planned window of a release consumer for its run from the surplus."""
+
+    _attribute = "surplus_window"
+    _enum = SurplusWindow
+    _attr_options = [s.value for s in SurplusWindow]
+
+    def __init__(self, coordinator: SlemsCoordinator, consumer: ConsumerConfig) -> None:
+        super().__init__(coordinator, consumer, "surplus_window")

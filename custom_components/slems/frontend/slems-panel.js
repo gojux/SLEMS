@@ -171,6 +171,7 @@ const STRINGS = {
     hotWaterReleaseSection: "Hot water release",
     releaseWindow: "Window",
     windowBeforeForced: "Before the forced run",
+    surplusWindow: "Surplus window",
     blocked: "blocked",
     saturated: "saturated",
     heldCommand: "held, draws too little",
@@ -212,8 +213,20 @@ const STRINGS = {
     wearEstimated: "estimated",
     wearHint: "Wear costs estimated: the purchase price and the rated cycles can be added in the battery configuration (Settings → SLEMS → edit battery).",
     targetLatest: "forced from {time}",
-    targetWindowFrom: "window from {time}",
     targetWindow: "window open",
+    targetPlanned: "surplus window open",
+    planSurplus: "surplus window {from}–{until}",
+    laneSurplus: "surplus window {from}–{until}",
+    targetPlan: "Plan",
+    hotWaterTargetPlan: "Hot water plan",
+    planWindow: "window {from}–{until}",
+    planRun: "takes about {duration}",
+    planForecast: "about {temperature} at {time} without heating",
+    lanesTitle: "Daily targets",
+    lanePeriod: "period {from}–{until}",
+    laneWindow: "release window {from}–{until}",
+    laneForced: "forced {from}–{until}",
+    laneDone: "reached",
     targetLatestPrice: "from {time} in the cheapest window",
     targetForcedPrice: "running in the cheapest window",
     targetDone: "reached",
@@ -457,6 +470,8 @@ const STRINGS = {
         "Runtime: time the consumer draws power. Enabled time: time SLEMS has it switched on, for devices with their own control (a dehumidifier with a hygrostat). Energy: kWh. Temperature: minimum and target temperature of its storage (temperature sensors). Counted from one deadline to the next; met from the surplus first. A temperature target applies from midnight (or the earliest start) to the deadline: after the deadline the consumer stays off until then, also with surplus.",
       release_window:
         "Once released, the release stays open at least this long, also without surplus, until the daily target is met or its deadline has passed (e.g. so your automation can wait for a compressor run of the heat pump). SLEMS plans only the energy the consumer really takes; unlike the minimum runtime the window does not count for **Avoid short runs**. 0: off.",
+      surplus_window:
+        "From the PV and consumption forecast SLEMS plans when the surplus covers the run best (with the window around it, from the earliest start until the forced run).\n**Off**: released only with the surplus there.\n**Show only**: shown on the card and in the day chart, released as with **Off**.\n**Release**: released for the planned window, also while the surplus dips; then a part may come from the batteries or the grid.",
       window_before_forced:
         "The window lies before the forced run: from the latest start minus the window on, SLEMS releases the consumer also without surplus, but not forced; forced only from the latest start, if your automation has not started it by then. Only with a source beyond the surplus; such a run uses the batteries or the grid like the forced one, just earlier.",
       target_earliest_enabled:
@@ -727,6 +742,7 @@ const STRINGS = {
     hotWaterReleaseSection: "Warmwasser-Freigabe",
     releaseWindow: "Fenster",
     windowBeforeForced: "Vor dem erzwungenen Start",
+    surplusWindow: "Überschuss-Fenster",
     blocked: "gesperrt",
     saturated: "gesättigt",
     heldCommand: "gehalten, zieht zu wenig",
@@ -768,8 +784,20 @@ const STRINGS = {
     wearEstimated: "geschätzt",
     wearHint: "Verschleißkosten geschätzt: Anschaffungspreis und Zyklen laut Hersteller lassen sich in der Batterie-Konfiguration nachtragen (Einstellungen → SLEMS → Batterie bearbeiten).",
     targetLatest: "erzwungen ab {time}",
-    targetWindowFrom: "Fenster ab {time}",
     targetWindow: "Fenster offen",
+    targetPlanned: "Überschuss-Fenster offen",
+    planSurplus: "Überschuss-Fenster {from}–{until}",
+    laneSurplus: "Überschuss-Fenster {from}–{until}",
+    targetPlan: "Plan",
+    hotWaterTargetPlan: "Warmwasser-Plan",
+    planWindow: "Fenster {from}–{until}",
+    planRun: "dauert ca. {duration}",
+    planForecast: "ohne Heizen um {time} ca. {temperature}",
+    lanesTitle: "Tagesziele",
+    lanePeriod: "Zeitraum {from}–{until}",
+    laneWindow: "Freigabefenster {from}–{until}",
+    laneForced: "erzwungen {from}–{until}",
+    laneDone: "erreicht",
     targetLatestPrice: "ab {time} im günstigsten Fenster",
     targetForcedPrice: "läuft im günstigsten Fenster",
     targetDone: "erreicht",
@@ -1013,6 +1041,8 @@ const STRINGS = {
         "Laufzeit: Zeit, in der der Verbraucher Leistung zieht. Freigabezeit: Zeit, in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung (Luftentfeuchter mit Hygrostat). Energie: kWh. Temperatur: Mindest- und Zieltemperatur seines Speichers (Temperaturfühler). Gezählt von Frist zu Frist; zuerst aus dem Überschuss. Ein Temperaturziel gilt von Mitternacht (oder dem frühesten Beginn) bis zur Frist: Nach der Frist bleibt der Verbraucher bis dahin aus, auch mit Überschuss.",
       release_window:
         "Einmal freigegeben, bleibt die Freigabe mindestens so lange offen, auch ohne Überschuss, bis das Tagesziel erreicht oder seine Frist vorbei ist (z. B. damit deine Automation auf einen Kompressorlauf der Wärmepumpe warten kann). SLEMS plant nur die Energie, die der Verbraucher wirklich aufnimmt; anders als die Mindestlaufzeit zählt das Fenster nicht für **Takten vermeiden**. 0: aus.",
+      surplus_window:
+        "Aus PV- und Verbrauchsprognose plant SLEMS, wann der Überschuss den Lauf am besten deckt (mit dem Fenster darum, ab dem frühesten Beginn bis zum erzwungenen Lauf).\n**Aus**: freigegeben nur mit Überschuss.\n**Nur anzeigen**: auf der Karte und im Tagesdiagramm gezeigt, freigegeben wie bei **Aus**.\n**Freigeben**: für das geplante Fenster freigegeben, auch wenn der Überschuss kurz fehlt; dann kann ein Teil aus Batterien oder Netz kommen.",
       window_before_forced:
         "Das Fenster liegt vor dem erzwungenen Start: Ab spätestem Start minus Fenster gibt SLEMS den Verbraucher auch ohne Überschuss frei, aber nicht erzwungen; erzwungen erst ab dem spätesten Start, wenn deine Automation ihn bis dahin nicht gestartet hat. Nur mit einer Quelle über den Überschuss hinaus; so ein Lauf nutzt Batterien oder Netz wie der erzwungene, nur früher.",
       target_earliest_enabled:
@@ -2098,7 +2128,7 @@ class SlemsPanel extends HTMLElement {
     const s = Math.round(totalSeconds ?? 0);
     const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);
-    return h ? `${h} h ${m} min` : m ? `${m} min` : `${s} s`;
+    return h ? (m ? `${h} h ${m} min` : `${h} h`) : m ? `${m} min` : `${s} s`;
   }
 
   /** Energy the storage of a consumer can still take, or how far the learning is. */
@@ -3036,7 +3066,8 @@ class SlemsPanel extends HTMLElement {
     this._chartData = rows;
     this._setSection(
       "daychart",
-      header + this._legend(rows) + this._chartSvg(rows) + `<div class="tooltip" id="tooltip" hidden></div>`
+      header + this._legend(rows) + this._chartSvg(rows) + (options.rows ? "" : this._targetLanes()) +
+        `<div class="tooltip" id="tooltip" hidden></div>`
     );
     this._showTooltip();
   }
@@ -3227,6 +3258,69 @@ class SlemsPanel extends HTMLElement {
         <line id="crosshair" x1="0" x2="0" y1="${pad.top}" y2="${plotBottom}" stroke="${c.muted}" visibility="hidden"/>
         <rect class="hit" x="${pad.left}" y="${pad.top}" width="${plotW}" height="${plotBottom - pad.top}" fill="transparent"/>
       </svg></div>`;
+  }
+
+  /** Per consumer with a daily target a lane under the day chart: its period
+   * (faint), the release window before the forced run, the forced run and the
+   * deadline, on the time axis of the chart. */
+  _targetLanes() {
+    const geometry = this._chartGeometry;
+    if (!geometry) return "";
+    const t = this._t;
+    const c = this._colors;
+    const { pad, plotW, width } = geometry;
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    if (this._chartDay === "tomorrow") dayStart.setDate(dayStart.getDate() + 1);
+    const hourOf = (iso) => (new Date(iso) - dayStart) / 3600000;
+    const x = (hour) => pad.left + (Math.max(0, Math.min(24, hour)) / 24) * plotW;
+    const lanes = [];
+    for (const consumer of this._config.consumers || []) {
+      const attrs = this._state("planned_power", consumer.device_id)?.attributes || {};
+      if (!attrs.target_type || attrs.target_type === "none" || !attrs.target_deadline) continue;
+      if (this._state("consumer_control", consumer.device_id)?.state === "off") continue;
+      const end = hourOf(attrs.target_deadline);
+      // A temperature target without an earliest start applies from midnight.
+      const start = attrs.target_earliest ? hourOf(attrs.target_earliest) : attrs.target_type === "temperature" ? Math.floor(end / 24) * 24 : end - 24;
+      if (end <= 0 || start >= 24) continue;
+      const done = attrs.target_mode === "done";
+      const source = this._state("target_source", consumer.device_id)?.state;
+      // Also a reached target, if its storage cools below the minimum by the deadline.
+      const latest = source !== "surplus" && attrs.target_latest_start ? hourOf(attrs.target_latest_start) : null;
+      const opens = latest !== null && attrs.target_window_opens ? hourOf(attrs.target_window_opens) : null;
+      const runEnd = latest !== null ? Math.min(end, latest + (attrs.target_run_s ? attrs.target_run_s / 3600 : end - latest)) : null;
+      const clock = (hour) => this._time(new Date(dayStart.getTime() + hour * 3600000).toISOString());
+      const span = (from, until, opacity, label) =>
+        until > 0 && from < 24 && until > from
+          ? `<rect x="${x(from)}" y="0" width="${Math.max(2, x(until) - x(from))}" height="10" rx="3" fill="${c.consumer}" fill-opacity="${opacity}"><title>${escapeHtml(
+              `${consumer.name}: ${label.replace("{from}", clock(from)).replace("{until}", clock(until))}`
+            )}</title></rect>`
+          : "";
+      const surplus = attrs.target_surplus_window;
+      const surplusSpan = surplus && hourOf(surplus[1]) > 0 && hourOf(surplus[0]) < 24
+        ? `<rect x="${x(hourOf(surplus[0]))}" y="1" width="${Math.max(2, x(hourOf(surplus[1])) - x(hourOf(surplus[0])))}" height="8" rx="3" fill="${c.pv}" fill-opacity="0.55" stroke="${c.pv}"><title>${escapeHtml(
+            `${consumer.name}: ${t.laneSurplus.replace("{from}", this._time(surplus[0])).replace("{until}", this._time(surplus[1]))}`
+          )}</title></rect>`
+        : "";
+      const shapes = [
+        span(start, end, 0.18, done ? `${t.lanePeriod} · ${t.laneDone}` : t.lanePeriod),
+        surplusSpan,
+        opens !== null ? span(opens, latest, 0.45, t.laneWindow) : "",
+        latest !== null ? span(latest, runEnd, 0.9, t.laneForced) : "",
+        end > 0 && end <= 24 ? `<line x1="${x(end)}" x2="${x(end)}" y1="-3" y2="13" stroke="${c.consumer}" stroke-width="2"/>` : "",
+      ].join("");
+      lanes.push({ name: `${consumer.name}${done ? ` · ${t.laneDone}` : ""}`, shapes });
+    }
+    if (!lanes.length) return "";
+    const laneH = 30;
+    const height = lanes.length * laneH + 4;
+    return `<div class="lanes"><h3 class="lanes-title">${t.lanesTitle}</h3><svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="chart" role="img" aria-label="${escapeHtml(t.lanesTitle)}">
+      ${lanes
+        .map(
+          (lane, i) => `<g transform="translate(0 ${i * laneH})"><text x="${pad.left}" y="9" class="tick">${escapeHtml(lane.name)}</text>
+            <g transform="translate(0 14)"><line x1="${pad.left}" x2="${width - pad.right}" y1="5" y2="5" stroke="${c.grid_line}"/>${lane.shapes}</g></g>`
+        )
+        .join("")}</svg></div>`;
   }
 
   _chartTable(rows) {
@@ -4141,6 +4235,12 @@ class SlemsPanel extends HTMLElement {
                     planned?.entity_id
                   )
                 : "";
+          const planText = c.controllable && control?.state !== "off" && targetType && targetType !== "none"
+            ? this._planText(attrs, this._state("target_source", c.device_id)?.state)
+            : "";
+          const planRow = planText
+            ? this._row(hotWater ? t.hotWaterTargetPlan : t.targetPlan, escapeHtml(planText), planned?.entity_id)
+            : "";
           const details = expanded
             ? `<dl>
               ${c.controllable ? this._row(t.consumerResponseTime, response, planned?.entity_id) : ""}
@@ -4167,6 +4267,7 @@ class SlemsPanel extends HTMLElement {
               ${this._releaseRow(c)}
               ${planned ? this._row(t.planned, escapeHtml(this._plannedText(planned, control?.state === "off")), planned.entity_id) : ""}
               ${progress}
+              ${planRow}
               ${supportRow}
             </dl>${
               // A heat pump: the switch controls only its hot water, not the heat pump.
@@ -4217,6 +4318,7 @@ class SlemsPanel extends HTMLElement {
     if (parseFloat(window.state) > 0 && type && type !== "none" && source !== "surplus") {
       controls.push([this._state("window_before_forced", c.device_id), t.windowBeforeForced]);
     }
+    if (type && type !== "none") controls.push([this._state("surplus_window", c.device_id), t.surplusWindow]);
     const heading = this._hotWater(c) ? t.hotWaterReleaseSection : t.releaseSection;
     return `<div class="settings card-setting"><h3 class="card-subheading">${heading}</h3>${controls
       .filter(([st]) => st)
@@ -4296,12 +4398,32 @@ class SlemsPanel extends HTMLElement {
     if (mode === "done") parts.push(t.targetDone);
     else if (mode === "waiting") parts.push(t.targetWaiting.replace("{time}", clock(attrs.target_earliest)));
     else if (mode === "forced") parts.push(attrs.target_price_window ? t.targetForcedPrice : t.targetForced);
-    else if (source !== "surplus" && attrs.target_latest_start) {
-      if (mode === "window") parts.push(t.targetWindow);
-      else if (attrs.target_window_opens) parts.push(t.targetWindowFrom.replace("{time}", clock(attrs.target_window_opens)));
-      parts.push((attrs.target_price_window ? t.targetLatestPrice : t.targetLatest).replace("{time}", clock(attrs.target_latest_start)));
-    }
+    else if (mode === "window") parts.push(t.targetWindow);
+    else if (mode === "planned") parts.push(t.targetPlanned);
     if (mode === "boost") parts.push(t.targetBoost);
+    return parts.join(" · ");
+  }
+
+  /** "Fenster 12:20–14:20 · erzwungen ab 14:20 · dauert ca. 1 h 5 min": when SLEMS plans the rest. */
+  _planText(attrs, source) {
+    const t = this._t;
+    const mode = attrs.target_mode;
+    if (!attrs.target_type || attrs.target_type === "none" || mode === "none" || mode === "forced") return "";
+    const parts = [];
+    if (attrs.target_forecast_c !== null && attrs.target_forecast_c !== undefined) {
+      const temperature = `${new Intl.NumberFormat(this._hass?.locale?.language || "en", { maximumFractionDigits: 1 }).format(attrs.target_forecast_c)} °C`;
+      parts.push(t.planForecast.replace("{temperature}", temperature).replace("{time}", this._clock(attrs.target_deadline)));
+    }
+    const forcing = source !== "surplus" && attrs.target_latest_start;
+    const surplus = attrs.target_surplus_window;
+    if (surplus) parts.push(t.planSurplus.replace("{from}", this._clock(surplus[0])).replace("{until}", this._time(surplus[1])));
+    if (forcing && attrs.target_window_opens) {
+      parts.push(t.planWindow.replace("{from}", this._clock(attrs.target_window_opens)).replace("{until}", this._time(attrs.target_latest_start)));
+    }
+    if (forcing) {
+      parts.push((attrs.target_price_window ? t.targetLatestPrice : t.targetLatest).replace("{time}", this._clock(attrs.target_latest_start)));
+    }
+    if (attrs.target_run_s > 0) parts.push(t.planRun.replace("{duration}", this._duration(Math.round(attrs.target_run_s / 300) * 300 || 300)));
     return parts.join(" · ");
   }
 
@@ -4814,6 +4936,8 @@ const STYLE = `
     font: inherit; color: inherit; cursor: pointer; }
   .legend-item.off { opacity: 0.4; text-decoration: line-through; }
   .chart-wrap { position: relative; }
+  .lanes { margin-top: 8px; }
+  .lanes-title { margin: 0 0 4px; font-size: 12px; font-weight: 500; color: var(--secondary-text-color); }
   .chart { display: block; max-width: 100%; }
   .chart .tick, .price-chart .tick { font-size: 11px; fill: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
   #daychart, #pricechart { position: relative; }

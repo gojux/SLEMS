@@ -1144,6 +1144,25 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
                 if (energy := coordinator.target_energy_wh.get(subentry_id)) is None
                 else round(energy)
             ),
+            # Planned surplus window of a release consumer [opens, closes], None without one.
+            "target_surplus_window": (
+                [moment.isoformat() for moment in window[:2]]
+                if (window := coordinator.surplus_windows.get(subentry_id))
+                else None
+            ),
+            # Forecast temperature at the deadline without heating (°C), None
+            # while the cooling of the storage is not learned.
+            "target_forecast_c": (
+                None
+                if (forecast := coordinator.target_forecast_c.get(subentry_id)) is None
+                else round(forecast, 1)
+            ),
+            # Time the rest takes at full power (s), None when not known.
+            "target_run_s": (
+                round(energy / power * 3600)
+                if energy and (power := coordinator.consumer_full_power_w(self.consumer)) > 0
+                else None
+            ),
         }
 
 

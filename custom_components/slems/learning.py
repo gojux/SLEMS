@@ -26,6 +26,9 @@ the value set by the user applies.
 * Thermal storage of a consumer (``ThermalLearner``): energy per kelvin of its
   temperature sensors and the temperatures at which it starts cycling and is
   full, for the capacity it has left.
+* Cooling of a storage (``CoolingLearner``): its temperature drop per hour of
+  the day while it is not heated (heat losses and water draws), to forecast
+  its temperature at the deadline of a temperature target.
 * Reserve of the night discharge (``MorningGapLearner``): the energy the house
   needed from battery or grid between the moment PV should have taken over
   (end of the night discharge as planned) and the moment it really did, as a
@@ -43,7 +46,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import math
 import statistics
 import time
@@ -241,6 +244,9 @@ def auto_timing(meter_interval_s: float | None) -> tuple[float, float] | None:
 # --- consumers --------------------------------------------------------------------------
 
 CONSUMER_ON_W = 50.0
+# One power sample per this many seconds of running: the kept samples span an
+# hour, so a start phase (a heat pump ramping up) weighs only its share.
+CONSUMER_SAMPLE_S = 30.0
 CONSUMER_KEEP = 120
 CONSUMER_MIN_SAMPLES = 30
 # A pause while commanded on: below this share of the learned power ...
@@ -273,6 +279,7 @@ class ConsumerLearner:
     _paused_since: float | None = None
     # Ran since it was switched on: before, no power is its start delay.
     _ran: bool = False
+    _last_sample: float | None = None
 
     def update(
         self,
@@ -291,8 +298,9 @@ class ConsumerLearner:
                 self.pauses.append(time.time() if wall_now is None else wall_now)
             self._paused_since = None
             self._ran = True
-            if full_command:
+            if full_command and (self._last_sample is None or now - self._last_sample >= CONSUMER_SAMPLE_S):
                 self.powers.append(power_w)
+                self._last_sample = now
             return
         nominal = self.nominal_w
         if (
@@ -562,6 +570,108 @@ class ThermalLearner:
             sensor_wh_per_k=[list(values) for values in data.get("sensor_wh_per_k", [])],
             cycling_powers=list(data.get("cycling_powers", [])),
             full_temps=list(data.get("full_temps", [])),
+        )
+
+
+# --- cooling of a storage ------------------------------------------------------------
+
+# Drops kept per hour of the day (about two weeks), and needed for its own value.
+COOLING_KEEP = 14
+COOLING_MIN_HOUR = 3
+# Hours with a value of their own needed before the forecast is used at all;
+# other hours take the mean of the known ones.
+COOLING_MIN_HOURS = 12
+# Samples further apart make the hour unusable (missed polls, restart).
+COOLING_MAX_GAP_S = 120.0
+
+
+@dataclass
+class CoolingLearner:
+    """Temperature drop of a storage per local hour of the day while it is not
+    heated: heat losses and the usual water draws (K per hour, positive when it
+    cools). An hour counts only if the storage was not heated in it and its
+    temperature was read throughout; the drop is its first temperature minus
+    its last one.
+    """
+
+    drops: dict[int, deque] = field(default_factory=dict)
+    # Temperature it learns (``TargetSensor`` value of the daily target).
+    sensor: str | None = None
+    _hour: datetime | None = None
+    _start_c: float | None = None
+    _last_c: float | None = None
+    _usable: bool = False
+    _last: float | None = None
+
+    def use_sensor(self, sensor: str) -> None:
+        """Drops of another temperature do not apply: a new choice starts anew."""
+        if self.sensor is not None and self.sensor != sensor:
+            self.drops = {}
+            self._usable = False
+        self.sensor = sensor
+
+    def update(self, now: float, local_now: datetime, temperature_c: float | None, heating: bool) -> None:
+        hour = local_now.replace(minute=0, second=0, microsecond=0)
+        if hour != self._hour:
+            if (
+                self._hour is not None
+                and self._usable
+                and self._start_c is not None
+                and self._last_c is not None
+                and hour - self._hour == timedelta(hours=1)
+                and self._last is not None
+                and now - self._last <= COOLING_MAX_GAP_S
+            ):
+                self.drops.setdefault(self._hour.hour, deque(maxlen=COOLING_KEEP)).append(
+                    round(self._start_c - self._last_c, 2)
+                )
+            # The first hour is only usable from its start on.
+            self._usable = self._hour is not None
+            self._hour, self._start_c = hour, temperature_c
+        if (
+            temperature_c is None
+            or heating
+            or (self._last is not None and now - self._last > COOLING_MAX_GAP_S)
+        ):
+            self._usable = False
+        self._last = now
+        self._last_c = temperature_c
+
+    def drop_k(self, hour: int) -> float | None:
+        """Expected drop in the local hour ``hour`` (K), None while not learned."""
+        own = {h: statistics.median(v) for h, v in self.drops.items() if len(v) >= COOLING_MIN_HOUR}
+        if len(own) < COOLING_MIN_HOURS:
+            return None
+        return own[hour] if hour in own else statistics.fmean(own.values())
+
+    def forecast_c(self, temperature_c: float, local_now: datetime, until: datetime) -> float | None:
+        """Temperature at ``until`` without heating, None while not learned."""
+        if self.drop_k(local_now.hour) is None:
+            return None
+        moment, value = local_now, temperature_c
+        while moment < until:
+            hour_end = moment.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+            step = min(hour_end, until)
+            value -= (self.drop_k(moment.hour) or 0.0) * (step - moment) / timedelta(hours=1)
+            moment = step
+        return value
+
+    @property
+    def hours_learned(self) -> int:
+        return sum(1 for v in self.drops.values() if len(v) >= COOLING_MIN_HOUR)
+
+    def as_dict(self) -> dict:
+        return {"drops": {str(h): list(v) for h, v in self.drops.items()}, "sensor": self.sensor}
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> CoolingLearner:
+        data = data or {}
+        return cls(
+            drops={
+                int(h): deque(values, maxlen=COOLING_KEEP)
+                for h, values in (data.get("drops") or {}).items()
+            },
+            sensor=data.get("sensor"),
         )
 
 

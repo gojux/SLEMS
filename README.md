@@ -185,7 +185,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Heat pump as consumer type (weather dependent forecast), optionally a release of its hot water charge (operating mode, learned hot water power) | ✅ |
 | Control of consumers: on/off, power set point or release for an automation of your own (with latest start), priority, minimum runtime/pause, avoid short runs, external blocking, control switchable per consumer | ✅ |
 | Consumers with their own thermostat: pauses recognised, their power goes to the batteries meanwhile | ✅ |
-| Temperature sensors of a storage: learned energy per degree, remaining capacity | ✅ |
+| Temperature sensors of a storage: learned energy per degree, remaining capacity, learned cooling per hour | ✅ |
 | Role of a consumer in the feed-in cap (supporting, normal, never) | ✅ |
 | Daily targets: runtime, enabled time, energy or temperature, with deadline and source (surplus, batteries, grid) | ✅ |
 | Battery support per consumer (always, automatic with the energy the batteries can spare, never) | ✅ |
@@ -1066,7 +1066,16 @@ the energy flow.
     the surplus): the window lies before the latest start. SLEMS releases the
     consumer from latest start − window on, also without surplus, but not
     forced; **Forced run** only from the latest start. The card shows when
-    the window opens ("window from 12:20 · forced from 14:20").
+    the window opens ("window 12:20–14:20 · forced from 14:20").
+  - **Surplus window** (with a daily target): from the PV and consumption
+    forecast SLEMS plans when the surplus covers the run best (from the
+    earliest start until the forced run, the energy still needed at its
+    learned power), with the window around it. **Off**: released only with
+    the surplus there. **Show only**: the card (row **Plan**) and the day
+    chart show it. **Release**: released for the planned window, also while
+    the surplus dips, so the automation can wait for its moment; a part may
+    then come from the batteries or the grid. Once open, the window stays as
+    planned until it closes.
 
   While the automation has not started the device, it draws nothing: SLEMS
   keeps the release on and gives the surplus to the batteries meanwhile (as
@@ -1291,8 +1300,17 @@ Per controlled consumer, on its card under **Daily target**.
   below the minimum again (e.g. after drawing hot water), the target is open
   again: up to the minimum with priority, then with the surplus up to the
   target. Choosing another sensor starts the target open again.
+  SLEMS learns how the storage cools per hour of the day while it is not
+  heated (heat losses and the usual water draws, about the last two weeks).
+  Once it knows 12 hours of the day, it forecasts the temperature at the
+  deadline: if the storage will fall below the minimum by then, the forced
+  run (and a release window before it) is planned for that temperature, also
+  while it is still above the minimum and before the earliest start. The row
+  **Plan** shows the forecast, e.g. **about 37 °C at 15:30 without heating**.
 - **Display**: the card shows the progress, e.g. **1.5 / 4 h · until 22:00 ·
-  forced from 19:30 · about 2.3 kWh to go**, and the chips **priority** or
+  about 2.3 kWh to go**, in the row **Plan** when SLEMS plans the rest, e.g.
+  **window 12:20–14:20 · forced from 14:20 · takes about 1 h 5 min**, and the
+  chips **priority** or
   **forced** while they apply; the consumer's box in the energy flow carries
   the same badge, and the strategy tile lists it (**Before the batteries:
   …**), since the batteries then only get what is left. The energy still needed is exact for an energy
@@ -1316,7 +1334,10 @@ Per controlled consumer, on its card under **Daily target**.
   consumer without a daily target is expected to take its mean daily energy
   of the last days from the surplus (today what is left of it). Both appear in the
   day chart as **Consumers (planned)** and in the consumption forecast, the state
-  of charge forecast and the night discharge. A consumer with the role
+  of charge forecast and the night discharge. Below the day chart, **Daily
+  targets** shows a lane per consumer with a daily target: its period (faint),
+  the release window before the forced run, the forced run and the deadline
+  (a mark). A consumer with the role
   **Supporting** is left out of the surplus part while the feed-in cap is on:
   the feed-in cap plans it with the surplus above the limit.
 
