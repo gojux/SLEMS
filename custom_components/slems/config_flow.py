@@ -1454,8 +1454,14 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
                 domain=["binary_sensor", "input_boolean", "switch", "water_heater"]
             )
         )
+        # A water heater counts with its current temperature.
         temperature = selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
+            selector.EntitySelectorConfig(
+                filter=[
+                    selector.EntityFilterSelectorConfig(domain="sensor", device_class="temperature"),
+                    selector.EntityFilterSelectorConfig(domain="water_heater"),
+                ]
+            )
         )
         fields[_optional(CONF_TEMPERATURE_ENTITY, defaults)] = temperature
         fields[_optional(CONF_TEMPERATURE_2_ENTITY, defaults)] = temperature

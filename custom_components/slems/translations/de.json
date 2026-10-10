@@ -345,7 +345,7 @@
             "priority": "1 = höchste Priorität bei der Verteilung von Überschuss.",
             "min_on_minutes": "Optional. Nach dem Einschalten durch SLEMS läuft der Verbraucher mindestens so lange.",
             "min_off_minutes": "Optional. Nach dem Ausschalten durch SLEMS bleibt der Verbraucher mindestens so lange aus.",
-            "temperature_entity": "Optional, z. B. der Fühler des Boilers am Heizstab. SLEMS lernt aus dem Mittel der Fühler, wie viel Energie der Speicher je Grad aufnimmt und ab welcher Temperatur der Thermostat taktet, und plant den Verbraucher bei der Einspeisebegrenzung nur so weit ein, wie er noch Energie aufnehmen kann.",
+            "temperature_entity": "Optional, z. B. der Fühler des Boilers am Heizstab, oder ein Water Heater (seine Ist-Temperatur). SLEMS lernt aus dem Mittel der Fühler, wie viel Energie der Speicher je Grad aufnimmt und ab welcher Temperatur der Thermostat taktet, und plant den Verbraucher bei der Einspeisebegrenzung nur so weit ein, wie er noch Energie aufnehmen kann.",
             "temperature_2_entity": "Optional, z. B. ein Fühler weiter oben im Boiler; macht die Schätzung genauer.",
             "min_current_a": "Unter diesem Strom wird der Verbraucher gestoppt (Fahrzeuge: meist 6 A).",
             "max_current_a": "Höchster Strom, den SLEMS vorgibt.",
@@ -1043,6 +1043,12 @@
       }
     },
     "switch": {
+      "window_before_forced": {
+        "name": "Fenster vor erzwungenem Start"
+      },
+      "hot_water_window_before_forced": {
+        "name": "Warmwasser-Fenster vor erzwungenem Start"
+      },
       "vacation": {
         "name": "Urlaub"
       },
@@ -1144,6 +1150,12 @@
       }
     },
     "number": {
+      "release_window": {
+        "name": "Freigabefenster"
+      },
+      "hot_water_release_window": {
+        "name": "Warmwasser-Freigabefenster"
+      },
       "peak_shaving_grid_limit": {
         "name": "Bezugsgrenze für Spitzenabfang"
       },
@@ -1285,20 +1297,16 @@
         "name": "Reagiert nicht"
       },
       "release": {
-        "name": "Freigabe",
-        "state_attributes": {
-          "forced": {
-            "name": "Erzwungen"
-          }
-        }
+        "name": "Freigabe"
       },
       "hot_water_release": {
-        "name": "Warmwasser-Freigabe",
-        "state_attributes": {
-          "forced": {
-            "name": "Erzwungen"
-          }
-        }
+        "name": "Warmwasser-Freigabe"
+      },
+      "forced": {
+        "name": "Erzwungener Lauf"
+      },
+      "hot_water_forced": {
+        "name": "Erzwungene Warmwasserladung"
       }
     },
     "time": {

@@ -848,6 +848,12 @@ class RealTimeController:
                 _LOGGER.debug("Consumer %s rests (thermostat)", subentry_id)
             self._resting.add(subentry_id)
 
+    def end_saturation(self, subentry_id: str) -> None:
+        """Control a saturated consumer again with the next cycle."""
+        if self._saturated_until.pop(subentry_id, None) is not None:
+            _LOGGER.debug("Consumer %s no longer saturated (target met or waiting)", subentry_id)
+            self.request()
+
     def _check_drawing_again(self, subentry_id: str, snapshot: SystemSnapshot) -> None:
         """End the saturation of a consumer that draws its kept command again."""
         kept = self._device_commands.get(subentry_id)

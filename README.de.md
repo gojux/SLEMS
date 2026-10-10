@@ -1114,10 +1114,26 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
   eingestellten Leistung und stellt bereit:
   - **Freigabe** (Binärsensor): an, solange SLEMS den Verbraucher einschalten
     würde (genug Überschuss, mit **Takten vermeiden** für einen ganzen Lauf,
-    oder ab dem spätesten Start seines Tagesziels). Das Attribut **forced**
-    ist ab dem spätesten Start an: dann sofort starten, auch ohne Überschuss.
+    oder ab dem spätesten Start seines Tagesziels).
+  - **Erzwungener Lauf** (Binärsensor): an, solange die Freigabe ab dem
+    spätesten Start des Tagesziels gilt: dann sofort starten, auch ohne
+    Überschuss.
   - **Spätester Start** (Sensor, Zeitpunkt): wann das Tagesziel spätestens
     starten muss; leer, wenn es erreicht ist.
+
+  Auf der Verbraucherkarte unter **Freigabe**:
+  - **Fenster** (Minuten, 0 = aus): Einmal freigegeben, bleibt die Freigabe
+    mindestens so lange offen, auch ohne Überschuss, bis das Tagesziel
+    erreicht oder seine Frist vorbei ist. Für eine Automation, die auf den
+    richtigen Moment wartet, z. B. einen Kompressorlauf der Wärmepumpe.
+    Anders als die Mindestlaufzeit zählt es nicht für **Takten vermeiden**:
+    SLEMS plant nur die Energie, die der Verbraucher wirklich aufnimmt.
+  - **Vor dem erzwungenen Start** (mit einem Tagesziel, dessen Quelle über
+    den Überschuss hinausgeht): Das Fenster liegt vor dem spätesten Start.
+    SLEMS gibt den Verbraucher ab spätestem Start − Fenster frei, auch ohne
+    Überschuss, aber nicht erzwungen; **Erzwungener Lauf** erst ab dem
+    spätesten Start. Die Karte zeigt, wann das Fenster öffnet („Fenster ab
+    12:20 · erzwungen ab 14:20“).
 
   Startet die Automation das Gerät noch nicht, zieht es nichts: SLEMS lässt
   die Freigabe dann an und gibt den Überschuss solange den Batterien (wie bei
@@ -1135,7 +1151,8 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
   Boilers als Temperaturfühler eignet sich ein Tagesziel **Temperatur**
   (z. B. Minimum 42 °C, Ziel 50 °C, Frist 16:00). Die Entitäten des
   Tagesziels, der Freigabe und der Steuerung tragen „Warmwasser“ im Namen
-  (z. B. **Warmwasser-Freigabe**, **Spätester Warmwasser-Start**,
+  (z. B. **Warmwasser-Freigabe**, **Erzwungene Warmwasserladung**,
+  **Spätester Warmwasser-Start**,
   **Warmwasser-Steuerung aktiv**); die Verbraucherkarte zeigt den Schalter der
   Steuerung als **Warmwasser-Steuerung** statt neben dem Namen. Ein Tagesziel
   **Energie** passt hier nicht, weil der Energiezähler das Heizen enthält.
@@ -1147,6 +1164,9 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
       entity_id: binary_sensor.waermepumpe_warmwasser_freigabe
       to: "on"
     - trigger: state
+      entity_id: binary_sensor.waermepumpe_erzwungene_warmwasserladung
+      to: "on"
+    - trigger: state
       entity_id: binary_sensor.heat_pump_running  # deine eigene Bedingung
       to: "on"
   conditions:
@@ -1155,9 +1175,8 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
       state: "on"
     - or:
         - condition: state
-          entity_id: binary_sensor.waermepumpe_warmwasser_freigabe
-          attribute: forced
-          state: true
+          entity_id: binary_sensor.waermepumpe_erzwungene_warmwasserladung
+          state: "on"
         - condition: state
           entity_id: binary_sensor.heat_pump_running
           state: "on"
@@ -1178,7 +1197,9 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
 - **Eigener Thermostat** (keine Einstellung, beobachtet): Ein Verbraucher, der
   trotz Vorgabe nichts abnimmt, gilt 15 Minuten als gesättigt und behält seine
   letzte Vorgabe (bei **Geplant** als „gehalten“ angezeigt); sobald er wieder die
-  Hälfte dieser Vorgabe abnimmt, steuert SLEMS ihn sofort wieder. Schaltet ihn
+  Hälfte dieser Vorgabe abnimmt, steuert SLEMS ihn sofort wieder, ebenso wenn
+  sein Tagesziel erreicht ist oder auf seinen Zeitraum wartet (nach seiner
+  Mindestlaufzeit): Dann wird er ausgeschaltet, eine Freigabe endet. Schaltet ihn
   sein eigener Thermostat während der Ansteuerung aus und wieder ein (z. B. ein
   Heizstab, der am Heizelement misst: zwei Pausen von 30 s bis 10 min innerhalb
   von 30 Tagen), steuert SLEMS ihn stattdessen weiter: In einer Pause (keine
@@ -1226,13 +1247,15 @@ Ampere, abgerundet, damit die Ladung im geplanten Rahmen bleibt.
 ### Temperaturfühler des Speichers
 
 Optional, bis zu zwei, z. B. der Fühler eines Boilers am Heizstab und einer
-weiter oben.
+weiter oben. Ein Water Heater (z. B. das Warmwasser einer Wärmepumpe) zählt
+mit seiner Ist-Temperatur.
 
 - SLEMS lernt aus dem Mittel der Fühler (und für jeden Fühler einzeln), wie
   viel Energie der Speicher je Grad aufnimmt, ab welcher Temperatur der
   Thermostat zu takten beginnt, wie hoch die mittlere Leistung beim Takten ist
   und wann er voll ist. Welcher Fühler den Thermostat schaltet und wo sie
-  sitzen, spielt keine Rolle.
+  sitzen, spielt keine Rolle. Werden andere Fühler ausgewählt, lernt SLEMS
+  neu.
 - Ab drei Heizläufen und zwei Taktbeginnen zeigt die Verbraucherkarte, wie
   viel der Speicher noch aufnehmen kann, und die Einspeisebegrenzung plant den
   Verbraucher nur mit 80 % davon ein.

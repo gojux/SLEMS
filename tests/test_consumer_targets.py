@@ -16,6 +16,7 @@ from custom_components.slems.consumer_targets import (
     forced_load,
     period_end,
     surplus_demand,
+    window_opens,
 )
 
 
@@ -198,6 +199,38 @@ def test_temperature_target_with_an_earliest_start() -> None:
     assert target.latest_start == local(11)
     assert target.mode is TargetMode.FORCED
 
+
+
+def test_release_window_before_the_forced_run() -> None:
+    settings = TargetSettings(
+        type=TargetType.TEMPERATURE, min_temp_c=40, target_temp_c=48, deadline=time(15, 30),
+        source=TargetSource.BATTERY, release_window_min=120,
+    )
+    progress = TargetProgress(end=local(15, 30))
+    # Without the energy per kelvin: latest start 15:30 − 2 h − 10 min = 13:20.
+    assert state(settings, progress, local(12), temperature_c=30).mode is TargetMode.BOOST
+    settings.window_before_forced = True
+    # From 13:20 − 2 h on released, not forced; forced from 13:20.
+    assert window_opens(settings, local(13, 20)) == local(11, 20)
+    assert state(settings, progress, local(11), temperature_c=30).mode is TargetMode.BOOST
+    assert state(settings, progress, local(12), temperature_c=30).mode is TargetMode.WINDOW
+    assert state(settings, progress, local(13, 30), temperature_c=30).mode is TargetMode.FORCED
+    # Above the minimum nothing is forced, so there is no window either.
+    assert state(settings, progress, local(12), temperature_c=42).mode is TargetMode.SURPLUS
+    # Batteries empty with the source "battery": no forced run, no window.
+    assert state(settings, progress, local(12), temperature_c=30, battery_can_supply=False).mode is TargetMode.BOOST
+    # Only surplus: no forced run, no window.
+    settings.source = TargetSource.SURPLUS
+    assert window_opens(settings, local(13, 20)) is None
+    assert state(settings, progress, local(12), temperature_c=30).mode is TargetMode.BOOST
+    # Runtime target: the window before its latest start (19:26).
+    runtime = TargetSettings(
+        type=TargetType.RUNTIME, hours=2.0, deadline=time(22, 0), source=TargetSource.GRID,
+        release_window_min=60, window_before_forced=True,
+    )
+    assert state(runtime, TargetProgress(end=local(22)), local(18)).mode is TargetMode.SURPLUS
+    assert state(runtime, TargetProgress(end=local(22)), local(18, 30)).mode is TargetMode.WINDOW
+    assert state(runtime, TargetProgress(end=local(22)), local(19, 30)).mode is TargetMode.FORCED
 
 
 def test_forced_load_for_the_planning() -> None:

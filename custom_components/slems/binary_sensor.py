@@ -36,7 +36,7 @@ async def async_setup_entry(
     for consumer in coordinator.consumers:
         if consumer.control_mode is ControlMode.RELEASE:
             async_add_entities(
-                [ReleaseSensor(coordinator, consumer)],
+                [ReleaseSensor(coordinator, consumer), ForcedSensor(coordinator, consumer)],
                 config_subentry_id=consumer.subentry_id,
             )
 
@@ -56,8 +56,10 @@ class ChargeSecuredSensor(SlemsSystemEntity, BinarySensorEntity):
 class ReleaseSensor(SlemsConsumerEntity, BinarySensorEntity):
     """On while SLEMS would switch the consumer on; the user's automation starts it."""
 
-    def __init__(self, coordinator: SlemsCoordinator, consumer: ConsumerConfig) -> None:
-        super().__init__(coordinator, consumer, "release")
+    def __init__(
+        self, coordinator: SlemsCoordinator, consumer: ConsumerConfig, key: str = "release"
+    ) -> None:
+        super().__init__(coordinator, consumer, key)
 
     @property
     def is_on(self) -> bool:
@@ -67,13 +69,18 @@ class ReleaseSensor(SlemsConsumerEntity, BinarySensorEntity):
         command = coordinator.controller.consumer_command(self.consumer.subentry_id)
         return command is not None and command > 0
 
+
+class ForcedSensor(ReleaseSensor):
+    """On while released from the latest start of the daily target on, regardless
+    of the surplus: the automation starts the consumer at once."""
+
+    def __init__(self, coordinator: SlemsCoordinator, consumer: ConsumerConfig) -> None:
+        super().__init__(coordinator, consumer, "forced")
+
     @property
-    def extra_state_attributes(self) -> dict:
+    def is_on(self) -> bool:
         target = self.coordinator.target_states.get(self.consumer.subentry_id)
-        return {
-            # Released from the latest start of the daily target on, regardless of the surplus.
-            "forced": self.is_on and target is not None and target.mode is TargetMode.FORCED,
-        }
+        return super().is_on and target is not None and target.mode is TargetMode.FORCED
 
 
 class NotRespondingSensor(SlemsBatteryEntity, BinarySensorEntity):

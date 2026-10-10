@@ -1049,10 +1049,24 @@ the energy flow.
   consumer like an on/off consumer with the configured power and provides:
   - **Release** (binary sensor): on while SLEMS would switch the consumer on
     (enough surplus, with **Avoid short runs** for a whole run, or from the
-    latest start of its daily target on). The attribute **forced** is on from
-    the latest start on: then start at once, also without surplus.
+    latest start of its daily target on).
+  - **Forced run** (binary sensor): on while released from the latest start
+    of the daily target on: then start at once, also without surplus.
   - **Latest start** (sensor, timestamp): when the daily target has to start
     at the latest; empty once it is met.
+
+  On the consumer card under **Release**:
+  - **Window** (minutes, 0 = off): once released, the release stays open at
+    least this long, also without surplus, until the daily target is met or
+    its deadline has passed. For an automation that waits for the right
+    moment, e.g. a compressor run of the heat pump. Unlike the minimum
+    runtime it does not count for **Avoid short runs**: SLEMS plans only the
+    energy the consumer really takes.
+  - **Before the forced run** (with a daily target whose source goes beyond
+    the surplus): the window lies before the latest start. SLEMS releases the
+    consumer from latest start − window on, also without surplus, but not
+    forced; **Forced run** only from the latest start. The card shows when
+    the window opens ("window from 12:20 · forced from 14:20").
 
   While the automation has not started the device, it draws nothing: SLEMS
   keeps the release on and gives the surplus to the batteries meanwhile (as
@@ -1069,7 +1083,8 @@ the energy flow.
   performance. With the boiler's sensors as temperature sensors a daily target
   **Temperature** fits (e.g. minimum 42 °C, target 50 °C, deadline 16:00). The
   entities of the daily target, the release and the control carry "hot water"
-  in their names (e.g. **Hot water release**, **Hot water latest start**,
+  in their names (e.g. **Hot water release**, **Hot water forced run**,
+  **Hot water latest start**,
   **Hot water control active**); the consumer card shows the control switch as
   **Hot water control** instead of next to the name. A
   daily target **Energy** does not fit here, as the energy counter includes
@@ -1081,6 +1096,9 @@ the energy flow.
       entity_id: binary_sensor.heat_pump_hot_water_release
       to: "on"
     - trigger: state
+      entity_id: binary_sensor.heat_pump_hot_water_forced_run
+      to: "on"
+    - trigger: state
       entity_id: binary_sensor.heat_pump_running  # your own condition
       to: "on"
   conditions:
@@ -1089,9 +1107,8 @@ the energy flow.
       state: "on"
     - or:
         - condition: state
-          entity_id: binary_sensor.heat_pump_hot_water_release
-          attribute: forced
-          state: true
+          entity_id: binary_sensor.heat_pump_hot_water_forced_run
+          state: "on"
         - condition: state
           entity_id: binary_sensor.heat_pump_running
           state: "on"
@@ -1111,7 +1128,9 @@ the energy flow.
 - **Own thermostat** (no setting, observed): a consumer that draws nothing
   although commanded counts as saturated for 15 minutes and keeps its last
   command (shown as **Planned** with "held"); once it draws half of that command
-  again, SLEMS controls it again at once. If its own thermostat switches it
+  again, SLEMS controls it again at once, as well as when its daily target
+  is met or waits for its period (after its minimum runtime): then it is
+  switched off, a release ends. If its own thermostat switches it
   off and on while it is commanded (e.g. a heating rod that measures at the
   element: two pauses of 30 s to 10 min within 30 days), SLEMS keeps
   controlling it instead: during a pause (no power for 2 response times,
@@ -1154,12 +1173,14 @@ amperes, rounded down so the charging stays within the planned power.
 ### Temperature sensors of the storage
 
 Optional, up to two, e.g. the sensor of a boiler at the heating rod and one
-higher up.
+higher up. A water heater (e.g. the hot water of a heat pump) counts with its
+current temperature.
 
 - SLEMS learns from the mean of the sensors (and of each sensor) how much
   energy the storage takes per degree, from which temperature the thermostat
   starts cycling, its mean power while cycling and when it is full. Which
-  sensor switches the thermostat and where they sit does not matter.
+  sensor switches the thermostat and where they sit does not matter. With
+  other sensors selected, it learns anew.
 - From three heating runs and two starts of the cycling on, the consumer card
   shows how much the storage can still take, and the feed-in cap plans the
   consumer only with 80 % of that.

@@ -345,7 +345,7 @@
             "priority": "1 = highest priority when distributing surplus power.",
             "min_on_minutes": "Optional. Once switched on by SLEMS, the consumer keeps running at least this long.",
             "min_off_minutes": "Optional. Once switched off by SLEMS, the consumer stays off at least this long.",
-            "temperature_entity": "Optional, e.g. the sensor of the boiler at the heating rod. SLEMS learns from the mean of the sensors how much energy the storage takes per degree and from which temperature the thermostat cycles, and plans the consumer for the feed-in cap only as far as it can still take energy.",
+            "temperature_entity": "Optional, e.g. the sensor of the boiler at the heating rod, or a water heater (its current temperature). SLEMS learns from the mean of the sensors how much energy the storage takes per degree and from which temperature the thermostat cycles, and plans the consumer for the feed-in cap only as far as it can still take energy.",
             "temperature_2_entity": "Optional, e.g. a sensor higher up in the boiler; makes the estimate more accurate.",
             "min_current_a": "Below this current the consumer is stopped (vehicles: usually 6 A).",
             "max_current_a": "Highest current SLEMS sets.",
@@ -1043,6 +1043,12 @@
       }
     },
     "switch": {
+      "window_before_forced": {
+        "name": "Window before the forced run"
+      },
+      "hot_water_window_before_forced": {
+        "name": "Hot water window before the forced run"
+      },
       "vacation": {
         "name": "Vacation"
       },
@@ -1144,6 +1150,12 @@
       }
     },
     "number": {
+      "release_window": {
+        "name": "Release window"
+      },
+      "hot_water_release_window": {
+        "name": "Hot water release window"
+      },
       "peak_shaving_grid_limit": {
         "name": "Peak shaving grid import limit"
       },
@@ -1285,20 +1297,16 @@
         "name": "Not responding"
       },
       "release": {
-        "name": "Release",
-        "state_attributes": {
-          "forced": {
-            "name": "Forced"
-          }
-        }
+        "name": "Release"
       },
       "hot_water_release": {
-        "name": "Hot water release",
-        "state_attributes": {
-          "forced": {
-            "name": "Forced"
-          }
-        }
+        "name": "Hot water release"
+      },
+      "forced": {
+        "name": "Forced run"
+      },
+      "hot_water_forced": {
+        "name": "Hot water forced run"
       }
     },
     "time": {

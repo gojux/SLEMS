@@ -167,6 +167,10 @@ const STRINGS = {
     releaseOff: "off",
     releaseForced: "on (forced)",
     releaseLatest: "latest start {time}",
+    releaseSection: "Release",
+    hotWaterReleaseSection: "Hot water release",
+    releaseWindow: "Window",
+    windowBeforeForced: "Before the forced run",
     blocked: "blocked",
     saturated: "saturated",
     heldCommand: "held, draws too little",
@@ -208,6 +212,8 @@ const STRINGS = {
     wearEstimated: "estimated",
     wearHint: "Wear costs estimated: the purchase price and the rated cycles can be added in the battery configuration (Settings → SLEMS → edit battery).",
     targetLatest: "forced from {time}",
+    targetWindowFrom: "window from {time}",
+    targetWindow: "window open",
     targetLatestPrice: "from {time} in the cheapest window",
     targetForcedPrice: "running in the cheapest window",
     targetDone: "reached",
@@ -449,6 +455,10 @@ const STRINGS = {
         "Hours the daily target needs per period (from one deadline to the next), in half hours. Runtime counts the time the consumer draws power (from 50 W; for a heat pump with hot water release only in hot water mode). Enabled time counts the time SLEMS has it switched on or released, also while it draws nothing (e.g. because its own thermostat or your automation has not started it yet).",
       target_type:
         "Runtime: time the consumer draws power. Enabled time: time SLEMS has it switched on, for devices with their own control (a dehumidifier with a hygrostat). Energy: kWh. Temperature: minimum and target temperature of its storage (temperature sensors). Counted from one deadline to the next; met from the surplus first. A temperature target applies from midnight (or the earliest start) to the deadline: after the deadline the consumer stays off until then, also with surplus.",
+      release_window:
+        "Once released, the release stays open at least this long, also without surplus, until the daily target is met or its deadline has passed (e.g. so your automation can wait for a compressor run of the heat pump). SLEMS plans only the energy the consumer really takes; unlike the minimum runtime the window does not count for **Avoid short runs**. 0: off.",
+      window_before_forced:
+        "The window lies before the forced run: from the latest start minus the window on, SLEMS releases the consumer also without surplus, but not forced; forced only from the latest start, if your automation has not started it by then. Only with a source beyond the surplus; such a run uses the batteries or the grid like the forced one, just earlier.",
       target_earliest_enabled:
         "Not switched on before the earliest start, also with surplus (e.g. a dehumidifier only from 10:00). Counted until the deadline; the latest start is never before it.",
       target_sensor:
@@ -713,6 +723,10 @@ const STRINGS = {
     releaseOff: "aus",
     releaseForced: "an (erzwungen)",
     releaseLatest: "spätester Start {time}",
+    releaseSection: "Freigabe",
+    hotWaterReleaseSection: "Warmwasser-Freigabe",
+    releaseWindow: "Fenster",
+    windowBeforeForced: "Vor dem erzwungenen Start",
     blocked: "gesperrt",
     saturated: "gesättigt",
     heldCommand: "gehalten, zieht zu wenig",
@@ -754,6 +768,8 @@ const STRINGS = {
     wearEstimated: "geschätzt",
     wearHint: "Verschleißkosten geschätzt: Anschaffungspreis und Zyklen laut Hersteller lassen sich in der Batterie-Konfiguration nachtragen (Einstellungen → SLEMS → Batterie bearbeiten).",
     targetLatest: "erzwungen ab {time}",
+    targetWindowFrom: "Fenster ab {time}",
+    targetWindow: "Fenster offen",
     targetLatestPrice: "ab {time} im günstigsten Fenster",
     targetForcedPrice: "läuft im günstigsten Fenster",
     targetDone: "erreicht",
@@ -995,6 +1011,10 @@ const STRINGS = {
         "Wie viele Stunden das Tagesziel je Zeitraum braucht (von einer Frist zur nächsten), in halben Stunden. Bei Laufzeit zählt die Zeit, in der der Verbraucher Leistung zieht (ab 50 W; bei einer Wärmepumpe mit Warmwasser-Freigabe nur im Warmwasserbetrieb). Bei Freigabezeit zählt die Zeit, in der SLEMS ihn eingeschaltet bzw. freigegeben hat, auch wenn er dabei nichts zieht (z. B. weil sein eigener Thermostat oder deine Automation ihn noch nicht gestartet hat).",
       target_type:
         "Laufzeit: Zeit, in der der Verbraucher Leistung zieht. Freigabezeit: Zeit, in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung (Luftentfeuchter mit Hygrostat). Energie: kWh. Temperatur: Mindest- und Zieltemperatur seines Speichers (Temperaturfühler). Gezählt von Frist zu Frist; zuerst aus dem Überschuss. Ein Temperaturziel gilt von Mitternacht (oder dem frühesten Beginn) bis zur Frist: Nach der Frist bleibt der Verbraucher bis dahin aus, auch mit Überschuss.",
+      release_window:
+        "Einmal freigegeben, bleibt die Freigabe mindestens so lange offen, auch ohne Überschuss, bis das Tagesziel erreicht oder seine Frist vorbei ist (z. B. damit deine Automation auf einen Kompressorlauf der Wärmepumpe warten kann). SLEMS plant nur die Energie, die der Verbraucher wirklich aufnimmt; anders als die Mindestlaufzeit zählt das Fenster nicht für **Takten vermeiden**. 0: aus.",
+      window_before_forced:
+        "Das Fenster liegt vor dem erzwungenen Start: Ab spätestem Start minus Fenster gibt SLEMS den Verbraucher auch ohne Überschuss frei, aber nicht erzwungen; erzwungen erst ab dem spätesten Start, wenn deine Automation ihn bis dahin nicht gestartet hat. Nur mit einer Quelle über den Überschuss hinaus; so ein Lauf nutzt Batterien oder Netz wie der erzwungene, nur früher.",
       target_earliest_enabled:
         "Vor dem frühesten Beginn wird der Verbraucher nicht eingeschaltet, auch nicht mit Überschuss (z. B. ein Luftentfeuchter erst ab 10:00). Gezählt bis zur Frist; die späteste Startzeit liegt nie davor.",
       target_sensor:
@@ -2119,7 +2139,8 @@ class SlemsPanel extends HTMLElement {
     if (!release) return "";
     const hotWater = this._hass.entities?.[release.entity_id]?.translation_key === "hot_water_release";
     const t = this._t;
-    let text = release.state !== "on" ? t.releaseOff : release.attributes?.forced ? t.releaseForced : t.releaseOn;
+    const forced = this._state("forced", consumer.device_id)?.state === "on";
+    let text = release.state !== "on" ? t.releaseOff : forced ? t.releaseForced : t.releaseOn;
     const latest = this._state("latest_start", consumer.device_id)?.state;
     if (latest && !["unknown", "unavailable"].includes(latest)) {
       text += ` · ${t.releaseLatest.replace("{time}", this._clock(latest))}`;
@@ -4126,7 +4147,7 @@ class SlemsPanel extends HTMLElement {
               ${c.controllable ? this._row(t.gridResponseTime, gridResponse, planned?.entity_id) : ""}
             </dl>${
               settings.length ? `<div class="settings card-setting">${settings.map((st) => this._control(st)).join("")}</div>` : ""
-            }${support ? `<div class="settings card-setting">${this._control(support, { label: t.batterySupport })}</div>` : ""}${capSection}${c.controllable ? this._targetSection(c) : ""}`
+            }${support ? `<div class="settings card-setting">${this._control(support, { label: t.batterySupport })}</div>` : ""}${capSection}${c.controllable ? this._releaseSection(c) + this._targetSection(c) : ""}`
             : "";
           const toggle = c.controllable || support
             ? `<button class="link card-toggle" data-action="toggle-consumer" data-id="${c.id}" aria-expanded="${expanded}">
@@ -4183,6 +4204,24 @@ class SlemsPanel extends HTMLElement {
   _hotWater(c) {
     const id = this._entityId("target_type", c.device_id);
     return Boolean(id && this._hass.entities?.[id]?.translation_key === "hot_water_target_type");
+  }
+
+  /** Release window of a consumer started by the user's automation. */
+  _releaseSection(c) {
+    const t = this._t;
+    const window = this._state("release_window", c.device_id);
+    if (!window) return "";
+    const controls = [[window, t.releaseWindow]];
+    const type = this._state("target_type", c.device_id)?.state;
+    const source = this._state("target_source", c.device_id)?.state;
+    if (parseFloat(window.state) > 0 && type && type !== "none" && source !== "surplus") {
+      controls.push([this._state("window_before_forced", c.device_id), t.windowBeforeForced]);
+    }
+    const heading = this._hotWater(c) ? t.hotWaterReleaseSection : t.releaseSection;
+    return `<div class="settings card-setting"><h3 class="card-subheading">${heading}</h3>${controls
+      .filter(([st]) => st)
+      .map(([st, label]) => this._control(st, { label }))
+      .join("")}</div>`;
   }
 
   _targetSection(c) {
@@ -4258,6 +4297,8 @@ class SlemsPanel extends HTMLElement {
     else if (mode === "waiting") parts.push(t.targetWaiting.replace("{time}", clock(attrs.target_earliest)));
     else if (mode === "forced") parts.push(attrs.target_price_window ? t.targetForcedPrice : t.targetForced);
     else if (source !== "surplus" && attrs.target_latest_start) {
+      if (mode === "window") parts.push(t.targetWindow);
+      else if (attrs.target_window_opens) parts.push(t.targetWindowFrom.replace("{time}", clock(attrs.target_window_opens)));
       parts.push((attrs.target_price_window ? t.targetLatestPrice : t.targetLatest).replace("{time}", clock(attrs.target_latest_start)));
     }
     if (mode === "boost") parts.push(t.targetBoost);

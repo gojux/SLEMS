@@ -244,7 +244,7 @@ def read_consumer_state(hass: HomeAssistant, consumer: ConsumerConfig) -> Consum
             blocked = block_state.state == STATE_OFF
         else:
             blocked = block_state.state == STATE_ON
-    temperatures = [temperature_c_of(hass.states.get(e)) for e in consumer.temperature_entity_ids]
+    temperatures = [storage_temperature_c(hass, e) for e in consumer.temperature_entity_ids]
     measured = state_as_watts(hass.states.get(consumer.power_entity_id))
     power = measured
     if consumer.hot_water_release and measured is not None:
@@ -270,9 +270,28 @@ def temperature_c_of(state) -> float | None:
     value = state_as_float(state)
     if value is None:
         return None
-    if state.attributes.get("unit_of_measurement") == "°F":
-        return (value - 32) * 5 / 9
-    return value
+    return _celsius(value, state.attributes.get("unit_of_measurement"))
+
+
+def storage_temperature_c(hass: HomeAssistant, entity_id: str) -> float | None:
+    """Temperature of a storage sensor in °C; of a water heater its current
+    temperature, which Home Assistant gives in the unit of the unit system."""
+    state = hass.states.get(entity_id)
+    if not entity_id.startswith("water_heater."):
+        return temperature_c_of(state)
+    if state is None:
+        return None
+    try:
+        value = float(state.attributes.get("current_temperature"))
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(value):
+        return None
+    return _celsius(value, hass.config.units.temperature_unit)
+
+
+def _celsius(value: float, unit: str | None) -> float:
+    return (value - 32) * 5 / 9 if unit == "°F" else value
 
 
 class RuntimeTracker:
@@ -298,6 +317,11 @@ class RuntimeTracker:
         """Switched on by SLEMS (or virtually, in simulation mode)."""
         state = self._states.get(subentry_id)
         return state is not None and state[0]
+
+    def on_for(self, subentry_id: str, now: float) -> float | None:
+        """Seconds since SLEMS switched the consumer on, None while off."""
+        state = self._states.get(subentry_id)
+        return now - state[1] if state is not None and state[0] else None
 
     def must_stay_on(self, consumer: ConsumerConfig, now: float) -> bool:
         state = self._states.get(consumer.subentry_id)

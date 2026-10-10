@@ -72,6 +72,9 @@ HOT_WATER_KEYS = frozenset(
         "target_deadline",
         "target_earliest",
         "release",
+        "forced",
+        "release_window",
+        "window_before_forced",
         "latest_start",
         "consumer_control",
     }

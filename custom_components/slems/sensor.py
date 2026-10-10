@@ -39,7 +39,7 @@ from .controller import ControlStatus
 from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 from .forecast.accuracy import Accuracy
 from .full_charge import is_due
-from .consumer_targets import target_fits, target_temperature, window_start
+from .consumer_targets import target_fits, target_temperature, window_opens, window_start
 from .const import ControlMode, TargetType
 from .grid_friendly import correction_weight
 from .learning import CONSUMPTION_MIN_DAYS, MORNING_MIN_DAYS, PV_MIN_DAYS, TARGET_MIN_SAMPLES
@@ -1126,6 +1126,12 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             else True,
             "target_latest_start": (
                 target.latest_start.isoformat() if target and target.latest_start else None
+            ),
+            # Released from then on before the latest start (release window).
+            "target_window_opens": (
+                opens.isoformat()
+                if target and target.latest_start and (opens := window_opens(settings, target.latest_start))
+                else None
             ),
             # The forced run starts early in a cheaper window (price aware control).
             "target_price_window": bool(target and target.price_window),

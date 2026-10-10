@@ -22,6 +22,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .const import ControlMode
 from .consumers import ConsumerConfig
 from .coordinator import BatteryRuntime, SlemsConfigEntry, SlemsCoordinator
 from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
@@ -356,6 +357,11 @@ async def async_setup_entry(
                 ),
                 config_subentry_id=consumer.subentry_id,
             )
+        if consumer.control_mode is ControlMode.RELEASE:
+            async_add_entities(
+                [ConsumerTargetNumber(coordinator, consumer, RELEASE_WINDOW)],
+                config_subentry_id=consumer.subentry_id,
+            )
 
 
 class SettingNumber(SlemsSystemEntity, RestoreNumber):
@@ -509,6 +515,20 @@ TARGET_NUMBERS: tuple[TargetNumberDescription, ...] = (
         mode=NumberMode.BOX,
         entity_category=EntityCategory.CONFIG,
     ),
+)
+
+
+# Release consumers: how long a release stays open at least (0: off).
+RELEASE_WINDOW = TargetNumberDescription(
+    key="release_window",
+    translation_key="release_window",
+    attribute="release_window_min",
+    native_unit_of_measurement=UnitOfTime.MINUTES,
+    native_min_value=0,
+    native_max_value=480,
+    native_step=15,
+    mode=NumberMode.BOX,
+    entity_category=EntityCategory.CONFIG,
 )
 
 

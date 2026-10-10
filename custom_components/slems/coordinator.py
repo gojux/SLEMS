@@ -184,6 +184,7 @@ from .consumer_targets import (
     remaining,
     surplus_demand,
     target_temperature,
+    window_opens,
     window_start,
 )
 from .night_discharge import NightDischargePlan, plan_night_discharge, pv_takeover
@@ -870,7 +871,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     data, not consumer.control_mode.on_off
                 )
         for subentry_id, data in (stored.get(THERMAL_STORE_KEY) or {}).items():
-            if subentry_id in self.thermal_learners:
+            if subentry_id not in self.thermal_learners:
+                continue
+            sensors = list(consumers[subentry_id].temperature_entity_ids)
+            # What was learned with other temperature sensors does not apply
+            # (data stored before the sensors were recorded is kept).
+            if data.get("sensors", sensors) == sensors:
                 self.thermal_learners[subentry_id] = ThermalLearner.from_dict(data)
         for subentry_id, data in (stored.get(TARGETS_STORE_KEY) or {}).items():
             if subentry_id in self.target_progress:
@@ -1305,8 +1311,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         data[CONSUMERS_STORE_KEY] = {
             subentry_id: learner.as_dict() for subentry_id, learner in self.consumer_learners.items()
         }
+        sensors = {c.subentry_id: list(c.temperature_entity_ids) for c in self.consumers}
         data[THERMAL_STORE_KEY] = {
-            subentry_id: learner.as_dict() for subentry_id, learner in self.thermal_learners.items()
+            subentry_id: {**learner.as_dict(), "sensors": sensors[subentry_id]}
+            for subentry_id, learner in self.thermal_learners.items()
         }
         data[TARGETS_STORE_KEY] = {
             subentry_id: progress.as_dict() for subentry_id, progress in self.target_progress.items()
@@ -2105,6 +2113,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         settings = self.settings
         # The daily targets first: their forced runs are a load in the plans.
         self._target_states(snapshot, battery, pv_forecast, load, wall_now)
+        self._end_needless_saturation(time.monotonic())
         if self.bad_weather.update(
             wall_now,
             hourly(pv_forecast) if pv_forecast is not None else None,
@@ -2631,7 +2640,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             state = self.target_states.get(subentry_id)
             if (
                 state is not None
-                and state.mode is TargetMode.FORCED
+                and state.mode in (TargetMode.FORCED, TargetMode.WINDOW)
                 and self.consumer_targets[subentry_id].source is TargetSource.BATTERY
             ):
                 continue
@@ -3040,7 +3049,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         consumers.cycling_holds); a run is the minimum runtime, or what its
         daily target still needs if less."""
         subentry_id = consumer.subentry_id
-        if not consumer.avoid_cycling or mode in (TargetMode.FORCED, TargetMode.BOOST):
+        if not consumer.avoid_cycling or mode in (TargetMode.FORCED, TargetMode.WINDOW, TargetMode.BOOST):
             self._short_since.pop(subentry_id, None)
             return False, False
         power = self._full_power_w(consumer)
@@ -3051,6 +3060,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             needed = missing if settings.type is not TargetType.ENERGY else missing / power * 3600
             if needed > 0:
                 run_s = min(run_s, needed)
+        elif settings.type is TargetType.TEMPERATURE and power > 0:
+            # Until the target temperature (the energy per kelvin learned, or
+            # the daily energy of the last days).
+            energy = self.target_energy_wh.get(subentry_id)
+            if energy:
+                run_s = min(run_s, energy / power * 3600)
         keep_on, keep_off, since = cycling_holds(
             self._runtime.is_on(subentry_id),
             power,
@@ -3077,7 +3092,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         """Allocation request of a consumer, with its daily target."""
         mode = self.target_states.get(consumer.subentry_id, TargetState(TargetMode.NONE)).mode
         keep_on, keep_off = self._cycling_holds(consumer, now, mode, available_w, run_surplus)
-        must_stay_on = self._runtime.must_stay_on(consumer, now) or keep_on
+        must_stay_on = self._runtime.must_stay_on(consumer, now) or keep_on or self._window_holds(consumer, now, mode)
         return ConsumerRequest(
             subentry_id=consumer.subentry_id,
             priority=consumer.priority,
@@ -3094,15 +3109,41 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             or (mode in (TargetMode.DONE, TargetMode.WAITING) and not must_stay_on),
             cap_mode=self.cap_mode(consumer.subentry_id),
             boost=mode is TargetMode.BOOST,
-            forced=mode is TargetMode.FORCED,
+            forced=mode in (TargetMode.FORCED, TargetMode.WINDOW),
             forced_max_w=(
                 battery.max_discharge_w
-                if mode is TargetMode.FORCED
+                if mode in (TargetMode.FORCED, TargetMode.WINDOW)
                 and battery is not None
                 and self.consumer_targets[consumer.subentry_id].source is TargetSource.BATTERY
                 else None
             ),
         )
+
+    def _window_holds(self, consumer: ConsumerConfig, now: float, mode: TargetMode) -> bool:
+        """A release stays open for its window (see consumer_targets), unless
+        its daily target is met or waits for its period."""
+        window_s = self.consumer_targets[consumer.subentry_id].release_window_min * 60
+        if consumer.control_mode is not ControlMode.RELEASE or window_s <= 0:
+            return False
+        if mode in (TargetMode.DONE, TargetMode.WAITING):
+            return False
+        on_for = self._runtime.on_for(consumer.subentry_id, now)
+        return on_for is not None and on_for < window_s
+
+    def _end_needless_saturation(self, now: float) -> None:
+        """A saturated consumer keeps its command (see controller), a release its
+        release; once its daily target is met or waits for its period, it is
+        controlled again after its minimum runtime, so it is switched off."""
+        for consumer in self.consumers:
+            subentry_id = consumer.subentry_id
+            state = self.target_states.get(subentry_id)
+            if (
+                subentry_id in self.controller.saturated
+                and state is not None
+                and state.mode in (TargetMode.DONE, TargetMode.WAITING)
+                and not self._runtime.must_stay_on(consumer, now)
+            ):
+                self.controller.end_saturation(subentry_id)
 
     def _count_target(
         self, consumer: ConsumerConfig, state: ConsumerState, now: float, commanded_on: bool
@@ -3374,7 +3415,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             not self.settings.price_control
             or not short
             or settings.source is not TargetSource.GRID
-            or state.mode not in (TargetMode.SURPLUS, TargetMode.BOOST)
+            or state.mode not in (TargetMode.SURPLUS, TargetMode.BOOST, TargetMode.WINDOW)
             or state.latest_start is None
             or state.end is None
         ):
@@ -3392,12 +3433,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
         if start is None:
             return state
-        return replace(
-            state,
-            latest_start=start,
-            mode=TargetMode.FORCED if local_now >= start else state.mode,
-            price_window=True,
-        )
+        opens = window_opens(settings, start)
+        if local_now >= start:
+            mode = TargetMode.FORCED
+        elif opens is not None and local_now >= opens:
+            mode = TargetMode.WINDOW
+        else:
+            mode = state.mode
+        return replace(state, latest_start=start, mode=mode, price_window=True)
 
     def consumer_full_power_w(self, consumer: ConsumerConfig) -> float:
         """Power of the consumer when it runs at full power (learned or configured)."""

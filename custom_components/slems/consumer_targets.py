@@ -12,6 +12,12 @@ deliver), also the batteries and the grid. From the latest start
 (deadline − remaining time × ``TIME_FACTOR`` − ``START_MARGIN``) on the
 consumer runs regardless of the surplus (*forced*).
 
+A consumer with a release (started by the user's automation) may keep its
+release open for a window (``release_window_min``), e.g. so the automation
+can wait for a heat pump's compressor run. Optionally the window lies before
+the latest start (*window*): released without surplus from latest start −
+window on, forced only from the latest start.
+
 An earliest start (optional) restricts the period to the time from the last
 earliest start before the deadline: before it SLEMS keeps the consumer off,
 also with surplus (*waiting*). A temperature target starts at midnight
@@ -63,6 +69,8 @@ class TargetMode(StrEnum):
     DONE = "done"
     SURPLUS = "surplus"
     BOOST = "boost"
+    # Released before the latest start (window before the forced run).
+    WINDOW = "window"
     FORCED = "forced"
 
 
@@ -83,6 +91,10 @@ class TargetSettings:
     # Not switched on before this time of the period (runtime, enabled time, energy).
     earliest_enabled: bool = False
     earliest: time = time(8, 0)
+    # Release consumers: a release stays open at least this long (0: off), and
+    # optionally opens this long before the latest start.
+    release_window_min: float = 0.0
+    window_before_forced: bool = False
 
 
 def window_start(settings: TargetSettings, end: datetime) -> datetime | None:
@@ -359,7 +371,12 @@ def evaluate(
         else:
             duration = TEMPERATURE_FALLBACK
         latest = max(end - duration - START_MARGIN, earliest) if earliest is not None else end - duration - START_MARGIN
-        mode = TargetMode.FORCED if may_force and local_now >= latest else TargetMode.BOOST
+        if may_force and local_now >= latest:
+            mode = TargetMode.FORCED
+        elif may_force and _in_window(settings, latest, local_now):
+            mode = TargetMode.WINDOW
+        else:
+            mode = TargetMode.BOOST
         return TargetState(mode, missing_k, latest, end)
 
     missing = remaining(settings, progress)
@@ -381,9 +398,28 @@ def evaluate(
         return TargetState(TargetMode.WAITING, missing, latest, end)
     if may_force and latest is not None and local_now >= latest:
         return TargetState(TargetMode.FORCED, missing, latest, end)
+    if may_force and latest is not None and _in_window(settings, latest, local_now):
+        return TargetState(TargetMode.WINDOW, missing, latest, end)
     if settings.priority and expected_surplus_wh < energy + battery_need_wh:
         return TargetState(TargetMode.BOOST, missing, latest, end)
     return TargetState(TargetMode.SURPLUS, missing, latest, end)
+
+
+def window_opens(settings: TargetSettings, latest: datetime) -> datetime | None:
+    """Start of the release window before the latest start, None without one
+    (also with the source "surplus only": there is no forced run)."""
+    if (
+        not settings.window_before_forced
+        or settings.release_window_min <= 0
+        or settings.source is TargetSource.SURPLUS
+    ):
+        return None
+    return latest - timedelta(minutes=settings.release_window_min)
+
+
+def _in_window(settings: TargetSettings, latest: datetime, local_now: datetime) -> bool:
+    opens = window_opens(settings, latest)
+    return opens is not None and local_now >= opens
 
 
 def energy_to_target(

@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, OperatingMode
+from .const import DOMAIN, ControlMode, OperatingMode
 from .consumers import ConsumerConfig
 from .coordinator import BatteryRuntime, SlemsConfigEntry, SlemsCoordinator
 from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
@@ -74,6 +74,11 @@ async def async_setup_entry(
                     ConsumerTargetPrioritySwitch(coordinator, consumer),
                     ConsumerTargetEarliestSwitch(coordinator, consumer),
                 ],
+                config_subentry_id=consumer.subentry_id,
+            )
+        if consumer.control_mode is ControlMode.RELEASE:
+            async_add_entities(
+                [WindowBeforeForcedSwitch(coordinator, consumer)],
                 config_subentry_id=consumer.subentry_id,
             )
 
@@ -455,5 +460,37 @@ class ConsumerTargetEarliestSwitch(SlemsConsumerEntity, SwitchEntity, RestoreEnt
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self._settings.earliest_enabled = False
+        self.async_write_ha_state()
+        self.coordinator.async_update_listeners()
+
+
+class WindowBeforeForcedSwitch(SlemsConsumerEntity, SwitchEntity, RestoreEntity):
+    """Release window before the forced run of the daily target (see consumer_targets)."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator: SlemsCoordinator, consumer: ConsumerConfig) -> None:
+        super().__init__(coordinator, consumer, "window_before_forced")
+
+    @property
+    def _settings(self):
+        return self.coordinator.consumer_targets[self.consumer.subentry_id]
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if (last_state := await self.async_get_last_state()) is not None:
+            self._settings.window_before_forced = last_state.state == STATE_ON
+
+    @property
+    def is_on(self) -> bool:
+        return self._settings.window_before_forced
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self._settings.window_before_forced = True
+        self.async_write_ha_state()
+        self.coordinator.async_update_listeners()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self._settings.window_before_forced = False
         self.async_write_ha_state()
         self.coordinator.async_update_listeners()

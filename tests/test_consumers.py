@@ -1,6 +1,7 @@
 """Tests for consumer state and the resting of consumers with a cycling thermostat."""
 
 import time
+from dataclasses import replace
 from types import SimpleNamespace
 
 from custom_components.slems.const import ConsumerType, ControlMode
@@ -265,3 +266,127 @@ def test_heat_pump_power_counts_for_the_control_only_in_hot_water_mode() -> None
     # Without a mode it is not known to heat hot water.
     unknown = read_consumer_state(hass_with({"sensor.hp_power": "2400"}), heat_pump)
     assert unknown.power_w == 0
+
+
+def test_water_heater_as_storage_temperature() -> None:
+    from custom_components.slems.consumers import storage_temperature_c
+
+    def hass(attributes: dict, unit: str = "°C"):
+        heater = SimpleNamespace(state="heat_pump", attributes=attributes)
+        return SimpleNamespace(
+            states=SimpleNamespace(get=lambda entity_id: heater if entity_id == "water_heater.dhw" else None),
+            config=SimpleNamespace(units=SimpleNamespace(temperature_unit=unit)),
+        )
+
+    assert storage_temperature_c(hass({"current_temperature": 48.5}), "water_heater.dhw") == 48.5
+    assert storage_temperature_c(hass({"current_temperature": 68}, "°F"), "water_heater.dhw") == 20
+    for attributes in ({}, {"current_temperature": None}, {"current_temperature": float("nan")}):
+        assert storage_temperature_c(hass(attributes), "water_heater.dhw") is None
+    assert storage_temperature_c(hass({}), "water_heater.other") is None
+
+
+def test_saturation_ends_when_the_target_is_met_or_waiting() -> None:
+    from custom_components.slems.consumer_targets import TargetMode, TargetState
+    from custom_components.slems.consumers import RuntimeTracker
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    ended: list[str] = []
+    runtime = RuntimeTracker()
+    config = replace(consumer(), min_on_s=5400.0)
+    runtime.update("rod", True, 0.0)
+    coordinator = SimpleNamespace(
+        consumers=[config],
+        controller=SimpleNamespace(saturated=frozenset({"rod"}), end_saturation=ended.append),
+        _runtime=runtime,
+        target_states={},
+    )
+    end = SlemsCoordinator._end_needless_saturation
+    for mode in (TargetMode.SURPLUS, TargetMode.FORCED, TargetMode.NONE):
+        coordinator.target_states = {"rod": TargetState(mode)}
+        end(coordinator, 6000.0)
+    assert ended == []
+    # Met, but still within its minimum runtime.
+    coordinator.target_states = {"rod": TargetState(TargetMode.DONE)}
+    end(coordinator, 5000.0)
+    assert ended == []
+    end(coordinator, 6000.0)
+    coordinator.target_states = {"rod": TargetState(TargetMode.WAITING)}
+    end(coordinator, 6000.0)
+    assert ended == ["rod", "rod"]
+
+
+def test_end_saturation_controls_the_consumer_again() -> None:
+    controller = RealTimeController.__new__(RealTimeController)
+    controller._saturated_until = {"rod": time.monotonic() + 900}
+    requested: list[bool] = []
+    controller.request = lambda: requested.append(True)
+    assert controller.saturated == frozenset({"rod"})
+    controller.end_saturation("rod")
+    assert controller.saturated == frozenset()
+    controller.end_saturation("rod")
+    assert requested == [True]
+
+
+def _release_coordinator(settings, mode=None):
+    from custom_components.slems.consumer_targets import TargetMode, TargetProgress, TargetState
+    from custom_components.slems.consumers import RuntimeTracker
+
+    runtime = RuntimeTracker()
+    return SimpleNamespace(
+        consumer_targets={"rod": settings},
+        target_progress={"rod": TargetProgress()},
+        target_states={"rod": TargetState(mode or TargetMode.SURPLUS)},
+        target_energy_wh={},
+        _runtime=runtime,
+        _short_since={},
+        _full_power_w=lambda consumer: 1200.0,
+    )
+
+
+def test_release_window_keeps_the_release_open() -> None:
+    from custom_components.slems.consumer_targets import TargetMode, TargetSettings
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    release = replace(consumer(), control_mode=ControlMode.RELEASE)
+    coordinator = _release_coordinator(TargetSettings(release_window_min=150))
+    holds = SlemsCoordinator._window_holds
+    # Off: nothing to hold.
+    assert not holds(coordinator, release, 0.0, TargetMode.SURPLUS)
+    coordinator._runtime.update("rod", True, 0.0)
+    assert holds(coordinator, release, 8000.0, TargetMode.SURPLUS)
+    assert holds(coordinator, release, 8000.0, TargetMode.NONE)
+    assert not holds(coordinator, release, 9000.0, TargetMode.SURPLUS)
+    # Met or waiting for its period: no longer held.
+    assert not holds(coordinator, release, 60.0, TargetMode.DONE)
+    assert not holds(coordinator, release, 60.0, TargetMode.WAITING)
+    # Only for a release, and only with a window.
+    assert not holds(coordinator, consumer(), 60.0, TargetMode.SURPLUS)
+    coordinator.consumer_targets["rod"].release_window_min = 0
+    assert not holds(coordinator, release, 60.0, TargetMode.SURPLUS)
+
+
+def test_avoiding_short_runs_with_a_temperature_target_needs_the_charge_only() -> None:
+    from custom_components.slems.const import TargetType
+    from custom_components.slems.consumer_targets import TargetMode, TargetSettings
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    config = replace(consumer(), control_mode=ControlMode.RELEASE, avoid_cycling=True, min_on_s=5400.0)
+    coordinator = _release_coordinator(TargetSettings(type=TargetType.TEMPERATURE))
+    runs: list[float] = []
+
+    def run_surplus(run_s: float) -> float:
+        runs.append(run_s)
+        return 2000.0
+
+    holds = SlemsCoordinator._cycling_holds
+    # Energy to the target not known: the minimum runtime.
+    holds(coordinator, config, 0.0, TargetMode.SURPLUS, 0.0, run_surplus)
+    # 1.2 kWh at 1200 W: one hour.
+    coordinator.target_energy_wh["rod"] = 1200.0
+    holds(coordinator, config, 0.0, TargetMode.SURPLUS, 0.0, run_surplus)
+    # More than the minimum runtime: the minimum runtime.
+    coordinator.target_energy_wh["rod"] = 3000.0
+    holds(coordinator, config, 0.0, TargetMode.SURPLUS, 0.0, run_surplus)
+    assert runs == [5400.0, 3600.0, 5400.0]
+    # The window before the forced run opens without surplus.
+    assert holds(coordinator, config, 0.0, TargetMode.WINDOW, 0.0, run_surplus) == (False, False)
