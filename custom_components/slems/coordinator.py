@@ -2681,6 +2681,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     night_reserve_pct=self.night_reserve_pct(settings),
                     discharge_max_grid_export_w=settings.discharge_max_grid_export_w,
                     bad_weather_until=self.bad_weather.until,
+                    battery_priority_soc_pct=settings.battery_priority_soc_pct,
                 )
             grid_load, budget_load = self._support_loads()
             until = (

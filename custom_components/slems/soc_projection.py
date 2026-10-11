@@ -6,7 +6,8 @@ simplified way:
 
 * Hours with PV surplus: planned charging. With grid friendly charging only
   the surplus above the feed-in limit, until the batteries are full plus the
-  safety buffer (see ``grid_friendly``). Like the controller, the charging is
+  safety buffer (see ``grid_friendly``). Below the battery priority SoC,
+  as in the allocation, the whole surplus until it is reached. Like the controller, the charging is
   planned again every hour from the projected state of charge, so charging
   held back (feed-in cap) is made up later. The feed-in limit is the
   controller's in the current hour and, like the controller does later, from
@@ -72,6 +73,8 @@ class ProjectionSettings:
     discharge_max_grid_export_w: float = math.inf
     # Until then neither grid friendly charging nor night discharge (bad weather mode).
     bad_weather_until: datetime | None = None
+    # Below it the whole surplus is charged, without the feed-in limit.
+    battery_priority_soc_pct: float = 0.0
 
 
 @dataclass
@@ -168,11 +171,18 @@ def project_soc(
         # Highest stored energy that leaves the space the feed-in cap needs.
         allowed = full - cap.space_needed_at(hour_end) if cap is not None else full
         if pv_w > load:
-            plan = charge_plan(hour, start)
+            charge = charge_plan(hour, start).get(hour, 0.0)
+            priority_wh = settings.battery_priority_soc_pct / 100 * capacity - stored
+            surplus_w = min(pv_w - load, battery.max_charge_w)
+            if priority_wh > 0 and surplus_w > charge:
+                # Battery priority: the whole surplus until its SoC is reached,
+                # the planned charging for the rest of the hour.
+                hours = min(share, priority_wh / (surplus_w * efficiency))
+                charge = (surplus_w * hours + charge * (share - hours)) / share
             # The plan includes the buffer (it lowers the feed-in limit); only
             # what still fits into the batteries is charged.
             room = max(0.0, min(full, allowed) - stored)
-            charge = min(plan.get(hour, 0.0), room / (share * efficiency))
+            charge = min(charge, room / (share * efficiency))
             if (cap_w := (charge_caps or {}).get(hour)) is not None:
                 # Room kept for cheaper hours (see grid_charge).
                 charge = min(charge, cap_w)
