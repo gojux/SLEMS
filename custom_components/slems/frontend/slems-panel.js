@@ -434,7 +434,7 @@ const STRINGS = {
       grid_import_max:
         "Charging from the grid never takes the grid import above this (house plus charging, sum of all phases), e.g. for the agreed connection power; 0 = no limit. Does not protect a single phase or the main fuse. Import peak shaving limits it as well.",
       battery_export:
-        "Only with price aware control. Feeds in from the batteries when the credit of the hour is higher than what the energy is worth later (plus the minimum gain), accepting grid import later; not below the morning reserve, at most the maximum grid export while discharging and the feed-in cap. Only pays with a feed-in credit that follows the market price per hour. Check your contract and any subsidy: some do not allow feeding in energy that was charged from the grid.",
+        "Only with price aware control. Feeds in from the batteries when the credit of the hour is higher than what the energy is worth later (plus the minimum gain and the wear costs), accepting grid import later; not below the morning reserve, at most the maximum grid export while discharging and the feed-in cap. Only pays with a feed-in credit that follows the market price per hour. Check your contract and any subsidy: some do not allow feeding in energy that was charged from the grid.",
       price_min_gain:
         "Keep the energy only in hours that are cheaper by at least this much than the hours it is kept for (forecasts are uncertain).",
       night_reserve_auto:
@@ -1006,7 +1006,7 @@ const STRINGS = {
       grid_import_max:
         "Netzladen hebt den Netzbezug (Haus plus Laden, Summe aller Phasen) nie über diesen Wert, z. B. für die vereinbarte Anschlussleistung; 0 = keine Grenze. Schützt keine einzelne Phase und nicht die Hauptsicherung. Bezugsspitzen abfangen begrenzt zusätzlich.",
       battery_export:
-        "Nur mit preisbewusster Steuerung. Speist aus den Batterien ein, wenn die Vergütung der Stunde höher ist als der spätere Wert der Energie (plus Mindestgewinn), und nimmt dafür späteren Netzbezug in Kauf; nicht unter die Morgenreserve, höchstens die maximale Einspeisung beim Entladen und die Einspeisebegrenzung. Lohnt nur mit einer Einspeisevergütung, die stündlich dem Börsenpreis folgt. Vertrag und Förderung prüfen: Manche erlauben nicht, aus dem Netz geladene Energie wieder einzuspeisen.",
+        "Nur mit preisbewusster Steuerung. Speist aus den Batterien ein, wenn die Vergütung der Stunde höher ist als der spätere Wert der Energie (plus Mindestgewinn und Verschleißkosten), und nimmt dafür späteren Netzbezug in Kauf; nicht unter die Morgenreserve, höchstens die maximale Einspeisung beim Entladen und die Einspeisebegrenzung. Lohnt nur mit einer Einspeisevergütung, die stündlich dem Börsenpreis folgt. Vertrag und Förderung prüfen: Manche erlauben nicht, aus dem Netz geladene Energie wieder einzuspeisen.",
       price_min_gain:
         "Energie nur in Stunden zurückhalten, die mindestens um so viel günstiger sind als die Stunden, für die sie gehalten wird (Prognosen sind unsicher).",
       night_reserve_auto:

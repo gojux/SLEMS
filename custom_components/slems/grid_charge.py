@@ -18,8 +18,11 @@ cover all of it (exactly, levels in between interpolated), a part of it in steps
   charges later wins: home storage ages mostly with time at a high state of
   charge, not with the cycle itself,
 * feeding in from the batteries beyond the deficit (optional): the credit of
-  the period is a gain, the minimum gain a cost; not below the export floor
-  (morning reserve) and at most the export power.
+  the period is a gain, the minimum gain and the wear costs a cost (the
+  energy is mostly refilled later, an extra cycle; it would rarely pay
+  instead of covering the house later, so this hardly holds back an export
+  without one); not below the export floor (morning reserve) and at most the
+  export power.
 
 Energy left at the refill is worth nothing (PV fills the batteries anyway);
 if the plan ends before (prices unknown), it is worth the lowest import
@@ -335,7 +338,8 @@ def plan_grid_charge(
             while k * step * eff <= room + 1e-6 and level - k >= max(export_floor, floor) - 1e-9:
                 fed = k * step * eff
                 money = price * (deficit - full) / 1000 - hour_credit * fed / 1000
-                result.append(("export", level - k, fed, money + min_gain_ct * fed / 1000, money))
+                # The wear: energy fed in is mostly refilled later (an extra cycle).
+                result.append(("export", level - k, fed, money + (min_gain_ct + battery.wear_ct) * fed / 1000, money))
                 k += 1
         # Charging from the grid (the house from the grid too).
         charge_ac_max = min(

@@ -119,6 +119,25 @@ def test_feeds_in_at_a_high_credit_above_the_reserve() -> None:
     assert flat is None or not flat.export_w
 
 
+def test_feeding_in_pays_the_wear() -> None:
+    h = hours(6)
+    prices = dict(zip(h, [30.0] * 6))
+    deficits = {hour: 100.0 for hour in h}
+    refill = h[-1] + timedelta(hours=1)
+
+    def exported(credit: float, wear: float) -> float:
+        plan = plan_grid_charge(
+            night(), battery(stored=4000, wear=wear), deficits, prices, refill, 1.0,
+            export_prices={hour: credit if hour == h[1] else 0.0 for hour in h}, export_floor_wh=1000,
+        )
+        return sum(plan.export_w.values()) if plan is not None else 0.0
+
+    # The energy is not needed until the PV refill: worth nothing later.
+    assert exported(3.0, wear=0.0) > 0
+    assert exported(3.0, wear=3.0) == 0
+    assert exported(6.0, wear=3.0) > 0
+
+
 def day_from(hour: int) -> datetime:
     return datetime(2026, 5, 10, hour, 0, tzinfo=dt_util.get_default_time_zone())
 

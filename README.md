@@ -462,7 +462,9 @@ previous one applies.
 **Feed in from the batteries** (switch, off by default; only with price
 aware control): the same plan may feed in from the batteries beyond the
 house's need when the credit of the hour is higher than what the energy is
-worth later plus the minimum gain – accepting grid import later. Not below
+worth later plus the minimum gain and the wear costs of the batteries (the
+energy is mostly charged again later, an extra cycle) – accepting grid import
+later. Not below
 the morning reserve, at most the maximum grid export while discharging and
 the feed-in cap. This only pays with a feed-in credit that follows the market
 price per hour; with a fixed or monthly credit the strategy says the option

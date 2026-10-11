@@ -488,8 +488,9 @@ vorige.
 **Batterien ins Netz entladen** (Schalter, standardmäßig aus; nur mit
 preisbewusster Steuerung): Derselbe Plan darf über den Bedarf des Hauses
 hinaus aus den Batterien einspeisen, wenn die Vergütung der Stunde höher ist
-als der spätere Wert der Energie plus Mindestgewinn – späterer Netzbezug wird
-dafür in Kauf genommen. Nicht unter die Morgenreserve, höchstens die maximale
+als der spätere Wert der Energie plus Mindestgewinn und Verschleißkosten der
+Batterien (die Energie wird meist später wieder geladen, ein zusätzlicher
+Zyklus) – späterer Netzbezug wird dafür in Kauf genommen. Nicht unter die Morgenreserve, höchstens die maximale
 Einspeisung beim Entladen und die Einspeisebegrenzung. Das lohnt nur mit
 einer Einspeisevergütung, die stündlich dem Börsenpreis folgt; mit fester
 oder monatlicher Vergütung zeigt die Strategie, dass die Option ohne Wirkung
