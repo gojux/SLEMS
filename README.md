@@ -656,10 +656,13 @@ SLEMS also works without any battery: add the consumers only.
   path adds up: the integration writing the command (often in its own
   polling cycle, behind a cloud also with a rate limit), the battery itself
   and the smart meter's update interval. SLEMS learns the response time per
-  battery (**Details** of the battery). Measured on one installation with the
-  same Marstek Venus E 3.0 and the smart meter read over Modbus every 0.5 s:
-  about 0.7–1.3 s directly over Modbus, about 4 s through Omnibattery
-  (entities); batteries behind a cloud are usually slower still. A slower
+  battery (**Details** of the battery), and apart from it the longer time of
+  a change of direction (charging ↔ discharging), which the control expects
+  for such a step. Measured on one installation with the same Marstek Venus
+  E 3.0 and the smart meter read over Modbus every 0.5 s: about 0.4–0.6 s
+  directly over Modbus, about 1.6 s for a change of direction, about 4 s
+  through Omnibattery (entities); batteries behind a cloud are usually
+  slower still. A slower
   battery means more grid exchange after load changes and a coarser control;
   together with faster batteries, those take the changes first (see
   [distribution between batteries](#distribution-between-batteries)).

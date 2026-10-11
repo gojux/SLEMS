@@ -691,10 +691,13 @@ SLEMS funktioniert auch ohne Batterie: einfach nur die Verbraucher anlegen.
   der Weg: die Integration, die den Befehl schreibt (oft in ihrem eigenen
   Abfragetakt, über eine Cloud auch mit Ratenbegrenzung), die Batterie selbst
   und das Aktualisierungsintervall des Smart Meters. SLEMS lernt die
-  Reaktionszeit je Batterie (**Details** der Batterie). Gemessen an einer Anlage
-  mit derselben Marstek Venus E 3.0 und dem Smart Meter per Modbus alle 0,5 s:
-  etwa 0,7–1,3 s direkt per Modbus, etwa 4 s über Omnibattery (Entitäten);
-  Batterien über eine Cloud sind meist noch langsamer. Eine langsamere
+  Reaktionszeit je Batterie (**Details** der Batterie) und getrennt davon die
+  längere Zeit eines Richtungswechsels (Laden ↔ Entladen), mit der die
+  Regelung bei einem solchen Schritt rechnet. Gemessen an einer Anlage mit
+  derselben Marstek Venus E 3.0 und dem Smart Meter per Modbus alle 0,5 s:
+  etwa 0,4–0,6 s direkt per Modbus, etwa 1,6 s für einen Richtungswechsel,
+  etwa 4 s über Omnibattery (Entitäten); Batterien über eine Cloud sind meist
+  noch langsamer. Eine langsamere
   Batterie bedeutet mehr Netzaustausch nach Laständerungen und eine gröbere
   Regelung; zusammen mit schnelleren Batterien übernehmen diese die Änderungen
   zuerst (siehe [Aufteilung auf die Batterien](#aufteilung-auf-die-batterien)).

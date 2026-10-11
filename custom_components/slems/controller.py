@@ -153,7 +153,8 @@ class RealTimeController:
         self._last_grid_w: float | None = None
         self.meter = MeterCadence()
         self.battery_response = StepResponse(DEFAULT_BATTERY_RESPONSE_S)
-        # Steps of all batteries together that reverse the direction (diagnostics).
+        # Steps of all batteries together that reverse the direction; used for
+        # a battery whose own reversals are not learned yet.
         self.battery_reversal_response = StepResponse(DEFAULT_BATTERY_RESPONSE_S)
         self.battery_responses = BatteryResponses()
         self.consumer_response: dict[str, DirectionalResponse] = {}
@@ -191,6 +192,15 @@ class RealTimeController:
         """Time until the grid meter shows a command of this battery."""
         learned = self.battery_responses.learned(battery_id)
         return learned if learned is not None else self.battery_response.value
+
+    def battery_reversal_response_s(self, battery_id: str) -> float:
+        """Time until the grid meter shows a command of this battery that reverses
+        its direction (never shorter than the one of any other step)."""
+        normal = self.battery_response_s(battery_id)
+        learned = self.battery_responses.learned_reversal(battery_id)
+        if learned is None:
+            learned = self.battery_reversal_response.response_s
+        return normal if learned is None else max(normal, learned)
 
     @property
     def gain(self) -> float:
@@ -403,14 +413,19 @@ class RealTimeController:
         runtimes = {battery.subentry_id: battery for battery in coordinator.batteries}
         seen = {}
         for battery_id in self._battery_history:
-            response_s = self.battery_response_s(battery_id)
-            power = self._seen_command(battery_id, start - response_s)
+            arrivals = self._arrivals(battery_id)
+            power = next((power for _, power, shown in reversed(arrivals) if shown <= start), None)
             if power is None:
                 continue
             if (runtime := runtimes.get(battery_id)) is not None:
+                constant_since = self._constant_since(battery_id, power)
+                response_s = next(
+                    (shown - issued for issued, _, shown in arrivals if issued == constant_since),
+                    self.battery_response_s(battery_id),
+                )
                 power = trusted_power(
                     power,
-                    self._constant_since(battery_id, power),
+                    constant_since,
                     runtime.measured_power_w,
                     runtime.measured_at,
                     start,
@@ -480,12 +495,13 @@ class RealTimeController:
         history = self._battery_history.get(battery_id)
         return history[-1][1] if history else None
 
-    def _seen_command(self, battery_id: str, before: float) -> float | None:
-        """Last command the meter can already show (issued before ``before``)."""
-        for issued, power in reversed(self._battery_history.get(battery_id, [])):
-            if issued <= before:
-                return power
-        return None
+    def _arrivals(self, battery_id: str) -> list[tuple[float, float, float]]:
+        """Commands of a battery: (issued, power, time the grid meter shows it)."""
+        return command_arrivals(
+            self._battery_history.get(battery_id, []),
+            self.battery_response_s(battery_id),
+            self.battery_reversal_response_s(battery_id),
+        )
 
     def _constant_since(self, battery_id: str, power: float) -> float | None:
         """Since when the commands stayed within the dead band of ``power``."""
@@ -541,6 +557,7 @@ class RealTimeController:
         new_total = 0.0
         changes: dict[str, float] = {}
         reversed_ids: set[str] = set()
+        started_ids: set[str] = set()
         # A self-test measures the effect of its battery: the others keep their set points.
         hold = self._coordinator.self_test_holds
         # Batteries that reduce their power are written first: while power
@@ -573,6 +590,8 @@ class RealTimeController:
                 changes[battery.subentry_id] = target - (latest or 0.0)
                 if latest is not None and latest * target < 0:
                     reversed_ids.add(battery.subentry_id)
+                elif latest == 0 and target != 0:
+                    started_ids.add(battery.subentry_id)
             else:
                 if battery.delivery.record_comm_failure(now) is not Action.NONE:
                     self.request()
@@ -582,7 +601,9 @@ class RealTimeController:
             return None
         # The grid power moves by the change of the battery power.
         self.battery_response.command(now, self._last_grid_w, new_total - previous_total)
-        self.battery_responses.command(now, self._last_grid_w, changes, frozenset(reversed_ids))
+        self.battery_responses.command(
+            now, self._last_grid_w, changes, frozenset(reversed_ids), frozenset(started_ids)
+        )
         if previous_total * new_total < 0:
             self.battery_reversal_response.command(now, self._last_grid_w, new_total - previous_total)
         elif abs(new_total - previous_total) >= MIN_STEP_W:
@@ -903,6 +924,25 @@ def seen_consumer_power(
     if elapsed_s < sensor_delay_s or measured_w is None:
         return target_w
     return measured_w
+
+
+def command_arrivals(
+    history: list[tuple[float, float]], response_s: float, reversal_s: float
+) -> list[tuple[float, float, float]]:
+    """Battery commands (issued, power) with the time the grid meter shows them.
+
+    A command that reverses the direction takes ``reversal_s``, any other
+    ``response_s``; no command shows up before the one issued before it.
+    """
+    arrivals = []
+    previous = None
+    shown = float("-inf")
+    for issued, power in history:
+        reverses = previous is not None and previous * power < 0
+        shown = max(shown, issued + (reversal_s if reverses else response_s))
+        arrivals.append((issued, power, shown))
+        previous = power
+    return arrivals
 
 
 def trusted_power(

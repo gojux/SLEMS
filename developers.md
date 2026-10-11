@@ -401,7 +401,9 @@ sends commands.
   meter cadence from every report of the grid meter (also unchanged values,
   `EVENT_STATE_REPORTED`); battery response time from commands with ≥ 300 W
   change until the meter moved 60 % of it (smaller corrections the same way
-  keep the measurement, one the other way ends it; stored with the gain); consumer response times
+  keep the measurement, one the other way ends it; stored with the gain), per
+  battery also apart for steps that reverse its direction and for steps out
+  of standby (from 0 W, diagnostics only); consumer response times
   (`DirectionalResponse`) from commands with ≥ 100 W change until the
   consumer's own power sensor moved 60 % (at the meter ≥ 300 W), switching on
   and off learned apart, each measured up to 5 min (`CONSUMER_MAX_RESPONSE_S`):
@@ -1154,7 +1156,8 @@ that would bring the grid to its target (feedforward from the energy
 balance), then moves only a share of the way there:
 
 ```
-seen      = battery commands issued at least the battery response time ago
+seen      = battery commands the meter shows already (command_arrivals: issued at
+            least the battery response time ago, a reversal its reversal time)
 consumers = controllable consumers as the meter shows them (seen_consumer_power)
 available = -grid_filtered + seen + consumers
 target    = allocation(available, ...)            # absolute set point
@@ -1852,3 +1855,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-11 | Planned surplus window per release consumer (`surplus_window`: off / show / release): the release reacted only to the surplus there, so an automation waiting for a compressor run had no planned moment, and nothing showed when it would come. `plan_surplus_window` takes the run (energy to target / learned power) the hourly forecast surplus covers best, `min(surplus, power)` in 15 minute steps, the earliest of equal ones, and centres the release window on it, bounded by the earliest start and the forced run. Before it opens it follows the forecast; once open it is kept until it closes, since a window recomputed every poll from now on would never be entered. "Release" runs it like a forced run (mode *planned*): the user chose to accept battery or grid energy in dips for one start of the device. |
 | 2026-10-11 | Public holidays of the price estimates are computed in the executor (`ZoneHolidays.load`: the current and next year when the prices are loaded, others when an estimate needs them): the holidays package imports a country's module on its first use, which Home Assistant reported as a blocking call in the event loop. Until a year is loaded the estimates go without its holidays. |
 | 2026-10-11 | Peak shaving keeps the import below its limit at any state of charge: above the threshold the price hold, planned grid charging and consumers without battery support left their load to the grid, so a peak went fully to the grid although peak shaving was on. A general import limit as protection of the main fuse was dropped: SLEMS only knows the sum of the grid power, a fuse trips per phase, and a single phase battery relieves only its own phase (feeding in on it loads that conductor as well). The help of the highest grid import while charging from the grid says so (sum of all phases, no protection of a phase). |
+| 2026-10-11 | The controller expects a battery command that reverses the direction to show up after the battery's learned reversal time (the joint one until learned, never shorter than the normal time), and no command before the one issued before it (`command_arrivals`); replaces the diagnostics-only use of 2026-10-02. Measured on three Venus E 3.0 over Modbus: about 0.35–0.6 s for a step, 1.6–1.7 s for a reversal; with the normal time the controller counted a reversal as arrived about 1 s early and corrected the remaining error a second time. Steps out of standby (from 0 W) are learned apart for the diagnostics (`battery_start_responses`): if a start is clearly faster than a reversal, a direction change can hand the power to a battery in standby at once instead of reversing the active one and ramping over. |

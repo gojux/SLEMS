@@ -27,3 +27,15 @@ def test_consumer_as_the_meter_sees_it() -> None:
     slow = args | {"sensor_delay_s": 8.0}
     assert seen_consumer_power(0, elapsed_s=5, **slow) == 2000
     assert seen_consumer_power(0, elapsed_s=9, **slow) == 0  # thermostat: draws nothing
+
+
+def test_reversal_shows_up_later_than_other_commands() -> None:
+    from custom_components.slems.controller import command_arrivals
+
+    history = [(0.0, -800.0), (10.0, -500.0), (20.0, 600.0), (20.5, 700.0), (30.0, 0.0)]
+    shown = [arrival for _, _, arrival in command_arrivals(history, 0.5, 1.7)]
+    # Same direction 0.5 s; the reversal 1.7 s, and the correction right
+    # after it not before the reversal; a step to standby 0.5 s again.
+    assert shown == [0.5, 10.5, 21.7, 21.7, 30.5]
+    # Without a separate reversal time all commands keep their own delay.
+    assert [a for _, _, a in command_arrivals(history, 0.5, 0.5)] == [0.5, 10.5, 20.5, 21.0, 30.5]

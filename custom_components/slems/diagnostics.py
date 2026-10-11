@@ -217,6 +217,11 @@ def _system(coordinator: SlemsCoordinator) -> dict:
                 battery.name: controller.battery_responses.learned_reversal(battery.subentry_id)
                 for battery in coordinator.batteries
             },
+            # Steps out of standby (from 0 W), learned apart.
+            "battery_start_response_by_battery_s": {
+                battery.name: controller.battery_responses.learned_start(battery.subentry_id)
+                for battery in coordinator.batteries
+            },
         },
         "cap_exceeded_for_s": _ago(coordinator.cap_exceeded_since, time.monotonic()),
         "snapshot": _plain(snapshot),

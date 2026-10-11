@@ -925,6 +925,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 self.controller.battery_response.response_s = response
             self.controller.battery_responses.restore(control.get("battery_responses") or {})
             self.controller.battery_responses.restore_reversals(control.get("battery_reversal_responses") or {})
+            self.controller.battery_responses.restore_starts(control.get("battery_start_responses") or {})
             if reversal := control.get("battery_reversal_response_s"):
                 self.controller.battery_reversal_response.response_s = reversal
         for battery in self.batteries:
@@ -1363,6 +1364,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             "battery_responses": self.controller.battery_responses.as_dict(),
             "battery_reversal_response_s": self.controller.battery_reversal_response.response_s,
             "battery_reversal_responses": self.controller.battery_responses.reversals_as_dict(),
+            "battery_start_responses": self.controller.battery_responses.starts_as_dict(),
             "grid_source": self.grid_source_configured,
             "bad_weather": self.bad_weather.as_dict(),
         }

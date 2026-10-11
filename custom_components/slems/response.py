@@ -8,8 +8,9 @@
   batteries together and for each battery from the steps it makes mostly
   alone (``BatteryResponses``); the batteries' own telemetry is read too
   rarely for that. Steps that reverse the direction (charging to discharging
-  or back) are also learned apart, for the diagnostics: whether a battery is
-  slower to change its direction than to change its power.
+  or back) are also learned apart; the controller expects a reversal to take
+  this longer time. Steps out of standby (from 0 W) are learned apart as well,
+  for the diagnostics: whether a battery starts faster than it reverses.
 * Consumer response times: time from a consumer command until the consumer's
   own power sensor (and the grid meter) shows most of the change, separately
   for switching on and off (``DirectionalResponse``): switching on includes
@@ -131,6 +132,8 @@ class BatteryResponses:
         self.learners: dict[str, StepResponse] = {}
         # Steps of a battery that reverse its direction.
         self.reversals: dict[str, StepResponse] = {}
+        # Steps of a battery out of standby (from 0 W).
+        self.starts: dict[str, StepResponse] = {}
 
     def command(
         self,
@@ -138,14 +141,16 @@ class BatteryResponses:
         baseline: float | None,
         changes: dict[str, float],
         reversed_ids: frozenset[str] = frozenset(),
+        started_ids: frozenset[str] = frozenset(),
     ) -> None:
         """The batteries' commanded powers changed by ``changes`` (battery id -> W);
-        the commands of ``reversed_ids`` changed their direction."""
+        the commands of ``reversed_ids`` changed their direction, the ones of
+        ``started_ids`` left standby."""
         total = sum(changes.values())
         moved = sum(abs(change) for change in changes.values())
         if moved < MIN_STEP_W:
             # Small corrections: each pending measurement decides by direction.
-            for learner in [*self.learners.values(), *self.reversals.values()]:
+            for learner in self._all():
                 learner.command(timestamp, baseline, total)
             return
         own = next(
@@ -162,6 +167,9 @@ class BatteryResponses:
         for battery_id, learner in self.reversals.items():
             if battery_id != own or own not in reversed_ids:
                 learner.cancel()
+        for battery_id, learner in self.starts.items():
+            if battery_id != own or own not in started_ids:
+                learner.cancel()
         if own is not None:
             self.learners.setdefault(own, StepResponse(DEFAULT_BATTERY_RESPONSE_S)).command(
                 timestamp, baseline, total
@@ -170,9 +178,16 @@ class BatteryResponses:
                 self.reversals.setdefault(own, StepResponse(DEFAULT_BATTERY_RESPONSE_S)).command(
                     timestamp, baseline, total
                 )
+            if own in started_ids:
+                self.starts.setdefault(own, StepResponse(DEFAULT_BATTERY_RESPONSE_S)).command(
+                    timestamp, baseline, total
+                )
+
+    def _all(self) -> list[StepResponse]:
+        return [*self.learners.values(), *self.reversals.values(), *self.starts.values()]
 
     def sample(self, timestamp: float, value: float) -> None:
-        for learner in [*self.learners.values(), *self.reversals.values()]:
+        for learner in self._all():
             learner.sample(timestamp, value)
 
     def learned(self, battery_id: str) -> float | None:
@@ -184,29 +199,42 @@ class BatteryResponses:
         learner = self.reversals.get(battery_id)
         return learner.response_s if learner else None
 
+    def learned_start(self, battery_id: str) -> float | None:
+        """Response time of a step out of standby (from 0 W)."""
+        learner = self.starts.get(battery_id)
+        return learner.response_s if learner else None
+
     def reversals_as_dict(self) -> dict[str, float]:
-        return {
-            battery_id: learner.response_s
-            for battery_id, learner in self.reversals.items()
-            if learner.response_s is not None
-        }
+        return _as_dict(self.reversals)
 
     def restore_reversals(self, data: dict[str, float]) -> None:
-        for battery_id, response_s in data.items():
-            learner = self.reversals.setdefault(battery_id, StepResponse(DEFAULT_BATTERY_RESPONSE_S))
-            learner.response_s = response_s
+        _restore(self.reversals, data)
+
+    def starts_as_dict(self) -> dict[str, float]:
+        return _as_dict(self.starts)
+
+    def restore_starts(self, data: dict[str, float]) -> None:
+        _restore(self.starts, data)
 
     def as_dict(self) -> dict[str, float]:
-        return {
-            battery_id: learner.response_s
-            for battery_id, learner in self.learners.items()
-            if learner.response_s is not None
-        }
+        return _as_dict(self.learners)
 
     def restore(self, data: dict[str, float]) -> None:
-        for battery_id, response_s in data.items():
-            learner = self.learners.setdefault(battery_id, StepResponse(DEFAULT_BATTERY_RESPONSE_S))
-            learner.response_s = response_s
+        _restore(self.learners, data)
+
+
+def _as_dict(learners: dict[str, StepResponse]) -> dict[str, float]:
+    return {
+        battery_id: learner.response_s
+        for battery_id, learner in learners.items()
+        if learner.response_s is not None
+    }
+
+
+def _restore(learners: dict[str, StepResponse], data: dict[str, float]) -> None:
+    for battery_id, response_s in data.items():
+        learner = learners.setdefault(battery_id, StepResponse(DEFAULT_BATTERY_RESPONSE_S))
+        learner.response_s = response_s
 
 
 class DirectionalResponse:
