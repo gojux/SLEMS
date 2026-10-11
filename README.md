@@ -269,14 +269,16 @@ step shows up on one phase with about the same size, or a third on each phase
 for a three phase device. After three agreeing steps the sensor **Phase** of
 the device shows it (**L1**, **L2**, **L3** or **Three phases**). For a wallbox
 whose active phases come from an entity, only the one phase it uses while
-charging on one phase is learned. The phase is shown and checked only; the
-control does not use it yet.
+charging on one phase is learned. The phase appears in **Details** of the
+battery and on the consumer card. It is shown and checked only; the control
+does not use it yet.
 
 - **Change**: if a device shows up on another phase three times in a row
   (e.g. a plug-in battery moved to another socket), **Settings → Repairs**
   asks which phase it is connected to; the measured one is preselected.
-- **Learn phase again** (button of the device): forgets the phase and learns
-  it anew. If the same phase comes out again, Repairs asks whether it is
+- **Learn phase again** (button of the device, or **Learn again** next to the
+  phase in **Details** of the battery and on the consumer card, after a
+  confirmation): forgets the phase and learns it anew. If the same phase comes out again, Repairs asks whether it is
   right or which phase to take instead. A phase you chose other than the
   measured one is kept; a change is still reported.
 
@@ -959,8 +961,8 @@ before an update.
 The same menu enables or disables the battery, starts or cancels the cell
 balancing and opens **Details**: model, device name, firmware versions (EMS,
 VMS, BMS, communication module; sensor **Firmware**), MAC address, capacity,
-charge cycles, the total charged and discharged energy, the last full charge
-and when the cell delta was last measured. **Open device in Home Assistant**
+charge cycles, the total charged and discharged energy, the last full charge,
+when the cell delta was last measured and the phase (see **Phases**). **Open device in Home Assistant**
 leads to the device page of the battery with all its entities.
 
 The last full charge (sensor **Last full charge**) is the moment the battery

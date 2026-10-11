@@ -274,15 +274,17 @@ etwa gleicher Größe, bei einem dreiphasigen Gerät zu einem Drittel an jeder
 Phase. Nach drei übereinstimmenden Sprüngen zeigt der Sensor **Phase** des
 Geräts sie an (**L1**, **L2**, **L3** oder **Dreiphasig**). Bei einer Wallbox,
 deren aktive Phasen eine Entität nennt, lernt SLEMS nur die eine Phase, mit
-der sie einphasig lädt. Die Phase wird nur angezeigt und geprüft; die
-Regelung verwendet sie noch nicht.
+der sie einphasig lädt. Die Phase steht in den **Details** der Batterie und
+auf der Verbraucherkarte. Sie wird nur angezeigt und geprüft; die Regelung
+verwendet sie noch nicht.
 
 - **Wechsel**: Zeigt sich ein Gerät dreimal hintereinander an einer anderen
   Phase (z. B. eine Steckerbatterie in einer anderen Steckdose), fragt
   **Einstellungen → Reparaturen**, an welcher Phase es hängt; die gemessene
   ist vorausgewählt.
-- **Phase neu lernen** (Button des Geräts): verwirft die Phase und lernt sie
-  neu. Kommt wieder dieselbe heraus, fragt Reparaturen, ob sie stimmt oder
+- **Phase neu lernen** (Button des Geräts, oder **Neu lernen** neben der Phase
+  in den **Details** der Batterie und auf der Verbraucherkarte, nach einer
+  Rückfrage): verwirft die Phase und lernt sie neu. Kommt wieder dieselbe heraus, fragt Reparaturen, ob sie stimmt oder
   welche Phase stattdessen gelten soll. Eine andere als die gemessene Phase,
   die du gewählt hast, bleibt erhalten; ein Wechsel wird weiter gemeldet.
 
@@ -1013,7 +1015,8 @@ Im selben Menü lässt sich die Batterie aktivieren oder deaktivieren, der
 Zellausgleich starten oder abbrechen, und **Details** zeigt Modell, Gerätename,
 Firmware-Versionen (EMS, VMS, BMS, Kommunikationsmodul; Sensor **Firmware**),
 MAC-Adresse, Kapazität, Ladezyklen, die insgesamt geladene und entladene
-Energie, die letzte Vollladung und wann das Zell-Delta zuletzt gemessen wurde.
+Energie, die letzte Vollladung, wann das Zell-Delta zuletzt gemessen wurde und
+die Phase (siehe **Phasen**).
 **Gerät in Home Assistant öffnen** führt zur Geräteseite der Batterie mit allen
 ihren Entitäten.
 

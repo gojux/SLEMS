@@ -99,6 +99,14 @@ const STRINGS = {
     pauseText: "SLEMS hands the battery back to its own logic and does not read or send anything for {min} minutes, e.g. during a firmware update. Afterwards it reconnects by itself; you can also resume earlier.",
     pauseConfirm: "Pause",
     details: "Details",
+    phase: "Phase",
+    phaseNotLearned: "not learned yet",
+    phaseChosen: "chosen by you",
+    phaseMeasuredNow: "lately measured on {phase}",
+    threePhases: "three phases",
+    relearnPhase: "Learn again",
+    relearnPhaseTitle: "Learn the phase of {name} again?",
+    relearnPhaseText: "SLEMS forgets the phase and learns it again from the next power steps; until then it shows \"not learned yet\". If the same phase comes out again, Settings → Repairs asks whether it is right.",
     deviceView: "Open device in Home Assistant",
     close: "Close",
     noDetails: "No details available.",
@@ -671,6 +679,14 @@ const STRINGS = {
     pauseText: "SLEMS gibt die Batterie an ihre eigene Logik zurück und liest und sendet {min} Minuten lang nichts, z. B. während eines Firmware-Updates. Danach verbindet es sich von selbst wieder; du kannst auch früher fortsetzen.",
     pauseConfirm: "Pausieren",
     details: "Details",
+    phase: "Phase",
+    phaseNotLearned: "noch nicht gelernt",
+    phaseChosen: "von dir gewählt",
+    phaseMeasuredNow: "zuletzt an {phase} gemessen",
+    threePhases: "dreiphasig",
+    relearnPhase: "Neu lernen",
+    relearnPhaseTitle: "Phase von {name} neu lernen?",
+    relearnPhaseText: "SLEMS verwirft die Phase und lernt sie aus den nächsten Leistungssprüngen neu; bis dahin steht dort „noch nicht gelernt“. Kommt wieder dieselbe Phase heraus, fragt Einstellungen → Reparaturen, ob sie stimmt.",
     deviceView: "Gerät in Home Assistant öffnen",
     close: "Schließen",
     noDetails: "Keine Details verfügbar.",
@@ -2011,7 +2027,9 @@ class SlemsPanel extends HTMLElement {
     this.shadowRoot.getElementById("details-body").innerHTML =
       (rows.length
         ? rows.map(([label, value, entityId]) => this._row(label, escapeHtml(String(value)), entityId)).join("") + wearHint
-        : `<dd class="muted">${t.noDetails}</dd>`) + this._selfTestDetails(s("self_test_result"));
+        : `<dd class="muted">${t.noDetails}</dd>`) +
+      this._phaseRow(deviceId, battery?.name) +
+      this._selfTestDetails(s("self_test_result"));
   }
 
   /** Result of the last self-test with an explanation per check. */
@@ -2180,6 +2198,42 @@ class SlemsPanel extends HTMLElement {
     return this._row(hotWater ? t.hotWaterRelease : t.release, escapeHtml(text), release.entity_id);
   }
 
+  /** Phase of a battery or consumer: "L2", "not learned yet", chosen by the user or another one measured lately. */
+  _phaseText(stateObj) {
+    if (!stateObj) return undefined;
+    const t = this._t;
+    const known = !["unknown", "unavailable"].includes(stateObj.state);
+    let text = known ? this._format(stateObj) : t.phaseNotLearned;
+    if (known && stateObj.attributes?.chosen) text += ` (${t.phaseChosen})`;
+    const other = stateObj.attributes?.measured_now;
+    if (other) {
+      text += ` · ${t.phaseMeasuredNow.replace("{phase}", other === "three_phase" ? t.threePhases : other.toUpperCase())}`;
+    }
+    return text;
+  }
+
+  /** Row "Phase" of a battery or consumer with "Learn again" (only with the smart meter's power per phase). */
+  _phaseRow(deviceId, name) {
+    const phase = this._state("phase", deviceId);
+    if (!phase) return "";
+    const button = this._entityId("relearn_phase", deviceId);
+    const relearn = button
+      ? ` <button class="link" data-action="relearn-phase" data-entity="${button}" data-name="${escapeHtml(name ?? "")}">${escapeHtml(this._t.relearnPhase)}</button>`
+      : "";
+    return this._row(this._t.phase, escapeHtml(this._phaseText(phase)) + relearn, phase.entity_id);
+  }
+
+  _relearnPhase(button) {
+    const t = this._t;
+    this._confirm(
+      t.relearnPhaseTitle.replace("{name}", button.dataset.name),
+      t.relearnPhaseText,
+      t.relearnPhase,
+      () => this._hass.callService("button", "press", { entity_id: button.dataset.entity }),
+      false
+    );
+  }
+
   _row(label, valueHtml, entityId) {
     const moreInfo = entityId ? ` data-more-info="${entityId}"` : "";
     return `<dt${moreInfo}>${label}</dt><dd${moreInfo}>${valueHtml}</dd>`;
@@ -2331,6 +2385,11 @@ class SlemsPanel extends HTMLElement {
     details.addEventListener("click", (event) => {
       if (event.target.closest("[data-answer]") || event.target === details) {
         details.close();
+        return;
+      }
+      const relearn = event.target.closest("[data-action='relearn-phase']");
+      if (relearn) {
+        this._relearnPhase(relearn);
         return;
       }
       const moreInfo = event.target.closest("[data-more-info]");
@@ -4272,6 +4331,7 @@ class SlemsPanel extends HTMLElement {
             ${noPower}
             <dl>
               ${this._row(t.measured, escapeHtml(this._format(measured)), c.power_entity)}
+              ${this._phaseRow(c.device_id, c.name)}
               ${this._releaseRow(c)}
               ${planned ? this._row(t.planned, escapeHtml(this._plannedText(planned, control?.state === "off")), planned.entity_id) : ""}
               ${progress}
@@ -4606,6 +4666,11 @@ class SlemsPanel extends HTMLElement {
     const moreInfo = event.target.closest("[data-more-info]");
     if (moreInfo && !event.target.closest("button, input, select, label.switch, a")) {
       this._moreInfo(moreInfo.dataset.moreInfo);
+      return;
+    }
+    const relearn = event.target.closest("[data-action='relearn-phase']");
+    if (relearn) {
+      this._relearnPhase(relearn);
       return;
     }
     const balancingButton = event.target.closest("[data-action='balancing-on'], [data-action='balancing-off']");
