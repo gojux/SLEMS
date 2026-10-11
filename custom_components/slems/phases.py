@@ -6,7 +6,7 @@ on each for a three phase device. Each step is a vote; other devices switching
 at the same moment make a step inconclusive, so a phase is only taken after
 ``MIN_VOTES`` agreeing votes, and a change only after ``CHANGE_VOTES`` votes in
 a row for another phase. The assignment is only shown and warned about; the
-control does not use it (yet).
+control does not use it.
 """
 
 from __future__ import annotations
