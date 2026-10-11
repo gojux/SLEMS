@@ -1130,7 +1130,10 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             # Released from then on before the latest start (release window).
             "target_window_opens": (
                 opens.isoformat()
-                if target and target.latest_start and (opens := window_opens(settings, target.latest_start))
+                if target
+                and target.latest_start
+                and target.end
+                and (opens := window_opens(settings, target.latest_start, target.end))
                 else None
             ),
             # The forced run starts early in a cheaper window (price aware control).

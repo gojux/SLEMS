@@ -3574,7 +3574,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
         if start is None:
             return state
-        opens = window_opens(settings, start)
+        opens = window_opens(settings, start, state.end)
         if local_now >= start:
             mode = TargetMode.FORCED
         elif opens is not None and local_now >= opens:

@@ -159,6 +159,7 @@ const STRINGS = {
     efficiency: "Round trip efficiency",
     state: "State",
     temperature: "Temperature",
+    storageTemperature: "Storage temperature",
     enabled: "Enabled",
     measured: "Measured",
     release: "Release",
@@ -730,6 +731,7 @@ const STRINGS = {
     efficiency: "Gesamtwirkungsgrad",
     state: "Status",
     temperature: "Temperatur",
+    storageTemperature: "Speichertemperatur",
     enabled: "Aktiviert",
     measured: "Gemessen",
     release: "Freigabe",
@@ -2741,7 +2743,11 @@ class SlemsPanel extends HTMLElement {
         </div>
         <div class="fbox-value" data-field="value">–</div>
         ${n.role === "battery" ? `<div class="fbox-soc"><div class="bar"><div data-field="socbar"></div></div><span data-field="soc">–</span></div>` : ""}
-        <div class="fbox-detail" data-field="detail"></div>
+        ${
+          n.role === "consumer"
+            ? `<div class="fbox-detail" title="${escapeHtml(this._t.storageTemperature)}"><ha-icon icon="mdi:water-boiler" data-field="detailicon" hidden></ha-icon><span data-field="detail"></span></div>`
+            : `<div class="fbox-detail" data-field="detail"></div>`
+        }
       </div>`;
     const byRole = (role) => nodes.filter((n) => n.role === role).map(box).join("");
     const hasConsumers = nodes.some((n) => n.role === "consumer");
@@ -2771,6 +2777,8 @@ class SlemsPanel extends HTMLElement {
     const shown = n.role === "grid" || n.role === "battery" ? Math.abs(n.power ?? 0) : n.power;
     set("value", n.power === null ? "–" : this._watts(shown));
     set("detail", n.detail || "");
+    const detailIcon = element.querySelector('[data-field="detailicon"]');
+    if (detailIcon) detailIcon.hidden = !n.detail;
     const badge = element.querySelector('[data-field="badge"]');
     if (badge) {
       set("badge", n.badge || "");
@@ -4769,11 +4777,16 @@ function roundedPath(points, radius) {
   return `${d} L${last[0]},${last[1]}`;
 }
 
-/** Where measured charging mostly came from: "pv", "grid" or "mixed" (both, striped). */
+/** Where measured charging of a half hour (mean W) mostly came from: "pv",
+ * "grid" or "mixed" (both, striped). The grid part is estimated from 5 minute
+ * means and overstated while the power fluctuates, so it counts from 50 Wh
+ * (a mean of 100 W) on and "mixed" from a share of 20 % on. */
 function chargeSource(charge, fromGrid) {
   if (!(charge > 0)) return null;
-  const share = (fromGrid || 0) / charge;
-  return share < 0.1 ? "pv" : share > 0.9 ? "grid" : "mixed";
+  const grid = fromGrid || 0;
+  const share = grid / charge;
+  if (grid < 100 || share < 0.2) return "pv";
+  return share > 0.9 ? "grid" : "mixed";
 }
 
 /** Pattern of diagonal stripes in two colours (charging from PV and grid at once). */
@@ -4911,7 +4924,9 @@ const STYLE = `
     color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); font-weight: 500; }
   .fbox-badge[hidden] { display: none; }
   .fbox-value { font-size: 20px; font-weight: 500; margin-top: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .fbox-detail { font-size: 12px; color: var(--secondary-text-color); min-height: 16px; margin-top: auto; }
+  .fbox-detail { font-size: 12px; color: var(--secondary-text-color); min-height: 16px; margin-top: auto; display: flex; align-items: center; gap: 4px; }
+  .fbox-detail ha-icon { --mdc-icon-size: 16px; }
+  .fbox-detail ha-icon[hidden] { display: none; }
   .fbox-soc { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; }
   .fbox-soc .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--divider-color); overflow: hidden; min-width: 40px; }
   .fbox-soc .bar div { height: 100%; border-radius: 3px; background: var(--c-battery); transition: width 0.4s; }

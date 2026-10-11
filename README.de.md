@@ -1268,8 +1268,8 @@ mit seiner Ist-Temperatur.
 - Ab drei Heizläufen und zwei Taktbeginnen zeigt die Verbraucherkarte, wie
   viel der Speicher noch aufnehmen kann, und die Einspeisebegrenzung plant den
   Verbraucher nur mit 80 % davon ein.
-- Seine Box im Energiefluss zeigt die Temperatur des für das Tagesziel
-  gewählten Fühlers (standardmäßig den Mittelwert).
+- Seine Box im Energiefluss zeigt mit einem Boiler-Symbol die Temperatur des
+  für das Tagesziel gewählten Fühlers (standardmäßig den Mittelwert).
 
 ### Batterie-Unterstützung
 
@@ -1460,7 +1460,9 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
     oben auf dem Teil aus PV. Das gemessene Laden ist grün, wenn es fast nur
     aus PV kam, blau, wenn es fast nur aus dem Netz kam (geladen bei
     gleichzeitigem Netzbezug), und grün-blau gestreift, wenn beides zugleich
-    lud.
+    lud. Der Netzanteil wird aus 5-Minuten-Mittelwerten geschätzt und bei
+    schwankender Leistung überschätzt; unter 20 % oder unter 50 Wh je halbe
+    Stunde gilt das Laden daher als PV.
   - **Morgen** zeigt Prognosen, geplantes Laden und Ladezustand des nächsten
     Tages, fortgeführt aus der Prognose von heute.
   - Die Prognose folgt der Planung: Laden nur mit dem geplanten Überschuss,

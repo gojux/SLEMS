@@ -211,7 +211,10 @@ def test_release_window_before_the_forced_run() -> None:
     assert state(settings, progress, local(12), temperature_c=30).mode is TargetMode.BOOST
     settings.window_before_forced = True
     # From 13:20 − 2 h on released, not forced; forced from 13:20.
-    assert window_opens(settings, local(13, 20)) == local(11, 20)
+    assert window_opens(settings, local(13, 20), local(15, 30)) == local(11, 20)
+    # Not before the earliest start.
+    later = TargetSettings(**{**vars(settings), "earliest_enabled": True, "earliest": time(12, 0)})
+    assert window_opens(later, local(13, 20), local(15, 30)) == local(12)
     assert state(settings, progress, local(11), temperature_c=30).mode is TargetMode.BOOST
     assert state(settings, progress, local(12), temperature_c=30).mode is TargetMode.WINDOW
     assert state(settings, progress, local(13, 30), temperature_c=30).mode is TargetMode.FORCED
@@ -221,7 +224,7 @@ def test_release_window_before_the_forced_run() -> None:
     assert state(settings, progress, local(12), temperature_c=30, battery_can_supply=False).mode is TargetMode.BOOST
     # Only surplus: no forced run, no window.
     settings.source = TargetSource.SURPLUS
-    assert window_opens(settings, local(13, 20)) is None
+    assert window_opens(settings, local(13, 20), local(15, 30)) is None
     assert state(settings, progress, local(12), temperature_c=30).mode is TargetMode.BOOST
     # Runtime target: the window before its latest start (19:26).
     runtime = TargetSettings(

@@ -1194,7 +1194,7 @@ current temperature.
   shows how much the storage can still take, and the feed-in cap plans the
   consumer only with 80 % of that.
 - Its box in the energy flow shows the temperature of the sensor chosen for
-  the daily target (the mean by default).
+  the daily target (the mean by default) with a boiler symbol.
 
 ### Battery support
 
@@ -1374,7 +1374,9 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar.
     grid on top of the part from PV. The measured charging is green when it
     came almost only from PV, blue when it came almost only from the grid
     (charged while importing), and striped green and blue when both charged
-    at once.
+    at once. The grid part is estimated from 5 minute means and overstated
+    while the power fluctuates; below 20 % or below 50 Wh per half hour the
+    charging therefore counts as PV.
   - **Tomorrow** shows the forecasts, planned charging and state of charge of
     the next day, continued from today's projection.
   - The projection follows the planning: charging only with the planned

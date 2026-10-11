@@ -383,7 +383,7 @@ def evaluate(
             return TargetState(TargetMode.WAITING, missing_k, latest, end)
         if may_force and local_now >= latest:
             mode = TargetMode.FORCED
-        elif may_force and _in_window(settings, latest, local_now):
+        elif may_force and _in_window(settings, latest, end, local_now):
             mode = TargetMode.WINDOW
         elif temperature_c < settings.min_temp_c:
             # Below the minimum it heats in any case; a reached target is open
@@ -412,7 +412,7 @@ def evaluate(
         return TargetState(TargetMode.WAITING, missing, latest, end)
     if may_force and latest is not None and local_now >= latest:
         return TargetState(TargetMode.FORCED, missing, latest, end)
-    if may_force and latest is not None and _in_window(settings, latest, local_now):
+    if may_force and latest is not None and _in_window(settings, latest, end, local_now):
         return TargetState(TargetMode.WINDOW, missing, latest, end)
     if settings.priority and expected_surplus_wh < energy + battery_need_wh:
         return TargetState(TargetMode.BOOST, missing, latest, end)
@@ -467,20 +467,23 @@ def plan_surplus_window(
     return max(start, closes - length), closes
 
 
-def window_opens(settings: TargetSettings, latest: datetime) -> datetime | None:
-    """Start of the release window before the latest start, None without one
-    (also with the source "surplus only": there is no forced run)."""
+def window_opens(settings: TargetSettings, latest: datetime, end: datetime) -> datetime | None:
+    """Start of the release window before the latest start, not before the
+    earliest start of the period ending at ``end``; None without one (also
+    with the source "surplus only": there is no forced run)."""
     if (
         not settings.window_before_forced
         or settings.release_window_min <= 0
         or settings.source is TargetSource.SURPLUS
     ):
         return None
-    return latest - timedelta(minutes=settings.release_window_min)
+    opens = latest - timedelta(minutes=settings.release_window_min)
+    earliest = window_start(settings, end)
+    return max(opens, earliest) if earliest is not None else opens
 
 
-def _in_window(settings: TargetSettings, latest: datetime, local_now: datetime) -> bool:
-    opens = window_opens(settings, latest)
+def _in_window(settings: TargetSettings, latest: datetime, end: datetime, local_now: datetime) -> bool:
+    opens = window_opens(settings, latest, end)
     return opens is not None and local_now >= opens
 
 
