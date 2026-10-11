@@ -202,7 +202,7 @@
         },
         "ha_device": {
           "title": "Battery from existing entities",
-          "description": "Choose the device of the battery in Home Assistant: SLEMS suggests its entities in the next steps, you check and correct them. Leave empty to choose all entities by hand.",
+          "description": "Select the device of the battery in Home Assistant: SLEMS suggests its entities in the next steps, also from the energy dashboard, you check and correct them. The devices that fit best come first; the battery of a hybrid inverter you set up as a PV system, or one of the energy dashboard, is preselected. Leave empty to choose all entities by hand.",
           "data": {
             "device": "Device"
           }

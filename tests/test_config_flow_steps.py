@@ -218,3 +218,43 @@ def test_devices_listed_by_fit_with_their_power() -> None:
     select = _device_select(candidates, lambda infos: consumer_device_fit(infos, ConsumerType.HEATING_ROD), "meter")
     assert "meter" in [o["value"] for o in select.config["options"]]
     assert _device_select(candidates, lambda _infos: 0, None) is None
+
+
+def test_battery_takes_the_energy_dashboards_sensors() -> None:
+    from unittest.mock import patch
+
+    from custom_components.slems import config_flow
+    from custom_components.slems.const import (
+        CONF_CHARGED_ENERGY_ENTITY,
+        CONF_DISCHARGED_ENERGY_ENTITY,
+        CONF_POWER_ENTITY,
+        CONF_POWER_INVERTED,
+        CONF_SOC_ENTITY,
+    )
+    from custom_components.slems.energy_dashboard import DashboardBattery, EnergyDashboard
+
+    dashboard = EnergyDashboard(
+        batteries=(
+            DashboardBattery(soc="sensor.a_soc", power="sensor.a_power", charged="sensor.a_in", discharged="sensor.a_out"),
+            DashboardBattery(soc="sensor.b_soc", power="sensor.b_power", power_discharge_positive=False),
+        )
+    )
+    devices = {"sensor.a_soc": "inverter", "sensor.a_power": "inverter", "sensor.b_soc": "b", "sensor.b_power": "b"}
+    with patch.object(config_flow, "_device_of", lambda _hass, entity_id: devices.get(entity_id)):
+        take = config_flow._battery_from_dashboard
+        assert take(None, dashboard, "inverter", {}, set()) == {
+            CONF_SOC_ENTITY: "sensor.a_soc",
+            CONF_CHARGED_ENERGY_ENTITY: "sensor.a_in",
+            CONF_DISCHARGED_ENERGY_ENTITY: "sensor.a_out",
+            CONF_POWER_ENTITY: "sensor.a_power",
+            CONF_POWER_INVERTED: True,
+        }
+        # The device suggests another power sensor (e.g. the AC side): it stays, without the dashboard's sign.
+        assert CONF_POWER_ENTITY not in take(None, dashboard, "inverter", {CONF_POWER_ENTITY: "sensor.ac"}, set())
+        # Without a device: the first battery SLEMS does not use yet.
+        assert take(None, dashboard, None, {}, {"sensor.a_soc"}) == {
+            CONF_SOC_ENTITY: "sensor.b_soc",
+            CONF_POWER_ENTITY: "sensor.b_power",
+            CONF_POWER_INVERTED: False,
+        }
+        assert take(None, dashboard, "other", {}, set()) == {}

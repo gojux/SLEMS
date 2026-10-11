@@ -157,6 +157,7 @@ from .drivers.marstek_venus_e3 import HARDWARE_MAX_POWER_W, MarstekVenusE3Driver
 from .entity_match import (
     CAPACITY,
     EntityInfo,
+    battery_device_fit,
     consumer_device_fit,
     grid_device_fit,
     match_battery_entities,
@@ -699,12 +700,15 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         if user_input is not None:
             self._model = BatteryModel(user_input[CONF_MODEL])
             return await self._async_step_model(None)
+        # A battery of a hybrid inverter or of the energy dashboard is one from entities.
+        _candidates, preferred, _dashboard = await self._async_battery_devices()
+        model = BatteryModel.HA_ENTITIES if preferred else BatteryModel.MARSTEK_VENUS_E3
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
                 {
                     vol.Required(
-                        CONF_MODEL, default=BatteryModel.MARSTEK_VENUS_E3.value
+                        CONF_MODEL, default=model.value
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=[model.value for model in BatteryModel],
@@ -809,29 +813,47 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             step_id="marstek_venus_e3", data_schema=schema, errors=errors
         )
 
+    async def _async_battery_devices(self) -> tuple[dict[str, _DeviceCandidate], set[str], EnergyDashboard]:
+        """Devices with entities, those that are a battery SLEMS does not have yet and are a PV system of the
+        setup (a hybrid inverter) or a battery of the energy dashboard, and the dashboard."""
+        dashboard = await async_energy_dashboard(self.hass)
+        entry = self._get_entry()
+        candidates = _device_candidates(self.hass, _used_entities(entry, None, system=False), ())
+        system = entry.options or entry.data
+        sources = [
+            *entity_ids(system.get(CONF_PV_POWER_ENTITY)),
+            *(entity_id for battery in dashboard.batteries for entity_id in (battery.soc, battery.power) if entity_id),
+        ]
+        preferred = {
+            device
+            for entity_id in sources
+            if (device := _device_of(self.hass, entity_id)) in candidates
+            and battery_device_fit(candidates[device].infos) > 0
+        }
+        return candidates, preferred, dashboard
+
     async def async_step_ha_device(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
         """Pick the battery's device; its entities are suggested for the next steps."""
+        candidates, preferred, dashboard = await self._async_battery_devices()
         if user_input is not None:
-            if device_id := user_input.get(CONF_DEVICE):
+            device_id = user_input.get(CONF_DEVICE)
+            if device_id:
                 self._data = _suggest_from_device(self.hass, device_id)
+            used = _used_entities(self._get_entry(), None, system=True)
+            self._data.update(_battery_from_dashboard(self.hass, dashboard, device_id, self._data, used))
             return await self.async_step_ha_entities()
+        devices = _device_select(
+            candidates, battery_device_fit, None, power_of=_battery_power_of, boost=preferred
+        )
+        if devices is None:
+            return await self.async_step_ha_device({})
+        # The battery of a hybrid inverter or of the energy dashboard first.
+        best = next((option["value"] for option in devices.config["options"] if option["value"] in preferred), None)
         return self.async_show_form(
             step_id="ha_device",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(CONF_DEVICE): selector.DeviceSelector(
-                        selector.DeviceSelectorConfig(
-                            entity=[
-                                selector.EntityFilterSelectorConfig(
-                                    domain="sensor", device_class=SensorDeviceClass.BATTERY
-                                )
-                            ]
-                        )
-                    )
-                }
-            ),
+            data_schema=vol.Schema({vol.Optional(CONF_DEVICE, description={"suggested_value": best}): devices}),
         )
 
     async def async_step_ha_entities(
@@ -1417,6 +1439,36 @@ def _suggest_from_device(hass: HomeAssistant, device_id: str) -> dict[str, Any]:
     if remote := by_id.get(matches.get(CONF_REMOTE_ENTITY, "")):
         data.update(suggest_remote_options(remote.options))
     return data
+
+
+def _battery_power_of(infos: list[EntityInfo]) -> str | None:
+    return match_battery_entities(infos).get(CONF_POWER_ENTITY)
+
+
+def _battery_from_dashboard(
+    hass: HomeAssistant, dashboard: EnergyDashboard, device_id: str | None, data: dict[str, Any], used: set[str]
+) -> dict[str, Any]:
+    """The energy dashboard's sensors of the battery on ``device_id`` (without a device: of the first one
+    SLEMS does not use yet). Its power only if the device suggests none or the same."""
+    for battery in dashboard.batteries:
+        sensors = [e for e in (battery.soc, battery.power, battery.charged, battery.discharged) if e]
+        if device_id is not None and device_id not in {_device_of(hass, e) for e in sensors}:
+            continue
+        if device_id is None and any(e in used for e in sensors):
+            continue
+        result: dict[str, Any] = {}
+        for key, entity_id in (
+            (CONF_SOC_ENTITY, battery.soc),
+            (CONF_CHARGED_ENERGY_ENTITY, battery.charged),
+            (CONF_DISCHARGED_ENERGY_ENTITY, battery.discharged),
+        ):
+            if entity_id:
+                result[key] = entity_id
+        if battery.power and data.get(CONF_POWER_ENTITY) in (None, battery.power):
+            result[CONF_POWER_ENTITY] = battery.power
+            result[CONF_POWER_INVERTED] = battery.power_discharge_positive
+        return result
+    return {}
 
 
 def _grid_power_of(infos: list[EntityInfo]) -> str | None:

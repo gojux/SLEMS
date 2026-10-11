@@ -645,6 +645,10 @@ SLEMS also works without any battery: add the consumers only.
   battery's device: SLEMS suggests its entities (state of charge, power, set
   points, mode, optional temperature, cell voltages and energy counters);
   check and correct them. Leave the device empty to choose everything by hand.
+  The battery of a hybrid inverter you set up as a PV system, or a battery of
+  the energy dashboard, comes first and is preselected (then also as the
+  model); the dashboard's state of charge, energy counters and power with its
+  sign are taken over.
   - **Read only**: SLEMS never sends commands, e.g. to run SLEMS in simulation
     mode side by side with an existing battery integration.
   - **Set point**: one number entity with the signed power (+charge /

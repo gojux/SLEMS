@@ -302,6 +302,21 @@ def match_battery_entities(entities: Iterable[EntityInfo]) -> dict[str, str]:
     return result
 
 
+def battery_device_fit(entities: Iterable[EntityInfo]) -> float:
+    """How well a device is a home battery; 0: not one (e.g. a phone, which has a state of charge only)."""
+    matches = match_battery_entities(entities)
+    if CONF_SOC_ENTITY not in matches:
+        return 0
+    score = 0.0
+    if CONF_POWER_ENTITY in matches:
+        score += 2
+    if any(key in matches for key in (CONF_SETPOINT_ENTITY, CONF_CHARGE_ENTITY, CONF_DISCHARGE_ENTITY, CONF_MODE_ENTITY)):
+        score += 2
+    if CONF_CHARGED_ENERGY_ENTITY in matches or CONF_DISCHARGED_ENERGY_ENTITY in matches:
+        score += 1
+    return score
+
+
 def suggest_control(matches: Mapping[str, str]) -> BatteryControl:
     """Control type that fits the matched entities."""
     if CONF_CHARGE_ENTITY in matches and CONF_DISCHARGE_ENTITY in matches:

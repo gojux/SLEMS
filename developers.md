@@ -1348,7 +1348,12 @@ CH395 can be sent from the simulator container to test it.
   `async_shutdown` releases the batteries of the old state in active mode,
   so a removed battery gets its release state too (HA's delete dialog of a
   subentry cannot ask).
-- **Config flow**: `ha_device` (optional device) → `_suggest_from_device`
+- **Config flow**: `ha_device` (optional device, ranked by
+  `battery_device_fit`; devices of the system's PV sensors (a hybrid
+  inverter) and of the energy dashboard's batteries first and preselected,
+  then the model defaults to entities; `_battery_from_dashboard` adds the
+  dashboard's state of charge, counters and power with its sign, the power
+  only if the device suggests none or the same) → `_suggest_from_device`
   (`entity_match.match_battery_entities`, scores per role on domain,
   device class, unit, EN/DE words; capacity and power limits from the capacity
   sensor and the number min/max) → `ha_entities` → `ha_setpoint` /

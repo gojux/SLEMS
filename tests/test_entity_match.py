@@ -471,3 +471,12 @@ def test_micro_inverter_and_plugs_as_pv() -> None:
 def test_outdoor_temperature_of_a_heat_pump() -> None:
     assert match_outdoor_temperature(HOVAL) == "sensor.hoval_outdoor_temperature"
     assert match_outdoor_temperature(ELWA) is None
+
+
+def test_battery_device_fit() -> None:
+    from custom_components.slems.entity_match import battery_device_fit
+
+    assert battery_device_fit(VENUS_ESPHOME) > 0
+    phone = [e("sensor.phone_battery_level", "Battery level", device_class="battery", unit="%")]
+    assert battery_device_fit(phone) == 0
+    assert battery_device_fit(HOVAL) == 0

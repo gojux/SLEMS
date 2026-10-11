@@ -676,7 +676,11 @@ SLEMS funktioniert auch ohne Batterie: einfach nur die Verbraucher anlegen.
   das Gerät der Batterie wählen: SLEMS schlägt seine Entitäten vor
   (Ladezustand, Leistung, Sollwerte, Modus, optional Temperatur,
   Zellspannungen und Energiezähler); bitte prüfen und korrigieren. Ohne Gerät
-  wählst du alles selbst.
+  wählst du alles selbst. Die Batterie eines Hybrid-Wechselrichters, den du als
+  PV-Anlage eingerichtet hast, oder eine Batterie aus dem Energie-Dashboard
+  steht oben und ist vorausgewählt (dann auch als Modell); Ladezustand,
+  Energiezähler und Leistung mit ihrem Vorzeichen aus dem Dashboard werden
+  übernommen.
   - **Nur lesen**: SLEMS sendet nie Befehle, z. B. um SLEMS im
     Simulationsmodus parallel zu einer bestehenden Batterie-Integration laufen
     zu lassen.

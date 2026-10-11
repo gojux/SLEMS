@@ -202,7 +202,7 @@
         },
         "ha_device": {
           "title": "Batterie aus vorhandenen Entitäten",
-          "description": "Wähle das Gerät der Batterie in Home Assistant: SLEMS schlägt in den nächsten Schritten seine Entitäten vor, du prüfst und korrigierst sie. Leer lassen, um alle Entitäten selbst zu wählen.",
+          "description": "Wähle das Gerät der Batterie in Home Assistant aus: SLEMS schlägt in den nächsten Schritten seine Entitäten vor, auch aus dem Energie-Dashboard, du prüfst und korrigierst sie. Die am besten passenden Geräte stehen oben; die Batterie eines Hybrid-Wechselrichters, den du als PV-Anlage eingerichtet hast, oder eine aus dem Energie-Dashboard ist vorausgewählt. Lass das Feld leer, um alle Entitäten selbst auszuwählen.",
           "data": {
             "device": "Gerät"
           }

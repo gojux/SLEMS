@@ -1,6 +1,6 @@
 """Reading the sensors of Home Assistant's energy dashboard."""
 
-from custom_components.slems.energy_dashboard import EnergyDashboard, read_energy_dashboard
+from custom_components.slems.energy_dashboard import DashboardBattery, EnergyDashboard, read_energy_dashboard
 
 
 def test_unified_grid_with_inverted_power_and_solar() -> None:
@@ -16,7 +16,11 @@ def test_unified_grid_with_inverted_power_and_solar() -> None:
              "config_entry_solar_forecast": ["forecast_roof"]},
             {"type": "solar", "stat_energy_from": "sensor.balcony_energy",
              "config_entry_solar_forecast": ["forecast_roof", "forecast_balcony"]},
-            {"type": "battery", "stat_energy_from": "sensor.out", "stat_energy_to": "sensor.in"},
+            # Its standard sign (positive = discharge) does not change the grid's.
+            {"type": "battery", "stat_energy_from": "sensor.out", "stat_energy_to": "sensor.in",
+             "stat_rate": "sensor.battery_power", "stat_soc": "sensor.battery_soc"},
+            {"type": "battery", "stat_energy_from": "sensor.out_2", "stat_energy_to": "sensor.in_2",
+             "power_config": {"stat_rate_inverted": "sensor.battery_2_power"}},
         ],
         "device_consumption": [
             {"stat_consumption": "sensor.heat_pump_energy", "stat_rate": "sensor.heat_pump_power"},
@@ -31,6 +35,12 @@ def test_unified_grid_with_inverted_power_and_solar() -> None:
         pv_power=("sensor.roof_power",),
         pv_energy=("sensor.roof_energy", "sensor.balcony_energy"),
         pv_forecast_entries=("forecast_roof", "forecast_balcony"),
+        batteries=(
+            DashboardBattery(soc="sensor.battery_soc", power="sensor.battery_power", power_discharge_positive=True,
+                             charged="sensor.in", discharged="sensor.out"),
+            DashboardBattery(power="sensor.battery_2_power", power_discharge_positive=False,
+                             charged="sensor.in_2", discharged="sensor.out_2"),
+        ),
         devices={"sensor.heat_pump_energy": "sensor.heat_pump_power", "sensor.dryer_energy": None},
     )
 
