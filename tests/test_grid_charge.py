@@ -144,6 +144,27 @@ def test_room_kept_for_the_pv_surplus_of_negative_hours() -> None:
     assert plan.saving_ct > 0
 
 
+def test_room_kept_for_the_surplus_of_hours_with_a_lower_credit() -> None:
+    # Without grid charging and feeding in from the batteries: 9–12 surplus at
+    # 12 ct feed-in, 12–15 at 2 ct; the battery fills either way.
+    h = [day_from(9) + timedelta(hours=i) for i in range(6)]
+    nets = {hour: -2000.0 for hour in h}
+    credit = dict(zip(h, [12.0, 12.0, 12.0, 2.0, 2.0, 2.0]))
+    prices = {hour: 30.0 for hour in h}
+    empty = ChargeBattery(
+        capacity_wh=5000, stored_wh=500, floor_wh=500, grid_max_wh=4500,
+        max_charge_w=2500, max_discharge_w=2500, efficiency=0.95, wear_ct=1.0,
+        grid_charge_w=0.0,
+    )
+    plan = plan_grid_charge(
+        day_from(9), empty, nets, prices, None, 1.0, export_prices=credit, battery_export=False
+    )
+    assert plan is not None
+    assert not plan.charge_w and not plan.export_w
+    assert sum(plan.charge_caps_w.get(hour, 0.0) for hour in h[:3]) < 1000
+    assert all(plan.charge_cap_at(hour) is None for hour in h[3:])
+
+
 def test_grid_charging_on_top_of_the_surplus_at_a_negative_import_price() -> None:
     h = [day_from(12) + timedelta(hours=i) for i in range(3)]
     nets = {hour: -500.0 for hour in h}

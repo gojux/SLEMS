@@ -444,17 +444,20 @@ power of the batteries), the import limit of peak shaving and the space the
 feed-in cap needs when PV takes over. Your own PV surplus is taken first. The plan includes the price hold; the strategy shows **Grid charging** with the energy, the
 start and the expected saving, the day chart the planned charging.
 
-**Negative prices**: with price aware control and a negative import price or
-feed-in credit within the known prices, the plan also covers the surplus
-hours: the batteries keep room for the PV surplus of the negative hours (they
-take only part of the surplus before and feed in the rest at a positive
-price; strategy **Room for cheaper hours**) and, with **Charge batteries from
-the grid**, also charge from the grid when the import price including all fees
-is negative. Your own PV surplus is taken first. **Highest grid import while
-charging from the grid** (sum of all phases, 0 = no limit, e.g. for the
-agreed connection power; it does not protect a single phase or the main fuse)
-and the import limit of peak shaving cap the import. This only matters with a credit or an
-import price that follows the market price per hour.
+**Surplus hours and negative prices**: with price aware control and a
+feed-in credit that follows the market price per hour, or a negative import
+price or credit within the known prices, the plan also covers the surplus
+hours, without any further switch: the batteries keep room for the PV surplus
+of the hours with a lower or negative credit (they take only part of the
+surplus before and feed in the rest at the higher credit; strategy **Room for
+cheaper hours**). With **Charge batteries from the grid** they also charge
+from the grid when the import price including all fees is negative. Your own
+PV surplus is taken first. **Highest grid import while charging from the
+grid** (sum of all phases, 0 = no limit, e.g. for the agreed connection power;
+it does not protect a single phase or the main fuse) and the import limit of
+peak shaving cap the import. The plan then reaches the last known price (at
+most 36 hours) and is computed in the background; until it is ready, the
+previous one applies.
 
 **Feed in from the batteries** (switch, off by default; only with price
 aware control): the same plan may feed in from the batteries beyond the

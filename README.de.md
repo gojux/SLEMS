@@ -468,18 +468,22 @@ die Strategie zeigt
 **Netzladen** mit Energie, Beginn und erwarteter Ersparnis, das Tagesdiagramm
 das geplante Laden.
 
-**Negative Preise**: Mit preisbewusster Steuerung und einem negativen
-Bezugspreis oder einer negativen Einspeisevergütung innerhalb der bekannten
-Preise plant SLEMS auch die Überschussstunden: Die Batterien halten Platz für
-den PV-Überschuss der negativen Stunden frei (sie nehmen davor nur einen Teil
-des Überschusses auf und speisen den Rest zum positiven Preis ein; Strategie
-**Platz für günstigere Stunden**) und laden mit **Batterien aus dem Netz laden** auch
-aus dem Netz, wenn der Bezugspreis samt allen Entgelten negativ ist. Der
-eigene PV-Überschuss geht dabei vor. **Höchster Netzbezug beim Netzladen**
-(Summe aller Phasen, 0 = keine Grenze, z. B. für die vereinbarte
-Anschlussleistung; schützt keine einzelne Phase und nicht die Hauptsicherung)
-und die Bezugsgrenze von Bezugsspitzen abfangen begrenzen den Bezug. Das wirkt nur mit einer
-Vergütung oder einem Bezugspreis, die stündlich dem Börsenpreis folgen.
+**Überschussstunden und negative Preise**: Mit preisbewusster Steuerung und
+einer Einspeisevergütung, die stündlich dem Börsenpreis folgt, oder einem
+negativen Bezugspreis bzw. einer negativen Vergütung innerhalb der bekannten
+Preise plant SLEMS auch die Überschussstunden, ohne dass dafür ein weiterer
+Schalter nötig ist: Die Batterien halten Platz für den PV-Überschuss der
+Stunden mit niedrigerer oder negativer Vergütung frei (sie nehmen davor nur
+einen Teil des Überschusses auf und speisen den Rest zur höheren Vergütung
+ein; Strategie **Platz für günstigere Stunden**). Mit **Batterien aus dem Netz
+laden** laden sie auch aus dem Netz, wenn der Bezugspreis samt allen
+Entgelten negativ ist. Der eigene PV-Überschuss geht dabei vor. **Höchster
+Netzbezug beim Netzladen** (Summe aller Phasen, 0 = keine Grenze, z. B. für
+die vereinbarte Anschlussleistung; schützt keine einzelne Phase und nicht die
+Hauptsicherung) und die Bezugsgrenze von Bezugsspitzen abfangen begrenzen
+den Bezug. Der Plan reicht dann bis zum letzten bekannten Preis (höchstens 36
+Stunden) und wird im Hintergrund gerechnet; bis er fertig ist, gilt der
+vorige.
 
 **Batterien ins Netz entladen** (Schalter, standardmäßig aus; nur mit
 preisbewusster Steuerung): Derselbe Plan darf über den Bedarf des Hauses

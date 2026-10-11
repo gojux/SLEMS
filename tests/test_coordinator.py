@@ -226,3 +226,48 @@ def test_run_costs_follow_the_outdoor_temperature_and_the_surplus() -> None:
     # Without a learned dependency the nominal power counts.
     fake.outdoor_power = {}
     assert SlemsCoordinator._run_prices(fake, consumer, 2500.0, now, end, None, consumption)[now] == pytest.approx(30)
+
+
+def test_spot_credit_of_a_given_tariff() -> None:
+    from types import SimpleNamespace
+
+    from custom_components.slems.coordinator import SlemsCoordinator
+    from custom_components.slems.tariff import Group, Role, Side, Tariff, TariffItem, Unit
+
+    def tariff(unit: Unit) -> Tariff:
+        return Tariff("T", Role.CURRENT, (TariffItem("Feed-in", Side.EXPORT, Group.ENERGY, unit, 0.0),), {})
+
+    effective = SlemsCoordinator.battery_export_effective
+    assert effective(SimpleNamespace(), tariff(Unit.SPOT))
+    assert not effective(SimpleNamespace(), tariff(Unit.KWH))
+
+
+def test_price_plan_in_the_executor_starts_a_control_cycle() -> None:
+    import asyncio
+    from functools import partial
+    from types import MethodType, SimpleNamespace
+
+    from custom_components.slems.coordinator import SlemsCoordinator
+    from custom_components.slems.grid_charge import PlanTiming
+
+    requests = []
+
+    async def executor(job):
+        return job()
+
+    coordinator = SimpleNamespace(
+        hass=SimpleNamespace(async_add_executor_job=executor),
+        grid_charge_timing=PlanTiming(),
+        _grid_charge_cache={},
+        _grid_charge_last=None,
+        _grid_charge_task=object(),
+        controller=SimpleNamespace(request=lambda: requests.append(True)),
+    )
+    coordinator._store_grid_charge = MethodType(SlemsCoordinator._store_grid_charge, coordinator)
+    plan = object()
+    asyncio.run(SlemsCoordinator._async_grid_charge(coordinator, ("key",), partial(lambda: plan), 96))
+    assert coordinator._grid_charge_last is plan
+    assert coordinator._grid_charge_cache[("key",)][1] is plan
+    assert coordinator._grid_charge_task is None
+    assert coordinator.grid_charge_timing.plans == 1 and coordinator.grid_charge_timing.periods == 96
+    assert requests == [True]
