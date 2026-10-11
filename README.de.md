@@ -133,8 +133,8 @@ SLEMS plant voraus und regelt genau:
   auf einen festen umstellen.
 - **Transparent und lokal.** Ein Dashboard mit Energiefluss, Prognose-Diagramm
   und allen Einstellungen; alles läuft lokal in Home Assistant, ohne Cloud. Im
-  Simulationsmodus siehst du, was SLEMS tun würde, bevor es etwas steuert,
-  auch neben einer bestehenden Batterie-Integration.
+  Betriebsmodus **Nur beobachten** siehst du, was SLEMS tun würde, bevor es
+  etwas steuert, auch neben einer bestehenden Batterie-Integration.
 - **Erst ausprobieren, dann ändern.** Die Simulation im Dashboard berechnet
   den Tagesplan mit anderen Einstellungen (netzdienliches Laden,
   Nachtentladung, Einspeisebegrenzung, Grenzen der Batterien, Prognosen ±%)
@@ -159,7 +159,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Smart Meter, PV-Leistung und Wetter frei wählbar | ✅ |
 | Einrichtung aus den Geräten von Smart Meter und PV-Anlagen und aus dem Energie-Dashboard; mehrere PV-Anlagen addiert | ✅ |
 | Smart Meter zusätzlich direkt per Modbus lesen (SunSpec, z. B. SolarEdge), mit dem Sensor als Rückfallebene | ✅ |
-| Betriebsmodus **Aus / Simulation (nur lesend) / Aktiv** | ✅ |
+| Betriebsmodus **Aus / Nur beobachten / Aktiv** | ✅ |
 | Urlaubsschalter und Schlechtwetter-Modus | ✅ |
 | Reparaturhinweise, Benachrichtigungen und Diagnosedaten | ✅ |
 
@@ -709,8 +709,8 @@ SLEMS funktioniert auch ohne Batterie: einfach nur die Verbraucher anlegen.
   Energiezähler und Leistung mit ihrem Vorzeichen aus dem Dashboard werden
   übernommen.
   - **Nur lesen**: SLEMS sendet nie Befehle, z. B. um SLEMS im
-    Simulationsmodus parallel zu einer bestehenden Batterie-Integration laufen
-    zu lassen.
+    Betriebsmodus **Nur beobachten** parallel zu einer bestehenden
+    Batterie-Integration laufen zu lassen.
   - **Sollwert**: eine Number-Entität mit der Leistung mit Vorzeichen (+Laden /
     −Entladen, Vorzeichen umkehrbar).
   - **Getrennte Lade- und Entladeleistung**: je eine Number, optional eine
@@ -1625,9 +1625,10 @@ Steuerung nichts spart (Fixpreis), haben keine solche Zeile.
 
 ### Reiter Einstellungen
 
-Alle Einstellwerte gruppiert und direkt änderbar; die Karte **Regelung** zeigt
-auch die gelernten Werte (aktuelle Regelverstärkung, Aktualisierungsintervall
-des Smart Meters, Reaktionszeit der Batterie).
+Alle Einstellwerte gruppiert und direkt änderbar; wird ein Wert gelernt
+(Schalter **… automatisch**), steht dort der gelernte Wert. Die Karte
+**Regelung** zeigt auch das Aktualisierungsintervall des Smart Meters und die
+Reaktionszeit der Batterie.
 
 ### Bedienung des Dashboards
 
@@ -1646,7 +1647,7 @@ im Energiefluss untereinander).
 Die Entität **SLEMS Betriebsmodus** schaltet zwischen:
 
 - **Aus**: Es wird nichts geplant oder gesendet.
-- **Simulation**: Prognosen und Pläne werden berechnet und angezeigt, aber
+- **Nur beobachten**: Prognosen und Pläne werden berechnet und angezeigt, aber
   keine Befehle an Batterien oder Verbraucher gesendet. Das ist die
   Voreinstellung.
 - **Aktiv**: Pläne werden ausgeführt: SLEMS sendet Vorgaben an die Batterien
@@ -1714,9 +1715,10 @@ und 0,9 an:
   Normale Laständerungen (Wasserkocher, Wolke) werden nicht als Schwingen
   gewertet. Der gelernte Wert bleibt über Neustarts erhalten.
 
-Die **Regelverstärkung** ist der Startwert der automatischen Anpassung; eine
-Änderung startet die Anpassung ab dem neuen Wert. Ist die Automatik
-ausgeschaltet, gilt die **Regelverstärkung** als fester Wert. Das
+Solange die Automatik an ist, zeigen die Einstellungen die gelernte
+Verstärkung. Ist sie ausgeschaltet, gilt die **Regelverstärkung** als fester
+Wert; wird sie wieder eingeschaltet, macht die Anpassung mit der zuletzt
+gelernten Verstärkung weiter. Das
 **Regelintervall** (Standard 1 s) begrenzt, wie oft SLEMS Befehle sendet.
 
 Diagnose-Sensoren zeigen, was SLEMS gelernt hat:
@@ -1931,10 +1933,11 @@ als Attribute) und **Einspeisebegrenzung: vor der Spitze einzuspeisen**.
 Jeder dieser Werte hat einen Schalter **… automatisch** (bzw. **Gelernte …
 verwenden**). SLEMS lernt immer, unabhängig vom Schalter; er entscheidet nur,
 was verwendet wird. Aus gilt dein eingestellter Wert; an verwendet SLEMS den
-gelernten, sobald genug Daten vorliegen, bis dahin weiter deinen. Die
-Einstellungen zeigen den gelernten Wert (**gelernt**) oder den Hinweis, dass
-noch Daten fehlen; der Diagnose-Sensor **Gelernte Werte in Verwendung** enthält
-alle gelernten Werte als Attribute.
+gelernten, sobald genug Daten vorliegen, bis dahin weiter deinen. Die Schalter
+sind standardmäßig an (eine bestehende Installation behält ihre Schalter, wie
+sie sind). Die Einstellungen zeigen den gelernten Wert (**gelernt**) oder den
+Hinweis, dass noch Daten fehlen; der Diagnose-Sensor **Gelernte Werte in
+Verwendung** enthält alle gelernten Werte als Attribute.
 
 | Wert | Gelernt aus | Braucht |
 |---|---|---|
@@ -1965,7 +1968,10 @@ alle gelernten Werte als Attribute.
   geht nach Priorität; ein laufender Ein/Aus-Verbraucher behält seine Leistung
   vor leistungsgeregelten Verbrauchern höherer Priorität (die nehmen dafür
   weniger, damit er nicht aus- und wieder eingeschaltet wird). Was eine Seite
-  nicht nutzen kann, bekommt die andere.
+  nicht nutzen kann, bekommt die andere. Der Anteil gilt nur ohne
+  **Netzdienliches Laden** (und wird nur dann angezeigt): Mit ihm bekommen die
+  Batterien den Überschuss über seiner Einspeisegrenze, die Verbraucher den
+  darunter.
 - **Ziel-Netzüberschuss beim Laden** (0–5000 W, Standard 100 W): Die Batterien
   laden nur aus dem Überschuss oberhalb dieses Werts.
 - **Ziel-Netzüberschuss beim Entladen** (−1000…+1000 W, Standard 50 W; positiv =
@@ -2082,7 +2088,7 @@ verschiedene Spracheinstellungen:
   Kennzahlen im Dashboard) folgen der **Serversprache** unter **Einstellungen →
   System → Allgemein**. Sie werden beim Laden der Integration gesetzt; nach
   einer Änderung SLEMS neu laden.
-- Dialoge, Menüs, Zustände (z. B. **Simulation (nur lesend)**) und die Texte des
+- Dialoge, Menüs, Zustände (z. B. **Nur beobachten**) und die Texte des
   Dashboards folgen der Sprache im **Benutzerprofil**.
 
 Bleiben Namen nach einem Update von SLEMS in der falschen Sprache, Home

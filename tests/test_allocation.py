@@ -88,6 +88,20 @@ def test_split_when_charge_is_secured() -> None:
     assert result.battery_power_w == 3000
 
 
+def test_grid_friendly_charging_replaces_the_share() -> None:
+    settings = replace(SETTINGS, grid_friendly_charging=True)
+    # Above the feed-in limit the batteries take the whole surplus (not 75 %),
+    # the consumers the surplus below it.
+    result = allocate(6000, battery(40), [ROD], settings, 20000, feed_in_limit_w=2000)
+    assert result.strategy is Strategy.GRID_FRIENDLY
+    assert result.battery_power_w == 4000
+    assert result.consumer_power_w["rod"] == 2000
+    # Without a limit (bad weather mode) the batteries take the whole surplus.
+    result = allocate(4000, battery(40), [ROD], settings, 20000)
+    assert result.battery_power_w == 4000
+    assert result.consumer_power_w["rod"] == 0
+
+
 def test_battery_limit_gives_rest_to_consumers() -> None:
     result = allocate(8000, battery(20), [ROD, PUMP], SETTINGS, expected_surplus_wh=None)
     assert result.battery_power_w == 5000

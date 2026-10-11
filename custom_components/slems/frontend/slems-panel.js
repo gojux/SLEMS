@@ -434,6 +434,16 @@ const STRINGS = {
     peakShavingNote:
       "Below the threshold only {usable} above the minimum state of charge ({min}) are left for peaks, about {kwh} kWh.",
     settingHints: {
+      operating_mode:
+        "**Off**: SLEMS plans and controls nothing. **Observe only**: forecasts and plans are calculated and shown, but nothing is sent to batteries or consumers, e.g. to try SLEMS next to an existing battery integration. **Active**: SLEMS controls batteries and consumers according to the plan. When switching away from **Active**, the batteries follow their own logic again.",
+      vacation:
+        "For absences, by hand or by an automation (e.g. with the presence). While it is on, the consumption forecast assumes at most the consumption at night. Days on which it was on are left out of the learned consumption, so the forecast is not too low after the return.",
+      auto_gain:
+        "SLEMS watches its own corrections and adjusts the control gain between 0.2 and 0.9: if the grid power swings back and forth, it drops at once; if it approaches the target only slowly, it rises in small steps. Normal load changes (kettle, cloud) do not count as swinging. Off: the set control gain applies.",
+      control_gain:
+        "Share of the remaining deviation SLEMS corrects per control cycle: 0.5 = half of it. Higher reacts faster, too high makes the grid power swing back and forth. Only without **Automatic control gain**.",
+      control_interval:
+        "Minimum time between two control cycles: SLEMS controls at every report of the smart meter, but at most this often. Best just below the report interval of the smart meter; **Automatic control timing** sets it by itself (0.8 × report interval).",
       price_control:
         "Needs a tariff. If the stored energy does not last for every hour until PV refills the batteries, they cover the hours with the highest import price and keep their energy in the cheaper ones (the house draws from the grid there). The grid import stays the same, it only moves to cheaper hours.",
       grid_charge:
@@ -502,6 +512,8 @@ const STRINGS = {
         "Below the state of charge threshold, consumption up to this power comes from the grid; the batteries only cover what exceeds it.",
       peak_shaving_auto:
         "Calculates the import limit so that the usable energy (above the minimum state of charge, minus the safety reserve) lasts until PV refills the batteries. Based on the consumption peaks of the last days; the fixed limit is then not used.",
+      battery_share_when_secured:
+        "Until the charge is secured the batteries get the whole surplus. Secured: the state of charge is at least **Battery priority below state of charge** and the PV surplus expected for the rest of the day covers filling the batteries plus the **Charge secured safety buffer**. From then on the batteries get this share of the surplus, the consumers the rest in the order of their priority; what one side cannot take goes to the other. 100 %: the consumers only get what the batteries cannot take; 0 %: the consumers first. Applies only without grid friendly charging (with it, its feed-in limit decides the split); a daily target short on time and the feed-in cap take precedence.",
       charge_grid_target:
         "Grid power aimed at while the batteries charge: this much is fed in, so that a sudden rise of the consumption is covered before it is drawn from the grid. 0 to 5000 W; 0 W charges with the whole surplus. Learned: 20 to 1000 W.",
       discharge_grid_target:
@@ -611,6 +623,7 @@ const STRINGS = {
       mode: "Operation",
       control: "Control",
       priority: "Battery priority and grid targets",
+      batteries: "Batteries",
       temperature: "Temperature charge limit",
       feedInCap: "Feed-in cap",
       gridFriendly: "Grid friendly charging",
@@ -1014,6 +1027,16 @@ const STRINGS = {
     peakShavingNote:
       "Unter der Schwelle bleiben nur {usable} über dem minimalen Ladezustand ({min}) für Spitzen, etwa {kwh} kWh.",
     settingHints: {
+      operating_mode:
+        "**Aus**: SLEMS plant und steuert nichts. **Nur beobachten**: Prognosen und Pläne werden berechnet und angezeigt, aber nichts wird an Batterien oder Verbraucher gesendet, z. B. zum Ausprobieren neben einer bestehenden Batterie-Integration. **Aktiv**: SLEMS steuert Batterien und Verbraucher nach dem Plan. Beim Wechsel weg von **Aktiv** folgen die Batterien wieder ihrer eigenen Logik.",
+      vacation:
+        "Für Abwesenheiten, von Hand oder per Automation (z. B. mit der Anwesenheit). Solange er an ist, rechnet die Verbrauchsprognose höchstens mit dem Verbrauch in der Nacht. Tage, an denen er an war, lässt SLEMS aus dem gelernten Verbrauch heraus, damit die Prognose nach der Rückkehr nicht zu tief liegt.",
+      auto_gain:
+        "SLEMS beobachtet seine eigenen Korrekturen und passt die Regelverstärkung zwischen 0,2 und 0,9 an: Schwingt die Netzleistung hin und her, sinkt sie sofort; nähert sie sich dem Ziel nur langsam, steigt sie in kleinen Schritten. Normale Laständerungen (Wasserkocher, Wolke) zählen nicht als Schwingen. Aus: Es gilt die eingestellte Regelverstärkung.",
+      control_gain:
+        "Anteil der verbleibenden Abweichung, den SLEMS pro Regelzyklus korrigiert: 0,5 = die Hälfte. Höher reagiert schneller, zu hoch lässt die Netzleistung hin und her schwingen. Gilt nur ohne **Automatische Regelverstärkung**.",
+      control_interval:
+        "Mindestabstand zwischen zwei Regelzyklen: SLEMS regelt bei jeder Meldung des Smart Meters, aber höchstens so oft. Sinnvoll knapp unter dem Meldeintervall des Smart Meters; das stellt **Regelzeiten automatisch** selbst ein (0,8 × Meldeintervall).",
       price_control:
         "Braucht einen Tarif. Reicht die gespeicherte Energie nicht für alle Stunden, bis die PV die Batterien wieder füllt, decken sie die Stunden mit dem höchsten Bezugspreis und halten ihre Energie in den günstigeren zurück (dort bezieht das Haus aus dem Netz). Der Netzbezug bleibt gleich, er wandert nur in günstigere Stunden.",
       grid_charge:
@@ -1082,6 +1105,8 @@ const STRINGS = {
         "Unterhalb der Ladezustand-Schwelle kommt Verbrauch bis zu dieser Leistung aus dem Netz; die Batterien decken nur, was darüber hinausgeht.",
       peak_shaving_auto:
         "Berechnet die Bezugsgrenze so, dass die nutzbare Energie (über dem minimalen Ladezustand, abzüglich Sicherheitsreserve) reicht, bis PV die Batterien wieder füllt. Grundlage sind die Verbrauchsspitzen der letzten Tage; die feste Grenze wird dann nicht verwendet.",
+      battery_share_when_secured:
+        "Bis die Ladung gesichert ist, bekommen die Batterien den gesamten Überschuss. Gesichert: Der Ladezustand liegt mindestens bei **Batterievorrang unter Ladezustand** und der erwartete PV-Überschuss des restlichen Tages deckt das Füllen der Batterien plus den **Sicherheitspuffer gesicherte Ladung**. Ab dann bekommen die Batterien diesen Anteil des Überschusses, die Verbraucher den Rest nach ihrer Priorität; was eine Seite nicht aufnehmen kann, bekommt die andere. 100 %: Die Verbraucher bekommen nur, was die Batterien nicht aufnehmen können; 0 %: zuerst die Verbraucher. Gilt nur ohne netzdienliches Laden (mit ihm entscheidet seine Einspeisegrenze die Aufteilung); ein knappes Tagesziel und die Einspeisebegrenzung haben Vorrang.",
       charge_grid_target:
         "Netzleistung, die beim Laden der Batterien angepeilt wird: so viel wird eingespeist, damit ein plötzlich höherer Verbrauch gedeckt ist, bevor er aus dem Netz kommt. 0 bis 5000 W; 0 W lädt mit dem ganzen Überschuss. Gelernt: 20 bis 1000 W.",
       discharge_grid_target:
@@ -1191,6 +1216,7 @@ const STRINGS = {
       mode: "Betrieb",
       control: "Regelung",
       priority: "Batterievorrang und Netz-Zielwerte",
+      batteries: "Batterien",
       temperature: "Ladebegrenzung nach Temperatur",
       feedInCap: "Einspeisebegrenzung",
       gridFriendly: "Netzdienliches Laden",
@@ -1215,6 +1241,7 @@ const LEARNED_SETTINGS = {
   charge_secured_buffer: ["charge_secured_buffer_auto", "charge_secured_buffer_kwh", ["pv", "consumption"]],
   charge_grid_target: ["grid_targets_auto", "charge_grid_target_w", ["grid_target_charge"]],
   discharge_grid_target: ["grid_targets_auto", "discharge_grid_target_w", ["grid_target_discharge"]],
+  control_gain: ["auto_gain", "control_gain", []],
   control_interval: ["timing_auto", "control_interval_s", []],
   surplus_average_window: ["timing_auto", "surplus_average_window_s", []],
   night_reserve: ["night_reserve_auto", "night_reserve_pct", ["morning"]],
@@ -1226,6 +1253,10 @@ const SETTING_SHOWN_WITH = {
   night_reserve_coverage: "night_reserve_auto",
   grid_targets_no_import: "grid_targets_auto",
   full_charge_interval: "regular_full_charge",
+};
+// Settings shown only while the switch they belong to is off.
+const SETTING_HIDDEN_WITH = {
+  battery_share_when_secured: "grid_friendly_charging",
 };
 
 // A battery not full for longer than this is named in the overview.
@@ -1242,7 +1273,6 @@ const SETTING_GROUPS = [
       "control_interval",
       "surplus_average_window",
       // Learned values (read only).
-      "control_gain_current",
       "meter_interval",
       "battery_response_time",
     ],
@@ -1301,6 +1331,7 @@ const SETTING_GROUPS = [
       "peak_shaving_reserve",
     ],
   ],
+  ["batteries", ["communication_pause"]],
   ["temperature", ["temperature_limit", "temperature_high", "temperature_band", "temperature_floor", "temperature_low"]],
   ["fullCharge", ["regular_full_charge", "full_charge_interval"]],
   [
@@ -4504,6 +4535,7 @@ class SlemsPanel extends HTMLElement {
       SETTING_GROUPS.map(([group, keys]) => {
         const rows = keys
           .filter((key) => !SETTING_SHOWN_WITH[key] || this._state(SETTING_SHOWN_WITH[key])?.state === "on")
+          .filter((key) => !SETTING_HIDDEN_WITH[key] || this._state(SETTING_HIDDEN_WITH[key])?.state !== "on")
           .map((key) => this._state(key))
           .filter(Boolean);
         if (!rows.length) return "";

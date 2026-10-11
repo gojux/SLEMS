@@ -17,7 +17,8 @@ is distributed, so the grid always keeps at least the target surplus.
    fill the batteries (including charge losses) plus a safety buffer.
 2. Once secured, the surplus is split: the battery share goes to the batteries,
    the rest to the consumers in order of priority. Whatever one side cannot
-   take is offered to the other.
+   take is offered to the other. With grid friendly charging the share does
+   not apply: its feed-in limit decides the split.
 
 Deficit (remaining below the discharge grid target): the batteries discharge
 so that the grid reaches the discharge target, which is capped by the maximum
@@ -27,7 +28,9 @@ or below its threshold, they only cover the import above the grid limit.
 In between the batteries stay idle.
 
 Grid friendly charging (optional, see grid_friendly): once the charge is
-secured, the batteries only charge with the surplus above the feed-in limit.
+secured, the batteries charge with the whole surplus above the feed-in limit,
+the consumers get the surplus below it. Without a limit (bad weather mode)
+the batteries take the whole surplus.
 
 Night discharge (optional, see night_discharge): outside a surplus the
 batteries discharge at least with the planned night power, ignoring the
@@ -194,6 +197,8 @@ class AllocationSettings:
     peak_shaving: bool
     peak_shaving_grid_limit_w: float
     peak_shaving_soc_threshold_pct: float
+    # The battery share applies only without grid friendly charging.
+    grid_friendly_charging: bool = False
 
 
 @dataclass(frozen=True)
@@ -381,7 +386,8 @@ def allocate(
 
     if charge_secured:
         strategy = Strategy.SHARED
-        battery_budget = remaining * settings.battery_share_when_secured_pct / 100
+        share_pct = 100.0 if settings.grid_friendly_charging else settings.battery_share_when_secured_pct
+        battery_budget = remaining * share_pct / 100
         if feed_in_limit_w is not None:
             room = max(0.0, remaining - feed_in_limit_w)
             if room < min(max_charge, battery_budget):

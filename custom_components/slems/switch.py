@@ -384,7 +384,9 @@ class ConsumerLearningSwitch(SlemsConsumerEntity, SwitchEntity, RestoreEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        if (last_state := await self.async_get_last_state()) is not None and last_state.state == STATE_ON:
+        # On for a new consumer: the configured values apply until enough is learned.
+        last_state = await self.async_get_last_state()
+        if last_state is None or last_state.state == STATE_ON:
             self.coordinator.consumer_learning.add(self.consumer.subentry_id)
 
     @property

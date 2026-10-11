@@ -791,7 +791,7 @@
         "name": "Betriebsmodus",
         "state": {
           "off": "Aus",
-          "simulation": "Simulation (nur lesend)",
+          "simulation": "Nur beobachten",
           "active": "Aktiv"
         }
       },

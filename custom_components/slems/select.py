@@ -62,7 +62,7 @@ async def async_setup_entry(
 
 
 class OperatingModeSelect(SlemsSystemEntity, SelectEntity, RestoreEntity):
-    """Off / simulation (read-only) / active."""
+    """Off / observe only / active."""
 
     _attr_options = [mode.value for mode in OperatingMode]
 

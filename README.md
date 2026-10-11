@@ -132,8 +132,8 @@ controls precisely:
   to a fixed one.
 - **Transparent and local.** A dashboard with energy flow, forecast chart and
   all settings; everything runs locally in Home Assistant without a cloud. The
-  simulation mode shows what SLEMS would do before it controls anything, also
-  next to an existing battery integration.
+  operating mode **Observe only** shows what SLEMS would do before it
+  controls anything, also next to an existing battery integration.
 - **Try before you change.** The simulation in the dashboard calculates the
   day plan with other settings (grid friendly charging, night discharge,
   feed-in cap, battery limits, forecasts ±%) and compares feed-in, grid import
@@ -157,7 +157,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Smart meter, PV power and weather entity freely selectable | ✅ |
 | Setup from the devices of smart meter and PV systems and from the energy dashboard; several PV systems summed up | ✅ |
 | Smart meter read directly over Modbus as well (SunSpec, e.g. SolarEdge), with the sensor as fallback | ✅ |
-| Operating mode **Off / Simulation (read-only) / Active** | ✅ |
+| Operating mode **Off / Observe only / Active** | ✅ |
 | Vacation switch and bad weather mode | ✅ |
 | Repair issues, notifications and diagnostics | ✅ |
 
@@ -674,8 +674,9 @@ SLEMS also works without any battery: add the consumers only.
   the energy dashboard, comes first and is preselected (then also as the
   model); the dashboard's state of charge, energy counters and power with its
   sign are taken over.
-  - **Read only**: SLEMS never sends commands, e.g. to run SLEMS in simulation
-    mode side by side with an existing battery integration.
+  - **Read only**: SLEMS never sends commands, e.g. to run SLEMS in the
+    operating mode **Observe only** side by side with an existing battery
+    integration.
   - **Set point**: one number entity with the signed power (+charge /
     −discharge, sign can be inverted).
   - **Separate charge and discharge power**: one number each, optionally a
@@ -1528,9 +1529,9 @@ the control saves nothing (a fixed price) have no such line.
 
 ### Settings tab
 
-All settings grouped and editable directly; the **Control** card also shows the
-learned values (current control gain, smart meter update interval, battery
-response time).
+All settings grouped and editable directly; while a value is learned (switch
+**… automatic**), the learned value is shown instead. The **Control** card also
+shows the smart meter update interval and the battery response time.
 
 ### Using the dashboard
 
@@ -1548,7 +1549,7 @@ shown one below the other).
 The entity **SLEMS Operating mode** switches between:
 
 - **Off** – nothing is planned or sent.
-- **Simulation** – forecasts and plans are computed and shown, but no command
+- **Observe only** – forecasts and plans are computed and shown, but no command
   is sent to batteries or consumers. This is the default.
 - **Active** – plans are executed: SLEMS sends set points to the batteries and
   switches/sets the consumers. It reacts to every change of the smart meter.
@@ -1609,9 +1610,9 @@ corrections and adjusts the gain between 0.2 and 0.9:
   changes (a kettle, a cloud) are not mistaken for swinging. The learned value
   is kept across restarts.
 
-**Control gain** is the start value of the automatic adjustment; changing it
-restarts the adjustment from the new value. With the automatic adjustment
-switched off, **Control gain** is used as a fixed value. **Control interval**
+While the automatic adjustment is on, the settings show the learned gain.
+Switched off, **Control gain** is used as a fixed value; switched on again,
+the adjustment goes on from the gain it learned last. **Control interval**
 (default 1 s) limits how often SLEMS sends commands.
 
 Diagnostic sensors show what SLEMS has learned:
@@ -1817,9 +1818,11 @@ peaks, the space needed, the export plan and the buffer as attributes) and
 Each of these values has a switch **… automatic** (or **Use learned …**). SLEMS
 always learns, whatever the switch; it only decides what is used. Off, the
 value you set applies; on, SLEMS uses the learned value as soon as there is
-enough data, until then still yours. The settings show the learned value
-(**learned**) or the note that there is not enough data yet; the diagnostic
-sensor **Learned values in use** has all learned values as attributes.
+enough data, until then still yours. The switches are on by default (an
+existing installation keeps its switches as they are). The settings show the
+learned value (**learned**) or the note that there is not enough data yet; the
+diagnostic sensor **Learned values in use** has all learned values as
+attributes.
 
 | Value | Learned from | Needs |
 |---|---|---|
@@ -1849,6 +1852,9 @@ sensor **Learned values in use** has all learned values as attributes.
   priority; a running on/off consumer keeps its power before power controlled
   consumers of higher priority (they take less instead, so the on/off one is
   not switched off and on again). Power one side cannot use goes to the other.
+  The share only applies without **Grid friendly charging** (and is only shown
+  then): with it the batteries take the surplus above its feed-in limit, the
+  consumers the surplus below it.
 - **Grid surplus target while charging** (0–5000 W, default 100 W) – the
   batteries only charge from the surplus above this value.
 - **Grid surplus target while discharging** (−1000…+1000 W, default 50 W;
@@ -1955,7 +1961,7 @@ language settings:
   figures in the dashboard) follow the **server language** under **Settings →
   System → General**. They are set when the integration loads, so reload SLEMS
   after changing it.
-- Dialogs, menus, states (e.g. **Simulation (read-only)**) and the texts of the
+- Dialogs, menus, states (e.g. **Observe only**) and the texts of the
   dashboard follow the language in the **user profile**.
 
 If names stay in the wrong language after an update of SLEMS, restart Home

@@ -791,7 +791,7 @@
         "name": "Operating mode",
         "state": {
           "off": "Off",
-          "simulation": "Simulation (read-only)",
+          "simulation": "Observe only",
           "active": "Active"
         }
       },

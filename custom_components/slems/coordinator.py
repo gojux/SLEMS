@@ -333,7 +333,7 @@ class BatteryRuntime:
     top_taper: TopTaper = field(default_factory=TopTaper)
     capacity_learner: CapacityLearner = field(default_factory=CapacityLearner)
     # Plan with the learned usable capacity instead of the configured one.
-    learn_capacity: bool = False
+    learn_capacity: bool = True
     # Allowed power right now (updated with every poll).
     power_limits: PowerLimits | None = None
     # Costs per kWh stored and delivered again (see battery_wear).
@@ -418,7 +418,7 @@ class ControlSettings:
     peak_shaving_grid_limit_w: float = DEFAULT_PEAK_SHAVING_GRID_LIMIT_W
     peak_shaving_soc_threshold_pct: float = DEFAULT_PEAK_SHAVING_SOC_THRESHOLD_PCT
     # Import limit calculated from the consumption peaks (see peak_shaving).
-    peak_shaving_auto: bool = False
+    peak_shaving_auto: bool = True
     peak_shaving_reserve_pct: float = 20.0
     # Averaging window of the grid power; 0 disables averaging.
     surplus_average_window_s: float = DEFAULT_SURPLUS_AVERAGE_WINDOW_S
@@ -442,13 +442,14 @@ class ControlSettings:
     # or start value of the automatic adaptation.
     control_gain: float = DEFAULT_CONTROL_GAIN
     auto_gain: bool = True
-    # Learned instead of the fixed values (see learning).
-    grid_friendly_buffer_auto: bool = False
-    charge_secured_buffer_auto: bool = False
-    grid_targets_auto: bool = False
+    # Learned instead of the fixed values (see learning); the fixed values
+    # apply until enough is learned.
+    grid_friendly_buffer_auto: bool = True
+    charge_secured_buffer_auto: bool = True
+    grid_targets_auto: bool = True
     # The learned discharge grid target is at least 0 W (no import aimed at).
     grid_targets_no_import: bool = False
-    timing_auto: bool = False
+    timing_auto: bool = True
     # Charge into the PV feed-in peak instead of as early as possible.
     grid_friendly_charging: bool = True
     # Energy grid friendly charging plans in addition to filling the
@@ -476,7 +477,7 @@ class ControlSettings:
     night_reserve_pct: float = DEFAULT_NIGHT_RESERVE_PCT
     # Learned from the morning gaps; share of the mornings it covers (above
     # 100 %: the largest gap times this).
-    night_reserve_auto: bool = False
+    night_reserve_auto: bool = True
     night_reserve_coverage_pct: float = 100.0
     # Feed-in cap at the grid connection point (see feed_in_cap).
     feed_in_cap: bool = False
@@ -486,7 +487,7 @@ class ControlSettings:
     # per peak in % of the peak power (as energy of one hour).
     feed_in_cap_buffer_pct: float = DEFAULT_FEED_IN_CAP_BUFFER_PCT
     # Buffer from the recorded PV forecast errors instead of the fixed one.
-    feed_in_cap_auto_buffer: bool = False
+    feed_in_cap_auto_buffer: bool = True
     # Duration of a communication pause (firmware update), minutes.
     communication_pause_min: float = 20.0
     # Charge power limited by the battery temperature (see battery_limits).
@@ -520,6 +521,7 @@ class ControlSettings:
             peak_shaving=self.peak_shaving,
             peak_shaving_grid_limit_w=self.peak_shaving_grid_limit_w,
             peak_shaving_soc_threshold_pct=self.peak_shaving_soc_threshold_pct,
+            grid_friendly_charging=self.grid_friendly_charging,
         )
 
 
