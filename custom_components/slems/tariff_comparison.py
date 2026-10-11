@@ -31,7 +31,7 @@ from .const import (
 )
 from .currency import market_prices_usable
 from .energy_history import async_grid_energy
-from .forecast import async_statistic_means
+from .forecast import async_statistic_means, sum_series
 from .price_backtest import BacktestBattery, play
 from .tariff import Role, Side, Tariff, combine_tariffs, compute_bill, mixed_tariff, tariff_from_data
 
@@ -270,12 +270,12 @@ async def _async_savings(
     if battery is None:
         return None
     sources = coordinator.history_sources()
-    ids = [*sources.house, sources.pv]
+    ids = [*sources.house, *sources.pv]
     means = await async_statistic_means(hass, ids, start, end)
     house = next((means[i] for i in sources.house if means.get(i)), None)
     if not house:
         return None
-    pv = means.get(sources.pv, {}) if sources.pv else {}
+    pv = sum_series(means.get(p, {}) for p in sources.pv)
     load = {hour: max(0.0, value) for hour, value in house.items()}
     pv = {hour: max(0.0, value) for hour, value in pv.items()}
     prices = coordinator.market_prices

@@ -175,8 +175,12 @@ Je Ladepunkt (hier „Garage“) entstehen u. a. **Max. Ladestrom**
 
 **Einstellungen** → **Geräte & Dienste** → **SLEMS** → **Verbraucher hinzufügen**.
 
-1. **Verbraucher**
+1. **Verbraucher** (Typ und Gerät)
    - **Typ**: **Wallbox (Elektroauto)**.
+   - **Gerät**: der Ladepunkt (z. B. **Garage**). SLEMS schlägt daraus die
+     Entitäten der nächsten Schritte vor; prüfe sie wie unten beschrieben.
+
+2. **Verbraucher**
    - **Leistungssensor**: **Ladeleistung** des Ladepunkts.
    - **Energiesensor**: **Netzbezug** des Ladepunkts (Zählerstand der Wallbox);
      hat deine Wallbox keinen eigenen Zähler, **Ladeenergie**.
@@ -185,20 +189,20 @@ Je Ladepunkt (hier „Garage“) entstehen u. a. **Max. Ladestrom**
 
    ![SLEMS: Wallbox als Verbraucher](images/slems_wallbox_step1_de.png)
 
-2. **Steuerung**
+3. **Steuerung**
    - **Steuer-Entity**: **Max. Ladestrom** des Ladepunkts.
    - **Mindeststrom** / **Höchststrom**: wie in evcc (meist 6 / 16 A).
    - **Phasen**: wie die Wallbox angeschlossen ist (meist 3).
    - **Entity der aktiven Phasen**: **Phasen in Verwendung**. Schaltet evcc
      zwischen 1 und 3 Phasen um, folgt SLEMS dem.
-   - **Start/Stopp-Entity**: Betriebsart A: **Modus** des Ladepunkts;
-     Betriebsart B: leer lassen.
+   - **Start/Stopp-Entity**: Betriebsart A: **Modus** des Ladepunkts
+     (vorgeschlagen); Betriebsart B: leeren.
    - **Mindestlaufzeit** / **Mindestpause**: 5 Minuten sind vorgegeben, damit die
      Wallbox bei Wolken nicht ständig startet und stoppt.
 
    ![SLEMS: Stromvorgabe über ha-evcc](images/slems_wallbox_step2_de.png)
 
-3. **Optionen für Start und Stopp** (nur Betriebsart A): **Option für ein**:
+4. **Optionen für Start und Stopp** (nur Betriebsart A, vorgeschlagen): **Option für ein**:
    **now**, **Option für aus**: **off**.
 
    ![SLEMS: Modus now / off](images/slems_wallbox_step3_de.png)

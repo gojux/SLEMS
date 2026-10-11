@@ -173,8 +173,12 @@ current (`select.evcc_garage_max_current`), the mode
 
 **Settings** → **Devices & services** → **SLEMS** → **Add consumer**.
 
-1. **Consumer**
+1. **Consumer** (type and device)
    - **Type**: **Wallbox (electric vehicle)**.
+   - **Device**: the loadpoint (e.g. **Garage**). SLEMS suggests the entities of
+     the next steps from it; check them as described below.
+
+2. **Consumer**
    - **Power sensor**: the **charging power** of the loadpoint.
    - **Energy sensor**: the **imported energy** of the loadpoint (meter reading of
      the wallbox); without a meter in the wallbox the **charged energy**.
@@ -183,20 +187,20 @@ current (`select.evcc_garage_max_current`), the mode
 
    ![SLEMS: wallbox as a consumer](images/slems_wallbox_step1_en.png)
 
-2. **Control**
+3. **Control**
    - **Control entity**: the **maximum charging current** of the loadpoint.
    - **Minimum current** / **Maximum current**: as in evcc (usually 6 / 16 A).
    - **Phases**: as the wallbox is connected (usually 3).
    - **Active phases entity**: the **active phases** of the loadpoint. If evcc
      switches between 1 and 3 phases, SLEMS follows.
-   - **Start/stop entity**: mode A: the **mode** of the loadpoint; mode B: leave
-     empty.
+   - **Start/stop entity**: mode A: the **mode** of the loadpoint (suggested);
+     mode B: clear it.
    - **Minimum runtime** / **Minimum pause**: 5 minutes are preset, so the wallbox
      does not start and stop with every cloud.
 
    ![SLEMS: current control through ha-evcc](images/slems_wallbox_step2_en.png)
 
-3. **Options for start and stop** (mode A only): **Option for on**: **now**,
+4. **Options for start and stop** (mode A only, suggested): **Option for on**: **now**,
    **Option for off**: **off**.
 
    ![SLEMS: mode now / off](images/slems_wallbox_step3_en.png)

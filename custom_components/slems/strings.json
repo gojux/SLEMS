@@ -3,7 +3,19 @@
     "step": {
       "user": {
         "title": "SLEMS system",
-        "description": "Select the measurements of your energy system. Batteries are added afterwards on the integration page.",
+        "description": "Select the device of your smart meter and those of your PV systems: SLEMS suggests their sensors in the next step, you check and correct them. The devices that fit best come first; what you entered in the energy dashboard of Home Assistant is preselected. Leave empty to choose the sensors by hand.",
+        "data": {
+          "grid_device": "Smart meter",
+          "pv_devices": "PV systems"
+        },
+        "data_description": {
+          "grid_device": "The device that measures the power at the grid connection point, e.g. a Shelly Pro 3EM, a Tibber Pulse or the meter at a SolarEdge inverter.",
+          "pv_devices": "One or several, e.g. the inverter on the roof and the one of a balcony system. Their power is summed up."
+        }
+      },
+      "system": {
+        "title": "SLEMS system",
+        "description": "Select the measurements of your energy system. Batteries are added afterwards on the integration page. Right now the grid power shows {grid_now} and the PV {pv_now}. Export must be negative; if it is positive, turn on **Invert grid power sign**.",
         "data": {
           "grid_power_entity": "Grid power (smart meter)",
           "grid_power_inverted": "Invert grid power sign",
@@ -19,7 +31,7 @@
         "data_description": {
           "grid_power_entity": "Power at the grid connection point. Expected sign: positive = import, negative = export.",
           "grid_power_inverted": "Enable if your meter reports export as positive.",
-          "pv_power_entity": "Current PV production. Used for the energy flow and the house consumption balance.",
+          "pv_power_entity": "Current PV production. Used for the energy flow and the house consumption balance. Several PV systems are summed up.",
           "weather_entity": "Optional. Improves the consumption forecast (e.g. heat pump demand).",
           "pv_forecast_entries": "Solar forecast integrations (e.g. Forecast.Solar, Solcast). Several entries, e.g. one per roof plane, are summed up.",
           "outdoor_temperature_entity": "Optional. Temperature sensor with history for the heat pump forecast. Without it, SLEMS records the temperature of the weather entity itself.",
@@ -68,6 +80,19 @@
     "step": {
       "init": {
         "title": "SLEMS system",
+        "description": "Select the device of your smart meter and those of your PV systems: SLEMS suggests their sensors in the next step, you check and correct them. The devices that fit best come first; what you entered in the energy dashboard of Home Assistant is preselected. Leave empty to choose the sensors by hand.",
+        "data": {
+          "grid_device": "Smart meter",
+          "pv_devices": "PV systems"
+        },
+        "data_description": {
+          "grid_device": "The device that measures the power at the grid connection point, e.g. a Shelly Pro 3EM, a Tibber Pulse or the meter at a SolarEdge inverter.",
+          "pv_devices": "One or several, e.g. the inverter on the roof and the one of a balcony system. Their power is summed up."
+        }
+      },
+      "system": {
+        "title": "SLEMS system",
+        "description": "Right now the grid power shows {grid_now} and the PV {pv_now}. Export must be negative; if it is positive, turn on **Invert grid power sign**.",
         "data": {
           "grid_power_entity": "Grid power (smart meter)",
           "grid_power_inverted": "Invert grid power sign",
@@ -83,6 +108,7 @@
         "data_description": {
           "grid_power_entity": "Power at the grid connection point. Expected sign: positive = import, negative = export.",
           "grid_power_inverted": "Enable if your meter reports export as positive.",
+          "pv_power_entity": "Current PV production. Used for the energy flow and the house consumption balance. Several PV systems are summed up.",
           "pv_forecast_entries": "Solar forecast integrations (e.g. Forecast.Solar, Solcast). Several entries, e.g. one per roof plane, are summed up.",
           "weather_entity": "Optional. Improves the consumption forecast (e.g. heat pump demand).",
           "outdoor_temperature_entity": "Optional. Temperature sensor with history for the heat pump forecast. Without it, SLEMS records the temperature of the weather entity itself.",
@@ -299,21 +325,37 @@
       "step": {
         "user": {
           "title": "Consumer",
-          "description": "Every consumer needs its own power and energy sensor.",
+          "description": "Select the type and, if it is in Home Assistant, the device of the consumer: SLEMS suggests its entities in the next steps, you check and correct them. The devices that fit best come first. Leave the device empty to choose all entities by hand.",
+          "data": {
+            "consumer_type": "Type",
+            "device": "Device",
+            "meter_device": "Meter device"
+          },
+          "data_description": {
+            "consumer_type": "Heat pump consumption is forecast from the weather; a heating rod is typically used for hot water in summer. A wallbox is never part of the house consumption forecast; the next step defaults to current control, 6–16 A and 5 minutes minimum runtime and pause, and its battery support to automatic.",
+            "device": "The consumer itself, e.g. the heat pump, the heating rod or the wallbox. Devices whose entities SLEMS already uses elsewhere are not listed.",
+            "meter_device": "Optional, if another device measures the consumer's power and energy, e.g. a smart plug or a meter in the distribution board. Leave empty if the device measures them itself."
+          }
+        },
+        "consumer": {
+          "title": "Consumer",
+          "description": "Every consumer needs its own power and energy sensor. The suggestions come from the selected devices; check them.",
           "data": {
             "name": "Name",
-            "consumer_type": "Type",
             "power_entity": "Power sensor",
             "energy_entity": "Energy sensor",
             "included_in_meter": "Included in smart meter",
             "show_in_flow": "Show in the energy flow",
+            "hot_water": "Heats a hot water storage",
             "control_mode": "Control"
           },
           "data_description": {
-            "consumer_type": "Heat pump consumption is forecast from the weather; a heating rod is typically used for hot water in summer. A wallbox is never part of the house consumption forecast; the next step defaults to current control, 6–16 A and 5 minutes minimum runtime and pause, and its battery support to automatic.",
+            "power_entity": "Its electrical power; for a heat pump not the heat output.",
+            "energy_entity": "Its meter reading. If the device has none (e.g. a my-PV device in the my-PV integration of Home Assistant), create an **Integral** helper from its power sensor.",
             "included_in_meter": "Enable if the consumer is behind the smart meter, i.e. its consumption is already part of the measured grid power.",
             "show_in_flow": "Shows the consumer as its own box in the energy flow of the dashboard. Off: its consumption still counts in the house; the consumer card shows it.",
-            "control_mode": "**Release**: SLEMS switches nothing itself but provides the binary sensor **Release** (on when SLEMS would switch the consumer on now; attribute **forced** from the latest start of the daily target on) and the sensor **Latest start**; an automation of your own starts the device. For a heat pump the release is for its hot water charge: only what it draws in hot water mode is controlled, the heating stays uncontrolled."
+            "hot_water": "On if the heat pump also heats the hot water. SLEMS then asks for its operating mode (with **Release**) and the temperature of the storage.",
+            "control_mode": "**Release**: SLEMS switches nothing itself but provides the binary sensor **Release** (on when SLEMS would switch the consumer on now; attribute **forced** from the latest start of the daily target on) and the sensor **Latest start**; an automation of your own starts the device. For a heat pump that heats a hot water storage the release is for its hot water charge: only what it draws in hot water mode is controlled, the heating stays uncontrolled."
           }
         },
         "control": {
@@ -339,7 +381,7 @@
             "mode_entity": "Operating mode"
           },
           "data_description": {
-            "control_entity": "Switch for on/off consumers, number entity in W for power controlled ones, in A for current controlled ones (e.g. the charging current of a wallbox); with current control also a select with ampere options (e.g. **Max. charging current** of an evcc loadpoint in ha-evcc).",
+            "control_entity": "Switch for on/off consumers, number entity in W for power controlled ones, in A for current controlled ones (e.g. the charging current of a wallbox); with current control also a select with ampere options (e.g. **Max. charging current** of an evcc loadpoint in ha-evcc). Turn off the device's own surplus control (e.g. **Auto control** of a my-PV ELWA 2), otherwise it works against SLEMS.",
             "nominal_power_w": "A rough estimate is enough if **Use learned values** is on: SLEMS then measures the real power while it runs the consumer (operating mode active) and uses it after about 15 minutes of running (the median of its last hour of running). Rather estimate a little too low than too high: too high, SLEMS waits for a larger surplus and may never switch the consumer on, so nothing is learned. For a heat pump with **Release**: its power for hot water; SLEMS learns it in hot water mode, so it follows the coefficient of performance.",
             "block_entity": "SLEMS does not control the consumer while it is blocked (e.g. by the device or an automation): a water heater while its operation mode is \"off\", other entities while they are \"on\".",
             "priority": "1 = highest priority when distributing surplus power.",

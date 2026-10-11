@@ -7,7 +7,7 @@ from pathlib import Path
 from custom_components.slems import config_flow
 
 STRINGS = json.loads((Path(config_flow.__file__).parent / "strings.json").read_text())
-FLOWS = {"tariff": config_flow.TariffSubentryFlow}
+FLOWS = {"tariff": config_flow.TariffSubentryFlow, "consumer": config_flow.ConsumerSubentryFlow}
 
 
 def test_steps_and_menu_options_have_methods() -> None:
@@ -149,3 +149,72 @@ def test_heat_pump_release_asks_for_its_hot_water_states() -> None:
         flow.async_step_control({CONF_MODE_ENTITY: "sensor.hp_status", CONF_NOMINAL_POWER_W: 2500, CONF_PRIORITY: 1})
     )
     assert result == "hot_water_states"
+
+
+def _control_form(data: dict, infos: list, existing: dict | None = None, device_changed: bool = False) -> dict:
+    import asyncio
+
+    from custom_components.slems.config_flow import ConsumerSubentryFlow
+
+    flow = ConsumerSubentryFlow()
+    flow._existing = lambda: dict(existing or {})
+    flow._data = data
+    flow._infos = infos
+    flow._device_changed = device_changed
+    flow.handler = ("entry", "consumer")
+    result = asyncio.run(flow.async_step_control())
+    return {str(key): key.default() if callable(key.default) else key.description for key in result["data_schema"].schema}
+
+
+def test_heat_pump_without_hot_water_has_no_operating_mode() -> None:
+    from custom_components.slems.const import CONF_CONSUMER_TYPE, CONF_CONTROL_MODE, CONF_HOT_WATER, CONF_MODE_ENTITY
+
+    data = {CONF_CONSUMER_TYPE: "heat_pump", CONF_CONTROL_MODE: "release"}
+    assert CONF_MODE_ENTITY not in _control_form({**data, CONF_HOT_WATER: False}, [])
+    assert CONF_MODE_ENTITY in _control_form({**data, CONF_HOT_WATER: True}, [])
+
+
+def test_control_step_shows_the_suggestions_of_the_device() -> None:
+    from test_entity_match import ELWA
+
+    from custom_components.slems.const import (
+        CONF_BLOCK_ENTITY,
+        CONF_CONSUMER_TYPE,
+        CONF_CONTROL_ENTITY,
+        CONF_CONTROL_MODE,
+        CONF_MAX_POWER_W,
+        CONF_TEMPERATURE_ENTITY,
+    )
+
+    data = {CONF_CONSUMER_TYPE: "heating_rod", CONF_CONTROL_MODE: "power"}
+    form = _control_form(data, ELWA)
+    assert form[CONF_CONTROL_ENTITY] == "number.elwa_2_power"
+    assert form[CONF_MAX_POWER_W] == 3500
+    assert form[CONF_TEMPERATURE_ENTITY] == {"suggested_value": "sensor.elwa_2_temperature"}
+    assert form[CONF_BLOCK_ENTITY] == {"suggested_value": "water_heater.elwa_2"}
+    # Reconfigured with the same device: what was stored stays; another device: its suggestions.
+    existing = {CONF_CONTROL_MODE: "power", CONF_CONTROL_ENTITY: "number.other", CONF_MAX_POWER_W: 2000}
+    assert _control_form(data, ELWA, existing)[CONF_CONTROL_ENTITY] == "number.other"
+    assert _control_form(data, ELWA, existing, device_changed=True)[CONF_CONTROL_ENTITY] == "number.elwa_2_power"
+
+
+def test_devices_listed_by_fit_with_their_power() -> None:
+    from test_entity_match import ELWA, HOVAL, SHELLY_PLUG, SMART_METER
+
+    from custom_components.slems.config_flow import _device_select, _DeviceCandidate
+    from custom_components.slems.const import ConsumerType
+    from custom_components.slems.entity_match import consumer_device_fit
+
+    candidates = {
+        "plug": _DeviceCandidate("Dryer", "shelly", SHELLY_PLUG),
+        "meter": _DeviceCandidate("Meter", "shelly", SMART_METER),
+        "rod": _DeviceCandidate("ELWA 2", "mypv_elwa2_modbus", ELWA),
+        "hp": _DeviceCandidate("Belaria", "hoval_unofficial", HOVAL),
+    }
+    select = _device_select(candidates, lambda infos: consumer_device_fit(infos, ConsumerType.HEATING_ROD), None)
+    options = [(o["value"], o["label"]) for o in select.config["options"]]
+    assert options == [("rod", "ELWA 2 (mypv_elwa2_modbus) – 1800 W"), ("plug", "Dryer (shelly) – 0.0 W")]
+    # The stored device is always offered.
+    select = _device_select(candidates, lambda infos: consumer_device_fit(infos, ConsumerType.HEATING_ROD), "meter")
+    assert "meter" in [o["value"] for o in select.config["options"]]
+    assert _device_select(candidates, lambda _infos: 0, None) is None

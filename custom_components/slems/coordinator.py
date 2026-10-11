@@ -137,6 +137,7 @@ from .forecast import (
     ForecastSources,
     VacationDays,
     async_statistic_means,
+    sum_series,
 )
 from .forecast.accuracy import PvAccuracyTracker
 from .bad_weather import BadWeatherMode
@@ -221,7 +222,7 @@ from .pv_forecast import (
     power_lookup,
 )
 from .soc_projection import ProjectionSettings, SocProjection, project_soc
-from .util import state_as_float, state_as_kwh, state_as_watts
+from .util import entity_ids, state_as_float, state_as_kwh, state_as_watts
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -1079,7 +1080,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             ),
             grid=config[CONF_GRID_POWER_ENTITY],
             grid_inverted=config.get(CONF_GRID_POWER_INVERTED, False),
-            pv=config.get(CONF_PV_POWER_ENTITY),
+            pv=entity_ids(config.get(CONF_PV_POWER_ENTITY)),
             batteries=tuple(
                 entity_id
                 for battery in self.batteries
@@ -1247,11 +1248,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         config = self._config
         for run in due:
             start, end = run.start, run.end
-            means = await async_statistic_means(self.hass, [*sources.house, sources.pv], start, end)
+            means = await async_statistic_means(self.hass, [*sources.house, *sources.pv], start, end)
             load = next((means[i] for i in sources.house if means.get(i)), None)
             if not load:
                 continue
-            pv = means.get(sources.pv, {}) if sources.pv else {}
+            pv = sum_series(means.get(p, {}) for p in sources.pv)
             energy = await async_grid_energy(
                 self.hass, start, end,
                 import_entity=config.get(CONF_GRID_IMPORT_ENERGY_ENTITY),
@@ -1396,8 +1397,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         snapshot.grid_power_w = grid
         self._grid_filter.window_s = self.average_window_s
         snapshot.grid_power_filtered_w = self._grid_filter.conservative(now)
-        if pv_entity := config.get(CONF_PV_POWER_ENTITY):
-            snapshot.pv_power_w = state_as_watts(self.hass.states.get(pv_entity))
+        snapshot.pv_power_w = self._pv_power_w()
         self._integrate_pv(snapshot.pv_power_w, now)
 
         for consumer in self.consumers:
@@ -1544,6 +1544,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         else:
             self.cap_exceeded_since = None
 
+    def _pv_power_w(self) -> float | None:
+        """Power of all PV systems; one that reports nothing (e.g. a micro inverter at night) counts as 0,
+        None only if none reports."""
+        values = [
+            watts
+            for entity_id in entity_ids(self._config.get(CONF_PV_POWER_ENTITY))
+            if (watts := state_as_watts(self.hass.states.get(entity_id))) is not None
+        ]
+        return sum(values) if values else None
+
     def _integrate_pv(self, pv_power_w: float | None, now: float) -> None:
         """Add up today's PV energy from the live values (restarts at midnight)."""
         today = dt_util.now().date()
@@ -1563,14 +1573,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         Without statistics for the PV sensor the integration only becomes
         complete at the next midnight.
         """
-        pv_entity = self._config.get(CONF_PV_POWER_ENTITY)
-        if not pv_entity:
+        pv_entities = entity_ids(self._config.get(CONF_PV_POWER_ENTITY))
+        if not pv_entities:
             return
         wall_now = dt_util.now()
         try:
             means = await async_statistic_means(
                 self.hass,
-                [pv_entity],
+                list(pv_entities),
                 dt_util.start_of_local_day(dt_util.as_local(wall_now)),
                 wall_now,
                 "5minute",
@@ -1578,9 +1588,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         except Exception:  # noqa: BLE001
             _LOGGER.debug("PV statistics of today not available", exc_info=True)
             return
-        energy, covered_until = energy_from_means(means.get(pv_entity, {}), timedelta(minutes=5))
-        if covered_until is None:
-            return
+        energy = 0.0
+        covered_until = None
+        for pv_entity in pv_entities:
+            part, until = energy_from_means(means.get(pv_entity, {}), timedelta(minutes=5))
+            if until is None:
+                # One PV system without statistics: today is only known from the next midnight.
+                return
+            energy += part
+            covered_until = until if covered_until is None else min(covered_until, until)
+        assert covered_until is not None
         # Bridge the minutes since the last statistics period with the current value.
         pv_now = self.data.pv_power_w if self.data is not None else None
         gap_h = max(0.0, (dt_util.now() - covered_until).total_seconds() / 3600)
@@ -3909,8 +3926,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             allocation=None,
             distribution=None,
         )
-        if pv_entity := config.get(CONF_PV_POWER_ENTITY):
-            snapshot.pv_power_w = state_as_watts(self.hass.states.get(pv_entity))
+        snapshot.pv_power_w = self._pv_power_w()
         self._house_hold.check(snapshot, now)
         self.plan(snapshot, dt_util.now(), now, previous_total_w=previous_total_w, gain=gain)
         return snapshot

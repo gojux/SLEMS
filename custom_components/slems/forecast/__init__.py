@@ -65,7 +65,8 @@ class ForecastSources:
     # Fallback: house = grid + pv - batteries.
     grid: str | None
     grid_inverted: bool
-    pv: str | None
+    # PV systems, summed up.
+    pv: tuple[str, ...]
     batteries: tuple[str, ...]
     # Consumers behind the meter to subtract from the house consumption.
     heat_pumps: tuple[str, ...]
@@ -164,7 +165,7 @@ async def async_statistic_means(
     }
 
 
-def _sum_series(series: Iterable[HourlySeries]) -> dict[datetime, float]:
+def sum_series(series: Iterable[HourlySeries]) -> dict[datetime, float]:
     total: dict[datetime, float] = {}
     for values in series:
         for start, value in values.items():
@@ -178,9 +179,9 @@ def build_house_history(
     """House consumption per hour from the best available source."""
     house: dict[datetime, float] = {}
     grid = means.get(sources.grid or "", {})
-    pv = means.get(sources.pv or "", {})
+    pv = sum_series(means.get(p, {}) for p in sources.pv)
     series = [means.get(b, {}) for b in sources.batteries]
-    batteries = _sum_series(series)
+    batteries = sum_series(series)
     # An hour without the value of a battery within its recorded span is a
     # gap (counted as 0 it would put the battery power into the house);
     # before its first or after its last value the battery did not exist.
@@ -224,7 +225,7 @@ class ConsumptionForecaster:
             [
                 *sources.house,
                 sources.grid,
-                sources.pv,
+                *sources.pv,
                 *sources.batteries,
                 *sources.heat_pumps,
                 *sources.controllable,
@@ -234,8 +235,8 @@ class ConsumptionForecaster:
             now,
         )
         house = build_house_history(sources, means)
-        heat_pump = _sum_series(means.get(h, {}) for h in sources.heat_pumps)
-        controllable = _sum_series(means.get(c, {}) for c in sources.controllable)
+        heat_pump = sum_series(means.get(h, {}) for h in sources.heat_pumps)
+        controllable = sum_series(means.get(c, {}) for c in sources.controllable)
         excluded = usable_exclusion(house, excluded, now)
         self.excluded_days = excluded
         base = without_days(

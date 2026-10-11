@@ -56,6 +56,13 @@ _ENERGY_FACTORS: dict[str, float] = {
 }
 
 
+def entity_ids(value: str | list[str] | None) -> tuple[str, ...]:
+    """Entity ids of a setting that takes one or several (stored as a string or a list)."""
+    if not value:
+        return ()
+    return (value,) if isinstance(value, str) else tuple(value)
+
+
 def state_as_float(state: State | None) -> float | None:
     """Return the numeric value of a state, or None if it is not usable."""
     if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):

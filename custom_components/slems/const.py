@@ -25,6 +25,10 @@ CONF_OUTDOOR_TEMPERATURE_ENTITY: Final = "outdoor_temperature_entity"
 # Energy counters of the smart meter (kWh), for tariffs and bills.
 CONF_GRID_IMPORT_ENERGY_ENTITY: Final = "grid_import_energy_entity"
 CONF_GRID_EXPORT_ENERGY_ENTITY: Final = "grid_export_energy_entity"
+# Devices of the smart meter and the PV systems: the config flow suggests the
+# entities above from them (not stored).
+CONF_GRID_DEVICE: Final = "grid_device"
+CONF_PV_DEVICES: Final = "pv_devices"
 # Grid power additionally read from a SunSpec meter over Modbus (grid_meter).
 CONF_GRID_MODBUS: Final = "grid_modbus"
 CONF_GRID_MODBUS_HOST: Final = "grid_modbus_host"
@@ -126,6 +130,12 @@ CONF_START_OFF: Final = "start_off"
 # that mean hot water.
 CONF_MODE_ENTITY: Final = "mode_entity"
 CONF_HOT_WATER_STATES: Final = "hot_water_states"
+# Heat pump that also heats a hot water storage (the config flow asks for its
+# operating mode and storage temperature only then).
+CONF_HOT_WATER: Final = "hot_water"
+# Optional device that measures the consumer when its own device does not
+# (e.g. a smart plug); CONF_DEVICE is the consumer's own device.
+CONF_METER_DEVICE: Final = "meter_device"
 DEFAULT_MIN_CURRENT_A: Final = 6
 DEFAULT_MAX_CURRENT_A: Final = 16
 DEFAULT_PHASES: Final = 3

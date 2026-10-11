@@ -156,6 +156,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 |---|---|
 | Beliebig viele Batterien, jederzeit hinzufügen, bearbeiten, entfernen | ✅ |
 | Smart Meter, PV-Leistung und Wetter frei wählbar | ✅ |
+| Einrichtung aus den Geräten von Smart Meter und PV-Anlagen und aus dem Energie-Dashboard; mehrere PV-Anlagen addiert | ✅ |
 | Smart Meter zusätzlich direkt per Modbus lesen (SunSpec, z. B. SolarEdge), mit dem Sensor als Rückfallebene | ✅ |
 | Betriebsmodus **Aus / Simulation (nur lesend) / Aktiv** | ✅ |
 | Urlaubsschalter und Schlechtwetter-Modus | ✅ |
@@ -184,6 +185,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Verbraucher | Status |
 |---|---|
 | Verbraucher mit eigenen Leistungs-/Energiesensoren, im oder außerhalb des Smart Meters | ✅ |
+| Verbraucher aus seinem Gerät einrichten: Geräte nach Eignung sortiert (z. B. Hoval, my-PV, evcc), Entitäten, Steuerung und ihr Bereich vorgeschlagen | ✅ |
 | Wärmepumpe als Verbrauchertyp (wetterabhängige Prognose), optional Freigabe ihrer Warmwasserladung (Betriebsmodus, gelernte Warmwasserleistung) | ✅ |
 | Steuerung von Verbrauchern: Ein/Aus, Leistungsvorgabe oder Freigabe für eine eigene Automation (mit spätestem Start), Priorität, Mindestlaufzeit/-pause, Takten vermeiden, externe Sperre, Steuerung je Verbraucher abschaltbar | ✅ |
 | Verbraucher mit eigenem Thermostat: Pausen erkannt, ihre Leistung geht solange an die Batterien | ✅ |
@@ -244,9 +246,17 @@ Voraussetzung: Home Assistant 2026.9 oder neuer.
 ## Einrichtung
 
 1. **Einstellungen → Geräte & Dienste → Integration hinzufügen → SLEMS**.
-2. Die Netzleistungs-Entität deines Smart Meters wählen (positiv = Bezug,
-   negativ = Einspeisung; **Vorzeichen umkehren** aktivieren, wenn dein Zähler
-   es umgekehrt meldet), optional PV-Leistung, PV-Prognose und Wetter.
+2. Die Geräte deines Smart Meters und deiner PV-Anlagen auswählen (optional,
+   vorausgewählt aus dem Energie-Dashboard von Home Assistant; die am besten
+   passenden Geräte stehen oben, z. B. ein Shelly Pro 3EM oder der Zähler
+   eines SolarEdge-Wechselrichters in der Integration SolarEdge Modbus oder
+   SolarEdge Modbus Multi). SLEMS schlägt ihre Sensoren vor und ergänzt, was
+   das Energie-Dashboard schon kennt, auch das Vorzeichen seiner
+   Netzleistung, die PV-Prognose und das Wetter. Die Netzleistungs-Entität
+   prüfen (positiv = Bezug, negativ = Einspeisung; das Formular zeigt ihren
+   aktuellen Wert; **Vorzeichen umkehren** aktivieren, wenn dein Zähler es
+   umgekehrt meldet), optional PV-Leistung, PV-Prognose und Wetter. Mehrere
+   PV-Anlagen (z. B. Dach und Balkon) werden addiert.
 3. Auf der Seite der SLEMS-Integration für jede Batterie **Batterie
    hinzufügen** und für jeden Verbraucher, der gemessen oder gesteuert werden
    soll, **Verbraucher hinzufügen** wählen.
@@ -1092,6 +1102,20 @@ bereits im Hausverbrauch enthalten, und dessen Prognose (ein Profil je
 Wochentag und Stunde) enthält ihren durchschnittlichen Verbrauch. Sie
 bekommen nur eine eigene Karte und ein Feld im Energiefluss.
 
+- **Gerät** (erster Schritt, optional): das Gerät des Verbrauchers in Home
+  Assistant, z. B. die Wärmepumpe, der Heizstab oder die Wallbox. Die am
+  besten passenden Geräte stehen oben (bekannte Integrationen wie Hoval, my-PV
+  oder evcc, und die Entitäten, die sie haben); Geräte, deren Entitäten SLEMS
+  schon verwendet, fehlen in der Liste. SLEMS schlägt daraus die Entitäten der
+  nächsten Schritte vor: Leistung und Energie (bei einer Wärmepumpe die
+  elektrische Leistung, nicht die Heizleistung), die Steuerung und ihre
+  Steuer-Entität mit ihrem Bereich, die Start/Stopp-Entität und die aktiven
+  Phasen einer Wallbox, den Betriebsmodus und den Speicher einer Wärmepumpe,
+  die Speicherfühler eines Heizstabs und seinen Water Heater als externe
+  Sperre. Du prüfst und korrigierst sie. **Messgerät**: optional, wenn ein
+  anderes Gerät den Verbraucher misst (z. B. eine smarte Steckdose).
+- **Heizt einen Warmwasserspeicher** (Wärmepumpe): nur dann fragt SLEMS ihren
+  Betriebsmodus (bei **Freigabe**) und die Temperatur des Speichers ab.
 - **Im Smart Meter enthalten**: aktivieren, wenn der Verbraucher hinter dem
   Smart Meter hängt (sein Verbrauch ist bereits in der Netzleistung
   enthalten). Für Verbraucher an einer separaten Versorgung deaktivieren.

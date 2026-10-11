@@ -154,6 +154,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 |---|---|
 | Any number of batteries, added/edited/removed at any time | ✅ |
 | Smart meter, PV power and weather entity freely selectable | ✅ |
+| Setup from the devices of smart meter and PV systems and from the energy dashboard; several PV systems summed up | ✅ |
 | Smart meter read directly over Modbus as well (SunSpec, e.g. SolarEdge), with the sensor as fallback | ✅ |
 | Operating mode **Off / Simulation (read-only) / Active** | ✅ |
 | Vacation switch and bad weather mode | ✅ |
@@ -182,6 +183,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Consumers | Status |
 |---|---|
 | Consumers with own power/energy sensors, inside or outside the smart meter | ✅ |
+| Consumer setup from its device: devices ranked by fit (e.g. Hoval, my-PV, evcc), entities, control and its range suggested | ✅ |
 | Heat pump as consumer type (weather dependent forecast), optionally a release of its hot water charge (operating mode, learned hot water power) | ✅ |
 | Control of consumers: on/off, power set point or release for an automation of your own (with latest start), priority, minimum runtime/pause, avoid short runs, external blocking, control switchable per consumer | ✅ |
 | Consumers with their own thermostat: pauses recognised, their power goes to the batteries meanwhile | ✅ |
@@ -241,9 +243,17 @@ Requires Home Assistant 2026.9 or newer.
 ## Setup
 
 1. **Settings → Devices & services → Add integration → SLEMS**.
-2. Select the grid power entity of your smart meter (positive = import,
-   negative = export; enable **invert** if your meter uses the opposite sign),
-   optionally PV power, PV forecast and weather.
+2. Select the devices of your smart meter and your PV systems (optional,
+   preselected from the energy dashboard of Home Assistant; the devices that
+   fit best come first, e.g. a Shelly Pro 3EM or the meter of a SolarEdge
+   inverter in the SolarEdge Modbus or SolarEdge Modbus Multi integration).
+   SLEMS suggests their sensors and fills in what the energy dashboard
+   already knows, including the sign of its grid power, the PV forecast
+   entries and the weather entity. Check the grid power entity (positive =
+   import, negative = export; the form shows its current value; enable
+   **invert** if your meter uses the opposite sign), and optionally PV power,
+   PV forecast and weather. Several PV systems (e.g. roof and balcony) are
+   summed up.
 3. On the SLEMS integration page choose **Add battery** for every battery and
    **Add consumer** for every consumer you want to measure or control.
 
@@ -1030,6 +1040,19 @@ already part of the house consumption, and its forecast (a profile per weekday
 and hour) contains their average use. They only get their own card and box in
 the energy flow.
 
+- **Device** (first step, optional): the consumer's device in Home Assistant,
+  e.g. the heat pump, the heating rod or the wallbox. The devices that fit best
+  come first (known integrations such as Hoval, my-PV or evcc, and the
+  entities they have); devices whose entities SLEMS already uses are not
+  listed. SLEMS suggests the entities of the next steps from it: power and
+  energy (of a heat pump the electrical power, not the heat output), the
+  control and its control entity with its range, the start/stop entity and
+  active phases of a wallbox, the operating mode and the storage of a heat
+  pump, the storage sensors of a heating rod and its water heater as external
+  block. You check and correct them. **Meter device**: optional, if another
+  device measures the consumer (e.g. a smart plug).
+- **Heats a hot water storage** (heat pump): only then SLEMS asks for its
+  operating mode (with **Release**) and the temperature of the storage.
 - **Included in smart meter**: enable if the consumer is behind the smart
   meter (its consumption is already part of the grid power). Disable for
   consumers on a separate supply.

@@ -3,7 +3,19 @@
     "step": {
       "user": {
         "title": "SLEMS-System",
-        "description": "Wähle die Messwerte deines Energiesystems. Batterien werden danach auf der Integrationsseite hinzugefügt.",
+        "description": "Wähle das Gerät deines Smart Meters und die deiner PV-Anlagen aus: SLEMS schlägt im nächsten Schritt ihre Sensoren vor, du prüfst und korrigierst sie. Die am besten passenden Geräte stehen oben; was du im Energie-Dashboard von Home Assistant eingetragen hast, ist vorausgewählt. Lass die Felder leer, um die Sensoren selbst auszuwählen.",
+        "data": {
+          "grid_device": "Smart Meter",
+          "pv_devices": "PV-Anlagen"
+        },
+        "data_description": {
+          "grid_device": "Das Gerät, das die Leistung am Netzanschlusspunkt misst, z. B. ein Shelly Pro 3EM, ein Tibber Pulse oder der Zähler an einem SolarEdge-Wechselrichter.",
+          "pv_devices": "Eine oder mehrere, z. B. der Wechselrichter am Dach und der eines Balkonkraftwerks. Ihre Leistung wird addiert."
+        }
+      },
+      "system": {
+        "title": "SLEMS-System",
+        "description": "Wähle die Messwerte deines Energiesystems. Batterien werden danach auf der Integrationsseite hinzugefügt. Gerade zeigt die Netzleistung {grid_now} und die PV {pv_now}. Einspeisung muss negativ sein; ist sie positiv, schalte **Vorzeichen der Netzleistung umkehren** ein.",
         "data": {
           "grid_power_entity": "Netzleistung (Smart Meter)",
           "grid_power_inverted": "Vorzeichen der Netzleistung umkehren",
@@ -19,7 +31,7 @@
         "data_description": {
           "grid_power_entity": "Leistung am Netzanschlusspunkt. Erwartetes Vorzeichen: positiv = Bezug, negativ = Einspeisung.",
           "grid_power_inverted": "Aktivieren, wenn dein Zähler Einspeisung positiv meldet.",
-          "pv_power_entity": "Aktuelle PV-Erzeugung. Wird für den Energiefluss und die Bilanz des Hausverbrauchs verwendet.",
+          "pv_power_entity": "Aktuelle PV-Erzeugung. Wird für den Energiefluss und die Bilanz des Hausverbrauchs verwendet. Mehrere PV-Anlagen werden addiert.",
           "weather_entity": "Optional. Verbessert die Verbrauchsprognose (z. B. Bedarf der Wärmepumpe).",
           "pv_forecast_entries": "Integrationen mit Solarprognose (z. B. Forecast.Solar, Solcast). Mehrere Einträge, z. B. einer je Dachfläche, werden addiert.",
           "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entität selbst auf.",
@@ -68,6 +80,19 @@
     "step": {
       "init": {
         "title": "SLEMS-System",
+        "description": "Wähle das Gerät deines Smart Meters und die deiner PV-Anlagen aus: SLEMS schlägt im nächsten Schritt ihre Sensoren vor, du prüfst und korrigierst sie. Die am besten passenden Geräte stehen oben; was du im Energie-Dashboard von Home Assistant eingetragen hast, ist vorausgewählt. Lass die Felder leer, um die Sensoren selbst auszuwählen.",
+        "data": {
+          "grid_device": "Smart Meter",
+          "pv_devices": "PV-Anlagen"
+        },
+        "data_description": {
+          "grid_device": "Das Gerät, das die Leistung am Netzanschlusspunkt misst, z. B. ein Shelly Pro 3EM, ein Tibber Pulse oder der Zähler an einem SolarEdge-Wechselrichter.",
+          "pv_devices": "Eine oder mehrere, z. B. der Wechselrichter am Dach und der eines Balkonkraftwerks. Ihre Leistung wird addiert."
+        }
+      },
+      "system": {
+        "title": "SLEMS-System",
+        "description": "Gerade zeigt die Netzleistung {grid_now} und die PV {pv_now}. Einspeisung muss negativ sein; ist sie positiv, schalte **Vorzeichen der Netzleistung umkehren** ein.",
         "data": {
           "grid_power_entity": "Netzleistung (Smart Meter)",
           "grid_power_inverted": "Vorzeichen der Netzleistung umkehren",
@@ -83,6 +108,7 @@
         "data_description": {
           "grid_power_entity": "Leistung am Netzanschlusspunkt. Erwartetes Vorzeichen: positiv = Bezug, negativ = Einspeisung.",
           "grid_power_inverted": "Aktivieren, wenn dein Zähler Einspeisung positiv meldet.",
+          "pv_power_entity": "Aktuelle PV-Erzeugung. Wird für den Energiefluss und die Bilanz des Hausverbrauchs verwendet. Mehrere PV-Anlagen werden addiert.",
           "pv_forecast_entries": "Integrationen mit Solarprognose (z. B. Forecast.Solar, Solcast). Mehrere Einträge, z. B. einer je Dachfläche, werden addiert.",
           "weather_entity": "Optional. Verbessert die Verbrauchsprognose (z. B. Bedarf der Wärmepumpe).",
           "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entität selbst auf.",
@@ -299,21 +325,37 @@
       "step": {
         "user": {
           "title": "Verbraucher",
-          "description": "Jeder Verbraucher braucht einen eigenen Leistungs- und Energiesensor.",
+          "description": "Wähle den Typ und, wenn er in Home Assistant ist, das Gerät des Verbrauchers aus: SLEMS schlägt in den nächsten Schritten seine Entitäten vor, du prüfst und korrigierst sie. Die am besten passenden Geräte stehen oben. Lass das Gerät leer, um alle Entitäten selbst auszuwählen.",
+          "data": {
+            "consumer_type": "Typ",
+            "device": "Gerät",
+            "meter_device": "Messgerät"
+          },
+          "data_description": {
+            "consumer_type": "Der Verbrauch einer Wärmepumpe wird wetterabhängig prognostiziert; eine Heizpatrone wird typischerweise im Sommer für Warmwasser genutzt. Eine Wallbox gehört nie zur Prognose des Hausverbrauchs; im nächsten Schritt sind Stromvorgabe, 6–16 A und 5 Minuten Mindestlaufzeit und -pause vorgegeben, die Batterie-Unterstützung steht auf Automatisch.",
+            "device": "Der Verbraucher selbst, z. B. die Wärmepumpe, der Heizstab oder die Wallbox. Geräte, deren Entitäten SLEMS schon anderswo verwendet, fehlen in der Liste.",
+            "meter_device": "Optional, wenn ein anderes Gerät Leistung und Energie des Verbrauchers misst, z. B. eine smarte Steckdose oder ein Zähler im Verteiler. Leer lassen, wenn das Gerät sie selbst misst."
+          }
+        },
+        "consumer": {
+          "title": "Verbraucher",
+          "description": "Jeder Verbraucher braucht einen eigenen Leistungs- und Energiesensor. Die Vorschläge stammen von den ausgewählten Geräten; prüfe sie.",
           "data": {
             "name": "Name",
-            "consumer_type": "Typ",
             "power_entity": "Leistungssensor",
             "energy_entity": "Energiesensor",
             "included_in_meter": "Im Smart Meter enthalten",
             "show_in_flow": "Im Energiefluss anzeigen",
+            "hot_water": "Heizt einen Warmwasserspeicher",
             "control_mode": "Steuerung"
           },
           "data_description": {
-            "consumer_type": "Der Verbrauch einer Wärmepumpe wird wetterabhängig prognostiziert; eine Heizpatrone wird typischerweise im Sommer für Warmwasser genutzt. Eine Wallbox gehört nie zur Prognose des Hausverbrauchs; im nächsten Schritt sind Stromvorgabe, 6–16 A und 5 Minuten Mindestlaufzeit und -pause vorgegeben, die Batterie-Unterstützung steht auf Automatisch.",
+            "power_entity": "Seine elektrische Leistung; bei einer Wärmepumpe nicht die Heizleistung.",
+            "energy_entity": "Sein Zählerstand. Hat das Gerät keinen (z. B. ein my-PV-Gerät in der my-PV-Integration von Home Assistant), lege aus seinem Leistungssensor einen Helfer **Integral** an.",
             "included_in_meter": "Aktivieren, wenn der Verbraucher hinter dem Smart Meter hängt, sein Verbrauch also bereits in der gemessenen Netzleistung enthalten ist.",
             "show_in_flow": "Zeigt den Verbraucher als eigene Box im Energiefluss des Dashboards. Aus: Sein Verbrauch zählt weiter im Haus; die Verbraucherkarte zeigt ihn.",
-            "control_mode": "**Freigabe**: SLEMS schaltet selbst nichts, sondern stellt den Binärsensor **Freigabe** (an, wenn SLEMS den Verbraucher jetzt einschalten würde; Attribut **forced** ab dem spätesten Start des Tagesziels) und den Sensor **Spätester Start** bereit; eine eigene Automation startet das Gerät. Bei einer Wärmepumpe gilt die Freigabe ihrer Warmwasserladung: Gesteuert wird nur, was sie im Warmwasserbetrieb zieht, das Heizen bleibt ungesteuert."
+            "hot_water": "An, wenn die Wärmepumpe auch das Warmwasser bereitet. SLEMS fragt dann ihren Betriebsmodus (bei **Freigabe**) und die Temperatur des Speichers ab.",
+            "control_mode": "**Freigabe**: SLEMS schaltet selbst nichts, sondern stellt den Binärsensor **Freigabe** (an, wenn SLEMS den Verbraucher jetzt einschalten würde; Attribut **forced** ab dem spätesten Start des Tagesziels) und den Sensor **Spätester Start** bereit; eine eigene Automation startet das Gerät. Bei einer Wärmepumpe, die einen Warmwasserspeicher heizt, gilt die Freigabe ihrer Warmwasserladung: Gesteuert wird nur, was sie im Warmwasserbetrieb zieht, das Heizen bleibt ungesteuert."
           }
         },
         "control": {
@@ -339,7 +381,7 @@
             "mode_entity": "Betriebsmodus"
           },
           "data_description": {
-            "control_entity": "Schalter für Ein/Aus-Verbraucher, Number-Entität in W für leistungsgeregelte, in A für stromgeregelte Verbraucher (z. B. Ladestrom einer Wallbox); bei Stromvorgabe auch eine Auswahl mit Ampere-Optionen (z. B. **Max. Ladestrom** eines evcc-Ladepunkts in ha-evcc).",
+            "control_entity": "Schalter für Ein/Aus-Verbraucher, Number-Entität in W für leistungsgeregelte, in A für stromgeregelte Verbraucher (z. B. Ladestrom einer Wallbox); bei Stromvorgabe auch eine Auswahl mit Ampere-Optionen (z. B. **Max. Ladestrom** eines evcc-Ladepunkts in ha-evcc). Schalte die eigene Überschussregelung des Geräts aus (z. B. **Auto control** eines my-PV ELWA 2), sonst arbeitet sie gegen SLEMS.",
             "nominal_power_w": "Eine grobe Schätzung reicht, wenn **Gelernte Werte verwenden** an ist: SLEMS misst dann die tatsächliche Leistung, während es den Verbraucher betreibt (Betriebsmodus Aktiv), und verwendet sie nach etwa 15 Minuten Betrieb (den Median seiner letzten Betriebsstunde). Lieber etwas zu niedrig als zu hoch schätzen: Zu hoch wartet SLEMS auf mehr Überschuss und schaltet den Verbraucher womöglich nie ein, dann wird auch nichts gelernt. Bei einer Wärmepumpe mit **Freigabe**: ihre Leistung beim Warmwasser; SLEMS lernt sie im Warmwasserbetrieb, sie folgt so der Leistungszahl.",
             "block_entity": "Solange der Verbraucher gesperrt ist (z. B. vom Gerät oder einer Automation), steuert SLEMS ihn nicht: ein Water Heater bei Betriebsart „off“, andere Entitäten, solange sie „on“ sind.",
             "priority": "1 = höchste Priorität bei der Verteilung von Überschuss.",

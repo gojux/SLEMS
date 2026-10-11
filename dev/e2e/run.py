@@ -289,7 +289,8 @@ def setup_system(token: str) -> None:
         token,
         FLOW,
         {"handler": "slems"},
-        {"user": {"grid_power_entity": "sensor.smart_meter_power", "pv_power_entity": "sensor.pv_power"}},
+        # The devices step is skipped while no device has a power sensor.
+        {"user": {}, "system": {"grid_power_entity": "sensor.smart_meter_power", "pv_power_entity": ["sensor.pv_power"]}},
         "system",
     )
     check(token, "system")
@@ -348,19 +349,22 @@ def battery_entities(token: str) -> None:
 
 def consumers(token: str) -> None:
     def measured(name: str, kind: str, power: str, energy: str, control: str) -> dict:
-        return {"name": name, "consumer_type": kind, "power_entity": power, "energy_entity": energy, "control_mode": control}
+        return {
+            "user": {"consumer_type": kind},
+            "consumer": {"name": name, "power_entity": power, "energy_entity": energy, "control_mode": control},
+        }
 
     subentry(
         token,
         "consumer",
-        {"user": measured("Heat pump", "heat_pump", "sensor.heat_pump_power", "sensor.heat_pump_energy", "none")},
+        measured("Heat pump", "heat_pump", "sensor.heat_pump_power", "sensor.heat_pump_energy", "none"),
         "Heat pump (measured only)",
     )
     subentry(
         token,
         "consumer",
         {
-            "user": measured("Heating rod", "heating_rod", "sensor.heating_rod_power", "sensor.heating_rod_energy", "power"),
+            **measured("Heating rod", "heating_rod", "sensor.heating_rod_power", "sensor.heating_rod_energy", "power"),
             "control": {"control_entity": "input_number.sim_heating_rod_setpoint", "max_power_w": 3000},
         },
         "Heating rod (power set point)",
@@ -369,7 +373,7 @@ def consumers(token: str) -> None:
         token,
         "consumer",
         {
-            "user": measured("Wallbox", "wallbox", "sensor.wallbox_power", "sensor.wallbox_energy", "current"),
+            **measured("Wallbox", "wallbox", "sensor.wallbox_power", "sensor.wallbox_energy", "current"),
             "control": {"control_entity": "input_number.sim_wallbox_current"},
         },
         "Wallbox (current)",
@@ -378,7 +382,7 @@ def consumers(token: str) -> None:
         token,
         "consumer",
         {
-            "user": measured("Pump", "other", "sensor.heat_pump_power", "sensor.heat_pump_energy", "switch"),
+            **measured("Pump", "other", "sensor.heat_pump_power", "sensor.heat_pump_energy", "switch"),
             "control": {"control_entity": "input_boolean.sim_car_connected", "nominal_power_w": 400},
         },
         "Pump (switched)",
@@ -491,7 +495,12 @@ def options(token: str) -> None:
         token,
         "/api/config/config_entries/options/flow",
         {"handler": entry_id},
-        {"init": {"grid_modbus": True}, "grid_modbus": {"grid_modbus_host": "sunspec-meter"}, "grid_meter": {}},
+        {
+            "init": {},
+            "system": {"grid_modbus": True},
+            "grid_modbus": {"grid_modbus_host": "sunspec-meter"},
+            "grid_meter": {},
+        },
         "Options: smart meter over Modbus",
     )
     check(token, "Options")
@@ -520,7 +529,7 @@ def reconfigure(token: str) -> None:
                 "ha_options": {},
                 "ha_limits": {},
             },
-            "consumer": {"user": {}, "control": {}},
+            "consumer": {"user": {}, "consumer": {}, "control": {}},
             "tariff": {"items": "finish", "details": {}},
         }[kind]
         result = run_flow(token, SUBENTRY_FLOW, {"handler": [entry_id, kind], "subentry_id": item["subentry_id"]}, steps, label)

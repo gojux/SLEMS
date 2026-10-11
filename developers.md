@@ -121,7 +121,8 @@ custom_components/slems/
   number.py          numeric runtime settings (averaging window, allocation, peak shaving)
   binary_sensor.py   battery charge secured
   util.py            unit conversion of HA states, clamping to number entities
-  entity_match.py    suggests the entities of a battery device per role (config flow)
+  entity_match.py    suggests the entities of a battery, consumer, smart meter or PV device per role (config flow)
+  energy_dashboard.py  grid, PV and device sensors of HA's energy dashboard (config flow suggestions)
   drivers/
     base.py          BatteryDriver contract (read_telemetry, apply_power, release_control)
     marstek_venus_e3.py
@@ -1235,11 +1236,39 @@ limit the maximum gain.
 - Every consumer is a config subentry of type `consumer`: power and energy
   sensor (required), type, *included in smart meter*, control mode and, for
   controlled consumers, control entity, power range, block entity and priority.
+  Its flow: `user` (type, device, meter device) → `consumer` (name, power,
+  energy, control mode; *hot water* for a heat pump) → `control` →
+  `start_options` / `hot_water_states`. The device list is ranked by
+  `entity_match.consumer_device_fit` (best type; known integrations in
+  `CONSUMER_PLATFORMS`, matched roles), the meter list by `meter_device_fit`;
+  devices with entities used by the system or another subentry are left out.
+  `match_consumer_entities` scores per role and control mode (electrical
+  before heat output, total before daily counters, a heat pump's storage only
+  by hot water names); `suggest_consumer_control` adds the range of the control
+  entity. Suggestions fill what is not stored; with another device than before
+  they replace the stored values. `hot_water` and the device ids are stored
+  for reconfiguring; a heat pump without `hot_water` is not asked for its
+  operating mode, its release is then a plain one.
 - Battery entities are registered with `config_subentry_id`, so removing a
   battery also removes its device and entities.
 - The PV forecast is configured as a list of config entry ids of solar forecast
   providers (`async_get_solar_forecast` of their `energy` platform, as used by
   the energy dashboard). Any provider works; several entries are summed.
+- The system flow (config `user` / options `init`) first asks for the smart
+  meter device and the PV devices (`grid_device_fit` / `pv_device_fit`,
+  preselected from the devices of the stored sensors, at the first setup from
+  the energy dashboard), then `system` with what `_async_suggest_system`
+  suggests: grid power and counters (`match_grid_entities`; the dashboard's
+  sensors if they belong to the chosen device or to none, with the
+  dashboard's sign), PV power per device (`match_pv_power`), the dashboard's
+  forecast entries (else all providers), the only weather entity and the
+  outdoor sensor of a heat pump consumer. The devices are not stored. The
+  form shows the current grid and PV power to check the sign.
+- `pv_power_entity` is a list (one string in entries from before several PV
+  systems were possible; `util.entity_ids` reads both). Their power is summed;
+  one that reports nothing counts as 0 (micro inverters at night), the sum is
+  unknown only if none reports; today's PV energy is restored from statistics
+  only if every PV sensor has them.
 
 ### Finding batteries
 
@@ -1858,3 +1887,5 @@ repository (otherwise its *brands* check fails).
 | 2026-10-11 | The controller expects a battery command that reverses the direction to show up after the battery's learned reversal time (the joint one until learned, never shorter than the normal time), and no command before the one issued before it (`command_arrivals`); replaces the diagnostics-only use of 2026-10-02. Measured on three Venus E 3.0 over Modbus: about 0.35–0.6 s for a step, 1.6–1.7 s for a reversal; with the normal time the controller counted a reversal as arrived about 1 s early and corrected the remaining error a second time. Steps out of standby (from 0 W) are learned apart for the diagnostics (`battery_start_responses`): if a start is clearly faster than a reversal, a direction change can hand the power to a battery in standby at once instead of reversing the active one and ramping over. |
 | 2026-10-11 | The price plan (`plan_grid_charge`) also runs when the feed-in credit follows the market price, without grid charging or feeding in from the batteries, and then reaches the last known price: before, such a credit only had the price hold, which knows no surplus hours, so the difference between a low credit at noon and a high one in the morning or evening was lost. The plan of the real control is computed in the executor (`_async_grid_charge`), the control keeps the last plan meanwhile and starts a cycle when the new one is ready; the simulation computes it directly. Measured on a Ryzen 7 8845HS for 36 hours in quarter hours: 30–50 ms for this case, up to about 130 ms with grid charging and feeding in from the batteries (a small battery takes longer: finer steps give more options to keep room); a Raspberry Pi 4 is about 8–10 times slower, which blocked the event loop for up to a second about once a minute. |
 | 2026-10-11 | Feeding in from the batteries pays the wear costs per kWh fed in (as a cost of the plan, not as money): energy fed in that the batteries would not need until the PV refill is charged again by PV that would otherwise be fed in, an extra cycle the plan counted as free. Energy fed in instead of covering the house later adds no cycle; there the wear is too strict, but that case only pays when the credit is above the later import price with all fees, so it hardly changes a decision. Wear on every kWh stored would be exact, but it would also shift the price hold and the PV absorption, for about 1 ct/kWh. |
+| 2026-10-11 | A consumer is set up from its device, like a battery from entities: the first step asks for the type, the device and an optional meter device, the later steps show the entities suggested from them. The device list is a select of its own rather than HA's device selector, which can neither rank nor say why a device fits; it is ranked by the type each device fits best, as the type is chosen in the same form. For the same reason *hot water* of a heat pump is asked in the second step, where the type is known: HA forms cannot show a field depending on another one of the same form. A heat pump integration often reports the heat output next to the electrical power (Hoval: *current power output* and *electrical power input*), so heat output and heat quantities count against a role. |
+| 2026-10-11 | The system is set up from the devices of the smart meter and the PV systems and from HA's energy dashboard, which since 2025 also holds the grid and PV power with the sign of the grid power: the dashboard's sign is taken as is; without it the sign is not guessed per integration (the sign of a meter differs between integrations and their versions), the form shows the current grid and PV power instead. Several PV systems are a list summed up everywhere the PV power is read, rather than a template sensor the user would have to create; the SolarEdge integrations of core and HACS put the inverter and its meter on devices of their own, so the meter ranks as the smart meter by its import and export counters. |

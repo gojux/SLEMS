@@ -11,9 +11,11 @@ discovery).
 from __future__ import annotations
 
 import asyncio
+from collections import Counter
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 import socket
-from collections.abc import Iterable, Mapping
 from typing import Any
 
 import voluptuous as vol
@@ -113,7 +115,11 @@ from .const import (
     CONF_MAX_POWER_W,
     CONF_MIN_POWER_W,
     CONF_MODE_ENTITY,
+    CONF_HOT_WATER,
     CONF_HOT_WATER_STATES,
+    CONF_METER_DEVICE,
+    CONF_GRID_DEVICE,
+    CONF_PV_DEVICES,
     CONF_NOMINAL_POWER_W,
     CONF_PRIORITY,
     DEFAULT_PRIORITY,
@@ -151,11 +157,25 @@ from .drivers.marstek_venus_e3 import HARDWARE_MAX_POWER_W, MarstekVenusE3Driver
 from .entity_match import (
     CAPACITY,
     EntityInfo,
+    consumer_device_fit,
+    grid_device_fit,
     match_battery_entities,
+    match_consumer_entities,
+    match_grid_entities,
+    match_outdoor_temperature,
+    match_pv_power,
+    means_hot_water,
+    meter_device_fit,
+    pv_device_fit,
+    suggest_consumer_control,
     suggest_control,
+    suggest_control_mode,
+    suggest_hot_water,
     suggest_mode_options,
     suggest_remote_options,
+    suggest_start_options,
 )
+from .energy_dashboard import EnergyDashboard, async_energy_dashboard
 from .energy_history import async_grid_energy
 from .tariff import (
     Group,
@@ -210,7 +230,7 @@ from .grid_meter import (
     read_power,
 )
 from .pv_forecast import async_forecast_provider_entries
-from .util import state_as_kwh, state_as_watts
+from .util import entity_ids, state_as_kwh, state_as_watts
 
 # Venus E 3.0 usable capacity.
 DEFAULT_CAPACITY_WH = 5120
@@ -300,6 +320,10 @@ async def _async_system_schema(
     hass: HomeAssistant, defaults: dict[str, Any]
 ) -> vol.Schema:
     """Schema for the system settings, shared by config and options flow."""
+    defaults = {**defaults}
+    if pv := entity_ids(defaults.get(CONF_PV_POWER_ENTITY)):
+        # Stored as one entity id before several PV systems were possible.
+        defaults[CONF_PV_POWER_ENTITY] = list(pv)
     providers = await async_forecast_provider_entries(hass)
     forecast_field: dict = {}
     if providers:
@@ -332,7 +356,9 @@ async def _async_system_schema(
             vol.Required(
                 CONF_GRID_MODBUS, default=defaults.get(CONF_GRID_MODBUS, False)
             ): selector.BooleanSelector(),
-            optional(CONF_PV_POWER_ENTITY): _POWER_SENSOR,
+            optional(CONF_PV_POWER_ENTITY): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor", device_class=SensorDeviceClass.POWER, multiple=True)
+            ),
             **forecast_field,
             optional(CONF_WEATHER_ENTITY): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="weather")
@@ -378,14 +404,62 @@ def _meter_label(meter: SunSpecMeter, power: float | None) -> str:
 
 
 class _GridModbusSteps:
-    """Steps for reading the grid power over Modbus, shared by config and options flow."""
+    """System steps shared by config and options flow: the devices of the smart meter and
+    the PV systems, the system settings suggested from them, and reading the grid power
+    over Modbus."""
 
     hass: HomeAssistant
     _system: dict[str, Any]
     _meters: list[tuple[SunSpecMeter, float | None]]
+    # The stored system settings (empty at the first setup) and the suggestions.
+    _current: dict[str, Any]
+    _suggested: dict[str, Any]
+    _devices_changed: bool
 
     def _async_finish_system(self) -> ConfigFlowResult:
         raise NotImplementedError
+
+    def _entry(self) -> ConfigEntry | None:
+        return None
+
+    async def _async_devices_step(
+        self, step_id: str, user_input: dict[str, Any] | None, current: dict[str, Any]
+    ) -> ConfigFlowResult:
+        """Smart meter and PV devices; the next step shows what SLEMS suggests from them."""
+        dashboard = await async_energy_dashboard(self.hass)
+        grid, pv = _system_devices(self.hass, current, dashboard)
+        if user_input is not None:
+            chosen_grid = user_input.get(CONF_GRID_DEVICE)
+            chosen_pv = list(user_input.get(CONF_PV_DEVICES) or [])
+            self._current = current
+            self._devices_changed = (chosen_grid, sorted(chosen_pv)) != (grid, sorted(pv))
+            self._suggested = await _async_suggest_system(self.hass, self._entry(), chosen_grid, chosen_pv, dashboard)
+            return await self.async_step_system()
+        used = _used_entities(self._entry(), None, system=False)
+        candidates = _device_candidates(self.hass, used, (grid, *pv))
+        fields: dict = {}
+        if grids := _device_select(candidates, grid_device_fit, grid, power_of=_grid_power_of):
+            fields[vol.Optional(CONF_GRID_DEVICE, description={"suggested_value": grid})] = grids
+        if pvs := _device_select(candidates, pv_device_fit, pv, power_of=match_pv_power, multiple=True):
+            fields[vol.Optional(CONF_PV_DEVICES, description={"suggested_value": pv})] = pvs
+        if not fields:
+            # No devices to choose from: straight to the settings.
+            return await self._async_devices_step(step_id, {}, current)
+        return self.async_show_form(step_id=step_id, data_schema=vol.Schema(fields))
+
+    async def async_step_system(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """The system settings, suggested from the devices and the energy dashboard."""
+        if user_input is not None:
+            return await self._async_system_done(user_input, self._current)
+        if self._devices_changed:
+            defaults = {**self._current, **self._suggested}
+        else:
+            defaults = {**self._suggested, **self._current}
+        return self.async_show_form(
+            step_id="system",
+            data_schema=await _async_system_schema(self.hass, defaults),
+            description_placeholders=_now_placeholders(self.hass, defaults),
+        )
 
     async def _async_system_done(
         self, user_input: dict[str, Any], previous: dict[str, Any]
@@ -571,11 +645,7 @@ class SlemsConfigFlow(_GridModbusSteps, ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        if user_input is not None:
-            return await self._async_system_done(user_input, {})
-        return self.async_show_form(
-            step_id="user", data_schema=await _async_system_schema(self.hass, {})
-        )
+        return await self._async_devices_step("user", user_input, {})
 
     @staticmethod
     @callback
@@ -606,11 +676,10 @@ class SlemsOptionsFlow(_GridModbusSteps, OptionsFlow):
         # Options fully replace the initial data, so a cleared optional field
         # does not fall back to the value from the first setup.
         current = dict(self.config_entry.options or self.config_entry.data)
-        if user_input is not None:
-            return await self._async_system_done(user_input, current)
-        return self.async_show_form(
-            step_id="init", data_schema=await _async_system_schema(self.hass, current)
-        )
+        return await self._async_devices_step("init", user_input, current)
+
+    def _entry(self) -> ConfigEntry | None:
+        return self.config_entry
 
 
 class BatterySubentryFlow(ConfigSubentryFlow):
@@ -1170,32 +1239,145 @@ async def _option_labels(hass: HomeAssistant, entity_id: str, options: list[str]
     ]
 
 
+def _entity_info(hass: HomeAssistant, entry: er.RegistryEntry) -> EntityInfo:
+    """An entity as the matcher sees it."""
+    state = hass.states.get(entry.entity_id)
+    attributes = state.attributes if state else {}
+    return EntityInfo.create(
+        entry.entity_id,
+        entry.translation_key,
+        entry.original_name,
+        entry.name,
+        device_class=entry.device_class or entry.original_device_class or attributes.get("device_class"),
+        unit=attributes.get("unit_of_measurement") or entry.unit_of_measurement,
+        state_class=attributes.get("state_class"),
+        options=tuple(str(option) for option in attributes.get("options") or ()),
+        minimum=attributes.get("min"),
+        maximum=attributes.get("max"),
+        state=state.state if state else None,
+        platform=entry.platform,
+    )
+
+
 def _device_entities(hass: HomeAssistant, device_id: str) -> list[EntityInfo]:
     """The enabled entities of a device as the matcher sees them."""
-    infos = []
-    for entry in er.async_entries_for_device(er.async_get(hass), device_id):
-        if entry.disabled_by is not None:
+    return [
+        _entity_info(hass, entry)
+        for entry in er.async_entries_for_device(er.async_get(hass), device_id)
+        if entry.disabled_by is None
+    ]
+
+
+@dataclass
+class _DeviceCandidate:
+    name: str
+    platform: str
+    infos: list[EntityInfo]
+
+
+def _used_entities(entry: ConfigEntry | None, own_subentry: str | None, *, system: bool) -> set[str]:
+    """Entity ids SLEMS uses: of the subentries except ``own_subentry``, with ``system`` also the system's."""
+    if entry is None:
+        return set()
+    configs = [subentry.data for subentry_id, subentry in entry.subentries.items() if subentry_id != own_subentry]
+    if system:
+        configs += [entry.data, entry.options]
+    used: set[str] = set()
+    for config in configs:
+        for value in config.values():
+            values = value if isinstance(value, list) else [value]
+            used.update(v for v in values if isinstance(v, str) and "." in v)
+    return used
+
+
+def _device_of(hass: HomeAssistant, entity_id: str | None) -> str | None:
+    entry = er.async_get(hass).async_get(entity_id) if entity_id else None
+    return entry.device_id if entry is not None else None
+
+
+def _device_candidates(hass: HomeAssistant, used: set[str], keep: Iterable[str | None]) -> dict[str, _DeviceCandidate]:
+    """Devices with entities, without SLEMS's own and those with an entity in ``used`` (unless in ``keep``)."""
+    keep = set(keep)
+    by_device: dict[str, list[er.RegistryEntry]] = {}
+    for entity in er.async_get(hass).entities.values():
+        if entity.device_id and entity.disabled_by is None:
+            by_device.setdefault(entity.device_id, []).append(entity)
+    devices = dr.async_get(hass)
+    result: dict[str, _DeviceCandidate] = {}
+    for device_id, entities in by_device.items():
+        platforms = Counter(entity.platform for entity in entities)
+        if DOMAIN in platforms:
             continue
-        state = hass.states.get(entry.entity_id)
-        attributes = state.attributes if state else {}
-        infos.append(
-            EntityInfo.create(
-                entry.entity_id,
-                entry.translation_key,
-                entry.original_name,
-                entry.name,
-                device_class=entry.device_class or entry.original_device_class
-                or attributes.get("device_class"),
-                unit=attributes.get("unit_of_measurement") or entry.unit_of_measurement,
-                state_class=attributes.get("state_class"),
-                options=tuple(attributes.get("options") or ()),
-                minimum=attributes.get("min"),
-                maximum=attributes.get("max"),
-                state=state.state if state else None,
-                platform=entry.platform,
-            )
+        if device_id not in keep and any(entity.entity_id in used for entity in entities):
+            continue
+        if (device := devices.async_get(device_id)) is None:
+            continue
+        result[device_id] = _DeviceCandidate(
+            name=device.name_by_user or device.name or device_id,
+            platform=platforms.most_common(1)[0][0],
+            infos=[_entity_info(hass, entity) for entity in entities],
         )
-    return infos
+    return result
+
+
+def _consumer_power(infos: list[EntityInfo]) -> str | None:
+    return match_consumer_entities(infos, ConsumerType.OTHER, ControlMode.NONE).get(CONF_POWER_ENTITY)
+
+
+def _device_select(
+    candidates: Mapping[str, _DeviceCandidate],
+    fit: Callable[[list[EntityInfo]], float],
+    keep: str | Iterable[str] | None,
+    *,
+    power_of: Callable[[list[EntityInfo]], str | None] = _consumer_power,
+    boost: set[str] = frozenset(),  # type: ignore[assignment]
+    multiple: bool = False,
+) -> selector.SelectSelector | None:
+    """Devices that fit, the best first, with the power they measure now; None if none fits.
+
+    ``boost``: devices to rank higher, e.g. those of the energy dashboard.
+    """
+    keep_ids = {keep} if isinstance(keep, str) else set(keep or ())
+    scored = []
+    for device_id, candidate in candidates.items():
+        score = fit(candidate.infos)
+        if score > 0 and device_id in boost:
+            score += 3
+        if score > 0 or device_id in keep_ids:
+            scored.append((-score, candidate.name.lower(), device_id, candidate))
+    if not scored:
+        return None
+    options = []
+    for _score, _name, device_id, candidate in sorted(scored):
+        label = f"{candidate.name} ({candidate.platform})"
+        power = power_of(candidate.infos)
+        info = next((info for info in candidate.infos if info.entity_id == power), None)
+        if info is not None and info.has_value:
+            label += f" – {info.state} {info.unit}"
+        options.append(selector.SelectOptionDict(value=device_id, label=label))
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(options=options, mode=selector.SelectSelectorMode.DROPDOWN, multiple=multiple)
+    )
+
+
+def _suggest_consumer(
+    hass: HomeAssistant,
+    consumer_type: ConsumerType,
+    device_id: str | None,
+    infos: list[EntityInfo],
+    meter_infos: list[EntityInfo],
+) -> dict[str, Any]:
+    """Name, measurement and control mode suggested from the consumer's device and its meter device."""
+    data: dict[str, Any] = {}
+    if device_id and (device := dr.async_get(hass).async_get(device_id)):
+        data[CONF_NAME] = device.name_by_user or device.name
+    data.update(match_consumer_entities(meter_infos, ConsumerType.OTHER, ControlMode.NONE))
+    hot_water = suggest_hot_water(infos) if infos else True
+    if consumer_type is ConsumerType.HEAT_PUMP:
+        data[CONF_HOT_WATER] = hot_water
+    if infos:
+        data[CONF_CONTROL_MODE] = suggest_control_mode(infos, consumer_type, hot_water=hot_water).value
+    return data
 
 
 def _suggest_from_device(hass: HomeAssistant, device_id: str) -> dict[str, Any]:
@@ -1237,6 +1419,91 @@ def _suggest_from_device(hass: HomeAssistant, device_id: str) -> dict[str, Any]:
     return data
 
 
+def _grid_power_of(infos: list[EntityInfo]) -> str | None:
+    return match_grid_entities(infos).get(CONF_GRID_POWER_ENTITY)
+
+
+def _system_devices(
+    hass: HomeAssistant, current: dict[str, Any], dashboard: EnergyDashboard
+) -> tuple[str | None, list[str]]:
+    """Devices of the stored grid and PV sensors, at the first setup those of the energy dashboard."""
+    grid_sources = [current.get(CONF_GRID_POWER_ENTITY)] if current else [dashboard.grid_power, dashboard.grid_import]
+    grid = next((device for entity_id in grid_sources if (device := _device_of(hass, entity_id))), None)
+    pv_sources = entity_ids(current.get(CONF_PV_POWER_ENTITY)) if current else dashboard.pv_power + dashboard.pv_energy
+    pv: list[str] = []
+    for entity_id in pv_sources:
+        if (device := _device_of(hass, entity_id)) and device not in pv:
+            pv.append(device)
+    return grid, pv
+
+
+async def _async_suggest_system(
+    hass: HomeAssistant,
+    entry: ConfigEntry | None,
+    grid_device: str | None,
+    pv_devices: list[str],
+    dashboard: EnergyDashboard,
+) -> dict[str, Any]:
+    """System settings suggested from the chosen devices, the energy dashboard and the setup."""
+    data: dict[str, Any] = {}
+    if grid_device:
+        data.update(match_grid_entities(_device_entities(hass, grid_device)))
+    for key, entity_id in (
+        (CONF_GRID_POWER_ENTITY, dashboard.grid_power),
+        (CONF_GRID_IMPORT_ENERGY_ENTITY, dashboard.grid_import),
+        (CONF_GRID_EXPORT_ENERGY_ENTITY, dashboard.grid_export),
+    ):
+        if not entity_id:
+            continue
+        device = _device_of(hass, entity_id)
+        # What the user chose in the dashboard, if it belongs to the chosen device or to none.
+        if grid_device is None or device == grid_device or (device is None and key not in data):
+            data[key] = entity_id
+    if dashboard.grid_power and data.get(CONF_GRID_POWER_ENTITY) == dashboard.grid_power:
+        data[CONF_GRID_POWER_INVERTED] = dashboard.grid_power_inverted
+
+    pv_power: list[str] = []
+    for device in pv_devices:
+        power = next((e for e in dashboard.pv_power if _device_of(hass, e) == device), None)
+        power = power or match_pv_power(_device_entities(hass, device))
+        if power and power not in pv_power:
+            pv_power.append(power)
+    if not pv_devices:
+        pv_power = list(dashboard.pv_power)
+    if pv_power:
+        data[CONF_PV_POWER_ENTITY] = pv_power
+
+    providers = [provider.entry_id for provider in await async_forecast_provider_entries(hass)]
+    forecasts = [e for e in dashboard.pv_forecast_entries if e in providers] or providers
+    if forecasts:
+        data[CONF_PV_FORECAST_ENTRIES] = forecasts
+    if len(weather := hass.states.async_entity_ids("weather")) == 1:
+        data[CONF_WEATHER_ENTITY] = weather[0]
+    if entry is not None:
+        # The outdoor sensor of a heat pump has the history the forecast needs.
+        for subentry in entry.subentries.values():
+            device = subentry.data.get(CONF_DEVICE)
+            if subentry.data.get(CONF_CONSUMER_TYPE) == ConsumerType.HEAT_PUMP and device:
+                if outdoor := match_outdoor_temperature(_device_entities(hass, device)):
+                    data[CONF_OUTDOOR_TEMPERATURE_ENTITY] = outdoor
+                    break
+    return data
+
+
+def _now_placeholders(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, str]:
+    """Current grid and PV power of the suggested sensors, to check the sign."""
+
+    def watts(entity_ids_: Iterable[str]) -> str:
+        values = [w for e in entity_ids_ if (w := state_as_watts(hass.states.get(e))) is not None]
+        return f"{sum(values):.0f} W" if values else "–"
+
+    grid = data.get(CONF_GRID_POWER_ENTITY)
+    return {
+        "grid_now": watts([grid] if grid else []),
+        "pv_now": watts(entity_ids(data.get(CONF_PV_POWER_ENTITY))),
+    }
+
+
 def _battery_data(user_input: dict[str, Any], model: BatteryModel) -> dict[str, Any]:
     """Subentry data of a battery (name still included) from the form input."""
     data = dict(user_input)
@@ -1257,13 +1524,21 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
     """Add or reconfigure a consumer.
 
     Every consumer must provide its own power and energy sensor. Control via a
-    switch, a power set point or a release is optional; a heat pump's release is
-    one for its hot water charge (operating mode and its hot water states).
+    switch, a power set point or a release is optional; the release of a heat
+    pump that heats hot water is one for its hot water charge (operating mode and
+    its hot water states). The first step picks the consumer's device (and one
+    that measures it, if another); the later steps show the entities suggested
+    from them.
     """
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
         self._hot_water_labels: list[selector.SelectOptionDict] = []
+        # Entities of the consumer's device and what SLEMS suggests from them.
+        self._infos: list[EntityInfo] = []
+        self._suggested: dict[str, Any] = {}
+        # Another device than before: its suggestions replace the stored values.
+        self._device_changed = False
 
     def _existing(self) -> dict[str, Any]:
         if self.source == SOURCE_RECONFIGURE:
@@ -1271,53 +1546,142 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
             return {CONF_NAME: subentry.title, **subentry.data}
         return {}
 
+    def _with_suggestions(self, existing: dict[str, Any], suggested: dict[str, Any]) -> dict[str, Any]:
+        if self._device_changed:
+            return {**existing, **suggested}
+        return {**suggested, **existing}
+
+    def _existing_devices(self) -> tuple[str | None, str | None]:
+        """(device, meter device) of the consumer being reconfigured, also from its entities."""
+        existing = self._existing()
+        if not existing:
+            return None, None
+        devices = dr.async_get(self.hass)
+        device = existing.get(CONF_DEVICE)
+        if device is None or devices.async_get(device) is None:
+            device = _device_of(self.hass, existing.get(CONF_CONTROL_ENTITY)) or _device_of(
+                self.hass, existing.get(CONF_POWER_ENTITY)
+            )
+        meter = existing.get(CONF_METER_DEVICE)
+        if meter is None or devices.async_get(meter) is None:
+            meter = _device_of(self.hass, existing.get(CONF_POWER_ENTITY))
+        return device, (meter if meter != device else None)
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
-        """Measurement and control mode."""
+        """Type and device of the consumer; SLEMS suggests its entities in the next steps."""
+        known = self._existing_devices()
         if user_input is not None:
-            self._data = user_input
+            consumer_type = ConsumerType(user_input[CONF_CONSUMER_TYPE])
+            device = user_input.get(CONF_DEVICE)
+            meter = user_input.get(CONF_METER_DEVICE)
+            self._device_changed = (device, meter) != known
+            self._infos = _device_entities(self.hass, device) if device else []
+            self._data = {CONF_CONSUMER_TYPE: consumer_type.value}
+            if device:
+                self._data[CONF_DEVICE] = device
+            if meter:
+                self._data[CONF_METER_DEVICE] = meter
+            meter_infos = _device_entities(self.hass, meter) if meter else self._infos
+            self._suggested = _suggest_consumer(self.hass, consumer_type, device, self._infos, meter_infos)
+            # The energy dashboard's sensors of the measuring device are what the user chose there.
+            measuring = meter or device
+            dashboard = await async_energy_dashboard(self.hass)
+            for energy, power in dashboard.devices.items():
+                if measuring and _device_of(self.hass, energy) == measuring:
+                    self._suggested[CONF_ENERGY_ENTITY] = energy
+                    if power:
+                        self._suggested[CONF_POWER_ENTITY] = power
+                    break
+            return await self.async_step_consumer()
+
+        defaults = self._existing()
+        device, meter = known
+        dashboard = await async_energy_dashboard(self.hass)
+        in_dashboard = {
+            device_id
+            for energy, power in dashboard.devices.items()
+            for entity_id in (energy, power)
+            if (device_id := _device_of(self.hass, entity_id))
+        }
+        used = _used_entities(self._get_entry(), self._subentry_id(), system=True)
+        candidates = _device_candidates(self.hass, used, (device, meter))
+        fields: dict = {
+            vol.Required(
+                CONF_CONSUMER_TYPE,
+                default=defaults.get(CONF_CONSUMER_TYPE, ConsumerType.OTHER.value),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[t.value for t in ConsumerType],
+                    translation_key=CONF_CONSUMER_TYPE,
+                )
+            ),
+        }
+        # The type is chosen in the same form: a device ranks by the type it fits best.
+        devices = _device_select(
+            candidates,
+            lambda infos: max(consumer_device_fit(infos, t) for t in ConsumerType),
+            device,
+            boost=in_dashboard,
+        )
+        if devices is not None:
+            fields[vol.Optional(CONF_DEVICE, description={"suggested_value": device})] = devices
+        meters = _device_select(candidates, meter_device_fit, meter, boost=in_dashboard)
+        if meters is not None:
+            fields[vol.Optional(CONF_METER_DEVICE, description={"suggested_value": meter})] = meters
+        return self.async_show_form(step_id="user", data_schema=vol.Schema(fields))
+
+    def _subentry_id(self) -> str | None:
+        return self._get_reconfigure_subentry().subentry_id if self.source == SOURCE_RECONFIGURE else None
+
+    async def async_step_consumer(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Name, measurement and control mode, suggested from the device."""
+        consumer_type = ConsumerType(self._data[CONF_CONSUMER_TYPE])
+        if user_input is not None:
+            self._data.update(user_input)
             if ControlMode(user_input[CONF_CONTROL_MODE]) is ControlMode.NONE:
                 return self._async_finish()
             return await self.async_step_control()
 
-        defaults = self._existing()
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, vol.UNDEFINED)): str,
-                vol.Required(
-                    CONF_CONSUMER_TYPE,
-                    default=defaults.get(CONF_CONSUMER_TYPE, ConsumerType.OTHER.value),
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[t.value for t in ConsumerType],
-                        translation_key=CONF_CONSUMER_TYPE,
-                    )
-                ),
-                vol.Required(
-                    CONF_POWER_ENTITY, default=defaults.get(CONF_POWER_ENTITY, vol.UNDEFINED)
-                ): _POWER_SENSOR,
-                vol.Required(
-                    CONF_ENERGY_ENTITY, default=defaults.get(CONF_ENERGY_ENTITY, vol.UNDEFINED)
-                ): _ENERGY_SENSOR,
-                vol.Required(
-                    CONF_INCLUDED_IN_METER, default=defaults.get(CONF_INCLUDED_IN_METER, True)
-                ): selector.BooleanSelector(),
-                vol.Required(
-                    CONF_SHOW_IN_FLOW, default=defaults.get(CONF_SHOW_IN_FLOW, True)
-                ): selector.BooleanSelector(),
-                vol.Required(
-                    CONF_CONTROL_MODE,
-                    default=defaults.get(CONF_CONTROL_MODE, ControlMode.NONE.value),
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[m.value for m in ControlMode],
-                        translation_key=CONF_CONTROL_MODE,
-                    )
-                ),
-            }
+        existing = self._existing()
+        if consumer_type is ConsumerType.HEAT_PUMP and CONF_HOT_WATER not in existing and existing:
+            # Stored before the option existed: a hot water release has its operating mode.
+            existing[CONF_HOT_WATER] = bool(existing.get(CONF_MODE_ENTITY))
+        defaults = self._with_suggestions(existing, self._suggested)
+        fields: dict = {
+            vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, vol.UNDEFINED)): str,
+            vol.Required(
+                CONF_POWER_ENTITY, default=defaults.get(CONF_POWER_ENTITY, vol.UNDEFINED)
+            ): _POWER_SENSOR,
+            vol.Required(
+                CONF_ENERGY_ENTITY, default=defaults.get(CONF_ENERGY_ENTITY, vol.UNDEFINED)
+            ): _ENERGY_SENSOR,
+            vol.Required(
+                CONF_INCLUDED_IN_METER, default=defaults.get(CONF_INCLUDED_IN_METER, True)
+            ): selector.BooleanSelector(),
+            vol.Required(
+                CONF_SHOW_IN_FLOW, default=defaults.get(CONF_SHOW_IN_FLOW, True)
+            ): selector.BooleanSelector(),
+        }
+        if consumer_type is ConsumerType.HEAT_PUMP:
+            fields[
+                vol.Required(CONF_HOT_WATER, default=defaults.get(CONF_HOT_WATER, True))
+            ] = selector.BooleanSelector()
+        fields[
+            vol.Required(
+                CONF_CONTROL_MODE,
+                default=defaults.get(CONF_CONTROL_MODE, ControlMode.NONE.value),
+            )
+        ] = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[m.value for m in ControlMode],
+                translation_key=CONF_CONTROL_MODE,
+            )
         )
-        return self.async_show_form(step_id="user", data_schema=schema)
+        return self.async_show_form(step_id="consumer", data_schema=vol.Schema(fields))
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
@@ -1359,8 +1723,14 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
                 CONF_TEMPERATURE_2_ENTITY,
             )
             defaults = {k: v for k, v in defaults.items() if k in keep}
+        consumer_type = ConsumerType(self._data[CONF_CONSUMER_TYPE])
+        hot_water = consumer_type is ConsumerType.HEAT_PUMP and self._data.get(CONF_HOT_WATER, False)
+        if self._infos:
+            defaults = self._with_suggestions(
+                defaults, suggest_consumer_control(self._infos, consumer_type, mode, hot_water=hot_water)
+            )
 
-        wallbox = ConsumerType(self._data[CONF_CONSUMER_TYPE]) is ConsumerType.WALLBOX
+        wallbox = consumer_type is ConsumerType.WALLBOX
         if wallbox and CONF_MIN_ON_MINUTES not in defaults:
             defaults = {
                 **defaults,
@@ -1408,7 +1778,7 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
                 )
             )
         elif mode is ControlMode.RELEASE:
-            if ConsumerType(self._data[CONF_CONSUMER_TYPE]) is ConsumerType.HEAT_PUMP:
+            if hot_water:
                 fields[
                     vol.Required(CONF_MODE_ENTITY, default=defaults.get(CONF_MODE_ENTITY, vol.UNDEFINED))
                 ] = selector.EntitySelector(
@@ -1524,7 +1894,10 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
         entity_id = self._data[CONF_START_ENTITY]
         state = self.hass.states.get(entity_id)
         options = list(state.attributes.get("options", [])) if state else []
-        defaults = self._existing()
+        defaults = suggest_start_options(options)
+        existing = self._existing()
+        if existing.get(CONF_START_ENTITY) == entity_id:
+            defaults.update({key: existing[key] for key in (CONF_START_ON, CONF_START_OFF) if key in existing})
         option = selector.SelectSelector(
             selector.SelectSelectorConfig(
                 options=await _option_labels(self.hass, entity_id, options), custom_value=not options
@@ -1576,24 +1949,9 @@ _PERCENT = selector.NumberSelector(
 )
 
 
-# Parts of an operating mode's state or name that mean hot water.
-_HOT_WATER_WORDS = (
-    "hot_water", "hotwater", "dhw", "domestic", "warmwasser", "brauchwasser", "sanitary", "tap_water",
-    "water_heating", "eau_chaude",
-)
-
-
 def hot_water_guess(options: list[selector.SelectOptionDict]) -> list[str]:
     """Options of an operating mode that probably mean hot water (value or label)."""
-
-    def normal(text: str) -> str:
-        return text.lower().replace("-", "_").replace(" ", "_")
-
-    return [
-        option["value"]
-        for option in options
-        if any(word in normal(option["value"]) or word in normal(option["label"]) for word in _HOT_WATER_WORDS)
-    ]
+    return [option["value"] for option in options if means_hot_water(option["value"]) or means_hot_water(option["label"])]
 
 
 def _price_symbols(code: str) -> tuple[str, str]:

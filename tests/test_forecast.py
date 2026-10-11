@@ -124,7 +124,7 @@ def test_house_history_prefers_explicit_sources() -> None:
     hour_b = NOW - timedelta(hours=1)
     sources = ForecastSources(
         house=("sensor.slems_house", "sensor.legacy_house"),
-        grid="sensor.grid", grid_inverted=False, pv="sensor.pv",
+        grid="sensor.grid", grid_inverted=False, pv=("sensor.pv",),
         batteries=("sensor.battery",), heat_pumps=(), controllable=(),
         temperature=None, weather=None,
     )
@@ -144,7 +144,7 @@ def test_house_history_prefers_explicit_sources() -> None:
 def test_house_history_skips_hours_without_a_battery_value() -> None:
     hours = [NOW - timedelta(hours=h) for h in range(5, 0, -1)]
     sources = ForecastSources(
-        house=(), grid="sensor.grid", grid_inverted=False, pv="sensor.pv",
+        house=(), grid="sensor.grid", grid_inverted=False, pv=("sensor.pv",),
         batteries=("sensor.battery_a", "sensor.battery_b"), heat_pumps=(), controllable=(),
         temperature=None, weather=None,
     )
@@ -269,3 +269,13 @@ def test_vacation_days_dropped_after_the_longest_lookback() -> None:
     assert start in vacation.days
     vacation.mark(start + timedelta(days=HEAT_PUMP_LOOKBACK_DAYS + 2))
     assert start not in vacation.days
+
+
+def test_house_history_sums_several_pv_systems() -> None:
+    hour = NOW - timedelta(hours=1)
+    sources = ForecastSources(
+        house=(), grid="sensor.grid", grid_inverted=False, pv=("sensor.roof", "sensor.balcony"),
+        batteries=(), heat_pumps=(), controllable=(), temperature=None, weather=None,
+    )
+    means = {"sensor.grid": {hour: -500}, "sensor.roof": {hour: 1500}, "sensor.balcony": {hour: 400}}
+    assert build_house_history(sources, means) == {hour: 1400}
