@@ -391,6 +391,22 @@ def test_price_hold_leaves_the_deficit_to_the_grid() -> None:
     assert shaved.strategy is Strategy.PEAK_SHAVING and shaved.battery_power_w == -1000
 
 
+def test_peak_shaving_limit_holds_above_its_threshold() -> None:
+    peak = _with(peak_shaving=True)
+    # The price plan keeps the energy, the import above the limit still comes from the batteries.
+    held = allocate(-4000, battery(60), [], peak, None, discharge_limit_w=0.0)
+    assert held.strategy is Strategy.PEAK_SHAVING and held.battery_power_w == -1000
+    assert allocate(-2500, battery(60), [], peak, None, discharge_limit_w=0.0).battery_power_w == 0
+    # An unsupported consumer is left to the grid only up to the limit.
+    unsupported = allocate(-4000, battery(60), [], peak, None, unsupported_measured_w=3500)
+    assert unsupported.strategy is Strategy.PEAK_SHAVING and unsupported.battery_power_w == -1000
+    night = allocate(-4000, battery(80), [], peak, None, night_discharge_w=600, unsupported_measured_w=3500)
+    assert night.battery_power_w == -1000
+    # Planned grid charging pauses while the house alone is above the limit.
+    charging = allocate(-4000, battery(30), [], peak, None, grid_charge_w=1500.0, discharge_limit_w=0.0)
+    assert charging.strategy is Strategy.PEAK_SHAVING and charging.battery_power_w == -1000
+
+
 def test_grid_charge_outside_a_surplus_below_the_import_limit() -> None:
     charging = allocate(-800, battery(30), [], SETTINGS, None, grid_charge_w=1500.0)
     assert charging.strategy is Strategy.GRID_CHARGE and charging.battery_power_w == 1500

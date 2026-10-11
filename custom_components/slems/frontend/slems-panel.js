@@ -432,7 +432,7 @@ const STRINGS = {
         "Only with price aware control. Charges the batteries from the grid in cheap hours when the energy replaces more expensive import later, after the charge and discharge losses, the wear costs and the minimum gain; as late as possible before it is needed. Not when PV fills the batteries anyway.",
       grid_charge_max_power: "0 = the charge power of the batteries. Import peak shaving limits it as well.",
       grid_import_max:
-        "Charging from the grid never takes the grid import above this (house plus charging), e.g. for the main fuse; 0 = no limit. Import peak shaving limits it as well.",
+        "Charging from the grid never takes the grid import above this (house plus charging, sum of all phases), e.g. for the agreed connection power; 0 = no limit. Does not protect a single phase or the main fuse. Import peak shaving limits it as well.",
       battery_export:
         "Only with price aware control. Feeds in from the batteries when the credit of the hour is higher than what the energy is worth later (plus the minimum gain), accepting grid import later; not below the morning reserve, at most the maximum grid export while discharging and the feed-in cap. Only pays with a feed-in credit that follows the market price per hour. Check your contract and any subsidy: some do not allow feeding in energy that was charged from the grid.",
       price_min_gain:
@@ -1004,7 +1004,7 @@ const STRINGS = {
         "Nur mit preisbewusster Steuerung. Lädt die Batterien in günstigen Stunden aus dem Netz, wenn die Energie später teureren Bezug ersetzt, nach Lade- und Entladeverlusten, Verschleißkosten und Mindestgewinn; so spät wie möglich vor dem Bedarf. Nicht, wenn die PV die Batterien ohnehin füllt.",
       grid_charge_max_power: "0 = Ladeleistung der Batterien. Bezugsspitzen abfangen begrenzt zusätzlich.",
       grid_import_max:
-        "Netzladen hebt den Netzbezug (Haus plus Laden) nie über diesen Wert, z. B. wegen der Hauptsicherung; 0 = keine Grenze. Bezugsspitzen abfangen begrenzt zusätzlich.",
+        "Netzladen hebt den Netzbezug (Haus plus Laden, Summe aller Phasen) nie über diesen Wert, z. B. für die vereinbarte Anschlussleistung; 0 = keine Grenze. Schützt keine einzelne Phase und nicht die Hauptsicherung. Bezugsspitzen abfangen begrenzt zusätzlich.",
       battery_export:
         "Nur mit preisbewusster Steuerung. Speist aus den Batterien ein, wenn die Vergütung der Stunde höher ist als der spätere Wert der Energie (plus Mindestgewinn), und nimmt dafür späteren Netzbezug in Kauf; nicht unter die Morgenreserve, höchstens die maximale Einspeisung beim Entladen und die Einspeisebegrenzung. Lohnt nur mit einer Einspeisevergütung, die stündlich dem Börsenpreis folgt. Vertrag und Förderung prüfen: Manche erlauben nicht, aus dem Netz geladene Energie wieder einzuspeisen.",
       price_min_gain:

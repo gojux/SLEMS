@@ -451,8 +451,9 @@ take only part of the surplus before and feed in the rest at a positive
 price; strategy **Room for cheaper hours**) and, with **Charge batteries from
 the grid**, also charge from the grid when the import price including all fees
 is negative. Your own PV surplus is taken first. **Highest grid import while
-charging from the grid** (0 = no limit, e.g. for the main fuse) and the import
-limit of peak shaving cap the import. This only matters with a credit or an
+charging from the grid** (sum of all phases, 0 = no limit, e.g. for the
+agreed connection power; it does not protect a single phase or the main fuse)
+and the import limit of peak shaving cap the import. This only matters with a credit or an
 import price that follows the market price per hour.
 
 **Feed in from the batteries** (switch, off by default; only with price
@@ -1819,9 +1820,11 @@ sensor **Learned values in use** has all learned values as attributes.
 - **Import peak shaving** (switch) – off by default. When enabled and the total
   state of charge is at or below **Peak shaving state of charge threshold**, the
   batteries only discharge to keep the grid import below **Peak shaving grid
-  import limit**. The threshold is an absolute state of charge but cannot be
-  set below the minimum state of charge of the batteries; below 20 % the
-  settings show how much is left above the minimum. With **Automatic peak
+  import limit**. Above the threshold they cover the import above the limit
+  also while the price plan keeps their energy, while grid charging is planned
+  or for consumers without battery support. The threshold is an absolute
+  state of charge but cannot be set below the minimum state of charge of the
+  batteries; below 20 % the settings show how much is left above the minimum. With **Automatic peak
   shaving limit** SLEMS calculates the import limit itself: the lowest one for
   which the expected energy above it, until PV refills the batteries (the
   forecast surplus adds up to the energy back to the threshold, so a little

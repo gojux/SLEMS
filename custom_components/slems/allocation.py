@@ -288,10 +288,12 @@ def allocate(
     charge_secured = battery is not None and _charge_secured(
         battery, settings, expected_surplus_wh
     )
+    peak_w = _peak_excess_w(remaining, settings)
 
     if (
         battery is not None
         and grid_charge_w > 0
+        and peak_w == 0
         and not battery.is_full
         and grid_charge_w > remaining - settings.charge_grid_target_w
     ):
@@ -326,7 +328,7 @@ def allocate(
     ):
         normal = max(0.0, discharge_target - remaining - unsupported_w)
         discharge = min(
-            max(normal, night_discharge_w or 0.0, cap_export),
+            max(normal, night_discharge_w or 0.0, cap_export, peak_w),
             max_export - remaining,
             battery.max_discharge_w,
         )
@@ -429,6 +431,13 @@ def _peak_shaving_active(battery: BatteryGroup, settings: AllocationSettings) ->
     return settings.peak_shaving and battery.soc_pct <= settings.peak_shaving_soc_threshold_pct
 
 
+def _peak_excess_w(remaining_w: float, settings: AllocationSettings) -> float:
+    """Grid import above the peak shaving limit (any SoC), 0 without peak shaving."""
+    if not settings.peak_shaving:
+        return 0.0
+    return max(0.0, -remaining_w - settings.peak_shaving_grid_limit_w)
+
+
 def _cover_deficit(
     remaining_w: float,
     grid_target_w: float,
@@ -439,19 +448,22 @@ def _cover_deficit(
 ) -> Allocation:
     if battery is None:
         return Allocation(strategy=Strategy.SELF_CONSUMPTION)
-    if limit_w is not None and not _peak_shaving_active(battery, settings):
-        discharge = max(0.0, grid_target_w - remaining_w - unsupported_w)
-        return Allocation(
-            strategy=Strategy.PRICE_HOLD,
-            battery_power_w=-min(discharge, limit_w, battery.max_discharge_w),
-        )
+    # Peak shaving keeps the import below its limit also above its SoC
+    # threshold, where the price hold or unsupported consumers leave load to
+    # the grid.
+    peak_w = _peak_excess_w(remaining_w, settings)
     if _peak_shaving_active(battery, settings):
-        grid_import = -remaining_w
-        discharge = max(0.0, grid_import - settings.peak_shaving_grid_limit_w)
+        discharge = peak_w
         strategy = Strategy.PEAK_SHAVING
     else:
         discharge = max(0.0, grid_target_w - remaining_w - unsupported_w)
         strategy = Strategy.SELF_CONSUMPTION
+        if limit_w is not None:
+            discharge = min(discharge, limit_w)
+            strategy = Strategy.PRICE_HOLD
+        if peak_w > discharge:
+            discharge = peak_w
+            strategy = Strategy.PEAK_SHAVING
     return Allocation(
         strategy=strategy, battery_power_w=-min(discharge, battery.max_discharge_w)
     )

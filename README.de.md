@@ -476,8 +476,9 @@ des Überschusses auf und speisen den Rest zum positiven Preis ein; Strategie
 **Platz für günstigere Stunden**) und laden mit **Batterien aus dem Netz laden** auch
 aus dem Netz, wenn der Bezugspreis samt allen Entgelten negativ ist. Der
 eigene PV-Überschuss geht dabei vor. **Höchster Netzbezug beim Netzladen**
-(0 = keine Grenze, z. B. für die Hauptsicherung) und die Bezugsgrenze von
-Bezugsspitzen abfangen begrenzen den Bezug. Das wirkt nur mit einer
+(Summe aller Phasen, 0 = keine Grenze, z. B. für die vereinbarte
+Anschlussleistung; schützt keine einzelne Phase und nicht die Hauptsicherung)
+und die Bezugsgrenze von Bezugsspitzen abfangen begrenzen den Bezug. Das wirkt nur mit einer
 Vergütung oder einem Bezugspreis, die stündlich dem Börsenpreis folgen.
 
 **Batterien ins Netz entladen** (Schalter, standardmäßig aus; nur mit
@@ -1936,8 +1937,10 @@ alle gelernten Werte als Attribute.
 - **Bezugsspitzen abfangen** (Schalter): standardmäßig aus. Wenn aktiviert und
   der Gesamt-Ladezustand auf oder unter der **Ladezustand-Schwelle für
   Spitzenabfang** liegt, entladen die Batterien nur noch, um den Netzbezug
-  unter der **Bezugsgrenze für Spitzenabfang** zu halten. Die Schwelle ist ein
-  absoluter Ladezustand, lässt sich aber nicht unter den minimalen Ladezustand
+  unter der **Bezugsgrenze für Spitzenabfang** zu halten. Über der Schwelle
+  decken sie den Bezug über der Grenze auch, wenn der Preisplan ihre Energie
+  zurückhält, Netzladen geplant ist oder ein Verbraucher ohne
+  Batterieunterstützung läuft. Die Schwelle ist ein absoluter Ladezustand, lässt sich aber nicht unter den minimalen Ladezustand
   der Batterien setzen; unter 20 % zeigen die Einstellungen, wie viel über dem
   Minimum noch übrig ist. Mit **Automatische Bezugsgrenze** berechnet SLEMS die
   Grenze selbst: die niedrigste, bei der die erwartete Energie oberhalb davon
