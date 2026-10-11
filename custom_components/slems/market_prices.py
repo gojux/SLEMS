@@ -120,18 +120,28 @@ def default_source(country: str | None) -> PriceSource:
 
 
 class ZoneHolidays:
-    """Public holidays of a bidding zone's country (``day in zone_holidays``)."""
+    """Public holidays of a bidding zone's country (``day in zone_holidays``).
+
+    The years are computed by ``load`` in an executor: the holidays package
+    imports the country's module on its first use, which blocks. A year not
+    loaded yet has no holidays.
+    """
 
     def __init__(self, country: str) -> None:
         self.country = country
         self._days: dict[int, set[date]] = {}
 
     def __contains__(self, day: object) -> bool:
-        if not isinstance(day, date):
-            return False
-        if day.year not in self._days:
-            self._days[day.year] = self._of_year(day.year)
-        return day in self._days[day.year]
+        return isinstance(day, date) and day in self._days.get(day.year, ())
+
+    @property
+    def years(self) -> set[int]:
+        return set(self._days)
+
+    def load(self, years: Iterable[int]) -> None:
+        for year in years:
+            if year not in self._days:
+                self._days[year] = self._of_year(year)
 
     def _of_year(self, year: int) -> set[date]:
         national = set(holidays.country_holidays(self.country, years=year))
@@ -400,6 +410,7 @@ class MarketPrices:
         self.references_update: datetime | None = None
         # Public holidays of the bidding zone for the estimates.
         self._holidays: ZoneHolidays | None = None
+        self._holidays_loading: asyncio.Future | None = None
 
     @property
     def attribution(self) -> str:
@@ -428,6 +439,8 @@ class MarketPrices:
         }
         if references.get("updated"):
             self.references_update = dt_util.parse_datetime(references["updated"])
+        year = dt_util.now().year
+        await self._hass.async_add_executor_job(self._zone_holidays().load, (year, year + 1))
 
     def start(self) -> None:
         """Begin the regular update (after the entities restored the settings)."""
@@ -477,13 +490,24 @@ class MarketPrices:
 
     def estimates(self, start: datetime, end: datetime) -> dict[int, float]:
         """Estimated €/MWh per quarter hour (epoch s) after the last known price."""
-        country = SOURCE_COUNTRY[self.source]
-        if self._holidays is None or self._holidays.country != country:
-            self._holidays = ZoneHolidays(country)
-        public = self._holidays
+        public = self._zone_holidays()
+        if missing := {start.year, end.year} - public.years:
+            self._load_holidays(public, missing)
         return estimate_prices(
             self.prices, int(start.timestamp()), int(end.timestamp()), day_off=lambda day: day in public
         )
+
+    def _zone_holidays(self) -> ZoneHolidays:
+        country = SOURCE_COUNTRY[self.source]
+        if self._holidays is None or self._holidays.country != country:
+            self._holidays = ZoneHolidays(country)
+        return self._holidays
+
+    def _load_holidays(self, public: ZoneHolidays, years: set[int]) -> None:
+        """Load holiday years in the executor (another source's country, a new
+        year); until then the estimates go without them."""
+        if self._holidays_loading is None or self._holidays_loading.done():
+            self._holidays_loading = self._hass.async_add_executor_job(public.load, sorted(years))
 
     def hourly_means(self, start: datetime, end: datetime) -> dict[datetime, float]:
         return hourly_means(self.prices, start, end)

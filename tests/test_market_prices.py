@@ -116,6 +116,10 @@ def test_swiss_holidays_kept_in_most_cantons() -> None:
     from custom_components.slems.market_prices import ZoneHolidays
 
     swiss = ZoneHolidays("CH")
+    # Not loaded yet (the executor loads them): no holidays.
+    assert date(2026, 8, 1) not in swiss
+    swiss.load([2026])
+    assert swiss.years == {2026}
     # National, and cantonal ones kept in most cantons (Good Friday, Whit Monday).
     for day in (date(2026, 8, 1), date(2026, 4, 3), date(2026, 5, 25), date(2026, 12, 26)):
         assert day in swiss
@@ -123,6 +127,7 @@ def test_swiss_holidays_kept_in_most_cantons() -> None:
     assert date(2026, 5, 1) not in swiss
     assert date(2026, 6, 4) not in swiss
     german = ZoneHolidays("DE")
+    german.load([2026])
     assert date(2026, 10, 3) in german
     assert date(2026, 10, 31) not in german
 
