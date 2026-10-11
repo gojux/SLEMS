@@ -119,6 +119,7 @@ from .const import (
     CONF_HOT_WATER_STATES,
     CONF_METER_DEVICE,
     CONF_GRID_DEVICE,
+    CONF_GRID_PHASE_ENTITIES,
     CONF_PV_DEVICES,
     CONF_NOMINAL_POWER_W,
     CONF_PRIORITY,
@@ -354,6 +355,7 @@ async def _async_system_schema(
                 CONF_GRID_POWER_INVERTED,
                 default=defaults.get(CONF_GRID_POWER_INVERTED, False),
             ): selector.BooleanSelector(),
+            **{optional(key): _POWER_SENSOR for key in CONF_GRID_PHASE_ENTITIES},
             vol.Required(
                 CONF_GRID_MODBUS, default=defaults.get(CONF_GRID_MODBUS, False)
             ): selector.BooleanSelector(),

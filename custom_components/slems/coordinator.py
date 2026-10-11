@@ -54,6 +54,7 @@ from .const import (
     CONF_GRID_MODBUS_UNIT_ID,
     CONF_GRID_EXPORT_ENERGY_ENTITY,
     CONF_GRID_IMPORT_ENERGY_ENTITY,
+    CONF_GRID_PHASE_ENTITIES,
     CONF_GRID_POWER_ENTITY,
     CONF_GRID_POWER_INVERTED,
     CONF_HOUSE_HISTORY_ENTITY,
@@ -146,6 +147,8 @@ from .battery_support import BatterySupport, SupportBudget, next_refill, support
 from .grid_filter import GridPowerFilter
 from .grid_meter import ModbusGridMeter
 from .grid_quarters import GridQuarters
+from .netting import NettingCheck
+from .phases import Phase, PhaseLearner
 from .market_prices import MarketPrices
 from .learning import (
     CapacityLearner,
@@ -253,6 +256,8 @@ THERMAL_STORE_KEY = "thermal"
 COOLING_STORE_KEY = "cooling"
 TARGETS_STORE_KEY = "targets"
 NO_POWER_STORE_KEY = "no_power"
+PHASES_STORE_KEY = "phases"
+NETTING_STORE_KEY = "netting"
 # Share of the learned storage capacity the feed-in cap planning relies on.
 THERMAL_SAFETY = 0.8
 # A power consumer counts as commanded at full power from this share on.
@@ -844,6 +849,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._short_since: dict[str, float] = {}
         # Consumers with a daily target that draw no power although switched on.
         self.no_power = {c.subentry_id: NoPowerWatch() for c in consumers}
+        # Phase of each battery and consumer behind the meter (see phases), and
+        # whether the meter's counters net the phases (see netting).
+        self.phase_learners: dict[str, PhaseLearner] = {}
+        self.netting = NettingCheck()
         self.target_progress = {c.subentry_id: TargetProgress() for c in consumers}
         self.target_states: dict[str, TargetState] = {}
         # Local hour start -> Wh of the forced runs the targets may still need
@@ -921,6 +930,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         for subentry_id, data in (stored.get(NO_POWER_STORE_KEY) or {}).items():
             if subentry_id in self.no_power:
                 self.no_power[subentry_id] = NoPowerWatch.from_dict(data)
+        self.phase_learners = {
+            subentry_id: PhaseLearner.from_dict(data)
+            for subentry_id, data in (stored.get(PHASES_STORE_KEY) or {}).items()
+            if subentry_id in self.phase_devices
+        }
+        self.netting = NettingCheck.from_dict(stored.get(NETTING_STORE_KEY))
         control = stored.get(CONTROL_STORE_KEY) or {}
         if gain := control.get("gain"):
             self.controller.gain_adapter.reset(gain)
@@ -1383,7 +1398,90 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         data[OUTDOOR_POWER_STORE_KEY] = {
             subentry_id: learner.as_dict() for subentry_id, learner in self.outdoor_power.items()
         }
+        data[PHASES_STORE_KEY] = {
+            subentry_id: learner.as_dict() for subentry_id, learner in self.phase_learners.items()
+        }
+        data[NETTING_STORE_KEY] = self.netting.as_dict()
         return data
+
+    @property
+    def phases_measured(self) -> bool:
+        """Whether the smart meter's power per phase is configured."""
+        return all(self._config.get(key) for key in CONF_GRID_PHASE_ENTITIES)
+
+    @property
+    def phase_devices(self) -> dict[str, str]:
+        """Subentry id -> name of the batteries and the consumers behind the meter (whose phase is learned)."""
+        devices = {battery.subentry_id: battery.name for battery in self.batteries}
+        devices.update({c.subentry_id: c.name for c in self.consumers if c.included_in_meter})
+        return devices
+
+    def phase_learner(self, subentry_id: str) -> PhaseLearner:
+        return self.phase_learners.setdefault(subentry_id, PhaseLearner())
+
+    def _observe_phases(self, snapshot: SystemSnapshot, now: float) -> None:
+        """One reading of the phases for every battery and consumer behind the meter."""
+        if not self.phases_measured:
+            return
+        sign = -1.0 if self._config.get(CONF_GRID_POWER_INVERTED, False) else 1.0
+        phases = []
+        for key in CONF_GRID_PHASE_ENTITIES:
+            watts = state_as_watts(self.hass.states.get(self._config[key]))
+            phases.append(None if watts is None else sign * watts)
+        readings: dict[str, float | None] = {}
+        for battery in self.batteries:
+            telemetry = snapshot.batteries.get(battery.subentry_id)
+            readings[battery.subentry_id] = telemetry.grid_side_power_w if telemetry is not None else None
+        for consumer in self.consumers:
+            if not consumer.included_in_meter:
+                continue
+            state = snapshot.consumers.get(consumer.subentry_id)
+            power = None
+            if state is not None:
+                power = state.total_power_w if state.total_power_w is not None else state.power_w
+            if consumer.phases_entity_id and state_as_float(self.hass.states.get(consumer.phases_entity_id)) != 1:
+                # Switching between one and three phases is no change of the phase: only the one phase is learned.
+                power = None
+            readings[consumer.subentry_id] = power
+        voted = False
+        for subentry_id, power in readings.items():
+            voted |= self.phase_learner(subentry_id).add(now, power, phases) is not None
+        if voted:
+            self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
+
+    def _observe_netting(self) -> None:
+        imported = self._config.get(CONF_GRID_IMPORT_ENERGY_ENTITY)
+        exported = self._config.get(CONF_GRID_EXPORT_ENERGY_ENTITY)
+        if not imported or not exported:
+            return
+        found = len(self.netting.per_phase)
+        self.netting.observe(
+            time.time(),
+            (imported, exported),
+            state_as_kwh(self.hass.states.get(imported)),
+            state_as_kwh(self.hass.states.get(exported)),
+            self.grid_quarters,
+        )
+        if len(self.netting.per_phase) != found:
+            self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
+
+    @callback
+    def relearn_phase(self, subentry_id: str) -> None:
+        """Learn the phase of a battery or consumer anew (its button)."""
+        self.phase_learner(subentry_id).relearn()
+        self._phase_changed()
+
+    @callback
+    def choose_phase(self, subentry_id: str, phase: Phase) -> None:
+        """The user's answer to a changed or confirmed phase; another than measured counts as chosen by hand."""
+        learner = self.phase_learner(subentry_id)
+        learner.choose(phase, manual=phase not in (learner.changed_to, learner.confirm))
+        self._phase_changed()
+
+    def _phase_changed(self) -> None:
+        self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
+        self.problems.update(time.monotonic(), self.data)
+        self.async_update_listeners()
 
     async def _async_update_data(self) -> SystemSnapshot:
         config = self._config
@@ -1525,6 +1623,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         elif mode is not OperatingMode.OFF:
             self.plan(snapshot, dt_util.now(), now)
         self._check_cap_exceeded(snapshot, now)
+        self._observe_phases(snapshot, now)
+        self._observe_netting()
         # Runs after the new data has been stored.
         self.hass.loop.call_soon(self.controller.request)
         self.problems.update(now, snapshot)

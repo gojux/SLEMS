@@ -123,6 +123,10 @@ custom_components/slems/
   util.py            unit conversion of HA states, clamping to number entities
   entity_match.py    suggests the entities of a battery, consumer, smart meter or PV device per role (config flow)
   energy_dashboard.py  grid, PV and device sensors of HA's energy dashboard (config flow suggestions)
+  phases.py          phase of a battery or consumer learned from the smart meter's phases
+  netting.py         whether the smart meter's energy counters net the phases
+  repairs.py         dialogs of the repair issues that ask (the phase)
+  button.py          learn the phase again
   drivers/
     base.py          BatteryDriver contract (read_telemetry, apply_power, release_control)
     marstek_venus_e3.py
@@ -1264,6 +1268,23 @@ limit the maximum gain.
   forecast entries (else all providers), the only weather entity and the
   outdoor sensor of a heat pump consumer. The devices are not stored. The
   form shows the current grid and PV power to check the sign.
+- Phases: with `grid_power_l1/l2/l3_entity` (all three, the sign of the grid
+  power) `coordinator._observe_phases` feeds every 5 s reading of each
+  battery (grid side power) and each consumer behind the meter (total power;
+  a wallbox with a phases entity only while on one phase) into its
+  `PhaseLearner`: a step of at least 300 W, steady 15 s before and 5–20 s
+  after, is a vote (`classify`, magnitudes only). The phase after 3 votes
+  with 75 % agreement; 3 votes in a row for another phase set `changed_to`, a
+  relearn that gives the same phase sets `confirm`; both are fixable repair
+  issues (`problems`, id with the phase, dialog in `repairs.PhaseFlow`).
+  The answer (`choose_phase`) clears the votes; another phase than measured
+  is `manual`. Stored under `phases` in the efficiency store.
+- Netting: `coordinator._observe_netting` reads both counters at each
+  quarter hour boundary (within 30 s) and compares the quarter hour with
+  `grid_quarters` (netted, from every grid value): both counters above it by
+  at least 30 Wh and alike within 30 % is counting per phase; 4 such quarter
+  hours within 7 days raise `grid_counters_not_netted` (other counters start
+  anew).
 - `pv_power_entity` is a list (one string in entries from before several PV
   systems were possible; `util.entity_ids` reads both). Their power is summed;
   one that reports nothing counts as 0 (micro inverters at night), the sum is
@@ -1894,3 +1915,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-11 | Feeding in from the batteries pays the wear costs per kWh fed in (as a cost of the plan, not as money): energy fed in that the batteries would not need until the PV refill is charged again by PV that would otherwise be fed in, an extra cycle the plan counted as free. Energy fed in instead of covering the house later adds no cycle; there the wear is too strict, but that case only pays when the credit is above the later import price with all fees, so it hardly changes a decision. Wear on every kWh stored would be exact, but it would also shift the price hold and the PV absorption, for about 1 ct/kWh. |
 | 2026-10-11 | A consumer is set up from its device, like a battery from entities: the first step asks for the type, the device and an optional meter device, the later steps show the entities suggested from them. The device list is a select of its own rather than HA's device selector, which can neither rank nor say why a device fits; it is ranked by the type each device fits best, as the type is chosen in the same form. For the same reason *hot water* of a heat pump is asked in the second step, where the type is known: HA forms cannot show a field depending on another one of the same form. A heat pump integration often reports the heat output next to the electrical power (Hoval: *current power output* and *electrical power input*), so heat output and heat quantities count against a role. |
 | 2026-10-11 | The system is set up from the devices of the smart meter and the PV systems and from HA's energy dashboard, which since 2025 also holds the grid and PV power with the sign of the grid power: the dashboard's sign is taken as is; without it the sign is not guessed per integration (the sign of a meter differs between integrations and their versions), the form shows the current grid and PV power instead. Several PV systems are a list summed up everywhere the PV power is read, rather than a template sensor the user would have to create; the SolarEdge integrations of core and HACS put the inverter and its meter on devices of their own, so the meter ranks as the smart meter by its import and export counters. |
+| 2026-10-11 | The phase of batteries and consumers is learned passively from their own power steps and the smart meter's phases, not by test steps: it works for consumers SLEMS only measures, and batteries make enough steps in normal operation. It is only shown and warned about for now; control per phase (phase limits, meters that do not net) needs it reliable first. Questions go through fixable repair issues, as a button cannot ask; the answer is taken as given and later votes may report a change again. Counters that do not net are recognised by both counters exceeding the netted quarter hour by about the same amount, the signature of energy flowing in on one phase and out on another; counter readings that are late only move energy between quarter hours and never raise both. |

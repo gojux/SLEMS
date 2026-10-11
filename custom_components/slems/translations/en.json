@@ -24,6 +24,9 @@
           "pv_forecast_entries": "PV forecast",
           "outdoor_temperature_entity": "Outdoor temperature",
           "house_history_entity": "House consumption history",
+          "grid_power_l1_entity": "Grid power L1",
+          "grid_power_l2_entity": "Grid power L2",
+          "grid_power_l3_entity": "Grid power L3",
           "grid_modbus": "Also read the smart meter over Modbus",
           "grid_import_energy_entity": "Grid import energy (counter)",
           "grid_export_energy_entity": "Grid export energy (counter)"
@@ -36,6 +39,9 @@
           "pv_forecast_entries": "Solar forecast integrations (e.g. Forecast.Solar, Solcast). Several entries, e.g. one per roof plane, are summed up.",
           "outdoor_temperature_entity": "Optional. Temperature sensor with history for the heat pump forecast. Without it, SLEMS records the temperature of the weather entity itself.",
           "house_history_entity": "Optional. Power sensor of the house consumption with existing history (e.g. from another integration). Used for the time before SLEMS recorded its own values.",
+          "grid_power_l1_entity": "Optional, together with L2 and L3: the power of each phase at the grid connection point, with the same sign as the grid power. SLEMS then learns the phase of every battery and consumer behind the smart meter (sensor **Phase**) and reports when it changes.",
+          "grid_power_l2_entity": "Optional, see L1.",
+          "grid_power_l3_entity": "Optional, see L1.",
           "grid_modbus": "Optional. Reads the grid power directly from a SunSpec meter (e.g. at a SolarEdge inverter, through a Modbus proxy) every fraction of a second. The control sees each value sooner than through the entity; the entity stays the fallback and the history.",
           "grid_import_energy_entity": "Optional. Energy counter of the smart meter for the import (kWh). Used for tariffs and bills; without it SLEMS uses the hourly mean of the grid power, which nets import and export within an hour.",
           "grid_export_energy_entity": "Optional. Energy counter of the smart meter for the export (kWh)."
@@ -101,6 +107,9 @@
           "pv_forecast_entries": "PV forecast",
           "outdoor_temperature_entity": "Outdoor temperature",
           "house_history_entity": "House consumption history",
+          "grid_power_l1_entity": "Grid power L1",
+          "grid_power_l2_entity": "Grid power L2",
+          "grid_power_l3_entity": "Grid power L3",
           "grid_modbus": "Also read the smart meter over Modbus",
           "grid_import_energy_entity": "Grid import energy (counter)",
           "grid_export_energy_entity": "Grid export energy (counter)"
@@ -113,6 +122,9 @@
           "weather_entity": "Optional. Improves the consumption forecast (e.g. heat pump demand).",
           "outdoor_temperature_entity": "Optional. Temperature sensor with history for the heat pump forecast. Without it, SLEMS records the temperature of the weather entity itself.",
           "house_history_entity": "Optional. Power sensor of the house consumption with existing history (e.g. from another integration). Used for the time before SLEMS recorded its own values.",
+          "grid_power_l1_entity": "Optional, together with L2 and L3: the power of each phase at the grid connection point, with the same sign as the grid power. SLEMS then learns the phase of every battery and consumer behind the smart meter (sensor **Phase**) and reports when it changes.",
+          "grid_power_l2_entity": "Optional, see L1.",
+          "grid_power_l3_entity": "Optional, see L1.",
           "grid_modbus": "Optional. Reads the grid power directly from a SunSpec meter (e.g. at a SolarEdge inverter, through a Modbus proxy) every fraction of a second. The control sees each value sooner than through the entity; the entity stays the fallback and the history.",
           "grid_import_energy_entity": "Optional. Energy counter of the smart meter for the import (kWh). Used for tariffs and bills; without it SLEMS uses the hourly mean of the grid power, which nets import and export within an hour.",
           "grid_export_energy_entity": "Optional. Energy counter of the smart meter for the export (kWh)."
@@ -747,6 +759,14 @@
         "at-wind": "Reference market value wind (E-Control, AT)",
         "at-hydro": "Reference market value hydro (E-Control, AT)"
       }
+    },
+    "phase": {
+      "options": {
+        "l1": "L1",
+        "l2": "L2",
+        "l3": "L3",
+        "three_phase": "Three phases"
+      }
     }
   },
   "entity": {
@@ -1098,6 +1118,15 @@
       },
       "hot_water_latest_start": {
         "name": "Hot water latest start"
+      },
+      "phase": {
+        "name": "Phase",
+        "state": {
+          "l1": "L1",
+          "l2": "L2",
+          "l3": "L3",
+          "three_phase": "Three phases"
+        }
       }
     },
     "switch": {
@@ -1380,6 +1409,11 @@
       "hot_water_target_earliest": {
         "name": "Hot water daily target earliest from"
       }
+    },
+    "button": {
+      "relearn_phase": {
+        "name": "Learn phase again"
+      }
     }
   },
   "exceptions": {
@@ -1599,6 +1633,46 @@
     "consumers_exceed_house": {
       "title": "Consumers do not match the house consumption",
       "description": "For more than 15 minutes the consumers behind the smart meter reported more power together than the whole house: last {consumers} W at a house consumption of {house} W (from grid, PV and batteries). That is not possible. Either a consumer measures wrong (e.g. a fixed or stuck value), or it is not behind the smart meter; then switch off **Included in smart meter** in its settings. Consumers drawing power: {names}. Until this is fixed, base load and consumption forecast are wrong. The notice disappears as soon as the values match again."
+    },
+    "phase_changed": {
+      "title": "{name} seems to be on another phase",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Phase of {name}",
+            "description": "SLEMS has measured {name} on {measured} several times in a row instead of {phase}, e.g. because it was plugged into another socket. Select the phase it is connected to; another one than measured is kept as chosen by you.",
+            "data": {
+              "phase": "Phase"
+            }
+          }
+        },
+        "abort": {
+          "not_loaded": "SLEMS is not running.",
+          "not_needed": "Already answered."
+        }
+      }
+    },
+    "phase_confirm": {
+      "title": "{name}: the same phase again",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Phase of {name}",
+            "description": "Learning it anew gave {phase} again. Keep it, or select the phase {name} is connected to; another one than measured is kept as chosen by you.",
+            "data": {
+              "phase": "Phase"
+            }
+          }
+        },
+        "abort": {
+          "not_loaded": "SLEMS is not running.",
+          "not_needed": "Already answered."
+        }
+      }
+    },
+    "grid_counters_not_netted": {
+      "title": "Energy counters of the smart meter do not net the phases",
+      "description": "The import and the export counter of the smart meter both ran in several quarter hours while the grid power showed less: they count per phase, while your utility meter usually nets the phases (in Germany and Austria). Tariffs and bills of SLEMS would then count energy that never crossed the meter. For a Shelly Pro 3EM the Shelly Phase Netting integration provides netted counters (learn more); with other meters, split the grid power into import and export with template sensors and **Integral** helpers. Or remove the counters in the SLEMS settings: SLEMS then uses its own netted values. Ignore this if your utility meter counts per phase as well."
     }
   }
 }

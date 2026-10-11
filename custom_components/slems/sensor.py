@@ -37,6 +37,7 @@ from .battery_distribution import LossModel
 from .cell_balancing import TOP_ZONE_V, BalancingPhase, balance_status
 from .controller import ControlStatus
 from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
+from .phases import Phase
 from .forecast.accuracy import Accuracy
 from .full_charge import is_due
 from .consumer_targets import target_fits, target_temperature, window_opens, window_start
@@ -771,6 +772,14 @@ async def async_setup_entry(
             ],
             config_subentry_id=battery.subentry_id,
         )
+    if coordinator.phases_measured:
+        for battery in coordinator.batteries:
+            async_add_entities([BatteryPhaseSensor(coordinator, battery)], config_subentry_id=battery.subentry_id)
+        for consumer in coordinator.consumers:
+            if consumer.included_in_meter:
+                async_add_entities(
+                    [ConsumerPhaseSensor(coordinator, consumer)], config_subentry_id=consumer.subentry_id
+                )
     for consumer in coordinator.consumers:
         if consumer.controllable:
             async_add_entities(
@@ -1602,3 +1611,48 @@ class StorageCapacitySensor(SlemsConsumerEntity, SensorEntity):
             "cycling_marks": len(learner.pause_temps),
             "full_marks": len(learner.full_temps),
         }
+
+
+class _PhaseValues:
+    """The phase a battery or consumer is connected to (learned, see phases)."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = [phase.value for phase in Phase]
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _unrecorded_attributes = frozenset({"votes"})
+    coordinator: SlemsCoordinator
+    _subentry_id: str
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success
+
+    @property
+    def native_value(self) -> str | None:
+        learner = self.coordinator.phase_learners.get(self._subentry_id)
+        return learner.phase.value if learner is not None and learner.phase is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        learner = self.coordinator.phase_learners.get(self._subentry_id)
+        if learner is None:
+            return {"chosen": False, "votes": [], "measured_now": None}
+        return {
+            # Chosen in a dialog against what was measured.
+            "chosen": learner.manual,
+            "votes": [vote.value for vote in learner.votes],
+            # Another phase measured several times in a row (asked under Repairs).
+            "measured_now": learner.changed_to.value if learner.changed_to else None,
+        }
+
+
+class BatteryPhaseSensor(_PhaseValues, SlemsBatteryEntity, SensorEntity):
+    def __init__(self, coordinator: SlemsCoordinator, battery) -> None:
+        super().__init__(coordinator, battery, "phase")
+        self._subentry_id = battery.subentry_id
+
+
+class ConsumerPhaseSensor(_PhaseValues, SlemsConsumerEntity, SensorEntity):
+    def __init__(self, coordinator: SlemsCoordinator, consumer) -> None:
+        super().__init__(coordinator, consumer, "phase")
+        self._subentry_id = consumer.subentry_id

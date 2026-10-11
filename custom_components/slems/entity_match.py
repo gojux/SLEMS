@@ -22,6 +22,7 @@ from .const import (
     CONF_ENERGY_ENTITY,
     CONF_GRID_EXPORT_ENERGY_ENTITY,
     CONF_GRID_IMPORT_ENERGY_ENTITY,
+    CONF_GRID_PHASE_ENTITIES,
     CONF_GRID_POWER_ENTITY,
     CONF_MAX_CELL_VOLTAGE_ENTITY,
     CONF_MAX_CURRENT_A,
@@ -849,13 +850,49 @@ def _pv_power(info: EntityInfo) -> float:
     return score
 
 
+# Names of the phases: L1 / phase A / phase 1 ...
+_PHASE_NAMES = (("l1", "a", "1"), ("l2", "b", "2"), ("l3", "c", "3"))
+
+
+def named_phase(info: EntityInfo) -> int | None:
+    """The phase (0–2) an entity is named after; letters and L1–L3 before numbers, None if not one."""
+    phase_word = info.has("phase", "channel")
+
+    def named(by: Callable[[tuple[str, str, str]], bool]) -> list[int]:
+        return [index for index, names in enumerate(_PHASE_NAMES) if by(names)]
+
+    by_letter = named(
+        lambda names: info.word(names[0])
+        or (phase_word and info.word(names[1]))
+        or info.entity_id.endswith((f"_{names[0]}", f"_{names[1]}"))
+    )
+    if len(by_letter) == 1:
+        return by_letter[0]
+    if by_letter:
+        return None
+    by_number = named(lambda names: phase_word and info.word(names[2]))
+    return by_number[0] if len(by_number) == 1 else None
+
+
+def _phase_power(index: int) -> Callable[[EntityInfo], float]:
+    def score(info: EntityInfo) -> float:
+        if not _power_sensor(info) or info.has("apparent", "reactive", "batter", "max", "limit") or info.word("dc"):
+            return 0
+        if named_phase(info) != index:
+            return 0
+        return 3 if info.device_class == "power" else 2
+
+    return score
+
+
 def match_grid_entities(entities: Iterable[EntityInfo]) -> dict[str, str]:
-    """Grid power and the import and export counters of a smart meter's device."""
+    """Grid power, the import and export counters and the power per phase of a smart meter's device."""
     return _best_per_role(
         list(entities),
         (
             (CONF_GRID_EXPORT_ENERGY_ENTITY, _grid_counter(export=True)),
             (CONF_GRID_IMPORT_ENERGY_ENTITY, _grid_counter(export=False)),
+            *((key, _phase_power(index)) for index, key in enumerate(CONF_GRID_PHASE_ENTITIES)),
             (CONF_GRID_POWER_ENTITY, _grid_power),
         ),
     )

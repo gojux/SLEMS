@@ -16,8 +16,8 @@ class FakeIssues:
         self.async_get = lambda _hass: self
         self.IssueSeverity = SimpleNamespace(WARNING="warning")
 
-    def async_create_issue(self, _hass, domain, issue_id, **_kwargs) -> None:
-        self.issues[(domain, issue_id)] = None
+    def async_create_issue(self, _hass, domain, issue_id, **kwargs) -> None:
+        self.issues[(domain, issue_id)] = kwargs
 
     def async_delete_issue(self, _hass, domain, issue_id) -> None:
         self.issues.pop((domain, issue_id), None)
@@ -30,6 +30,10 @@ def coordinator(batteries) -> SimpleNamespace:
         controller=SimpleNamespace(status=ControlStatus.ACTIVE),
         grid_meter=None,
         grid_meter_error=None,
+        phases_measured=False,
+        phase_devices={},
+        phase_learners={},
+        netting=SimpleNamespace(not_netted=False),
     )
 
 
@@ -159,3 +163,30 @@ def test_consumers_drawing_more_than_the_house_become_a_repair_issue() -> None:
         reporter.update(start + 10_000, snapshot)
         reporter.update(start + 20_000, snapshot)
         assert issue not in registry.issues
+
+
+def test_phase_and_netting_issues() -> None:
+    from custom_components.slems.phases import Phase, PhaseLearner
+
+    moved = PhaseLearner()
+    moved.phase, moved.changed_to = Phase.L1, Phase.L2
+    state = coordinator([])
+    state.phases_measured = True
+    state.phase_devices = {"venus": "Venus", "rod": "Heating rod"}
+    state.phase_learners = {"venus": moved, "rod": PhaseLearner()}
+    state.netting = SimpleNamespace(not_netted=True)
+    registry = FakeIssues(set())
+    reporter = problems.ProblemReporter(None, state)
+    with (
+        patch.object(problems, "ir", registry),
+        patch.object(reporter, "_update_cap_notifications", lambda *_: None),
+    ):
+        reporter.update(0.0)
+        issue = registry.issues[(DOMAIN, "phase_changed_venus_l2")]
+        assert issue["is_fixable"] and issue["data"] == {"subentry_id": "venus"}
+        assert issue["translation_placeholders"] == {"name": "Venus", "phase": "L1", "measured": "L2"}
+        assert registry.issues[(DOMAIN, "grid_counters_not_netted")]["learn_more_url"] == problems.NETTING_URL
+        # Answered: the issue goes.
+        moved.choose(Phase.L2, manual=False)
+        reporter.update(1.0)
+    assert (DOMAIN, "phase_changed_venus_l2") not in registry.issues

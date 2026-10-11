@@ -13,7 +13,10 @@ themselves when the problem is gone:
 * the grid power over Modbus is configured but has not been available for
   ``GRID_MODBUS_AFTER_S`` (SLEMS uses the entity meanwhile),
 * a current tariff has newer prices or is no longer valid (kept by
-  ``tariff_updates``).
+  ``tariff_updates``),
+* the phase of a battery or consumer seems to have changed, or learning it
+  anew gave the same phase (both with a dialog to answer, see ``repairs``),
+* the smart meter's energy counters do not net the phases (``netting``).
 
 Notifications (bell) for events: the end of an active cell balancing run,
 except when the user cancelled it. The problems of the feed-in cap come from
@@ -44,6 +47,7 @@ from .currency import currency_code, market_prices_usable
 from .tariff_comparison import configured_tariffs
 from .tariff_updates import TARIFF_ISSUE_PREFIX
 from .controller import ControlStatus
+from .phases import label
 
 if TYPE_CHECKING:
     from .coordinator import BatteryRuntime, SlemsCoordinator, SystemSnapshot
@@ -57,6 +61,10 @@ GRID_MODBUS_ISSUE = "grid_modbus_unavailable"
 GRID_MODBUS_AFTER_S = 300.0
 MARKET_CURRENCY_ISSUE = "market_price_currency"
 CONSUMERS_EXCEED_ISSUE = "consumers_exceed_house"
+# Phase issues: the subentry id and, for a change, the new phase follow.
+PHASE_ISSUE_PREFIX = "phase_"
+NOT_NETTED_ISSUE = "grid_counters_not_netted"
+NETTING_URL = "https://github.com/gojux/shelly_phase_netting"
 # The consumers behind the meter draw more than the whole house: impossible for
 # longer than the different delays of the sensors, so one of them measures
 # wrong or is not behind the meter.
@@ -115,10 +123,14 @@ class ProblemReporter:
         """Create or delete the repair issues (``now``: monotonic time)."""
         coordinator = self._coordinator
         wanted: dict[str, tuple[str, dict[str, str]]] = {}
+        # Issues with a dialog: issue id -> data for the repairs flow.
+        fixable: dict[str, dict[str, str]] = {}
         # Feed-in cap problems are notifications; issues with their ids are removed.
         possible = {
             GRID_STALE_ISSUE, GRID_MODBUS_ISSUE, MARKET_CURRENCY_ISSUE, CONSUMERS_EXCEED_ISSUE,
-            *CAP_NOTIFICATIONS.values(),
+            *CAP_NOTIFICATIONS.values(), NOT_NETTED_ISSUE,
+            # Phase issues are named after what they ask about.
+            *(issue_id for issue_id in self._active or () if issue_id.startswith(PHASE_ISSUE_PREFIX)),
         }
         for battery in coordinator.batteries:
             possible |= {
@@ -151,6 +163,23 @@ class ProblemReporter:
                 "grid_modbus_unavailable", {"error": meter.last_error or "–"}
             )
 
+        if coordinator.phases_measured:
+            for subentry_id, name in coordinator.phase_devices.items():
+                learner = coordinator.phase_learners.get(subentry_id)
+                if learner is None:
+                    continue
+                if learner.changed_to is not None and learner.phase is not None:
+                    issue_id = f"{PHASE_ISSUE_PREFIX}changed_{subentry_id}_{learner.changed_to.value}"
+                    wanted[issue_id] = (
+                        "phase_changed", {"name": name, "phase": label(learner.phase), "measured": label(learner.changed_to)}
+                    )
+                    fixable[issue_id] = {"subentry_id": subentry_id}
+                elif learner.confirm is not None:
+                    issue_id = f"{PHASE_ISSUE_PREFIX}confirm_{subentry_id}_{learner.confirm.value}"
+                    wanted[issue_id] = ("phase_confirm", {"name": name, "phase": label(learner.confirm)})
+                    fixable[issue_id] = {"subentry_id": subentry_id}
+        if coordinator.netting.not_netted:
+            wanted[NOT_NETTED_ISSUE] = ("grid_counters_not_netted", {})
         if self._consumers_exceed(now, snapshot):
             wanted[CONSUMERS_EXCEED_ISSUE] = ("consumers_exceed_house", self._exceed_values or {})
         if not market_prices_usable(self._hass) and coordinator.market_prices.enabled:
@@ -167,7 +196,9 @@ class ProblemReporter:
                     self._hass,
                     DOMAIN,
                     issue_id,
-                    is_fixable=False,
+                    is_fixable=issue_id in fixable,
+                    data=fixable.get(issue_id),
+                    learn_more_url=NETTING_URL if issue_id == NOT_NETTED_ISSUE else None,
                     severity=ir.IssueSeverity.WARNING,
                     translation_key=translation_key,
                     translation_placeholders=placeholders,

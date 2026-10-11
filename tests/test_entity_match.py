@@ -453,7 +453,9 @@ def test_solaredge_meter_and_inverter() -> None:
 
 
 def test_shelly_pro_3em_total_of_all_phases() -> None:
-    assert match_grid_entities(SHELLY_PRO_3EM) == {
+    matches = match_grid_entities(SHELLY_PRO_3EM)
+    roles = (CONF_GRID_POWER_ENTITY, CONF_GRID_IMPORT_ENERGY_ENTITY, CONF_GRID_EXPORT_ENERGY_ENTITY)
+    assert {key: matches[key] for key in roles} == {
         CONF_GRID_POWER_ENTITY: "sensor.pro3em_total_active_power",
         CONF_GRID_IMPORT_ENERGY_ENTITY: "sensor.pro3em_total_active_energy",
         CONF_GRID_EXPORT_ENERGY_ENTITY: "sensor.pro3em_total_active_returned_energy",
@@ -480,3 +482,33 @@ def test_battery_device_fit() -> None:
     phone = [e("sensor.phone_battery_level", "Battery level", device_class="battery", unit="%")]
     assert battery_device_fit(phone) == 0
     assert battery_device_fit(HOVAL) == 0
+
+
+def test_power_per_phase_of_smart_meters() -> None:
+    from custom_components.slems.const import CONF_GRID_L1_ENTITY, CONF_GRID_L2_ENTITY, CONF_GRID_L3_ENTITY
+
+    core = [
+        *SE_CORE_METER,
+        watt("sensor.meter_1_power_phase_b", "power_phase_b Power phase B", SE_CORE),
+        watt("sensor.meter_1_power_phase_c", "power_phase_c Power phase C", SE_CORE),
+    ]
+    multi = [
+        *SE_MULTI_METER,
+        watt("sensor.solaredge_m1_ac_power_b", "AC Power B", SE_MULTI),
+        watt("sensor.solaredge_m1_ac_power_c", "AC Power C", SE_MULTI),
+    ]
+    shelly = [
+        *SHELLY_PRO_3EM,
+        watt("sensor.pro3em_phase_b_active_power", "Phase B active power", "shelly"),
+        watt("sensor.pro3em_phase_c_active_power", "Phase C active power", "shelly"),
+    ]
+    for entities, ids in (
+        (core, ("sensor.meter_1_power_phase_a", "sensor.meter_1_power_phase_b", "sensor.meter_1_power_phase_c")),
+        (multi, ("sensor.solaredge_m1_ac_power_a", "sensor.solaredge_m1_ac_power_b", "sensor.solaredge_m1_ac_power_c")),
+        (shelly, ("sensor.pro3em_phase_a_active_power", "sensor.pro3em_phase_b_active_power",
+                  "sensor.pro3em_phase_c_active_power")),
+    ):
+        matches = match_grid_entities(entities)
+        assert (matches[CONF_GRID_L1_ENTITY], matches[CONF_GRID_L2_ENTITY], matches[CONF_GRID_L3_ENTITY]) == ids
+        # The total stays the total.
+        assert matches[CONF_GRID_POWER_ENTITY] not in ids

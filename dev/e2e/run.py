@@ -290,7 +290,15 @@ def setup_system(token: str) -> None:
         FLOW,
         {"handler": "slems"},
         # The devices step is skipped while no device has a power sensor.
-        {"user": {}, "system": {"grid_power_entity": "sensor.smart_meter_power", "pv_power_entity": ["sensor.pv_power"]}},
+        {
+            "user": {},
+            "system": {
+                "grid_power_entity": "sensor.smart_meter_power",
+                "pv_power_entity": ["sensor.pv_power"],
+                # Only to set up the phase entities; the simulation has no phases to learn from.
+                **{f"grid_power_{phase}_entity": "sensor.smart_meter_power" for phase in ("l1", "l2", "l3")},
+            },
+        },
         "system",
     )
     check(token, "system")
@@ -556,6 +564,15 @@ def dashboard(token: str) -> None:
     slems = [s for s in states if s["entity_id"].split(".", 1)[1].startswith("slems")]
     unavailable = [s["entity_id"] for s in slems if s["state"] == "unavailable"]
     print(f"  {len(slems)} SLEMS entities, unavailable: {unavailable or 'none'}")
+    # Phase entities of the batteries and consumers (the setup has the power per phase).
+    relearn = [s["entity_id"] for s in states if s["entity_id"].startswith("button.") and "phase" in s["entity_id"]]
+    phase = [
+        s["entity_id"] for s in states
+        if s["entity_id"].startswith("sensor.") and s["entity_id"].endswith("_phase") and "balancing" not in s["entity_id"]
+    ]
+    if not relearn or len(relearn) != len(phase):
+        raise Failure(f"phase entities: buttons {relearn}, sensors {phase}")
+    print(f"  phase: {len(phase)} sensors and buttons")
     check(token, "Dashboard")
 
 

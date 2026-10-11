@@ -25,6 +25,12 @@ CONF_OUTDOOR_TEMPERATURE_ENTITY: Final = "outdoor_temperature_entity"
 # Energy counters of the smart meter (kWh), for tariffs and bills.
 CONF_GRID_IMPORT_ENERGY_ENTITY: Final = "grid_import_energy_entity"
 CONF_GRID_EXPORT_ENERGY_ENTITY: Final = "grid_export_energy_entity"
+# Power per phase at the grid connection point (optional, same sign as the grid power):
+# the phase of each battery and consumer is learned from it (see phases).
+CONF_GRID_L1_ENTITY: Final = "grid_power_l1_entity"
+CONF_GRID_L2_ENTITY: Final = "grid_power_l2_entity"
+CONF_GRID_L3_ENTITY: Final = "grid_power_l3_entity"
+CONF_GRID_PHASE_ENTITIES: Final = (CONF_GRID_L1_ENTITY, CONF_GRID_L2_ENTITY, CONF_GRID_L3_ENTITY)
 # Devices of the smart meter and the PV systems: the config flow suggests the
 # entities above from them (not stored).
 CONF_GRID_DEVICE: Final = "grid_device"

@@ -31,6 +31,7 @@ lustiges Wort für ein sehr interessantes Tier) und *EMS*
   - [HACS (benutzerdefiniertes Repository)](#hacs-benutzerdefiniertes-repository)
   - [Manuell](#manuell)
 - [Einrichtung](#einrichtung)
+  - [Phasen (optional)](#phasen-optional)
   - [Smart Meter per Modbus (optional)](#smart-meter-per-modbus-optional)
   - [Tarife (optional)](#tarife-optional)
   - [PV-Prognose](#pv-prognose)
@@ -186,6 +187,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 |---|---|
 | Verbraucher mit eigenen Leistungs-/Energiesensoren, im oder außerhalb des Smart Meters | ✅ |
 | Verbraucher aus seinem Gerät einrichten: Geräte nach Eignung sortiert (z. B. Hoval, my-PV, evcc), Entitäten, Steuerung und ihr Bereich vorgeschlagen | ✅ |
+| Phase von Batterien und Verbrauchern aus den Phasen des Smart Meters gelernt, Wechsel gemeldet, neu lernen; Energiezähler, die nicht über die Phasen saldieren, erkannt | ✅ (Regelung je Phase noch nicht) |
 | Wärmepumpe als Verbrauchertyp (wetterabhängige Prognose), optional Freigabe ihrer Warmwasserladung (Betriebsmodus, gelernte Warmwasserleistung) | ✅ |
 | Steuerung von Verbrauchern: Ein/Aus, Leistungsvorgabe oder Freigabe für eine eigene Automation (mit spätestem Start), Priorität, Mindestlaufzeit/-pause, Takten vermeiden, externe Sperre, Steuerung je Verbraucher abschaltbar | ✅ |
 | Verbraucher mit eigenem Thermostat: Pausen erkannt, ihre Leistung geht solange an die Batterien | ✅ |
@@ -260,6 +262,29 @@ Voraussetzung: Home Assistant 2026.9 oder neuer.
 3. Auf der Seite der SLEMS-Integration für jede Batterie **Batterie
    hinzufügen** und für jeden Verbraucher, der gemessen oder gesteuert werden
    soll, **Verbraucher hinzufügen** wählen.
+
+### Phasen (optional)
+
+Misst dein Smart Meter jede Phase, wähle in den SLEMS-Einstellungen seine
+**Netzleistung L1**, **L2** und **L3** aus (vorgeschlagen aus dem Gerät des
+Smart Meters, mit demselben Vorzeichen wie die Netzleistung). SLEMS lernt dann
+die Phase jeder Batterie und jedes Verbrauchers hinter dem Smart Meter aus
+ihren Leistungssprüngen ab 300 W: Ein Sprung zeigt sich an einer Phase in
+etwa gleicher Größe, bei einem dreiphasigen Gerät zu einem Drittel an jeder
+Phase. Nach drei übereinstimmenden Sprüngen zeigt der Sensor **Phase** des
+Geräts sie an (**L1**, **L2**, **L3** oder **Dreiphasig**). Bei einer Wallbox,
+deren aktive Phasen eine Entität nennt, lernt SLEMS nur die eine Phase, mit
+der sie einphasig lädt. Die Phase wird nur angezeigt und geprüft; die
+Regelung verwendet sie noch nicht.
+
+- **Wechsel**: Zeigt sich ein Gerät dreimal hintereinander an einer anderen
+  Phase (z. B. eine Steckerbatterie in einer anderen Steckdose), fragt
+  **Einstellungen → Reparaturen**, an welcher Phase es hängt; die gemessene
+  ist vorausgewählt.
+- **Phase neu lernen** (Button des Geräts): verwirft die Phase und lernt sie
+  neu. Kommt wieder dieselbe heraus, fragt Reparaturen, ob sie stimmt oder
+  welche Phase stattdessen gelten soll. Eine andere als die gemessene Phase,
+  die du gewählt hast, bleibt erhalten; ein Wechsel wird weiter gemeldet.
 
 ### Smart Meter per Modbus (optional)
 
@@ -2012,7 +2037,21 @@ verschwinden von selbst, sobald sie behoben sind:
   falsch oder hängt nicht hinter dem Zähler; Grundverbrauch und
   Verbrauchsprognose stimmen so lange nicht),
 - der aktuelle Tarif hängt vom Börsenpreis ab, Home Assistant ist aber auf eine
-  andere Währung als Euro eingestellt (siehe Börsenpreise).
+  andere Währung als Euro eingestellt (siehe Börsenpreise),
+- eine Batterie oder ein Verbraucher scheint an einer anderen Phase zu hängen,
+  oder das Neu-Lernen der Phase hat wieder dieselbe ergeben (mit einem Dialog
+  zum Beantworten, siehe **Phasen**),
+- die Energiezähler des Smart Meters saldieren nicht über die Phasen: In
+  mehreren Viertelstunden sind Bezugs- und Einspeisezähler beide um etwa
+  denselben Betrag mehr gelaufen, als die Netzleistung zeigt (z. B. ein Shelly
+  Pro 3EM, der je Phase zählt, während Zähler der Netzbetreiber in Deutschland
+  und Österreich saldieren). Tarife und Rechnungen würden Energie zählen, die
+  nie über den Zähler ging. Für einen Shelly Pro 3EM liefert
+  [Shelly Phase Netting](https://github.com/gojux/shelly_phase_netting)
+  saldierte Zähler; sonst die Netzleistung mit Template-Sensoren und Helfern
+  **Integral** aufteilen oder die Zähler entfernen (SLEMS verwendet dann seine
+  eigenen saldierten Werte). Ignoriere den Hinweis, wenn auch dein Zähler des
+  Netzbetreibers je Phase zählt.
 
 Das Dashboard zeigt sie ebenfalls: ein roter Hinweis auf der Batteriekarte
 (**nicht lesbar**, **reagiert nicht**), im Energiefluss und für den Smart Meter

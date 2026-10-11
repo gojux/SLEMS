@@ -24,6 +24,9 @@
           "pv_forecast_entries": "PV-Prognose",
           "outdoor_temperature_entity": "Außentemperatur",
           "house_history_entity": "Historie Hausverbrauch",
+          "grid_power_l1_entity": "Netzleistung L1",
+          "grid_power_l2_entity": "Netzleistung L2",
+          "grid_power_l3_entity": "Netzleistung L3",
           "grid_modbus": "Smart Meter zusätzlich per Modbus lesen",
           "grid_import_energy_entity": "Netzbezug (Zähler)",
           "grid_export_energy_entity": "Netzeinspeisung (Zähler)"
@@ -36,6 +39,9 @@
           "pv_forecast_entries": "Integrationen mit Solarprognose (z. B. Forecast.Solar, Solcast). Mehrere Einträge, z. B. einer je Dachfläche, werden addiert.",
           "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entität selbst auf.",
           "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Wird für die Zeit verwendet, bevor SLEMS eigene Werte aufgezeichnet hat.",
+          "grid_power_l1_entity": "Optional, zusammen mit L2 und L3: die Leistung jeder Phase am Netzanschlusspunkt, mit demselben Vorzeichen wie die Netzleistung. SLEMS lernt dann die Phase jeder Batterie und jedes Verbrauchers hinter dem Smart Meter (Sensor **Phase**) und meldet, wenn sie sich ändert.",
+          "grid_power_l2_entity": "Optional, siehe L1.",
+          "grid_power_l3_entity": "Optional, siehe L1.",
           "grid_modbus": "Optional. Liest die Netzleistung direkt von einem SunSpec-Zähler (z. B. am SolarEdge-Wechselrichter, über einen Modbus-Proxy) im Bruchteil einer Sekunde. Die Regelung sieht jeden Wert früher als über die Entität; die Entität bleibt Rückfallebene und Historie.",
           "grid_import_energy_entity": "Optional. Energiezähler des Smart Meters für den Bezug (kWh). Für Tarife und Rechnungen; ohne ihn nutzt SLEMS das Stundenmittel der Netzleistung, das Bezug und Einspeisung innerhalb einer Stunde verrechnet.",
           "grid_export_energy_entity": "Optional. Energiezähler des Smart Meters für die Einspeisung (kWh)."
@@ -101,6 +107,9 @@
           "pv_forecast_entries": "PV-Prognose",
           "outdoor_temperature_entity": "Außentemperatur",
           "house_history_entity": "Historie Hausverbrauch",
+          "grid_power_l1_entity": "Netzleistung L1",
+          "grid_power_l2_entity": "Netzleistung L2",
+          "grid_power_l3_entity": "Netzleistung L3",
           "grid_modbus": "Smart Meter zusätzlich per Modbus lesen",
           "grid_import_energy_entity": "Netzbezug (Zähler)",
           "grid_export_energy_entity": "Netzeinspeisung (Zähler)"
@@ -113,6 +122,9 @@
           "weather_entity": "Optional. Verbessert die Verbrauchsprognose (z. B. Bedarf der Wärmepumpe).",
           "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entität selbst auf.",
           "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Wird für die Zeit verwendet, bevor SLEMS eigene Werte aufgezeichnet hat.",
+          "grid_power_l1_entity": "Optional, zusammen mit L2 und L3: die Leistung jeder Phase am Netzanschlusspunkt, mit demselben Vorzeichen wie die Netzleistung. SLEMS lernt dann die Phase jeder Batterie und jedes Verbrauchers hinter dem Smart Meter (Sensor **Phase**) und meldet, wenn sie sich ändert.",
+          "grid_power_l2_entity": "Optional, siehe L1.",
+          "grid_power_l3_entity": "Optional, siehe L1.",
           "grid_modbus": "Optional. Liest die Netzleistung direkt von einem SunSpec-Zähler (z. B. am SolarEdge-Wechselrichter, über einen Modbus-Proxy) im Bruchteil einer Sekunde. Die Regelung sieht jeden Wert früher als über die Entität; die Entität bleibt Rückfallebene und Historie.",
           "grid_import_energy_entity": "Optional. Energiezähler des Smart Meters für den Bezug (kWh). Für Tarife und Rechnungen; ohne ihn nutzt SLEMS das Stundenmittel der Netzleistung, das Bezug und Einspeisung innerhalb einer Stunde verrechnet.",
           "grid_export_energy_entity": "Optional. Energiezähler des Smart Meters für die Einspeisung (kWh)."
@@ -747,6 +759,14 @@
         "at-wind": "Referenzmarktwert Wind (E-Control, AT)",
         "at-hydro": "Referenzmarktwert Wasserkraft (E-Control, AT)"
       }
+    },
+    "phase": {
+      "options": {
+        "l1": "L1",
+        "l2": "L2",
+        "l3": "L3",
+        "three_phase": "Dreiphasig"
+      }
     }
   },
   "entity": {
@@ -1098,6 +1118,15 @@
       },
       "hot_water_latest_start": {
         "name": "Spätester Warmwasser-Start"
+      },
+      "phase": {
+        "name": "Phase",
+        "state": {
+          "l1": "L1",
+          "l2": "L2",
+          "l3": "L3",
+          "three_phase": "Dreiphasig"
+        }
       }
     },
     "switch": {
@@ -1380,6 +1409,11 @@
       "hot_water_target_earliest": {
         "name": "Warmwasser-Tagesziel frühestens ab"
       }
+    },
+    "button": {
+      "relearn_phase": {
+        "name": "Phase neu lernen"
+      }
     }
   },
   "exceptions": {
@@ -1599,6 +1633,46 @@
     "consumers_exceed_house": {
       "title": "Verbraucher passen nicht zum Hausverbrauch",
       "description": "Die Verbraucher hinter dem Smart Meter meldeten länger als 15 Minuten zusammen mehr Leistung als das ganze Haus: zuletzt {consumers} W bei einem Hausverbrauch von {house} W (aus Netz, PV und Batterien). Das ist nicht möglich. Entweder misst ein Verbraucher falsch (z. B. ein fester oder hängender Wert), oder er hängt nicht hinter dem Smart Meter; dann **Im Smart Meter enthalten** in seinen Einstellungen ausschalten. Verbraucher mit Leistung: {names}. Bis das behoben ist, stimmen Grundverbrauch und Verbrauchsprognose nicht. Die Meldung verschwindet, sobald die Werte wieder zusammenpassen."
+    },
+    "phase_changed": {
+      "title": "{name} scheint an einer anderen Phase zu hängen",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Phase von {name}",
+            "description": "SLEMS hat {name} mehrmals hintereinander an {measured} statt an {phase} gemessen, z. B. weil es in eine andere Steckdose gesteckt wurde. Wähle die Phase aus, an der es hängt; eine andere als die gemessene bleibt als von dir gewählt erhalten.",
+            "data": {
+              "phase": "Phase"
+            }
+          }
+        },
+        "abort": {
+          "not_loaded": "SLEMS läuft nicht.",
+          "not_needed": "Bereits beantwortet."
+        }
+      }
+    },
+    "phase_confirm": {
+      "title": "{name}: wieder dieselbe Phase",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Phase von {name}",
+            "description": "Das Neu-Lernen hat wieder {phase} ergeben. Behalte sie, oder wähle die Phase aus, an der {name} hängt; eine andere als die gemessene bleibt als von dir gewählt erhalten.",
+            "data": {
+              "phase": "Phase"
+            }
+          }
+        },
+        "abort": {
+          "not_loaded": "SLEMS läuft nicht.",
+          "not_needed": "Bereits beantwortet."
+        }
+      }
+    },
+    "grid_counters_not_netted": {
+      "title": "Energiezähler des Smart Meters saldieren nicht über die Phasen",
+      "description": "Bezugs- und Einspeisezähler des Smart Meters sind in mehreren Viertelstunden beide gelaufen, während die Netzleistung weniger zeigte: Sie zählen je Phase, während dein Zähler des Netzbetreibers meist über die Phasen saldiert (in Deutschland und Österreich). Tarife und Rechnungen von SLEMS würden dann Energie zählen, die nie über den Zähler ging. Für einen Shelly Pro 3EM liefert die Integration Shelly Phase Netting saldierte Zähler (mehr erfahren); bei anderen Zählern teile die Netzleistung mit Template-Sensoren und Helfern **Integral** in Bezug und Einspeisung auf. Oder entferne die Zähler in den SLEMS-Einstellungen: SLEMS verwendet dann seine eigenen saldierten Werte. Ignoriere den Hinweis, wenn auch dein Zähler des Netzbetreibers je Phase zählt."
     }
   }
 }

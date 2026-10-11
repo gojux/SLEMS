@@ -31,6 +31,7 @@ system).
   - [HACS (custom repository)](#hacs-custom-repository)
   - [Manual](#manual)
 - [Setup](#setup)
+  - [Phases (optional)](#phases-optional)
   - [Smart meter over Modbus (optional)](#smart-meter-over-modbus-optional)
   - [Tariffs (optional)](#tariffs-optional)
   - [PV forecast](#pv-forecast)
@@ -184,6 +185,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 |---|---|
 | Consumers with own power/energy sensors, inside or outside the smart meter | ✅ |
 | Consumer setup from its device: devices ranked by fit (e.g. Hoval, my-PV, evcc), entities, control and its range suggested | ✅ |
+| Phase of batteries and consumers learned from the smart meter's phases, change reported, learn again; energy counters that do not net the phases detected | ✅ (control per phase not yet) |
 | Heat pump as consumer type (weather dependent forecast), optionally a release of its hot water charge (operating mode, learned hot water power) | ✅ |
 | Control of consumers: on/off, power set point or release for an automation of your own (with latest start), priority, minimum runtime/pause, avoid short runs, external blocking, control switchable per consumer | ✅ |
 | Consumers with their own thermostat: pauses recognised, their power goes to the batteries meanwhile | ✅ |
@@ -256,6 +258,27 @@ Requires Home Assistant 2026.9 or newer.
    summed up.
 3. On the SLEMS integration page choose **Add battery** for every battery and
    **Add consumer** for every consumer you want to measure or control.
+
+### Phases (optional)
+
+If your smart meter measures each phase, select its **Grid power L1**, **L2**
+and **L3** in the SLEMS settings (suggested from the smart meter's device, same
+sign as the grid power). SLEMS then learns the phase of every battery and every
+consumer behind the smart meter from their power steps of at least 300 W: a
+step shows up on one phase with about the same size, or a third on each phase
+for a three phase device. After three agreeing steps the sensor **Phase** of
+the device shows it (**L1**, **L2**, **L3** or **Three phases**). For a wallbox
+whose active phases come from an entity, only the one phase it uses while
+charging on one phase is learned. The phase is shown and checked only; the
+control does not use it yet.
+
+- **Change**: if a device shows up on another phase three times in a row
+  (e.g. a plug-in battery moved to another socket), **Settings → Repairs**
+  asks which phase it is connected to; the measured one is preselected.
+- **Learn phase again** (button of the device): forgets the phase and learns
+  it anew. If the same phase comes out again, Repairs asks whether it is
+  right or which phase to take instead. A phase you chose other than the
+  measured one is kept; a change is still reported.
 
 ### Smart meter over Modbus (optional)
 
@@ -1892,7 +1915,18 @@ when they are solved:
   is not behind the meter; base load and consumption forecast are wrong
   meanwhile),
 - the current tariff follows the market price while Home Assistant is set to
-  another currency than euro (see market prices).
+  another currency than euro (see market prices),
+- a battery or consumer seems to be on another phase, or learning its phase
+  anew gave the same one (with a dialog to answer, see **Phases**),
+- the energy counters of the smart meter do not net the phases: in several
+  quarter hours the import and the export counter both ran by about the same
+  amount more than the grid power shows (e.g. a Shelly Pro 3EM, which counts
+  per phase, while utility meters in Germany and Austria net the phases).
+  Tariffs and bills would count energy that never crossed the meter. For a
+  Shelly Pro 3EM, [Shelly Phase Netting](https://github.com/gojux/shelly_phase_netting)
+  provides netted counters; otherwise split the grid power with template
+  sensors and **Integral** helpers, or remove the counters (SLEMS then uses its
+  own netted values). Ignore it if your utility meter counts per phase too.
 
 The dashboard also shows them: a red note on the battery card (**cannot be
 read**, **not responding**), in the energy flow and, for the smart meter, at the
