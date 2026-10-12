@@ -464,6 +464,36 @@ const STRINGS = {
         "Keeps energy in the batteries for consumption peaks, e.g. with a tariff with a demand charge or a weak grid connection: from the **Peak shaving state of charge threshold** down, the batteries only cover the grid import above the **Peak shaving grid import limit**, the house draws the rest from the grid. Above the threshold they cover the import above the limit also when they would not discharge otherwise (the price plan keeps energy, grid charging runs, a consumer without battery support runs). Grid charging stays below the limit.",
       peak_shaving_soc_threshold:
         "From this state of charge (of all batteries together) down, the batteries only cover peaks above the import limit; the energy between the minimum state of charge and the threshold is reserved for peaks. Not below the minimum state of charge of the batteries. The battery support **Automatic** of the consumers does not discharge below it either.",
+      peak_shaving_reserve:
+        "Only with **Automatic peak shaving limit**: share of the usable energy between the minimum state of charge and the threshold that the calculation of the limit does not plan with, against more consumption than in the last days. Larger: a higher import limit, the batteries last more reliably until PV refills them, but absorb less.",
+      temperature_limit:
+        "Limits the charge power of every battery by its reported temperature: gradually less when hot, none at all when cold. Spares the cells; the BMS keeps its own protection. The Venus reports its internal temperature, not the cell temperature. Batteries without a temperature are not limited, discharging never.",
+      temperature_high:
+        "Above this temperature the charge power drops linearly over the **Charge derating range** down to the **Charge power at high temperature**.",
+      temperature_band:
+        "Temperature range above the **Charge derating temperature** over which the charge power drops from full to the **Charge power at high temperature**. Example: 40 °C, 10 °C range and 40 % → 70 % at 45 °C, 40 % from 50 °C. 0 °C: straight to the lower limit.",
+      temperature_floor:
+        "Charge power at the upper end of the range and above, in % of the possible charge power. 0 %: no charging above it.",
+      temperature_low:
+        "At or below this temperature the batteries do not charge; within 5 °C above it the charge power rises linearly back to full. Protects against charging in the cold, which harms LFP cells.",
+      rotation_soc_threshold:
+        "At low power only as many batteries run as cause the least losses: when discharging the ones with the highest state of charge, when charging the ones with the lowest. If an inactive battery is better by more than this threshold, it takes over. Smaller: the states of charge stay closer together, batteries change more often.",
+      rotation_min_interval:
+        "At most one change within this time, even if the threshold is exceeded earlier. 0: change as soon as the threshold is exceeded.",
+      rotation_ramp_rate:
+        "How fast the power moves from one battery to another, in W per second: at a change and when batteries are added or dropped. Small powers are moved quickly; the sum always stays the same.",
+      rotation_ramp_max:
+        "A transition never takes longer, even with a large power and a small ramp rate. 0: at once, without a transition.",
+      min_soc:
+        "At or below this state of charge SLEMS no longer discharges the battery, only 2 % above it again, because the state of charge rises a little after a load. The morning reserve and the peak shaving state of charge threshold come on top of it. Cell balancing ignores the limit.",
+      max_soc:
+        "At or above this state of charge SLEMS no longer charges the battery, only 2 % below it again. It counts as \"full\" for grid friendly charging, the secured charge and the forecast. 100 %: the BMS ends the charge. The regular full charge and cell balancing may charge above it.",
+      max_charge_limit:
+        "Highest AC charge power SLEMS commands to the battery, e.g. to spare it or because of a weak supply line; never above what the battery can do.",
+      max_discharge_limit:
+        "Highest AC discharge power SLEMS commands to the battery, e.g. 800 W for a plug-in solar system; never above what the battery can do.",
+      communication_pause:
+        "How long **Pause communication (firmware update)** in the menu of a battery card disconnects, and how much **Extend pause** adds. Afterwards SLEMS reconnects by itself. Applies to all batteries.",
       price_control:
         "Needs a tariff. If the stored energy does not last for every hour until PV refills the batteries, they cover the hours with the highest import price and keep their energy in the cheaper ones (the house draws from the grid there). The grid import stays the same, it only moves to cheaper hours.",
       grid_charge:
@@ -1077,6 +1107,36 @@ const STRINGS = {
         "Hält Energie in den Batterien für Verbrauchsspitzen zurück, z. B. bei einem Tarif mit Leistungspreis oder einem schwachen Netzanschluss: Ab der **Ladezustand-Schwelle für Spitzenabfang** abwärts decken die Batterien nur noch den Netzbezug über der **Bezugsgrenze für Spitzenabfang**, den Rest bezieht das Haus aus dem Netz. Darüber decken sie den Bezug über der Grenze auch, wenn sie sonst nicht entladen würden (der Preisplan hält Energie zurück, Netzladen läuft, ein Verbraucher ohne Batterie-Unterstützung läuft). Netzladen bleibt unter der Grenze.",
       peak_shaving_soc_threshold:
         "Ab diesem Ladezustand (aller Batterien zusammen) abwärts decken die Batterien nur noch Spitzen über der Bezugsgrenze; die Energie zwischen dem minimalen Ladezustand und der Schwelle ist damit für Spitzen reserviert. Nicht unter dem minimalen Ladezustand der Batterien. Auch die Batterie-Unterstützung **Automatisch** der Verbraucher entlädt nicht darunter.",
+      peak_shaving_reserve:
+        "Nur mit **Automatische Bezugsgrenze**: Anteil der nutzbaren Energie zwischen minimalem Ladezustand und Schwelle, den die Berechnung der Grenze nicht verplant, gegen mehr Verbrauch als in den letzten Tagen. Größer: höhere Bezugsgrenze, die Batterien reichen sicherer bis zum Nachladen durch PV, fangen dafür weniger ab.",
+      temperature_limit:
+        "Begrenzt die Ladeleistung jeder Batterie nach ihrer gemeldeten Temperatur: bei Hitze schrittweise weniger, bei Kälte gar nicht. Schont die Zellen; das BMS behält seinen eigenen Schutz. Die Venus meldet ihre Innentemperatur, nicht die Zelltemperatur. Batterien ohne Temperatur werden nicht begrenzt, das Entladen nie.",
+      temperature_high:
+        "Über dieser Temperatur sinkt die Ladeleistung linear über den **Bereich der Ladeabregelung** bis auf die **Ladeleistung bei hoher Temperatur**.",
+      temperature_band:
+        "Temperaturbereich über der **Temperatur für Ladeabregelung**, über den die Ladeleistung von voll auf die **Ladeleistung bei hoher Temperatur** sinkt. Beispiel: 40 °C, 10 °C Bereich und 40 % → bei 45 °C 70 %, ab 50 °C 40 %. 0 °C: gleich auf die Untergrenze.",
+      temperature_floor:
+        "Ladeleistung am oberen Ende des Bereichs und darüber, in % der möglichen Ladeleistung. 0 %: Darüber wird nicht mehr geladen.",
+      temperature_low:
+        "Bei oder unter dieser Temperatur wird nicht geladen; in den 5 °C darüber steigt die Ladeleistung wieder linear auf voll. Schützt vor Laden bei Kälte, das LFP-Zellen schadet.",
+      rotation_soc_threshold:
+        "Bei kleiner Leistung laufen nur so viele Batterien, wie am wenigsten Verluste machen: beim Entladen die mit dem höchsten Ladezustand, beim Laden die mit dem niedrigsten. Liegt eine inaktive Batterie um mehr als diese Schwelle besser, übernimmt sie. Kleiner: Die Ladezustände bleiben enger beisammen, es wird öfter gewechselt.",
+      rotation_min_interval:
+        "Höchstens ein Wechsel in dieser Zeit, auch wenn die Schwelle früher überschritten ist. 0: wechseln, sobald die Schwelle überschritten ist.",
+      rotation_ramp_rate:
+        "Wie schnell die Leistung von einer Batterie zur anderen wandert, in W pro Sekunde: bei einem Wechsel und wenn Batterien dazukommen oder wegfallen. Kleine Leistungen sind damit schnell umverteilt; die Summe bleibt dabei immer gleich.",
+      rotation_ramp_max:
+        "Ein Übergang dauert nie länger, auch bei großer Leistung und kleiner Rampe. 0: sofort, ohne Übergang.",
+      min_soc:
+        "Bei oder unter diesem Ladezustand entlädt SLEMS die Batterie nicht mehr, erst 2 % darüber wieder, weil der Ladezustand nach einer Last wieder etwas steigt. Morgenreserve und Ladezustand-Schwelle für Spitzenabfang kommen darüber. Der Zellausgleich ignoriert die Grenze.",
+      max_soc:
+        "Bei oder über diesem Ladezustand lädt SLEMS die Batterie nicht mehr, erst 2 % darunter wieder. Er gilt als „voll“ für netzdienliches Laden, die gesicherte Ladung und die Prognose. 100 %: Das BMS beendet die Ladung. Die regelmäßige Vollladung und der Zellausgleich dürfen darüber laden.",
+      max_charge_limit:
+        "Höchste AC-Ladeleistung, die SLEMS der Batterie vorgibt, z. B. zur Schonung oder wegen einer schwachen Zuleitung; nie über dem, was die Batterie kann.",
+      max_discharge_limit:
+        "Höchste AC-Entladeleistung, die SLEMS der Batterie vorgibt, z. B. 800 W für ein Steckersolar-System; nie über dem, was die Batterie kann.",
+      communication_pause:
+        "Wie lange **Kommunikation pausieren (Firmware-Update)** im Menü einer Batteriekarte die Verbindung trennt und wie viel **Pause verlängern** anhängt. Danach verbindet sich SLEMS von selbst wieder. Gilt für alle Batterien.",
       price_control:
         "Braucht einen Tarif. Reicht die gespeicherte Energie nicht für alle Stunden, bis die PV die Batterien wieder füllt, decken sie die Stunden mit dem höchsten Bezugspreis und halten ihre Energie in den günstigeren zurück (dort bezieht das Haus aus dem Netz). Der Netzbezug bleibt gleich, er wandert nur in günstigere Stunden.",
       grid_charge:
@@ -1337,8 +1397,8 @@ const SETTING_GROUPS = [
       "feed_in_cap",
       "pv_peak_power",
       "feed_in_cap_limit",
-      "feed_in_cap_buffer",
       "feed_in_cap_auto_buffer",
+      "feed_in_cap_buffer",
     ],
   ],
   ["gridFriendly", ["grid_friendly_charging", "grid_friendly_buffer_auto", "grid_friendly_buffer"]],
@@ -1364,10 +1424,10 @@ const SETTING_GROUPS = [
     "peak",
     [
       "peak_shaving",
-      // Read only with the automatic limit (shows the calculated value).
-      "peak_shaving_grid_limit",
       "peak_shaving_soc_threshold",
       "peak_shaving_auto",
+      // Read only with the automatic limit (shows the calculated value).
+      "peak_shaving_grid_limit",
       "peak_shaving_reserve",
     ],
   ],
