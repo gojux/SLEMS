@@ -4081,6 +4081,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if not battery.driver.capabilities.controllable:
             battery.release_pending_since = None
             return True
+        if battery.communication_paused:
+            # Nothing is sent while paused; a manual pause released the battery
+            # before it began. Connecting would also take the battery's only
+            # connection slot until the pause ends.
+            return True
         try:
             await battery.driver.release_control()
         except BatteryDriverError as err:

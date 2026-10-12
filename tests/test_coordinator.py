@@ -271,3 +271,30 @@ def test_price_plan_in_the_executor_starts_a_control_cycle() -> None:
     assert coordinator._grid_charge_task is None
     assert coordinator.grid_charge_timing.plans == 1 and coordinator.grid_charge_timing.periods == 96
     assert requests == [True]
+
+
+def test_release_leaves_a_paused_battery_alone() -> None:
+    import asyncio
+    from types import SimpleNamespace
+
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    released = []
+
+    async def release_control() -> None:
+        released.append(True)
+
+    battery = SimpleNamespace(
+        name="Venus",
+        driver=SimpleNamespace(capabilities=SimpleNamespace(controllable=True), release_control=release_control),
+        communication_paused=True,
+        release_pending_since=None,
+    )
+    coordinator = SlemsCoordinator.__new__(SlemsCoordinator)
+    # E.g. switching to "Observe only" while the battery is paused: no connection.
+    assert asyncio.run(coordinator.async_release_battery(battery)) is True
+    assert released == []
+    assert battery.release_pending_since is None
+    battery.communication_paused = False
+    assert asyncio.run(coordinator.async_release_battery(battery)) is True
+    assert released == [True]
