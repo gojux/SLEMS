@@ -185,7 +185,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 |---|---|
 | Consumers with own power/energy sensors, inside or outside the smart meter | ✅ |
 | Consumer setup from its device: devices ranked by fit (e.g. Hoval, my-PV, evcc), entities, control and its range suggested | ✅ |
-| Phase of batteries and consumers learned from the smart meter's phases, change reported, learn again; energy counters that do not net the phases detected | ✅ (control per phase not yet) |
+| Phase of consumers learned from the smart meter's phases (starting with the history), of batteries in the self-test, change reported, learn again; energy counters that do not net the phases detected | ✅ (control per phase not yet) |
 | Heat pump as consumer type (weather dependent forecast), optionally a release of its hot water charge (operating mode, learned hot water power) | ✅ |
 | Control of consumers: on/off, power set point or release for an automation of your own (with latest start), priority, minimum runtime/pause, avoid short runs, external blocking, control switchable per consumer | ✅ |
 | Consumers with their own thermostat: pauses recognised, their power goes to the batteries meanwhile | ✅ |
@@ -263,24 +263,39 @@ Requires Home Assistant 2026.9 or newer.
 
 If your smart meter measures each phase, select its **Grid power L1**, **L2**
 and **L3** in the SLEMS settings (suggested from the smart meter's device, same
-sign as the grid power). SLEMS then learns the phase of every battery and every
-consumer behind the smart meter from their power steps of at least 300 W: a
-step shows up on one phase with about the same size, or a third on each phase
-for a three phase device. After three agreeing steps the sensor **Phase** of
-the device shows it (**L1**, **L2**, **L3** or **Three phases**). For a wallbox
-whose active phases come from an entity, only the one phase it uses while
-charging on one phase is learned. The phase appears in **Details** of the
+sign as the grid power). SLEMS then learns the phase of every consumer behind
+the smart meter, and of every battery in its self-test:
+
+- **Consumers**: SLEMS compares the power of all batteries, consumers and the
+  PV system with the smart meter's phases, averaged over two minutes each. A
+  change of a consumer's power shows up on one phase with about the same size,
+  or a third on each phase for a three phase device, even while the batteries
+  compensate it at the same time. SLEMS starts with the last two days of the
+  Home Assistant history and then goes on with the live values, so a consumer
+  that switched a few times in this period gets its phase right away.
+  Sensors that report up to a minute late are no problem.
+- **Batteries**: the control moves the batteries together and against every
+  other load, so their phase cannot be told from normal operation. The
+  [self-test](#self-test-of-a-battery) shows it: the other batteries and the
+  consumers are held meanwhile.
+
+The sensor **Phase** of the device shows the result (**L1**, **L2**, **L3** or
+**Three phases**), its attribute *shares* the measured share per phase. For a
+wallbox whose active phases come from an entity, only the one phase it uses
+while charging on one phase is learned. The phase appears in **Details** of the
 battery and on the consumer card. It is shown and checked only; the control
 does not use it yet.
 
-- **Change**: if a device shows up on another phase three times in a row
-  (e.g. a plug-in battery moved to another socket), **Settings → Repairs**
-  asks which phase it is connected to; the measured one is preselected.
+- **Change**: if a consumer clearly shows up on another phase (e.g. a heater
+  moved to another socket; older values fade over a few days), or a self-test
+  measures another phase, **Settings → Repairs** asks which phase it is
+  connected to; the measured one is preselected.
 - **Learn phase again** (button of the device, or **Learn again** next to the
   phase in **Details** of the battery and on the consumer card, after a
-  confirmation): forgets the phase and learns it anew. If the same phase comes out again, Repairs asks whether it is
-  right or which phase to take instead. A phase you chose other than the
-  measured one is kept; a change is still reported.
+  confirmation): forgets the phase and learns it anew from the history; for a
+  battery run a self-test afterwards. If the same phase comes out again,
+  Repairs asks whether it is right or which phase to take instead. A phase you
+  chose other than the measured one is kept; a change is still reported.
 
 ### Smart meter over Modbus (optional)
 
@@ -937,6 +952,9 @@ Checked are:
   direction.
 - **Hand-back** to its own logic.
 
+If the smart meter measures each phase, the test also learns the battery's
+[phase](#phases-optional): the phase on which the steps show up.
+
 If the house consumption changes a lot during the rest, the checks at the smart
 meter are **unclear** instead of failed; repeat the test at a quieter time
 then. The result appears as a notification, on the battery card (if something
@@ -1464,7 +1482,9 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar.
 ![Batteries tab: one card per battery with state of charge, power, set point and cell delta](docs/images/dashboard_batteries_en.png)
 
 State of charge, stored energy and capacity (kWh), power on the grid side (AC)
-with its direction, the SLEMS set point, efficiency, state and the **Enabled**
+with its direction (an idle battery is **Full** or **Empty** when SLEMS
+charges or discharges it no further because of its state of charge or its
+BMS, otherwise **Idle**), the SLEMS set point, efficiency, state and the **Enabled**
 switch of every battery (disabling asks for confirmation), the cell delta with
 its balance status, a recommendation for active cell balancing and the phase
 of a running one.

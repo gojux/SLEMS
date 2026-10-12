@@ -115,4 +115,6 @@ class NotRespondingSensor(SlemsBatteryEntity, BinarySensorEntity):
             "retry_at": retry_at,
             # SoC (%) at which the BMS ended the charge below full, None otherwise.
             "bms_full_soc": delivery.bms_full_soc,
+            # SoC (%) at which the BMS blocked discharging, None otherwise.
+            "bms_empty_soc": delivery.bms_stop_soc if delivery.bms_limit_w == 0 else None,
         }

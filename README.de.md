@@ -187,7 +187,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 |---|---|
 | Verbraucher mit eigenen Leistungs-/Energiesensoren, im oder außerhalb des Smart Meters | ✅ |
 | Verbraucher aus seinem Gerät einrichten: Geräte nach Eignung sortiert (z. B. Hoval, my-PV, evcc), Entitäten, Steuerung und ihr Bereich vorgeschlagen | ✅ |
-| Phase von Batterien und Verbrauchern aus den Phasen des Smart Meters gelernt, Wechsel gemeldet, neu lernen; Energiezähler, die nicht über die Phasen saldieren, erkannt | ✅ (Regelung je Phase noch nicht) |
+| Phase von Verbrauchern aus den Phasen des Smart Meters gelernt (beginnend mit dem Verlauf), von Batterien im Selbsttest, Wechsel gemeldet, neu lernen; Energiezähler, die nicht über die Phasen saldieren, erkannt | ✅ (Regelung je Phase noch nicht) |
 | Wärmepumpe als Verbrauchertyp (wetterabhängige Prognose), optional Freigabe ihrer Warmwasserladung (Betriebsmodus, gelernte Warmwasserleistung) | ✅ |
 | Steuerung von Verbrauchern: Ein/Aus, Leistungsvorgabe oder Freigabe für eine eigene Automation (mit spätestem Start), Priorität, Mindestlaufzeit/-pause, Takten vermeiden, externe Sperre, Steuerung je Verbraucher abschaltbar | ✅ |
 | Verbraucher mit eigenem Thermostat: Pausen erkannt, ihre Leistung geht solange an die Batterien | ✅ |
@@ -268,25 +268,42 @@ Voraussetzung: Home Assistant 2026.9 oder neuer.
 Misst dein Smart Meter jede Phase, wähle in den SLEMS-Einstellungen seine
 **Netzleistung L1**, **L2** und **L3** aus (vorgeschlagen aus dem Gerät des
 Smart Meters, mit demselben Vorzeichen wie die Netzleistung). SLEMS lernt dann
-die Phase jeder Batterie und jedes Verbrauchers hinter dem Smart Meter aus
-ihren Leistungssprüngen ab 300 W: Ein Sprung zeigt sich an einer Phase in
-etwa gleicher Größe, bei einem dreiphasigen Gerät zu einem Drittel an jeder
-Phase. Nach drei übereinstimmenden Sprüngen zeigt der Sensor **Phase** des
-Geräts sie an (**L1**, **L2**, **L3** oder **Dreiphasig**). Bei einer Wallbox,
-deren aktive Phasen eine Entität nennt, lernt SLEMS nur die eine Phase, mit
-der sie einphasig lädt. Die Phase steht in den **Details** der Batterie und
-auf der Verbraucherkarte. Sie wird nur angezeigt und geprüft; die Regelung
-verwendet sie noch nicht.
+die Phase jedes Verbrauchers hinter dem Smart Meter, und die jeder Batterie in
+ihrem Selbsttest:
 
-- **Wechsel**: Zeigt sich ein Gerät dreimal hintereinander an einer anderen
-  Phase (z. B. eine Steckerbatterie in einer anderen Steckdose), fragt
-  **Einstellungen → Reparaturen**, an welcher Phase es hängt; die gemessene
-  ist vorausgewählt.
+- **Verbraucher**: SLEMS vergleicht die Leistung aller Batterien, Verbraucher
+  und der PV-Anlage mit den Phasen des Smart Meters, jeweils über zwei Minuten
+  gemittelt. Eine Änderung der Leistung eines Verbrauchers zeigt sich an einer
+  Phase in etwa gleicher Größe, bei einem dreiphasigen Gerät zu einem Drittel
+  an jeder Phase, auch wenn die Batterien sie gleichzeitig ausgleichen. SLEMS
+  beginnt mit den letzten zwei Tagen aus dem Verlauf von Home Assistant und
+  rechnet dann mit den aktuellen Werten weiter; ein Verbraucher, der in dieser
+  Zeit ein paarmal geschaltet hat, bekommt seine Phase also sofort. Sensoren,
+  die bis zu einer Minute verzögert melden, sind kein Problem.
+- **Batterien**: Die Regelung bewegt die Batterien gemeinsam und gegen jede
+  andere Last, daher lässt sich ihre Phase im normalen Betrieb nicht erkennen.
+  Der [Selbsttest](#selbsttest-einer-batterie) zeigt sie: Die anderen
+  Batterien und die Verbraucher werden dabei festgehalten.
+
+Der Sensor **Phase** des Geräts zeigt das Ergebnis (**L1**, **L2**, **L3** oder
+**Dreiphasig**), sein Attribut *shares* den gemessenen Anteil je Phase. Bei
+einer Wallbox, deren aktive Phasen eine Entität nennt, lernt SLEMS nur die eine
+Phase, mit der sie einphasig lädt. Die Phase steht in den **Details** der
+Batterie und auf der Verbraucherkarte. Sie wird nur angezeigt und geprüft; die
+Regelung verwendet sie noch nicht.
+
+- **Wechsel**: Zeigt sich ein Verbraucher deutlich an einer anderen Phase
+  (z. B. ein Heizlüfter in einer anderen Steckdose; ältere Werte verblassen
+  über einige Tage), oder misst ein Selbsttest eine andere Phase, fragt
+  **Einstellungen → Reparaturen**, an welcher Phase das Gerät hängt; die
+  gemessene ist vorausgewählt.
 - **Phase neu lernen** (Button des Geräts, oder **Neu lernen** neben der Phase
   in den **Details** der Batterie und auf der Verbraucherkarte, nach einer
-  Rückfrage): verwirft die Phase und lernt sie neu. Kommt wieder dieselbe heraus, fragt Reparaturen, ob sie stimmt oder
-  welche Phase stattdessen gelten soll. Eine andere als die gemessene Phase,
-  die du gewählt hast, bleibt erhalten; ein Wechsel wird weiter gemeldet.
+  Rückfrage): verwirft die Phase und lernt sie neu aus dem Verlauf; bei einer
+  Batterie danach einen Selbsttest machen. Kommt wieder dieselbe heraus, fragt
+  Reparaturen, ob sie stimmt oder welche Phase stattdessen gelten soll. Eine
+  andere als die gemessene Phase, die du gewählt hast, bleibt erhalten; ein
+  Wechsel wird weiter gemeldet.
 
 ### Smart Meter per Modbus (optional)
 
@@ -989,6 +1006,10 @@ Geprüft wird:
   Richtung.
 - **Rückgabe** an die eigene Logik.
 
+Misst der Smart Meter jede Phase, lernt der Test auch die
+[Phase](#phasen-optional) der Batterie: die Phase, an der sich die Schritte
+zeigen.
+
 Schwankt der Hausverbrauch während der Ruhe stark, sind die Prüfungen am Smart
 Meter **unklar** statt fehlerhaft; dann den Test zu einer ruhigeren Zeit
 wiederholen. Das Ergebnis erscheint als Benachrichtigung, auf der Batteriekarte
@@ -1555,7 +1576,9 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
 ![Reiter Batterien: eine Karte je Batterie mit Ladezustand, Leistung, Vorgabe und Zell-Delta](docs/images/dashboard_batteries_de.png)
 
 Ladezustand, gespeicherte Energie und Kapazität (kWh), netzseitige Leistung
-(AC) mit Richtung, die Vorgabe von SLEMS, Wirkungsgrad, Status und der
+(AC) mit Richtung (eine stehende Batterie ist **Voll** oder **Leer**, wenn SLEMS
+sie wegen ihres Ladezustands oder ihres BMS nicht weiter lädt oder entlädt,
+sonst **Standby**), die Vorgabe von SLEMS, Wirkungsgrad, Status und der
 Schalter **Aktiviert** jeder Batterie (das Deaktivieren muss bestätigt werden),
 das Zell-Delta mit seinem Status, eine Empfehlung für den aktiven
 Zellausgleich und die Phase eines laufenden Ausgleichs.

@@ -56,6 +56,8 @@ const STRINGS = {
     charging: "Charging",
     discharging: "Discharging",
     idle: "Idle",
+    batteryFull: "Full",
+    batteryEmpty: "Empty",
     energyFlow: "Energy flow",
     today: "Today",
     dayChart: "Today: forecast and plan",
@@ -106,7 +108,7 @@ const STRINGS = {
     threePhases: "three phases",
     relearnPhase: "Learn again",
     relearnPhaseTitle: "Learn the phase of {name} again?",
-    relearnPhaseText: "SLEMS forgets the phase and learns it again from the next power steps; until then it shows \"not learned yet\". If the same phase comes out again, Settings → Repairs asks whether it is right.",
+    relearnPhaseText: "SLEMS forgets the phase and learns it again from the history of the last two days and the following values; until then it shows \"not learned yet\". The phase of a battery comes from its self-test: run one afterwards. If the same phase comes out again, Settings → Repairs asks whether it is right.",
     deviceView: "Open device in Home Assistant",
     close: "Close",
     noDetails: "No details available.",
@@ -275,6 +277,7 @@ const STRINGS = {
     gridStaleText: "The batteries follow their own logic until the smart meter reports again.",
     notRespondingText: "does not deliver the commanded power ({reason}); handed back to its own logic, retried at {time}",
     bmsFullText: "The BMS ended the charge at {soc} % because one cell is full; no charging until the battery has discharged.",
+    bmsEmptyText: "The BMS ended the discharge at {soc} %.",
     notRespondingReasons: {
       charge_not_delivered: "no charging",
       discharge_not_delivered: "no discharging",
@@ -701,6 +704,8 @@ const STRINGS = {
     charging: "Laden",
     discharging: "Entladen",
     idle: "Standby",
+    batteryFull: "Voll",
+    batteryEmpty: "Leer",
     energyFlow: "Energiefluss",
     today: "Heute",
     dayChart: "Heute: Prognose und Plan",
@@ -751,7 +756,7 @@ const STRINGS = {
     threePhases: "dreiphasig",
     relearnPhase: "Neu lernen",
     relearnPhaseTitle: "Phase von {name} neu lernen?",
-    relearnPhaseText: "SLEMS verwirft die Phase und lernt sie aus den nächsten Leistungssprüngen neu; bis dahin steht dort „noch nicht gelernt“. Kommt wieder dieselbe Phase heraus, fragt Einstellungen → Reparaturen, ob sie stimmt.",
+    relearnPhaseText: "SLEMS verwirft die Phase und lernt sie aus dem Verlauf der letzten zwei Tage und den folgenden Werten neu; bis dahin steht dort „noch nicht gelernt“. Die Phase einer Batterie kommt aus ihrem Selbsttest: Mach danach einen. Kommt wieder dieselbe Phase heraus, fragt Einstellungen → Reparaturen, ob sie stimmt.",
     deviceView: "Gerät in Home Assistant öffnen",
     close: "Schließen",
     noDetails: "Keine Details verfügbar.",
@@ -920,6 +925,7 @@ const STRINGS = {
     gridStaleText: "Die Batterien folgen ihrer eigenen Logik, bis der Smart Meter wieder meldet.",
     notRespondingText: "liefert die vorgegebene Leistung nicht ({reason}); an die eigene Logik übergeben, neuer Versuch um {time}",
     bmsFullText: "Das BMS hat die Ladung bei {soc} % beendet, weil eine Zelle voll ist; geladen wird erst wieder, nachdem die Batterie entladen hat.",
+    bmsEmptyText: "Das BMS hat das Entladen bei {soc} % beendet.",
     notRespondingReasons: {
       charge_not_delivered: "lädt nicht",
       discharge_not_delivered: "entlädt nicht",
@@ -1363,6 +1369,8 @@ const SETTING_HIDDEN_WITH = {
   battery_share_when_secured: "grid_friendly_charging",
 };
 
+// SoC from which a battery counts as full (FULL_SOC_PCT in delivery_monitor.py).
+const FULL_SOC_PCT = 99;
 // A battery not full for longer than this is named in the overview.
 const FULL_CHARGE_NOTE_DAYS = 14;
 
@@ -2389,6 +2397,19 @@ class SlemsPanel extends HTMLElement {
    * sensor uses +discharge like the Home Assistant energy dashboard), else
    * the battery power.
    */
+  /** "Full" or "Empty" for an idle battery SLEMS charges or discharges no further, "Standby" otherwise. */
+  _idleText(deviceId) {
+    const t = this._t;
+    const blocked = (key) => {
+      const st = this._state(key, deviceId);
+      return this._number(st) === 0 && ["soc", "bms"].includes(st.attributes.reason);
+    };
+    // At 100 % the BMS ends the charge, the SoC window does not block it.
+    if (blocked("allowed_charge_power") || this._number(this._state("battery_soc", deviceId)) >= FULL_SOC_PCT) return t.batteryFull;
+    if (blocked("allowed_discharge_power")) return t.batteryEmpty;
+    return t.idle;
+  }
+
   _batteryPower(deviceId) {
     const ac = this._number(this._state("ac_power", deviceId));
     return ac !== null ? -ac : this._number(this._state("battery_power", deviceId));
@@ -2851,7 +2872,7 @@ class SlemsPanel extends HTMLElement {
             ? t.notResponding
             : balancing
             ? t.balancing
-            : power === null ? "" : power > 10 ? t.charging : power < -10 ? t.discharging : t.idle,
+            : power === null ? "" : power > 10 ? t.charging : power < -10 ? t.discharging : this._idleText(battery.device_id),
       });
     }
     for (const consumer of this._config.consumers || []) {
@@ -4280,14 +4301,14 @@ class SlemsPanel extends HTMLElement {
           const soc = this._number(s("battery_soc"));
           const enabled = s("battery_enabled");
           const notResponding = s("not_responding");
-          const direction = (value) => {
+          const direction = (value, idle = t.idle) => {
             if (value === null || value === undefined) return undefined;
-            const text = value > 10 ? t.charging : value < -10 ? t.discharging : t.idle;
+            const text = value > 10 ? t.charging : value < -10 ? t.discharging : idle;
             return { text: `${this._watts(Math.abs(value))} (${text})` };
           };
           const rows = [
             [t.storedEnergy, s("stored_energy") && { text: this._storedOf(s("stored_energy")) ?? this._format(s("stored_energy")) }, s("stored_energy")?.entity_id],
-            [t.powerGridSide, direction(this._batteryPower(b.device_id)), (s("ac_power") || s("battery_power"))?.entity_id],
+            [t.powerGridSide, direction(this._batteryPower(b.device_id), this._idleText(b.device_id)), (s("ac_power") || s("battery_power"))?.entity_id],
             [t.setPoint, direction(this._number(s("planned_power"))), s("planned_power")?.entity_id],
             [t.efficiency, s("round_trip_efficiency"), s("round_trip_efficiency")?.entity_id],
             [t.state, s("inverter_state"), s("inverter_state")?.entity_id],
@@ -4315,6 +4336,9 @@ class SlemsPanel extends HTMLElement {
           } else if (notResponding?.attributes?.bms_full_soc != null) {
             const text = t.bmsFullText.replace("{soc}", Math.round(notResponding.attributes.bms_full_soc));
             problem = `<div class="info-box"><ha-icon icon="mdi:battery-check-outline"></ha-icon><span>${escapeHtml(text)}</span></div>`;
+          } else if (notResponding?.attributes?.bms_empty_soc != null) {
+            const text = t.bmsEmptyText.replace("{soc}", Math.round(notResponding.attributes.bms_empty_soc));
+            problem = `<div class="info-box"><ha-icon icon="mdi:battery-outline"></ha-icon><span>${escapeHtml(text)}</span></div>`;
           }
           const selfTest = s("self_test_result");
           if (!problem && selfTest?.state === "running") {
