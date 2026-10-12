@@ -84,6 +84,12 @@ class BatteryDriver(ABC):
         """Interval of complete rewrites of the set point; None: the controller's default."""
         return None
 
+    @property
+    def start_delay_s(self) -> float | None:
+        """Typical time until the grid meter shows a command out of standby, used
+        until the controller learned it; None: like any other command."""
+        return None
+
     async def read_device_info(self) -> dict[str, str]:
         """Firmware versions and other static device information (may be empty)."""
         return {}

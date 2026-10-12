@@ -105,7 +105,7 @@ def test_reversal_learned_apart_for_its_battery() -> None:
     responses.command(0.0, 0.0, {"a": -800.0})
     responses.sample(2.0, -800.0)
     # A reversal of battery a (discharging -> charging): 5 s.
-    responses.command(10.0, -800.0, {"a": 1600.0}, frozenset({"a"}))
+    responses.command(10.0, -800.0, {"a": 1600.0}, {"a": -800.0})
     responses.sample(12.0, -700.0)
     responses.sample(15.0, 800.0)
     assert responses.learned("a") is not None
@@ -122,7 +122,7 @@ def test_start_from_standby_learned_apart_for_its_battery() -> None:
     responses.command(0.0, 0.0, {"a": 1000.0}, started_ids=frozenset({"a"}))
     responses.sample(0.8, 1000.0)
     # A reversal is no start.
-    responses.command(10.0, 1000.0, {"a": -2000.0}, frozenset({"a"}))
+    responses.command(10.0, 1000.0, {"a": -2000.0}, {"a": 1000.0})
     responses.sample(12.0, -1000.0)
     assert responses.learned_start("a") == pytest.approx(0.8)
     assert responses.learned_reversal("a") == pytest.approx(2.0)
@@ -130,3 +130,15 @@ def test_start_from_standby_learned_apart_for_its_battery() -> None:
     restored = BatteryResponses()
     restored.restore_starts(responses.starts_as_dict())
     assert restored.learned_start("a") == pytest.approx(0.8)
+
+
+def test_reversal_is_learned_until_the_new_direction_shows() -> None:
+    responses = BatteryResponses()
+    # Battery a reverses from 1500 W discharging to 1500 W charging.
+    responses.command(0.0, -1500.0, {"a": 3000.0}, {"a": -1500.0})
+    # Its stop shows after 0.5 s: 50 % of the step, but no charging yet.
+    responses.sample(0.5, 0.0)
+    responses.sample(1.5, 300.0)
+    # 60 % of the new direction.
+    responses.sample(1.8, 900.0)
+    assert responses.learned_reversal("a") == pytest.approx(1.8)

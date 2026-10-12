@@ -7,10 +7,13 @@
   commands the current meter value already contains. Learned for all
   batteries together and for each battery from the steps it makes mostly
   alone (``BatteryResponses``); the batteries' own telemetry is read too
-  rarely for that. Steps that reverse the direction (charging to discharging
-  or back) are also learned apart; the controller expects a reversal to take
-  this longer time. Steps out of standby (from 0 W) are learned apart as well,
-  for the diagnostics: whether a battery starts faster than it reverses.
+  rarely for that (and reports its own power more than a second late).
+  Steps that reverse the direction (charging to discharging or back) are
+  learned apart: a reversal stops at once and only then starts the other
+  direction, so the time until the *new direction* shows is learned. Steps
+  out of standby (from 0 W) are learned apart as well: the inverter of a
+  Marstek Venus does nothing for about 2 s before it ramps up. The controller
+  expects these steps to take their own times.
 * Consumer response times: time from a consumer command until the consumer's
   own power sensor (and the grid meter) shows most of the change, separately
   for switching on and off (``DirectionalResponse``): switching on includes
@@ -130,7 +133,7 @@ class BatteryResponses:
 
     def __init__(self) -> None:
         self.learners: dict[str, StepResponse] = {}
-        # Steps of a battery that reverse its direction.
+        # Steps of a battery that reverse its direction, until the new direction shows.
         self.reversals: dict[str, StepResponse] = {}
         # Steps of a battery out of standby (from 0 W).
         self.starts: dict[str, StepResponse] = {}
@@ -140,12 +143,13 @@ class BatteryResponses:
         timestamp: float,
         baseline: float | None,
         changes: dict[str, float],
-        reversed_ids: frozenset[str] = frozenset(),
+        reversed_from: dict[str, float] | None = None,
         started_ids: frozenset[str] = frozenset(),
     ) -> None:
         """The batteries' commanded powers changed by ``changes`` (battery id -> W);
-        the commands of ``reversed_ids`` changed their direction, the ones of
-        ``started_ids`` left standby."""
+        the commands of ``reversed_from`` changed their direction (battery id ->
+        power before), the ones of ``started_ids`` left standby."""
+        reversed_from = reversed_from or {}
         total = sum(changes.values())
         moved = sum(abs(change) for change in changes.values())
         if moved < MIN_STEP_W:
@@ -165,7 +169,7 @@ class BatteryResponses:
             if battery_id != own:
                 learner.cancel()
         for battery_id, learner in self.reversals.items():
-            if battery_id != own or own not in reversed_ids:
+            if battery_id != own or own not in reversed_from:
                 learner.cancel()
         for battery_id, learner in self.starts.items():
             if battery_id != own or own not in started_ids:
@@ -174,9 +178,12 @@ class BatteryResponses:
             self.learners.setdefault(own, StepResponse(DEFAULT_BATTERY_RESPONSE_S)).command(
                 timestamp, baseline, total
             )
-            if own in reversed_ids:
+            if own in reversed_from:
+                # Until the new direction shows: the stop of the old power
+                # moves the grid first.
+                stopped = reversed_from[own]
                 self.reversals.setdefault(own, StepResponse(DEFAULT_BATTERY_RESPONSE_S)).command(
-                    timestamp, baseline, total
+                    timestamp, None if baseline is None else baseline - stopped, total + stopped
                 )
             if own in started_ids:
                 self.starts.setdefault(own, StepResponse(DEFAULT_BATTERY_RESPONSE_S)).command(

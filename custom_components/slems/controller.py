@@ -9,7 +9,10 @@ Two measures keep the loop stable although the meter shows the effect of a
 command only after a while:
 * The battery power assumed in the energy balance is the one the meter can
   already see: the last command older than the learned battery response time
-  (see ``response``). Newer commands are not counted twice.
+  (see ``response``). Newer commands are not counted twice. A command out of
+  standby takes the longer start time; a reversal counts as 0 W after the
+  normal response time and with its new direction after the reversal time
+  (``command_arrivals``).
 * A battery that measurably does not follow its command (e.g. stopped by its
   BMS) counts with its measured power instead (``trusted_power``): the last
   poll, taken long enough after the command became constant, deviates by more
@@ -79,6 +82,8 @@ BATTERY_DEADBAND_W = 25.0
 BATTERY_KEEPALIVE_S = 60.0
 # Commands kept per battery to know which one the meter already shows.
 BATTERY_HISTORY = 8
+# A battery measured below this before SLEMS commands it counts as in standby.
+IDLE_POWER_W = 50.0
 CONSUMER_DEADBAND_W = 50.0
 CONSUMER_COMMAND_INTERVAL_S = 10.0
 CONSUMER_MIN_STEP_W = 100.0
@@ -127,6 +132,8 @@ class RealTimeController:
         self._rerun = False
         # battery id -> [(monotonic time, commanded power)], oldest first
         self._battery_history: dict[str, list[tuple[float, float]]] = {}
+        # battery id -> power before the oldest command in its history
+        self._history_base: dict[str, float] = {}
         # battery id -> monotonic time of the last complete write
         self._battery_refreshed: dict[str, float] = {}
         # battery id -> monotonic time since the commands have their direction
@@ -153,8 +160,9 @@ class RealTimeController:
         self._last_grid_w: float | None = None
         self.meter = MeterCadence()
         self.battery_response = StepResponse(DEFAULT_BATTERY_RESPONSE_S)
-        # Steps of all batteries together that reverse the direction; used for
-        # a battery whose own reversals are not learned yet.
+        # Steps of all batteries together that reverse the direction, until the
+        # new direction shows; used for a battery whose own reversals are not
+        # learned yet.
         self.battery_reversal_response = StepResponse(DEFAULT_BATTERY_RESPONSE_S)
         self.battery_responses = BatteryResponses()
         self.consumer_response: dict[str, DirectionalResponse] = {}
@@ -194,13 +202,33 @@ class RealTimeController:
         return learned if learned is not None else self.battery_response.value
 
     def battery_reversal_response_s(self, battery_id: str) -> float:
-        """Time until the grid meter shows a command of this battery that reverses
-        its direction (never shorter than the one of any other step)."""
+        """Time until the grid meter shows the new direction of a command of this
+        battery that reverses its direction (its stop shows up like any other
+        command); never shorter than the one of any other step."""
         normal = self.battery_response_s(battery_id)
         learned = self.battery_responses.learned_reversal(battery_id)
         if learned is None:
             learned = self.battery_reversal_response.response_s
+        if learned is None:
+            # The new direction starts the inverter again.
+            learned = self._start_delay_s(battery_id)
         return normal if learned is None else max(normal, learned)
+
+    def battery_start_response_s(self, battery_id: str) -> float:
+        """Time until the grid meter shows a command of this battery out of
+        standby (never shorter than the one of any other step)."""
+        normal = self.battery_response_s(battery_id)
+        learned = self.battery_responses.learned_start(battery_id)
+        if learned is None:
+            learned = self._start_delay_s(battery_id)
+        return normal if learned is None else max(normal, learned)
+
+    def _start_delay_s(self, battery_id: str) -> float | None:
+        """Start delay the battery's driver knows for its model."""
+        return next(
+            (b.driver.start_delay_s for b in self._coordinator.batteries if b.subentry_id == battery_id),
+            None,
+        )
 
     @property
     def gain(self) -> float:
@@ -419,8 +447,9 @@ class RealTimeController:
                 continue
             if (runtime := runtimes.get(battery_id)) is not None:
                 constant_since = self._constant_since(battery_id, power)
+                # The last arrival of a command: a reversal also has its stop.
                 response_s = next(
-                    (shown - issued for issued, _, shown in arrivals if issued == constant_since),
+                    (shown - issued for issued, _, shown in reversed(arrivals) if issued == constant_since),
                     self.battery_response_s(battery_id),
                 )
                 power = trusted_power(
@@ -501,6 +530,8 @@ class RealTimeController:
             self._battery_history.get(battery_id, []),
             self.battery_response_s(battery_id),
             self.battery_reversal_response_s(battery_id),
+            self.battery_start_response_s(battery_id),
+            self._history_base.get(battery_id, 0.0),
         )
 
     def _constant_since(self, battery_id: str, power: float) -> float | None:
@@ -517,8 +548,21 @@ class RealTimeController:
         if latest is None or (latest > 0) != (power > 0) or (latest < 0) != (power < 0):
             self._direction_since[battery_id] = now
         history = self._battery_history.setdefault(battery_id, [])
+        if not history:
+            self._history_base[battery_id] = self._idle_power(battery_id)
         history.append((now, power))
-        del history[:-BATTERY_HISTORY]
+        if len(history) > BATTERY_HISTORY:
+            self._history_base[battery_id] = history[-BATTERY_HISTORY - 1][1]
+            del history[:-BATTERY_HISTORY]
+
+    def _idle_power(self, battery_id: str) -> float:
+        """Power of a battery before SLEMS commands it: the last poll, 0 if it
+        (almost) stands still or was not read."""
+        measured = next(
+            (b.measured_power_w for b in self._coordinator.batteries if b.subentry_id == battery_id),
+            None,
+        )
+        return measured if measured is not None and abs(measured) > IDLE_POWER_W else 0.0
 
     async def _async_release_ramped_out(self) -> bool:
         """Release batteries whose ramp-out ended and that got 0 W; True if any."""
@@ -556,7 +600,8 @@ class RealTimeController:
 
         new_total = 0.0
         changes: dict[str, float] = {}
-        reversed_ids: set[str] = set()
+        # battery id -> power before a command that reverses the direction
+        reversed_from: dict[str, float] = {}
         started_ids: set[str] = set()
         # A self-test measures the effect of its battery: the others keep their set points.
         hold = self._coordinator.self_test_holds
@@ -589,7 +634,7 @@ class RealTimeController:
                 new_total += target
                 changes[battery.subentry_id] = target - (latest or 0.0)
                 if latest is not None and latest * target < 0:
-                    reversed_ids.add(battery.subentry_id)
+                    reversed_from[battery.subentry_id] = latest
                 elif latest == 0 and target != 0:
                     started_ids.add(battery.subentry_id)
             else:
@@ -602,10 +647,12 @@ class RealTimeController:
         # The grid power moves by the change of the battery power.
         self.battery_response.command(now, self._last_grid_w, new_total - previous_total)
         self.battery_responses.command(
-            now, self._last_grid_w, changes, frozenset(reversed_ids), frozenset(started_ids)
+            now, self._last_grid_w, changes, reversed_from, frozenset(started_ids)
         )
         if previous_total * new_total < 0:
-            self.battery_reversal_response.command(now, self._last_grid_w, new_total - previous_total)
+            # Measured until the new direction shows: the stop shows up earlier.
+            baseline = None if self._last_grid_w is None else self._last_grid_w - previous_total
+            self.battery_reversal_response.command(now, baseline, new_total)
         elif abs(new_total - previous_total) >= MIN_STEP_W:
             self.battery_reversal_response.cancel()
         return new_total
@@ -927,19 +974,33 @@ def seen_consumer_power(
 
 
 def command_arrivals(
-    history: list[tuple[float, float]], response_s: float, reversal_s: float
+    history: list[tuple[float, float]],
+    response_s: float,
+    reversal_s: float,
+    start_s: float | None = None,
+    before: float | None = None,
 ) -> list[tuple[float, float, float]]:
     """Battery commands (issued, power) with the time the grid meter shows them.
 
-    A command that reverses the direction takes ``reversal_s``, any other
-    ``response_s``; no command shows up before the one issued before it.
+    A command out of standby (from 0 W) takes ``start_s``, any other
+    ``response_s``. A command that reverses the direction shows up in two
+    parts: its stop (0 W) after ``response_s``, its new direction after
+    ``reversal_s``. No command shows up before the one issued before it.
+    ``before`` is the power before the oldest command (None: unknown).
     """
     arrivals = []
-    previous = None
+    previous = before
     shown = float("-inf")
     for issued, power in history:
-        reverses = previous is not None and previous * power < 0
-        shown = max(shown, issued + (reversal_s if reverses else response_s))
+        if previous is not None and previous * power < 0:
+            shown = max(shown, issued + response_s)
+            arrivals.append((issued, 0.0, shown))
+            delay = reversal_s
+        elif previous == 0 and power != 0 and start_s is not None:
+            delay = start_s
+        else:
+            delay = response_s
+        shown = max(shown, issued + delay)
         arrivals.append((issued, power, shown))
         previous = power
     return arrivals

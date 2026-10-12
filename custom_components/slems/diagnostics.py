@@ -211,7 +211,8 @@ def _system(coordinator: SlemsCoordinator) -> dict:
                 battery.name: controller.battery_responses.learned(battery.subentry_id)
                 for battery in coordinator.batteries
             },
-            # Steps that reverse the direction (charging <-> discharging), learned apart.
+            # Steps that reverse the direction (charging <-> discharging), learned
+            # apart until the new direction shows.
             "battery_reversal_response_s": controller.battery_reversal_response.response_s,
             "battery_reversal_response_by_battery_s": {
                 battery.name: controller.battery_responses.learned_reversal(battery.subentry_id)
@@ -220,6 +221,15 @@ def _system(coordinator: SlemsCoordinator) -> dict:
             # Steps out of standby (from 0 W), learned apart.
             "battery_start_response_by_battery_s": {
                 battery.name: controller.battery_responses.learned_start(battery.subentry_id)
+                for battery in coordinator.batteries
+            },
+            # Times the control expects (learned, else the driver's or the general value).
+            "battery_times_in_use_s": {
+                battery.name: {
+                    "step": round(controller.battery_response_s(battery.subentry_id), 2),
+                    "start": round(controller.battery_start_response_s(battery.subentry_id), 2),
+                    "reversal": round(controller.battery_reversal_response_s(battery.subentry_id), 2),
+                }
                 for battery in coordinator.batteries
             },
         },

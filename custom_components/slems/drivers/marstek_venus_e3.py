@@ -43,6 +43,13 @@ CONFIRM_DELAY_S = 0.2
 CONFIRM_TOLERANCE_W = 100
 CONFIRM_TOLERANCE_RATIO = 0.1
 
+# Time from the first register write until the grid meter shows 60 % of a
+# command out of standby. Measured on a Venus E 3.0 (2026-10-12): the inverter
+# does nothing for about 2 s, independent of the power and of how long it was
+# idle (10 s or 90 s), then ramps up within about 1 s; other steps show up
+# after about 0.9 s.
+START_DELAY_S = 2.7
+
 RS485_ENABLE = 0x55AA
 RS485_DISABLE = 0x55BB
 
@@ -175,6 +182,10 @@ class MarstekVenusE3Driver(BatteryDriver):
     @property
     def has_connection(self) -> bool:
         return True
+
+    @property
+    def start_delay_s(self) -> float | None:
+        return START_DELAY_S
 
     async def read_device_info(self) -> dict[str, str]:
         await self._ensure_connected()
