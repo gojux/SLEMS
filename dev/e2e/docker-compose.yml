@@ -6,6 +6,8 @@
 # Usage (from the repository root):
 #   docker compose -f dev/e2e/docker-compose.yml run --rm e2e
 #   docker compose -f dev/e2e/docker-compose.yml down
+# HA_VERSION selects another Home Assistant version, e.g. the minimum one:
+#   HA_VERSION=$(jq -r .homeassistant hacs.json) docker compose -f dev/e2e/docker-compose.yml run --rm e2e
 name: slems-e2e
 
 x-venus-sim: &venus-sim
@@ -16,8 +18,8 @@ x-venus-sim: &venus-sim
 
 services:
   homeassistant:
-    # The same version as the development instance.
-    image: ghcr.io/home-assistant/home-assistant:2026.9.3
+    # By default the same version as the development instance.
+    image: ghcr.io/home-assistant/home-assistant:${HA_VERSION:-2026.10.1}
     tmpfs:
       - /config
     volumes:

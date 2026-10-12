@@ -18,10 +18,17 @@ jobs:
       - run: docker compose --profile tests run --rm tests
 
   e2e:
-    name: setup (end-to-end)
+    name: setup (end-to-end, ${{ matrix.ha }} Home Assistant)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # current: the version of the development instance; minimum: the one in hacs.json.
+        ha: [current, minimum]
     steps:
       - uses: actions/checkout@v4
+      - if: matrix.ha == 'minimum'
+        run: echo "HA_VERSION=$(jq -r .homeassistant hacs.json)" >> "$GITHUB_ENV"
       # A fresh Home Assistant with simulators, set up through the frontend API (dev/e2e).
       - run: docker compose -f dev/e2e/docker-compose.yml run --rm e2e
       - name: Home Assistant log

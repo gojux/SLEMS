@@ -56,7 +56,7 @@ docker compose down
 
 | Service | Purpose |
 |---|---|
-| `homeassistant` | HA 2026.9.3 (same version as production) on <http://localhost:8123>. `custom_components/slems` is mounted read-only. |
+| `homeassistant` | HA 2026.10.1 (same version as production) on <http://localhost:8123>. `custom_components/slems` is mounted read-only. |
 | `venus-sim-1`, `venus-sim-2` | Modbus TCP simulators of a Venus E 3.0 (`dev/venus_sim/simulator.py`), reachable as host `venus-sim-1` / `venus-sim-2`, port 502. |
 | `evcc` (profile `evcc`) | evcc 0.316 for the [evcc guide](docs/wallbox-evcc.md), host network, configured in its web UI (data in `dev/evcc`, not committed); start with `docker compose --profile evcc up -d evcc`. Home Assistant reaches it at the bridge gateway (e.g. `http://10.240.6.1:7070`), the browser at the host IP, which evcc also uses for the Home Assistant login. [ha-evcc](https://github.com/marq24/ha-evcc) is copied into `dev/config/custom_components` by hand. |
 | `sunspec-meter` | SunSpec meter in the layout of a SolarEdge inverter with two meters (`dev/sunspec_meter/meter_sim.py`), host `sunspec-meter`, port 502, export positive. An automation of the dev instance writes the simulated grid power through port 5021 at every change of `sensor.smart_meter_power`. |
@@ -1762,10 +1762,14 @@ commands. A form gets its defaults and suggested values like in the frontend
 plus the values of its step; after every entry the integration must be
 loaded and the log free of errors. Only made-up data, no secrets, no
 internet services (market prices stay off). It takes a few minutes, so it
-runs on GitHub after a push; locally when a change touches the setup:
+runs on GitHub after a push, once with the Home Assistant version of the
+development instance and once with the minimum version from `hacs.json`;
+locally when a change touches the setup (`HA_VERSION` selects the version):
 
 ```bash
 docker compose -f dev/e2e/docker-compose.yml run --rm e2e
+docker compose -f dev/e2e/docker-compose.yml down
+HA_VERSION=$(jq -r .homeassistant hacs.json) docker compose -f dev/e2e/docker-compose.yml run --rm e2e
 docker compose -f dev/e2e/docker-compose.yml down
 ```
 
