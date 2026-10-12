@@ -33,6 +33,8 @@ def run(
     soc: float = 50.0,
     counter_digits: int = 2,
     on_phase: int | None = None,
+    handover_at: float | None = None,
+    handover_until: float = 3600.0,
 ) -> SelfTest:
     """Drive a test with a simulated battery: 1 s samples until the release."""
     rng = random.Random(1)
@@ -53,12 +55,18 @@ def run(
         reported = actual * sign * scale
         c, d = (discharged, charged) if swap_counters else (charged, discharged)
         phases = None
+        # Two other batteries hand 1300 W over (L1 takes it from L3), the meter sum stays.
+        handing = handover_at is not None and handover_at <= now < handover_until
+        others = (-1300.0, 0.0) if handing else (0.0, -1300.0)
         if on_phase is not None:
-            phases = tuple(meter / 3 + (actual * 2 / 3 if k == on_phase else -actual / 3) for k in range(3))
+            moved = (-1300.0, 0.0, 1300.0) if handing else (0.0, 0.0, 0.0)
+            phases = tuple(
+                meter / 3 + (actual * 2 / 3 if k == on_phase else -actual / 3) + moved[k] for k in range(3)
+            )
         sample = Sample(
             now, meter, reported, soc,
             round(c, counter_digits) if counters else None, round(d, counter_digits) if counters else None,
-            phases,
+            phases, others,
         )
         result = test.step(now, sample, ready=True)
         power = result if result is not None else power
@@ -182,6 +190,10 @@ def test_the_phase_of_the_battery() -> None:
     assert run(SelfTest(600, 600, 0.0), on_phase=1).grid_phase() is GridPhase.L2
     # Without the phases of the meter.
     assert run(SelfTest(600, 600, 0.0)).grid_phase() is None
+    # Another battery handed over after the first rest: charge and discharge compared directly.
+    assert run(SelfTest(600, 600, 0.0), on_phase=2, handover_at=70).grid_phase() is GridPhase.L3
+    # It handed back between charge and discharge: nothing to tell.
+    assert run(SelfTest(600, 600, 0.0), on_phase=2, handover_at=70, handover_until=200).grid_phase() is None
     # A full battery charges only a little: the discharge alone shows the phase.
     test = run(SelfTest(200, 600, 0.0), on_phase=2)
     assert test.grid_phase() is GridPhase.L3

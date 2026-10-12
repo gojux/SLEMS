@@ -1290,11 +1290,15 @@ limit the maximum gain.
   at least 0.4 of its power along it (free batteries and late sensors take
   up part, a three phase heat pump showed 0.6), gets that phase (`PhaseLearner.observe`); another pattern later
   sets `changed_to`, the same again clears it. Batteries are never decided
-  from the statistics; `SelfTest.grid_phase` (the change of each meter phase
-  against the battery's own reported step, `classify`; steps that show no
-  phase, e.g. 200 W charging of a full battery, are left out, the others must
-  agree) gives their phase at the end of a self-test (`phase_steps` and
-  `grid_phase` in its result). When the statistics are empty (new, other devices, learn
+  from the statistics; `SelfTest.grid_phase` gives their phase at the end of
+  a self-test (`phase_steps` and `grid_phase` in its result): the change of
+  each meter phase against the battery's own reported change (`classify`),
+  comparing the charge window with the discharge window directly (twice the
+  step; another battery handing over during a rest cancels out, which moved
+  two phases by 1.3 kW against the rest in a real test), else each step
+  against its rest (e.g. 200 W charging of a full battery is left out). The
+  other batteries' reported power must not move by more than 25 % of the
+  step between the compared windows. When the statistics are empty (new, other devices, learn
   again) `_load_phase_history` replays the last 2 days of the recorder
   (`get_significant_states`, compressed, an hour per query; batteries from
   SLEMS' own power sensors) through `phases.replay` (evaluated after each

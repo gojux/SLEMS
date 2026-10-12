@@ -2181,22 +2181,21 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if battery.unreadable_since is not None and now - battery.unreadable_since >= SELF_TEST_UNREADABLE_S:
                 self.end_self_test(battery, "unreadable")
             return
-        others = [
-            power
-            for other in self.batteries
-            if other is not battery
-            and (other_telemetry := snapshot.batteries.get(other.subentry_id)) is not None
-            and (power := other_telemetry.grid_side_power_w) is not None
-        ]
+        others: list[float | None] = []
+        for other in self.batteries:
+            if other is not battery:
+                other_telemetry = snapshot.batteries.get(other.subentry_id)
+                others.append(other_telemetry.grid_side_power_w if other_telemetry is not None else None)
         grid = snapshot.grid_power_w
         sample = Sample(
             now,
-            None if grid is None else grid - sum(others),
+            None if grid is None else grid - sum(p for p in others if p is not None),
             telemetry.grid_side_power_w,
             telemetry.soc_pct,
             telemetry.extra.get("total_charging_energy"),
             telemetry.extra.get("total_discharging_energy"),
             self._grid_phases_w(),
+            tuple(others),
         )
         battery.self_test_power_w = test.step(now, sample, ready=battery.leaving_until is None)
 

@@ -31,9 +31,13 @@ over the last ``MEAN_S`` of a phase. The checks:
 * release: the battery was handed back to its own logic.
 
 With the smart meter's power per phase the test also shows the battery's
-phase (``grid_phase``): the step of the meter shows up on one phase alone
-(see phases.classify, against the battery's own reported step, which the
-house load does not move), alike in the directions that show one.
+phase (``grid_phase``): its step shows up on one phase alone (see
+phases.classify, against the battery's own reported step, which the house
+load does not move). With both directions the charge is compared with the
+discharge directly: twice the step, and a change before them (e.g. another
+battery handing over during the rest) cancels out. If another battery's
+reported power moved between the compared windows, the comparison shows
+nothing.
 
 A meter that moves a lot while the battery rests (house or PV changing) makes
 the meter based checks *unclear* instead of failed (unless the meter matches
@@ -50,7 +54,7 @@ from enum import StrEnum
 import statistics
 from typing import Any
 
-from .phases import Phase as GridPhase, classify
+from .phases import OTHER_SHARE, Phase as GridPhase, classify
 
 IDLE_S = 60.0
 STEP_MAX_S = 240.0
@@ -113,6 +117,8 @@ class Sample:
     discharged_kwh: float | None = None
     # The smart meter's power per phase (+import), None without it.
     phases_w: tuple[float | None, float | None, float | None] | None = None
+    # Reported power of the other batteries, always in the same order.
+    others_w: tuple[float | None, ...] = ()
 
 
 @dataclass
@@ -151,6 +157,15 @@ class _Record:
             if not values:
                 return None
             means.append(statistics.fmean(values))
+        return means
+
+    def others_means(self) -> list[float | None]:
+        window = self.window()
+        count = max((len(s.others_w) for s in window), default=0)
+        means: list[float | None] = []
+        for i in range(count):
+            values = [v for s in window if i < len(s.others_w) and (v := s.others_w[i]) is not None]
+            means.append(statistics.fmean(values) if values else None)
         return means
 
     def spread(self) -> float | None:
@@ -228,19 +243,36 @@ class SelfTest:
         return self._current.target_w if self.commanding and self._current else None
 
     def phase_steps(self) -> dict[str, dict[str, Any]]:
-        """Per step: the battery's step (its reported power, else the meter) and each phase's change."""
+        """The compared windows: charge against discharge if both ran, else each step against its
+        rest. Per comparison the battery's step (its reported power, else the meter), each phase's
+        change and the largest change of another battery's reported power."""
+        charge, discharge = self._records.get(Phase.CHARGE), self._records.get(Phase.DISCHARGE)
+        if charge is not None and discharge is not None:
+            pairs = {"both": (charge, discharge)}
+        else:
+            pairs = {
+                phase.value: (record, reference)
+                for phase in (Phase.CHARGE, Phase.DISCHARGE)
+                if (record := self._records.get(phase)) is not None
+                and (reference := self._reference(phase)) is not None
+            }
         steps: dict[str, dict[str, Any]] = {}
-        for phase in (Phase.CHARGE, Phase.DISCHARGE):
-            record = self._records.get(phase)
-            reference = self._reference(phase)
-            if record is None or reference is None:
-                continue
+        for key, (record, reference) in pairs.items():
             meter, power, _ = self._deltas(record, reference)
             after, before = record.phase_means(), reference.phase_means()
             step = power if power is not None else meter
             if step is None or after is None or before is None:
                 continue
-            steps[phase.value] = {"step_w": step, "phases_w": [a - b for a, b in zip(after, before, strict=True)]}
+            others = [
+                abs(a - b)
+                for a, b in zip(record.others_means(), reference.others_means())
+                if a is not None and b is not None
+            ]
+            steps[key] = {
+                "step_w": step,
+                "phases_w": [a - b for a, b in zip(after, before, strict=True)],
+                "others_w": max(others, default=0.0),
+            }
         return steps
 
     def grid_phase(self) -> GridPhase | None:
@@ -249,7 +281,8 @@ class SelfTest:
         found = {
             phase
             for step in self.phase_steps().values()
-            if (phase := classify(step["step_w"], step["phases_w"])) is not None
+            if step["others_w"] <= OTHER_SHARE * abs(step["step_w"])
+            and (phase := classify(step["step_w"], step["phases_w"])) is not None
         }
         return found.pop() if len(found) == 1 else None
 
@@ -277,7 +310,11 @@ class SelfTest:
             "discharge_w": self.discharge_w,
             "checks": [check.as_dict() for check in self.checks],
             "phase_steps": {
-                key: {"step_w": round(step["step_w"]), "phases_w": [round(w) for w in step["phases_w"]]}
+                key: {
+                    "step_w": round(step["step_w"]),
+                    "phases_w": [round(w) for w in step["phases_w"]],
+                    "others_w": round(step["others_w"]),
+                }
                 for key, step in self.phase_steps().items()
             },
             "grid_phase": None if (phase := self.grid_phase()) is None else phase.value,
