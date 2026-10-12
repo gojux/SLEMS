@@ -4747,7 +4747,8 @@ class SlemsPanel extends HTMLElement {
       const value = attributes[learned[1]];
       const unit = stateObj.attributes.unit_of_measurement || "";
       const language = this._hass?.locale?.language || "en";
-      const format = (v) => `${new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(v)} ${unit}`.trim();
+      const digits = unit === "W" ? 0 : 2;
+      const format = (v) => `${new Intl.NumberFormat(language, { maximumFractionDigits: digits }).format(v)} ${unit}`.trim();
       if (value !== null && value !== undefined) {
         return `<div class="setting"><span>${name}</span><span class="readonly">${escapeHtml(format(value))} (${this._t.learned})</span></div>`;
       }
