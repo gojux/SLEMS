@@ -498,6 +498,8 @@ const STRINGS = {
         "Needs a tariff. If the stored energy does not last for every hour until PV refills the batteries, they cover the hours with the highest import price and keep their energy in the cheaper ones (the house draws from the grid there). The grid import stays the same, it only moves to cheaper hours.",
       grid_charge:
         "Only with price aware control. Charges the batteries from the grid in cheap hours when the energy replaces more expensive import later, after the charge and discharge losses, the wear costs and the minimum gain; as late as possible before it is needed. Not when PV fills the batteries anyway.",
+      grid_charge_max_soc:
+        "Grid charging charges the batteries up to this state of charge at most. How much pays, SLEMS plans anyway from prices and forecasts; the limit also leaves room for unexpectedly much PV and keeps the batteries full for long less often. With the feed-in cap the room it needs for the next peak stays free as well.",
       grid_charge_max_power: "0 = the charge power of the batteries. Import peak shaving limits it as well.",
       grid_import_max:
         "Charging from the grid never takes the grid import above this (house plus charging, sum of all phases), e.g. for the agreed connection power; 0 = no limit. Does not protect a single phase or the main fuse. Import peak shaving limits it as well.",
@@ -1141,6 +1143,8 @@ const STRINGS = {
         "Braucht einen Tarif. Reicht die gespeicherte Energie nicht für alle Stunden, bis die PV die Batterien wieder füllt, decken sie die Stunden mit dem höchsten Bezugspreis und halten ihre Energie in den günstigeren zurück (dort bezieht das Haus aus dem Netz). Der Netzbezug bleibt gleich, er wandert nur in günstigere Stunden.",
       grid_charge:
         "Nur mit preisbewusster Steuerung. Lädt die Batterien in günstigen Stunden aus dem Netz, wenn die Energie später teureren Bezug ersetzt, nach Lade- und Entladeverlusten, Verschleißkosten und Mindestgewinn; so spät wie möglich vor dem Bedarf. Nicht, wenn die PV die Batterien ohnehin füllt.",
+      grid_charge_max_soc:
+        "Netzladen lädt die Batterien höchstens bis zu diesem Ladezustand. Wie viel sich lohnt, plant SLEMS ohnehin aus Preisen und Prognosen; die Grenze lässt zusätzlich Platz für unerwartet viel PV und hält die Batterien seltener lange voll. Mit Einspeisebegrenzung bleibt außerdem der Platz frei, den sie für die nächste Spitze braucht.",
       grid_charge_max_power: "0 = Ladeleistung der Batterien. Bezugsspitzen abfangen begrenzt zusätzlich.",
       grid_import_max:
         "Netzladen hebt den Netzbezug (Haus plus Laden, Summe aller Phasen) nie über diesen Wert, z. B. für die vereinbarte Anschlussleistung; 0 = keine Grenze. Schützt keine einzelne Phase und nicht die Hauptsicherung. Bezugsspitzen abfangen begrenzt zusätzlich.",
