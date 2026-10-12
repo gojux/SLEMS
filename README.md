@@ -955,10 +955,14 @@ Checked are:
 If the smart meter measures each phase, the test also learns the battery's
 [phase](#phases-optional): the phase on which the steps show up.
 
-If the house consumption changes a lot during the rest, the checks at the smart
+If the house consumption changes a lot during the test, the checks at the smart
 meter are **unclear** instead of failed; repeat the test at a quieter time
-then. The result appears as a notification, on the battery card (if something
-is conspicuous or wrong) and with an explanation per check under ⋮ →
+then. The same happens with a nearly full or empty battery, which can only
+charge or discharge a little: repeat the test at a medium state of charge. A
+test that found nothing wrong but could not check everything ends **partly
+unclear**, shown as a hint, not as a problem. The result appears as a
+notification, on the battery card (if something is unclear, conspicuous or
+wrong) and with an explanation per check under ⋮ →
 **Details**; the sensor **Self-test result** keeps it. It stops outside
 operating mode **Active**, with paused communication, when the smart meter does
 not report or the battery cannot be read for 30 seconds; a restart of Home

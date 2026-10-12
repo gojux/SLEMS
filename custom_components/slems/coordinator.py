@@ -10,8 +10,11 @@ import asyncio
 import logging
 import math
 import time
+from typing import Any
 
 from homeassistant.components.modbus import async_get_unit
+from homeassistant.components.recorder import get_instance
+from homeassistant.components.recorder.history import get_significant_states
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
@@ -148,7 +151,7 @@ from .grid_filter import GridPowerFilter
 from .grid_meter import ModbusGridMeter
 from .grid_quarters import GridQuarters
 from .netting import NettingCheck
-from .phases import Phase, PhaseLearner
+from .phases import HISTORY_S, REPLAY_STEP_S, Phase, PhaseLearner, PhaseModel, replay
 from .market_prices import MarketPrices
 from .learning import (
     CapacityLearner,
@@ -225,7 +228,7 @@ from .pv_forecast import (
     power_lookup,
 )
 from .soc_projection import ProjectionSettings, SocProjection, project_soc
-from .util import entity_ids, state_as_float, state_as_kwh, state_as_watts
+from .util import entity_ids, state_as_float, state_as_kwh, state_as_watts, watts_factor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -853,7 +856,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.no_power = {c.subentry_id: NoPowerWatch() for c in consumers}
         # Phase of each battery and consumer behind the meter (see phases), and
         # whether the meter's counters net the phases (see netting).
-        self.phase_learners: dict[str, PhaseLearner] = {}
+        self.phase_model = PhaseModel()
+        # The recorder's history being taken into the phase statistics (live readings wait).
+        self._phase_history_run = 0
+        self._phase_history_loading = False
+        # Last replay of the history (diagnostics): hours taken, error.
+        self.phase_history_status: dict[str, Any] = {}
         self.netting = NettingCheck()
         self.target_progress = {c.subentry_id: TargetProgress() for c in consumers}
         self.target_states: dict[str, TargetState] = {}
@@ -932,11 +940,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         for subentry_id, data in (stored.get(NO_POWER_STORE_KEY) or {}).items():
             if subentry_id in self.no_power:
                 self.no_power[subentry_id] = NoPowerWatch.from_dict(data)
-        self.phase_learners = {
-            subentry_id: PhaseLearner.from_dict(data)
-            for subentry_id, data in (stored.get(PHASES_STORE_KEY) or {}).items()
-            if subentry_id in self.phase_devices
-        }
+        self.phase_model = PhaseModel.from_dict(stored.get(PHASES_STORE_KEY))
+        self.phase_model.configure(self.phase_devices, (b.subentry_id for b in self.batteries))
         self.netting = NettingCheck.from_dict(stored.get(NETTING_STORE_KEY))
         control = stored.get(CONTROL_STORE_KEY) or {}
         if gain := control.get("gain"):
@@ -1006,6 +1011,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.config_entry.async_create_background_task(
             self.hass, self._async_restore_export_today(), "slems grid export today"
         )
+        if self.phases_measured and self.phase_model.empty:
+            self._load_phase_history()
 
     async def _on_forecast_time(self, _now: datetime) -> None:
         await self.async_refresh_forecast()
@@ -1401,9 +1408,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         data[OUTDOOR_POWER_STORE_KEY] = {
             subentry_id: learner.as_dict() for subentry_id, learner in self.outdoor_power.items()
         }
-        data[PHASES_STORE_KEY] = {
-            subentry_id: learner.as_dict() for subentry_id, learner in self.phase_learners.items()
-        }
+        data[PHASES_STORE_KEY] = self.phase_model.as_dict()
         data[NETTING_STORE_KEY] = self.netting.as_dict()
         return data
 
@@ -1419,22 +1424,27 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         devices.update({c.subentry_id: c.name for c in self.consumers if c.included_in_meter})
         return devices
 
+    @property
+    def phase_learners(self) -> dict[str, PhaseLearner]:
+        return self.phase_model.learners
+
     def phase_learner(self, subentry_id: str) -> PhaseLearner:
-        return self.phase_learners.setdefault(subentry_id, PhaseLearner())
+        return self.phase_model.learner(subentry_id)
 
     def _observe_phases(self, snapshot: SystemSnapshot, now: float) -> None:
         """One reading of the phases for every battery and consumer behind the meter."""
-        if not self.phases_measured:
+        phases = self._grid_phases_w()
+        if phases is None:
             return
-        sign = -1.0 if self._config.get(CONF_GRID_POWER_INVERTED, False) else 1.0
-        phases = []
-        for key in CONF_GRID_PHASE_ENTITIES:
-            watts = state_as_watts(self.hass.states.get(self._config[key]))
-            phases.append(None if watts is None else sign * watts)
+        if self.phase_model.configure(self.phase_devices, (b.subentry_id for b in self.batteries)):
+            self._load_phase_history()
+        if self._phase_history_loading:
+            return
         readings: dict[str, float | None] = {}
         for battery in self.batteries:
             telemetry = snapshot.batteries.get(battery.subentry_id)
             readings[battery.subentry_id] = telemetry.grid_side_power_w if telemetry is not None else None
+        three_phase_w = 0.0
         for consumer in self.consumers:
             if not consumer.included_in_meter:
                 continue
@@ -1442,15 +1452,110 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             power = None
             if state is not None:
                 power = state.total_power_w if state.total_power_w is not None else state.power_w
-            if consumer.phases_entity_id and state_as_float(self.hass.states.get(consumer.phases_entity_id)) != 1:
-                # Switching between one and three phases is no change of the phase: only the one phase is learned.
-                power = None
+            active = state_as_float(self.hass.states.get(consumer.phases_entity_id)) if consumer.phases_entity_id else 1
+            if active is not None and active != 1 and power is not None:
+                # Switching between one and three phases is no change of the phase: only the one phase is
+                # learned, on more the power counts as spread evenly.
+                three_phase_w += power
+                power = 0.0
             readings[consumer.subentry_id] = power
-        voted = False
-        for subentry_id, power in readings.items():
-            voted |= self.phase_learner(subentry_id).add(now, power, phases) is not None
-        if voted:
+        if self.phase_model.add(now, readings, phases, snapshot.pv_power_w, three_phase_w):
+            self.phase_model.evaluate()
             self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
+
+    def _grid_phases_w(self) -> tuple[float | None, float | None, float | None] | None:
+        """The smart meter's power per phase (+ import), None if not configured."""
+        if not self.phases_measured:
+            return None
+        sign = -1.0 if self._config.get(CONF_GRID_POWER_INVERTED, False) else 1.0
+        watts = [state_as_watts(self.hass.states.get(self._config[key])) for key in CONF_GRID_PHASE_ENTITIES]
+        return tuple(None if w is None else sign * w for w in watts)  # type: ignore[return-value]
+
+    def _load_phase_history(self) -> None:
+        """Start the phase statistics anew from the recorder's history (in the background)."""
+        self.phase_model.restart()
+        self._phase_history_run += 1
+        self._phase_history_loading = True
+        self.config_entry.async_create_background_task(
+            self.hass, self._async_load_phase_history(self._phase_history_run), "slems phase history"
+        )
+
+    def _phase_history_sources(self) -> dict[str, tuple[str, float]]:
+        """Key -> entity and the factor to W with the sign of the live readings (+ import)."""
+        sign = -1.0 if self._config.get(CONF_GRID_POWER_INVERTED, False) else 1.0
+        sources = {f"phase_{i}": (self._config[key], sign) for i, key in enumerate(CONF_GRID_PHASE_ENTITIES)}
+        registry = er.async_get(self.hass)
+        for battery in self.batteries:
+            # SLEMS' own sensors: the AC power (+ discharge), else the battery power (+ charge).
+            for key, factor in (("ac_power", -1.0), ("battery_power", 1.0)):
+                if entity_id := registry.async_get_entity_id("sensor", DOMAIN, f"{battery.subentry_id}_{key}"):
+                    sources[battery.subentry_id] = (entity_id, factor)
+                    break
+        for consumer in self.consumers:
+            if consumer.included_in_meter:
+                sources[consumer.subentry_id] = (consumer.power_entity_id, 1.0)
+                if consumer.phases_entity_id:
+                    sources[f"active_{consumer.subentry_id}"] = (consumer.phases_entity_id, 1.0)
+        for i, entity_id in enumerate(entity_ids(self._config.get(CONF_PV_POWER_ENTITY))):
+            sources[f"pv_{i}"] = (entity_id, 1.0)
+        return {
+            key: (entity_id, factor if key.startswith("active_") else factor * watts_factor(self.hass.states.get(entity_id)))
+            for key, (entity_id, factor) in sources.items()
+        }
+
+    async def _async_load_phase_history(self, run: int) -> None:
+        """Replay the last ``HISTORY_S`` of the recorder into the phase statistics, an hour at a time."""
+        sources = self._phase_history_sources()
+        entity_list = sorted({entity_id for entity_id, _ in sources.values()})
+        end = time.time() // REPLAY_STEP_S * REPLAY_STEP_S
+        start = end - HISTORY_S
+        status: dict[str, Any] = {"started": dt_util.utcnow().isoformat(), "hours": 0, "error": None}
+        status["sources"] = {key: entity_id for key, (entity_id, _) in sources.items()}
+        self.phase_history_status = status
+        try:
+            while start < end and run == self._phase_history_run:
+                chunk_end = min(end, start + 3600)
+                rows = await get_instance(self.hass).async_add_executor_job(
+                    partial(
+                        get_significant_states,
+                        self.hass,
+                        dt_util.utc_from_timestamp(start),
+                        dt_util.utc_from_timestamp(chunk_end),
+                        entity_list,
+                        include_start_time_state=True,
+                        significant_changes_only=False,
+                        minimal_response=True,
+                        no_attributes=True,
+                        compressed_state_format=True,
+                    )
+                )
+                if run != self._phase_history_run:
+                    return
+                series = {key: _history_series(rows.get(entity_id) or [], factor) for key, (entity_id, factor) in sources.items()}
+                replay(
+                    self.phase_model,
+                    start,
+                    chunk_end,
+                    [series[f"phase_{i}"] for i in range(3)],
+                    {device: series[device] for device in self.phase_devices if device in series},
+                    [s for key, s in series.items() if key.startswith("pv_")],
+                    {key.removeprefix("active_"): s for key, s in series.items() if key.startswith("active_")},
+                )
+                start = chunk_end
+                status["hours"] += 1
+                # Let the event loop run between the hours.
+                await asyncio.sleep(0)
+        except Exception as err:  # noqa: BLE001
+            status["error"] = repr(err)
+            _LOGGER.warning("Phase history not available: %s", err, exc_info=True)
+        finally:
+            if run == self._phase_history_run:
+                self._phase_history_loading = False
+        if run == self._phase_history_run:
+            status["finished"] = dt_util.utcnow().isoformat()
+            _LOGGER.info("Phase statistics from %s hours of history", status["hours"])
+            self.phase_model.evaluate()
+            self._phase_changed()
 
     def _observe_netting(self) -> None:
         imported = self._config.get(CONF_GRID_IMPORT_ENERGY_ENTITY)
@@ -1470,8 +1575,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
 
     @callback
     def relearn_phase(self, subentry_id: str) -> None:
-        """Learn the phase of a battery or consumer anew (its button)."""
+        """Learn the phase of a battery or consumer anew (its button): forgets it and starts the
+        statistics anew from the recorder's history."""
         self.phase_learner(subentry_id).relearn()
+        if self.phases_measured:
+            self._load_phase_history()
         self._phase_changed()
 
     @callback
@@ -1483,8 +1591,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
 
     def _phase_changed(self) -> None:
         self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
-        self.problems.update(time.monotonic(), self.data)
-        self.async_update_listeners()
+        if self.data is not None:
+            self.problems.update(time.monotonic(), self.data)
+            self.async_update_listeners()
 
     async def _async_update_data(self) -> SystemSnapshot:
         config = self._config
@@ -2017,6 +2126,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         battery.self_test_power_w = None
         battery.leaving_until = None
         battery.self_test_last = test.as_dict()
+        if (phase := test.grid_phase()) is not None and battery.subentry_id in self.phase_model.devices:
+            self.phase_learner(battery.subentry_id).observe(phase)
+            self._phase_changed()
         if test.result != "cancelled":
             self.config_entry.async_create_background_task(
                 self.hass,
@@ -2084,6 +2196,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             telemetry.soc_pct,
             telemetry.extra.get("total_charging_energy"),
             telemetry.extra.get("total_discharging_energy"),
+            self._grid_phases_w(),
         )
         battery.self_test_power_w = test.step(now, sample, ready=battery.leaving_until is None)
 
@@ -4203,3 +4316,17 @@ def _weather_temperature(state) -> float | None:
         return None
     unit = state.attributes.get("temperature_unit", UnitOfTemperature.CELSIUS)
     return TemperatureConverter.convert(temperature, unit, UnitOfTemperature.CELSIUS)
+
+
+def _history_series(rows: list, factor: float) -> list[tuple[float, float | None]]:
+    """(time, value × factor) of recorder rows in the compressed format; None if not a number."""
+    series: list[tuple[float, float | None]] = []
+    for row in rows:
+        try:
+            value: float | None = float(row["s"]) * factor
+        except (KeyError, TypeError, ValueError):
+            value = None
+        if value is not None and not math.isfinite(value):
+            value = None
+        series.append((float(row["lu"]), value))
+    return series

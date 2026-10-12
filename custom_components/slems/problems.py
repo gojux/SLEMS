@@ -358,7 +358,7 @@ class ProblemReporter:
         """Notification about the end of a self-test (not for a cancelled one)."""
         text = await self._texts()
         result = test.result or "failed"
-        if result in ("ok", "warning", "failed"):
+        if result in ("ok", "unclear", "warning", "failed"):
             lines = "\n".join(
                 f"- {text(f'self_test_check_{check.key}')}: {text(f'self_test_outcome_{check.outcome.value}')}"
                 for check in test.checks

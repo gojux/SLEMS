@@ -294,7 +294,18 @@ async def async_get_config_entry_diagnostics(
         },
         **_system(coordinator),
         "batteries": [_battery(coordinator, battery) for battery in coordinator.batteries],
+        "phases": _phases(coordinator),
     }
+
+
+def _phases(coordinator: SlemsCoordinator) -> dict[str, Any] | None:
+    """Learning the phases (see phases): statistics per device, by name, and the history taken."""
+    if not coordinator.phases_measured:
+        return None
+    state = coordinator.phase_model.diagnostics()
+    names = coordinator.phase_devices
+    state["devices"] = {names.get(device, device): values for device, values in state["devices"].items()}
+    return {**state, "history": coordinator.phase_history_status}
 
 
 async def async_get_device_diagnostics(

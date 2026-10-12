@@ -1104,6 +1104,7 @@
           "pending": "Scheduled",
           "running": "Running",
           "ok": "OK",
+          "unclear": "Partly unclear",
           "warning": "Conspicuous",
           "failed": "Errors found",
           "not_active": "Stopped (not active)",
@@ -1528,6 +1529,9 @@
     "self_test_ok_message": {
       "message": "The self-test of {name} is OK.\n\n{checks}"
     },
+    "self_test_unclear_message": {
+      "message": "The self-test of {name} found nothing wrong, but could not check everything: the house consumption changed too much for some steps, or a step was small because the battery was nearly full or empty. Repeat it at a quieter time and with a battery neither full nor empty; the SLEMS dashboard shows the details: on the battery card ⋮ → **Details**.\n\n{checks}"
+    },
     "self_test_warning_message": {
       "message": "The self-test of {name} found something conspicuous. The SLEMS dashboard explains it: on the battery card ⋮ → **Details**. \"Unclear\" means the house consumption changed too much during the test; repeat it at a quieter time then.\n\n{checks}"
     },
@@ -1640,7 +1644,7 @@
         "step": {
           "init": {
             "title": "Phase of {name}",
-            "description": "SLEMS has measured {name} on {measured} several times in a row instead of {phase}, e.g. because it was plugged into another socket. Select the phase it is connected to; another one than measured is kept as chosen by you.",
+            "description": "SLEMS now measures {name} on {measured} instead of {phase}, e.g. because it was plugged into another socket. Select the phase it is connected to; another one than measured is kept as chosen by you.",
             "data": {
               "phase": "Phase"
             }

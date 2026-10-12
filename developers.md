@@ -596,8 +596,12 @@ last result in its attributes), notification in `problems.py`.
   per direction limited by the allowed power at the start (below 100 W the
   direction is skipped).
 - Outcomes ok / warning / failed / unclear / skipped; the result is the worst,
-  unclear counts as warning (repeat), skipped not. A meter spread in the rest
-  above 30 % of the test power makes a missing effect unclear.
+  skipped not counted. An unclear result (nothing found, not all checkable)
+  is shown as a hint, not as a problem. A meter spread in the rest above 30 %
+  of the step makes the effect unclear unless the meter change matches the
+  battery's reported one within 20 %; such a step does not count for the
+  power checks. An unclear step below 300 W gets reason `small` (nearly full
+  or empty battery: repeat at a medium state of charge).
 - A battery added with `self_test_on_setup` (subentry data) is tested once as
   soon as `self_test_blocked` allows it; the store keeps
   `self_test_on_setup_done` and `self_test_last`. A running test is not
@@ -1281,13 +1285,16 @@ limit the maximum gain.
   more column), fading with a half-life of 3 days. `shares` solves them per
   device with the devices of known phase fixed to their pattern (pseudo
   inverse: batteries moved alike cannot be told apart); a consumer with at
-  least 6 changes ≥ 150 W, standard errors ≤ 0.15 and shares of length ≥ 0.4
-  whose cosine to one pattern (1,0,0)… or (⅓,⅓,⅓) is ≥ 0.85 and 0.2 ahead of
-  the next gets that phase (`PhaseLearner.observe`); another pattern later
+  least 6 changes ≥ 150 W, standard errors ≤ 0.15 and shares whose cosine to
+  one pattern (1,0,0)… or (⅓,⅓,⅓) is ≥ 0.85 and 0.2 ahead of the next, with
+  at least 0.4 of its power along it (free batteries and late sensors take
+  up part, a three phase heat pump showed 0.6), gets that phase (`PhaseLearner.observe`); another pattern later
   sets `changed_to`, the same again clears it. Batteries are never decided
-  from the statistics; `SelfTest.grid_phase` (the meter phases during the
-  steps, `classify`, alike in both directions) gives their phase at the end
-  of a self-test. When the statistics are empty (new, other devices, learn
+  from the statistics; `SelfTest.grid_phase` (the change of each meter phase
+  against the battery's own reported step, `classify`; steps that show no
+  phase, e.g. 200 W charging of a full battery, are left out, the others must
+  agree) gives their phase at the end of a self-test (`phase_steps` and
+  `grid_phase` in its result). When the statistics are empty (new, other devices, learn
   again) `_load_phase_history` replays the last 2 days of the recorder
   (`get_significant_states`, compressed, an hour per query; batteries from
   SLEMS' own power sensors) through `phases.replay` (evaluated after each
@@ -1936,3 +1943,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-11 | The phase of batteries and consumers is learned passively from their own power steps and the smart meter's phases, not by test steps: it works for consumers SLEMS only measures, and batteries make enough steps in normal operation. It is only shown and warned about for now; control per phase (phase limits, meters that do not net) needs it reliable first. Questions go through fixable repair issues, as a button cannot ask; the answer is taken as given and later votes may report a change again. Counters that do not net are recognised by both counters exceeding the netted quarter hour by about the same amount, the signature of energy flowing in on one phase and out on another; counter readings that are late only move energy between quarter hours and never raise both. |
 | 2026-10-11 | The learned phase stays out of the control. A limit of the unbalance per phase (4.6 kVA in Germany, 3.68 kVA in Austria) only matters with several batteries on one phase or a single phase battery above it, and a limit in Home Assistant is no certified symmetry device the grid operator would accept. Protecting a phase or the main fuse could only use the battery on that phase or the consumers on it, for little benefit. Control per phase for counters that do not net mixes up the meter in Home Assistant with the utility meter, which nets the phases in DACH: with it a battery on L1 does pay off import on L2, only the statistics of such a counter are wrong. Each would add new failure modes for little gain. |
 | 2026-10-12 | The phase of consumers is learned from all devices together instead of single steps: a recorded day of a house with three batteries showed that the batteries compensate every step of another load within the same 5 s reading, spread over their phases, so a step never shows up alone; sensors that report up to 90 s late (a heat pump) never lined up with the meter either. A least squares fit of the changes of 120 s block means over all devices (batteries, consumers, PV) explains both; the block means take up the sensor delays without estimating them, which tested as good as shifting each sensor by its delay. Battery phases are not taken from it: the batteries follow loads SLEMS does not measure and are moved alike, which biased three single phase batteries towards three phases; their phase comes from the self-test, which holds the other devices anyway. The statistics start from the last 2 days of the recorder (an hour per query to keep the memory small; more days add little and a meter reports about 45 000 values per phase and day), so no waiting for new steps. |
+| 2026-10-12 | A self-test that found nothing wrong but could not check everything ends *unclear*, shown as a hint on the battery card instead of the red "conspicuous": the usual cause is a full or empty battery that may only charge or discharge 200 W, which a house changing by a few hundred watts hides, and that is no fault of the battery. A noisy step no longer passes the effect check by chance (the house moving the meter the right way) unless the meter matches the battery's own reported change, and it does not count for the power scale, which averaged a noise-made ratio near 0 with the real 1.0 into a factor of 0.51. |

@@ -80,8 +80,14 @@ def state_as_watts(state: State | None) -> float | None:
     value = state_as_float(state)
     if value is None or state is None:
         return None
-    unit = state.attributes.get("unit_of_measurement", UnitOfPower.WATT)
-    return value * _POWER_FACTORS.get(unit, 1.0)
+    return value * watts_factor(state)
+
+
+def watts_factor(state: State | None) -> float:
+    """Factor from the unit of a power state to W (1 if unknown)."""
+    if state is None:
+        return 1.0
+    return _POWER_FACTORS.get(state.attributes.get("unit_of_measurement", UnitOfPower.WATT), 1.0)
 
 
 def state_as_kwh(state: State | None) -> float | None:

@@ -1104,6 +1104,7 @@
           "pending": "Geplant",
           "running": "Läuft",
           "ok": "In Ordnung",
+          "unclear": "Teilweise unklar",
           "warning": "Auffällig",
           "failed": "Fehler gefunden",
           "not_active": "Abgebrochen (nicht aktiv)",
@@ -1528,6 +1529,9 @@
     "self_test_ok_message": {
       "message": "Der Selbsttest von {name} ist in Ordnung.\n\n{checks}"
     },
+    "self_test_unclear_message": {
+      "message": "Der Selbsttest von {name} hat nichts Falsches gefunden, konnte aber nicht alles prüfen: Der Hausverbrauch hat bei manchen Schritten zu stark geschwankt, oder ein Schritt war klein, weil die Batterie fast voll oder leer war. Wiederhole ihn zu einer ruhigeren Zeit und mit einer Batterie, die weder voll noch leer ist; die Einzelheiten zeigt das SLEMS-Dashboard: auf der Batteriekarte ⋮ → **Details**.\n\n{checks}"
+    },
     "self_test_warning_message": {
       "message": "Der Selbsttest von {name} hat Auffälligkeiten ergeben. Was sie bedeuten, zeigt das SLEMS-Dashboard: auf der Batteriekarte ⋮ → **Details**. Bei „unklar“ hat sich der Hausverbrauch während des Tests zu stark verändert; wiederhole ihn dann in einer ruhigeren Zeit.\n\n{checks}"
     },
@@ -1640,7 +1644,7 @@
         "step": {
           "init": {
             "title": "Phase von {name}",
-            "description": "SLEMS hat {name} mehrmals hintereinander an {measured} statt an {phase} gemessen, z. B. weil es in eine andere Steckdose gesteckt wurde. Wähle die Phase aus, an der es hängt; eine andere als die gemessene bleibt als von dir gewählt erhalten.",
+            "description": "SLEMS misst {name} inzwischen an {measured} statt an {phase}, z. B. weil es in eine andere Steckdose gesteckt wurde. Wähle die Phase aus, an der es hängt; eine andere als die gemessene bleibt als von dir gewählt erhalten.",
             "data": {
               "phase": "Phase"
             }

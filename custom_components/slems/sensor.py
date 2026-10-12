@@ -956,7 +956,7 @@ class EfficiencySensor(SlemsBatteryEntity, SensorEntity):
 
 
 SELF_TEST_STATES = [
-    "pending", "running", "ok", "warning", "failed",
+    "pending", "running", "ok", "unclear", "warning", "failed",
     "not_active", "paused", "grid_stale", "unreadable", "cancelled",
 ]
 
@@ -1621,7 +1621,7 @@ class _PhaseValues:
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = [phase.value for phase in Phase]
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _unrecorded_attributes = frozenset({"votes"})
+    _unrecorded_attributes = frozenset({"shares"})
     coordinator: SlemsCoordinator
     _subentry_id: str
 
@@ -1638,12 +1638,13 @@ class _PhaseValues:
     def extra_state_attributes(self) -> dict:
         learner = self.coordinator.phase_learners.get(self._subentry_id)
         if learner is None:
-            return {"chosen": False, "votes": [], "measured_now": None}
+            return {"chosen": False, "shares": None, "measured_now": None}
         return {
             # Chosen in a dialog against what was measured.
             "chosen": learner.manual,
-            "votes": [vote.value for vote in learner.votes],
-            # Another phase measured several times in a row (asked under Repairs).
+            # Measured share of the device's power per phase L1, L2, L3 (see phases).
+            "shares": None if learner.shares is None else [round(share, 2) for share in learner.shares],
+            # Another phase measured (asked under Repairs).
             "measured_now": learner.changed_to.value if learner.changed_to else None,
         }
 

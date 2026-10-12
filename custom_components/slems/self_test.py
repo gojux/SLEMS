@@ -30,8 +30,17 @@ over the last ``MEAN_S`` of a phase. The checks:
 * soc: within 0-100 %, without jumps, not against the direction,
 * release: the battery was handed back to its own logic.
 
+With the smart meter's power per phase the test also shows the battery's
+phase (``grid_phase``): the step of the meter shows up on one phase alone
+(see phases.classify, against the battery's own reported step, which the
+house load does not move), alike in the directions that show one.
+
 A meter that moves a lot while the battery rests (house or PV changing) makes
-the meter based checks *unclear* instead of failed.
+the meter based checks *unclear* instead of failed (unless the meter matches
+the battery's own reported change), and such a step does not count for the
+power checks either; a step below ``MIN_POWER_W`` (a nearly full
+or empty battery) is marked ``small``. A test whose worst check is unclear
+ends *unclear*: nothing found, only not all of it checkable.
 """
 
 from __future__ import annotations
@@ -40,6 +49,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 import statistics
 from typing import Any
+
+from .phases import Phase as GridPhase, classify
 
 IDLE_S = 60.0
 STEP_MAX_S = 240.0
@@ -100,6 +111,8 @@ class Sample:
     soc_pct: float | None
     charged_kwh: float | None = None
     discharged_kwh: float | None = None
+    # The smart meter's power per phase (+import), None without it.
+    phases_w: tuple[float | None, float | None, float | None] | None = None
 
 
 @dataclass
@@ -130,6 +143,15 @@ class _Record:
     def mean(self, attribute: str) -> float | None:
         values = [v for s in self.window() if (v := getattr(s, attribute)) is not None]
         return statistics.fmean(values) if values else None
+
+    def phase_means(self) -> list[float] | None:
+        means = []
+        for k in range(3):
+            values = [v for s in self.window() if s.phases_w is not None and (v := s.phases_w[k]) is not None]
+            if not values:
+                return None
+            means.append(statistics.fmean(values))
+        return means
 
     def spread(self) -> float | None:
         values = [s.meter_w for s in self.window() if s.meter_w is not None]
@@ -205,6 +227,32 @@ class SelfTest:
                 self._next(now)
         return self._current.target_w if self.commanding and self._current else None
 
+    def phase_steps(self) -> dict[str, dict[str, Any]]:
+        """Per step: the battery's step (its reported power, else the meter) and each phase's change."""
+        steps: dict[str, dict[str, Any]] = {}
+        for phase in (Phase.CHARGE, Phase.DISCHARGE):
+            record = self._records.get(phase)
+            reference = self._reference(phase)
+            if record is None or reference is None:
+                continue
+            meter, power, _ = self._deltas(record, reference)
+            after, before = record.phase_means(), reference.phase_means()
+            step = power if power is not None else meter
+            if step is None or after is None or before is None:
+                continue
+            steps[phase.value] = {"step_w": step, "phases_w": [a - b for a, b in zip(after, before, strict=True)]}
+        return steps
+
+    def grid_phase(self) -> GridPhase | None:
+        """The phase the steps showed up on; None if no step shows one, they disagree or the
+        phases are not measured."""
+        found = {
+            phase
+            for step in self.phase_steps().values()
+            if (phase := classify(step["step_w"], step["phases_w"])) is not None
+        }
+        return found.pop() if len(found) == 1 else None
+
     def released(self, ok: bool | None, wall: float) -> None:
         """The battery was handed back (None: nothing had to be released)."""
         if self.phase is not Phase.RELEASE:
@@ -228,6 +276,11 @@ class SelfTest:
             "charge_w": self.charge_w,
             "discharge_w": self.discharge_w,
             "checks": [check.as_dict() for check in self.checks],
+            "phase_steps": {
+                key: {"step_w": round(step["step_w"]), "phases_w": [round(w) for w in step["phases_w"]]}
+                for key, step in self.phase_steps().items()
+            },
+            "grid_phase": None if (phase := self.grid_phase()) is None else phase.value,
         }
 
     # --- steps -----------------------------------------------------------------
@@ -326,10 +379,15 @@ class SelfTest:
             return Check(key, Outcome.UNCLEAR, values)
         along = meter * (1 if target > 0 else -1)
         size = abs(target)
+        if spread is not None and spread > NOISE_SHARE * size:
+            # The house moves the meter as much: only a change that matches the battery's own counts.
+            if along >= REACHED_SHARE * size and power is not None and abs(meter - power) <= NO_EFFECT_SHARE * size:
+                return Check(key, Outcome.OK, values)
+            if size < MIN_POWER_W:
+                values["reason"] = "small"
+            return Check(key, Outcome.UNCLEAR, values)
         if along >= REACHED_SHARE * size:
             return Check(key, Outcome.OK, values)
-        if spread is not None and spread > NOISE_SHARE * size:
-            return Check(key, Outcome.UNCLEAR, values)
         if along <= -REACHED_SHARE * size:
             return Check(key, Outcome.FAILED, {**values, "reason": "reversed"})
         if abs(meter) < NO_EFFECT_SHARE * size:
@@ -342,8 +400,12 @@ class SelfTest:
             return [Check("power_sign", Outcome.SKIPPED), Check("power_scale", Outcome.SKIPPED)]
         ratios = []
         for record, reference in steps:
-            meter, power, _ = self._deltas(record, reference)
-            if meter is None or power is None or abs(meter) < REACHED_SHARE * abs(record.target_w):
+            meter, power, spread = self._deltas(record, reference)
+            size = abs(record.target_w)
+            if meter is None or power is None or abs(meter) < REACHED_SHARE * size:
+                continue
+            if spread is not None and spread > NOISE_SHARE * size:
+                # The meter moved with the house, not (only) with the battery.
                 continue
             ratios.append(power / meter)
         if not ratios:
@@ -440,8 +502,6 @@ class SelfTest:
         self.phase = Phase.DONE
         self.finished_at = wall
         self.result = _worst([check.outcome for check in self.checks]).value
-        if self.result == Outcome.UNCLEAR.value:
-            self.result = Outcome.WARNING.value
 
 
 def _worst(outcomes: list[Outcome]) -> Outcome:

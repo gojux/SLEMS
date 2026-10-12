@@ -4,6 +4,7 @@ import random
 
 import pytest
 
+from custom_components.slems.phases import Phase as GridPhase
 from custom_components.slems.self_test import (
     HOLD_S,
     IDLE_S,
@@ -31,6 +32,7 @@ def run(
     noise_w: float = 0.0,
     soc: float = 50.0,
     counter_digits: int = 2,
+    on_phase: int | None = None,
 ) -> SelfTest:
     """Drive a test with a simulated battery: 1 s samples until the release."""
     rng = random.Random(1)
@@ -50,9 +52,13 @@ def run(
         meter = HOUSE_W + actual + (rng.uniform(-noise_w, noise_w) if noise_w else 0.0)
         reported = actual * sign * scale
         c, d = (discharged, charged) if swap_counters else (charged, discharged)
+        phases = None
+        if on_phase is not None:
+            phases = tuple(meter / 3 + (actual * 2 / 3 if k == on_phase else -actual / 3) for k in range(3))
         sample = Sample(
             now, meter, reported, soc,
             round(c, counter_digits) if counters else None, round(d, counter_digits) if counters else None,
+            phases,
         )
         result = test.step(now, sample, ready=True)
         power = result if result is not None else power
@@ -131,8 +137,8 @@ def test_without_counters_or_power_sensor() -> None:
 def test_restless_house_makes_it_unclear() -> None:
     test = run(SelfTest(600, 600, 0.0), effect=0.0, noise_w=600)
     assert outcomes(test)["effect_charge"] == "unclear"
-    # Unclear is not passed: the result asks to repeat it.
-    assert test.result == "warning"
+    # Nothing found, but not passed either: the result asks to repeat it.
+    assert test.result == "unclear"
 
 
 def test_full_battery_only_discharges() -> None:
@@ -170,3 +176,24 @@ def test_waits_for_a_counter_in_10_wh_steps() -> None:
     # 200 W: 10 Wh take 3 minutes; the step waits for it instead of skipping the check.
     test = run(SelfTest(200, 200, 0.0), soc=50.0)
     assert outcomes(test)["counters"] == "ok"
+
+
+def test_the_phase_of_the_battery() -> None:
+    assert run(SelfTest(600, 600, 0.0), on_phase=1).grid_phase() is GridPhase.L2
+    # Without the phases of the meter.
+    assert run(SelfTest(600, 600, 0.0)).grid_phase() is None
+    # A full battery charges only a little: the discharge alone shows the phase.
+    test = run(SelfTest(200, 600, 0.0), on_phase=2)
+    assert test.grid_phase() is GridPhase.L3
+    assert test.as_dict()["grid_phase"] == "l3"
+
+
+def test_a_full_battery_is_unclear_not_conspicuous() -> None:
+    # Only 200 W charging against a house that changes by a few hundred watts.
+    test = run(SelfTest(200, 600, 0.0), noise_w=250)
+    checks = {check.key: check for check in test.checks}
+    assert checks["effect_charge"].outcome is Outcome.UNCLEAR
+    assert checks["effect_charge"].values["reason"] == "small"
+    # The noisy charge step does not count for the power checks.
+    assert checks["power_scale"].outcome is Outcome.OK
+    assert test.result == "unclear"

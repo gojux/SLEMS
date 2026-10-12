@@ -617,10 +617,12 @@ const STRINGS = {
     selfTestRunning: "Self-test running: {phase}. The other batteries and the consumers keep their set points meanwhile.",
     selfTestPhases: { prepare: "taking over", idle: "resting", charge: "charging", rest: "resting", discharge: "discharging", release: "handing back" },
     selfTestProblem: { warning: "Self-test conspicuous", failed: "Self-test found errors" },
+    selfTestUnclear: "Self-test partly unclear",
+    selfTestUnclearText: "nothing wrong found, but not everything checkable; repeat it with a battery neither full nor empty",
     selfTestProblemText: "see ⋮ → Details",
     selfTestSection: "Self-test",
     selfTestLast: "Last self-test",
-    selfTestResults: { ok: "OK", warning: "conspicuous", failed: "errors found", cancelled: "cancelled", not_active: "stopped (not active)", paused: "stopped (communication paused)", grid_stale: "stopped (smart meter not reporting)", unreadable: "stopped (battery not readable)" },
+    selfTestResults: { ok: "OK", unclear: "partly unclear", warning: "conspicuous", failed: "errors found", cancelled: "cancelled", not_active: "stopped (not active)", paused: "stopped (communication paused)", grid_stale: "stopped (smart meter not reporting)", unreadable: "stopped (battery not readable)" },
     selfTestOutcomes: { ok: "OK", warning: "conspicuous", failed: "error", unclear: "unclear", skipped: "not checked" },
     selfTestChecks: {
       effect_charge: "Charging shows at the smart meter",
@@ -638,6 +640,8 @@ const STRINGS = {
       effect_reversed: "The smart meter moved the other way ({meter} at a command of {expected}): the set point is inverted (setting “Invert set point sign”) or charge and discharge are swapped.",
       effect_partial: "Only part of it arrived ({meter} at a command of {expected}): the battery limits itself (state of charge, temperature, own limits) or the set point has a wrong factor.",
       effect_unclear: "The house consumption changed too much (±{spread}); repeat the test at a quieter time.",
+      effect_unclear_charge_small: "The battery was nearly full and could only charge {expected}, too little against the changing house consumption (±{spread}). Not a fault; repeat the test when the battery is not full.",
+      effect_unclear_discharge_small: "The battery was nearly empty and could only discharge {expected}, too little against the changing house consumption (±{spread}). Not a fault; repeat the test when the battery is not empty.",
       power_sign_ok: "The battery reports its power with the right sign.",
       power_sign_failed: "The battery reports its power with the opposite sign: switch the setting “Invert power sign”.",
       power_scale_ok: "The reported power matches the smart meter (factor {factor}).",
@@ -1265,10 +1269,12 @@ const STRINGS = {
     selfTestRunning: "Selbsttest läuft: {phase}. So lange halten die anderen Batterien und die Verbraucher ihre Vorgaben.",
     selfTestPhases: { prepare: "Übernahme", idle: "Ruhe", charge: "Laden", rest: "Ruhe", discharge: "Entladen", release: "Rückgabe" },
     selfTestProblem: { warning: "Selbsttest auffällig", failed: "Selbsttest hat Fehler gefunden" },
+    selfTestUnclear: "Selbsttest teilweise unklar",
+    selfTestUnclearText: "nichts Falsches gefunden, aber nicht alles prüfbar; wiederhole ihn mit einer Batterie, die weder voll noch leer ist",
     selfTestProblemText: "siehe ⋮ → Details",
     selfTestSection: "Selbsttest",
     selfTestLast: "Letzter Selbsttest",
-    selfTestResults: { ok: "in Ordnung", warning: "auffällig", failed: "Fehler gefunden", cancelled: "abgebrochen", not_active: "abgebrochen (nicht aktiv)", paused: "abgebrochen (Kommunikation pausiert)", grid_stale: "abgebrochen (Smart Meter meldet nicht)", unreadable: "abgebrochen (Batterie nicht lesbar)" },
+    selfTestResults: { ok: "in Ordnung", unclear: "teilweise unklar", warning: "auffällig", failed: "Fehler gefunden", cancelled: "abgebrochen", not_active: "abgebrochen (nicht aktiv)", paused: "abgebrochen (Kommunikation pausiert)", grid_stale: "abgebrochen (Smart Meter meldet nicht)", unreadable: "abgebrochen (Batterie nicht lesbar)" },
     selfTestOutcomes: { ok: "in Ordnung", warning: "auffällig", failed: "Fehler", unclear: "unklar", skipped: "nicht geprüft" },
     selfTestChecks: {
       effect_charge: "Laden wirkt am Smart Meter",
@@ -1286,6 +1292,8 @@ const STRINGS = {
       effect_reversed: "Der Smart Meter hat sich in die Gegenrichtung bewegt ({meter} bei einer Vorgabe von {expected}): Die Vorgabe ist invertiert (Einstellung „Vorzeichen des Sollwerts umkehren“) oder Laden und Entladen sind vertauscht.",
       effect_partial: "Nur ein Teil kam an ({meter} bei einer Vorgabe von {expected}): Die Batterie begrenzt selbst (Ladezustand, Temperatur, eigene Grenzen) oder die Vorgabe hat einen falschen Faktor.",
       effect_unclear: "Der Hausverbrauch hat zu stark geschwankt (±{spread}); wiederhole den Test zu einer ruhigeren Zeit.",
+      effect_unclear_charge_small: "Die Batterie war fast voll und konnte nur mit {expected} laden, zu wenig gegen den schwankenden Hausverbrauch (±{spread}). Kein Fehler; wiederhole den Test, wenn die Batterie nicht voll ist.",
+      effect_unclear_discharge_small: "Die Batterie war fast leer und konnte nur mit {expected} entladen, zu wenig gegen den schwankenden Hausverbrauch (±{spread}). Kein Fehler; wiederhole den Test, wenn die Batterie nicht leer ist.",
       power_sign_ok: "Die Batterie meldet ihre Leistung mit dem richtigen Vorzeichen.",
       power_sign_failed: "Die Batterie meldet ihre Leistung mit umgekehrtem Vorzeichen: Einstellung „Vorzeichen der Leistung umkehren“ umschalten.",
       power_scale_ok: "Die gemeldete Leistung passt zum Smart Meter (Faktor {factor}).",
@@ -2217,7 +2225,10 @@ class SlemsPanel extends HTMLElement {
     const outcome = check.outcome;
     if (check.key.startsWith("effect_")) {
       if (outcome === "ok") return fill("effect_ok");
-      if (outcome === "unclear") return fill("effect_unclear");
+      if (outcome === "unclear") {
+        // A small step: the battery was nearly full (charge) or empty (discharge).
+        return fill(check.reason === "small" ? `effect_unclear_${check.key.slice("effect_".length)}_small` : "effect_unclear");
+      }
       return fill(`effect_${check.reason}`);
     }
     if (check.key === "power_sign" || check.key === "power_scale") {
@@ -4346,6 +4357,10 @@ class SlemsPanel extends HTMLElement {
             problem = `<div class="info-box"><ha-icon icon="mdi:battery-check-outline"></ha-icon><span>${escapeHtml(
               t.selfTestRunning.replace("{phase}", phase)
             )}</span><button class="link" data-action="self-test-off" data-entity="${s("self_test")?.entity_id}">${t.selfTestCancel}</button></div>`;
+          } else if (!problem && selfTest?.state === "unclear") {
+            problem = `<div class="info-box"><ha-icon icon="mdi:battery-check-outline"></ha-icon><span><b>${t.selfTestUnclear}</b> – ${escapeHtml(
+              t.selfTestUnclearText
+            )}</span><button class="link" data-action="menu-details" data-device="${b.device_id}">${t.selfTestProblemText}</button></div>`;
           } else if (!problem && (selfTest?.state === "warning" || selfTest?.state === "failed")) {
             problem = `<div class="problem"><ha-icon icon="mdi:battery-alert-variant-outline"></ha-icon><span><b>${
               t.selfTestProblem[selfTest.state]

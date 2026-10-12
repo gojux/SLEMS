@@ -1010,10 +1010,14 @@ Misst der Smart Meter jede Phase, lernt der Test auch die
 [Phase](#phasen-optional) der Batterie: die Phase, an der sich die Schritte
 zeigen.
 
-Schwankt der Hausverbrauch während der Ruhe stark, sind die Prüfungen am Smart
+Schwankt der Hausverbrauch während des Tests stark, sind die Prüfungen am Smart
 Meter **unklar** statt fehlerhaft; dann den Test zu einer ruhigeren Zeit
-wiederholen. Das Ergebnis erscheint als Benachrichtigung, auf der Batteriekarte
-(bei Auffälligkeiten oder Fehlern) und mit einer Erklärung je Prüfung unter
+wiederholen. Genauso bei einer fast vollen oder leeren Batterie, die nur noch
+wenig laden oder entladen kann: dann den Test bei mittlerem Ladezustand
+wiederholen. Ein Test, der nichts Falsches gefunden, aber nicht alles geprüft
+hat, endet **teilweise unklar** und erscheint als Hinweis, nicht als Problem.
+Das Ergebnis erscheint als Benachrichtigung, auf der Batteriekarte (bei
+Unklarheiten, Auffälligkeiten oder Fehlern) und mit einer Erklärung je Prüfung unter
 ⋮ → **Details**; der Sensor **Selbsttest Ergebnis** hält es fest. Abgebrochen
 wird er außerhalb des Betriebsmodus **Aktiv**, bei pausierter Kommunikation,
 wenn der Smart Meter nicht meldet oder die Batterie 30 Sekunden nicht lesbar
