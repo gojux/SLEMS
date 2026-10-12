@@ -3266,6 +3266,7 @@ class SlemsPanel extends HTMLElement {
       return;
     }
     this._chartData = rows;
+    this._laneSpans = [];
     this._setSection(
       "daychart",
       header + this._legend(rows) + this._chartSvg(rows) + (options.rows ? "" : this._targetLanes()) +
@@ -3464,7 +3465,8 @@ class SlemsPanel extends HTMLElement {
 
   /** Per consumer with a daily target a lane under the day chart: its period
    * (faint), the release window before the forced run, the forced run and the
-   * deadline, on the time axis of the chart. */
+   * deadline, on the time axis of the chart. The spans are kept in
+   * _laneSpans for the tooltip of the day chart. */
   _targetLanes() {
     const geometry = this._chartGeometry;
     if (!geometry) return "";
@@ -3492,13 +3494,24 @@ class SlemsPanel extends HTMLElement {
       const opens = latest !== null && attrs.target_window_opens ? hourOf(attrs.target_window_opens) : null;
       const runEnd = latest !== null ? Math.min(end, latest + (attrs.target_run_s ? attrs.target_run_s / 3600 : end - latest)) : null;
       const clock = (hour) => this._time(new Date(dayStart.getTime() + hour * 3600000).toISOString());
+      // Ordered from the most specific span, which the tooltip shows.
+      const tipSpans = [];
+      const tipSpan = (from, until, opacity, label) => {
+        if (until > 0 && from < 24 && until > from)
+          tipSpans.push({ from, until, opacity, label: label.replace("{from}", clock(from)).replace("{until}", clock(until)) });
+      };
+      if (latest !== null) tipSpan(latest, runEnd, 0.9, t.laneForced);
+      if (opens !== null) tipSpan(opens, latest, 0.45, t.laneWindow);
+      const surplus = attrs.target_surplus_window;
+      if (surplus) tipSpan(hourOf(surplus[0]), hourOf(surplus[1]), 0.55, t.laneSurplus);
+      tipSpan(start, end, 0.18, done ? `${t.lanePeriod} · ${t.laneDone}` : t.lanePeriod);
+      if (tipSpans.length) this._laneSpans.push({ name: consumer.name, spans: tipSpans });
       const span = (from, until, opacity, label) =>
         until > 0 && from < 24 && until > from
           ? `<rect x="${x(from)}" y="0" width="${Math.max(2, x(until) - x(from))}" height="10" rx="3" fill="${c.consumer}" fill-opacity="${opacity}"><title>${escapeHtml(
               `${consumer.name}: ${label.replace("{from}", clock(from)).replace("{until}", clock(until))}`
             )}</title></rect>`
           : "";
-      const surplus = attrs.target_surplus_window;
       const surplusSpan = surplus && hourOf(surplus[1]) > 0 && hourOf(surplus[0]) < 24
         ? `<rect x="${x(hourOf(surplus[0]))}" y="1" width="${Math.max(2, x(hourOf(surplus[1])) - x(hourOf(surplus[0])))}" height="8" rx="3" fill="${c.pv}" fill-opacity="0.55" stroke="${c.pv}"><title>${escapeHtml(
             `${consumer.name}: ${t.laneSurplus.replace("{from}", this._time(surplus[0])).replace("{until}", this._time(surplus[1]))}`
@@ -3591,6 +3604,17 @@ class SlemsPanel extends HTMLElement {
       value === null || value === undefined
         ? ""
         : `<div><span class="swatch" style="background:${color}"></span>${label}<b>${escapeHtml(this._percent(value))}</b></div>`;
+    // Consumers whose daily target has a span in this half hour.
+    const laneEntries = (this._laneSpans || [])
+      .map((lane) => {
+        const span = lane.spans.find((s) => s.from < (slot + 1) / 2 && s.until > slot / 2);
+        return span
+          ? `<div><span class="swatch" style="background:${c.consumer};opacity:${Math.max(0.35, span.opacity)}"></span>${escapeHtml(
+              lane.name
+            )}<b>${escapeHtml(span.label)}</b></div>`
+          : "";
+      })
+      .join("");
     tooltip.innerHTML = `<div class="tt-title">${slotTime(slot)}–${slotTime(slot + 1)}</div>
       ${entry(c.pv, t.pvForecast, v("pvForecast"))}${entry(c.pv, t.pvActual, v("pvActual"))}
       ${entry(c.house, t.consumptionForecast, v("consumptionForecast"))}${entry(c.house, t.consumptionActual, v("consumptionActual"))}
@@ -3607,7 +3631,7 @@ class SlemsPanel extends HTMLElement {
               v("capCurtailed")
             )
           : ""
-      }`;
+      }${laneEntries}`;
     tooltip.hidden = false;
     // Position relative to the chart card, next to the cursor.
     const card = this.shadowRoot.getElementById("daychart").getBoundingClientRect();
