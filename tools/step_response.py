@@ -15,6 +15,20 @@ The script plays a fixed sequence of set points several times:
   restarts after stops of ``--gaps`` seconds and steps from ``--warm-power``
   watts held for ``--warm-hold`` seconds, both directions, with a start out
   of a long standby for comparison.
+* ``--plan overlap``: set points that follow each other faster than the
+  battery, as the SLEMS controller sends them every ``--update-every``
+  seconds: starts and reversals whose set point changes while the inverter
+  is still starting, a reversal taken back after ``--reversal-gaps``
+  seconds, and steps of ``--sizes`` watts in the same direction (whether
+  small steps are faster than large ones, i.e. whether the battery ramps).
+  Plain starts and reversals are played for comparison.
+
+Several set points sent in quick succession (an *episode*) are measured as
+one step from their first command to the last set point. An episode that
+ends at the set point it started from (a reversal taken back) is measured
+from its last command until the power is back, starting from the power
+measured right before it; the summary also shows the lowest and highest AC
+power of the battery during the episode, i.e. how far the reversal got.
 
 Set points are written like SLEMS does: only registers whose value
 changed, set points before the force mode, everything again every
@@ -41,6 +55,7 @@ Examples:
     python3 step_response.py 192.168.1.50 --meter 127.0.0.1:503
     python3 step_response.py 192.168.1.50 --power 2000 --cycles 2 --long-idle 120
     python3 step_response.py 192.168.1.50 --meter 127.0.0.1:503 --plan warm --cycles 2
+    python3 step_response.py 192.168.1.50 --meter 127.0.0.1:503 --plan overlap --cycles 2
 """
 
 from __future__ import annotations
@@ -92,6 +107,26 @@ class Segment:
     target_w: int  # +charge / -discharge
     hold_s: float
     kind: str
+    # Segments in a row with the same episode are measured as one step; the
+    # kind of the last one names it.
+    episode: str | None = None
+
+
+@dataclass
+class Episode:
+    """Set points sent in quick succession, measured from the first command."""
+
+    command: float
+    from_w: int
+    baseline_w: float
+    settled_before: bool
+    state_before: str
+    low_w: int | None = None
+    high_w: int | None = None
+
+    def sample(self, ac_w: int) -> None:
+        self.low_w = ac_w if self.low_w is None else min(self.low_w, ac_w)
+        self.high_w = ac_w if self.high_w is None else max(self.high_w, ac_w)
 
 
 @dataclass
@@ -112,6 +147,9 @@ class Step:
     meter_share: float | None = None
     # AC power of the battery during the last second of the set point.
     end_w: float | None = None
+    # Lowest and highest AC power during an episode.
+    low_w: int | None = None
+    high_w: int | None = None
     samples: list[tuple[float, int, int, str]] = field(default_factory=list)
 
 
@@ -221,7 +259,7 @@ class Meter(threading.Thread):
             return [sample for sample in self.samples if start <= sample[0] <= end]
 
     def evaluate(self, step: Step, command: float, end: float, settled_before: bool) -> None:
-        """Fill the meter times of a step that ended at ``end``."""
+        """Fill the meter times of a step commanded at ``command`` that ended at ``end``."""
         change = step.target_w - step.previous_w
         before = [value for _, value in self.between(command - METER_WINDOW_S, command)]
         after = [value for _, value in self.between(end - METER_WINDOW_S, end)]
@@ -315,6 +353,62 @@ def plan_warm(
     return segments
 
 
+def plan_overlap(
+    power: int,
+    update_s: float,
+    reversal_gaps: list[float],
+    sizes: list[int],
+    hold: float,
+    short_idle: float,
+    long_idle: float,
+) -> list[Segment]:
+    third = power // 3
+    higher = min(power * 4 // 3, MAX_POWER_W)
+    high = (higher + power) // 2
+    segments = [
+        Segment(0, long_idle, "stop charge"),
+        Segment(power, hold, f"start charge after {long_idle:g} s"),
+        Segment(0, short_idle, "stop charge"),
+        Segment(power, hold, f"start charge after {short_idle:g} s (comparison)"),
+        Segment(0, short_idle, "stop charge"),
+        Segment(third, update_s, "", "raise"),
+        Segment(2 * third, update_s, "", "raise"),
+        Segment(power, hold, f"start charge, raised every {update_s:g} s", "raise"),
+        Segment(0, short_idle, "stop charge"),
+        Segment(higher, update_s, "", "lower"),
+        Segment(high, update_s, "", "lower"),
+        Segment(power, hold, f"start charge, lowered every {update_s:g} s", "lower"),
+        Segment(-power, hold, "reversal charge -> discharge (comparison)"),
+    ]
+    for gap in reversal_gaps:
+        segments += [
+            Segment(power, gap, "", f"back discharge {gap:g}"),
+            Segment(-power, hold, f"back to discharging after {gap:g} s of charging", f"back discharge {gap:g}"),
+        ]
+    segments.append(Segment(power, hold, "reversal discharge -> charge (comparison)"))
+    for gap in reversal_gaps:
+        segments += [
+            Segment(-power, gap, "", f"back charge {gap:g}"),
+            Segment(power, hold, f"back to charging after {gap:g} s of discharging", f"back charge {gap:g}"),
+        ]
+    segments += [
+        Segment(-third, update_s, "", "reverse raise"),
+        Segment(-2 * third, update_s, "", "reverse raise"),
+        Segment(-power, hold, f"reversal charge -> discharge, raised every {update_s:g} s", "reverse raise"),
+        Segment(third, update_s, "", "reverse raise back"),
+        Segment(2 * third, update_s, "", "reverse raise back"),
+        Segment(power, hold, f"reversal discharge -> charge, raised every {update_s:g} s", "reverse raise back"),
+    ]
+    for size in sizes:
+        if power + size > MAX_POWER_W:
+            continue
+        segments += [
+            Segment(power + size, hold, f"up charge by {size} W"),
+            Segment(power, hold, f"down charge by {size} W"),
+        ]
+    return segments
+
+
 def run_segment(
     battery: Battery,
     meter: Meter | None,
@@ -324,16 +418,27 @@ def run_segment(
     writer: Any,
     index: int,
     started: float,
-) -> Step:
+    episode: Episode | None = None,
+) -> tuple[Step, Episode | None]:
+    """Play one set point; ``episode`` is the one this segment continues."""
     state_before = battery.state()
-    _dc, baseline = battery.power()
-    if not settled_before:
-        # The battery's own value lags behind: measured from the set point before.
-        baseline = previous_w
+    _dc, measured = battery.power()
+    # The battery's own value lags behind: measured from the set point before.
+    baseline = measured if settled_before else previous_w
     command = time.monotonic()
     writes = battery.apply(segment.target_w)
-    step = Step(segment.kind, previous_w, segment.target_w, state_before, writes, time.monotonic() - command)
-    change = segment.target_w - previous_w
+    since, from_w = command, previous_w
+    if segment.episode is not None:
+        if episode is None:
+            episode = Episode(command, previous_w, baseline, settled_before, state_before)
+        if segment.target_w != episode.from_w:
+            since, from_w, baseline = episode.command, episode.from_w, episode.baseline_w
+            settled_before, state_before = episode.settled_before, episode.state_before
+        else:
+            # Back where it started: from the power reached meanwhile.
+            from_w, baseline, settled_before = round(measured), measured, True
+    step = Step(segment.kind, from_w, segment.target_w, state_before, writes, time.monotonic() - command)
+    change = segment.target_w - from_w
     active = ("charging", "discharging")
     expected_state = active[0] if segment.target_w > 0 else active[1] if segment.target_w < 0 else None
     step.state_tracked = state_before != expected_state
@@ -342,7 +447,9 @@ def run_segment(
         if now - battery.last_refresh >= REFRESH_S:
             battery.apply(segment.target_w, refresh=True)
         dc, ac = battery.power()
-        elapsed = time.monotonic() - command
+        if episode is not None:
+            episode.sample(ac)
+        elapsed = time.monotonic() - since
         state = ""
         if read_state:
             state = battery.state()
@@ -352,7 +459,16 @@ def run_segment(
         read_state = not read_state
         step.samples.append((elapsed, dc, ac, state))
         writer.writerow(
-            [f"{time.monotonic() - started:.3f}", index, segment.kind, segment.target_w, f"{elapsed:.3f}", dc, ac, state]
+            [
+                f"{time.monotonic() - started:.3f}",
+                index,
+                segment.kind or segment.episode,
+                segment.target_w,
+                f"{elapsed:.3f}",
+                dc,
+                ac,
+                state,
+            ]
         )
         moved = (ac - baseline) / change if change else 0.0
         if step.arrived_s is None and moved >= ARRIVED_RATIO:
@@ -360,11 +476,15 @@ def run_segment(
         if step.settled_s is None and moved >= SETTLED_RATIO:
             step.settled_s = elapsed
     if meter is not None:
-        meter.evaluate(step, command, time.monotonic(), settled_before)
-    last = [ac for elapsed, _dc, ac, _state in step.samples if elapsed >= segment.hold_s - 1.0]
+        meter.evaluate(step, since, time.monotonic(), settled_before)
+    # The last second of this set point (elapsed counts from the episode's first command).
+    end_from = command - since + segment.hold_s - 1.0
+    last = [ac for elapsed, _dc, ac, _state in step.samples if elapsed >= end_from]
     if last and segment.hold_s >= SETTLED_HOLD_S:
         step.end_w = statistics.median(last)
-    return step
+    if episode is not None:
+        step.low_w, step.high_w = episode.low_w, episode.high_w
+    return step, episode
 
 
 def seconds(value: float | None) -> str:
@@ -400,6 +520,11 @@ def summary(steps: list[Step]) -> None:
             if missing:
                 text += f"  ({missing}x not reached)"
             print(f"    {label:<14} {text}")
+        lows = [s.low_w for s in group if s.low_w is not None]
+        highs = [s.high_w for s in group if s.high_w is not None]
+        if lows and highs:
+            print(f"    {'AC range':<14} {statistics.median(lows):5.0f} to {statistics.median(highs):.0f} W "
+                  "during the episode (median of the lowest and highest)")
         ends = [s.end_w for s in group if s.end_w is not None]
         if ends:
             print(f"    {'battery at end':<14} {statistics.median(ends):5.0f} W (AC, own measurement)")
@@ -428,7 +553,9 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=502)
     parser.add_argument("--unit", type=int, default=1)
     parser.add_argument("--power", type=int, default=1500, help="W of the large steps (default 1500)")
-    parser.add_argument("--plan", choices=("steps", "warm"), default="steps", help="sequence (default steps)")
+    parser.add_argument(
+        "--plan", choices=("steps", "warm", "overlap"), default="steps", help="sequence (default steps)"
+    )
     parser.add_argument("--small", type=int, default=300, help="W of the small starts (default 300)")
     parser.add_argument(
         "--gaps", type=float, nargs="+", default=[0.5, 1.0, 2.0, 5.0, 10.0], help="warm: stops before a restart (s)"
@@ -437,6 +564,15 @@ def main() -> None:
         "--warm-power", type=int, nargs="+", default=[30, 50], help="warm: small powers held instead of 0 W"
     )
     parser.add_argument("--warm-hold", type=float, default=30.0, help="warm: seconds of the small power (default 30)")
+    parser.add_argument(
+        "--update-every", type=float, default=0.5, help="overlap: seconds between set points of an episode (default 0.5)"
+    )
+    parser.add_argument(
+        "--reversal-gaps", type=float, nargs="+", default=[0.5, 1.0, 2.0], help="overlap: reversals taken back after (s)"
+    )
+    parser.add_argument(
+        "--sizes", type=int, nargs="+", default=[50, 100, 200, 300, 600, 1000], help="overlap: step sizes (W)"
+    )
     parser.add_argument("--hold", type=float, default=10.0, help="seconds per set point (default 10)")
     parser.add_argument("--short-idle", type=float, default=10.0, help="short standby in seconds (default 10)")
     parser.add_argument("--long-idle", type=float, default=90.0, help="long standby in seconds (default 90)")
@@ -453,7 +589,17 @@ def main() -> None:
 
     power = min(max(args.power, 300), MAX_POWER_W)
     small = min(max(args.small, 100), power)
-    if args.plan == "warm":
+    if args.plan == "overlap":
+        segments = plan_overlap(
+            power,
+            args.update_every,
+            args.reversal_gaps,
+            [max(size, 10) for size in args.sizes],
+            args.hold,
+            args.short_idle,
+            args.long_idle,
+        )
+    elif args.plan == "warm":
         warm_powers = [min(max(w, 10), power // 2) for w in args.warm_power]
         segments = plan_warm(
             power, args.gaps, warm_powers, args.hold, args.warm_hold, args.short_idle, args.long_idle
@@ -513,17 +659,24 @@ def main() -> None:
                 index = 0
                 for cycle in range(args.cycles):
                     print(f"\nCycle {cycle + 1}/{args.cycles}")
-                    for segment in segments:
-                        step = run_segment(
-                            battery, meter, previous, settled_before, segment, writer, index, started
+                    episode: Episode | None = None
+                    for position, segment in enumerate(segments):
+                        step, episode = run_segment(
+                            battery, meter, previous, settled_before, segment, writer, index, started, episode
                         )
                         settled_before = segment.hold_s >= SETTLED_HOLD_S
                         index += 1
-                        if previous == segment.target_w:
+                        following = segments[position + 1] if position + 1 < len(segments) else None
+                        if segment.episode is not None and following is not None and following.episode == segment.episode:
+                            # Only the last set point of an episode is reported.
+                            previous = segment.target_w
+                            continue
+                        episode = None
+                        if previous == segment.target_w and segment.episode is None:
                             continue
                         steps.append(step)
                         print(
-                            f"  {previous:>6} -> {segment.target_w:>6} W  {segment.kind:<34} "
+                            f"  {step.previous_w:>6} -> {segment.target_w:>6} W  {segment.kind:<34} "
                             f"from {step.state_before:<11} {step.writes} writes {step.write_s:.2f} s  "
                             f"60 % {seconds(step.arrived_s)}  90 % {seconds(step.settled_s)}  "
                             f"state {seconds(step.state_s)}"

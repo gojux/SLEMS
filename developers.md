@@ -1779,7 +1779,16 @@ optionally the grid meter (`--meter`, the SunSpec block SLEMS reads, polled
 in a second thread) show 60 % and 90 % of each step, plus the change of the
 inverter state. `--plan steps` (default) covers starts out of standby, steps,
 reversals and stops; `--plan warm` restarts after short stops and steps from
-a small held power. It asks to set SLEMS to *Observe only* and to pause the
+a small held power; `--plan overlap` sends set points faster than the battery
+follows, like the controller does every 0.5 s: starts and reversals whose set
+point is raised or lowered while the inverter is still starting, reversals
+taken back after 0.5–2 s, and steps of 50–1000 W in the same direction
+(whether the battery ramps), with plain starts and reversals for comparison.
+Set points sent in quick succession are measured as one step from their first
+command; a reversal taken back is measured from its last command, and the
+summary shows the battery's AC range meanwhile (how far the reversal got).
+The battery's own AC power lags behind the meter, so use `--meter` for
+`overlap`. It asks to set SLEMS to *Observe only* and to pause the
 battery first (`--yes` skips that), refuses to start outside 30–85 % SoC,
 writes every sample to CSV files and prints a summary per kind of step; at the
 end or on Ctrl+C it hands the battery back. Results: see the timing table in
@@ -1788,6 +1797,7 @@ end or on Ctrl+C it hands the battery back. Results: see the timing table in
 ```bash
 python3 -B tools/step_response.py <battery-ip> --meter <meter-host>:503
 python3 -B tools/step_response.py <battery-ip> --meter <meter-host>:503 --plan warm --cycles 2
+python3 -B tools/step_response.py <battery-ip> --meter <meter-host>:503 --plan overlap --cycles 2
 ```
 
 `tools/at_grid_templates.py` writes the Austrian tariff templates for the grid
