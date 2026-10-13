@@ -425,7 +425,10 @@ sends commands.
   power change is usually a single write (150 ms).
   Batteries that reduce their power are written first, so the short gap
   between the writes causes a little import instead of feeding battery energy
-  into the grid. Set points are logged at debug level.
+  into the grid. Set points are logged at debug level, as is every control
+  cycle (grid power raw and filtered, battery power the meter already shows,
+  commanded total before and after, gain), every measurement of a battery
+  response time and every change of the automatic gain.
 - **Consumers**: switch → `turn_on`/`turn_off`, power → `set_value` (clamped to
   the entity's min/max/step, dead band 50 W); at most one command per consumer
   every 10 s. Blocked consumers are left alone.
@@ -1685,6 +1688,37 @@ charging, 797 W discharging). The set points are delivered within a few watts;
 34003 reported 13 charge cycles; the app no longer shows the cycle count
 (nor the DC power), so it cannot be compared.
 
+Timing, measured with `tools/step_response.py` (2026-10-12/13, one Venus
+E 3.0 at 39–40 % SoC, SLEMS in *Observe only*, SolarEdge meter read over a
+Modbus proxy every 0.24 s, three runs each). Times from the first register
+write until the grid meter shows 60 % of the step (writes take 0.16 s per
+changed register: 1 for a step, 2 for a start or stop, 3 for a reversal);
+the data stay in `diagnose/` (not committed):
+
+| Step | 60 % at the meter | Behaviour |
+|---|---|---|
+| Stop (to 0 W) | 0.3–0.55 s | at once |
+| Up / down in the same direction (500 ↔ 1500 W) | 0.8–1.0 s | starts at once, ramps over about 1.2 s (90 % after 1.7 s) |
+| Reversal ±1500 → ∓1500 W | 1.75–1.9 s | stops at once, about 1 s at 0 W, then ramps the new direction |
+| Start out of standby (0 → 300 or 1500 W) | 2.6–2.8 s | nothing for about 2 s, then ramps within about 1 s |
+| Restart after a stop of 0.5 / 1 / 2 / 5 / 10 s | 2.3–2.9 s | like a start: the inverter is cold as soon as it stops |
+| Step from 30 or 50 W held for 30 s to 1500 W | 0.8–0.95 s | like a step in the same direction |
+
+- The start delay does not depend on the power (300 W like 1500 W), the
+  direction or how long the battery was idle (0.5 s to 90 s). `START_DELAY_S`
+  (2.7 s) in the driver is this value; the controller uses it until it
+  learned a start time.
+- A battery holding a small power (30 or 50 W, delivered within 2 W) stays
+  warm, but the AC/DC difference is about 24 W at these powers, against about
+  13 W the Venus needs in standby. A start costs about 2 s × the power of
+  grid exchange (below 1 Wh at 1500 W), so keeping batteries warm all the
+  time does not pay off.
+- The battery's own AC power (30006) lags about 1.3–1.5 s behind the grid
+  meter (60 % after 2.2–2.5 s for a normal step), although it changes with
+  every read: it is unsuitable for response times.
+- Charging 1500 W AC gave 1425 W DC (about 5 % loss), discharging 1500 W AC
+  took 1610 W DC (about 7 %).
+
 Note:
 
 - The device holds only one connection: while Omnibattery is running, a Modbus
@@ -1724,6 +1758,24 @@ battery back. Pause the battery in SLEMS first (battery menu ⋮).
 python3 tools/set_power.py <battery-ip> --charge 1000 --duration 180
 python3 tools/set_power.py <battery-ip> --discharge 800
 python3 tools/set_power.py <battery-ip> --release
+```
+
+`tools/step_response.py` plays a sequence of set points on a Venus several
+times, written like the driver does (only changed registers, set points
+before the force mode), and measures when the battery's own AC power and
+optionally the grid meter (`--meter`, the SunSpec block SLEMS reads, polled
+in a second thread) show 60 % and 90 % of each step, plus the change of the
+inverter state. `--plan steps` (default) covers starts out of standby, steps,
+reversals and stops; `--plan warm` restarts after short stops and steps from
+a small held power. It asks to set SLEMS to *Observe only* and to pause the
+battery first (`--yes` skips that), refuses to start outside 30–85 % SoC,
+writes every sample to CSV files and prints a summary per kind of step; at the
+end or on Ctrl+C it hands the battery back. Results: see the timing table in
+[Marstek Venus E 3.0](#marstek-venus-e-30).
+
+```bash
+python3 -B tools/step_response.py <battery-ip> --meter <meter-host>:503
+python3 -B tools/step_response.py <battery-ip> --meter <meter-host>:503 --plan warm --cycles 2
 ```
 
 `tools/at_grid_templates.py` writes the Austrian tariff templates for the grid

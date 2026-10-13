@@ -159,12 +159,14 @@ class RealTimeController:
         self._resting: set[str] = set()
         self._last_grid_w: float | None = None
         self.meter = MeterCadence()
-        self.battery_response = StepResponse(DEFAULT_BATTERY_RESPONSE_S)
+        self.battery_response = StepResponse(DEFAULT_BATTERY_RESPONSE_S, label="step all batteries")
         # Steps of all batteries together that reverse the direction, until the
         # new direction shows; used for a battery whose own reversals are not
         # learned yet.
-        self.battery_reversal_response = StepResponse(DEFAULT_BATTERY_RESPONSE_S)
-        self.battery_responses = BatteryResponses()
+        self.battery_reversal_response = StepResponse(
+            DEFAULT_BATTERY_RESPONSE_S, label="reversal all batteries"
+        )
+        self.battery_responses = BatteryResponses(self._battery_name)
         self.consumer_response: dict[str, DirectionalResponse] = {}
         self.gain_adapter = AdaptiveGain(coordinator.settings.control_gain)
         self.status = ControlStatus.INACTIVE
@@ -195,6 +197,11 @@ class RealTimeController:
             state = snapshot.consumers.get(subentry_id)
             if state is not None and state.power_w is not None:
                 learner.sample(now, state.power_w)
+
+    def _battery_name(self, battery_id: str) -> str:
+        return next(
+            (b.name for b in self._coordinator.batteries if b.subentry_id == battery_id), battery_id
+        )
 
     def battery_response_s(self, battery_id: str) -> float:
         """Time until the grid meter shows a command of this battery."""
@@ -478,6 +485,17 @@ class RealTimeController:
         # released first and then planned again.
         await self._async_apply_balancing()
         new_total = await self._async_apply_batteries(snapshot, latest_total)
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            _LOGGER.debug(
+                "Cycle: grid %s W (filtered %s W), seen %s, commanded %.0f -> %.0f W, gain %.2f",
+                "-" if snapshot.grid_power_w is None else f"{snapshot.grid_power_w:.0f}",
+                "-" if snapshot.grid_power_filtered_w is None else f"{snapshot.grid_power_filtered_w:.0f}",
+                ", ".join(f"{self._battery_name(battery_id)} {power:.0f} W" for battery_id, power in seen.items())
+                or "-",
+                latest_total,
+                latest_total if new_total is None else new_total,
+                self.gain,
+            )
         if new_total is not None and coordinator.settings.auto_gain:
             self.gain_adapter.observe(start, new_total - latest_total)
         if not coordinator.self_test_holds:

@@ -87,6 +87,26 @@ def test_battery_responses_learn_from_own_steps() -> None:
     assert restored.learned("a") == pytest.approx(1.2)
 
 
+def test_battery_responses_log_each_measurement(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level("DEBUG", logger="custom_components.slems.response")
+    responses = BatteryResponses({"a": "Venus 1"}.get)
+    responses.command(0.0, -500.0, {"a": 1000}, started_ids=frozenset({"a"}))
+    responses.sample(2.6, 200.0)
+    messages = [record.getMessage() for record in caplog.records]
+    assert "Response step Venus 1: step +1000 W from -500 W arrived after 2.60 s (grid 200 W), learned 2.60 s" in messages
+    assert any(message.startswith("Response start Venus 1:") for message in messages)
+    # Restored learners log with the battery name too.
+    caplog.clear()
+    restored = BatteryResponses({"a": "Venus 1"}.get)
+    restored.restore_reversals({"a": 1.8})
+    restored.command(10.0, 0.0, {"a": -1000}, reversed_from={"a": 500.0})
+    restored.sample(40.5, 0.0)
+    assert any(
+        record.getMessage().startswith("Response reversal Venus 1: step -500 W from -500 W not arrived")
+        for record in caplog.records
+    )
+
+
 def test_battery_responses_shared_step_ends_a_pending_measurement() -> None:
     responses = BatteryResponses()
     responses.command(0.0, 0.0, {"a": 1000})

@@ -26,6 +26,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+import logging
+
+_LOGGER = logging.getLogger(__name__)
 
 MIN_GAIN = 0.2
 MAX_GAIN = 0.9
@@ -115,6 +118,7 @@ class AdaptiveGain:
         self._cooldown_until = timestamp + COOLDOWN_S
         if gain == self.gain:
             return
+        _LOGGER.debug("Gain %s from %.2f to %.2f", adjustment, self.gain, gain)
         self.gain = gain
         self.last_adjustment = adjustment
         self.last_adjustment_at = timestamp

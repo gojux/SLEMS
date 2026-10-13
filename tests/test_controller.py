@@ -67,8 +67,12 @@ def test_start_out_of_standby_takes_the_start_time() -> None:
 def test_start_and_reversal_times_fall_back_to_the_driver() -> None:
     from custom_components.slems.controller import RealTimeController
 
-    battery = SimpleNamespace(subentry_id="a", driver=SimpleNamespace(start_delay_s=2.7), measured_power_w=None)
-    other = SimpleNamespace(subentry_id="b", driver=SimpleNamespace(start_delay_s=None), measured_power_w=None)
+    battery = SimpleNamespace(
+        subentry_id="a", name="A", driver=SimpleNamespace(start_delay_s=2.7), measured_power_w=None
+    )
+    other = SimpleNamespace(
+        subentry_id="b", name="B", driver=SimpleNamespace(start_delay_s=None), measured_power_w=None
+    )
     coordinator = SimpleNamespace(
         hass=None,
         batteries=[battery, other],

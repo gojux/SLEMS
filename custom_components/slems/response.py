@@ -22,12 +22,17 @@
 
 All values are exponential moving averages of individual measurements; a
 measurement is dropped when another command interferes or nothing happens
-within ``MAX_RESPONSE_S``.
+within ``MAX_RESPONSE_S``. Learners with a label log every measurement at
+debug level.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+import logging
+
+_LOGGER = logging.getLogger(__name__)
 
 EMA_ALPHA = 0.3
 # Share of the commanded change that counts as "arrived".
@@ -79,11 +84,17 @@ class StepResponse:
     """Learns how long a commanded step takes to show up in a measurement."""
 
     def __init__(
-        self, default_s: float, min_step_w: float = MIN_STEP_W, max_response_s: float = MAX_RESPONSE_S
+        self,
+        default_s: float,
+        min_step_w: float = MIN_STEP_W,
+        max_response_s: float = MAX_RESPONSE_S,
+        *,
+        label: str | None = None,
     ) -> None:
         self._default_s = default_s
         self._min_step_w = min_step_w
         self._max_response_s = max_response_s
+        self._label = label
         self.response_s: float | None = None
         self._pending: _PendingStep | None = None
 
@@ -115,11 +126,29 @@ class StepResponse:
         elapsed = timestamp - pending.start
         if elapsed > self._max_response_s:
             self._pending = None
+            if self._label is not None:
+                _LOGGER.debug(
+                    "Response %s: step %+.0f W from %.0f W not arrived within %.0f s",
+                    self._label,
+                    pending.change,
+                    pending.baseline,
+                    self._max_response_s,
+                )
             return
         moved = (value - pending.baseline) / pending.change
         if moved >= ARRIVED_RATIO:
             self.response_s = _ema(self.response_s, max(0.1, elapsed))
             self._pending = None
+            if self._label is not None:
+                _LOGGER.debug(
+                    "Response %s: step %+.0f W from %.0f W arrived after %.2f s (grid %.0f W), learned %.2f s",
+                    self._label,
+                    pending.change,
+                    pending.baseline,
+                    elapsed,
+                    value,
+                    self.response_s,
+                )
 
 
 class BatteryResponses:
@@ -131,7 +160,9 @@ class BatteryResponses:
     unlearned for a long time.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, names: Callable[[str], str] | None = None) -> None:
+        # Battery name for the debug log.
+        self._names = names
         self.learners: dict[str, StepResponse] = {}
         # Steps of a battery that reverse its direction, until the new direction shows.
         self.reversals: dict[str, StepResponse] = {}
@@ -175,20 +206,26 @@ class BatteryResponses:
             if battery_id != own or own not in started_ids:
                 learner.cancel()
         if own is not None:
-            self.learners.setdefault(own, StepResponse(DEFAULT_BATTERY_RESPONSE_S)).command(
+            self._learner(self.learners, "step", own).command(
                 timestamp, baseline, total
             )
             if own in reversed_from:
                 # Until the new direction shows: the stop of the old power
                 # moves the grid first.
                 stopped = reversed_from[own]
-                self.reversals.setdefault(own, StepResponse(DEFAULT_BATTERY_RESPONSE_S)).command(
+                self._learner(self.reversals, "reversal", own).command(
                     timestamp, None if baseline is None else baseline - stopped, total + stopped
                 )
             if own in started_ids:
-                self.starts.setdefault(own, StepResponse(DEFAULT_BATTERY_RESPONSE_S)).command(
+                self._learner(self.starts, "start", own).command(
                     timestamp, baseline, total
                 )
+
+    def _learner(self, learners: dict[str, StepResponse], kind: str, battery_id: str) -> StepResponse:
+        if (learner := learners.get(battery_id)) is None:
+            name = self._names(battery_id) if self._names is not None else battery_id
+            learner = learners[battery_id] = StepResponse(DEFAULT_BATTERY_RESPONSE_S, label=f"{kind} {name}")
+        return learner
 
     def _all(self) -> list[StepResponse]:
         return [*self.learners.values(), *self.reversals.values(), *self.starts.values()]
@@ -215,19 +252,23 @@ class BatteryResponses:
         return _as_dict(self.reversals)
 
     def restore_reversals(self, data: dict[str, float]) -> None:
-        _restore(self.reversals, data)
+        self._restore(self.reversals, "reversal", data)
 
     def starts_as_dict(self) -> dict[str, float]:
         return _as_dict(self.starts)
 
     def restore_starts(self, data: dict[str, float]) -> None:
-        _restore(self.starts, data)
+        self._restore(self.starts, "start", data)
 
     def as_dict(self) -> dict[str, float]:
         return _as_dict(self.learners)
 
     def restore(self, data: dict[str, float]) -> None:
-        _restore(self.learners, data)
+        self._restore(self.learners, "step", data)
+
+    def _restore(self, learners: dict[str, StepResponse], kind: str, data: dict[str, float]) -> None:
+        for battery_id, response_s in data.items():
+            self._learner(learners, kind, battery_id).response_s = response_s
 
 
 def _as_dict(learners: dict[str, StepResponse]) -> dict[str, float]:
@@ -236,12 +277,6 @@ def _as_dict(learners: dict[str, StepResponse]) -> dict[str, float]:
         for battery_id, learner in learners.items()
         if learner.response_s is not None
     }
-
-
-def _restore(learners: dict[str, StepResponse], data: dict[str, float]) -> None:
-    for battery_id, response_s in data.items():
-        learner = learners.setdefault(battery_id, StepResponse(DEFAULT_BATTERY_RESPONSE_S))
-        learner.response_s = response_s
 
 
 class DirectionalResponse:
