@@ -9,8 +9,9 @@ Verbraucher steuert. Ziel ist ein netzdienlicher Betrieb der Batterien, z. B.
 durch Verschieben des Ladezeitpunkts, damit die tägliche Einspeisespitze
 abgefangen wird. Grundlage dafür sind Prognosen für Verbrauch und PV-Ertrag.
 
-Der Name setzt sich aus *[Slug](https://en.wikipedia.org/wiki/Sea_slug)* (ein
-lustiges Wort für ein sehr interessantes Tier) und *EMS*
+Der Name setzt sich aus *Slug* (unsere „Lieblingshaustiere“ und ein lustiges
+Wort für eine ganze Reihe [sehr interessanter
+Tiere](https://en.wikipedia.org/wiki/Sea_slug)) und *EMS*
 (Energiemanagementsystem) zusammen.
 
 ![SLEMS-Übersicht: Energiefluss, Kennzahlen und das Diagramm mit Prognose und Plan des Tages](docs/images/dashboard_overview_de.png)

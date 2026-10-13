@@ -9,8 +9,9 @@ controllable consumers. Its goal is to operate the batteries in a grid
 friendly way, e.g. by shifting the charging time so that the daily feed-in
 peak is absorbed, based on forecasts of consumption and PV production.
 
-The name is a combination of *[Slug](https://en.wikipedia.org/wiki/Sea_slug)*
-(a funny word for a very interesting animal) and *EMS* (energy management
+The name is a combination of *Slug* (our "favourite pets" and a funny word for
+a whole range of [very interesting
+animals](https://en.wikipedia.org/wiki/Sea_slug)) and *EMS* (energy management
 system).
 
 ![SLEMS overview: energy flow, key figures and the forecast and plan chart of the day](docs/images/dashboard_overview_en.png)
