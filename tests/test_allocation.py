@@ -136,6 +136,37 @@ def test_minimum_runtime_keeps_consumer_running() -> None:
     assert result.battery_power_w == -300
 
 
+def test_running_on_off_consumer_counts_with_what_it_draws() -> None:
+    # A heat pump learned at 2860 W draws 3190 W: the available power holds
+    # its 3190 W, the house without it needs 1860 W.
+    pump = ConsumerRequest(
+        subentry_id="pump", priority=1, control_mode=ControlMode.RELEASE,
+        nominal_power_w=2860, must_stay_on=True, running=True, drawing_w=3190,
+    )
+    result = allocate(3190 - 1860, battery(50), [pump], SETTINGS, expected_surplus_wh=None)
+    assert result.consumer_power_w["pump"] == 2860
+    # The batteries cover the whole house, not 330 W less.
+    assert result.battery_power_w == -1860
+    # Drawing less than learned: nothing fed in from the batteries.
+    pump = replace(pump, drawing_w=2130)
+    result = allocate(2130 - 1860, battery(50), [pump], SETTINGS, expected_surplus_wh=None)
+    assert result.battery_power_w == -1860
+
+
+def test_running_on_off_consumer_takes_what_it_draws_from_a_surplus() -> None:
+    pump = replace(PUMP, running=True, drawing_w=350)
+    # 2000 W surplus with the pump drawing 350 W of its nominal 500 W.
+    result = allocate(2000, battery(100), [pump], SETTINGS, expected_surplus_wh=0)
+    assert result.consumer_power_w["pump"] == 500
+    # A pump switched off draws nothing yet: its nominal power is planned.
+    off = replace(PUMP, drawing_w=0)
+    assert allocate(2000, battery(50), [off], replace(SETTINGS, battery_share_when_secured_pct=0),
+                    expected_surplus_wh=50000).battery_power_w == 1500
+    result = allocate(2000, battery(50), [pump], replace(SETTINGS, battery_share_when_secured_pct=0),
+                      expected_surplus_wh=50000)
+    assert result.battery_power_w == 1650
+
+
 def test_minimum_pause_keeps_consumer_off() -> None:
     paused = ConsumerRequest(
         subentry_id="rod", priority=1, control_mode=ControlMode.POWER,

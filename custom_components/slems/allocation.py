@@ -6,7 +6,8 @@ unblocked controllable consumers). Positive = surplus, negative = deficit.
 
 Consumers that must keep running (minimum runtime) keep their power first.
 Running on/off consumers keep their power before power controlled consumers
-of higher priority (those can adapt, switching costs a cycle).
+of higher priority (those can adapt, switching costs a cycle). A running
+on/off consumer takes what it draws from the balance, not its nominal power.
 With the remaining power three cases exist:
 
 Surplus (remaining above the charge grid target): the power above the target
@@ -159,6 +160,10 @@ class ConsumerRequest:
     # Switched on right now (an on/off consumer keeps its power before the
     # power controlled ones, see _distribute).
     running: bool = False
+    # Power it draws right now as the grid meter shows it. A running on/off
+    # consumer takes this from the balance instead of its nominal power (see
+    # _drawn_w); its allocation stays the nominal power (= on).
+    drawing_w: float | None = None
     # Minimum pause not yet elapsed: must stay off.
     must_stay_off: bool = False
     cap_mode: CapMode = CapMode.NORMAL
@@ -285,9 +290,9 @@ def allocate(
             consumer_power[consumer.subentry_id] = power
         elif consumer.must_stay_on:
             consumer_power[consumer.subentry_id] = consumer.minimum_running_power_w
-    remaining = available_w - sum(consumer_power.values())
+    remaining = available_w - sum(drawn_power_w(c, consumer_power[c.subentry_id]) for c in ordered)
     unsupported_w = unsupported_measured_w + sum(
-        power for subentry_id, power in consumer_power.items() if subentry_id in unsupported
+        drawn_power_w(c, consumer_power[c.subentry_id]) for c in ordered if c.subentry_id in unsupported
     )
 
     charge_secured = battery is not None and _charge_secured(
@@ -475,6 +480,19 @@ def _cover_deficit(
     )
 
 
+def drawn_power_w(consumer: ConsumerRequest, power_w: float) -> float:
+    """Power an allocation of ``power_w`` takes from the balance.
+
+    A running on/off consumer draws what it draws, not its nominal power: a
+    heat pump modulates, a learned nominal power fits only on average. With
+    the nominal power the batteries would cover the difference in the wrong
+    direction (feed it into the grid, or leave it to the grid).
+    """
+    if power_w > 0 and consumer.control_mode.on_off and consumer.running and consumer.drawing_w is not None:
+        return consumer.drawing_w
+    return power_w
+
+
 def _distribute(
     budget: float,
     consumers: Iterable[ConsumerRequest],
@@ -499,7 +517,7 @@ def _distribute(
         if consumer.control_mode.on_off:
             if current == 0 and budget >= consumer.nominal_power_w:
                 consumer_power[consumer.subentry_id] = consumer.nominal_power_w
-                budget -= consumer.nominal_power_w
+                budget -= drawn_power_w(consumer, consumer.nominal_power_w)
             continue
         extra = min(budget, consumer.max_power_w - current)
         if current + extra < consumer.min_power_w:

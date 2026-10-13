@@ -42,6 +42,7 @@ from .allocation import (
     Strategy,
     allocate,
     battery_full,
+    drawn_power_w,
     expected_surplus_wh,
     limit_discharge_export,
     max_discharge_export_w,
@@ -2466,8 +2467,21 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self.plan_changes.add(wall_now, price_decision(price_limit_w, grid_charge_w, battery_export_w, charge_cap_w))
 
         surplus_w = self._run_surplus(pv_forecast, consumption, load, wall_now)
+        # The consumers' power as it is in the energy balance (available power).
+        drawing_w = seen_w or {
+            subentry_id: state.power_w or 0.0
+            for subentry_id, state in snapshot.consumers.items()
+            if snapshot.is_controllable_now(subentry_id)
+        }
         requests = [
-            self._request(consumer, now, battery, snapshot.available_power_w, surplus_w)
+            self._request(
+                consumer,
+                now,
+                battery,
+                snapshot.available_power_w,
+                surplus_w,
+                drawing_w.get(consumer.subentry_id),
+            )
             for consumer in map(self.effective_consumer, self.consumers)
             if snapshot.is_controllable_now(consumer.subentry_id)
         ]
@@ -2544,10 +2558,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # Counted at their command (controller cycle), that command is not in
         # the grid power and comes off again.
         unused_w = 0.0
+        by_id = {request.subentry_id: request for request in requests}
         for subentry_id, power in allocation.consumer_power_w.items():
             if subentry_id in snapshot.resting:
                 measured = snapshot.consumers[subentry_id].power_w or 0.0
-                unused_w += max(0.0, power - measured) - (seen_w.get(subentry_id, measured) - measured)
+                drawn = drawn_power_w(by_id[subentry_id], power) if subentry_id in by_id else power
+                unused_w += max(0.0, drawn - measured) - (seen_w.get(subentry_id, measured) - measured)
         if unused_w > 0 and battery is not None:
             max_charge = 0.0 if battery.is_full else battery.max_charge_w
             allocation.battery_power_w = max(
@@ -3454,8 +3470,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         battery: BatteryGroup | None,
         available_w: float | None = None,
         run_surplus: Callable[[float], float] | None = None,
+        drawing_w: float | None = None,
     ) -> ConsumerRequest:
-        """Allocation request of a consumer, with its daily target."""
+        """Allocation request of a consumer, with its daily target; ``drawing_w``
+        is its power in the energy balance."""
         mode = self.target_states.get(consumer.subentry_id, TargetState(TargetMode.NONE)).mode
         keep_on, keep_off = self._cycling_holds(consumer, now, mode, available_w, run_surplus)
         must_stay_on = self._runtime.must_stay_on(consumer, now) or keep_on or self._window_holds(consumer, now, mode)
@@ -3468,6 +3486,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             max_power_w=consumer.max_power_w or 0,
             must_stay_on=must_stay_on,
             running=self._runtime.is_on(consumer.subentry_id),
+            drawing_w=drawing_w,
             # A met target or one before its earliest start keeps it off
             # (after its minimum runtime).
             must_stay_off=self._runtime.must_stay_off(consumer, now)
