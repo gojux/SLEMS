@@ -5,10 +5,18 @@ Standard library only (Python 3.10+). The battery accepts a single Modbus TCP
 connection: pause the communication of this battery in SLEMS (battery menu ⋮)
 and stop any other integration talking to it while the script runs.
 
-The script plays a fixed sequence of set points several times: starts out of
-standby (after a short and a long standby, with full and small power), steps
-up and down in the same direction, reversals (charging <-> discharging) and
-stops. Set points are written like SLEMS does: only registers whose value
+The script plays a fixed sequence of set points several times:
+
+* ``--plan steps`` (default): starts out of standby (after a short and a long
+  standby, with full and small power), steps up and down in the same
+  direction, reversals (charging <-> discharging) and stops.
+* ``--plan warm``: whether a battery that stopped only shortly, or that holds
+  a small power instead of 0 W, starts faster than one out of standby:
+  restarts after stops of ``--gaps`` seconds and steps from ``--warm-power``
+  watts held for ``--warm-hold`` seconds, both directions, with a start out
+  of a long standby for comparison.
+
+Set points are written like SLEMS does: only registers whose value
 changed, set points before the force mode, everything again every
 ``REFRESH_S`` seconds.
 
@@ -32,6 +40,7 @@ Examples:
     python3 step_response.py 192.168.1.50
     python3 step_response.py 192.168.1.50 --meter 127.0.0.1:503
     python3 step_response.py 192.168.1.50 --power 2000 --cycles 2 --long-idle 120
+    python3 step_response.py 192.168.1.50 --meter 127.0.0.1:503 --plan warm --cycles 2
 """
 
 from __future__ import annotations
@@ -73,6 +82,9 @@ METER_BLOCK = 5
 NOT_IMPLEMENTED = 0x8000
 # Meter baseline before the command and final value at the end of a hold.
 METER_WINDOW_S = 1.0
+# A set point held shorter has not settled: the next step is measured from
+# the last settled state instead of the values right before its command.
+SETTLED_HOLD_S = 2.0
 
 
 @dataclass
@@ -98,6 +110,8 @@ class Step:
     meter_arrived_s: float | None = None
     # Share of the commanded change the meter showed at the end of the hold.
     meter_share: float | None = None
+    # AC power of the battery during the last second of the set point.
+    end_w: float | None = None
     samples: list[tuple[float, int, int, str]] = field(default_factory=list)
 
 
@@ -171,6 +185,8 @@ class Meter(threading.Thread):
         self._halt = threading.Event()
         # +1: the meter rises with charging, -1: it falls; None until known.
         self.sign: int | None = None
+        # Meter value without the battery, from the end of the last settled set point.
+        self.without_battery: float | None = None
 
     def read(self, transaction: int) -> float | None:
         words = read_holding(self.sock, self.unit, transaction, self.register, METER_BLOCK)
@@ -204,18 +220,30 @@ class Meter(threading.Thread):
         with self._lock:
             return [sample for sample in self.samples if start <= sample[0] <= end]
 
-    def evaluate(self, step: Step, command: float, end: float, change: int) -> None:
+    def evaluate(self, step: Step, command: float, end: float, settled_before: bool) -> None:
         """Fill the meter times of a step that ended at ``end``."""
+        change = step.target_w - step.previous_w
         before = [value for _, value in self.between(command - METER_WINDOW_S, command)]
         after = [value for _, value in self.between(end - METER_WINDOW_S, end)]
-        if not before or not after or not change:
+        if not after:
             return
-        baseline = statistics.median(before)
+        settled = end - command >= SETTLED_HOLD_S
+        if not settled_before and self.sign is not None and self.without_battery is not None:
+            baseline = self.without_battery + self.sign * step.previous_w
+        elif before:
+            baseline = statistics.median(before)
+        else:
+            return
+        if settled and self.sign is not None:
+            self.without_battery = statistics.median(after) - self.sign * step.target_w
+        if not change:
+            return
         moved = statistics.median(after) - baseline
         if self.sign is None:
             if abs(change) < 1000 or abs(moved) < 0.5 * abs(change):
                 return
             self.sign = 1 if moved * change > 0 else -1
+            self.without_battery = statistics.median(after) - self.sign * step.target_w
         step.meter_share = self.sign * moved / change
         for timestamp, value in self.between(command, end):
             if self.sign * (value - baseline) / change >= ARRIVED_RATIO:
@@ -247,10 +275,51 @@ def plan(power: int, small: int, hold: float, short_idle: float, long_idle: floa
     ]
 
 
+def plan_warm(
+    power: int,
+    gaps: list[float],
+    warm_powers: list[int],
+    hold: float,
+    warm_hold: float,
+    short_idle: float,
+    long_idle: float,
+) -> list[Segment]:
+    segments = [
+        Segment(0, long_idle, "stop charge"),
+        Segment(power, hold, f"start charge after {long_idle:g} s"),
+    ]
+    for gap in gaps:
+        segments += [
+            Segment(0, gap, f"stop charge for {gap:g} s"),
+            Segment(power, hold, f"restart charge after {gap:g} s stop"),
+        ]
+    segments += [
+        Segment(0, short_idle, "stop charge"),
+        Segment(-power, hold, f"start discharge after {short_idle:g} s"),
+    ]
+    for gap in gaps:
+        segments += [
+            Segment(0, gap, f"stop discharge for {gap:g} s"),
+            Segment(-power, hold, f"restart discharge after {gap:g} s stop"),
+        ]
+    for warm in warm_powers:
+        segments += [
+            Segment(-warm, warm_hold, f"down discharge to {warm} W"),
+            Segment(-power, hold, f"up discharge from {warm} W"),
+        ]
+    for warm in warm_powers:
+        segments += [
+            Segment(warm, warm_hold, f"to charge {warm} W"),
+            Segment(power, hold, f"up charge from {warm} W"),
+        ]
+    return segments
+
+
 def run_segment(
     battery: Battery,
     meter: Meter | None,
     previous_w: int,
+    settled_before: bool,
     segment: Segment,
     writer: Any,
     index: int,
@@ -258,6 +327,9 @@ def run_segment(
 ) -> Step:
     state_before = battery.state()
     _dc, baseline = battery.power()
+    if not settled_before:
+        # The battery's own value lags behind: measured from the set point before.
+        baseline = previous_w
     command = time.monotonic()
     writes = battery.apply(segment.target_w)
     step = Step(segment.kind, previous_w, segment.target_w, state_before, writes, time.monotonic() - command)
@@ -288,7 +360,10 @@ def run_segment(
         if step.settled_s is None and moved >= SETTLED_RATIO:
             step.settled_s = elapsed
     if meter is not None:
-        meter.evaluate(step, command, time.monotonic(), change)
+        meter.evaluate(step, command, time.monotonic(), settled_before)
+    last = [ac for elapsed, _dc, ac, _state in step.samples if elapsed >= segment.hold_s - 1.0]
+    if last and segment.hold_s >= SETTLED_HOLD_S:
+        step.end_w = statistics.median(last)
     return step
 
 
@@ -325,6 +400,9 @@ def summary(steps: list[Step]) -> None:
             if missing:
                 text += f"  ({missing}x not reached)"
             print(f"    {label:<14} {text}")
+        ends = [s.end_w for s in group if s.end_w is not None]
+        if ends:
+            print(f"    {'battery at end':<14} {statistics.median(ends):5.0f} W (AC, own measurement)")
         shares = [s.meter_share for s in group if s.meter_share is not None]
         if shares:
             print(f"    {'meter share':<14} {statistics.median(shares):5.0%} of the commanded change at the end")
@@ -350,13 +428,22 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=502)
     parser.add_argument("--unit", type=int, default=1)
     parser.add_argument("--power", type=int, default=1500, help="W of the large steps (default 1500)")
+    parser.add_argument("--plan", choices=("steps", "warm"), default="steps", help="sequence (default steps)")
     parser.add_argument("--small", type=int, default=300, help="W of the small starts (default 300)")
+    parser.add_argument(
+        "--gaps", type=float, nargs="+", default=[0.5, 1.0, 2.0, 5.0, 10.0], help="warm: stops before a restart (s)"
+    )
+    parser.add_argument(
+        "--warm-power", type=int, nargs="+", default=[30, 50], help="warm: small powers held instead of 0 W"
+    )
+    parser.add_argument("--warm-hold", type=float, default=30.0, help="warm: seconds of the small power (default 30)")
     parser.add_argument("--hold", type=float, default=10.0, help="seconds per set point (default 10)")
     parser.add_argument("--short-idle", type=float, default=10.0, help="short standby in seconds (default 10)")
     parser.add_argument("--long-idle", type=float, default=90.0, help="long standby in seconds (default 90)")
     parser.add_argument("--cycles", type=int, default=3, help="repetitions of the sequence (default 3)")
     parser.add_argument("--min-soc", type=float, default=30.0, help="refuse to start below this SoC (default 30)")
     parser.add_argument("--max-soc", type=float, default=85.0, help="refuse to start above this SoC (default 85)")
+    parser.add_argument("--yes", action="store_true", help="start without asking for confirmation")
     parser.add_argument("--csv", help="sample file (default step_response_<host>_<time>.csv)")
     parser.add_argument("--meter", metavar="HOST:PORT", help="also read this SunSpec grid meter")
     parser.add_argument("--meter-unit", type=int, default=1)
@@ -366,10 +453,31 @@ def main() -> None:
 
     power = min(max(args.power, 300), MAX_POWER_W)
     small = min(max(args.small, 100), power)
-    segments = plan(power, small, args.hold, args.short_idle, args.long_idle)
+    if args.plan == "warm":
+        warm_powers = [min(max(w, 10), power // 2) for w in args.warm_power]
+        segments = plan_warm(
+            power, args.gaps, warm_powers, args.hold, args.warm_hold, args.short_idle, args.long_idle
+        )
+    else:
+        segments = plan(power, small, args.hold, args.short_idle, args.long_idle)
     # About one second per set point for the reads and writes around the command.
     duration = sum(s.hold_s + 1 for s in segments) * args.cycles
     path = args.csv or f"step_response_{args.host}_{time.strftime('%Y%m%d-%H%M%S')}.csv"
+    if not args.yes:
+        print("Before the test, in SLEMS:")
+        if args.meter:
+            print('  1. Set the operating mode to "Observe only" (nothing else may regulate on the grid meter).')
+        else:
+            print('  1. Set the operating mode to "Observe only" (or keep the other batteries controlled).')
+        print(f"  2. Pause the communication of the battery {args.host} (battery menu ⋮), long enough")
+        print(f"     for about {duration / 60:.0f} min; pausing again extends the pause.")
+        print("  Afterwards set the operating mode back and end the pause.")
+        try:
+            input("Press Enter to start, Ctrl+C to cancel. ")
+        except (KeyboardInterrupt, EOFError):
+            print("\nCancelled, nothing done.")
+            return
+
     with connect("Battery", args.host, args.port) as sock:
         link = Link(sock, args.unit)
         soc = link.read(REG_SOC) / 10
@@ -401,11 +509,15 @@ def main() -> None:
             try:
                 battery.apply(0, refresh=True)
                 previous = 0
+                settled_before = True
                 index = 0
                 for cycle in range(args.cycles):
                     print(f"\nCycle {cycle + 1}/{args.cycles}")
                     for segment in segments:
-                        step = run_segment(battery, meter, previous, segment, writer, index, started)
+                        step = run_segment(
+                            battery, meter, previous, settled_before, segment, writer, index, started
+                        )
+                        settled_before = segment.hold_s >= SETTLED_HOLD_S
                         index += 1
                         if previous == segment.target_w:
                             continue
@@ -416,6 +528,7 @@ def main() -> None:
                             f"60 % {seconds(step.arrived_s)}  90 % {seconds(step.settled_s)}  "
                             f"state {seconds(step.state_s)}"
                             + (f"  meter {seconds(step.meter_arrived_s)}" if meter else "")
+                            + (f"  end {step.end_w:.0f} W" if step.end_w is not None else "")
                         )
                         previous = segment.target_w
             except KeyboardInterrupt:
