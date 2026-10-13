@@ -1907,9 +1907,13 @@ attributes.
   aware control it leaves the energy the price plan still needs for
   expensive hours (e.g. the next evening after a dull day). Requires the
   consumption forecast.
-- **Surplus averaging window** (0–300 s, default 5 s, 0 = off) – the grid power
-  is averaged; the less favourable of average and current value is used, so
-  the control does not overshoot with fluctuating PV.
+- **Surplus averaging window** (0–300 s, default 5 s, 0 = off) – what the
+  house and the PV do without the batteries is averaged; the less favourable
+  of average and current value is used, so the control does not overshoot
+  with fluctuating PV. A rise of the consumption (or a PV drop) only counts
+  once it has lasted twice the response time of the batteries (at most 2 s):
+  short load pulses, e.g. of a coffee machine keeping its heater warm, are
+  over before a battery could follow them.
 - **Import peak shaving** (switch) – off by default. When enabled and the total
   state of charge is at or below **Peak shaving state of charge threshold**, the
   batteries only discharge to keep the grid import below **Peak shaving grid

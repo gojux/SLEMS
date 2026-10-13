@@ -2030,10 +2030,14 @@ Verwendung** enthält alle gelernten Werte als Attribute.
   Mit preisbewusster Steuerung lässt sie die Energie in den Batterien, die
   der Preisplan noch für teure Stunden braucht (z. B. den nächsten Abend
   nach einem trüben Tag). Benötigt die Verbrauchsprognose.
-- **Mittelungsfenster Überschuss** (0–300 s, Standard 5 s, 0 = aus): Die
-  Netzleistung wird gemittelt; es gilt der ungünstigere Wert aus Mittelwert
-  und aktuellem Wert, damit die Regelung bei schwankender PV nicht
-  überschießt.
+- **Mittelungsfenster Überschuss** (0–300 s, Standard 5 s, 0 = aus): Gemittelt
+  wird, was Haus und PV ohne die Batterien tun; es gilt der ungünstigere Wert
+  aus Mittelwert und aktuellem Wert, damit die Regelung bei schwankender PV
+  nicht überschießt. Ein Anstieg des Verbrauchs (oder ein Einbruch der PV)
+  zählt erst, wenn er doppelt so lange anhält wie die Reaktionszeit der
+  Batterien (höchstens 2 s): Kurze Lastspitzen, z. B. einer Kaffeemaschine,
+  die ihre Heizung warm hält, sind vorbei, bevor eine Batterie ihnen folgen
+  könnte.
 - **Bezugsspitzen abfangen** (Schalter): standardmäßig aus. Wenn aktiviert und
   der Gesamt-Ladezustand auf oder unter der **Ladezustand-Schwelle für
   Spitzenabfang** liegt, entladen die Batterien nur noch, um den Netzbezug

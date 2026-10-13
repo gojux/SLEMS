@@ -139,6 +139,7 @@ def _system(coordinator: SlemsCoordinator) -> dict:
         snapshot = {
             "grid_power_w": data.grid_power_w,
             "grid_power_filtered_w": data.grid_power_filtered_w,
+            "grid_without_batteries_filtered_w": data.grid_without_batteries_filtered_w,
             "pv_power_w": data.pv_power_w,
             "house_power_w": data.house_power_w,
             "battery_power_w": data.battery_power_w,
@@ -261,6 +262,7 @@ def _system(coordinator: SlemsCoordinator) -> dict:
             "grid_target_samples": [len(coordinator.grid_targets.charge), len(coordinator.grid_targets.discharge)],
             "timing": coordinator.learned_timing,
             "control_interval_s": coordinator.control_interval_s,
+            "grid_hold_s": coordinator.grid_hold_s,
             "morning_gap": coordinator.morning_gap.as_dict(),
             "vacation_days": coordinator.vacation_days.as_list(),
             "outdoor_power": {

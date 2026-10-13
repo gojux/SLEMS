@@ -109,7 +109,7 @@ custom_components/slems/
   response.py        learned meter cadence and response times
   adaptive_gain.py   automatic adaptation of the control gain
   allocation.py      distribution of available power between batteries and consumers
-  grid_filter.py     conservative moving average of the grid power
+  grid_filter.py     conservative moving average of the grid power without the batteries
   efficiency.py      round trip efficiency (battery counters / learned / manual)
   entity.py          base classes (system device, battery devices)
   sensor.py          system and battery sensors
@@ -144,12 +144,24 @@ Every coordinator update (operating mode *simulation* or *active*) computes an
 `Allocation` (`allocation.py`); in simulation mode it is only shown via
 sensors. Inputs:
 
-- **Available power** = −(filtered grid power) + AC battery power + power of
-  the controllable, unblocked consumers behind the meter. It is what SLEMS
+- **Available power** = −(filtered grid power without the batteries) + power
+  of the controllable, unblocked consumers behind the meter. It is what SLEMS
   could distribute if it controlled everything it is allowed to.
-- **Grid filter**: time weighted average over 0–300 s (0 = off); the larger
-  import (= smaller surplus) of average and current value is used, so PV drops
-  are followed immediately and PV rises only after the window.
+- **Grid filter** (`grid_filter`): every meter report is stored minus the
+  battery power the meter shows at that moment (`_battery_seen_w`: the
+  controller's `seen_battery_power`, otherwise the telemetry of the batteries
+  in the planning), i.e. what house and PV do on their own. Filtering the raw
+  grid power kept the controller's own corrections in the average while the
+  corrected battery power already counted in the balance: a correction
+  counted twice and pushed the grid to the other side. Of that power the
+  larger import (= smaller surplus) of two values is used: the lowest value
+  of the hold time (`grid_hold_s` = 2 × battery response time, at most 2 s)
+  and the time weighted average of that held value over 0–300 s (0 = off).
+  A load switching on or a PV drop counts after the hold time, a PV rise or
+  a load switching off after the window. Load pulses shorter than the hold
+  time are ignored: the reaction would arrive after their end and only feed
+  their energy into the grid. `grid_power_filtered_w` (sensor, diagnostics)
+  is the filtered value plus the current battery power.
 - **Charge secured**: SoC ≥ *battery priority SoC* and expected PV surplus
   today ≥ energy to full (divided by the charge efficiency) + *safety buffer* (kWh).
   The expected surplus is the remaining PV forecast today minus the current
@@ -1174,7 +1186,7 @@ balance), then moves only a share of the way there:
 seen      = battery commands the meter shows already (command_arrivals: issued at
             least the battery response time ago, a reversal its reversal time)
 consumers = controllable consumers as the meter shows them (seen_consumer_power)
-available = -grid_filtered + seen + consumers
+available = -(grid - seen)_filtered + consumers
 target    = allocation(available, ...)            # absolute set point
 new       = latest + gain · (target - latest)     # latest = last commanded total
 new       = limit_discharge_export(new, ...)      # hard export limit
@@ -2004,3 +2016,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-11 | The learned phase stays out of the control. A limit of the unbalance per phase (4.6 kVA in Germany, 3.68 kVA in Austria) only matters with several batteries on one phase or a single phase battery above it, and a limit in Home Assistant is no certified symmetry device the grid operator would accept. Protecting a phase or the main fuse could only use the battery on that phase or the consumers on it, for little benefit. Control per phase for counters that do not net mixes up the meter in Home Assistant with the utility meter, which nets the phases in DACH: with it a battery on L1 does pay off import on L2, only the statistics of such a counter are wrong. Each would add new failure modes for little gain. |
 | 2026-10-12 | The phase of consumers is learned from all devices together instead of single steps: a recorded day of a house with three batteries showed that the batteries compensate every step of another load within the same 5 s reading, spread over their phases, so a step never shows up alone; sensors that report up to 90 s late (a heat pump) never lined up with the meter either. A least squares fit of the changes of 120 s block means over all devices (batteries, consumers, PV) explains both; the block means take up the sensor delays without estimating them, which tested as good as shifting each sensor by its delay. Battery phases are not taken from it: the batteries follow loads SLEMS does not measure and are moved alike, which biased three single phase batteries towards three phases; their phase comes from the self-test, which holds the other devices anyway. The statistics start from the last 2 days of the recorder (an hour per query to keep the memory small; more days add little and a meter reports about 45 000 values per phase and day), so no waiting for new steps. |
 | 2026-10-12 | A self-test that found nothing wrong but could not check everything ends *unclear*, shown as a hint on the battery card instead of the red "conspicuous": the usual cause is a full or empty battery that may only charge or discharge 200 W, which a house changing by a few hundred watts hides, and that is no fault of the battery. A noisy step no longer passes the effect check by chance (the house moving the meter the right way) unless the meter matches the battery's own reported change, and it does not count for the power scale, which averaged a noise-made ratio near 0 with the real 1.0 into a factor of 0.51. |
+| 2026-10-13 | The grid filter averages the grid power minus the battery power the meter shows (what house and PV do on their own) instead of the grid power, and a rise counts only after twice the battery response time (at most 2 s): a recorded oscillation was started by the 0.5–1 s heating pulses of a coffee machine; the batteries' reaction arrived after each pulse had ended, and the old filter kept the pulse and the controller's own correction in its average, so the batteries kept reducing while exporting. A replay of the pulses lowered the extra export from 21.6 to 2.4 Wh per 10 min. Controlled consumers stay in the filtered power: their commands are rare and their own power reports late. |

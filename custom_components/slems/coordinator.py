@@ -147,7 +147,7 @@ from .forecast.accuracy import PvAccuracyTracker
 from .bad_weather import BadWeatherMode
 from .battery_wear import ESTIMATED_CT_PER_KWH, Wear
 from .battery_support import BatterySupport, SupportBudget, next_refill, support_budget_wh
-from .grid_filter import GridPowerFilter
+from .grid_filter import MAX_HOLD_S, GridPowerFilter
 from .grid_meter import ModbusGridMeter
 from .grid_quarters import GridQuarters
 from .netting import NettingCheck
@@ -539,7 +539,10 @@ class SystemSnapshot:
 
     # Grid power, +import / -export.
     grid_power_w: float | None = None
-    # Grid power after the conservative averaging (see grid_filter).
+    # Grid power without the batteries in the planning (what the house and the
+    # PV do on their own) after the conservative averaging (see grid_filter).
+    grid_without_batteries_filtered_w: float | None = None
+    # The same plus the battery power the grid meter shows now.
     grid_power_filtered_w: float | None = None
     pv_power_w: float | None = None
     # Per battery subentry id; missing if the battery could not be read.
@@ -1167,7 +1170,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     @callback
     def _on_modbus_grid(self, grid: float) -> None:
         self.controller.observe_meter_report()
-        self._grid_filter.add(time.monotonic(), grid)
+        self._grid_filter.add(time.monotonic(), grid, self._battery_seen_w())
         self._integrate_export(grid, time.monotonic())
         self.controller.observe_grid(grid)
         self.controller.request()
@@ -1184,6 +1187,43 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if meter is not None and meter.fresh(time.monotonic()):
             return meter.value
         return self._grid_from_entity()
+
+    def _battery_seen_w(self, seen: dict[str, float] | None = None) -> float:
+        """Battery power the grid meter shows now, of the batteries in the
+        planning (the battery power of the energy balance in ``plan``): ``seen``
+        (default: the controller's commands the meter shows already), otherwise
+        the telemetry."""
+        data = self.data
+        if data is None:
+            return 0.0
+        if seen is None:
+            seen = self.controller.seen_battery_power(time.monotonic())
+        return sum(
+            power
+            for battery in self.batteries
+            if battery.participating
+            and (telemetry := data.batteries.get(battery.subentry_id)) is not None
+            and (power := seen.get(battery.subentry_id, telemetry.grid_side_power_w)) is not None
+        )
+
+    def _filter_grid(
+        self, snapshot: SystemSnapshot, now: float, seen: dict[str, float] | None = None
+    ) -> None:
+        """Fill the filtered grid power of ``snapshot``."""
+        grid_filter = self._grid_filter
+        grid_filter.window_s = self.average_window_s
+        grid_filter.hold_s = self.grid_hold_s
+        filtered = grid_filter.conservative(now)
+        snapshot.grid_without_batteries_filtered_w = filtered
+        snapshot.grid_power_filtered_w = None if filtered is None else filtered + self._battery_seen_w(seen)
+
+    @property
+    def grid_hold_s(self) -> float:
+        """Time a rise of the grid power without the batteries must last to
+        count: twice the time the batteries need to follow. A reaction to a
+        shorter load pulse arrives after its end and only feeds its energy into
+        the grid."""
+        return min(MAX_HOLD_S, 2 * self.controller.battery_response.value)
 
     def grid_age_s(self) -> float | None:
         """Age of the current grid power (None without a value)."""
@@ -1221,7 +1261,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             return None
         if self._config.get(CONF_GRID_POWER_INVERTED, False):
             grid = -grid
-        self._grid_filter.add(time.monotonic(), grid)
+        self._grid_filter.add(time.monotonic(), grid, self._battery_seen_w())
         self._integrate_export(grid, time.monotonic())
         return grid
 
@@ -1605,8 +1645,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
 
         grid = self.grid_power_w()
         snapshot.grid_power_w = grid
-        self._grid_filter.window_s = self.average_window_s
-        snapshot.grid_power_filtered_w = self._grid_filter.conservative(now)
+        self._filter_grid(snapshot, now)
         snapshot.pv_power_w = self._pv_power_w()
         self._integrate_pv(snapshot.pv_power_w, now)
 
@@ -1963,18 +2002,18 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         What would be fed in if neither the batteries in normal operation nor
         the controlled consumers nor this battery took power.
         """
-        if snapshot.grid_power_filtered_w is None:
+        if snapshot.grid_without_batteries_filtered_w is None:
             return 0.0
-        batteries_w = sum(
-            power
-            for b in self.batteries
-            if (b.participating or b is battery)
-            and (telemetry := snapshot.batteries.get(b.subentry_id)) is not None
-            and (power := telemetry.grid_side_power_w) is not None
+        # The batteries in normal operation are not part of the filtered power.
+        own_w = (
+            0.0
+            if battery.participating
+            or (telemetry := snapshot.batteries.get(battery.subentry_id)) is None
+            else telemetry.grid_side_power_w or 0.0
         )
         return (
-            -snapshot.grid_power_filtered_w
-            + batteries_w
+            -snapshot.grid_without_batteries_filtered_w
+            + own_w
             + snapshot.controlled_consumer_power_w()
         )
 
@@ -2340,7 +2379,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         With ``previous_total_w`` the total battery power only moves by
         ``gain`` of the difference towards the allocation (damped correction).
         """
-        if snapshot.grid_power_filtered_w is None:
+        if snapshot.grid_without_batteries_filtered_w is None:
             return
         controlled_w = measured_controlled_w = snapshot.controlled_consumer_power_w()
         seen_w: dict[str, float] = {}
@@ -2372,10 +2411,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             and (power := telemetry.grid_side_power_w) is not None
         )
         snapshot.available_power_w = (
-            -snapshot.grid_power_filtered_w
-            + enabled_battery_w
-            + controlled_w
-            + balancing_discharge_w
+            -snapshot.grid_without_batteries_filtered_w + controlled_w + balancing_discharge_w
         )
         house = snapshot.house_power_w
         load = None if house is None else house - measured_controlled_w
@@ -4130,7 +4166,6 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         snapshot = replace(
             self.data,
             grid_power_w=grid,
-            grid_power_filtered_w=self._grid_filter.conservative(now),
             batteries=batteries,
             consumers={
                 consumer.subentry_id: read_consumer_state(self.hass, consumer)
@@ -4142,6 +4177,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             allocation=None,
             distribution=None,
         )
+        self._filter_grid(snapshot, now, battery_power_w)
         snapshot.pv_power_w = self._pv_power_w()
         self._house_hold.check(snapshot, now)
         self.plan(snapshot, dt_util.now(), now, previous_total_w=previous_total_w, gain=gain)

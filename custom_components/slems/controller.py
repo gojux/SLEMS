@@ -198,6 +198,34 @@ class RealTimeController:
             if state is not None and state.power_w is not None:
                 learner.sample(now, state.power_w)
 
+    def seen_battery_power(self, now: float) -> dict[str, float]:
+        """Battery powers the grid meter shows at ``now`` (battery id -> W), for
+        the batteries with commands."""
+        runtimes = {battery.subentry_id: battery for battery in self._coordinator.batteries}
+        seen = {}
+        for battery_id in self._battery_history:
+            arrivals = self._arrivals(battery_id)
+            power = next((power for _, power, shown in reversed(arrivals) if shown <= now), None)
+            if power is None:
+                continue
+            if (runtime := runtimes.get(battery_id)) is not None:
+                constant_since = self._constant_since(battery_id, power)
+                # The last arrival of a command: a reversal also has its stop.
+                response_s = next(
+                    (shown - issued for issued, _, shown in reversed(arrivals) if issued == constant_since),
+                    self.battery_response_s(battery_id),
+                )
+                power = trusted_power(
+                    power,
+                    constant_since,
+                    runtime.measured_power_w,
+                    runtime.measured_at,
+                    now,
+                    response_s,
+                )
+            seen[battery_id] = power
+        return seen
+
     def _battery_name(self, battery_id: str) -> str:
         return next(
             (b.name for b in self._coordinator.batteries if b.subentry_id == battery_id), battery_id
@@ -445,29 +473,7 @@ class RealTimeController:
                     # Back to its own logic until it is retried.
                     await self._release(battery)
 
-        runtimes = {battery.subentry_id: battery for battery in coordinator.batteries}
-        seen = {}
-        for battery_id in self._battery_history:
-            arrivals = self._arrivals(battery_id)
-            power = next((power for _, power, shown in reversed(arrivals) if shown <= start), None)
-            if power is None:
-                continue
-            if (runtime := runtimes.get(battery_id)) is not None:
-                constant_since = self._constant_since(battery_id, power)
-                # The last arrival of a command: a reversal also has its stop.
-                response_s = next(
-                    (shown - issued for issued, _, shown in reversed(arrivals) if issued == constant_since),
-                    self.battery_response_s(battery_id),
-                )
-                power = trusted_power(
-                    power,
-                    constant_since,
-                    runtime.measured_power_w,
-                    runtime.measured_at,
-                    start,
-                    response_s,
-                )
-            seen[battery_id] = power
+        seen = self.seen_battery_power(start)
         latest_total = sum(
             power
             for battery_id in self._battery_history
