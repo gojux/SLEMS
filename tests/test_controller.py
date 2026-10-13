@@ -2,6 +2,8 @@
 
 from types import SimpleNamespace
 
+import pytest
+
 from custom_components.slems.util import clamp_to_entity
 
 
@@ -67,12 +69,10 @@ def test_start_out_of_standby_takes_the_start_time() -> None:
 def test_start_and_reversal_times_fall_back_to_the_driver() -> None:
     from custom_components.slems.controller import RealTimeController
 
-    battery = SimpleNamespace(
-        subentry_id="a", name="A", driver=SimpleNamespace(start_delay_s=2.7), measured_power_w=None
-    )
-    other = SimpleNamespace(
-        subentry_id="b", name="B", driver=SimpleNamespace(start_delay_s=None), measured_power_w=None
-    )
+    venus = SimpleNamespace(start_delay_s=2.7, start_extra_s=1.6, reversal_extra_s=0.6)
+    plain = SimpleNamespace(start_delay_s=None, start_extra_s=0.0, reversal_extra_s=0.0)
+    battery = SimpleNamespace(subentry_id="a", name="A", driver=venus, measured_power_w=None)
+    other = SimpleNamespace(subentry_id="b", name="B", driver=plain, measured_power_w=None)
     coordinator = SimpleNamespace(
         hass=None,
         batteries=[battery, other],
@@ -87,12 +87,17 @@ def test_start_and_reversal_times_fall_back_to_the_driver() -> None:
     # A driver without a start delay: like any other step.
     assert controller.battery_start_response_s("b") == 0.8
     assert controller.battery_reversal_response_s("b") == 0.8
-    # Learned values win, never shorter than a normal step.
-    controller.battery_responses.restore_starts({"a": 2.4, "b": 0.3})
+    # Learned values win, never shorter than a normal step plus the driver's extra time.
+    controller.battery_responses.restore_starts({"a": 2.6, "b": 0.3})
     controller.battery_responses.restore_reversals({"a": 1.8})
-    assert controller.battery_start_response_s("a") == 2.4
+    assert controller.battery_start_response_s("a") == 2.6
     assert controller.battery_start_response_s("b") == 0.8
     assert controller.battery_reversal_response_s("a") == 1.8
+    # Learned too short in the control loop (seen: 0.6 s for a start): the floor.
+    controller.battery_responses.restore_starts({"a": 0.6})
+    controller.battery_responses.restore_reversals({"a": 1.0})
+    assert controller.battery_start_response_s("a") == pytest.approx(2.4)
+    assert controller.battery_reversal_response_s("a") == pytest.approx(1.4)
 
 
 def test_power_before_the_history_decides_about_a_start() -> None:

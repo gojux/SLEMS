@@ -49,6 +49,11 @@ CONFIRM_TOLERANCE_RATIO = 0.1
 # idle (10 s or 90 s), then ramps up within about 1 s; other steps show up
 # after about 0.9 s.
 START_DELAY_S = 2.7
+# Least extra time over a step of the same battery (2026-10-13, three runs:
+# starts 2.5-2.9 s, reversals 1.6-2.1 s, steps of 50-1000 W 0.7-1.1 s at the
+# meter, also with set points changing every 0.5 s meanwhile).
+START_EXTRA_S = 1.6
+REVERSAL_EXTRA_S = 0.6
 
 RS485_ENABLE = 0x55AA
 RS485_DISABLE = 0x55BB
@@ -186,6 +191,14 @@ class MarstekVenusE3Driver(BatteryDriver):
     @property
     def start_delay_s(self) -> float | None:
         return START_DELAY_S
+
+    @property
+    def start_extra_s(self) -> float:
+        return START_EXTRA_S
+
+    @property
+    def reversal_extra_s(self) -> float:
+        return REVERSAL_EXTRA_S
 
     async def read_device_info(self) -> dict[str, str]:
         await self._ensure_connected()

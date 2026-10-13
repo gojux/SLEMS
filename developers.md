@@ -1735,11 +1735,24 @@ the data stay in `diagnose/` (not committed):
 | Start out of standby (0 → 300 or 1500 W) | 2.6–2.8 s | nothing for about 2 s, then ramps within about 1 s |
 | Restart after a stop of 0.5 / 1 / 2 / 5 / 10 s | 2.3–2.9 s | like a start: the inverter is cold as soon as it stops |
 | Step from 30 or 50 W held for 30 s to 1500 W | 0.8–0.95 s | like a step in the same direction |
+| Steps of 50, 100, 200, 300, 600, 1000 W from 1500 W (`--plan overlap`) | 0.7–1.1 s | the same for every size: no ramp in W/s |
+| Start whose set point is raised or lowered every 0.5 s meanwhile | 2.5–2.9 s | like a plain start: the delay does not start again |
+| Reversal whose set point is raised every 0.5 s meanwhile | 1.6–2.1 s | like a plain reversal |
+| Reversal taken back after 0.5 / 1 s | 1.9–4.1 s from taking it back | the battery only stops (AC down to 0 W, never the other direction), then starts the old direction like out of standby |
+| Reversal taken back after 2 s | 0.5–1.75 s from taking it back | the new direction had just begun (±300–400 W) |
 
 - The start delay does not depend on the power (300 W like 1500 W), the
   direction or how long the battery was idle (0.5 s to 90 s). `START_DELAY_S`
   (2.7 s) in the driver is this value; the controller uses it until it
   learned a start time.
+- Starts and reversals take at least `START_EXTRA_S` (1.6 s) and
+  `REVERSAL_EXTRA_S` (0.6 s) longer than a step of the same battery; the
+  controller never uses a learned start or reversal time below the learned
+  step time plus these (learned in the control loop, a start came out at
+  0.6 s). Measured 2026-10-13 with `--plan overlap`, Venus at 41 % SoC, three
+  runs; data in `diagnose/batterie-reaktionszeiten/overlap-2026-10-13/`.
+- A reversal taken back within about a second costs 2–4 s without power
+  (stop, then a cold start), stopping costs 0.5 s.
 - A battery holding a small power (30 or 50 W, delivered within 2 W) stays
   warm, but the AC/DC difference is about 24 W at these powers, against about
   13 W the Venus needs in standby. A start costs about 2 s × the power of
@@ -2053,3 +2066,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-13 | A running on/off consumer takes what it draws from the energy balance instead of its nominal power: a heat pump kept on (avoid cycling) or forced by its daily target was planned with its learned 2860 W while it drew 2130–3190 W (it modulates); the batteries covered the difference the wrong way, feeding about 550 W into the grid or leaving about 330 W to the grid for minutes. Its allocation stays the nominal power, which means "on" for the control. |
 | 2026-10-13 | An on/off consumer found running after a start counts as switched on: after a restart a heat pump in a hot water run counted as off, its power as available; with the charge not secured the batteries took it and charged 1.8 kW from the grid while the heat pump, its release withdrawn, finished its run. |
 | 2026-10-13 | The batteries never charge more than the surplus at the meter with the consumers as they draw now (except planned grid charging), instead of trusting that a consumer allotted less stops at once: a released heat pump finishes its run anyway, and battery support *always* did not help because the allocation saw a surplus, not a deficit. One rule for every way into it (restart, release withdrawn, a device not following) instead of single cases. |
+| 2026-10-13 | Learned start and reversal times have a floor: the learned step time plus the driver's least extra time (Venus: 1.6 s and 0.6 s, measured with set points changing every 0.5 s as in the control loop). The learned start times of a real installation were 0.6 s against 2.6–2.9 s measured: measurements in the control loop end early when another change of the grid moves the meter. A floor relative to the step time keeps the meter's own delay in. |

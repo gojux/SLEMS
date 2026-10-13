@@ -90,6 +90,18 @@ class BatteryDriver(ABC):
         until the controller learned it; None: like any other command."""
         return None
 
+    @property
+    def start_extra_s(self) -> float:
+        """Time a command out of standby takes at least longer than any other
+        step (the inverter starting); the learned start time never goes below."""
+        return 0.0
+
+    @property
+    def reversal_extra_s(self) -> float:
+        """Time the new direction of a reversal takes at least longer than any
+        other step; the learned reversal time never goes below."""
+        return 0.0
+
     async def read_device_info(self) -> dict[str, str]:
         """Firmware versions and other static device information (may be empty)."""
         return {}

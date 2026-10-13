@@ -74,6 +74,7 @@ from .response import (
 from .util import ServiceCallError, async_call_service, clamp_to_entity, state_as_float
 
 if TYPE_CHECKING:
+    from .drivers import BatteryDriver
     from .coordinator import BatteryRuntime, SlemsCoordinator, SystemSnapshot
     from .consumers import ConsumerConfig
 
@@ -242,31 +243,34 @@ class RealTimeController:
     def battery_reversal_response_s(self, battery_id: str) -> float:
         """Time until the grid meter shows the new direction of a command of this
         battery that reverses its direction (its stop shows up like any other
-        command); never shorter than the one of any other step."""
+        command); never shorter than any other step plus the driver's
+        ``reversal_extra_s``."""
         normal = self.battery_response_s(battery_id)
+        driver = self._driver(battery_id)
         learned = self.battery_responses.learned_reversal(battery_id)
         if learned is None:
             learned = self.battery_reversal_response.response_s
-        if learned is None:
+        if learned is None and driver is not None:
             # The new direction starts the inverter again.
-            learned = self._start_delay_s(battery_id)
-        return normal if learned is None else max(normal, learned)
+            learned = driver.start_delay_s
+        least = normal + (driver.reversal_extra_s if driver is not None else 0.0)
+        return least if learned is None else max(least, learned)
 
     def battery_start_response_s(self, battery_id: str) -> float:
         """Time until the grid meter shows a command of this battery out of
-        standby (never shorter than the one of any other step)."""
+        standby; never shorter than any other step plus the driver's
+        ``start_extra_s``. Measurements in the control loop come out too short
+        at times (another change of the grid ends them early)."""
         normal = self.battery_response_s(battery_id)
+        driver = self._driver(battery_id)
         learned = self.battery_responses.learned_start(battery_id)
-        if learned is None:
-            learned = self._start_delay_s(battery_id)
-        return normal if learned is None else max(normal, learned)
+        if learned is None and driver is not None:
+            learned = driver.start_delay_s
+        least = normal + (driver.start_extra_s if driver is not None else 0.0)
+        return least if learned is None else max(least, learned)
 
-    def _start_delay_s(self, battery_id: str) -> float | None:
-        """Start delay the battery's driver knows for its model."""
-        return next(
-            (b.driver.start_delay_s for b in self._coordinator.batteries if b.subentry_id == battery_id),
-            None,
-        )
+    def _driver(self, battery_id: str) -> BatteryDriver | None:
+        return next((b.driver for b in self._coordinator.batteries if b.subentry_id == battery_id), None)
 
     @property
     def gain(self) -> float:
