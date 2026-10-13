@@ -425,8 +425,9 @@ hourly mean of the grid power (less exact).
 
 **Dynamic tariffs and market prices.** A line can also follow the day-ahead
 market: **spot price (hourly)** or **monthly market price**, each as market price
-× (1 + share in %) + price in ct/kWh, e.g. "spot × 1.05 + 1.2 ct" or
-"monthly market price − 0.5 ct" for the feed-in. Published monthly market
++ share in % of its amount + price in ct/kWh, e.g. "spot + 5 % + 1.2 ct" or
+"monthly market price − 0.5 ct" for the feed-in; a markup in % stays a markup
+at negative market prices. Published monthly market
 prices can be entered per month (e.g. "2026-08: 7.1"); months without a value
 use the mean of the spot prices weighted by your feed-in. If the price
 follows an official monthly value, choose it as the line's **Monthly value**
