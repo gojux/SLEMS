@@ -113,3 +113,17 @@ def test_power_before_the_history_decides_about_a_start() -> None:
     battery.measured_power_w = 20.0
     controller._record_command("a", 800.0, 50.0)
     assert controller._history_base["a"] == 0.0
+
+
+def test_commands_report_starts_and_stops() -> None:
+    from custom_components.slems.controller import RealTimeController
+
+    battery = SimpleNamespace(subentry_id="a", driver=SimpleNamespace(start_delay_s=2.7), measured_power_w=None)
+    coordinator = SimpleNamespace(hass=None, batteries=[battery], settings=SimpleNamespace(control_gain=0.5))
+    controller = RealTimeController(coordinator)
+    # Out of standby (nothing measured before), a correction, a stop and a restart 20 s later.
+    for timestamp, power in ((0.0, 800.0), (1.0, 900.0), (10.0, 0.0), (30.0, -500.0), (31.0, 400.0)):
+        controller._record_command("a", power, timestamp)
+    (counts,) = controller.battery_starts.days["a"].values()
+    # The reversal is no start.
+    assert counts == {"starts": 2, "within_60_s": 1, "within_300_s": 1}

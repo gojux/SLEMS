@@ -224,6 +224,11 @@ def _system(coordinator: SlemsCoordinator) -> dict:
                 battery.name: controller.battery_responses.learned_start(battery.subentry_id)
                 for battery in coordinator.batteries
             },
+            # Starts out of standby per day, and restarts within 60 s / 300 s after a stop.
+            "battery_starts_by_battery": {
+                battery.name: controller.battery_starts.days.get(battery.subentry_id, {})
+                for battery in coordinator.batteries
+            },
             # Times the control expects (learned, else the driver's or the general value).
             "battery_times_in_use_s": {
                 battery.name: {

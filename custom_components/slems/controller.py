@@ -53,9 +53,11 @@ from typing import TYPE_CHECKING
 from homeassistant.const import ATTR_ENTITY_ID, STATE_ON
 from homeassistant.core import CALLBACK_TYPE, State, callback
 from homeassistant.helpers.event import async_call_later
+from homeassistant.util import dt as dt_util
 
 from .adaptive_gain import AdaptiveGain
 from .battery_distribution import LEAVE_RAMP_S
+from .battery_starts import BatteryStarts
 from .delivery_monitor import Action
 from .drivers import BatteryDriverError
 from .const import ControlMode, OperatingMode
@@ -167,6 +169,7 @@ class RealTimeController:
             DEFAULT_BATTERY_RESPONSE_S, label="reversal all batteries"
         )
         self.battery_responses = BatteryResponses(self._battery_name)
+        self.battery_starts = BatteryStarts()
         self.consumer_response: dict[str, DirectionalResponse] = {}
         self.gain_adapter = AdaptiveGain(coordinator.settings.control_gain)
         self.status = ControlStatus.INACTIVE
@@ -574,6 +577,11 @@ class RealTimeController:
         history = self._battery_history.setdefault(battery_id, [])
         if not history:
             self._history_base[battery_id] = self._idle_power(battery_id)
+        previous = latest if latest is not None else self._history_base[battery_id]
+        if previous == 0 and power != 0:
+            self.battery_starts.started(battery_id, now, dt_util.now().date().isoformat())
+        elif previous != 0 and power == 0:
+            self.battery_starts.stopped(battery_id, now)
         history.append((now, power))
         if len(history) > BATTERY_HISTORY:
             self._history_base[battery_id] = history[-BATTERY_HISTORY - 1][1]

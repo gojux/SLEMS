@@ -1724,7 +1724,10 @@ the data stay in `diagnose/` (not committed):
   warm, but the AC/DC difference is about 24 W at these powers, against about
   13 W the Venus needs in standby. A start costs about 2 s × the power of
   grid exchange (below 1 Wh at 1500 W), so keeping batteries warm all the
-  time does not pay off.
+  time does not pay off. Whether a short hold after a stop would, shows
+  `battery_starts_by_battery` in the diagnostics (`battery_starts.py`): starts
+  out of standby per battery and day, and the restarts within 60 s and 300 s
+  after a stop.
 - The battery's own AC power (30006) lags about 1.3–1.5 s behind the grid
   meter (60 % after 2.2–2.5 s for a normal step), although it changes with
   every read: it is unsuitable for response times.
