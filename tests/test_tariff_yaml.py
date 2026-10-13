@@ -155,6 +155,22 @@ def test_zero_when_negative() -> None:
         )
 
 
+def test_max_market_ct() -> None:
+    name, data = parse_yaml(
+        "format: slems-tariff\nversion: 1\nname: Spot\nitems:\n"
+        "  - {name: Energy, side: import, group: energy, unit: spot, price: 1.8, max_market_ct: 60}\n"
+    )
+    assert data["items"][0]["max_market_ct"] == 60.0
+    assert "max_market_ct: 60.0" in export_yaml(name, data)
+    assert parse_yaml(export_yaml(name, data)) == (name, data)
+    # Only for items following the market price.
+    with pytest.raises(TariffYamlError):
+        parse_yaml(
+            "format: slems-tariff\nversion: 1\nname: Fix\nitems:\n"
+            "  - {name: Energy, side: import, group: energy, unit: kwh, price: 12, max_market_ct: 60}\n"
+        )
+
+
 def test_currency_is_kept_and_exported() -> None:
     _, data = parse_yaml(
         "format: slems-tariff\nversion: 1\nname: Swiss\ncurrency: chf\nitems:\n"

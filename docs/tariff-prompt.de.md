@@ -55,6 +55,7 @@ items:
 
 Optionale Felder je Posten:
   factor_pct: 5             # nur spot/market_month: Börsenpreis + 5 % seines Betrags
+  max_market_ct: 60         # nur spot/market_month: Börsenpreis zählt höchstens 60 ct/kWh netto (Preisobergrenze im Vertrag)
   valid_from: 2026-04-01    # Preis gilt ab diesem Tag (ein Posten je Preisstand)
   months: [4, 5, 6, 7, 8, 9]          # nur in diesen Monaten
   weekdays: [mon, tue, wed, thu, fri] # nur an diesen Wochentagen
@@ -74,7 +75,8 @@ Regeln:
 - Bei dynamischen Tarifen: unit spot oder market_month, price ist der
   Aufschlag in ct/kWh (negativ bei einem Abschlag), factor_pct ein
   prozentualer Aufschlag vom Betrag des Marktpreises (auch bei negativem
-  Marktpreis ein Aufschlag).
+  Marktpreis ein Aufschlag). Begrenzt der Vertrag den Marktpreis nach oben,
+  ist max_market_ct diese Grenze in ct/kWh netto.
 - Die Rechnung eines dynamischen Tarifs (Preis je Stunde oder Viertelstunde
   nach der Börse) zeigt nur einen Durchschnittspreis des Zeitraums. Nimm ihn
   nie als festen Preis: Der Energiepreis ist unit spot mit dem Aufschlag aus

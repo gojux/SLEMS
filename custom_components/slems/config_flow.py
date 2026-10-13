@@ -2607,6 +2607,11 @@ class TariffSubentryFlow(ConfigSubentryFlow):
             vol.Optional("market", default=current.get("market") or "own"): _tariff_select(
                 ["own", *REFERENCE_MARKETS], "tariff_market"
             ),
+            _optional("max_market_ct", current): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    step="any", unit_of_measurement=f"{minor}/kWh", mode=selector.NumberSelectorMode.BOX
+                )
+            ),
             vol.Optional("zero_when_negative", default=bool(current.get("zero_when_negative"))): selector.BooleanSelector(),
             _optional("valid_from", current): selector.DateSelector(),
             _optional("valid_to", current): selector.DateSelector(),
@@ -2738,6 +2743,11 @@ def _item_from_input(user_input: dict[str, Any]) -> TariffItem:
         valid_to=date.fromisoformat(user_input["valid_to"]) if user_input.get("valid_to") else None,
         market=None if user_input.get("market") in (None, "own") or user_input["unit"] != Unit.MARKET_MONTH else user_input["market"],
         zero_when_negative=bool(user_input.get("zero_when_negative")),
+        max_market_ct=(
+            float(user_input["max_market_ct"])
+            if user_input.get("max_market_ct") is not None and Unit(user_input["unit"]).dynamic
+            else None
+        ),
     )
 
 
@@ -2790,6 +2800,8 @@ def _describe_item(item: TariffItem, language: str, currency: str = "EUR") -> st
             price += f" {'+' if item.factor_pct > 0 else '−'} {short(abs(item.factor_pct))} %"
         if item.price:
             price += f" {'+' if item.price > 0 else '−'} {short(abs(item.price))} {symbols(currency)[1]}/kWh"
+        if item.max_market_ct is not None:
+            price += " · " + words["max_market_ct"].format(price=f"{short(item.max_market_ct)} {symbols(currency)[1]}/kWh")
     else:
         major, minor = symbols(currency)
         price = f"{short(item.price)} {({Unit.KWH: f'{minor}/kWh', Unit.PERCENT: '%'}).get(item.unit, f'{major}/a')}"
@@ -2813,7 +2825,7 @@ _CHECK_WORDS = {
     "de": {
         Side.IMPORT: "Bezug", Side.EXPORT: "Einspeisung", "computed": "berechnet", "bill": "Rechnung",
         Group.ENERGY: "Energie", Group.GRID: "Netz", Group.LEVIES: "Abgaben", "net": "netto",
-        "months": "Monate", "weekdays": "Wochentage", "zero_when_negative": "0 bei negativem Börsenpreis", "own": "eigene Vorlage", "no_template": "keine", "offer": "Angebot für Vertragsbeginn {month}",
+        "months": "Monate", "weekdays": "Wochentage", "zero_when_negative": "0 bei negativem Börsenpreis", "max_market_ct": "Marktpreis höchstens {price}", "own": "eigene Vorlage", "no_template": "keine", "offer": "Angebot für Vertragsbeginn {month}",
         "new_item": "neu", "unchanged": "unverändert", "dropped": "entfällt",
         "own_changes": "Von dir geändert, wird ebenfalls ersetzt: {names}",
         "update": "Neue Preise ab {date} ({name})", "successor": "Nachfolgetarif {name} ab {date}",
@@ -2828,7 +2840,7 @@ _CHECK_WORDS = {
     "en": {
         Side.IMPORT: "Import", Side.EXPORT: "Export", "computed": "computed", "bill": "bill",
         Group.ENERGY: "energy", Group.GRID: "grid", Group.LEVIES: "levies", "net": "net",
-        "months": "months", "weekdays": "weekdays", "zero_when_negative": "0 at a negative market price", "own": "own template", "no_template": "none", "offer": "offer for contracts starting {month}",
+        "months": "months", "weekdays": "weekdays", "zero_when_negative": "0 at a negative market price", "max_market_ct": "market price at most {price}", "own": "own template", "no_template": "none", "offer": "offer for contracts starting {month}",
         "new_item": "new", "unchanged": "unchanged", "dropped": "dropped",
         "own_changes": "Changed by you, replaced as well: {names}",
         "update": "New prices from {date} ({name})", "successor": "Successor {name} from {date}",

@@ -427,7 +427,8 @@ hourly mean of the grid power (less exact).
 market: **spot price (hourly)** or **monthly market price**, each as market price
 + share in % of its amount + price in ct/kWh, e.g. "spot + 5 % + 1.2 ct" or
 "monthly market price − 0.5 ct" for the feed-in; a markup in % stays a markup
-at negative market prices. Published monthly market
+at negative market prices. **Market price at most** caps the market price
+before the markups (e.g. 60 ct/kWh net at Salzburg AG FlexSpot). Published monthly market
 prices can be entered per month (e.g. "2026-08: 7.1"); months without a value
 use the mean of the spot prices weighted by your feed-in. If the price
 follows an official monthly value, choose it as the line's **Monthly value**

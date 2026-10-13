@@ -221,3 +221,20 @@ def test_a_chosen_option_names_the_tariff(tmp_path: Path) -> None:
     templates = load_templates([("shipped", tmp_path)])
     assert combine(templates)[0] == "Fix"
     assert combine(templates, {templates[0].key: ["Upgrade"]})[0] == "Fix Öko+"
+
+
+def test_a_correction_adding_a_market_price_cap(tmp_path: Path) -> None:
+    folder = tmp_path / "at" / "energy" / "example"
+    folder.mkdir(parents=True)
+    path = folder / "2026-01-01_spot.yaml"
+    spot = "  - {name: Energy, side: import, group: energy, unit: spot, price: 1.8, factor_pct: 3%s}\n"
+    text = level("2026-01-01", 1.0).replace("parts:", "id: at/example/spot\nparts:").replace(
+        "  - {name: Energy, side: import, group: energy, unit: kwh, price: 1.0}\n", spot % ""
+    )
+    path.write_text(text)
+    _, data = combine(load_templates([("shipped", tmp_path)]))
+    path.write_text(text.replace(spot % "", spot % ", max_market_ct: 60"))
+    templates = load_templates([("shipped", tmp_path)])
+    candidates = find_candidates(data, templates)["at/example/spot"]
+    corrected, _ = apply_updates(data, candidates, [], templates)
+    assert next(item for item in corrected["items"] if item["name"] == "Energy")["max_market_ct"] == 60

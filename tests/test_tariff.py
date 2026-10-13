@@ -334,3 +334,10 @@ def test_percent_markup_of_the_amount_stays_a_markup_at_negative_prices() -> Non
     assert item.ct_per_kwh(10.0) == pytest.approx(10.0 + 0.3 + 1.8)
     # Salzburg AG FlexSpot: 3 % of the absolute amount, also at a negative price.
     assert item.ct_per_kwh(-10.0) == pytest.approx(-10.0 + 0.3 + 1.8)
+
+
+def test_market_price_cap_applies_before_the_markups() -> None:
+    item = TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.SPOT, 1.8, factor_pct=3.0, max_market_ct=60.0)
+    assert item.ct_per_kwh(80.0) == pytest.approx(60.0 + 1.8 + 1.8)
+    assert item.ct_per_kwh(10.0) == pytest.approx(10.0 + 0.3 + 1.8)
+    assert TariffItem.from_dict(item.as_dict()) == item

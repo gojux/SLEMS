@@ -443,7 +443,8 @@ Day-Ahead-Markt folgen: **Börsenpreis (stündlich)** oder **Monatsmarktpreis**,
 jeweils als Marktpreis + Aufschlag in % seines Betrags + Preis in ct/kWh, z. B.
 „Börsenpreis + 5 % + 1,2 ct“ oder „Monatsmarktpreis − 0,5 ct“ für die
 Einspeisung; ein Aufschlag in % bleibt auch bei negativem Marktpreis ein
-Aufschlag. Veröffentlichte Monatsmarktpreise lassen sich je Monat eintragen
+Aufschlag. **Börsenpreis höchstens** begrenzt den Marktpreis vor den
+Aufschlägen (z. B. 60 ct/kWh netto bei Salzburg AG FlexSpot). Veröffentlichte Monatsmarktpreise lassen sich je Monat eintragen
 (z. B. „2026-08: 7,1“); Monate ohne Wert nutzen das Mittel der Börsenpreise,
 gewichtet mit deiner Einspeisung. Folgt der Preis einem offiziellen
 Monatswert, wählst du ihn beim Posten als **Monatswert** (Österreich: der

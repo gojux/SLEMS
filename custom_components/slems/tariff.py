@@ -12,7 +12,8 @@ A tariff is a list of items, each as a line of a bill:
   the export, which approximates the market price of PV feed-in); for the
   last two the price is spot + |spot| × ``factor_pct`` / 100 + ``price``
   ct/kWh (the percentage of the amount, as suppliers bill it: a markup stays
-  a markup at a negative price),
+  a markup at a negative price; ``max_market_ct`` caps the market price
+  before, e.g. Salzburg AG FlexSpot at 60 ct/kWh net),
   or ``percent`` (``price`` % of the net amount of the other items of its
   side and group, e.g. a municipal levy of 7 % on the energy),
 * optional time window (months, weekdays, hours ``from`` – ``to`` local time,
@@ -102,6 +103,8 @@ class TariffItem:
     # reference_values, e.g. "at-pv"); None: the day-ahead mean weighted by the feed-in.
     market: str | None = None
     zero_when_negative: bool = False
+    # Dynamic units: the market price counts at most this much (ct/kWh net).
+    max_market_ct: float | None = None
 
     @property
     def specificity(self) -> int:
@@ -141,6 +144,7 @@ class TariffItem:
             "valid_to": self.valid_to.isoformat() if self.valid_to else None,
             "market": self.market,
             "zero_when_negative": self.zero_when_negative,
+            "max_market_ct": self.max_market_ct,
         }
 
     def ct_per_kwh(self, market_ct: float | None, spot_ct: float | None = None) -> float | None:
@@ -151,6 +155,8 @@ class TariffItem:
             return self.price
         if market_ct is None:
             return None
+        if self.max_market_ct is not None:
+            market_ct = min(market_ct, self.max_market_ct)
         return market_ct + abs(market_ct) * self.factor_pct / 100 + self.price
 
     @classmethod
@@ -174,6 +180,7 @@ class TariffItem:
             valid_to=date.fromisoformat(data["valid_to"]) if data.get("valid_to") else None,
             market=data.get("market") or None,
             zero_when_negative=bool(data.get("zero_when_negative")),
+            max_market_ct=None if data.get("max_market_ct") is None else float(data["max_market_ct"]),
         )
 
 

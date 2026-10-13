@@ -53,6 +53,7 @@ items:
 
 Optional fields per item:
   factor_pct: 5             # spot/market_month only: market price + 5 % of its amount
+  max_market_ct: 60         # spot/market_month only: the market price counts at most 60 ct/kWh net (price cap of the contract)
   valid_from: 2026-04-01    # price applies from this day (one item per price level)
   months: [4, 5, 6, 7, 8, 9]          # only in these months
   weekdays: [mon, tue, wed, thu, fri] # only on these weekdays
@@ -72,7 +73,8 @@ Rules:
   them (e.g. a metering fee for the feed-in) are items of their own.
 - Dynamic tariffs: unit spot or market_month, price is the markup in ct/kWh
   (negative for a discount), factor_pct a markup in % of the amount of the
-  market price (a markup also at a negative market price).
+  market price (a markup also at a negative market price). If the contract
+  caps the market price, max_market_ct is that cap in ct/kWh net.
 - The bill of a dynamic tariff (price per hour or quarter hour following the
   exchange) shows only a mean price of the period. Never take it as a fixed
   price: the energy price is unit spot with the markup of the contract

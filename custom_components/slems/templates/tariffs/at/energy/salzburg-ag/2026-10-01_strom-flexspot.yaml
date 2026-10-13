@@ -8,11 +8,11 @@ currency: EUR
 year: 2026
 parts: [energy]
 valid_from: 2026-10-01
-source: "Produktblatt Strom FlexSpot (salzburg-ag.at, Stand Oktober 2026): EXAA-Börsenpreis + 3 % seines Absolutbetrags + 1,80 ct/kWh, Börsenpreis höchstens 60 ct/kWh netto; SLEMS nutzt den Day-Ahead-Preis der Preisquelle und bildet die Obergrenze nicht ab"
+source: "Produktblatt Strom FlexSpot (salzburg-ag.at, Stand Oktober 2026): EXAA-Börsenpreis + 3 % seines Absolutbetrags + 1,80 ct/kWh, Börsenpreis höchstens 60 ct/kWh netto; SLEMS nutzt den Day-Ahead-Preis der Preisquelle"
 suggest: {grid_operator: Salzburg Netz GmbH}
 vat_pct:
   import: {energy: 20, grid: 20, levies: 20}
   export: {energy: 0, grid: 20, levies: 20}
 items:
   - {name: Grundentgelt, side: import, group: energy, unit: year, price: 50.0}
-  - {name: Arbeitspreis, side: import, group: energy, unit: spot, price: 1.8, factor_pct: 3}
+  - {name: Arbeitspreis, side: import, group: energy, unit: spot, price: 1.8, factor_pct: 3, max_market_ct: 60}

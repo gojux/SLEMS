@@ -99,12 +99,12 @@ def _identity(item: Mapping[str, Any]) -> tuple:
 def _values(item: Mapping[str, Any]) -> tuple:
     return (
         item["unit"], float(item["price"]), float(item.get("factor_pct") or 0.0),
-        tuple(sorted((item.get("month_prices") or {}).items())),
+        tuple(sorted((item.get("month_prices") or {}).items())), item.get("max_market_ct"),
     )
 
 
 def _set_values(item: dict[str, Any], source: Mapping[str, Any]) -> None:
-    for key in ("unit", "price", "factor_pct", "month_prices"):
+    for key in ("unit", "price", "factor_pct", "month_prices", "max_market_ct"):
         item[key] = source.get(key)
 
 
