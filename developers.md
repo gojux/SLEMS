@@ -186,6 +186,20 @@ sensors. Inputs:
   available power holds: the controller's `consumer_power_seen`, otherwise
   the measured power; `drawn_power_w`). The nominal power only decides
   whether it is switched on.
+- **Charging within the surplus at the meter** (`limit_charge_to_surplus`):
+  the allocation counts the power of controllable consumers as available, as
+  if they stopped when allotted less. A planned charge (except grid charging)
+  is therefore capped at the export without the batteries, with the
+  consumers as they draw now, minus the charge target: power taken from a
+  consumer reaches the batteries once it really draws less. A consumer that
+  does not follow (a released heat pump finishes its run) no longer lets the
+  batteries charge from the grid; the price is a short export while a
+  consumer that does follow ramps down.
+- **Consumers running at start**: the on/off state of a consumer is the one
+  SLEMS allocated and is not stored. An on/off consumer that draws at least
+  10 % of its nominal power while its state is still unknown (after a start)
+  counts as switched on from then (`RuntimeTracker.adopt_running`), so a run
+  in progress is protected by *avoid cycling* and its minimum runtime.
 - **Disabled batteries** (switch per battery): still read and part of the
   energy balance (their power is treated like an uncontrolled load/source),
   but excluded from the battery group, total SoC, available power, planning
@@ -2037,3 +2051,5 @@ repository (otherwise its *brands* check fails).
 | 2026-10-12 | A self-test that found nothing wrong but could not check everything ends *unclear*, shown as a hint on the battery card instead of the red "conspicuous": the usual cause is a full or empty battery that may only charge or discharge 200 W, which a house changing by a few hundred watts hides, and that is no fault of the battery. A noisy step no longer passes the effect check by chance (the house moving the meter the right way) unless the meter matches the battery's own reported change, and it does not count for the power scale, which averaged a noise-made ratio near 0 with the real 1.0 into a factor of 0.51. |
 | 2026-10-13 | The grid filter averages the grid power minus the battery power the meter shows (what house and PV do on their own) instead of the grid power, and a rise counts only after twice the battery response time (at most 2 s): a recorded oscillation was started by the 0.5–1 s heating pulses of a coffee machine; the batteries' reaction arrived after each pulse had ended, and the old filter kept the pulse and the controller's own correction in its average, so the batteries kept reducing while exporting. A replay of the pulses lowered the extra export from 21.6 to 2.4 Wh per 10 min. Controlled consumers stay in the filtered power: their commands are rare and their own power reports late. |
 | 2026-10-13 | A running on/off consumer takes what it draws from the energy balance instead of its nominal power: a heat pump kept on (avoid cycling) or forced by its daily target was planned with its learned 2860 W while it drew 2130–3190 W (it modulates); the batteries covered the difference the wrong way, feeding about 550 W into the grid or leaving about 330 W to the grid for minutes. Its allocation stays the nominal power, which means "on" for the control. |
+| 2026-10-13 | An on/off consumer found running after a start counts as switched on: after a restart a heat pump in a hot water run counted as off, its power as available; with the charge not secured the batteries took it and charged 1.8 kW from the grid while the heat pump, its release withdrawn, finished its run. |
+| 2026-10-13 | The batteries never charge more than the surplus at the meter with the consumers as they draw now (except planned grid charging), instead of trusting that a consumer allotted less stops at once: a released heat pump finishes its run anyway, and battery support *always* did not help because the allocation saw a surplus, not a deficit. One rule for every way into it (restart, release withdrawn, a device not following) instead of single cases. |

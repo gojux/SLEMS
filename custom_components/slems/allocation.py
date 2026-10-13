@@ -53,6 +53,11 @@ rest goes to the consumers or is fed in now.
 Feeding in from the batteries (optional, see grid_charge): outside a surplus
 the batteries cover the deficit and feed in the planned power on top.
 
+The batteries never charge more than is left at the meter with the consumers
+as they draw now (``limit_charge_to_surplus``, except planned grid charging):
+power allotted away from a consumer reaches them once the consumer really
+draws less.
+
 Battery support (see battery_support): the power of consumers that must not
 draw from the batteries right now (``unsupported``) is left to the grid in a
 deficit; the batteries cover only the rest. Import peak shaving still covers
@@ -541,6 +546,21 @@ def limit_discharge_export(
     # export' = -(grid + planned - current) <= max_export
     lowest = current_w - grid_w - max_export_w
     return min(0.0, max(planned_w, lowest))
+
+
+def limit_charge_to_surplus(planned_w: float, surplus_w: float, charge_grid_target_w: float) -> float:
+    """Reduce a planned charge to what is left at the meter right now.
+
+    ``surplus_w`` is the export without the batteries, with the consumers as
+    they draw now. The allocation counts the power of controllable consumers
+    as available, as if they stopped when allotted less; one that does not
+    (a released heat pump finishes its run) would let the batteries charge
+    from the grid. They get such power once the consumer really draws less.
+    Discharging is not affected.
+    """
+    if planned_w <= 0:
+        return planned_w
+    return min(planned_w, max(0.0, surplus_w - charge_grid_target_w))
 
 
 def remaining_pv_wh(forecast: PvForecast, now: datetime) -> float:

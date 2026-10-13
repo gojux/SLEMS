@@ -5,7 +5,7 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 from custom_components.slems.const import ConsumerType, ControlMode
-from custom_components.slems.consumers import ConsumerConfig, ConsumerState, read_consumer_state
+from custom_components.slems.consumers import ConsumerConfig, ConsumerState, RuntimeTracker, read_consumer_state
 from custom_components.slems.controller import RealTimeController
 
 
@@ -429,3 +429,14 @@ def test_surplus_window_is_kept_once_open_and_releases() -> None:
     # Off: no window.
     assert at(12, current=replace(settings, surplus_window=SurplusWindow.OFF)).mode is TargetMode.SURPLUS
     assert "rod" not in coordinator.surplus_windows
+
+
+def test_consumer_found_running_after_a_start_counts_as_on() -> None:
+    tracker = RuntimeTracker()
+    tracker.adopt_running("pump", 100.0)
+    assert tracker.is_on("pump")
+    assert tracker.on_for("pump", 160.0) == 60.0
+    # A state SLEMS knows is kept: switched off by SLEMS stays off.
+    tracker.update("rod", False, 100.0)
+    tracker.adopt_running("rod", 200.0)
+    assert not tracker.is_on("rod")

@@ -16,6 +16,7 @@ from custom_components.slems.allocation import (
     allocate,
     battery_full,
     expected_surplus_wh,
+    limit_charge_to_surplus,
     limit_discharge_export,
     max_discharge_export_w,
     remaining_pv_wh,
@@ -515,3 +516,16 @@ def test_release_is_planned_like_a_switch() -> None:
     assert result.consumer_power_w["boiler"] == 1500
     result = allocate(1000, battery(100), [release], SETTINGS, expected_surplus_wh=0)
     assert result.consumer_power_w["boiler"] == 0
+
+
+def test_charging_stays_within_the_surplus_at_the_meter() -> None:
+    # After a restart a heat pump drawing 2390 W counted as off: the
+    # allocation gave its power to the batteries, while without the batteries
+    # the meter showed 530 W import. Nothing to charge from.
+    assert limit_charge_to_surplus(1790, -530, 40) == 0
+    # Once it really stops, the surplus is there and the batteries take it.
+    assert limit_charge_to_surplus(1790, 1860, 40) == 1790
+    # A part of it: what is left after the charge target.
+    assert limit_charge_to_surplus(1790, 1000, 40) == 960
+    # Discharging is not limited.
+    assert limit_charge_to_surplus(-800, -530, 40) == -800

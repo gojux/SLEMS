@@ -44,6 +44,7 @@ from .allocation import (
     battery_full,
     drawn_power_w,
     expected_surplus_wh,
+    limit_charge_to_surplus,
     limit_discharge_export,
     max_discharge_export_w,
     remaining_pv_wh,
@@ -103,6 +104,7 @@ from .const import (
 from .controller import ControlStatus, RealTimeController
 from .consumers import (
     AVOID_CYCLING_RUN_S,
+    RUNNING_AT_START_RATIO,
     ConsumerConfig,
     ConsumerState,
     RuntimeTracker,
@@ -2467,6 +2469,17 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self.plan_changes.add(wall_now, price_decision(price_limit_w, grid_charge_w, battery_export_w, charge_cap_w))
 
         surplus_w = self._run_surplus(pv_forecast, consumption, load, wall_now)
+        for consumer in map(self.effective_consumer, self.consumers):
+            state = snapshot.consumers.get(consumer.subentry_id)
+            nominal = consumer.nominal_power_w or 0
+            if (
+                consumer.control_mode.on_off
+                and nominal > 0
+                and snapshot.is_controllable_now(consumer.subentry_id)
+                and state is not None
+                and (state.power_w or 0.0) >= RUNNING_AT_START_RATIO * nominal
+            ):
+                self._runtime.adopt_running(consumer.subentry_id, now)
         # The consumers' power as it is in the energy balance (available power).
         drawing_w = seen_w or {
             subentry_id: state.power_w or 0.0
@@ -2572,6 +2585,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             )
         elif unused_w < 0:
             allocation.battery_power_w += unused_w
+        if allocation.strategy is not Strategy.GRID_CHARGE:
+            allocation.battery_power_w = limit_charge_to_surplus(
+                allocation.battery_power_w,
+                -snapshot.grid_without_batteries_filtered_w,
+                self.grid_target_w(settings, charging=True),
+            )
         if previous_total_w is not None:
             allocation.battery_power_w = previous_total_w + gain * (
                 allocation.battery_power_w - previous_total_w

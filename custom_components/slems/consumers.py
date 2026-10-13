@@ -313,6 +313,14 @@ class RuntimeTracker:
         elif previous is None or previous[0] != is_on:
             self._states[subentry_id] = (is_on, now)
 
+    def adopt_running(self, subentry_id: str, now: float) -> None:
+        """A consumer found running whose state is not known yet (after a
+        start of SLEMS) counts as switched on from now: it is in a run, e.g.
+        a released heat pump charging hot water, that switching it off would
+        not end."""
+        if subentry_id not in self._states:
+            self._states[subentry_id] = (True, now)
+
     def is_on(self, subentry_id: str) -> bool:
         """Switched on by SLEMS (or virtually, in simulation mode)."""
         state = self._states.get(subentry_id)
@@ -331,6 +339,10 @@ class RuntimeTracker:
         state = self._states.get(consumer.subentry_id)
         return state is not None and not state[0] and now - state[1] < consumer.min_off_s
 
+
+# An on/off consumer drawing this share of its nominal power when SLEMS
+# starts is taken as running (see RuntimeTracker.adopt_running).
+RUNNING_AT_START_RATIO = 0.1
 
 # Avoid short runs (consumer option): dips of the surplus bridged at most this
 # long, and the run that must fit into the forecast surplus without a minimum runtime.
