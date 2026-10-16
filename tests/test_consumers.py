@@ -225,6 +225,8 @@ def test_release_is_published_without_a_service_call() -> None:
     controller._low_since = {}
     controller._resting = set()
     controller._saturated_until = {}
+    controller._drawing_since = {}
+    controller._running_on_its_own = set()
     controller.consumer_response = {}
     controller.consumer_grid_response = {}
     controller.battery_response = SimpleNamespace(value=5.0)
@@ -440,3 +442,107 @@ def test_consumer_found_running_after_a_start_counts_as_on() -> None:
     tracker.update("rod", False, 100.0)
     tracker.adopt_running("rod", 200.0)
     assert not tracker.is_on("rod")
+
+
+def running_on_its_own_controller(command: tuple[float, float] | None) -> RealTimeController:
+    controller = RealTimeController.__new__(RealTimeController)
+    controller._consumer_commands = {"rod": command} if command is not None else {}
+    controller._device_commands = {"rod": 0.0}
+    controller._drawing_since = {}
+    controller._running_on_its_own = set()
+    controller._consumer_before = {}
+    controller.consumer_response = {}
+    controller.consumer_grid_response = {}
+    controller.request = lambda: None
+    return controller
+
+
+def drawing(power_w: float | None):
+    return SimpleNamespace(consumers={"rod": ConsumerState(power_w=power_w)})
+
+
+def test_consumer_switched_off_that_keeps_drawing_runs_on_its_own() -> None:
+    # Released heat pump started by hand after its release closed long ago.
+    controller = running_on_its_own_controller((0.0, 0.0))
+    assert not controller._check_running_on_its_own("rod", 0.0, drawing(1200.0), 5000.0)
+    assert not controller._check_running_on_its_own("rod", 0.0, drawing(1200.0), 5009.0)
+    assert controller._check_running_on_its_own("rod", 0.0, drawing(1200.0), 5011.0)
+    assert "rod" in controller.running_on_its_own
+
+
+def test_running_on_its_own_waits_until_switching_off_shows_at_the_meter() -> None:
+    from custom_components.slems.response import DirectionalResponse
+
+    controller = running_on_its_own_controller((0.0, 1000.0))
+    learner = DirectionalResponse(10.0)
+    learner.off.response_s = 60.0
+    controller.consumer_grid_response = {"rod": learner}
+    # Just switched off: still stopping (1.5 x the learned 60 s at the meter).
+    controller._check_running_on_its_own("rod", 0.0, drawing(1200.0), 1000.0)
+    assert not controller._check_running_on_its_own("rod", 0.0, drawing(1200.0), 1080.0)
+    assert controller._check_running_on_its_own("rod", 0.0, drawing(1200.0), 1091.0)
+
+
+def test_no_running_on_its_own_while_commanded_or_drawing_little() -> None:
+    controller = running_on_its_own_controller((2000.0, 0.0))
+    controller._check_running_on_its_own("rod", 2000.0, drawing(1200.0), 5000.0)
+    assert not controller._check_running_on_its_own("rod", 2000.0, drawing(1200.0), 6000.0)
+    controller = running_on_its_own_controller((0.0, 0.0))
+    controller._check_running_on_its_own("rod", 0.0, drawing(50.0), 5000.0)
+    assert not controller._check_running_on_its_own("rod", 0.0, drawing(50.0), 6000.0)
+    # Planned on now: drawing is expected.
+    controller._check_running_on_its_own("rod", 1500.0, drawing(1200.0), 5000.0)
+    assert not controller._check_running_on_its_own("rod", 1500.0, drawing(1200.0), 6000.0)
+    assert not controller.running_on_its_own
+
+
+def test_switch_found_off_without_command_can_run_on_its_own() -> None:
+    controller = running_on_its_own_controller(None)
+    controller._check_running_on_its_own("rod", 0.0, drawing(1200.0), 5000.0)
+    assert controller._check_running_on_its_own("rod", 0.0, drawing(1200.0), 5011.0)
+
+
+def test_consumer_counts_at_most_with_its_command_when_switched_off_or_turned_down() -> None:
+    # Switched off, still stopping or started by hand: house load.
+    controller = running_on_its_own_controller((0.0, 1000.0))
+    controller._consumer_before = {"rod": 1200.0}
+    assert controller.consumer_power_counted("rod", 1200.0) == 0.0
+    controller._consumer_before = {"rod": 0.0}
+    assert controller.consumer_power_counted("rod", 1200.0) == 0.0
+    # Turned down: counted at its command until it draws less.
+    controller = running_on_its_own_controller((1000.0, 1000.0))
+    controller._consumer_before = {"rod": 3000.0}
+    assert controller.consumer_power_counted("rod", 3000.0) == 1000.0
+    assert controller.consumer_power_counted("rod", 800.0) == 800.0
+    # Turned up: as the meter shows it (the start still on its way).
+    controller._consumer_before = {"rod": 500.0}
+    assert controller.consumer_power_counted("rod", 500.0) == 500.0
+    assert controller.consumer_power_counted("rod", 1100.0) == 1100.0
+    # A switch found off gets no command, only its set point.
+    controller = running_on_its_own_controller(None)
+    assert controller.consumer_power_counted("rod", 1200.0) == 0.0
+    controller._device_commands = {}
+    assert controller.consumer_power_counted("rod", 1200.0) == 1200.0
+
+
+def test_running_on_its_own_ends_when_the_consumer_draws_less() -> None:
+    controller = running_on_its_own_controller((0.0, 0.0))
+    controller._running_on_its_own = {"rod"}
+    controller._check_stopped("rod", drawing(1100.0))
+    assert "rod" in controller.running_on_its_own
+    controller._check_stopped("rod", drawing(20.0))
+    assert not controller.running_on_its_own
+
+
+def test_consumer_running_on_its_own_is_not_controllable() -> None:
+    from custom_components.slems.coordinator import SystemSnapshot
+
+    snapshot = SystemSnapshot(
+        consumer_configs={"rod": consumer()},
+        consumers={"rod": ConsumerState(power_w=1200.0)},
+    )
+    assert snapshot.is_controllable_now("rod")
+    assert snapshot.controlled_consumer_power_w() == 1200.0
+    snapshot = replace(snapshot, running_on_its_own=frozenset({"rod"}))
+    assert not snapshot.is_controllable_now("rod")
+    assert snapshot.controlled_consumer_power_w() == 0.0

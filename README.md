@@ -1235,6 +1235,17 @@ the energy flow.
   controlling it instead: during a pause (no power for 2 response times,
   10–60 s) the batteries get its unused power, and as soon as it draws again
   it gets it back (shown as **thermostat pause**).
+- **Switching off and turning down** (no setting): what a consumer draws
+  beyond its command until switching off takes effect counts as house load;
+  the batteries cover it according to its **Battery support** until it really
+  draws less.
+- **Runs on its own** (no setting, observed): a consumer SLEMS switched off
+  (0 W, off or release closed) that keeps drawing 100 W or more runs on its
+  own, e.g. a hot water charge started by hand that a closed release does not
+  end. After 10 s and 1.5 times its response time for switching off (learned
+  at the meter, else at its own sensor, else 10 s) SLEMS plans it like an
+  uncontrolled consumer until it draws less again; then SLEMS controls it
+  again.
 - **Control active** (switch per controllable consumer, also on its card in
   the dashboard): off means SLEMS only measures the consumer. Switching it off
   in operating mode **active** sets it to 0 W (or off) once; afterwards SLEMS
@@ -1503,9 +1514,10 @@ of a running one.
 One card per consumer, collapsed to the important values (measured and
 planned power, progress of the daily target) and expanded with **Show
 settings** (the browser keeps the choice). Measured and planned power,
-blocked/saturated state, the learned response times for switching on and off
-(own sensor and at the meter; switching on includes a start delay of the
-device, e.g. a compressor) and the **Control active** switch.
+blocked/saturated/runs on its own state, the learned response times for
+switching on and off (own sensor and at the meter; switching on includes a
+start delay of the device, e.g. a compressor) and the **Control active**
+switch.
 
 ### Simulation
 

@@ -187,6 +187,7 @@ const STRINGS = {
     saturated: "saturated",
     heldCommand: "held, draws too little",
     resting: "thermostat pause",
+    runningOnItsOwn: "runs on its own",
     controlOff: "control off",
     plannedControlOff: "– (control off)",
     onlyWithControl: "Applies only while the control is active.",
@@ -839,6 +840,7 @@ const STRINGS = {
     saturated: "gesättigt",
     heldCommand: "gehalten, zieht zu wenig",
     resting: "Thermostat-Pause",
+    runningOnItsOwn: "läuft eigenständig",
     controlOff: "Steuerung aus",
     plannedControlOff: "– (Steuerung aus)",
     onlyWithControl: "Wirkt nur bei aktiver Steuerung.",
@@ -4467,6 +4469,7 @@ class SlemsPanel extends HTMLElement {
             attrs.blocked ? t.blocked : "",
             attrs.saturated ? t.saturated : "",
             attrs.resting ? t.resting : "",
+            attrs.running_on_its_own ? t.runningOnItsOwn : "",
             attrs.target_mode === "boost" ? t.targetBoostChip : "",
             attrs.target_mode === "forced" ? t.targetForcedChip : "",
           ]

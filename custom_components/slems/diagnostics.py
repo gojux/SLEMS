@@ -161,6 +161,7 @@ def _system(coordinator: SlemsCoordinator) -> dict:
             "consumers": data.consumers,
             "saturated": data.saturated,
             "resting": data.resting,
+            "running_on_its_own": data.running_on_its_own,
             "control_disabled": data.control_disabled,
             "day_plan": data.day_plan,
             "day_plan_tomorrow": data.day_plan_tomorrow,

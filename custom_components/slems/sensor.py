@@ -1056,7 +1056,7 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             )
         if data.allocation is None:
             return None
-        # Blocked, resting or with control off: nothing assigned.
+        # Blocked, resting, running on its own or with control off: nothing assigned.
         return rounded_state(
             data.allocation.consumer_power_w.get(subentry_id, 0.0), self.suggested_display_precision
         )
@@ -1076,6 +1076,7 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             "blocked": state.blocked if state else None,
             "saturated": self.consumer.subentry_id in data.saturated,
             "resting": self.consumer.subentry_id in data.resting,
+            "running_on_its_own": self.consumer.subentry_id in data.running_on_its_own,
             # Days in a row without power although switched on (daily target only).
             "no_power_days": watch.days if (watch := self.coordinator.no_power.get(subentry_id)) and watch.active else 0,
             # Command until the own sensor / the grid meter shows it, switching

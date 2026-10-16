@@ -39,6 +39,16 @@ Safety:
   it keeps its command and is only *resting* while it draws nothing; the
   batteries get its unused power meanwhile. The controller counts a resting
   consumer at its command, so its restart is no surprise.
+* A consumer switched off or turned down counts in the distributable power
+  at most with its command (``consumer_power_counted``): what it still draws
+  beyond, until switching off shows or for good, is house load the batteries
+  cover according to its battery support.
+* A consumer switched off (0 W, off or a closed release) that still draws
+  ``RUNNING_ON_ITS_OWN_MIN_W`` or more runs on its own, e.g. started by hand
+  or in a run that a closed release does not end. Once it drew that for
+  ``RUNNING_ON_ITS_OWN_S`` and for ``RUNNING_ON_ITS_OWN_STOP_FACTOR`` times
+  the time switching it off takes, it is planned like an uncontrolled load
+  until it draws less again.
 """
 
 from __future__ import annotations
@@ -102,6 +112,11 @@ SATURATION_DELAY_RANGE_S = (30.0, 600.0)
 # Resting after this many consumer response times without power (bounded).
 RESTING_RESPONSE_FACTOR = 2
 RESTING_DELAY_RANGE_S = (10.0, 60.0)
+# A consumer switched off that draws this much for this long, and for this
+# many times the time switching it off takes, runs on its own.
+RUNNING_ON_ITS_OWN_MIN_W = 100.0
+RUNNING_ON_ITS_OWN_S = 10.0
+RUNNING_ON_ITS_OWN_STOP_FACTOR = 1.5
 RAMP_STEP_S = 1.0
 # Measured battery power replaces the command only beyond this deviation.
 MISMATCH_MIN_W = 200.0
@@ -160,6 +175,10 @@ class RealTimeController:
         # and the ones resting right now.
         self._low_since: dict[str, float] = {}
         self._resting: set[str] = set()
+        # Consumers switched off: since when they draw power, and the ones
+        # running on their own right now.
+        self._drawing_since: dict[str, float] = {}
+        self._running_on_its_own: set[str] = set()
         self._last_grid_w: float | None = None
         self.meter = MeterCadence()
         self.battery_response = StepResponse(DEFAULT_BATTERY_RESPONSE_S, label="step all batteries")
@@ -320,11 +339,29 @@ class RealTimeController:
             sensor.value(on) if sensor else DEFAULT_CONSUMER_RESPONSE_S,
         )
 
+    def consumer_power_counted(self, subentry_id: str, seen_w: float) -> float:
+        """Power of a consumer that counts as distributable: at most its command
+        while it is switched off or turned down. What it draws beyond (still
+        stopping, started by hand) is house load."""
+        command = self._consumer_commands.get(subentry_id)
+        # A switch found in the wanted state gets no command, only its set point.
+        target = command[0] if command is not None else self._device_commands.get(subentry_id)
+        if target is None:
+            return seen_w
+        before = self._consumer_before.get(subentry_id) if command is not None else None
+        if target <= 0 or (before is not None and target < before):
+            return min(seen_w, max(0.0, target))
+        return seen_w
+
     # --- scheduling -----------------------------------------------------------
 
     @property
     def resting(self) -> frozenset[str]:
         return frozenset(self._resting)
+
+    @property
+    def running_on_its_own(self) -> frozenset[str]:
+        return frozenset(self._running_on_its_own)
 
     @property
     def saturated(self) -> frozenset[str]:
@@ -452,6 +489,8 @@ class RealTimeController:
     async def _async_cycle(self) -> None:
         if not self._active:
             self.status = ControlStatus.INACTIVE
+            self._drawing_since.clear()
+            self._running_on_its_own.clear()
             return
         coordinator = self._coordinator
         if self._grid_stale():
@@ -750,6 +789,8 @@ class RealTimeController:
             if target is None or not snapshot.is_controllable_now(subentry_id):
                 self._low_since.pop(subentry_id, None)
                 self._resting.discard(subentry_id)
+                self._drawing_since.pop(subentry_id, None)
+                self._check_stopped(subentry_id, snapshot)
                 if subentry_id not in snapshot.saturated:
                     # Blocked or no longer controlled: its set point is not ours.
                     self._device_commands.pop(subentry_id, None)
@@ -760,6 +801,8 @@ class RealTimeController:
                 self._check_resting(subentry_id, snapshot, now)
             else:
                 self._check_saturation(subentry_id, snapshot, now)
+            if self._check_running_on_its_own(subentry_id, target, snapshot, now):
+                continue
             previous = self._consumer_commands.get(subentry_id)
             if previous is not None and now - previous[1] < CONSUMER_COMMAND_INTERVAL_S:
                 continue
@@ -951,6 +994,44 @@ class RealTimeController:
             if subentry_id not in self._resting:
                 _LOGGER.debug("Consumer %s rests (thermostat)", subentry_id)
             self._resting.add(subentry_id)
+
+    def _check_running_on_its_own(
+        self, subentry_id: str, target: float, snapshot: SystemSnapshot, now: float
+    ) -> bool:
+        """Mark a consumer switched off that keeps drawing power as running on its own."""
+        measured = snapshot.consumers[subentry_id].power_w
+        previous = self._consumer_commands.get(subentry_id)
+        # A switch found in the wanted state gets no command, only its set point.
+        commanded, since = previous if previous is not None else (self._device_commands.get(subentry_id), 0.0)
+        if target > 0 or commanded is None or commanded > 0 or measured is None or measured < RUNNING_ON_ITS_OWN_MIN_W:
+            self._drawing_since.pop(subentry_id, None)
+            return False
+        drawing_since = self._drawing_since.setdefault(subentry_id, now)
+        stop_s = self.consumer_grid_response_s(subentry_id, on=False)
+        if stop_s is None:
+            stop_s = self.consumer_response_s(subentry_id, on=False)
+        if stop_s is None:
+            stop_s = DEFAULT_CONSUMER_RESPONSE_S
+        if (
+            now - drawing_since < RUNNING_ON_ITS_OWN_S
+            or now - since < RUNNING_ON_ITS_OWN_STOP_FACTOR * stop_s
+        ):
+            return False
+        _LOGGER.debug("Consumer %s runs on its own (draws %.0f W although off)", subentry_id, measured)
+        self._drawing_since.pop(subentry_id, None)
+        self._running_on_its_own.add(subentry_id)
+        self.request()
+        return True
+
+    def _check_stopped(self, subentry_id: str, snapshot: SystemSnapshot) -> None:
+        """Control a consumer running on its own again once it draws less."""
+        if subentry_id not in self._running_on_its_own:
+            return
+        measured = snapshot.consumers[subentry_id].power_w
+        if measured is None or measured < RUNNING_ON_ITS_OWN_MIN_W:
+            _LOGGER.debug("Consumer %s no longer runs on its own", subentry_id)
+            self._running_on_its_own.discard(subentry_id)
+            self.request()
 
     def end_saturation(self, subentry_id: str) -> None:
         """Control a saturated consumer again with the next cycle."""

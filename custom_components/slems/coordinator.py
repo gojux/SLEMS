@@ -561,6 +561,9 @@ class SystemSnapshot:
     # Consumers with a cycling thermostat that draw nothing right now; they
     # keep their command, the batteries get their unused power.
     resting: frozenset[str] = frozenset()
+    # Consumers switched off that run on their own (started by hand, a run a
+    # closed release does not end); treated like uncontrolled loads meanwhile.
+    running_on_its_own: frozenset[str] = frozenset()
     # Consumers whose control the user switched off (measured only).
     control_disabled: frozenset[str] = frozenset()
     # Import limit of peak shaving in effect (fixed or automatic), None when off.
@@ -635,6 +638,7 @@ class SystemSnapshot:
             and config.included_in_meter
             and not state.blocked
             and subentry_id not in self.saturated
+            and subentry_id not in self.running_on_its_own
             and subentry_id not in self.control_disabled
         )
 
@@ -1752,6 +1756,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._learn_morning_gap(snapshot, now)
         snapshot.saturated = self.controller.saturated
         snapshot.resting = self.controller.resting
+        snapshot.running_on_its_own = self.controller.running_on_its_own
         self.controller.observe_consumers(snapshot)
         mode = self.settings.operating_mode
         if mode is OperatingMode.ACTIVE and self.data is not None:
@@ -2388,14 +2393,18 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             return
         controlled_w = measured_controlled_w = snapshot.controlled_consumer_power_w()
         seen_w: dict[str, float] = {}
+        beyond_w: dict[str, float] = {}
         if previous_total_w is not None:
             # Controller cycle: the consumers as the grid meter shows them, like
-            # the batteries (commands still on their way count as not yet done).
-            seen_w = {
-                subentry_id: self.controller.consumer_power_seen(subentry_id, state.power_w, now)
-                for subentry_id, state in snapshot.consumers.items()
-                if snapshot.is_controllable_now(subentry_id)
-            }
+            # the batteries (commands still on their way count as not yet done),
+            # at most with their command while switched off or turned down: the
+            # rest is house load until they really draw less.
+            for subentry_id, state in snapshot.consumers.items():
+                if not snapshot.is_controllable_now(subentry_id):
+                    continue
+                seen = self.controller.consumer_power_seen(subentry_id, state.power_w, now)
+                seen_w[subentry_id] = self.controller.consumer_power_counted(subentry_id, seen)
+                beyond_w[subentry_id] = seen - seen_w[subentry_id]
             controlled_w = sum(seen_w.values())
         enabled_battery_w = sum(
             power
@@ -2540,7 +2549,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if cap is not None
             else None
         )
-        unsupported_measured_w = self._update_unsupported(snapshot)
+        unsupported_measured_w = self._update_unsupported(snapshot, beyond_w)
         allocation = allocate(
             snapshot.available_power_w,
             battery,
@@ -2982,11 +2991,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         phases = active_phases(self.hass, consumer)
         return amps_for(power_w, consumer.voltage_v, phases), phases
 
-    def _update_unsupported(self, snapshot: SystemSnapshot) -> float:
+    def _update_unsupported(self, snapshot: SystemSnapshot, beyond_w: Mapping[str, float]) -> float:
         """Consumers the batteries must not cover right now (see battery_support).
 
         Sets ``unsupported`` and returns the measured power of those SLEMS does
-        not control right now (blocked, control off or measured only).
+        not control right now (blocked, control off, measured only or running
+        on its own), and what those it controls draw beyond their command
+        (``beyond_w``, see controller.consumer_power_counted).
         """
         unsupported: set[str] = set()
         measured_w = 0.0
@@ -3009,6 +3020,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if not snapshot.is_controllable_now(subentry_id):
                 measured = snapshot.consumers.get(subentry_id)
                 measured_w += max(0.0, (measured.power_w or 0.0) if measured else 0.0)
+            else:
+                measured_w += max(0.0, beyond_w.get(subentry_id, 0.0))
         self.unsupported = frozenset(unsupported)
         return measured_w
 
@@ -4213,6 +4226,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             },
             saturated=saturated,
             resting=self.controller.resting,
+            running_on_its_own=self.controller.running_on_its_own,
             control_disabled=frozenset(self.consumer_control_disabled),
             allocation=None,
             distribution=None,

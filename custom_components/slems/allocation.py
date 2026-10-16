@@ -2,7 +2,9 @@
 
 ``available_w`` is the power SLEMS can distribute: the (filtered) grid export
 plus the power currently drawn by everything SLEMS controls (batteries and
-unblocked controllable consumers). Positive = surplus, negative = deficit.
+unblocked controllable consumers; a consumer switched off or turned down at
+most with its command, what it draws beyond is house load). Positive =
+surplus, negative = deficit.
 
 Consumers that must keep running (minimum runtime) keep their power first.
 Running on/off consumers keep their power before power controlled consumers
@@ -279,7 +281,8 @@ def allocate(
 
     ``unsupported`` are controllable consumers whose planned power the
     batteries must not cover, ``unsupported_measured_w`` the measured power of
-    such consumers that SLEMS does not control right now.
+    such consumers that SLEMS does not control right now and what the
+    controlled ones draw beyond their command.
     """
     ordered = sorted(consumers, key=lambda c: (c.priority, c.subentry_id))
     consumer_power = {c.subentry_id: 0.0 for c in ordered}

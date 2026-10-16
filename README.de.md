@@ -1311,6 +1311,18 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
   Leistung für 2 Reaktionszeiten, 10–60 s) bekommen die Batterien seine nicht
   genutzte Leistung, und sobald er wieder abnimmt, bekommt er sie zurück
   (angezeigt als **Thermostat-Pause**).
+- **Ausschalten und Herunterregeln** (keine Einstellung): Was ein Verbraucher
+  über seine Vorgabe hinaus abnimmt, bis das Ausschalten wirkt, zählt als
+  Hausverbrauch; die Batterien decken es nach seiner
+  **Batterie-Unterstützung**, bis er wirklich weniger abnimmt.
+- **Läuft eigenständig** (keine Einstellung, beobachtet): Ein Verbraucher, den
+  SLEMS ausgeschaltet hat (0 W, aus oder Freigabe geschlossen), der aber
+  weiter mindestens 100 W abnimmt, läuft eigenständig, z. B. eine von Hand
+  gestartete Warmwasser-Ladung, die eine geschlossene Freigabe nicht beendet.
+  Nach 10 s und dem 1,5-Fachen seiner Reaktionszeit beim Ausschalten (am
+  Zähler gelernt, sonst am eigenen Sensor, sonst 10 s) plant SLEMS ihn wie
+  einen nicht gesteuerten Verbraucher, bis er wieder weniger abnimmt; dann
+  steuert SLEMS ihn wieder.
 - **Steuerung aktiv** (Schalter je steuerbarem Verbraucher, auch auf seiner
   Karte im Dashboard): aus bedeutet, SLEMS misst den Verbraucher nur. Beim
   Ausschalten im Betriebsmodus **Aktiv** setzt SLEMS ihn einmal auf 0 W (bzw.
@@ -1597,10 +1609,10 @@ Zellausgleich und die Phase eines laufenden Ausgleichs.
 Eine Karte je Verbraucher, zugeklappt mit den wichtigen Werten (gemessene und
 geplante Leistung, Fortschritt des Tagesziels), aufgeklappt über
 **Einstellungen anzeigen** (der Browser merkt sich die Auswahl). Gemessene und
-geplante Leistung, gesperrt/gesättigt, die gelernten Reaktionszeiten beim Ein-
-und Ausschalten (eigener Sensor und am Zähler; das Einschalten enthält eine
-Anlaufverzögerung des Geräts, z. B. eines Kompressors) und der Schalter
-**Steuerung aktiv**.
+geplante Leistung, gesperrt/gesättigt/läuft eigenständig, die gelernten
+Reaktionszeiten beim Ein- und Ausschalten (eigener Sensor und am Zähler; das
+Einschalten enthält eine Anlaufverzögerung des Geräts, z. B. eines
+Kompressors) und der Schalter **Steuerung aktiv**.
 
 ### Simulation
 
