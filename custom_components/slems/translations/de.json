@@ -227,6 +227,7 @@
             "soc_entity": "Ladezustand",
             "power_entity": "Batterieleistung",
             "power_inverted": "Vorzeichen der Leistung umkehren",
+            "own_pv": "Eigene PV-Module an der Batterie",
             "battery_control": "Steuerung",
             "battery_temperature_entity": "Batterietemperatur",
             "max_cell_voltage_entity": "Höchste Zellspannung",
@@ -235,12 +236,41 @@
             "discharged_energy_entity": "Insgesamt entladene Energie"
           },
           "data_description": {
-            "power_entity": "Pflicht, wenn SLEMS die Batterie steuert: sie geht in die für die Regelung verfügbare Leistung ein.",
+            "power_entity": "Pflicht, wenn SLEMS die Batterie steuert: sie geht in die für die Regelung verfügbare Leistung ein. Mit **Eigene PV-Module an der Batterie** optional: SLEMS nimmt eigene PV − Ausgang.",
             "power_inverted": "SLEMS erwartet positiv = Laden. Aktivieren, wenn der Sensor Entladen positiv meldet.",
-            "battery_control": "Sollwert: eine Number-Entität mit der Leistung mit Vorzeichen. Getrennt: je eine Number für Laden und Entladen, optional eine Modus-Auswahl. Skript: ein Skript erhält die Leistung als Variable power_w (+Laden / -Entladen).",
+            "own_pv": "Aktivieren für eine Batterie, deren PV-Module nur über den Ausgang der Batterie ins Haus liefern (Balkonspeicher wie Marstek B2500 oder Zendure SolarFlow, Hybrid-Wechselrichter). Ihre Erzeugung zählt als PV; trag sie nicht zusätzlich als PV-Anlage ein.",
+            "battery_control": "Sollwert: eine Number-Entität mit der Leistung mit Vorzeichen. Getrennt: je eine Number für Laden und Entladen, optional eine Modus-Auswahl. Skript: ein Skript erhält die Leistung als Variable power_w (+Laden / -Entladen). Ausgang: eine Number mit dem Ausgang ins Haus, nur mit **Eigene PV-Module an der Batterie**.",
             "battery_temperature_entity": "Optional: ermöglicht die Ladebegrenzung nach Temperatur.",
             "max_cell_voltage_entity": "Optional, zusammen mit der niedrigsten Zellspannung: sanftes Laden nahe voll, Zell-Delta und Zellausgleich (LFP-Zellen).",
             "charged_energy_entity": "Optional, zusammen mit der entladenen Energie: Wirkungsgrad aus den Batteriezählern."
+          }
+        },
+        "ha_own_pv": {
+          "title": "Eigene PV-Module",
+          "description": "SLEMS zählt die Module als PV und die Batterieleistung als eigene PV − Ausgang. Ohne Sonne kann die Batterie nicht laden (kein Laden aus dem Netz); sie entlädt höchstens den höchsten Ausgang abzüglich der eigenen PV.",
+          "data": {
+            "own_pv_entity": "Leistung der eigenen PV-Module",
+            "output_entity": "Ausgang ins Haus",
+            "max_output_w": "Höchster Ausgang",
+            "remove_from_pv": "Bei den PV-Anlagen entfernen"
+          },
+          "data_description": {
+            "own_pv_entity": "Leistung der Module an den PV-Eingängen der Batterie (DC, z. B. „Total Input“).",
+            "output_entity": "Leistung, die die Einheit ins Haus liefert (AC, positiv beim Liefern).",
+            "max_output_w": "Grenze des Wechselrichters am Ausgang, z. B. 800 W; eigene PV und Entladen teilen sie sich.",
+            "remove_from_pv": "Beim Speichern entfernt SLEMS sie aus den PV-Anlagen der Systemeinstellungen."
+          }
+        },
+        "ha_output": {
+          "title": "Steuerung über den Ausgang",
+          "description": "SLEMS rechnet die Batterieleistung in einen Ausgang um: Ausgang = eigene PV − Ladeleistung, zwischen 0 und dem höchsten Ausgang. Mit dem Zustand bei Freigabe **Standby** bleibt der Ausgang bei 0 W: die Batterie lädt nur aus ihren Modulen.",
+          "data": {
+            "output_setpoint_entity": "Ausgang (Number, W)",
+            "remote_entity": "Fernsteuerung (optional)"
+          },
+          "data_description": {
+            "output_setpoint_entity": "Number-Entität mit dem Ausgang ins Haus. Das Gerät darf sie nicht dauerhaft speichern (Flash-Verschleiß bei häufigen Vorgaben).",
+            "remote_entity": "Schalter oder Auswahl, die die Batterie unter externe Steuerung stellt. SLEMS schaltet sie vor der ersten Vorgabe ein und bei der Freigabe an die **Automatik** wieder aus."
           }
         },
         "ha_setpoint": {
@@ -320,9 +350,11 @@
       },
       "error": {
         "cannot_connect": "Keine Verbindung zur Batterie möglich.",
+        "no_auto_release": "Automatik braucht eine Fernsteuerungs-Entität, eine Modus-Option für Automatik oder ein Freigabe-Skript; sonst Standby wählen.",
         "none_found": "Im Netz wurde keine Marstek Venus gefunden. Adresse von Hand eingeben (siehe README: IP-Adresse finden); andere Integrationen, die die Batterie verwenden, vorher stoppen.",
-        "power_required": "SLEMS braucht die Batterieleistung, um die Batterie zu steuern.",
-        "no_auto_release": "Automatik braucht eine Fernsteuerungs-Entität, eine Modus-Option für Automatik oder ein Freigabe-Skript; sonst Standby wählen."
+        "output_needs_own_pv": "**Ausgang** braucht **Eigene PV-Module an der Batterie**.",
+        "own_pv_counted_twice": "Diese Entitäten sind auch als PV-Anlagen eingetragen: {pv_systems}. Ihre Erzeugung würde doppelt zählen. Wähle **Bei den PV-Anlagen entfernen** aus oder andere Entitäten.",
+        "power_required": "SLEMS braucht die Batterieleistung, um die Batterie zu steuern."
       },
       "abort": {
         "reconfigure_successful": "Batterie aktualisiert."
@@ -677,7 +709,8 @@
         "none": "Nur lesen",
         "setpoint": "Sollwert (eine Number)",
         "split": "Getrennte Lade- und Entladeleistung",
-        "script": "Skript"
+        "script": "Skript",
+        "output": "Ausgang (eigene PV-Module)"
       }
     },
     "release_state": {
@@ -900,6 +933,12 @@
       },
       "ac_power": {
         "name": "AC-Leistung"
+      },
+      "own_pv_power": {
+        "name": "Leistung eigene PV"
+      },
+      "output_power": {
+        "name": "Ausgangsleistung"
       },
       "battery_voltage": {
         "name": "Batteriespannung"

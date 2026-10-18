@@ -630,6 +630,8 @@ BATTERY_EXTRA_SENSORS: tuple[BatterySensorDescription, ...] = (
         # Assistant energy dashboard for battery power.
         value_fn=lambda t: -t.ac_power_w if t.ac_power_w is not None else None,
     ),
+    BatterySensorDescription(**_power("own_pv_power"), value_fn=lambda t: t.pv_w),
+    BatterySensorDescription(**_power("output_power"), value_fn=lambda t: t.output_w),
     BatterySensorDescription(
         key="battery_voltage",
         translation_key="battery_voltage",

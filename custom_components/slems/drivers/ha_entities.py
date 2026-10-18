@@ -8,7 +8,14 @@ controlled through the entities of the battery's own integration:
   optionally inverted),
 * ``split``: one number for charging and one for discharging, optionally a
   mode select (charge / discharge / standby / automatic),
-* ``script``: a script receives the signed power as variable ``power_w``.
+* ``script``: a script receives the signed power as variable ``power_w``,
+* ``output``: one number with the output power of a battery with its own PV
+  modules; the battery power becomes output = own PV − power, within 0 and
+  the highest output.
+
+With own PV modules the driver reads their power and the output (both
+required; without them the unit cannot be balanced) and reports the AC power
+as own PV − output.
 
 An optional remote control entity (switch or select) is switched on before the
 first set point and off again when the battery is released to its automatic.
@@ -56,6 +63,11 @@ from ..const import (
     CONF_MODE_DISCHARGE,
     CONF_MODE_ENTITY,
     CONF_MODE_STANDBY,
+    CONF_MAX_OUTPUT_W,
+    CONF_OUTPUT_ENTITY,
+    CONF_OUTPUT_SETPOINT_ENTITY,
+    CONF_OWN_PV,
+    CONF_OWN_PV_ENTITY,
     CONF_POWER_ENTITY,
     CONF_POWER_INVERTED,
     CONF_POWER_SCRIPT,
@@ -121,6 +133,11 @@ class EntityBatteryConfig:
     min_command_interval_s: float = 0.0
     keepalive_s: float | None = None
     extra_entities: Mapping[str, str] | None = None
+    own_pv: bool = False
+    own_pv_entity_id: str | None = None
+    output_entity_id: str | None = None
+    output_setpoint_entity_id: str | None = None
+    max_output_w: int | None = None
 
     @classmethod
     def from_data(cls, data: Mapping[str, Any]) -> EntityBatteryConfig:
@@ -155,6 +172,11 @@ class EntityBatteryConfig:
                 for key, conf in EXTRA_ENTITIES.items()
                 if (entity_id := data.get(conf))
             },
+            own_pv=bool(data.get(CONF_OWN_PV, False)),
+            own_pv_entity_id=data.get(CONF_OWN_PV_ENTITY),
+            output_entity_id=data.get(CONF_OUTPUT_ENTITY),
+            output_setpoint_entity_id=data.get(CONF_OUTPUT_SETPOINT_ENTITY),
+            max_output_w=int(data[CONF_MAX_OUTPUT_W]) if data.get(CONF_MAX_OUTPUT_W) else None,
         )
 
     @property
@@ -178,6 +200,10 @@ class HomeAssistantEntityDriver(BatteryDriver):
             max_charge_power_w=config.max_charge_power_w,
             max_discharge_power_w=config.max_discharge_power_w,
             controllable=config.control is not BatteryControl.NONE,
+            own_pv=config.own_pv,
+            # Charging from the grid needs an input entity, not supported yet.
+            ac_charge=not config.own_pv,
+            max_output_w=config.max_output_w if config.own_pv else None,
         )
         # Last value written per entity; unchanged values are not written again.
         self._written: dict[str, Any] = {}
@@ -198,7 +224,10 @@ class HomeAssistantEntityDriver(BatteryDriver):
 
     @property
     def extra_telemetry_keys(self) -> frozenset[str]:
-        return frozenset(self._config.extra_entities or {})
+        keys = frozenset(self._config.extra_entities or {})
+        if self._config.own_pv:
+            keys |= {"ac_power", "own_pv_power", "output_power"}
+        return keys
 
     @property
     def min_command_interval_s(self) -> float:
@@ -229,7 +258,29 @@ class HomeAssistantEntityDriver(BatteryDriver):
             value = _extra_value(key, self._hass.states.get(entity_id))
             if value is not None:
                 extra[key] = value
-        return BatteryTelemetry(soc_pct=soc, power_w=power, extra=extra)
+        if not config.own_pv:
+            return BatteryTelemetry(soc_pct=soc, power_w=power, extra=extra)
+        pv = self._own_pv_w()
+        output = state_as_watts(self._hass.states.get(config.output_entity_id)) if config.output_entity_id else None
+        if output is None:
+            raise BatteryDriverError(f"{config.output_entity_id} is unavailable")
+        ac_power = pv - output
+        return BatteryTelemetry(
+            soc_pct=soc,
+            power_w=power if power is not None else ac_power,
+            ac_power_w=ac_power,
+            pv_w=pv,
+            output_w=output,
+            extra=extra,
+        )
+
+    def _own_pv_w(self) -> float:
+        """Power of the own PV modules (W, >= 0)."""
+        entity_id = self._config.own_pv_entity_id
+        pv = state_as_watts(self._hass.states.get(entity_id)) if entity_id else None
+        if pv is None:
+            raise BatteryDriverError(f"{entity_id} is unavailable")
+        return max(0.0, pv)
 
     async def apply_power(self, net_power_w: int, *, refresh: bool = False) -> bool:
         config = self._config
@@ -243,7 +294,9 @@ class HomeAssistantEntityDriver(BatteryDriver):
                 await self._run_script(config.power_script, power)
                 return True
             await self._remote(on=True, refresh=refresh)
-            if config.control is BatteryControl.SETPOINT:
+            if config.control is BatteryControl.OUTPUT:
+                await self._set_watts(config.output_setpoint_entity_id, self._output_w(power), refresh)
+            elif config.control is BatteryControl.SETPOINT:
                 value = -power if config.setpoint_inverted else power
                 await self._set_watts(config.setpoint_entity_id, value, refresh)
             else:
@@ -253,6 +306,13 @@ class HomeAssistantEntityDriver(BatteryDriver):
             self._written.clear()
             return False
         return True
+
+    def _output_w(self, power: int) -> int:
+        """Output that makes the battery charge ``power`` from the current own PV."""
+        output = self._own_pv_w() - power
+        if self._config.max_output_w is not None:
+            output = min(output, self._config.max_output_w)
+        return round(max(0.0, output))
 
     async def _apply_split(self, power: int, refresh: bool) -> None:
         config = self._config
@@ -292,6 +352,10 @@ class HomeAssistantEntityDriver(BatteryDriver):
                 return
             if config.control is BatteryControl.SETPOINT:
                 await self._set_watts(config.setpoint_entity_id, 0, True)
+            elif config.control is BatteryControl.OUTPUT:
+                # No output follows the sun; without output the battery
+                # charges from its modules only and keeps its energy.
+                await self._set_watts(config.output_setpoint_entity_id, 0, True)
             else:
                 await self._apply_split(0, True)
                 if auto and config.mode_entity_id and config.mode_auto:

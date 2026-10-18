@@ -101,6 +101,7 @@ def _unread_battery(
         ),
         measured_power_w=-800.0,
         measured_at=100.0,
+        measured_pv_w=None,
         leaving_until=None,
         release_pending_since=None,
     )
@@ -391,3 +392,50 @@ def test_release_leaves_a_paused_battery_alone() -> None:
     battery.communication_paused = False
     assert asyncio.run(coordinator.async_release_battery(battery)) is True
     assert released == [True]
+
+
+def test_battery_with_own_pv_counts_its_modules_as_pv() -> None:
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    coordinator = SimpleNamespace(_pv_power_w=lambda: 2000.0)
+    snapshot = SystemSnapshot(
+        grid_power_w=-300,
+        batteries={
+            # 600 W from the modules, 200 W into the house: charging 400 W.
+            "plug_in": BatteryTelemetry(soc_pct=50, power_w=400, ac_power_w=400, pv_w=600, output_w=200),
+            "venus": BatteryTelemetry(soc_pct=50, power_w=1000),
+        },
+    )
+    SlemsCoordinator._set_pv_power(coordinator, snapshot)
+    assert snapshot.pv_power_w == 2600
+    assert snapshot.own_pv_power_w == 600
+    # house = grid + other PV + output - other batteries
+    assert snapshot.house_power_w == -300 + 2000 + 200 - 1000
+    assert snapshot.batteries["plug_in"].connection_power_w == -200
+    assert snapshot.batteries["venus"].connection_power_w == 1000
+
+
+def test_pv_unknown_without_pv_systems_and_own_pv() -> None:
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    snapshot = SystemSnapshot(batteries={"venus": BatteryTelemetry(soc_pct=50, power_w=0)})
+    SlemsCoordinator._set_pv_power(SimpleNamespace(_pv_power_w=lambda: None), snapshot)
+    assert snapshot.pv_power_w is None
+    snapshot.batteries["plug_in"] = BatteryTelemetry(soc_pct=50, ac_power_w=0, pv_w=0, output_w=0)
+    SlemsCoordinator._set_pv_power(SimpleNamespace(_pv_power_w=lambda: None), snapshot)
+    assert snapshot.pv_power_w == 0
+
+
+def test_unread_battery_with_own_pv_keeps_only_its_output() -> None:
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    battery = _unread_battery("plug_in")
+    # Last read: 600 W PV, 200 W output (charging 400 W).
+    battery.measured_power_w, battery.measured_pv_w = 400.0, 600.0
+    snapshot = SystemSnapshot(grid_power_w=100, pv_power_w=0)
+    snapshot.unread_battery_power_w = SlemsCoordinator._unread_battery_power_w(
+        _unread_coordinator(battery), snapshot, 100
+    )
+    # Its PV is missing from the PV sum, so only the output counts.
+    assert snapshot.unread_battery_power_w == -200
+    assert snapshot.house_power_w == 300

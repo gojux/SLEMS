@@ -236,3 +236,61 @@ def test_automatic_release_needs_a_way_back() -> None:
     assert EntityBatteryConfig.from_data(
         {**base, "battery_control": "split", "mode_entity": "select.mode", "mode_auto": "Auto"}
     ).can_release_to_auto
+
+
+def plug_in(fake: FakeHass, **options) -> HomeAssistantEntityDriver:
+    """Plug-in battery with own PV modules, 800 W output, no battery power sensor."""
+    fake._states.update(
+        {
+            entity_id: SimpleNamespace(entity_id=entity_id, state=state, attributes=attributes)
+            for entity_id, (state, attributes) in {
+                "sensor.pv": ("600", {"unit_of_measurement": "W"}),
+                "sensor.output": ("0.2", {"unit_of_measurement": "kW"}),
+                "number.output": ("0", {"min": 0, "max": 800, "step": 1, "unit_of_measurement": "W"}),
+            }.items()
+        }
+    )
+    config = EntityBatteryConfig(
+        soc_entity_id="sensor.soc",
+        capacity_wh=2240,
+        max_charge_power_w=1800,
+        max_discharge_power_w=800,
+        own_pv=True,
+        own_pv_entity_id="sensor.pv",
+        output_entity_id="sensor.output",
+        max_output_w=800,
+        **options,
+    )
+    return HomeAssistantEntityDriver(fake, config)
+
+
+async def test_own_pv_telemetry_is_pv_minus_output() -> None:
+    fake = hass()
+    battery = plug_in(fake)
+    assert battery.capabilities.own_pv and not battery.capabilities.ac_charge
+    assert battery.capabilities.max_output_w == 800
+    telemetry = await battery.read_telemetry()
+    assert telemetry.pv_w == 600 and telemetry.output_w == 200
+    assert telemetry.ac_power_w == 400 and telemetry.power_w == 400
+    assert telemetry.connection_power_w == -200
+    assert {"ac_power", "own_pv_power", "output_power"} <= battery.extra_telemetry_keys
+    # Without the modules the unit cannot be balanced.
+    fake._states["sensor.pv"].state = "unavailable"
+    with pytest.raises(BatteryDriverError):
+        await battery.read_telemetry()
+
+
+async def test_output_control_turns_the_battery_power_into_an_output() -> None:
+    fake = hass()
+    battery = plug_in(fake, control=BatteryControl.OUTPUT, output_setpoint_entity_id="number.output")
+    assert await battery.apply_power(400)  # charge 400 W of 600 W PV
+    assert float(fake.value("number.output")) == 200
+    assert await battery.apply_power(-500)  # 600 W PV + 500 W exceed the output
+    assert float(fake.value("number.output")) == 800
+    assert await battery.apply_power(1000)  # more than the PV: no output
+    assert float(fake.value("number.output")) == 0
+    await battery.apply_power(-100)
+    await battery.release_control()
+    assert float(fake.value("number.output")) == 0
+    fake._states["sensor.pv"].state = "unavailable"
+    assert not await battery.apply_power(0)

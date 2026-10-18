@@ -324,6 +324,8 @@ class BatteryRuntime:
     # controller trusts it over a command the battery does not follow.
     measured_power_w: float | None = None
     measured_at: float | None = None
+    # Production of the own PV modules at that time (batteries with own PV).
+    measured_pv_w: float | None = None
     # Monotonic time since a release (hand back to its own logic) is
     # outstanding: it failed and is tried again until it succeeds.
     release_pending_since: float | None = None
@@ -548,7 +550,10 @@ class SystemSnapshot:
     grid_without_batteries_filtered_w: float | None = None
     # The same plus the battery power the grid meter shows now.
     grid_power_filtered_w: float | None = None
+    # PV of the installation, including the own PV modules of batteries.
     pv_power_w: float | None = None
+    # Of it the own PV modules of the batteries that were read.
+    own_pv_power_w: float = 0.0
     # Per battery subentry id; missing if the battery could not be read.
     batteries: dict[str, BatteryTelemetry] = field(default_factory=dict)
     # Last measured power of the controllable batteries that could not be
@@ -1494,7 +1499,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         readings: dict[str, float | None] = {}
         for battery in self.batteries:
             telemetry = snapshot.batteries.get(battery.subentry_id)
-            readings[battery.subentry_id] = telemetry.grid_side_power_w if telemetry is not None else None
+            readings[battery.subentry_id] = telemetry.connection_power_w if telemetry is not None else None
         three_phase_w = 0.0
         for consumer in self.consumers:
             if not consumer.included_in_meter:
@@ -1510,7 +1515,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 three_phase_w += power
                 power = 0.0
             readings[consumer.subentry_id] = power
-        if self.phase_model.add(now, readings, phases, snapshot.pv_power_w, three_phase_w):
+        # The own PV modules of a battery are part of its output.
+        pv = None if snapshot.pv_power_w is None else snapshot.pv_power_w - snapshot.own_pv_power_w
+        if self.phase_model.add(now, readings, phases, pv, three_phase_w):
             self.phase_model.evaluate()
             self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
 
@@ -1657,8 +1664,6 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         grid = self.grid_power_w()
         snapshot.grid_power_w = grid
         self._filter_grid(snapshot, now)
-        snapshot.pv_power_w = self._pv_power_w()
-        self._integrate_pv(snapshot.pv_power_w, now)
 
         for consumer in self.consumers:
             snapshot.consumers[consumer.subentry_id] = read_consumer_state(
@@ -1738,6 +1743,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 telemetry.soc_pct, telemetry.grid_side_power_w, telemetry.extra.get("max_cell_voltage")
             )
             battery.measured_power_w = telemetry.grid_side_power_w
+            battery.measured_pv_w = telemetry.pv_w
             battery.measured_at = now
             battery.top_taper.update(telemetry.extra.get("max_cell_voltage"))
             battery.capacity_learner.update(
@@ -1745,6 +1751,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             )
             battery.power_limits = self._power_limits(battery, telemetry)
             self._check_delivery(battery, telemetry, now)
+        self._set_pv_power(snapshot)
+        self._integrate_pv(snapshot.pv_power_w, now)
         # After all batteries were read: the balancing share of the surplus
         # depends on the other batteries.
         for battery in self.batteries:
@@ -1816,6 +1824,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if (watts := state_as_watts(self.hass.states.get(entity_id))) is not None
         ]
         return sum(values) if values else None
+
+    def _set_pv_power(self, snapshot: SystemSnapshot) -> None:
+        """PV of the PV systems plus the own PV modules of the batteries read."""
+        own = [pv for telemetry in snapshot.batteries.values() if (pv := telemetry.pv_w) is not None]
+        pv = self._pv_power_w()
+        snapshot.own_pv_power_w = sum(own)
+        snapshot.pv_power_w = pv if not own else (pv or 0.0) + sum(own)
 
     def _integrate_pv(self, pv_power_w: float | None, now: float) -> None:
         """Add up today's PV energy from the live values (restarts at midnight)."""
@@ -1974,6 +1989,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             top_taper=battery.top_taper.active and caps.controllable,
             bms_limit_w=battery.delivery.bms_limit_w,
             bms_full=battery.delivery.bms_full,
+            own_pv_w=telemetry.pv_w if caps.own_pv else None,
+            ac_charge=caps.ac_charge,
+            max_output_w=caps.max_output_w,
         )
 
     def _check_delivery(
@@ -2097,7 +2115,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 held and battery.driver.release_state is ReleaseState.AUTO
             ):
                 continue
-            total += battery.measured_power_w or 0.0
+            # Without its own PV (unknown now) only its output counts.
+            total += (battery.measured_power_w or 0.0) - (battery.measured_pv_w or 0.0)
         return total
 
     def disabled_and_released(self, battery: BatteryRuntime) -> bool:
@@ -4261,7 +4280,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             distribution=None,
         )
         self._filter_grid(snapshot, now, battery_power_w)
-        snapshot.pv_power_w = self._pv_power_w()
+        # The own PV of the batteries as last read.
+        self._set_pv_power(snapshot)
         self._house_hold.check(snapshot, now)
         self.plan(snapshot, dt_util.now(), now, previous_total_w=previous_total_w, gain=gain)
         return snapshot

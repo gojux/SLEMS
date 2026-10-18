@@ -6,6 +6,11 @@ or entity ids never leak out of a driver.
 
 Sign convention used everywhere in SLEMS: battery power is positive while
 charging and negative while discharging.
+
+A battery with its own PV modules feeds the house only through its output.
+Its AC power is own PV − output: charging from the modules is charging, and
+their production counts as PV of the installation (house = grid + PV −
+battery stays true without a further term).
 """
 
 from __future__ import annotations
@@ -28,6 +33,13 @@ class BatteryCapabilities:
     max_discharge_power_w: int
     # False for read-only drivers; the controller never calls apply_power then.
     controllable: bool
+    # Own PV modules behind the battery's output (see the module docstring).
+    own_pv: bool = False
+    # False: the battery charges only from its own PV modules, never from the grid.
+    ac_charge: bool = True
+    # Highest output into the house (W), shared by the own PV and the
+    # discharge; None: no output limit apart from the discharge power.
+    max_output_w: int | None = None
 
 
 @dataclass
@@ -40,6 +52,10 @@ class BatteryTelemetry:
     # AC side power at the inverter output, +charge / -discharge; None if the
     # battery does not report it.
     ac_power_w: float | None = None
+    # Batteries with own PV: power of the modules (>= 0) and the output into
+    # the house (+feed into the house); ac_power_w is pv_w - output_w.
+    pv_w: float | None = None
+    output_w: float | None = None
     # Driver specific extra values (voltage, temperature, counters, ...).
     extra: dict[str, Any] = field(default_factory=dict)
 
@@ -47,6 +63,14 @@ class BatteryTelemetry:
     def grid_side_power_w(self) -> float | None:
         """Power as seen by the house installation (AC if known)."""
         return self.ac_power_w if self.ac_power_w is not None else self.power_w
+
+    @property
+    def connection_power_w(self) -> float | None:
+        """Power at the battery's connection to the house (+charge / -discharge):
+        the output of a battery with own PV, else the grid side power."""
+        if self.output_w is not None:
+            return -self.output_w
+        return self.grid_side_power_w
 
 
 class BatteryDriverError(Exception):

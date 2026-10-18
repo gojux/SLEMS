@@ -227,6 +227,7 @@
             "soc_entity": "State of charge",
             "power_entity": "Battery power",
             "power_inverted": "Invert power sign",
+            "own_pv": "Own PV modules at the battery",
             "battery_control": "Control",
             "battery_temperature_entity": "Battery temperature",
             "max_cell_voltage_entity": "Highest cell voltage",
@@ -235,12 +236,41 @@
             "discharged_energy_entity": "Total discharged energy"
           },
           "data_description": {
-            "power_entity": "Required when SLEMS controls the battery: it is part of the power available for control.",
+            "power_entity": "Required when SLEMS controls the battery: it is part of the power available for control. With **Own PV modules at the battery** optional: SLEMS uses own PV − output.",
             "power_inverted": "SLEMS expects positive = charging. Enable if the sensor reports discharging as positive.",
-            "battery_control": "Set point: one number entity with the signed power. Separate: one number for charging and one for discharging, optionally a mode select. Script: a script receives the power as variable power_w (+charge / -discharge).",
+            "own_pv": "Enable for a battery whose PV modules feed the house only through the battery's output (plug-in battery such as Marstek B2500 or Zendure SolarFlow, hybrid inverter). Their production counts as PV; do not enter them as a PV system as well.",
+            "battery_control": "Set point: one number entity with the signed power. Separate: one number for charging and one for discharging, optionally a mode select. Script: a script receives the power as variable power_w (+charge / -discharge). Output: one number with the output into the house, only with **Own PV modules at the battery**.",
             "battery_temperature_entity": "Optional: enables the temperature charge limit.",
             "max_cell_voltage_entity": "Optional, together with the lowest cell voltage: gentle charging near the top, cell delta and cell balancing (LFP cells).",
             "charged_energy_entity": "Optional, together with the discharged energy: efficiency from the battery counters."
+          }
+        },
+        "ha_own_pv": {
+          "title": "Own PV modules",
+          "description": "SLEMS counts the modules as PV and the battery power as own PV − output. Without sun the battery cannot charge (no charging from the grid); it discharges at most the highest output minus the own PV.",
+          "data": {
+            "own_pv_entity": "Power of the own PV modules",
+            "output_entity": "Output into the house",
+            "max_output_w": "Highest output",
+            "remove_from_pv": "Remove them from the PV systems"
+          },
+          "data_description": {
+            "own_pv_entity": "Power of the modules at the battery's PV inputs (DC, e.g. \"Total input\").",
+            "output_entity": "Power the unit feeds into the house (AC, positive while feeding).",
+            "max_output_w": "Limit of the inverter at the output, e.g. 800 W; own PV and discharge share it.",
+            "remove_from_pv": "On saving SLEMS removes them from the PV systems of the system settings."
+          }
+        },
+        "ha_output": {
+          "title": "Control by output",
+          "description": "SLEMS turns the battery power into an output: output = own PV − charge power, between 0 and the highest output. With the release state **Standby** the output stays at 0 W: the battery charges from its modules only.",
+          "data": {
+            "output_setpoint_entity": "Output (number, W)",
+            "remote_entity": "Remote control (optional)"
+          },
+          "data_description": {
+            "output_setpoint_entity": "Number entity with the output into the house. It must not be stored permanently by the device (flash wear with frequent set points).",
+            "remote_entity": "Switch or select that puts the battery under external control. SLEMS switches it on before the first set point and off when it releases the battery to **Automatic**."
           }
         },
         "ha_setpoint": {
@@ -320,9 +350,11 @@
       },
       "error": {
         "cannot_connect": "Cannot connect to the battery.",
+        "no_auto_release": "Automatic needs a remote control entity, a mode option for automatic or a release script; otherwise choose standby.",
         "none_found": "No Marstek Venus found in the network. Enter the address by hand (see README: finding the IP address); stop other integrations using the battery first.",
-        "power_required": "SLEMS needs the battery power to control the battery.",
-        "no_auto_release": "Automatic needs a remote control entity, a mode option for automatic or a release script; otherwise choose standby."
+        "output_needs_own_pv": "**Output** needs **Own PV modules at the battery**.",
+        "own_pv_counted_twice": "These entities are also entered as PV systems: {pv_systems}. Their production would count twice. Select **Remove them from the PV systems** or choose other entities.",
+        "power_required": "SLEMS needs the battery power to control the battery."
       },
       "abort": {
         "reconfigure_successful": "Battery updated."
@@ -677,7 +709,8 @@
         "none": "Read only",
         "setpoint": "Set point (one number)",
         "split": "Separate charge and discharge power",
-        "script": "Script"
+        "script": "Script",
+        "output": "Output (own PV modules)"
       }
     },
     "release_state": {
@@ -900,6 +933,12 @@
       },
       "ac_power": {
         "name": "AC power"
+      },
+      "own_pv_power": {
+        "name": "Own PV power"
+      },
+      "output_power": {
+        "name": "Output power"
       },
       "battery_voltage": {
         "name": "Battery voltage"

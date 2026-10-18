@@ -9,6 +9,7 @@ logger:
   logs:
     custom_components.slems: debug
     homeassistant.components.automation.feed_simulated_sunspec_meter: warning
+    homeassistant.components.automation.simulate_plug_in_battery_charge: warning
 
 # Simulated measurements. Adjust the sliders to play with the values.
 input_number:
@@ -57,6 +58,31 @@ input_number:
     step: 1
     initial: 3
 
+  # Simulated plug-in battery with its own PV modules (2.24 kWh, 800 W
+  # output), SLEMS battery type "Home Assistant entities" with "Own PV
+  # modules at the battery" and control "Output".
+  sim_plug_in_pv:
+    name: Simulated plug-in battery PV power
+    min: 0
+    max: 1000
+    step: 10
+    unit_of_measurement: W
+    initial: 400
+  sim_plug_in_soc:
+    name: Plug-in battery state of charge
+    min: 0
+    max: 100
+    step: 0.0001
+    unit_of_measurement: "%"
+    initial: 50
+  sim_plug_in_output_setpoint:
+    name: Plug-in battery output set point
+    min: 0
+    max: 800
+    step: 1
+    unit_of_measurement: W
+    initial: 0
+
 input_boolean:
   sim_heating_rod_blocked:
     name: Heating rod externally blocked
@@ -89,7 +115,47 @@ template:
               - states('input_number.sim_pv_power') | float(0)
               - states('sensor.sim_venus_1_ac_power') | float(0)
               - states('sensor.sim_venus_2_ac_power') | float(0)
-              - states('sensor.sim_venus_3_ac_power') | float(0)) | round(0) }}
+              - states('sensor.sim_venus_3_ac_power') | float(0)
+              - states('sensor.plug_in_battery_output') | float(0)) | round(0) }}
+  # Plug-in battery with own PV: the output follows its set point; empty it
+  # gives at most its PV, full it passes the PV through.
+  - number:
+      - name: Plug-in battery output limit
+        unique_id: sim_plug_in_output_limit
+        unit_of_measurement: W
+        min: 0
+        max: 800
+        step: 1
+        state: "{{ states('input_number.sim_plug_in_output_setpoint') | float(0) }}"
+        set_value:
+          - action: input_number.set_value
+            target: {entity_id: input_number.sim_plug_in_output_setpoint}
+            data: {value: "{{ value }}"}
+    sensor:
+      - name: Plug-in battery PV power
+        unique_id: sim_plug_in_pv_power
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        state: "{{ states('input_number.sim_plug_in_pv') | float(0) }}"
+      - name: Plug-in battery output
+        unique_id: sim_plug_in_output
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        state: >-
+          {% set pv = states('input_number.sim_plug_in_pv') | float(0) %}
+          {% set soc = states('input_number.sim_plug_in_soc') | float(0) %}
+          {% set out = [[states('input_number.sim_plug_in_output_setpoint') | float(0), 0] | max, 800] | min %}
+          {% if soc <= 0 %}{% set out = [out, pv] | min %}{% endif %}
+          {% if soc >= 100 %}{% set out = [out, [pv, 800] | min] | max %}{% endif %}
+          {{ out | round(0) }}
+      - name: Plug-in battery state of charge
+        unique_id: sim_plug_in_soc
+        unit_of_measurement: "%"
+        device_class: battery
+        state_class: measurement
+        state: "{{ states('input_number.sim_plug_in_soc') | float(0) | round(1) }}"
   # Third simulated Venus, controlled through entities (SLEMS battery type
   # "Home Assistant entities", control "separate charge and discharge power").
   - number:
@@ -300,6 +366,19 @@ modbus:
 # Feeds the simulated SunSpec meter (dev/sunspec_meter) with the grid power,
 # export positive like SolarEdge, for "read the smart meter over Modbus".
 automation sim:
+  - alias: Simulate plug-in battery charge
+    mode: single
+    triggers:
+      - trigger: time_pattern
+        seconds: "/1"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.sim_plug_in_soc}
+        data:
+          value: >-
+            {% set power = states('input_number.sim_plug_in_pv') | float(0)
+                - states('sensor.plug_in_battery_output') | float(0) %}
+            {{ [[states('input_number.sim_plug_in_soc') | float(0) + power / 3600 / 2240 * 100, 0] | max, 100] | min | round(4) }}
   - alias: Feed simulated SunSpec meter
     mode: queued
     triggers:

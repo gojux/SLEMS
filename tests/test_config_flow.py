@@ -53,3 +53,48 @@ def test_cleared_optional_field_is_removed() -> None:
         ("soc_entity", "power_entity"),
     )
     assert data == {"soc_entity": "sensor.soc"}
+
+
+def test_entity_battery_with_own_pv_keeps_its_entities() -> None:
+    own_pv = {
+        "own_pv_entity": "sensor.pv",
+        "output_entity": "sensor.output",
+        "max_output_w": 800.0,
+    }
+    data = config_flow._entity_battery_data(
+        {
+            "battery_control": "output",
+            "own_pv": True,
+            **own_pv,
+            "output_setpoint_entity": "number.output",
+            "setpoint_entity": "number.setpoint",
+            "remove_from_pv": True,
+        }
+    )
+    assert data == {
+        "battery_control": "output",
+        "own_pv": True,
+        **own_pv,
+        "max_output_w": 800,
+        "output_setpoint_entity": "number.output",
+    }
+    # Switched off again: its entities go.
+    data = config_flow._entity_battery_data({"battery_control": "none", "own_pv": False, **own_pv})
+    assert data == {"battery_control": "none"}
+
+
+def test_own_pv_entered_as_pv_system_is_found_and_removed() -> None:
+    from types import SimpleNamespace
+
+    flow = config_flow.BatterySubentryFlow()
+    updates = []
+    entry = SimpleNamespace(data={"pv_power_entity": ["sensor.roof", "sensor.output"]}, options={})
+    flow._get_entry = lambda: entry
+    flow.hass = SimpleNamespace(
+        config_entries=SimpleNamespace(async_update_entry=lambda e, **kw: updates.append(kw))
+    )
+    flow._data = {"own_pv_entity": "sensor.pv", "output_entity": "sensor.output"}
+    assert flow._counted_as_pv() == ["sensor.output"]
+    flow._remove_from_pv = flow._counted_as_pv()
+    flow._remove_pv_systems()
+    assert updates == [{"data": {"pv_power_entity": ["sensor.roof"]}}]

@@ -712,11 +712,33 @@ SLEMS also works without any battery: add the consumers only.
     covers batteries controlled through actions (services). SLEMS waits until
     the script is done (at most 10 seconds) so its errors are noticed; keep
     it short (no waits).
+  - **Output**: one number with the output into the house, for a battery with
+    **Own PV modules at the battery** (see below).
+
+  **Own PV modules at the battery**: for a battery whose PV modules feed the
+  house only through the battery's output, e.g. a plug-in battery (Marstek
+  B2500, Zendure SolarFlow, Anker Solarbank) or a hybrid inverter. Choose the
+  power of the modules, the output into the house and the highest output
+  (e.g. 800 W). SLEMS counts the modules as PV and the battery power as own
+  PV − output, so the balance stays right; do not enter the modules or the
+  output as a PV system as well. SLEMS points that out and offers to remove
+  them there. With the control **Output** SLEMS sets output = own PV − charge
+  power. Such a battery charges at most what its modules produce (no
+  charging from the grid, none at night) and discharges at most the highest
+  output minus its own PV: at 600 W PV and 800 W output 200 W are left. The
+  sensors **Allowed charge power** and **Allowed discharge power** show the
+  reason `pv`. Its sensors **Own PV power** and **Output
+  power** show both values. With the state when released **Standby** the
+  output stays at 0 W, so the battery charges from its modules only. Use an
+  output entity the device does not store permanently: frequent set points
+  wear out its flash memory. The forecast of the state of charge does not
+  yet tell the battery's own PV forecast from the other PV systems.
 
   Optionally a **remote control** switch or select (e.g. **Manual battery
   control** of Omnibattery) is switched on before the first set point and off
   when SLEMS releases the battery to **Automatic**, so it controls itself again;
-  leave it empty if you switch it yourself. For controlling, the battery power sensor is required.
+  leave it empty if you switch it yourself. For controlling, the battery power
+  sensor is required (with own PV modules SLEMS uses own PV − output instead).
   **Minimum time between commands** suits integrations with a rate limit (often
   cloud based), **Repeat set point every** batteries that fall back to their own
   logic without new commands. Switch off the battery's own control (e.g. its
@@ -2102,9 +2124,12 @@ wallbox on the [evcc guide](docs/wallbox-evcc.md).
 - Battery groups with a shared fuse: several batteries on one circuit (e.g.
   two Venus behind one circuit breaker) get a highest power together, which
   the active batteries of the group share, instead of a fixed half for each.
-- Further kinds of installations: batteries with their own PV (DC coupled),
-  their own meter or a backup output with loads behind it, and batteries
-  serving several inverters.
+- Batteries with their own PV: their own PV forecast in the forecast of the
+  state of charge, curtailing only for the feed-in cap, devices that pass the
+  PV through when full, the self-test with sun, and charging from the grid
+  for devices with an AC input.
+- Further kinds of installations: batteries with their own meter or a backup
+  output with loads behind it, and batteries serving several inverters.
 - Ongoing check of the batteries in normal operation: clean set point changes
   (one battery, no consumer switching, a quiet smart meter) compared with the
   smart meter and the reported power; after many consistent mismatches (e.g. a

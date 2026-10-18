@@ -91,6 +91,12 @@ from .const import (
     CONF_REMOTE_ON,
     CONF_SETPOINT_ENTITY,
     CONF_SETPOINT_INVERTED,
+    CONF_MAX_OUTPUT_W,
+    CONF_OUTPUT_ENTITY,
+    CONF_OUTPUT_SETPOINT_ENTITY,
+    CONF_OWN_PV,
+    CONF_OWN_PV_ENTITY,
+    CONF_REMOVE_FROM_PV,
     BatteryControl,
     ReleaseState,
     CONF_BLOCK_ENTITY,
@@ -278,7 +284,9 @@ _CONTROL_KEYS: dict[BatteryControl, tuple[str, ...]] = {
         CONF_MODE_CHARGE, CONF_MODE_DISCHARGE, CONF_MODE_STANDBY, CONF_MODE_AUTO,
     ),
     BatteryControl.SCRIPT: (CONF_POWER_SCRIPT, CONF_RELEASE_SCRIPT),
+    BatteryControl.OUTPUT: (CONF_OUTPUT_SETPOINT_ENTITY,),
 }
+_OWN_PV_KEYS = (CONF_OWN_PV_ENTITY, CONF_OUTPUT_ENTITY, CONF_MAX_OUTPUT_W)
 _REMOTE_KEYS = (CONF_REMOTE_ENTITY, CONF_REMOTE_ON, CONF_REMOTE_OFF)
 _CONTROLLED_KEYS = (CONF_RELEASE_STATE, CONF_MIN_COMMAND_INTERVAL_S, CONF_KEEPALIVE_S)
 
@@ -694,6 +702,8 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         self._host: str | None = None
         # Battery from HA entities: data collected over the steps.
         self._data: dict[str, Any] = {}
+        # PV systems to remove on saving: they are the battery's own PV.
+        self._remove_from_pv: list[str] = []
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -866,16 +876,15 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         if user_input is not None:
             self._data = _merge(self._data, user_input, _ENTITY_STEP_KEYS)
             control = BatteryControl(self._data[CONF_BATTERY_CONTROL])
-            if control is not BatteryControl.NONE and not self._data.get(CONF_POWER_ENTITY):
+            own_pv = self._data.get(CONF_OWN_PV, False)
+            if control is BatteryControl.OUTPUT and not own_pv:
+                errors[CONF_BATTERY_CONTROL] = "output_needs_own_pv"
+            elif control is not BatteryControl.NONE and not own_pv and not self._data.get(CONF_POWER_ENTITY):
                 errors[CONF_POWER_ENTITY] = "power_required"
-            elif control is BatteryControl.SETPOINT:
-                return await self.async_step_ha_setpoint()
-            elif control is BatteryControl.SPLIT:
-                return await self.async_step_ha_split()
-            elif control is BatteryControl.SCRIPT:
-                return await self.async_step_ha_script()
+            elif own_pv:
+                return await self.async_step_ha_own_pv()
             else:
-                return await self.async_step_ha_limits()
+                return await self._async_step_control()
 
         data = self._data
         schema = vol.Schema(
@@ -887,6 +896,9 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                 _optional(CONF_POWER_ENTITY, data): _POWER_SENSOR,
                 vol.Required(
                     CONF_POWER_INVERTED, default=data.get(CONF_POWER_INVERTED, False)
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_OWN_PV, default=data.get(CONF_OWN_PV, False)
                 ): selector.BooleanSelector(),
                 vol.Required(
                     CONF_BATTERY_CONTROL,
@@ -908,6 +920,102 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             step_id="ha_entities",
             data_schema=schema,
             errors=errors,
+        )
+
+    async def _async_step_control(self) -> SubentryFlowResult:
+        control = BatteryControl(self._data[CONF_BATTERY_CONTROL])
+        if control is BatteryControl.SETPOINT:
+            return await self.async_step_ha_setpoint()
+        if control is BatteryControl.SPLIT:
+            return await self.async_step_ha_split()
+        if control is BatteryControl.SCRIPT:
+            return await self.async_step_ha_script()
+        if control is BatteryControl.OUTPUT:
+            return await self.async_step_ha_output()
+        return await self.async_step_ha_limits()
+
+    async def async_step_ha_own_pv(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Own PV modules behind the battery: their power, the output and its limit.
+
+        Entered as a PV system as well, their production would count twice;
+        the step shows that and offers to remove them there.
+        """
+        errors: dict[str, str] = {}
+        twice = []
+        if user_input is not None:
+            self._data = _merge(self._data, user_input, _OWN_PV_KEYS)
+            twice = self._counted_as_pv()
+            if twice and not user_input.get(CONF_REMOVE_FROM_PV):
+                errors["base"] = "own_pv_counted_twice"
+            else:
+                self._remove_from_pv = twice
+                return await self._async_step_control()
+        else:
+            twice = self._counted_as_pv()
+        data = self._data
+        schema: dict = {
+            vol.Required(
+                CONF_OWN_PV_ENTITY, default=data.get(CONF_OWN_PV_ENTITY, vol.UNDEFINED)
+            ): _POWER_SENSOR,
+            vol.Required(
+                CONF_OUTPUT_ENTITY, default=data.get(CONF_OUTPUT_ENTITY, vol.UNDEFINED)
+            ): _POWER_SENSOR,
+            vol.Required(
+                CONF_MAX_OUTPUT_W, default=data.get(CONF_MAX_OUTPUT_W, 800)
+            ): _watts(100_000),
+        }
+        if twice:
+            schema[vol.Required(CONF_REMOVE_FROM_PV, default=False)] = selector.BooleanSelector()
+        return self.async_show_form(
+            step_id="ha_own_pv",
+            data_schema=vol.Schema(schema),
+            errors=errors,
+            description_placeholders={"pv_systems": ", ".join(twice) or "-"},
+        )
+
+    def _counted_as_pv(self) -> list[str]:
+        """The battery's own PV or output entities entered as a PV system."""
+        entry = self._get_entry()
+        system = entry.options or entry.data
+        own = {self._data.get(CONF_OWN_PV_ENTITY), self._data.get(CONF_OUTPUT_ENTITY)}
+        return [entity_id for entity_id in entity_ids(system.get(CONF_PV_POWER_ENTITY)) if entity_id in own]
+
+    def _remove_pv_systems(self) -> None:
+        """Remove the PV systems that are the battery's own PV."""
+        if not self._remove_from_pv:
+            return
+        entry = self._get_entry()
+        field = "options" if entry.options else "data"
+        system = dict(getattr(entry, field))
+        system[CONF_PV_POWER_ENTITY] = [
+            entity_id
+            for entity_id in entity_ids(system.get(CONF_PV_POWER_ENTITY))
+            if entity_id not in self._remove_from_pv
+        ]
+        self.hass.config_entries.async_update_entry(entry, **{field: system})
+        self._remove_from_pv = []
+
+    async def async_step_ha_output(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """One number entity with the output power of a battery with own PV."""
+        if user_input is not None:
+            self._data = _merge(self._data, user_input, (CONF_OUTPUT_SETPOINT_ENTITY, CONF_REMOTE_ENTITY))
+            return await self._async_step_after_control()
+        data = self._data
+        return self.async_show_form(
+            step_id="ha_output",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_OUTPUT_SETPOINT_ENTITY,
+                        default=data.get(CONF_OUTPUT_SETPOINT_ENTITY, vol.UNDEFINED),
+                    ): _NUMBER_ENTITY,
+                    _optional(CONF_REMOTE_ENTITY, data): _REMOTE_ENTITY,
+                }
+            ),
         )
 
     async def async_step_ha_setpoint(
@@ -1050,6 +1158,7 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             ):
                 errors[CONF_RELEASE_STATE] = "no_auto_release"
             else:
+                self._remove_pv_systems()
                 return self._async_finish(candidate)
             data = {**data, **user_input}
 
@@ -1194,6 +1303,7 @@ _ENTITY_STEP_KEYS = (
     CONF_SOC_ENTITY,
     CONF_POWER_ENTITY,
     CONF_POWER_INVERTED,
+    CONF_OWN_PV,
     CONF_BATTERY_CONTROL,
     CONF_BATTERY_TEMPERATURE_ENTITY,
     CONF_MAX_CELL_VOLTAGE_ENTITY,
@@ -1231,6 +1341,13 @@ def _entity_battery_data(data: dict[str, Any]) -> dict[str, Any]:
     if control is BatteryControl.NONE:
         for key in _CONTROLLED_KEYS:
             result.pop(key, None)
+    if not result.get(CONF_OWN_PV):
+        result.pop(CONF_OWN_PV, None)
+        for key in _OWN_PV_KEYS:
+            result.pop(key, None)
+    else:
+        result[CONF_MAX_OUTPUT_W] = int(result[CONF_MAX_OUTPUT_W])
+    result.pop(CONF_REMOVE_FROM_PV, None)
     if not result.get(CONF_MODE_ENTITY):
         for key in (CONF_MODE_CHARGE, CONF_MODE_DISCHARGE, CONF_MODE_STANDBY, CONF_MODE_AUTO):
             result.pop(key, None)

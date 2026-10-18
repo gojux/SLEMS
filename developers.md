@@ -76,6 +76,15 @@ and `input_boolean.sim_car_connected` are on) for a consumer with current
 control (start/stop entity: the enable switch). For a PV forecast add the
 Forecast.Solar integration in the dev instance (no account needed).
 
+A simulated plug-in battery with its own PV modules (2.24 kWh, 800 W output)
+is built from template entities: `input_number.sim_plug_in_pv` sets the
+power of its modules, `number.plug_in_battery_output_limit` is its output set
+point, `sensor.plug_in_battery_output` the output (empty: at most its PV,
+full: the PV passes through) and an automation integrates the state of
+charge every second. Add it in SLEMS as **Existing Home Assistant entities**
+with **Own PV modules at the battery** and the control **Output**; the smart
+meter subtracts its output.
+
 `dev/seed_statistics.py` imports 60 days of synthetic hourly statistics (see
 its docstring) so the consumption forecast has history to learn from. An
 access token can be created in the user profile of the dev instance. Everything else in
@@ -131,7 +140,7 @@ custom_components/slems/
     base.py          BatteryDriver contract (read_telemetry, apply_power, release_control)
     marstek_venus_e3.py
     modbus_client.py Modbus TCP link with Venus firmware quirks
-    ha_entities.py   battery backed by HA entities (read-only, set point, split, script)
+    ha_entities.py   battery backed by HA entities (read-only, set point, split, script, output with own PV)
 ```
 
 Runtime settings (operating mode, vacation, peak shaving) live in

@@ -93,6 +93,15 @@ CONF_CHARGED_ENERGY_ENTITY: Final = "charged_energy_entity"
 CONF_DISCHARGED_ENERGY_ENTITY: Final = "discharged_energy_entity"
 CONF_MIN_COMMAND_INTERVAL_S: Final = "min_command_interval_s"
 CONF_KEEPALIVE_S: Final = "keepalive_s"
+# Battery with its own PV modules that feeds the house only through its output
+# (plug-in battery, hybrid inverter).
+CONF_OWN_PV: Final = "own_pv"
+CONF_OWN_PV_ENTITY: Final = "own_pv_entity"
+CONF_OUTPUT_ENTITY: Final = "output_entity"
+CONF_OUTPUT_SETPOINT_ENTITY: Final = "output_setpoint_entity"
+CONF_MAX_OUTPUT_W: Final = "max_output_w"
+# Entities of the PV systems to remove because they are the battery's own PV.
+CONF_REMOVE_FROM_PV: Final = "remove_from_pv"
 
 # Used until a learned value is reliable, and as manual default.
 DEFAULT_ROUND_TRIP_EFFICIENCY_PCT: Final = 88
@@ -209,6 +218,9 @@ class BatteryControl(StrEnum):
     SPLIT = "split"
     # A script receives the signed power as variable ``power_w``.
     SCRIPT = "script"
+    # One number with the output power of a battery with its own PV modules
+    # (W, >= 0); the driver converts the battery power into it.
+    OUTPUT = "output"
 
 
 class ReleaseState(StrEnum):

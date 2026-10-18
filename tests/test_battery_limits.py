@@ -108,3 +108,27 @@ def test_bms_stop_limits_or_blocks_discharging() -> None:
         2500, 2500, settings, SocWindow(), 20, ON, bms_limit_w=0, use_soc_window=False
     )
     assert limits.discharge_w == 2500
+
+
+def test_own_pv_limits_charging_and_shares_the_output() -> None:
+    settings = BatteryLimitSettings()
+    window = SocWindow()
+    limits = power_limits(
+        1800, 1800, settings, window, None, ON, own_pv_w=600, ac_charge=False, max_output_w=800
+    )
+    assert limits.charge_w == 600 and limits.charge_reason == "pv"
+    assert limits.discharge_w == 200 and limits.discharge_reason == "pv"
+    # At night: no charging, the whole output for discharging.
+    limits = power_limits(1800, 1800, settings, window, None, ON, own_pv_w=0, ac_charge=False, max_output_w=800)
+    assert limits.charge_w == 0 and limits.charge_reason == "pv"
+    assert limits.discharge_w == 800 and limits.discharge_reason == "pv"
+    # More PV than the output: no discharging.
+    limits = power_limits(1800, 1800, settings, window, None, ON, own_pv_w=1000, ac_charge=False, max_output_w=800)
+    assert limits.discharge_w == 0
+    # A battery that charges from the grid as well is not limited by its PV.
+    limits = power_limits(1800, 1800, settings, window, None, ON, own_pv_w=100, max_output_w=2000)
+    assert limits.charge_w == 1800 and limits.charge_reason is None
+    # The SoC window wins.
+    window.charge_blocked = window.discharge_blocked = True
+    limits = power_limits(1800, 1800, settings, window, None, ON, own_pv_w=600, ac_charge=False, max_output_w=800)
+    assert limits.charge_reason == "soc" and limits.discharge_reason == "soc"

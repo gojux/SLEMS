@@ -7,7 +7,11 @@ from pathlib import Path
 from custom_components.slems import config_flow
 
 STRINGS = json.loads((Path(config_flow.__file__).parent / "strings.json").read_text())
-FLOWS = {"tariff": config_flow.TariffSubentryFlow, "consumer": config_flow.ConsumerSubentryFlow}
+FLOWS = {
+    "tariff": config_flow.TariffSubentryFlow,
+    "consumer": config_flow.ConsumerSubentryFlow,
+    "battery": config_flow.BatterySubentryFlow,
+}
 
 
 def test_steps_and_menu_options_have_methods() -> None:
