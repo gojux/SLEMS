@@ -1,6 +1,8 @@
 """Tests for the energy balance in the system snapshot."""
 
-from custom_components.slems.const import ConsumerType, ControlMode
+from types import SimpleNamespace
+
+from custom_components.slems.const import ConsumerType, ControlMode, ReleaseState
 from custom_components.slems.consumers import ConsumerConfig, ConsumerState
 from custom_components.slems.coordinator import SystemSnapshot
 from custom_components.slems.drivers.base import BatteryTelemetry
@@ -84,22 +86,42 @@ def test_negative_house_power_keeps_the_last_valid_value() -> None:
     assert stale.house_power_w is None  # unknown
 
 
-def test_unread_battery_keeps_its_last_power_then_house_power_unknown() -> None:
-    from types import SimpleNamespace
+def _unread_battery(
+    battery_id: str,
+    *,
+    enabled: bool = True,
+    controllable: bool = True,
+    release_state: ReleaseState = ReleaseState.STANDBY,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        subentry_id=battery_id,
+        enabled=enabled,
+        driver=SimpleNamespace(
+            capabilities=SimpleNamespace(controllable=controllable), release_state=release_state
+        ),
+        measured_power_w=-800.0,
+        measured_at=100.0,
+        leaving_until=None,
+        release_pending_since=None,
+    )
 
+
+def _unread_coordinator(*batteries: SimpleNamespace) -> SimpleNamespace:
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    coordinator = SimpleNamespace(batteries=list(batteries), controls=lambda _battery: False)
+    coordinator.disabled_and_released = lambda b: SlemsCoordinator.disabled_and_released(coordinator, b)
+    return coordinator
+
+
+def test_unread_battery_keeps_its_last_power_then_house_power_unknown() -> None:
     from custom_components.slems.coordinator import UNREAD_BATTERY_HOLD_S, SlemsCoordinator
 
-    def battery(battery_id: str, *, enabled: bool = True, controllable: bool = True) -> SimpleNamespace:
-        return SimpleNamespace(
-            subentry_id=battery_id,
-            enabled=enabled,
-            driver=SimpleNamespace(capabilities=SimpleNamespace(controllable=controllable)),
-            measured_power_w=-800.0,
-            measured_at=100.0,
-        )
-
-    coordinator = SimpleNamespace(
-        batteries=[battery("a"), battery("b"), battery("off", enabled=False), battery("ro", controllable=False)]
+    coordinator = _unread_coordinator(
+        _unread_battery("a"),
+        _unread_battery("b"),
+        _unread_battery("off", enabled=False),
+        _unread_battery("ro", controllable=False),
     )
     snapshot = SystemSnapshot(
         grid_power_w=200,
@@ -108,7 +130,8 @@ def test_unread_battery_keeps_its_last_power_then_house_power_unknown() -> None:
     )
     unread = SlemsCoordinator._unread_battery_power_w
     snapshot.unread_battery_power_w = unread(coordinator, snapshot, 100 + UNREAD_BATTERY_HOLD_S)
-    # b still discharges with its last 800 W; disabled and read-only batteries do not count.
+    # b still discharges with its last 800 W; a released disabled battery and
+    # read-only batteries do not count.
     assert snapshot.unread_battery_power_w == -800
     assert snapshot.battery_power_w == -1300
     assert snapshot.house_power_w == 1500
@@ -120,6 +143,76 @@ def test_unread_battery_keeps_its_last_power_then_house_power_unknown() -> None:
     # Never read since the start: unknown at once.
     coordinator.batteries[1].measured_at = None
     assert unread(coordinator, snapshot, 100) is None
+
+
+def test_unread_disabled_battery_in_standby_counts_zero() -> None:
+    from custom_components.slems.coordinator import UNREAD_BATTERY_HOLD_S, SlemsCoordinator
+
+    off = _unread_battery("off", enabled=False)
+    coordinator = _unread_coordinator(off)
+    snapshot = SystemSnapshot(grid_power_w=200, pv_power_w=0)
+    # Released in standby it stands at 0 W, also right after its last reading.
+    for now in (110.0, 1000 + UNREAD_BATTERY_HOLD_S):
+        snapshot.unread_battery_power_w = SlemsCoordinator._unread_battery_power_w(coordinator, snapshot, now)
+        assert snapshot.unread_battery_power_w == 0
+        assert snapshot.house_power_w == 200
+    assert not SlemsCoordinator.unread_power_unknown(coordinator, off)
+
+
+def test_unread_disabled_battery_keeps_its_power_until_released() -> None:
+    from custom_components.slems.coordinator import UNREAD_BATTERY_HOLD_S, SlemsCoordinator
+
+    off = _unread_battery("off", enabled=False, release_state=ReleaseState.AUTO)
+    off.release_pending_since = 150.0
+    coordinator = _unread_coordinator(off)
+    snapshot = SystemSnapshot(grid_power_w=200, pv_power_w=0)
+    unread = SlemsCoordinator._unread_battery_power_w
+    # It may still discharge with its last set point, also after the hold time
+    # of an enabled battery; the house power stays known.
+    for now in (110.0, 1000 + UNREAD_BATTERY_HOLD_S):
+        snapshot.unread_battery_power_w = unread(coordinator, snapshot, now)
+        assert snapshot.unread_battery_power_w == -800
+        assert snapshot.house_power_w == 1000
+    assert not SlemsCoordinator.unread_power_unknown(coordinator, off)
+    # Never read since the start: nothing to keep, but never unknown.
+    off.measured_at = None
+    off.measured_power_w = None
+    assert unread(coordinator, snapshot, 100) == 0
+    # Still ramping out (not released yet): the same.
+    off.release_pending_since = None
+    off.leaving_until = 120.0
+    off.measured_power_w = -300.0
+    assert unread(coordinator, snapshot, 110) == -300
+    # Released: 0 W.
+    off.leaving_until = None
+    assert unread(coordinator, snapshot, 110) == 0
+
+
+def test_unread_disabled_battery_on_its_own_logic_counts_zero_with_hint() -> None:
+    from custom_components.slems.coordinator import UNREAD_BATTERY_HOLD_S, SlemsCoordinator
+
+    off = _unread_battery("off", enabled=False, release_state=ReleaseState.AUTO)
+    coordinator = _unread_coordinator(off)
+    snapshot = SystemSnapshot(grid_power_w=200, pv_power_w=0)
+    unread = SlemsCoordinator._unread_battery_power_w
+    # A short gap: it likely goes on like before.
+    snapshot.unread_battery_power_w = unread(coordinator, snapshot, 100 + UNREAD_BATTERY_HOLD_S)
+    assert snapshot.unread_battery_power_w == -800
+    assert snapshot.house_power_w == 1000
+    # Afterwards 0 W, but never unknown.
+    snapshot.unread_battery_power_w = unread(coordinator, snapshot, 101 + UNREAD_BATTERY_HOLD_S)
+    assert snapshot.unread_battery_power_w == 0
+    assert snapshot.house_power_w == 200
+    off.measured_at = None
+    assert unread(coordinator, snapshot, 100) == 0
+    off.measured_at = 100.0
+    # It regulates on its own: its power is unknown (repair issue, see test_problems).
+    assert SlemsCoordinator.unread_power_unknown(coordinator, off)
+    off.release_pending_since = 150.0
+    assert not SlemsCoordinator.unread_power_unknown(coordinator, off)
+    off.release_pending_since = None
+    off.enabled = True
+    assert not SlemsCoordinator.unread_power_unknown(coordinator, off)
 
 
 def test_planning_powers_of_a_full_or_blocked_battery() -> None:

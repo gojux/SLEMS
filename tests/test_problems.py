@@ -86,6 +86,36 @@ def test_outstanding_release_becomes_a_repair_issue() -> None:
         assert (DOMAIN, "battery_release_failed_b1") not in registry.issues
 
 
+def test_unreadable_disabled_battery_on_its_own_logic_makes_house_power_inaccurate() -> None:
+    battery = SimpleNamespace(
+        subentry_id="b1", name="Venus", not_responding=False, unreadable_since=100.0,
+        release_pending_since=None, communication_paused=False,
+    )
+    state = coordinator([battery])
+    unknown = {"b1": True}
+    state.unread_power_unknown = lambda b: unknown[b.subentry_id]
+    registry = FakeIssues(set())
+    reporter = problems.ProblemReporter(None, state)
+    issue = (DOMAIN, "house_power_inaccurate_b1")
+    with (
+        patch.object(problems, "ir", registry),
+        patch.object(reporter, "_update_cap_notifications", lambda *_: None),
+    ):
+        reporter.update(200.0)
+        assert issue not in registry.issues
+        reporter.update(100.0 + problems.UNREADABLE_AFTER_S)
+        assert issue in registry.issues
+        assert registry.issues[issue]["translation_key"] == "house_power_inaccurate"
+        # In standby or not released yet its power is known (0 W or held).
+        unknown["b1"] = False
+        reporter.update(100.0 + problems.UNREADABLE_AFTER_S + 1)
+        assert issue not in registry.issues
+        unknown["b1"] = True
+        battery.unreadable_since = None
+        reporter.update(1000.0)
+        assert issue not in registry.issues
+
+
 def test_blocked_duration_text() -> None:
     from custom_components.slems.problems import _duration
 

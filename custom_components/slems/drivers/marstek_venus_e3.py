@@ -185,6 +185,10 @@ class MarstekVenusE3Driver(BatteryDriver):
         )
 
     @property
+    def release_state(self) -> ReleaseState:
+        return self._release_state
+
+    @property
     def has_connection(self) -> bool:
         return True
 

@@ -626,8 +626,13 @@ replaced by the last valid value (for at most 30 seconds, then unknown).
 If an enabled, controllable battery cannot be read, it counts with its last
 measured power for up to 5 minutes, since it keeps its last set point without
 new commands. After that the house consumption is unknown until the battery can
-be read again, instead of adding its power to the house. The consumption
-forecast leaves out hours in which the statistics of a battery lack a value.
+be read again, instead of adding its power to the house. A disabled battery
+never makes the house consumption unknown: while it is not yet handed back to
+its own logic it keeps counting with its last measured power, once released it
+counts with 0 W. In release state **Automatic** it may charge or discharge on
+its own: it counts with its last measured power for up to 5 minutes, then with
+0 W, and a repair points out that the house consumption is inaccurate. The consumption forecast leaves out hours in which the statistics
+of a battery lack a value.
 
 ## Without batteries
 
@@ -1958,6 +1963,8 @@ when they are solved:
 
 - a battery does not respond (excluded, see above),
 - a battery could not be read for more than 5 minutes,
+- a disabled battery in release state **Automatic** could not be read for more
+  than 5 minutes (it counts with 0 W, so the house consumption is inaccurate),
 - a battery could not be handed back to its own logic for more than 5
   minutes (it may still run with the last set point; SLEMS keeps trying,
   every release is confirmed by reading the battery back),

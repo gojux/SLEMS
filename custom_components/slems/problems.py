@@ -6,6 +6,8 @@ themselves when the problem is gone:
 * a battery does not deliver the commanded power and is excluded
   (``delivery_monitor``),
 * a battery could not be read for ``UNREADABLE_AFTER_S``,
+* a disabled battery released to its own logic could not be read for
+  ``UNREADABLE_AFTER_S``: it counts 0 W, the house consumption is inaccurate,
 * a battery could not be handed back to its own logic for
   ``RELEASE_FAILED_AFTER_S`` (it may still run with the last set point),
 * the grid meter is stale in operating mode active (the batteries follow their
@@ -102,6 +104,10 @@ def _release_issue(battery: BatteryRuntime) -> str:
     return f"battery_release_failed_{battery.subentry_id}"
 
 
+def _house_inaccurate_issue(battery: BatteryRuntime) -> str:
+    return f"house_power_inaccurate_{battery.subentry_id}"
+
+
 class ProblemReporter:
     """Keeps the repair issues of one SLEMS entry in line with the current state."""
 
@@ -137,6 +143,7 @@ class ProblemReporter:
                 _not_responding_issue(battery),
                 _unreadable_issue(battery),
                 _release_issue(battery),
+                _house_inaccurate_issue(battery),
             }
             placeholders = {"name": battery.name}
             if battery.not_responding:
@@ -144,6 +151,8 @@ class ProblemReporter:
             since = battery.unreadable_since
             if since is not None and now - since >= UNREADABLE_AFTER_S:
                 wanted[_unreadable_issue(battery)] = ("battery_unreadable", placeholders)
+                if coordinator.unread_power_unknown(battery):
+                    wanted[_house_inaccurate_issue(battery)] = ("house_power_inaccurate", placeholders)
             pending = battery.release_pending_since
             # A paused battery is not talked to on purpose.
             if pending is not None and not battery.communication_paused and now - pending >= RELEASE_FAILED_AFTER_S:

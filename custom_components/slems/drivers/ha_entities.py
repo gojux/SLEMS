@@ -193,6 +193,10 @@ class HomeAssistantEntityDriver(BatteryDriver):
         return "Home Assistant entities (read-only)"
 
     @property
+    def release_state(self) -> ReleaseState:
+        return self._config.release_state
+
+    @property
     def extra_telemetry_keys(self) -> frozenset[str]:
         return frozenset(self._config.extra_entities or {})
 

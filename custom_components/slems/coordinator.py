@@ -100,6 +100,7 @@ from .const import (
     ConsumerType,
     ControlMode,
     OperatingMode,
+    ReleaseState,
 )
 from .controller import ControlStatus, RealTimeController
 from .consumers import (
@@ -550,8 +551,8 @@ class SystemSnapshot:
     pv_power_w: float | None = None
     # Per battery subentry id; missing if the battery could not be read.
     batteries: dict[str, BatteryTelemetry] = field(default_factory=dict)
-    # Last measured power of the enabled, controllable batteries that could
-    # not be read this time (see UNREAD_BATTERY_HOLD_S); None: unknown.
+    # Last measured power of the controllable batteries that could not be
+    # read this time (see SlemsCoordinator._unread_battery_power_w); None: unknown.
     unread_battery_power_w: float | None = 0.0
     consumer_configs: dict[str, ConsumerConfig] = field(default_factory=dict)
     consumers: dict[str, ConsumerState] = field(default_factory=dict)
@@ -657,7 +658,8 @@ class SystemSnapshot:
         Negative for a moment when the smart meter reports a change later than
         the PV and battery measurements. Unknown while an enabled battery
         could not be read for longer than UNREAD_BATTERY_HOLD_S: it keeps
-        its last set point, its power would end up in the house.
+        its last set point, its power would end up in the house (a disabled
+        one never makes it unknown, see ``_unread_battery_power_w``).
         """
         if self.grid_power_w is None or self.unread_battery_power_w is None:
             return None
@@ -2074,20 +2076,47 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
 
     def _unread_battery_power_w(self, snapshot: SystemSnapshot, now: float) -> float | None:
-        """Last measured power of the enabled, controllable batteries missing
-        from ``snapshot``; None if one was not read for UNREAD_BATTERY_HOLD_S."""
+        """Last measured power of the controllable batteries missing from
+        ``snapshot``; None if an enabled one was not read for UNREAD_BATTERY_HOLD_S.
+
+        A disabled battery never makes it unknown: until it is handed back to
+        its own logic it may hold its last set point and keeps its last power;
+        once released it counts 0 W, in release state AUTO only after
+        UNREAD_BATTERY_HOLD_S (it regulates on its own and likely goes on
+        like before a short gap, see ``unread_power_unknown``).
+        """
         total = 0.0
         for battery in self.batteries:
-            if (
-                battery.subentry_id in snapshot.batteries
-                or not battery.enabled
-                or not battery.driver.capabilities.controllable
+            if battery.subentry_id in snapshot.batteries or not battery.driver.capabilities.controllable:
+                continue
+            held = battery.measured_at is not None and now - battery.measured_at <= UNREAD_BATTERY_HOLD_S
+            if battery.enabled:
+                if not held:
+                    return None
+            elif self.disabled_and_released(battery) and not (
+                held and battery.driver.release_state is ReleaseState.AUTO
             ):
                 continue
-            if battery.measured_at is None or now - battery.measured_at > UNREAD_BATTERY_HOLD_S:
-                return None
             total += battery.measured_power_w or 0.0
         return total
+
+    def disabled_and_released(self, battery: BatteryRuntime) -> bool:
+        """Disabled and handed back to its own logic (the release confirmed)."""
+        return (
+            not battery.enabled
+            and battery.leaving_until is None
+            and battery.release_pending_since is None
+            and not self.controls(battery)
+        )
+
+    def unread_power_unknown(self, battery: BatteryRuntime) -> bool:
+        """Counts 0 W in the balance while unread although it may charge or
+        discharge: disabled and released to its own logic (release state AUTO)."""
+        return (
+            battery.driver.capabilities.controllable
+            and battery.driver.release_state is ReleaseState.AUTO
+            and self.disabled_and_released(battery)
+        )
 
     async def _async_read_battery(self, battery: BatteryRuntime, now: float) -> BatteryTelemetry | None:
         """Read one battery (an outstanding release first); None if not read."""

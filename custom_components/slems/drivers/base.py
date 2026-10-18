@@ -14,6 +14,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..const import ReleaseState
+
 
 @dataclass(frozen=True)
 class BatteryCapabilities:
@@ -68,6 +70,11 @@ class BatteryDriver(ABC):
     def extra_telemetry_keys(self) -> frozenset[str]:
         """Keys this driver may report in BatteryTelemetry.extra."""
         return frozenset()
+
+    @property
+    def release_state(self) -> ReleaseState:
+        """State the battery is left in when SLEMS releases it."""
+        return ReleaseState.AUTO
 
     @property
     def has_connection(self) -> bool:

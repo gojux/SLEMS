@@ -660,6 +660,12 @@ Kann eine aktivierte, steuerbare Batterie nicht gelesen werden, zählt sie bis
 zu 5 Minuten mit ihrer zuletzt gemessenen Leistung, weil sie ihre letzte
 Vorgabe ohne neue Befehle weiterführt. Danach ist der Hausverbrauch unbekannt,
 bis die Batterie wieder lesbar ist, statt ihre Leistung dem Haus zuzurechnen.
+Eine deaktivierte Batterie macht den Hausverbrauch nie unbekannt: Solange sie
+noch nicht an ihre eigene Logik zurückgegeben ist, zählt sie weiter mit ihrer
+zuletzt gemessenen Leistung, nach der Freigabe mit 0 W. Mit dem Zustand
+**Automatik** bei der Freigabe lädt oder entlädt sie womöglich selbst: Sie
+zählt bis zu 5 Minuten mit ihrer zuletzt gemessenen Leistung, danach mit 0 W,
+und eine Reparatur weist darauf hin, dass der Hausverbrauch ungenau ist.
 Stunden, in denen der Statistik einer Batterie ein Wert fehlt, lässt die
 Verbrauchsprognose aus.
 
@@ -2083,6 +2089,9 @@ verschwinden von selbst, sobald sie behoben sind:
 
 - eine Batterie reagiert nicht (ausgeschlossen, siehe oben),
 - eine Batterie kann seit mehr als 5 Minuten nicht gelesen werden,
+- eine deaktivierte Batterie mit dem Zustand **Automatik** bei der Freigabe
+  kann seit mehr als 5 Minuten nicht gelesen werden (sie zählt mit 0 W, der
+  Hausverbrauch ist ungenau),
 - eine Batterie konnte seit mehr als 5 Minuten nicht an ihre eigene Logik
   zurückgegeben werden (sie läuft womöglich noch mit der letzten Vorgabe;
   SLEMS versucht es laufend erneut, jede Freigabe wird durch Zurücklesen

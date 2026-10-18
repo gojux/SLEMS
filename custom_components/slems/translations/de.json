@@ -1604,6 +1604,10 @@
       "title": "{name} kann nicht gelesen werden",
       "description": "SLEMS kann {name} seit mehr als 5 Minuten nicht lesen. Die Batterie wird so lange weder eingeplant noch gesteuert. Prüfe die Netzwerkverbindung, die Modbus-Einstellungen und ob eine andere Integration (z. B. Omnibattery) die einzige Modbus-Verbindung der Batterie belegt."
     },
+    "house_power_inaccurate": {
+      "title": "Hausverbrauch ungenau ohne {name}",
+      "description": "{name} ist deaktiviert und an ihre eigene Logik freigegeben (**Automatik**), SLEMS kann sie aber nicht lesen. Sie lädt oder entlädt vielleicht trotzdem; SLEMS rechnet sie mit 0 W, darum können Hausverbrauch, Grundlast und was SLEMS daraus lernt um ihre Leistung abweichen. Die Regelung am Smart Meter ist nicht betroffen. Prüfe die Verbindung der Batterie oder stell ihren Zustand bei der Freigabe auf **Standby**."
+    },
     "grid_meter_stale": {
       "title": "Smart Meter meldet nicht",
       "description": "Die Smart-Meter-Entität hat länger keinen Wert gemeldet. SLEMS hat die Batterien an ihre eigene Logik übergeben und regelt wieder, sobald der Zähler meldet. Prüfe den Smart Meter und seine Integration."
