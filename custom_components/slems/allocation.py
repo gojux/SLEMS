@@ -80,7 +80,8 @@ as usual without the supporting consumers, and the batteries do not charge
 with it while the space is needed later (``hold_charging``). Before a peak the
 batteries feed in the planned export power; the export never exceeds the
 limit, and the cap export may exceed the maximum grid export while
-discharging.
+discharging. What is left above the limit is curtailed (``cap_excess_w``,
+by batteries with own PV, see own_pv).
 """
 
 from __future__ import annotations
@@ -250,6 +251,9 @@ class Allocation:
     battery_power_w: float = 0.0
     consumer_power_w: dict[str, float] = field(default_factory=dict)
     charge_secured: bool = False
+    # Surplus above the feed-in cap that neither batteries nor consumers take
+    # (curtailed, see own_pv).
+    cap_excess_w: float = 0.0
 
 
 def allocate(
@@ -379,6 +383,7 @@ def allocate(
     if room_kept:
         max_charge = max(0.0, charge_cap_w)
     cap_charge = 0.0
+    cap_excess = 0.0
     capped = False
     if cap is not None:
         # Surplus above the limit: the planned part of the supporting
@@ -390,7 +395,7 @@ def allocate(
         left = over - early + _distribute(early, support, consumer_power)
         cap_charge = min(max_charge, left)
         left = _distribute(left - cap_charge, support, consumer_power)
-        _distribute(left, [c for c in ordered if c.cap_mode is CapMode.NORMAL], consumer_power)
+        cap_excess = _distribute(left, [c for c in ordered if c.cap_mode is CapMode.NORMAL], consumer_power)
         remaining -= over
         max_charge = 0.0 if cap.hold_charging else max_charge - cap_charge
     remaining = max(0.0, remaining - settings.charge_grid_target_w)
@@ -428,6 +433,7 @@ def allocate(
         battery_power_w=battery_power,
         consumer_power_w=consumer_power,
         charge_secured=charge_secured,
+        cap_excess_w=max(0.0, cap_excess),
     )
 
 

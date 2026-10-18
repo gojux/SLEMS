@@ -632,6 +632,7 @@ BATTERY_EXTRA_SENSORS: tuple[BatterySensorDescription, ...] = (
     ),
     BatterySensorDescription(**_power("own_pv_power"), value_fn=lambda t: t.pv_w),
     BatterySensorDescription(**_power("output_power"), value_fn=lambda t: t.output_w),
+    BatterySensorDescription(**_power("input_power"), value_fn=lambda t: t.input_w),
     BatterySensorDescription(
         key="battery_voltage",
         translation_key="battery_voltage",

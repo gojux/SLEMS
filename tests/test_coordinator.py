@@ -238,7 +238,7 @@ def test_planning_powers_of_a_full_or_blocked_battery() -> None:
     coordinator = SlemsCoordinator.__new__(SlemsCoordinator)
     coordinator.batteries = [battery("full"), battery("blocked")]
     coordinator.full_charge_battery = None
-    coordinator._power_limits = lambda battery, telemetry, use_soc_window=True: (
+    coordinator._power_limits = lambda battery, telemetry, use_soc_window=True, plan=False: (
         PowerLimits(charge_w=0.0, discharge_w=2500.0) if use_soc_window else PowerLimits(2500.0, 2500.0)
     )
     snapshot = SimpleNamespace(
@@ -439,3 +439,104 @@ def test_unread_battery_with_own_pv_keeps_only_its_output() -> None:
     # Its PV is missing from the PV sum, so only the output counts.
     assert snapshot.unread_battery_power_w == -200
     assert snapshot.house_power_w == 300
+
+
+def _plug_in(subentry_id: str, *, passes_pv_through: bool = False) -> SimpleNamespace:
+    from custom_components.slems.battery_limits import PowerLimits
+    from custom_components.slems.drivers.base import BatteryCapabilities
+
+    states = []
+    driver = SimpleNamespace(
+        capabilities=BatteryCapabilities(
+            capacity_wh=2240,
+            max_charge_power_w=1800,
+            max_discharge_power_w=800,
+            controllable=True,
+            own_pv=True,
+            ac_charge=False,
+            max_output_w=800,
+            passes_pv_through=passes_pv_through,
+        ),
+        set_own_pv_state=lambda **kw: states.append(kw),
+        states=states,
+    )
+    return SimpleNamespace(
+        subentry_id=subentry_id,
+        participating=True,
+        driver=driver,
+        delivery=SimpleNamespace(bms_full=False),
+        power_limits=PowerLimits(600, 200),
+    )
+
+
+def test_batteries_with_own_pv_curtail_for_the_feed_in_cap() -> None:
+    from custom_components.slems.allocation import Allocation, CapControl, Strategy
+    from custom_components.slems.battery_distribution import Distribution
+    from custom_components.slems.coordinator import SlemsCoordinator
+    from custom_components.slems.own_pv import CurtailControl
+
+    first, full = _plug_in("first"), _plug_in("full", passes_pv_through=True)
+    coordinator = SimpleNamespace(
+        batteries=[first, full],
+        _curtail=CurtailControl(),
+        _own_pv_at_top=SlemsCoordinator._own_pv_at_top,
+    )
+    snapshot = SystemSnapshot(
+        grid_power_filtered_w=-1100,
+        batteries={
+            "first": BatteryTelemetry(soc_pct=60, ac_power_w=200, pv_w=600, output_w=400),
+            # Full and passing its PV through: it cannot curtail.
+            "full": BatteryTelemetry(soc_pct=100, ac_power_w=0, pv_w=500, output_w=500),
+        },
+    )
+    snapshot.distribution = Distribution({"first": 200.0, "full": 0.0}, ())
+    allocation = Allocation(Strategy.FEED_IN_CAP, cap_excess_w=500)
+    cap = CapControl(limit_w=700, margin_w=100)
+    SlemsCoordinator._own_pv_control(coordinator, snapshot, allocation, cap, controller_cycle=True)
+    # Half the export above 600 W, within the 400 W the first one can curtail.
+    assert snapshot.own_pv_curtail_w == 250
+    assert first.driver.states[-1] == {"at_top": False, "curtail_w": 250}
+    assert full.driver.states[-1] == {"at_top": True, "curtail_w": 0}
+    # A slow update keeps the curtailment of the controller.
+    SlemsCoordinator._own_pv_control(coordinator, snapshot, Allocation(Strategy.IDLE), None, controller_cycle=False)
+    assert snapshot.own_pv_curtail_w == 250
+
+
+def test_delivery_counts_only_what_the_pv_read_allows() -> None:
+    from custom_components.slems.coordinator import SlemsCoordinator
+    from custom_components.slems.const import OperatingMode
+
+    battery = _plug_in("plug_in")
+    observed = []
+    battery.delivery = SimpleNamespace(
+        tick=lambda now: None,
+        observe=lambda now, commanded, *args: observed.append(commanded),
+    )
+    battery.leaving_until = None
+    coordinator = SimpleNamespace(
+        settings=SimpleNamespace(operating_mode=OperatingMode.ACTIVE),
+        controller=SimpleNamespace(command_state=lambda battery_id: (500.0, 0.0)),
+    )
+    # A cloud: 500 W commanded, only 120 W of PV left.
+    telemetry = BatteryTelemetry(soc_pct=50, ac_power_w=120, pv_w=120, output_w=0)
+    SlemsCoordinator._check_delivery(coordinator, battery, telemetry, 100.0)
+    assert observed == [120]
+
+
+def test_pv_correction_counts_own_pv_only_with_a_forecast() -> None:
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    coordinator = SimpleNamespace(
+        batteries=[
+            SimpleNamespace(subentry_id="with", own_pv_forecast_entry="forecast"),
+            SimpleNamespace(subentry_id="without", own_pv_forecast_entry=None),
+        ]
+    )
+    snapshot = SystemSnapshot(
+        pv_power_w=3000,
+        batteries={
+            "with": BatteryTelemetry(soc_pct=50, ac_power_w=0, pv_w=400, output_w=400),
+            "without": BatteryTelemetry(soc_pct=50, ac_power_w=0, pv_w=600, output_w=600),
+        },
+    )
+    assert SlemsCoordinator._forecast_pv_power_w(coordinator, snapshot) == 2400

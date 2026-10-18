@@ -33,6 +33,10 @@ are first absorbed by the battery that can follow them, then move over to
 the efficient split. No battery works against the direction of the total;
 what the fast battery cannot take, the others take at once.
 
+A battery that charges in any case (own PV above its highest output, see
+battery_limits) gets that minimum first, the total less it is distributed as
+above with the rest of its charge power, whatever the direction.
+
 A battery due for its regular full charge (see full_charge) gets the charge
 power first; the others share the rest as above. When discharging it is
 spared while all others have more than ``SPARE_OTHERS_MIN_SOC_PCT`` and can
@@ -42,7 +46,7 @@ deliver the power.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from .full_charge import SPARE_OTHERS_MIN_SOC_PCT
 
@@ -88,6 +92,8 @@ class BatteryUnit:
     leaving_fraction: float | None = None
     # Learned time until the grid meter shows a command (None: not learned).
     response_s: float | None = None
+    # Charging that happens in any case (W).
+    min_charge_w: float = 0.0
 
     @property
     def leaving(self) -> bool:
@@ -144,6 +150,18 @@ class BatteryDistributor:
         ``full_charge`` is the battery due for its full charge: charged first,
         spared when discharging while the others can do it.
         """
+        forced = {u.battery_id: u.min_charge_w for u in units if u.min_charge_w > 0}
+        if forced:
+            units = [
+                replace(u, max_charge_w=max(0.0, u.max_charge_w - u.min_charge_w), max_discharge_w=0.0, min_charge_w=0.0)
+                if u.battery_id in forced
+                else u
+                for u in units
+            ]
+            result = self.distribute(total_w - sum(forced.values()), units, settings, now, full_charge)
+            for battery_id, power in forced.items():
+                result.power_w[battery_id] = result.power_w.get(battery_id, 0.0) + power
+            return result
         elapsed = 0.0 if self._last_call is None else max(0.0, now - self._last_call)
         self._last_call = now
         fast, slow_s = _fast_battery(units, total_w)

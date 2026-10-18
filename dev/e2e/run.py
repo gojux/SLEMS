@@ -355,6 +355,43 @@ def battery_entities(token: str) -> None:
     )
 
 
+def battery_plug_in(token: str) -> None:
+    # The simulated plug-in battery with own PV, input from the grid and AC mode.
+    subentry(
+        token,
+        "battery",
+        {
+            "user": {"model": "ha_entities"},
+            "ha_device": {},
+            "ha_entities": {
+                "name": "Plug-in battery",
+                "soc_entity": "sensor.plug_in_battery_state_of_charge",
+                "own_pv": True,
+                "battery_control": "output",
+            },
+            "ha_own_pv": {
+                "own_pv_entity": "sensor.plug_in_battery_pv_power",
+                "output_entity": "sensor.plug_in_battery_output",
+                "input_entity": "sensor.plug_in_battery_input",
+                "passes_pv_through": False,
+            },
+            "ha_output": {
+                "output_setpoint_entity": "number.plug_in_battery_output_limit",
+                "input_setpoint_entity": "number.plug_in_battery_input_limit",
+                "mode_entity": "input_select.sim_plug_in_ac_mode",
+            },
+            "ha_options": {"mode_charge": "Input", "mode_discharge": "Output"},
+            "ha_limits": {
+                "capacity_wh": 2240,
+                "max_charge_power_w": 1200,
+                "max_discharge_power_w": 800,
+                "release_state": "standby",
+            },
+        },
+        "Battery with own PV (plug-in battery)",
+    )
+
+
 def consumers(token: str) -> None:
     def measured(name: str, kind: str, power: str, energy: str, control: str) -> dict:
         return {
@@ -534,6 +571,8 @@ def reconfigure(token: str) -> None:
                 "ha_device": {},
                 "ha_entities": {},
                 "ha_split": {},
+                "ha_own_pv": {},
+                "ha_output": {},
                 "ha_options": {},
                 "ha_limits": {},
             },
@@ -580,6 +619,7 @@ SCENARIOS = [
     ("Setup", setup_system),
     ("Batteries", battery_modbus),
     ("Battery from entities", battery_entities),
+    ("Battery with own PV", battery_plug_in),
     ("Consumers", consumers),
     ("Tariffs", tariffs),
     ("Options", options),

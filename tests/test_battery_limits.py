@@ -132,3 +132,19 @@ def test_own_pv_limits_charging_and_shares_the_output() -> None:
     window.charge_blocked = window.discharge_blocked = True
     limits = power_limits(1800, 1800, settings, window, None, ON, own_pv_w=600, ac_charge=False, max_output_w=800)
     assert limits.charge_reason == "soc" and limits.discharge_reason == "soc"
+
+
+def test_own_pv_above_the_output_charges_in_any_case() -> None:
+    settings = BatteryLimitSettings()
+    window = SocWindow()
+    limits = power_limits(1800, 1800, settings, window, None, ON, own_pv_w=1000, ac_charge=False, max_output_w=800)
+    assert limits.min_charge_w == 200 and limits.charge_w == 1000
+    # Also above the maximum SoC: SLEMS cannot stop it.
+    window.charge_blocked = True
+    limits = power_limits(1800, 1800, settings, window, None, ON, own_pv_w=1000, ac_charge=False, max_output_w=800)
+    assert limits.charge_w == 200 and limits.charge_reason == "pv" and limits.min_charge_w == 200
+    # A full battery takes nothing: the device curtails.
+    limits = power_limits(
+        1800, 1800, settings, window, None, ON, own_pv_w=1000, ac_charge=False, max_output_w=800, full=True
+    )
+    assert limits.charge_w == 0 and limits.min_charge_w == 0

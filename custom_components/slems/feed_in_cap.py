@@ -34,6 +34,9 @@ peaks are not averaged away) and the hourly consumption forecast:
   taken by the consumers' spare power once the batteries are full
   (``takeover_wh``); only the rest is reported as a problem.
 
+Batteries with own PV modules and without an input from the grid take at
+most the forecast of their modules in a step (``charge_limit``).
+
 Energies of the batteries (space, need) are stored energy; the charge and
 discharge losses are applied with the one-way efficiency. Consumers, excess
 and export are AC energy.
@@ -42,7 +45,7 @@ and export are AC energy.
 from __future__ import annotations
 
 from bisect import bisect_right
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import math
@@ -244,6 +247,8 @@ class _Step:
     # not needed in this step while the batteries take their part.
     spare_w: float = 0.0
     drained_w: float = 0.0
+    # Charge power of the batteries in this step (None: the planned one).
+    max_charge_w: float | None = None
 
 
 def plan_cap(
@@ -256,6 +261,7 @@ def plan_cap(
     settings: CapSettings,
     support: Sequence[CapConsumer] = (),
     normal: Sequence[CapConsumer] = (),
+    charge_limit: Callable[[datetime], float] | None = None,
 ) -> CapPlan:
     """Plan the feed-in cap from ``now`` until the end of tomorrow.
 
@@ -263,7 +269,8 @@ def plan_cap(
     buckets (Wh). ``max_charge_w`` / ``max_discharge_w`` are the powers of
     the batteries apart from the SoC window. ``support`` are the supporting
     consumers and ``normal`` the normal ones (each in order of priority); the
-    normal ones take what the supporting ones cannot.
+    normal ones take what the supporting ones cannot. ``charge_limit``: the
+    charge power at a moment instead of ``max_charge_w`` (own PV).
 
     The plan is made with the batteries first. Energy that does not fit (too
     small, or too late to make room, both with the buffers) is then given to
@@ -276,6 +283,9 @@ def plan_cap(
         )
     local_now = dt_util.as_local(now)
     steps = _steps(local_now, pv, consumption, settings, max_discharge_w)
+    if charge_limit is not None:
+        for step in steps:
+            step.max_charge_w = charge_limit(step.start + STEP / 2)
     args = (steps, battery, max_charge_w, max_discharge_w, settings, local_now)
     plan, shortfalls = _evaluate(*args, support, normal)
     if support and any(value > PROBLEM_TOLERANCE_WH for value in shortfalls):
@@ -393,7 +403,7 @@ def _evaluate(
         if step.excess_w <= 0:
             continue
         over = max(0.0, step.excess_w - step.early_w)
-        step.absorbed_w = min(over, max_charge_w)
+        step.absorbed_w = min(over, max_charge_w if step.max_charge_w is None else step.max_charge_w)
         rest = over - step.absorbed_w
         parts = (
             [(c.power_w, c.switch) for c in support]

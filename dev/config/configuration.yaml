@@ -59,8 +59,8 @@ input_number:
     initial: 3
 
   # Simulated plug-in battery with its own PV modules (2.24 kWh, 800 W
-  # output), SLEMS battery type "Home Assistant entities" with "Own PV
-  # modules at the battery" and control "Output".
+  # output, 1200 W input from the grid), SLEMS battery type "Home Assistant
+  # entities" with "Own PV modules at the battery" and control "Output".
   sim_plug_in_pv:
     name: Simulated plug-in battery PV power
     min: 0
@@ -82,8 +82,25 @@ input_number:
     step: 1
     unit_of_measurement: W
     initial: 0
+  sim_plug_in_input_setpoint:
+    name: Plug-in battery input set point
+    min: 0
+    max: 1200
+    step: 1
+    unit_of_measurement: W
+    initial: 0
+
+input_select:
+  # Mode of the simulated plug-in battery (like acMode of Zendure).
+  sim_plug_in_ac_mode:
+    name: Plug-in battery AC mode
+    options: [Input, Output]
+    initial: Output
 
 input_boolean:
+  sim_plug_in_passes_through:
+    name: Plug-in battery passes its PV through when full
+    initial: false
   sim_heating_rod_blocked:
     name: Heating rod externally blocked
   # Start/stop of the simulated wallbox (SLEMS) and whether a car is plugged in.
@@ -116,9 +133,12 @@ template:
               - states('sensor.sim_venus_1_ac_power') | float(0)
               - states('sensor.sim_venus_2_ac_power') | float(0)
               - states('sensor.sim_venus_3_ac_power') | float(0)
-              - states('sensor.plug_in_battery_output') | float(0)) | round(0) }}
-  # Plug-in battery with own PV: the output follows its set point; empty it
-  # gives at most its PV, full it passes the PV through.
+              - states('sensor.plug_in_battery_output') | float(0)
+              + states('sensor.plug_in_battery_input') | float(0)) | round(0) }}
+  # Plug-in battery with own PV: in mode Output the output follows its set
+  # point, in mode Input the input charges from the grid. Empty it gives at
+  # most its PV; full it passes the PV through, or with the switch off it
+  # curtails the modules to the output.
   - number:
       - name: Plug-in battery output limit
         unique_id: sim_plug_in_output_limit
@@ -131,13 +151,28 @@ template:
           - action: input_number.set_value
             target: {entity_id: input_number.sim_plug_in_output_setpoint}
             data: {value: "{{ value }}"}
+      - name: Plug-in battery input limit
+        unique_id: sim_plug_in_input_limit
+        unit_of_measurement: W
+        min: 0
+        max: 1200
+        step: 1
+        state: "{{ states('input_number.sim_plug_in_input_setpoint') | float(0) }}"
+        set_value:
+          - action: input_number.set_value
+            target: {entity_id: input_number.sim_plug_in_input_setpoint}
+            data: {value: "{{ value }}"}
     sensor:
       - name: Plug-in battery PV power
         unique_id: sim_plug_in_pv_power
         unit_of_measurement: W
         device_class: power
         state_class: measurement
-        state: "{{ states('input_number.sim_plug_in_pv') | float(0) }}"
+        state: >-
+          {% set pv = states('input_number.sim_plug_in_pv') | float(0) %}
+          {% set out = states('sensor.plug_in_battery_output') | float(0) %}
+          {% set full = states('input_number.sim_plug_in_soc') | float(0) >= 100 %}
+          {{ ([pv, out] | min if full else pv) | round(0) }}
       - name: Plug-in battery output
         unique_id: sim_plug_in_output
         unit_of_measurement: W
@@ -147,9 +182,21 @@ template:
           {% set pv = states('input_number.sim_plug_in_pv') | float(0) %}
           {% set soc = states('input_number.sim_plug_in_soc') | float(0) %}
           {% set out = [[states('input_number.sim_plug_in_output_setpoint') | float(0), 0] | max, 800] | min %}
+          {% if is_state('input_select.sim_plug_in_ac_mode', 'Input') %}{% set out = 0 %}{% endif %}
           {% if soc <= 0 %}{% set out = [out, pv] | min %}{% endif %}
-          {% if soc >= 100 %}{% set out = [out, [pv, 800] | min] | max %}{% endif %}
+          {% if soc >= 100 and is_state('input_boolean.sim_plug_in_passes_through', 'on') %}
+            {% set out = [out, [pv, 800] | min] | max %}
+          {% endif %}
           {{ out | round(0) }}
+      - name: Plug-in battery input
+        unique_id: sim_plug_in_input
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        state: >-
+          {% set full = states('input_number.sim_plug_in_soc') | float(0) >= 100 %}
+          {% set input = [[states('input_number.sim_plug_in_input_setpoint') | float(0), 0] | max, 1200] | min %}
+          {{ (input if is_state('input_select.sim_plug_in_ac_mode', 'Input') and not full else 0) | round(0) }}
       - name: Plug-in battery state of charge
         unique_id: sim_plug_in_soc
         unit_of_measurement: "%"
@@ -376,7 +423,8 @@ automation sim:
         target: {entity_id: input_number.sim_plug_in_soc}
         data:
           value: >-
-            {% set power = states('input_number.sim_plug_in_pv') | float(0)
+            {% set power = states('sensor.plug_in_battery_pv_power') | float(0)
+                + states('sensor.plug_in_battery_input') | float(0)
                 - states('sensor.plug_in_battery_output') | float(0) %}
             {{ [[states('input_number.sim_plug_in_soc') | float(0) + power / 3600 / 2240 * 100, 0] | max, 100] | min | round(4) }}
   - alias: Feed simulated SunSpec meter

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from functools import partial
@@ -132,7 +132,8 @@ from .battery_limits import (
     TopTaper,
     power_limits,
 )
-from .cell_balancing import BalancingPhase, CellBalancer, CellMonitor
+from .cell_balancing import BMS_END_CELL_V, BMS_END_SOC_PCT, BalancingPhase, CellBalancer, CellMonitor
+from .own_pv import CurtailControl, feasible_command_w
 from .self_test import Phase as SelfTestPhase, Sample, SelfTest, self_test_power_w, step_power_w
 from .delivery_monitor import Action, DeliveryMonitor
 from .full_charge import REST_S as FULL_CHARGE_REST_S, FullChargeCandidate, due_battery
@@ -231,7 +232,7 @@ from .pv_forecast import (
     mean_power,
     power_lookup,
 )
-from .soc_projection import ProjectionSettings, SocProjection, project_soc
+from .soc_projection import OwnPvBattery, ProjectionSettings, SocProjection, project_soc
 from .util import entity_ids, state_as_float, state_as_kwh, state_as_watts, watts_factor
 
 _LOGGER = logging.getLogger(__name__)
@@ -326,6 +327,10 @@ class BatteryRuntime:
     measured_at: float | None = None
     # Production of the own PV modules at that time (batteries with own PV).
     measured_pv_w: float | None = None
+    # Batteries with own PV: power sensor of the modules and the PV forecast
+    # provider entry of them (None: no forecast, not part of the PV forecast).
+    own_pv_entity: str | None = None
+    own_pv_forecast_entry: str | None = None
     # Monotonic time since a release (hand back to its own logic) is
     # outstanding: it failed and is tried again until it succeeds.
     release_pending_since: float | None = None
@@ -554,6 +559,10 @@ class SystemSnapshot:
     pv_power_w: float | None = None
     # Of it the own PV modules of the batteries that were read.
     own_pv_power_w: float = 0.0
+    # PV the batteries with own PV curtail for the feed-in cap (see own_pv).
+    own_pv_curtail_w: float = 0.0
+    # Forecast of the own PV modules per battery (native periods, raw).
+    own_pv_forecasts: dict[str, PvForecast] = field(default_factory=dict)
     # Per battery subentry id; missing if the battery could not be read.
     batteries: dict[str, BatteryTelemetry] = field(default_factory=dict)
     # Last measured power of the controllable batteries that could not be
@@ -793,6 +802,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._house_hold = HousePowerHold()
         self._runtime = RuntimeTracker()
         self._distributor = BatteryDistributor()
+        self._curtail = CurtailControl()
         # PV energy produced today (in memory): (local date, Wh, last sample).
         self._pv_day: tuple[object, float, float | None, float | None] | None = None
         # True once the integration covers a whole day since midnight.
@@ -1704,8 +1714,20 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 )
             self._count_target(consumer, state, now, command is not None and command > 0)
 
-        if forecast_entries := config.get(CONF_PV_FORECAST_ENTRIES):
+        forecast_entries = list(config.get(CONF_PV_FORECAST_ENTRIES) or [])
+        # The forecasts of own PV modules are part of the installation's PV.
+        own_entries = {
+            battery.subentry_id: entry_id
+            for battery in self.batteries
+            if (entry_id := battery.own_pv_forecast_entry) and battery.driver.capabilities.own_pv
+        }
+        forecast_entries += [e for e in dict.fromkeys(own_entries.values()) if e not in forecast_entries]
+        snapshot.own_pv_forecasts = {}
+        if forecast_entries:
             snapshot.pv_forecast = await async_get_pv_forecast(self.hass, forecast_entries)
+            for subentry_id, entry_id in own_entries.items():
+                if (own := await async_get_pv_forecast(self.hass, [entry_id])) is not None:
+                    snapshot.own_pv_forecasts[subentry_id] = own
             if snapshot.pv_forecast is not None:
                 wall_now = dt_util.now()
                 self.pv_accuracy.record_forecast(
@@ -1752,7 +1774,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             battery.power_limits = self._power_limits(battery, telemetry)
             self._check_delivery(battery, telemetry, now)
         self._set_pv_power(snapshot)
-        self._integrate_pv(snapshot.pv_power_w, now)
+        self._integrate_pv(self._forecast_pv_power_w(snapshot), now)
         # After all batteries were read: the balancing share of the surplus
         # depends on the other batteries.
         for battery in self.batteries:
@@ -1832,8 +1854,22 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         snapshot.own_pv_power_w = sum(own)
         snapshot.pv_power_w = pv if not own else (pv or 0.0) + sum(own)
 
+    def _forecast_pv_power_w(self, snapshot: SystemSnapshot) -> float | None:
+        """PV the PV forecast covers: without own PV modules that have no forecast entry."""
+        if snapshot.pv_power_w is None:
+            return None
+        uncovered = sum(
+            telemetry.pv_w
+            for battery in self.batteries
+            if not battery.own_pv_forecast_entry
+            and (telemetry := snapshot.batteries.get(battery.subentry_id)) is not None
+            and telemetry.pv_w is not None
+        )
+        return snapshot.pv_power_w - uncovered
+
     def _integrate_pv(self, pv_power_w: float | None, now: float) -> None:
-        """Add up today's PV energy from the live values (restarts at midnight)."""
+        """Add up today's PV energy the forecast covers from the live values
+        (restarts at midnight); the actual value of the PV correction and accuracy."""
         today = dt_util.now().date()
         day, energy, last_time, last_power = self._pv_day or (today, 0.0, None, None)
         if day != today:
@@ -1851,7 +1887,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         Without statistics for the PV sensor the integration only becomes
         complete at the next midnight.
         """
-        pv_entities = entity_ids(self._config.get(CONF_PV_POWER_ENTITY))
+        pv_entities = [
+            *entity_ids(self._config.get(CONF_PV_POWER_ENTITY)),
+            *(b.own_pv_entity for b in self.batteries if b.own_pv_entity and b.own_pv_forecast_entry),
+        ]
         if not pv_entities:
             return
         wall_now = dt_util.now()
@@ -1877,7 +1916,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             covered_until = until if covered_until is None else min(covered_until, until)
         assert covered_until is not None
         # Bridge the minutes since the last statistics period with the current value.
-        pv_now = self.data.pv_power_w if self.data is not None else None
+        pv_now = self._forecast_pv_power_w(self.data) if self.data is not None else None
         gap_h = max(0.0, (dt_util.now() - covered_until).total_seconds() / 3600)
         energy += (pv_now or 0.0) * gap_h
         self._pv_day = (wall_now.date(), energy, time.monotonic(), pv_now)
@@ -1972,9 +2011,18 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
 
     def _power_limits(
-        self, battery: BatteryRuntime, telemetry: BatteryTelemetry, *, use_soc_window: bool = True
+        self,
+        battery: BatteryRuntime,
+        telemetry: BatteryTelemetry,
+        *,
+        use_soc_window: bool = True,
+        plan: bool = False,
     ) -> PowerLimits:
+        """Limits right now; ``plan``: for the plans ahead, where the own PV of
+        the hour decides (charging not limited by the PV now, discharging by
+        the whole output)."""
         caps = battery.driver.capabilities
+        own_pv_w = (0.0 if plan else telemetry.pv_w) if caps.own_pv else None
         return power_limits(
             caps.max_charge_power_w,
             caps.max_discharge_power_w,
@@ -1989,9 +2037,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             top_taper=battery.top_taper.active and caps.controllable,
             bms_limit_w=battery.delivery.bms_limit_w,
             bms_full=battery.delivery.bms_full,
-            own_pv_w=telemetry.pv_w if caps.own_pv else None,
-            ac_charge=caps.ac_charge,
+            own_pv_w=own_pv_w,
+            ac_charge=caps.ac_charge or plan,
             max_output_w=caps.max_output_w,
+            full=telemetry.soc_pct is not None and battery_full(telemetry.soc_pct, 100.0),
         )
 
     def _check_delivery(
@@ -2010,6 +2059,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if command is None:
             return
         commanded, since = command
+        caps = battery.driver.capabilities
+        if caps.own_pv:
+            commanded = feasible_command_w(
+                commanded, telemetry.pv_w, ac_charge=caps.ac_charge, max_output_w=caps.max_output_w
+            )
         action = battery.delivery.observe(
             now,
             commanded,
@@ -2389,7 +2443,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 continue
             caps = battery.driver.capabilities
             if planning:
-                limits = self._power_limits(battery, telemetry, use_soc_window=False)
+                limits = self._power_limits(battery, telemetry, use_soc_window=False, plan=True)
             else:
                 limits = battery.power_limits or self._power_limits(battery, telemetry)
             energy += telemetry.soc_pct * battery.capacity_wh
@@ -2682,6 +2736,63 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             now,
             full_charge=self.full_charge_battery,
         )
+        self._own_pv_control(snapshot, allocation, cap_control, controller_cycle=previous_total_w is not None)
+
+    def _own_pv_control(
+        self,
+        snapshot: SystemSnapshot,
+        allocation: Allocation,
+        cap: CapControl | None,
+        *,
+        controller_cycle: bool,
+    ) -> None:
+        """Batteries with own PV: probing for curtailed PV at the top of the
+        charge and curtailing for the feed-in cap (see own_pv)."""
+        own = [
+            b for b in self.batteries
+            if b.driver.capabilities.own_pv and b.driver.capabilities.controllable
+        ]
+        if not own:
+            return
+        curtailable: dict[str, float] = {}
+        for battery in own:
+            telemetry = snapshot.batteries.get(battery.subentry_id)
+            if not battery.participating or telemetry is None or telemetry.pv_w is None:
+                continue
+            full = battery.delivery.bms_full or (
+                telemetry.soc_pct is not None and battery_full(telemetry.soc_pct, 100.0)
+            )
+            if battery.driver.capabilities.passes_pv_through and full:
+                continue
+            power = snapshot.distribution.power_w.get(battery.subentry_id, 0.0)
+            curtailable[battery.subentry_id] = max(0.0, telemetry.pv_w - max(0.0, power))
+        if controller_cycle:
+            export = None if snapshot.grid_power_filtered_w is None else -snapshot.grid_power_filtered_w
+            self._curtail.update(
+                export, cap.max_export_w if cap is not None else None,
+                allocation.cap_excess_w, sum(curtailable.values()),
+            )
+        left = snapshot.own_pv_curtail_w = self._curtail.total_w
+        for battery in own:
+            share = min(left, curtailable.get(battery.subentry_id, 0.0))
+            left -= share
+            battery.driver.set_own_pv_state(at_top=self._own_pv_at_top(battery, snapshot), curtail_w=share)
+
+    @staticmethod
+    def _own_pv_at_top(battery: BatteryRuntime, snapshot: SystemSnapshot) -> bool:
+        """Whether the battery may take less than commanded (full, at the top
+        of the charge, limited by temperature). The maximum SoC of SLEMS is not
+        enough: below the top the battery takes what the output leaves."""
+        telemetry = snapshot.batteries.get(battery.subentry_id)
+        if telemetry is None or telemetry.soc_pct is None:
+            return False
+        limits = battery.power_limits
+        if battery.delivery.bms_full or (
+            limits is not None and limits.charge_reason in ("temperature", "top", "bms")
+        ):
+            return True
+        cell = telemetry.extra.get("max_cell_voltage")
+        return cell >= BMS_END_CELL_V if cell is not None else telemetry.soc_pct >= BMS_END_SOC_PCT
 
     # --- learned values (see learning) ------------------------------------------------
 
@@ -2945,6 +3056,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 result.grid_charge = self._grid_charge(
                     battery, wall_now, pv_forecast, pv_hourly, consumption_hourly, grid_load, until, settings,
                     result.peak_limit_w, cap, tariff, background,
+                    own=self._own_pv_batteries(snapshot, wall_now),
                 )
                 if result.grid_charge is None:
                     result.price_hold = self._price_hold(
@@ -2998,6 +3110,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 battery_export=result.grid_charge.hourly_export_w if result.grid_charge else None,
                 charge_caps=result.grid_charge.hourly_caps_w if result.grid_charge else None,
                 night_keep=_price_keep(result.grid_charge, result.price_hold, battery),
+                own=self._own_pv_batteries(snapshot, wall_now),
             )
         pv_power = power_lookup(self._pv_native(snapshot, wall_now))
         result.day_plan = self._day_plan(
@@ -3113,6 +3226,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         cap: CapPlan | None,
         tariff: Tariff | None = None,
         background: bool = False,
+        own: Sequence[OwnPvBattery] = (),
     ) -> GridChargePlan | None:
         """Price plan of the batteries (see grid_charge).
 
@@ -3161,9 +3275,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if enabled
             else 0.0
         )
-        grid_power = battery.max_charge_w if settings.grid_charge else 0.0
+        # Batteries with own PV and without an input do not charge from the grid.
+        grid_power = (
+            max(0.0, battery.max_charge_w - sum(b.max_charge_w for b in own)) if settings.grid_charge else 0.0
+        )
         if settings.grid_charge_max_w > 0:
             grid_power = min(grid_power, settings.grid_charge_max_w)
+        own_room_wh = sum(max(0.0, b.full_wh - b.stored_wh) for b in own)
         import_limit = peak_limit_w if settings.peak_shaving else math.inf
         if settings.grid_import_max_w > 0:
             import_limit = min(import_limit, settings.grid_import_max_w)
@@ -3180,6 +3298,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 battery.full_soc_pct / 100 * capacity - cap.space_needed_at(horizon)
                 if cap is not None
                 else math.inf,
+                battery.full_soc_pct / 100 * capacity - own_room_wh,
             ),
             max_charge_w=battery.max_charge_w,
             max_discharge_w=battery.max_discharge_w,
@@ -3268,7 +3387,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         capacity = battery.capacity_wh
         enabled = [b for b in self.batteries if b.enabled]
         weights = [b.driver.capabilities.capacity_wh or 1.0 for b in enabled]
-        max_charge = battery.max_charge_w
+        # Batteries with own PV and without an input do not charge from the grid.
+        own = self._own_pv_batteries(snapshot, dt_util.now())
+        max_charge = max(0.0, battery.max_charge_w - sum(b.max_charge_w for b in own))
         if settings.grid_charge_max_w > 0:
             max_charge = min(max_charge, settings.grid_charge_max_w)
         return BacktestBattery(
@@ -3376,6 +3497,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             balancing_wh,
             cap,
             self.target_demands,
+            own=self._own_pv_batteries(snapshot, wall_now),
         )
         capacity = battery.capacity_wh
         floor = battery.min_soc_pct / 100 * capacity
@@ -3435,7 +3557,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             telemetry = snapshot.batteries.get(runtime.subentry_id)
             if runtime.plannable and telemetry is not None:
                 # Without the SoC window: the power when the peak comes.
-                limits = self._power_limits(runtime, telemetry, use_soc_window=False)
+                limits = self._power_limits(runtime, telemetry, use_soc_window=False, plan=True)
                 charge_w += limits.charge_w
                 discharge_w += limits.discharge_w
         if power_w is not None:
@@ -3473,7 +3595,62 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             ),
             support,
             normal,
+            charge_limit=self._own_pv_charge_limit(snapshot, wall_now, charge_w) if power_w is None else None,
         )
+
+    def _own_pv_batteries(self, snapshot: SystemSnapshot, wall_now: datetime) -> list[OwnPvBattery]:
+        """The plannable batteries with own PV and without an input from the
+        grid, with the forecast of their modules (corrected like the PV forecast)."""
+        result = []
+        for battery in self.batteries:
+            caps = battery.driver.capabilities
+            telemetry = snapshot.batteries.get(battery.subentry_id)
+            if (
+                not caps.own_pv
+                or caps.ac_charge
+                or not battery.plannable
+                or telemetry is None
+                or telemetry.soc_pct is None
+            ):
+                continue
+            capacity = battery.capacity_wh
+            maximum = (
+                100.0
+                if battery.subentry_id == self.full_charge_battery or not caps.controllable
+                else battery.limits.max_soc_pct
+            )
+            minimum = battery.limits.min_soc_pct if caps.controllable else 0.0
+            forecast = snapshot.own_pv_forecasts.get(battery.subentry_id)
+            result.append(
+                OwnPvBattery(
+                    stored_wh=telemetry.soc_pct / 100 * capacity,
+                    full_wh=maximum / 100 * capacity,
+                    floor_wh=minimum / 100 * capacity,
+                    max_charge_w=self._power_limits(battery, telemetry, use_soc_window=False, plan=True).charge_w,
+                    pv=corrected_forecast(forecast, wall_now, snapshot.pv_correction, snapshot.pv_elapsed_share)
+                    if forecast
+                    else {},
+                )
+            )
+        return result
+
+    def _own_pv_charge_limit(
+        self, snapshot: SystemSnapshot, wall_now: datetime, charge_w: float
+    ) -> Callable[[datetime], float] | None:
+        """Charge power of the batteries at a moment: those with own PV at
+        most the forecast of their modules (None without such batteries)."""
+        own = self._own_pv_batteries(snapshot, wall_now)
+        if not own:
+            return None
+        others_w = max(0.0, charge_w - sum(b.max_charge_w for b in own))
+        lookups = [(b.max_charge_w, power_lookup(b.pv) if b.pv else None) for b in own]
+
+        def limit(moment: datetime) -> float:
+            return others_w + sum(
+                min(max_w, lookup(moment)) for max_w, lookup in lookups if lookup is not None
+            )
+
+        return limit
 
     def _run_surplus(
         self,
@@ -4308,6 +4485,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     max_discharge_w=0.0 if resting else limits.discharge_w,
                     loss_model=battery.loss_curve.model(LossModel()),
                     response_s=self.controller.battery_responses.learned(battery.subentry_id),
+                    min_charge_w=limits.min_charge_w,
                     leaving_fraction=(
                         None
                         if battery.plannable

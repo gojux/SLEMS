@@ -17,7 +17,9 @@
 * Own PV modules (batteries that feed the house only through their output):
   without charging from the grid the battery charges at most what its
   modules produce, and it discharges at most the highest output minus that
-  production (the output is shared). Both change with the sun.
+  production (the output is shared). Both change with the sun. PV above the
+  highest output charges the battery in any case unless it is full (the
+  device curtails it then): a minimum charge, also beyond the SoC window.
 * Temperature (optional; the high limit after Omnibattery's temperature charge
   limit): above the high limit the charge power ramps linearly down to the
   floor at high limit + band. Below the low limit no charging; above it the
@@ -123,6 +125,8 @@ class PowerLimits:
     # delivery_monitor).
     charge_reason: str | None = None
     discharge_reason: str | None = None
+    # Charging that happens in any case (own PV above the highest output).
+    min_charge_w: float = 0.0
 
 
 def power_limits(
@@ -141,6 +145,7 @@ def power_limits(
     own_pv_w: float | None = None,
     ac_charge: bool = True,
     max_output_w: float | None = None,
+    full: bool = False,
 ) -> PowerLimits:
     """Combine capability, user power limits, SoC window and temperature.
 
@@ -149,7 +154,8 @@ def power_limits(
     after the BMS stopped discharging (0: blocked). ``bms_full``: the BMS
     ended the charge below the maximum SoC (no charging). ``own_pv_w``:
     production of the battery's own PV modules (None: it has none), with
-    ``ac_charge`` (it may charge from the grid as well) and ``max_output_w``.
+    ``ac_charge`` (it may charge from the grid as well) and ``max_output_w``;
+    ``full``: the battery takes nothing (no minimum charge).
     """
     charge, charge_reason = max_charge_w, None
     if settings.charge_limit_w is not None and settings.charge_limit_w < charge:
@@ -162,10 +168,15 @@ def power_limits(
     pv = max(0.0, own_pv_w) if own_pv_w is not None else None
     if pv is not None and not ac_charge and pv < charge:
         charge, charge_reason = pv, "pv"
+    forced = 0.0
+    if pv is not None and max_output_w is not None and not full and not bms_full:
+        forced = min(charge, max(0.0, pv - max_output_w))
     if use_soc_window and window.charge_blocked and not full_charge:
         charge, charge_reason = 0.0, "soc"
     elif use_soc_window and bms_full:
         charge, charge_reason = 0.0, "bms"
+    if charge < forced:
+        charge, charge_reason = forced, "pv"
 
     discharge, discharge_reason = max_discharge_w, None
     if settings.discharge_limit_w is not None and settings.discharge_limit_w < discharge:
@@ -176,4 +187,4 @@ def power_limits(
         discharge, discharge_reason = 0.0, "soc"
     elif use_soc_window and bms_limit_w is not None and bms_limit_w < discharge:
         discharge, discharge_reason = bms_limit_w, "bms"
-    return PowerLimits(max(0.0, charge), max(0.0, discharge), charge_reason, discharge_reason)
+    return PowerLimits(max(0.0, charge), max(0.0, discharge), charge_reason, discharge_reason, forced)

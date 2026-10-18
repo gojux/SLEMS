@@ -100,6 +100,12 @@ CONF_OWN_PV_ENTITY: Final = "own_pv_entity"
 CONF_OUTPUT_ENTITY: Final = "output_entity"
 CONF_OUTPUT_SETPOINT_ENTITY: Final = "output_setpoint_entity"
 CONF_MAX_OUTPUT_W: Final = "max_output_w"
+# Input from the grid (measured power and set point), optional.
+CONF_INPUT_ENTITY: Final = "input_entity"
+CONF_INPUT_SETPOINT_ENTITY: Final = "input_setpoint_entity"
+CONF_PASSES_PV_THROUGH: Final = "passes_pv_through"
+# PV forecast provider entry of the own PV modules.
+CONF_OWN_PV_FORECAST_ENTRY: Final = "own_pv_forecast_entry"
 # Entities of the PV systems to remove because they are the battery's own PV.
 CONF_REMOVE_FROM_PV: Final = "remove_from_pv"
 
@@ -219,7 +225,8 @@ class BatteryControl(StrEnum):
     # A script receives the signed power as variable ``power_w``.
     SCRIPT = "script"
     # One number with the output power of a battery with its own PV modules
-    # (W, >= 0); the driver converts the battery power into it.
+    # (W, >= 0), optionally one with the input from the grid and a mode
+    # select; the driver converts the battery power into them.
     OUTPUT = "output"
 
 

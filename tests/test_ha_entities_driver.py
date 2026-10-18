@@ -294,3 +294,88 @@ async def test_output_control_turns_the_battery_power_into_an_output() -> None:
     assert float(fake.value("number.output")) == 0
     fake._states["sensor.pv"].state = "unavailable"
     assert not await battery.apply_power(0)
+
+
+def plug_in_with_input(fake: FakeHass, **options) -> HomeAssistantEntityDriver:
+    """Plug-in battery with an input from the grid and a mode select (Zendure like)."""
+    fake._states.update(
+        {
+            entity_id: SimpleNamespace(entity_id=entity_id, state=state, attributes=attributes)
+            for entity_id, (state, attributes) in {
+                "sensor.input": ("0", {"unit_of_measurement": "W"}),
+                "number.input": ("0", {"min": 0, "max": 1200, "step": 1, "unit_of_measurement": "W"}),
+                "select.ac_mode": ("Output", {"options": ["Input", "Output", "Auto"]}),
+            }.items()
+        }
+    )
+    return plug_in(
+        fake,
+        control=BatteryControl.OUTPUT,
+        output_setpoint_entity_id="number.output",
+        input_entity_id="sensor.input",
+        input_setpoint_entity_id="number.input",
+        mode_entity_id="select.ac_mode",
+        mode_charge="Input",
+        mode_discharge="Output",
+        mode_auto="Auto",
+        **options,
+    )
+
+
+async def test_input_charges_beyond_the_own_pv() -> None:
+    fake = hass()
+    battery = plug_in_with_input(fake)
+    assert battery.capabilities.ac_charge
+    fake._states["sensor.input"].state = "300"
+    telemetry = await battery.read_telemetry()
+    # 600 W PV + 300 W input − 200 W output.
+    assert telemetry.ac_power_w == 700 and telemetry.input_w == 300
+    assert telemetry.connection_power_w == 100
+    assert "input_power" in battery.extra_telemetry_keys
+    assert await battery.apply_power(1000)
+    assert float(fake.value("number.input")) == 400 and float(fake.value("number.output")) == 0
+    assert fake.value("select.ac_mode") == "Input"
+    # Charging from the grid: the output stops first.
+    order = [call[2]["entity_id"] for call in fake.calls if call[1] == "set_value"]
+    assert order[-2:] == ["number.output", "number.input"]
+    assert await battery.apply_power(100)
+    assert float(fake.value("number.input")) == 0 and float(fake.value("number.output")) == 500
+    order = [call[2]["entity_id"] for call in fake.calls if call[1] == "set_value"]
+    assert order[-2:] == ["number.input", "number.output"]
+    assert fake.value("select.ac_mode") == "Output"
+    await battery.release_control()
+    assert fake.value("select.ac_mode") == "Auto"
+
+
+async def test_output_follows_the_own_pv() -> None:
+    fake = hass()
+    battery = plug_in(fake, control=BatteryControl.OUTPUT, output_setpoint_entity_id="number.output")
+    assert not battery.needs_write(400)  # nothing written yet
+    await battery.apply_power(400)
+    assert not battery.needs_write(400)
+    fake._states["sensor.pv"].state = "750"
+    assert battery.needs_write(400)
+    await battery.apply_power(400)
+    assert float(fake.value("number.output")) == 350
+
+
+async def test_curtailing_and_probing_at_the_top() -> None:
+    fake = hass()
+    battery = plug_in(fake, control=BatteryControl.OUTPUT, output_setpoint_entity_id="number.output")
+    # The feed-in cap curtails 150 W: the output is lower than PV − charge power.
+    battery.set_own_pv_state(at_top=False, curtail_w=150)
+    await battery.apply_power(400)
+    assert float(fake.value("number.output")) == 50
+    # At the top the output is raised a step above the output read (200 W).
+    battery.set_own_pv_state(at_top=True, curtail_w=0)
+    await battery.apply_power(400)
+    assert float(fake.value("number.output")) == 250
+    # A device that passes its PV through needs no probe.
+    fake = hass()
+    battery = plug_in(
+        fake, control=BatteryControl.OUTPUT, output_setpoint_entity_id="number.output", passes_pv_through=True
+    )
+    assert battery.capabilities.passes_pv_through
+    battery.set_own_pv_state(at_top=True, curtail_w=0)
+    await battery.apply_power(400)
+    assert float(fake.value("number.output")) == 200

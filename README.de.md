@@ -758,20 +758,48 @@ SLEMS funktioniert auch ohne Batterie: einfach nur die Verbraucher anlegen.
   (Marstek B2500, Zendure SolarFlow, Anker Solarbank) oder ein
   Hybrid-Wechselrichter. Wähle die Leistung der Module, den Ausgang ins Haus und
   den höchsten Ausgang (z. B. 800 W). SLEMS zählt die Module als PV und die
-  Batterieleistung als eigene PV − Ausgang, damit die Bilanz stimmt; trag die
+  Batterieleistung als eigene PV + Eingang − Ausgang, damit die Bilanz stimmt; trag die
   Module oder den Ausgang nicht zusätzlich als PV-Anlage ein. SLEMS weist darauf
   hin und bietet an, sie dort zu entfernen. Mit der Steuerung **Ausgang** setzt
-  SLEMS Ausgang = eigene PV − Ladeleistung. Eine solche Batterie lädt höchstens,
-  was ihre Module liefern (kein Laden aus dem Netz, nachts keines), und entlädt
-  höchstens den höchsten Ausgang abzüglich ihrer eigenen PV: bei 600 W PV und
-  800 W Ausgang bleiben 200 W. **Erlaubte Ladeleistung** und **Erlaubte
-  Entladeleistung** zeigen dann den Grund `pv`. Ihre Sensoren
-  **Leistung eigene PV** und **Ausgangsleistung** zeigen beide Werte. Mit dem
-  Zustand bei Freigabe **Standby** bleibt der Ausgang bei 0 W, die Batterie lädt
-  dann nur aus ihren Modulen. Nimm eine Ausgangs-Entität, die das Gerät nicht
-  dauerhaft speichert: häufige Vorgaben verschleißen seinen Flash-Speicher. Die
-  Prognose des Ladezustands trennt die eigene PV-Prognose der Batterie noch
-  nicht von den anderen PV-Anlagen.
+  SLEMS Ausgang = eigene PV − Ladeleistung und schreibt ihn neu, wenn sich die
+  eigene PV ändert. Ohne Eingang aus dem Netz lädt eine solche Batterie
+  höchstens, was ihre Module liefern (nachts keines), und entlädt höchstens den
+  höchsten Ausgang abzüglich ihrer eigenen PV: bei 600 W PV und 800 W Ausgang
+  bleiben 200 W. PV über dem höchsten Ausgang lädt sie in jedem Fall, außer sie
+  ist voll. **Erlaubte Ladeleistung** und **Erlaubte Entladeleistung** zeigen
+  dann den Grund `pv`. Ihre Sensoren **Leistung eigene PV**,
+  **Ausgangsleistung** und mit Eingang **Eingangsleistung** zeigen die Werte.
+  Mit dem Zustand bei Freigabe **Standby** bleiben Eingang und Ausgang bei 0 W,
+  die Batterie lädt dann nur aus ihren Modulen. Nimm Entitäten für Ausgang und
+  Eingang, die das Gerät nicht dauerhaft speichert: häufige Vorgaben
+  verschleißen seinen Flash-Speicher.
+
+  Ein Gerät mit AC-Eingang (z. B. Zendure SolarFlow mit **inputLimit** und
+  **acMode**) bekommt den Sensor **Eingang aus dem Netz** und mit der Steuerung
+  **Ausgang** die Number für den Eingang und optional eine Modus-Auswahl
+  (Laden: Eingang, Entladen: Ausgang). Es lädt dann über die eigene PV hinaus
+  aus dem Netz (Eingang = Ladeleistung − eigene PV, Ausgang 0) und nimmt am
+  Laden aus dem Netz teil. Ohne Eingang bleibt es dort außen vor.
+
+  **Reicht die PV bei voller Batterie durch**: schalte es ein, wenn das Gerät
+  bei voller Batterie seine PV unabhängig von der Vorgabe des Ausgangs ins Haus
+  liefert. Sonst regelt das Gerät seine Module ab, sobald die Batterie weniger
+  nimmt als PV − Ausgang (voll, am Ende der Ladung, durch die Temperatur
+  begrenzt), und der PV-Sensor zeigt nur noch den Rest. SLEMS hebt den Ausgang
+  dann in Schritten an (50 W, verdoppelt, solange die PV folgt), um die PV
+  wiederzufinden, und hält den Ausgang über dem, was die Batterie nimmt. Gewollt
+  regelt nur die **Einspeisebegrenzung** eine solche Batterie ab: Können weder
+  die Batterien noch die Verbraucher den Überschuss über der Grenze nehmen,
+  senken die Batterien mit eigener PV ihren Ausgang, bis die Einspeisung an der
+  Grenze liegt.
+
+  **PV-Prognose der Module** (optional): der Prognose-Eintrag der Module der
+  Batterie (z. B. eine Forecast.Solar-Fläche des Balkons). Er zählt zur
+  PV-Prognose der Anlage, auch wenn er in den Systemeinstellungen nicht
+  ausgewählt ist. In der Prognose des Ladezustands, der Einspeisebegrenzung und
+  dem Preisplan lädt die Batterie höchstens diese Prognose und nur aus ihr;
+  ohne den Eintrag lädt sie dort nicht, und ihre eigene PV bleibt aus der
+  PV-Korrektur (Ist / Prognose) heraus.
 
   Optional wird ein Schalter oder eine Auswahl für die **Fernsteuerung** (z. B.
   **Manuelle Batteriesteuerung** bei Omnibattery) vor der ersten Vorgabe
@@ -779,7 +807,7 @@ SLEMS funktioniert auch ohne Batterie: einfach nur die Verbraucher anlegen.
   Batterie wieder selbst regelt; leer lassen, wenn du sie selbst schaltest.
   Zum Steuern ist der Sensor der
   Batterieleistung Pflicht (mit eigenen PV-Modulen nimmt SLEMS stattdessen
-  eigene PV − Ausgang). **Mindestabstand zwischen Befehlen** passt für
+  eigene PV + Eingang − Ausgang). **Mindestabstand zwischen Befehlen** passt für
   Integrationen mit begrenzter Befehlsrate (oft über eine Cloud), **Vorgabe
   wiederholen alle** für Batterien, die ohne neue Befehle auf ihre eigene Logik
   zurückfallen. Die eigene Regelung der Batterie (z. B. ihre Nulleinspeisung)
@@ -2260,10 +2288,10 @@ Nutzern mit einer echten Wallbox zur [evcc-Anleitung](docs/wallbox-evcc.de.md).
   Stromkreis (z. B. zwei Venus hinter einem Leitungsschutzschalter) bekommen
   eine gemeinsame Höchstleistung, die sich die aktiven Batterien der Gruppe
   teilen, statt fest der Hälfte für jede.
-- Batterien mit eigener PV: ihre eigene PV-Prognose in der Prognose des
-  Ladezustands, Abregeln nur für die Einspeisebegrenzung, Geräte, die die PV
-  bei voller Batterie durchreichen, der Selbsttest mit Sonne und Laden aus dem
-  Netz für Geräte mit AC-Eingang.
+- Batterien mit eigener PV: die ersten echten Geräte (Marstek B2500, Zendure
+  SolarFlow) und Hybrid-Wechselrichter über ihre Integrationen, ein
+  gemeinsamer höchster Ausgang für mehrere Einheiten an einem Wechselrichter
+  und die Prüfung auf doppelt gezählte PV auch in den Systemeinstellungen.
 - Weitere Anlagenarten: Batterien mit eigenem Zähler oder einem
   Notstromausgang mit Lasten dahinter, und Batterien an mehreren
   Wechselrichtern.

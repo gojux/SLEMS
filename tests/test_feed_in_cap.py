@@ -255,3 +255,12 @@ def test_switch_consumers_only_with_their_full_power() -> None:
     assert "charge_power_too_low" in small.problems
     power = plan(now, pv_hours({(1, 12): 5900}), charge=2000.0, support=[CapConsumer(3000)])
     assert power.curtailed_wh == pytest.approx(0)
+
+
+def test_charge_limit_of_batteries_with_own_pv() -> None:
+    # 1 kWh above the limit at noon; a plug-in battery without sun at that
+    # moment takes nothing, the others 300 W.
+    pv = pv_hours({(1, 12): 4400})
+    result = plan(midnight(0) + timedelta(hours=20), pv, charge_limit=lambda moment: 300.0)
+    assert result.blocks[0].absorbed_wh == pytest.approx(300)
+    assert result.curtailed_wh == pytest.approx(700)

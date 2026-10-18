@@ -698,7 +698,11 @@ class RealTimeController:
                 continue
             if latest is not None and not refresh:
                 same_direction = (latest > 0) == (target > 0) and (latest < 0) == (target < 0)
-                if abs(latest - target) < BATTERY_DEADBAND_W and same_direction:
+                if (
+                    abs(latest - target) < BATTERY_DEADBAND_W
+                    and same_direction
+                    and not battery.driver.needs_write(round(latest))
+                ):
                     new_total += latest
                     continue
             _LOGGER.debug("Battery %s: set point %d W", battery.name, target)

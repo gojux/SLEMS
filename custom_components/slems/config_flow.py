@@ -91,11 +91,15 @@ from .const import (
     CONF_REMOTE_ON,
     CONF_SETPOINT_ENTITY,
     CONF_SETPOINT_INVERTED,
+    CONF_INPUT_ENTITY,
+    CONF_INPUT_SETPOINT_ENTITY,
     CONF_MAX_OUTPUT_W,
     CONF_OUTPUT_ENTITY,
     CONF_OUTPUT_SETPOINT_ENTITY,
     CONF_OWN_PV,
     CONF_OWN_PV_ENTITY,
+    CONF_OWN_PV_FORECAST_ENTRY,
+    CONF_PASSES_PV_THROUGH,
     CONF_REMOVE_FROM_PV,
     BatteryControl,
     ReleaseState,
@@ -284,9 +288,15 @@ _CONTROL_KEYS: dict[BatteryControl, tuple[str, ...]] = {
         CONF_MODE_CHARGE, CONF_MODE_DISCHARGE, CONF_MODE_STANDBY, CONF_MODE_AUTO,
     ),
     BatteryControl.SCRIPT: (CONF_POWER_SCRIPT, CONF_RELEASE_SCRIPT),
-    BatteryControl.OUTPUT: (CONF_OUTPUT_SETPOINT_ENTITY,),
+    BatteryControl.OUTPUT: (
+        CONF_OUTPUT_SETPOINT_ENTITY, CONF_INPUT_SETPOINT_ENTITY, CONF_MODE_ENTITY,
+        CONF_MODE_CHARGE, CONF_MODE_DISCHARGE, CONF_MODE_STANDBY, CONF_MODE_AUTO,
+    ),
 }
-_OWN_PV_KEYS = (CONF_OWN_PV_ENTITY, CONF_OUTPUT_ENTITY, CONF_MAX_OUTPUT_W)
+_OWN_PV_KEYS = (
+    CONF_OWN_PV_ENTITY, CONF_OUTPUT_ENTITY, CONF_INPUT_ENTITY, CONF_MAX_OUTPUT_W,
+    CONF_PASSES_PV_THROUGH, CONF_OWN_PV_FORECAST_ENTRY,
+)
 _REMOTE_KEYS = (CONF_REMOTE_ENTITY, CONF_REMOTE_ON, CONF_REMOTE_OFF)
 _CONTROLLED_KEYS = (CONF_RELEASE_STATE, CONF_MIN_COMMAND_INTERVAL_S, CONF_KEEPALIVE_S)
 
@@ -946,6 +956,8 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         twice = []
         if user_input is not None:
             self._data = _merge(self._data, user_input, _OWN_PV_KEYS)
+            if not self._data.get(CONF_PASSES_PV_THROUGH):
+                self._data.pop(CONF_PASSES_PV_THROUGH, None)
             twice = self._counted_as_pv()
             if twice and not user_input.get(CONF_REMOVE_FROM_PV):
                 errors["base"] = "own_pv_counted_twice"
@@ -962,10 +974,26 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             vol.Required(
                 CONF_OUTPUT_ENTITY, default=data.get(CONF_OUTPUT_ENTITY, vol.UNDEFINED)
             ): _POWER_SENSOR,
+            _optional(CONF_INPUT_ENTITY, data): _POWER_SENSOR,
             vol.Required(
                 CONF_MAX_OUTPUT_W, default=data.get(CONF_MAX_OUTPUT_W, 800)
             ): _watts(100_000),
+            vol.Required(
+                CONF_PASSES_PV_THROUGH, default=data.get(CONF_PASSES_PV_THROUGH, False)
+            ): selector.BooleanSelector(),
         }
+        if providers := await async_forecast_provider_entries(self.hass):
+            schema[_optional(CONF_OWN_PV_FORECAST_ENTRY, data)] = selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        selector.SelectOptionDict(
+                            value=entry.entry_id, label=f"{entry.title} ({entry.domain})"
+                        )
+                        for entry in providers
+                    ],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            )
         if twice:
             schema[vol.Required(CONF_REMOVE_FROM_PV, default=False)] = selector.BooleanSelector()
         return self.async_show_form(
@@ -1000,10 +1028,19 @@ class BatterySubentryFlow(ConfigSubentryFlow):
     async def async_step_ha_output(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
-        """One number entity with the output power of a battery with own PV."""
+        """Number entities with the output (and the input) of a battery with own
+        PV, optionally a mode select."""
+        errors: dict[str, str] = {}
         if user_input is not None:
-            self._data = _merge(self._data, user_input, (CONF_OUTPUT_SETPOINT_ENTITY, CONF_REMOTE_ENTITY))
-            return await self._async_step_after_control()
+            self._data = _merge(
+                self._data,
+                user_input,
+                (CONF_OUTPUT_SETPOINT_ENTITY, CONF_INPUT_SETPOINT_ENTITY, CONF_MODE_ENTITY, CONF_REMOTE_ENTITY),
+            )
+            if self._data.get(CONF_INPUT_SETPOINT_ENTITY) and not self._data.get(CONF_INPUT_ENTITY):
+                errors[CONF_INPUT_SETPOINT_ENTITY] = "input_needs_sensor"
+            else:
+                return await self._async_step_after_control()
         data = self._data
         return self.async_show_form(
             step_id="ha_output",
@@ -1013,9 +1050,12 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                         CONF_OUTPUT_SETPOINT_ENTITY,
                         default=data.get(CONF_OUTPUT_SETPOINT_ENTITY, vol.UNDEFINED),
                     ): _NUMBER_ENTITY,
+                    _optional(CONF_INPUT_SETPOINT_ENTITY, data): _NUMBER_ENTITY,
+                    _optional(CONF_MODE_ENTITY, data): _SELECT_ENTITY,
                     _optional(CONF_REMOTE_ENTITY, data): _REMOTE_ENTITY,
                 }
             ),
+            errors=errors,
         )
 
     async def async_step_ha_setpoint(
@@ -1101,7 +1141,7 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         data = self._data
         fields: dict[str, list[str]] = {}
         control = BatteryControl(data[CONF_BATTERY_CONTROL])
-        mode = data.get(CONF_MODE_ENTITY) if control is BatteryControl.SPLIT else None
+        mode = data.get(CONF_MODE_ENTITY) if control in (BatteryControl.SPLIT, BatteryControl.OUTPUT) else None
         if mode and (options := _select_options(self.hass, mode)):
             for key in (CONF_MODE_CHARGE, CONF_MODE_DISCHARGE, CONF_MODE_STANDBY, CONF_MODE_AUTO):
                 fields[key] = options
@@ -1331,10 +1371,12 @@ def _entity_battery_data(data: dict[str, Any]) -> dict[str, Any]:
     """Data of a battery from HA entities without the keys of other control types."""
     control = BatteryControl(data.get(CONF_BATTERY_CONTROL, BatteryControl.NONE))
     result = {key: value for key, value in data.items() if value not in (None, "")}
+    kept = _CONTROL_KEYS.get(control, ())
     for other, keys in _CONTROL_KEYS.items():
         if other is not control:
             for key in keys:
-                result.pop(key, None)
+                if key not in kept:
+                    result.pop(key, None)
     if control in (BatteryControl.NONE, BatteryControl.SCRIPT):
         for key in _REMOTE_KEYS:
             result.pop(key, None)

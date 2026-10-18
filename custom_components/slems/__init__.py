@@ -18,6 +18,8 @@ from .const import (
     CONF_CAPACITY_WH,
     CONF_PURCHASE_PRICE_EUR,
     CONF_RATED_CYCLES,
+    CONF_OWN_PV_ENTITY,
+    CONF_OWN_PV_FORECAST_ENTRY,
     CONF_SELF_TEST_ON_SETUP,
     DEFAULT_ROUND_TRIP_EFFICIENCY_PCT,
     DOMAIN,
@@ -81,6 +83,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
                 ),
                 self_test_pending=bool(subentry.data.get(CONF_SELF_TEST_ON_SETUP))
                 and driver.capabilities.controllable,
+                own_pv_entity=subentry.data.get(CONF_OWN_PV_ENTITY) if driver.capabilities.own_pv else None,
+                own_pv_forecast_entry=subentry.data.get(CONF_OWN_PV_FORECAST_ENTRY)
+                if driver.capabilities.own_pv
+                else None,
             )
         )
     consumers = [

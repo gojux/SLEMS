@@ -10,12 +10,15 @@ controlled through the entities of the battery's own integration:
   mode select (charge / discharge / standby / automatic),
 * ``script``: a script receives the signed power as variable ``power_w``,
 * ``output``: one number with the output power of a battery with its own PV
-  modules; the battery power becomes output = own PV − power, within 0 and
-  the highest output.
+  modules, optionally one with the input from the grid and a mode select
+  (charge: input, discharge: output); the battery power becomes the input or
+  the output (see own_pv). The output follows the own PV: it is written
+  again once it differs by ``OUTPUT_DEADBAND_W`` from the one written.
 
-With own PV modules the driver reads their power and the output (both
-required; without them the unit cannot be balanced) and reports the AC power
-as own PV − output.
+With own PV modules the driver reads their power, the output and, if set, the
+input (required; without them the unit cannot be balanced) and reports the AC
+power as own PV + input − output. At the top of the charge it probes for
+curtailed PV unless the device passes its PV through when full (see own_pv).
 
 An optional remote control entity (switch or select) is switched on before the
 first set point and off again when the battery is released to its automatic.
@@ -32,6 +35,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 import logging
+import time
 from typing import Any
 
 from homeassistant.const import (
@@ -63,11 +67,14 @@ from ..const import (
     CONF_MODE_DISCHARGE,
     CONF_MODE_ENTITY,
     CONF_MODE_STANDBY,
+    CONF_INPUT_ENTITY,
+    CONF_INPUT_SETPOINT_ENTITY,
     CONF_MAX_OUTPUT_W,
     CONF_OUTPUT_ENTITY,
     CONF_OUTPUT_SETPOINT_ENTITY,
     CONF_OWN_PV,
     CONF_OWN_PV_ENTITY,
+    CONF_PASSES_PV_THROUGH,
     CONF_POWER_ENTITY,
     CONF_POWER_INVERTED,
     CONF_POWER_SCRIPT,
@@ -90,6 +97,7 @@ from ..util import (
     state_as_kwh,
     state_as_watts,
 )
+from ..own_pv import OutputProbe, ports
 from .base import BatteryCapabilities, BatteryDriver, BatteryDriverError, BatteryTelemetry
 
 _LOGGER = logging.getLogger(__name__)
@@ -102,6 +110,8 @@ EXTRA_ENTITIES: dict[str, str] = {
     "total_charging_energy": CONF_CHARGED_ENERGY_ENTITY,
     "total_discharging_energy": CONF_DISCHARGED_ENERGY_ENTITY,
 }
+# An output that follows the own PV is written again from this difference.
+OUTPUT_DEADBAND_W = 20.0
 
 
 @dataclass(frozen=True)
@@ -138,6 +148,9 @@ class EntityBatteryConfig:
     output_entity_id: str | None = None
     output_setpoint_entity_id: str | None = None
     max_output_w: int | None = None
+    input_entity_id: str | None = None
+    input_setpoint_entity_id: str | None = None
+    passes_pv_through: bool = False
 
     @classmethod
     def from_data(cls, data: Mapping[str, Any]) -> EntityBatteryConfig:
@@ -177,6 +190,9 @@ class EntityBatteryConfig:
             output_entity_id=data.get(CONF_OUTPUT_ENTITY),
             output_setpoint_entity_id=data.get(CONF_OUTPUT_SETPOINT_ENTITY),
             max_output_w=int(data[CONF_MAX_OUTPUT_W]) if data.get(CONF_MAX_OUTPUT_W) else None,
+            input_entity_id=data.get(CONF_INPUT_ENTITY),
+            input_setpoint_entity_id=data.get(CONF_INPUT_SETPOINT_ENTITY),
+            passes_pv_through=bool(data.get(CONF_PASSES_PV_THROUGH, False)),
         )
 
     @property
@@ -201,12 +217,18 @@ class HomeAssistantEntityDriver(BatteryDriver):
             max_discharge_power_w=config.max_discharge_power_w,
             controllable=config.control is not BatteryControl.NONE,
             own_pv=config.own_pv,
-            # Charging from the grid needs an input entity, not supported yet.
-            ac_charge=not config.own_pv,
+            # With own PV charging from the grid needs the input.
+            ac_charge=not config.own_pv or bool(config.input_setpoint_entity_id),
             max_output_w=config.max_output_w if config.own_pv else None,
+            passes_pv_through=config.own_pv and config.passes_pv_through,
         )
         # Last value written per entity; unchanged values are not written again.
         self._written: dict[str, Any] = {}
+        self._probe = OutputProbe()
+        self._at_top = False
+        self._curtail_w = 0.0
+        # Output last written (W), for the dead band of an output following the PV.
+        self._output_written: float | None = None
 
     @property
     def capabilities(self) -> BatteryCapabilities:
@@ -227,6 +249,8 @@ class HomeAssistantEntityDriver(BatteryDriver):
         keys = frozenset(self._config.extra_entities or {})
         if self._config.own_pv:
             keys |= {"ac_power", "own_pv_power", "output_power"}
+            if self._config.input_entity_id:
+                keys |= {"input_power"}
         return keys
 
     @property
@@ -261,41 +285,55 @@ class HomeAssistantEntityDriver(BatteryDriver):
         if not config.own_pv:
             return BatteryTelemetry(soc_pct=soc, power_w=power, extra=extra)
         pv = self._own_pv_w()
-        output = state_as_watts(self._hass.states.get(config.output_entity_id)) if config.output_entity_id else None
-        if output is None:
-            raise BatteryDriverError(f"{config.output_entity_id} is unavailable")
-        ac_power = pv - output
+        output = self._watts_read(config.output_entity_id)
+        grid_input = self._watts_read(config.input_entity_id) if config.input_entity_id else None
+        ac_power = pv + (grid_input or 0.0) - output
         return BatteryTelemetry(
             soc_pct=soc,
             power_w=power if power is not None else ac_power,
             ac_power_w=ac_power,
             pv_w=pv,
             output_w=output,
+            input_w=grid_input,
             extra=extra,
         )
 
     def _own_pv_w(self) -> float:
         """Power of the own PV modules (W, >= 0)."""
-        entity_id = self._config.own_pv_entity_id
-        pv = state_as_watts(self._hass.states.get(entity_id)) if entity_id else None
-        if pv is None:
+        return self._watts_read(self._config.own_pv_entity_id)
+
+    def _watts_read(self, entity_id: str | None) -> float:
+        """A power sensor of a battery with own PV (W, >= 0); required."""
+        value = state_as_watts(self._hass.states.get(entity_id)) if entity_id else None
+        if value is None:
             raise BatteryDriverError(f"{entity_id} is unavailable")
-        return max(0.0, pv)
+        return max(0.0, value)
+
+    def set_own_pv_state(self, *, at_top: bool, curtail_w: float) -> None:
+        self._at_top = at_top
+        self._curtail_w = max(0.0, curtail_w)
+
+    def needs_write(self, net_power_w: int) -> bool:
+        if self._config.control is not BatteryControl.OUTPUT or self._output_written is None:
+            return False
+        try:
+            _, output = self._ports(self._clamp(net_power_w))
+        except BatteryDriverError:
+            return False
+        return abs(output - self._output_written) >= OUTPUT_DEADBAND_W
 
     async def apply_power(self, net_power_w: int, *, refresh: bool = False) -> bool:
         config = self._config
         if not self._capabilities.controllable:
             return await super().apply_power(net_power_w, refresh=refresh)
-        power = max(
-            -config.max_discharge_power_w, min(config.max_charge_power_w, net_power_w)
-        )
+        power = self._clamp(net_power_w)
         try:
             if config.control is BatteryControl.SCRIPT:
                 await self._run_script(config.power_script, power)
                 return True
             await self._remote(on=True, refresh=refresh)
             if config.control is BatteryControl.OUTPUT:
-                await self._set_watts(config.output_setpoint_entity_id, self._output_w(power), refresh)
+                await self._apply_ports(*self._ports(power), refresh)
             elif config.control is BatteryControl.SETPOINT:
                 value = -power if config.setpoint_inverted else power
                 await self._set_watts(config.setpoint_entity_id, value, refresh)
@@ -307,12 +345,40 @@ class HomeAssistantEntityDriver(BatteryDriver):
             return False
         return True
 
-    def _output_w(self, power: int) -> int:
-        """Output that makes the battery charge ``power`` from the current own PV."""
-        output = self._own_pv_w() - power
-        if self._config.max_output_w is not None:
-            output = min(output, self._config.max_output_w)
-        return round(max(0.0, output))
+    def _clamp(self, net_power_w: int) -> int:
+        config = self._config
+        return max(-config.max_discharge_power_w, min(config.max_charge_power_w, net_power_w))
+
+    def _ports(self, power: int) -> tuple[float, float]:
+        """(input, output) that make the battery take ``power`` from the current own PV."""
+        config = self._config
+        pv = self._own_pv_w()
+        has_input = bool(config.input_setpoint_entity_id)
+        if self._curtail_w > 0:
+            # Curtailed on purpose: a lower output, no input.
+            self._probe.reset()
+            return ports(power + self._curtail_w, pv, config.max_output_w, False)
+        grid_input, output = ports(power, pv, config.max_output_w, has_input)
+        if grid_input > 0 or power < 0 or not self._at_top or config.passes_pv_through:
+            self._probe.reset()
+            return grid_input, output
+        output_read = self._watts_read(config.output_entity_id)
+        return 0.0, self._probe.output(time.monotonic(), power, pv, output_read, config.max_output_w)
+
+    async def _apply_ports(self, grid_input: float, output: float, refresh: bool) -> None:
+        """Write the input and the output; the one that stops first."""
+        config = self._config
+        steps = [(config.output_setpoint_entity_id, output)]
+        if config.input_setpoint_entity_id:
+            steps.append((config.input_setpoint_entity_id, grid_input))
+            if grid_input <= 0:
+                steps.reverse()
+        for entity_id, value in steps:
+            await self._set_watts(entity_id, round(value), refresh)
+        self._output_written = output
+        option = config.mode_charge if grid_input > 0 else config.mode_discharge
+        if config.mode_entity_id and option:
+            await self._select(config.mode_entity_id, option, refresh)
 
     async def _apply_split(self, power: int, refresh: bool) -> None:
         config = self._config
@@ -355,7 +421,12 @@ class HomeAssistantEntityDriver(BatteryDriver):
             elif config.control is BatteryControl.OUTPUT:
                 # No output follows the sun; without output the battery
                 # charges from its modules only and keeps its energy.
-                await self._set_watts(config.output_setpoint_entity_id, 0, True)
+                await self._apply_ports(0.0, 0.0, True)
+                self._probe.reset()
+                if config.mode_entity_id:
+                    option = config.mode_auto if auto else config.mode_standby
+                    if option:
+                        await self._select(config.mode_entity_id, option, True)
             else:
                 await self._apply_split(0, True)
                 if auto and config.mode_entity_id and config.mode_auto:
@@ -365,6 +436,7 @@ class HomeAssistantEntityDriver(BatteryDriver):
         finally:
             # A failure is raised to the coordinator, which tries again.
             self._written.clear()
+            self._output_written = None
 
     # --- entity access ---------------------------------------------------------
 

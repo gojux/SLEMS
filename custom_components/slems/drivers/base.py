@@ -7,10 +7,11 @@ or entity ids never leak out of a driver.
 Sign convention used everywhere in SLEMS: battery power is positive while
 charging and negative while discharging.
 
-A battery with its own PV modules feeds the house only through its output.
-Its AC power is own PV − output: charging from the modules is charging, and
-their production counts as PV of the installation (house = grid + PV −
-battery stays true without a further term).
+A battery with its own PV modules feeds the house only through its output
+(and may charge from the grid through an input). Its AC power is own PV +
+input − output: charging from the modules is charging, and their production
+counts as PV of the installation (house = grid + PV − battery stays true
+without a further term).
 """
 
 from __future__ import annotations
@@ -40,6 +41,9 @@ class BatteryCapabilities:
     # Highest output into the house (W), shared by the own PV and the
     # discharge; None: no output limit apart from the discharge power.
     max_output_w: int | None = None
+    # The own PV passes through to the output when the battery is full,
+    # whatever the set point (it cannot be curtailed then).
+    passes_pv_through: bool = False
 
 
 @dataclass
@@ -52,10 +56,12 @@ class BatteryTelemetry:
     # AC side power at the inverter output, +charge / -discharge; None if the
     # battery does not report it.
     ac_power_w: float | None = None
-    # Batteries with own PV: power of the modules (>= 0) and the output into
-    # the house (+feed into the house); ac_power_w is pv_w - output_w.
+    # Batteries with own PV: power of the modules (>= 0), the output into the
+    # house and the input from the grid (both >= 0); ac_power_w is
+    # pv_w + input_w - output_w.
     pv_w: float | None = None
     output_w: float | None = None
+    input_w: float | None = None
     # Driver specific extra values (voltage, temperature, counters, ...).
     extra: dict[str, Any] = field(default_factory=dict)
 
@@ -67,9 +73,9 @@ class BatteryTelemetry:
     @property
     def connection_power_w(self) -> float | None:
         """Power at the battery's connection to the house (+charge / -discharge):
-        the output of a battery with own PV, else the grid side power."""
+        input − output of a battery with own PV, else the grid side power."""
         if self.output_w is not None:
-            return -self.output_w
+            return (self.input_w or 0.0) - self.output_w
         return self.grid_side_power_w
 
 
@@ -162,6 +168,18 @@ class BatteryDriver(ABC):
         complete write (keep-alive). Returns True if the command was accepted.
         """
         raise NotImplementedError(f"{self.model_name} is read-only")
+
+    def set_own_pv_state(self, *, at_top: bool, curtail_w: float) -> None:
+        """Batteries with own PV, before ``apply_power``: whether the battery may
+        take less than commanded (full, at the top of the charge or limited by
+        temperature), so PV curtailed by a lower output has to be found again,
+        and the PV to curtail on purpose (feed-in cap)."""
+
+    def needs_write(self, net_power_w: int) -> bool:
+        """True if the set point for ``net_power_w`` differs from the one
+        written although the command did not change (e.g. an output that
+        follows the own PV)."""
+        return False
 
     async def release_control(self) -> None:
         """Hand control back to the battery's internal logic.

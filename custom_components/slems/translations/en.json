@@ -247,29 +247,39 @@
         },
         "ha_own_pv": {
           "title": "Own PV modules",
-          "description": "SLEMS counts the modules as PV and the battery power as own PV − output. Without sun the battery cannot charge (no charging from the grid); it discharges at most the highest output minus the own PV.",
+          "description": "SLEMS counts the modules as PV and the battery power as own PV + input − output. Without an input from the grid the battery charges only from its modules; it discharges at most the highest output minus the own PV, and PV above the highest output charges it in any case.",
           "data": {
             "own_pv_entity": "Power of the own PV modules",
             "output_entity": "Output into the house",
+            "input_entity": "Input from the grid (optional)",
             "max_output_w": "Highest output",
+            "passes_pv_through": "Passes the PV through when full",
+            "own_pv_forecast_entry": "PV forecast of the modules (optional)",
             "remove_from_pv": "Remove them from the PV systems"
           },
           "data_description": {
             "own_pv_entity": "Power of the modules at the battery's PV inputs (DC, e.g. \"Total input\").",
             "output_entity": "Power the unit feeds into the house (AC, positive while feeding).",
+            "input_entity": "Power the unit takes from the grid to charge (AC, positive while charging). Required for an input set point.",
             "max_output_w": "Limit of the inverter at the output, e.g. 800 W; own PV and discharge share it.",
+            "passes_pv_through": "When full the device feeds its PV into the house whatever the output set point. Otherwise SLEMS raises the output in small steps at the top of the charge, so the device does not curtail its modules.",
+            "own_pv_forecast_entry": "Forecast entry of these modules. It counts towards the PV forecast of the installation; without it the battery does not charge in the forecast of the state of charge.",
             "remove_from_pv": "On saving SLEMS removes them from the PV systems of the system settings."
           }
         },
         "ha_output": {
           "title": "Control by output",
-          "description": "SLEMS turns the battery power into an output: output = own PV − charge power, between 0 and the highest output. With the release state **Standby** the output stays at 0 W: the battery charges from its modules only.",
+          "description": "SLEMS turns the battery power into an output: output = own PV − charge power, between 0 and the highest output. With an input it charges beyond the own PV from the grid (input = charge power − own PV, output 0). With the release state **Standby** input and output stay at 0 W: the battery charges from its modules only.",
           "data": {
             "output_setpoint_entity": "Output (number, W)",
+            "input_setpoint_entity": "Input (number, W, optional)",
+            "mode_entity": "Mode (optional)",
             "remote_entity": "Remote control (optional)"
           },
           "data_description": {
             "output_setpoint_entity": "Number entity with the output into the house. It must not be stored permanently by the device (flash wear with frequent set points).",
+            "input_setpoint_entity": "Number entity with the charge power from the grid (e.g. **inputLimit** of Zendure). It must not be stored permanently by the device either.",
+            "mode_entity": "Select that switches between charging from the grid and feeding into the house (e.g. **acMode** of Zendure); the options are assigned in the next step.",
             "remote_entity": "Switch or select that puts the battery under external control. SLEMS switches it on before the first set point and off when it releases the battery to **Automatic**."
           }
         },
@@ -353,6 +363,7 @@
         "no_auto_release": "Automatic needs a remote control entity, a mode option for automatic or a release script; otherwise choose standby.",
         "none_found": "No Marstek Venus found in the network. Enter the address by hand (see README: finding the IP address); stop other integrations using the battery first.",
         "output_needs_own_pv": "**Output** needs **Own PV modules at the battery**.",
+        "input_needs_sensor": "An input set point needs the **Input from the grid** in the previous step.",
         "own_pv_counted_twice": "These entities are also entered as PV systems: {pv_systems}. Their production would count twice. Select **Remove them from the PV systems** or choose other entities.",
         "power_required": "SLEMS needs the battery power to control the battery."
       },
@@ -939,6 +950,9 @@
       },
       "output_power": {
         "name": "Output power"
+      },
+      "input_power": {
+        "name": "Input power"
       },
       "battery_voltage": {
         "name": "Battery voltage"

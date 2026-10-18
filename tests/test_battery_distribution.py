@@ -247,3 +247,15 @@ def test_similar_batteries_split_as_before() -> None:
         dist.distribute(-3000, units, _shared_settings(), float(t))
     result = dist.distribute(-4000, units, _shared_settings(), 30.1)
     assert result.power_w["fast"] == pytest.approx(result.power_w["slow"], abs=50)
+
+
+def test_forced_charge_comes_first_whatever_the_direction() -> None:
+    # Own PV above the highest output charges the plug-in battery 200 W anyway.
+    plug_in = BatteryUnit("plug_in", 50, 600, 0, LOSSES, min_charge_w=200)
+    units = [unit("a", 50), plug_in]
+    result = settle(BatteryDistributor(), -500, units)
+    assert result.power_w["plug_in"] == 200
+    assert result.power_w["a"] == pytest.approx(-700)
+    result = settle(BatteryDistributor(), 500, units)
+    assert result.power_w["plug_in"] >= 200
+    assert sum(result.power_w.values()) == pytest.approx(500)

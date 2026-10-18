@@ -76,14 +76,21 @@ and `input_boolean.sim_car_connected` are on) for a consumer with current
 control (start/stop entity: the enable switch). For a PV forecast add the
 Forecast.Solar integration in the dev instance (no account needed).
 
-A simulated plug-in battery with its own PV modules (2.24 kWh, 800 W output)
-is built from template entities: `input_number.sim_plug_in_pv` sets the
-power of its modules, `number.plug_in_battery_output_limit` is its output set
-point, `sensor.plug_in_battery_output` the output (empty: at most its PV,
-full: the PV passes through) and an automation integrates the state of
-charge every second. Add it in SLEMS as **Existing Home Assistant entities**
-with **Own PV modules at the battery** and the control **Output**; the smart
-meter subtracts its output.
+A simulated plug-in battery with its own PV modules (2.24 kWh, 800 W output,
+1200 W input from the grid) is built from template entities:
+`input_number.sim_plug_in_pv` sets the power its modules could produce,
+`number.plug_in_battery_output_limit` and `number.plug_in_battery_input_limit`
+are its set points, `input_select.sim_plug_in_ac_mode` its mode (Input:
+charging from the grid, Output: feeding the house), `sensor.plug_in_battery_output`
+and `sensor.plug_in_battery_input` the measured powers (empty: at most its PV).
+Full, it passes its PV through while `input_boolean.sim_plug_in_passes_through`
+is on; off, it curtails the modules to the output and
+`sensor.plug_in_battery_pv_power` shows only that. An automation integrates
+the state of charge every second. Add it in SLEMS as **Existing Home
+Assistant entities** with **Own PV modules at the battery** and the control
+**Output** (mode options Input / Output); the smart meter subtracts its
+output and adds its input. The end-to-end test (`dev/e2e`) sets it up that
+way.
 
 `dev/seed_statistics.py` imports 60 days of synthetic hourly statistics (see
 its docstring) so the consumption forecast has history to learn from. An
@@ -112,6 +119,7 @@ custom_components/slems/
   grid_friendly.py   feed-in limit for grid friendly charging, PV forecast correction
   feed_in_cap.py     feed-in cap planning (space needed, export before the peak)
   battery_distribution.py  split of the battery power between batteries (rotation, ramps)
+  own_pv.py          batteries with own PV: input/output, probe for curtailed PV, curtailing for the feed-in cap
   controller.py      real-time controller (active mode): commands to batteries and consumers
   panel.py           registration of the sidebar dashboard
   frontend/slems-panel.js  dashboard web component (no build step)
@@ -137,7 +145,7 @@ custom_components/slems/
   repairs.py         dialogs of the repair issues that ask (the phase)
   button.py          learn the phase again
   drivers/
-    base.py          BatteryDriver contract (read_telemetry, apply_power, release_control)
+    base.py          BatteryDriver contract (read_telemetry, apply_power, release_control, own PV state)
     marstek_venus_e3.py
     modbus_client.py Modbus TCP link with Venus firmware quirks
     ha_entities.py   battery backed by HA entities (read-only, set point, split, script, output with own PV)
@@ -1453,6 +1461,25 @@ CH395 can be sent from the simulator container to test it.
   sensor and the number min/max) → `ha_entities` → `ha_setpoint` /
   `ha_split` / `ha_script` → `ha_options` (select options, suggested) →
   `ha_limits`. `_entity_battery_data` drops the keys of other control types.
+- **Own PV modules** (`own_pv`, `own_pv.py`): telemetry own PV, output and
+  optionally input (required; AC power = PV + input − output). The control
+  `output` turns the battery power into input or output (`own_pv.ports`),
+  writes them in the order that stops first and the mode option (charge:
+  input, discharge: output). `needs_write` makes the controller write again
+  once the output for the same command differs by `OUTPUT_DEADBAND_W`, so
+  the output follows the PV. Before every write the coordinator passes
+  `set_own_pv_state`: `at_top` (full, at the top of the charge, charge
+  limited by temperature, top taper or BMS) starts the probe for
+  curtailed PV (`OutputProbe`) unless `passes_pv_through`; `curtail_w` is
+  the share of the feed-in cap curtailment (`CurtailControl`, integrating
+  the export above `CapControl.max_export_w` once the allocation reports
+  `cap_excess_w`). `feasible_command_w` cuts the command to what the PV read
+  allows before the delivery monitor judges it. Limits: charge ≤ PV without
+  an input, discharge ≤ highest output − PV, `min_charge_w` = PV − highest
+  output unless full (the distribution gives it first). The plans use
+  `_power_limits(plan=True)` (PV of the hour instead of now) and
+  `OwnPvBattery` (stored energy apart, charging at most the forecast of the
+  battery's `own_pv_forecast_entry`, never from the grid).
 - **Dev instance**: `venus-sim-3` is controlled only through Modbus and
   template entities (`dev/config/configuration.yaml`: template numbers for
   charge/discharge power, template select for the force mode, Modbus switch

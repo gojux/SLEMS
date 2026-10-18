@@ -35,6 +35,13 @@ simplified way:
   after charging, in order of priority, within its window and at most at the
   consumer's power, before it is exported.
 
+* Batteries with own PV modules and without an input from the grid (see
+  own_pv): their stored energy is kept apart. Of the planned charging they
+  take at most the forecast of their own modules (none without a forecast
+  entry), never from the grid; the other batteries take the rest as far as
+  their power and room allow. A decrease of the stored energy (discharging,
+  feeding in) is shared by the usable energy of each part.
+
 Other controllable consumers (they run on surplus), grid targets and batteries
 in active cell balancing are left out.
 """
@@ -53,6 +60,7 @@ from .consumer_targets import SurplusDemand
 from .feed_in_cap import CapPlan
 from .grid_friendly import feed_in_limit, planned_charging, remaining_surplus_by_hour
 from .night_discharge import plan_night_discharge
+from .pv_forecast import PvForecast, hourly
 
 PERIOD = timedelta(hours=1)
 
@@ -75,6 +83,67 @@ class ProjectionSettings:
     bad_weather_until: datetime | None = None
     # Below it the whole surplus is charged, without the feed-in limit.
     battery_priority_soc_pct: float = 0.0
+
+
+@dataclass(frozen=True)
+class OwnPvBattery:
+    """A battery of the group that charges only from its own PV modules."""
+
+    stored_wh: float
+    full_wh: float
+    floor_wh: float
+    # Charge power apart from the PV (W).
+    max_charge_w: float
+    # Forecast of its modules in its native periods (Wh); empty: none.
+    pv: PvForecast = field(default_factory=dict)
+
+
+class _OwnSplit:
+    """Stored energy of the batteries with own PV and of the others."""
+
+    def __init__(self, own: Sequence[OwnPvBattery], battery: BatteryGroup, stored: float) -> None:
+        self._own = list(own)
+        self._pv = [hourly(b.pv) if b.pv else {} for b in own]
+        self.stored = [b.stored_wh for b in own]
+        capacity = battery.capacity_wh
+        self._others_full = battery.full_soc_pct / 100 * capacity - sum(b.full_wh for b in own)
+        self._others_floor = battery.min_soc_pct / 100 * capacity - sum(b.floor_wh for b in own)
+        self._others_max_w = max(0.0, battery.max_charge_w - sum(b.max_charge_w for b in own))
+        self.others = stored - sum(self.stored)
+
+    def charge(self, hour: datetime, charge_w: float, share: float, efficiency: float, *, grid: bool) -> float:
+        """Part of ``charge_w`` the batteries take (the own ones not from the grid)."""
+        if charge_w <= 0 or share <= 0:
+            return charge_w
+        left = charge_w * share * efficiency
+        taken = 0.0
+        for index, own in enumerate(self._own if not grid else ()):
+            power = min(own.max_charge_w, self._pv[index].get(hour, 0.0))
+            energy = min(left, power * share * efficiency, max(0.0, own.full_wh - self.stored[index]))
+            self.stored[index] += energy
+            left -= energy
+            taken += energy
+        others = min(
+            left, self._others_max_w * share * efficiency, max(0.0, self._others_full - self.others)
+        )
+        self.others += others
+        return (taken + others) / (share * efficiency)
+
+    def settle(self, stored: float) -> None:
+        """Share a decrease to ``stored`` by the usable energy of each part."""
+        decrease = self.others + sum(self.stored) - stored
+        if decrease <= 0:
+            self.others -= decrease
+            return
+        usable = [max(0.0, s - own.floor_wh) for s, own in zip(self.stored, self._own, strict=True)]
+        others_usable = max(0.0, self.others - self._others_floor)
+        whole = sum(usable) + others_usable
+        if whole <= 0:
+            self.others -= decrease
+            return
+        for index, part in enumerate(usable):
+            self.stored[index] -= decrease * part / whole
+        self.others -= decrease * others_usable / whole
 
 
 @dataclass
@@ -111,6 +180,7 @@ def project_soc(
     battery_export: Mapping[datetime, float] | None = None,
     charge_caps: Mapping[datetime, float] | None = None,
     night_keep: Callable[[datetime], float | None] | None = None,
+    own: Sequence[OwnPvBattery] = (),
 ) -> SocProjection:
     """Project until the end of tomorrow.
 
@@ -125,6 +195,7 @@ def project_soc(
     energy) lasts, until ``budget_until``; later, or without a budget, the
     batteries cover it. ``night_keep``: stored energy the price plan keeps at
     a moment, the night discharge stays above it (see night_discharge).
+    ``own``: the batteries of the group with own PV and without an input.
     """
     result = SocProjection()
     capacity = battery.capacity_wh
@@ -139,6 +210,7 @@ def project_soc(
     # Energy each demand still takes.
     left = [demand.energy_wh for demand in demands]
     budget_left = budget_wh
+    split = _OwnSplit(own, battery, stored) if own else None
 
     def charge_plan(hour: datetime, start: datetime) -> dict[datetime, float]:
         day_end = dt_util.start_of_local_day(hour) + timedelta(days=1)
@@ -192,6 +264,8 @@ def project_soc(
             if cap is not None and hour in cap.hourly:
                 charge = max(charge, cap.hourly[hour].absorbed_wh / share)
                 charge = min(charge, max(0.0, full - stored) / (share * efficiency))
+            if split is not None:
+                charge = split.charge(hour, charge, share, efficiency, grid=False)
             result.planned_charge_w[hour] = charge
             if charge > pv_w - load:
                 result.planned_grid_charge_w[hour] = charge - (pv_w - load)
@@ -207,6 +281,8 @@ def project_soc(
             charge = grid_charge[hour]
             room = max(0.0, full - stored)
             charge = min(charge, room / (share * efficiency))
+            if split is not None:
+                charge = split.charge(hour, charge, share, efficiency, grid=True)
             result.planned_charge_w[hour] = charge
             if charge > 0:
                 result.planned_grid_charge_w[hour] = charge
@@ -247,6 +323,8 @@ def project_soc(
             export_w = max(0.0, min(battery.max_discharge_w, cap.limit_w - max(0.0, pv_w - load)))
             floor = battery.min_soc_pct / 100 * capacity
             stored = max(floor, allowed, stored - export_w * share / efficiency)
+        if split is not None:
+            split.settle(stored)
         result.soc_pct[hour] = stored / capacity * 100
         # Battery AC power from the change of the stored energy (losses on the AC side).
         change = (stored - stored_before) / share

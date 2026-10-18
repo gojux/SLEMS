@@ -98,3 +98,29 @@ def test_own_pv_entered_as_pv_system_is_found_and_removed() -> None:
     flow._remove_from_pv = flow._counted_as_pv()
     flow._remove_pv_systems()
     assert updates == [{"data": {"pv_power_entity": ["sensor.roof"]}}]
+
+
+def test_output_control_keeps_its_input_and_mode() -> None:
+    data = config_flow._entity_battery_data(
+        {
+            "battery_control": "output",
+            "own_pv": True,
+            "own_pv_entity": "sensor.pv",
+            "output_entity": "sensor.output",
+            "input_entity": "sensor.input",
+            "max_output_w": 800.0,
+            "passes_pv_through": True,
+            "own_pv_forecast_entry": "forecast",
+            "output_setpoint_entity": "number.output",
+            "input_setpoint_entity": "number.input",
+            "mode_entity": "select.ac_mode",
+            "mode_charge": "Input",
+            "charge_entity": "number.charge",
+        }
+    )
+    assert "charge_entity" not in data
+    assert data["mode_entity"] == "select.ac_mode" and data["mode_charge"] == "Input"
+    assert data["input_setpoint_entity"] == "number.input" and data["own_pv_forecast_entry"] == "forecast"
+    # Without own PV the input and the forecast go too.
+    data = config_flow._entity_battery_data({"battery_control": "none", "input_entity": "sensor.input", "own_pv_forecast_entry": "f"})
+    assert data == {"battery_control": "none"}

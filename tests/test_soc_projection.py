@@ -246,3 +246,42 @@ def test_battery_support_loads() -> None:
         budget_load={at(20): 2000}, budget_wh=500, budget_until=at(19),
     )
     assert late.soc_pct[at(20)] == pytest.approx(base.soc_pct[at(20)])
+
+
+def test_battery_with_own_pv_charges_only_from_its_modules() -> None:
+    from custom_components.slems.soc_projection import OwnPvBattery
+
+    pv, consumption = forecasts()
+    now = at(2)
+    # 2.24 kWh of the 10 kWh with its own modules, half full like the others.
+    plug_in = OwnPvBattery(stored_wh=1120, full_wh=2240, floor_wh=0, max_charge_w=800)
+    result = project_soc(now, battery(50), pv, consumption, None, settings(), None, own=[plug_in])
+    # The night drains both by their energy; without a forecast of its
+    # modules it does not charge from the roof's surplus.
+    assert result.soc_pct[at(7)] == pytest.approx(26)
+    assert result.soc_pct[at(16)] == pytest.approx((7760 + 1120 * (1 - 2400 / 5000)) / 100)
+    # With the forecast of its modules it fills up as well.
+    own_pv = {at(hour, day): 800.0 for day in (0, 1) for hour in range(9, 15)}
+    plug_in = OwnPvBattery(stored_wh=1120, full_wh=2240, floor_wh=0, max_charge_w=800, pv=own_pv)
+    result = project_soc(now, battery(50), pv, consumption, None, settings(), None, own=[plug_in])
+    assert result.soc_pct[at(16)] == pytest.approx(100)
+
+
+def test_battery_with_own_pv_does_not_charge_from_the_grid() -> None:
+    from custom_components.slems.soc_projection import OwnPvBattery
+
+    pv, consumption = forecasts()
+    now = at(2)
+    plug_in = OwnPvBattery(stored_wh=1120, full_wh=2240, floor_wh=0, max_charge_w=800)
+    result = project_soc(
+        now, battery(50), pv, consumption, None, settings(), None,
+        grid_charge={at(3): 3000.0}, own=[plug_in],
+    )
+    # 3 kWh from the grid, all into the others (room 3880 Wh after an hour of night).
+    assert result.planned_grid_charge_w[at(3)] == pytest.approx(3000)
+    full = project_soc(
+        now, battery(50), pv, consumption, None, settings(), None,
+        grid_charge={at(3): 9000.0}, own=[plug_in],
+    )
+    # More than the others' room: limited to it, the plug-in battery keeps its share.
+    assert full.planned_grid_charge_w[at(3)] < 5000

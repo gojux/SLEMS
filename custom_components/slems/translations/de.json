@@ -247,29 +247,39 @@
         },
         "ha_own_pv": {
           "title": "Eigene PV-Module",
-          "description": "SLEMS zählt die Module als PV und die Batterieleistung als eigene PV − Ausgang. Ohne Sonne kann die Batterie nicht laden (kein Laden aus dem Netz); sie entlädt höchstens den höchsten Ausgang abzüglich der eigenen PV.",
+          "description": "SLEMS zählt die Module als PV und die Batterieleistung als eigene PV + Eingang − Ausgang. Ohne Eingang aus dem Netz lädt die Batterie nur aus ihren Modulen; sie entlädt höchstens den höchsten Ausgang abzüglich der eigenen PV, und PV über dem höchsten Ausgang lädt sie in jedem Fall.",
           "data": {
             "own_pv_entity": "Leistung der eigenen PV-Module",
             "output_entity": "Ausgang ins Haus",
+            "input_entity": "Eingang aus dem Netz (optional)",
             "max_output_w": "Höchster Ausgang",
+            "passes_pv_through": "Reicht die PV bei voller Batterie durch",
+            "own_pv_forecast_entry": "PV-Prognose der Module (optional)",
             "remove_from_pv": "Bei den PV-Anlagen entfernen"
           },
           "data_description": {
             "own_pv_entity": "Leistung der Module an den PV-Eingängen der Batterie (DC, z. B. „Total Input“).",
             "output_entity": "Leistung, die die Einheit ins Haus liefert (AC, positiv beim Liefern).",
+            "input_entity": "Leistung, die die Einheit zum Laden aus dem Netz nimmt (AC, positiv beim Laden). Nötig für eine Vorgabe des Eingangs.",
             "max_output_w": "Grenze des Wechselrichters am Ausgang, z. B. 800 W; eigene PV und Entladen teilen sie sich.",
+            "passes_pv_through": "Bei voller Batterie liefert das Gerät seine PV unabhängig von der Vorgabe des Ausgangs ins Haus. Sonst hebt SLEMS den Ausgang am Ende der Ladung in kleinen Schritten an, damit das Gerät seine Module nicht abregelt.",
+            "own_pv_forecast_entry": "Prognose-Eintrag dieser Module. Er zählt zur PV-Prognose der Anlage; ohne ihn lädt die Batterie in der Prognose des Ladezustands nicht.",
             "remove_from_pv": "Beim Speichern entfernt SLEMS sie aus den PV-Anlagen der Systemeinstellungen."
           }
         },
         "ha_output": {
           "title": "Steuerung über den Ausgang",
-          "description": "SLEMS rechnet die Batterieleistung in einen Ausgang um: Ausgang = eigene PV − Ladeleistung, zwischen 0 und dem höchsten Ausgang. Mit dem Zustand bei Freigabe **Standby** bleibt der Ausgang bei 0 W: die Batterie lädt nur aus ihren Modulen.",
+          "description": "SLEMS rechnet die Batterieleistung in einen Ausgang um: Ausgang = eigene PV − Ladeleistung, zwischen 0 und dem höchsten Ausgang. Mit Eingang lädt sie über die eigene PV hinaus aus dem Netz (Eingang = Ladeleistung − eigene PV, Ausgang 0). Mit dem Zustand bei Freigabe **Standby** bleiben Eingang und Ausgang bei 0 W: die Batterie lädt nur aus ihren Modulen.",
           "data": {
             "output_setpoint_entity": "Ausgang (Number, W)",
+            "input_setpoint_entity": "Eingang (Number, W, optional)",
+            "mode_entity": "Modus (optional)",
             "remote_entity": "Fernsteuerung (optional)"
           },
           "data_description": {
             "output_setpoint_entity": "Number-Entität mit dem Ausgang ins Haus. Das Gerät darf sie nicht dauerhaft speichern (Flash-Verschleiß bei häufigen Vorgaben).",
+            "input_setpoint_entity": "Number-Entität mit der Ladeleistung aus dem Netz (z. B. **inputLimit** bei Zendure). Auch sie darf das Gerät nicht dauerhaft speichern.",
+            "mode_entity": "Auswahl, die zwischen Laden aus dem Netz und Liefern ins Haus umschaltet (z. B. **acMode** bei Zendure); die Optionen werden im nächsten Schritt zugeordnet.",
             "remote_entity": "Schalter oder Auswahl, die die Batterie unter externe Steuerung stellt. SLEMS schaltet sie vor der ersten Vorgabe ein und bei der Freigabe an die **Automatik** wieder aus."
           }
         },
@@ -353,6 +363,7 @@
         "no_auto_release": "Automatik braucht eine Fernsteuerungs-Entität, eine Modus-Option für Automatik oder ein Freigabe-Skript; sonst Standby wählen.",
         "none_found": "Im Netz wurde keine Marstek Venus gefunden. Adresse von Hand eingeben (siehe README: IP-Adresse finden); andere Integrationen, die die Batterie verwenden, vorher stoppen.",
         "output_needs_own_pv": "**Ausgang** braucht **Eigene PV-Module an der Batterie**.",
+        "input_needs_sensor": "Eine Vorgabe des Eingangs braucht den **Eingang aus dem Netz** im vorigen Schritt.",
         "own_pv_counted_twice": "Diese Entitäten sind auch als PV-Anlagen eingetragen: {pv_systems}. Ihre Erzeugung würde doppelt zählen. Wähle **Bei den PV-Anlagen entfernen** aus oder andere Entitäten.",
         "power_required": "SLEMS braucht die Batterieleistung, um die Batterie zu steuern."
       },
@@ -939,6 +950,9 @@
       },
       "output_power": {
         "name": "Ausgangsleistung"
+      },
+      "input_power": {
+        "name": "Eingangsleistung"
       },
       "battery_voltage": {
         "name": "Batteriespannung"
