@@ -2160,10 +2160,11 @@ behalten die Sprache, in der sie angelegt wurden; nur die angezeigten Namen
 
 ## Roadmap
 
-Mögliche Erweiterungen:
+Mögliche Erweiterungen, nach Themen geordnet. Gesucht: Rückmeldungen von
+Nutzern mit einer echten Wallbox zur [evcc-Anleitung](docs/wallbox-evcc.de.md).
 
-- Rückmeldungen von Nutzern mit einer echten Wallbox zur
-  [evcc-Anleitung](docs/wallbox-evcc.de.md).
+**Elektroauto**
+
 - Wallbox mit evcc (Betriebsart A) so bequem wie evcc selbst: ein Tagesziel
   nach dem Ladestand des Autos („80 % bis 7:00“, von evcc über ha-evcc), ein
   Schalter zum sofortigen Laden mit voller Leistung (bis zum Abstecken oder bis
@@ -2171,38 +2172,74 @@ Mögliche Erweiterungen:
 - Batterien mit Verfügbarkeit (z. B. „Auto angesteckt“) und einer Reserve bis
   zu einer Uhrzeit: Grundlage für ein Auto, das das Haus versorgt (V2H).
 - Gelernte Anwesenheit des Autos für die Planung.
+
+**Planung und Preise**
+
+- Eine gemeinsame Planung für alle Batterieziele: Laden, Entladen und
+  Einspeisen je Viertelstunde nach Kosten über die nächsten 36–48 Stunden
+  (Preise, Nachtentladung, Einspeisebegrenzung, netzdienliches Laden) statt
+  getrennter Regeln mit jeweils eigenem Horizont. Dazu gehören:
+  - die Tagesziele der Verbraucher gemeinsam mit den Batterien geplant,
+  - ein stabilerer Plan der preisbewussten Steuerung (nur bei deutlicher
+    Verbesserung geändert).
+- Verbraucher bei negativen Preisen bevorzugen (z. B. den Heizstab).
+- Geschätzte Preise nach dem Wetter: die Prognose von Wind, Sonne und Last des
+  Marktgebiets (Energy-Charts) verschiebt die Schätzung; bei genau bekannten
+  Werten wäre die Abweichung im letzten Jahr um etwa ein Drittel gesunken.
+
+**Tarife**
+
+- Preise aus einer Home-Assistant-Entität des Lieferanten (z. B. die
+  Tibber-Integration, Octopus Deutschland, Ostrom): eine Posten-Art mit
+  Adaptern für die verbreiteten Vorschau-Formate, mit der Angabe, ob der Preis
+  Netzentgelte und Abgaben schon enthält.
+- Index-Tarife (z. B. nach dem Österreichischen Strompreisindex ÖSPI): eine
+  Posten-Art mit der Formel des Lieferanten, die Monatswerte des Index mit
+  Zustimmung von der Energieagentur abgerufen; damit auch Vorlagen für
+  Index-Tarife.
 - Einspeisen aus den Batterien auch in der Schätzung des Tarifvergleichs.
 - Tarifvergleich mit anderer Hardware: was eine größere Batterie, mehr
   Ladeleistung, ein anderer höchster Ladezustand oder mehr PV im
   aufgezeichneten Jahr gebracht hätten (das Batteriemodell der Schätzung mit
   den Einstellungen der Simulation).
-- Verbraucher bei negativen Preisen bevorzugen (z. B. den Heizstab).
-- Eine gemeinsame Planung für alle Batterieziele: Laden, Entladen und
-  Einspeisen je Viertelstunde nach Kosten über die nächsten 36–48 Stunden
-  (Preise, Nachtentladung, Einspeisebegrenzung, netzdienliches Laden) statt
-  getrennter Regeln mit jeweils eigenem Horizont.
-- Preisbewusste Steuerung: ein stabilerer Plan (nur bei deutlicher
-  Verbesserung geändert).
-- Geschätzte Preise nach dem Wetter: die Prognose von Wind, Sonne und Last des
-  Marktgebiets (Energy-Charts) verschiebt die Schätzung; bei genau bekannten
-  Werten wäre die Abweichung im letzten Jahr um etwa ein Drittel gesunken.
-- Preise aus einer Home-Assistant-Entität des Lieferanten (z. B. die
-  Tibber-Integration, Octopus Deutschland, Ostrom): eine Posten-Art mit
-  Adaptern für die verbreiteten Vorschau-Formate, mit der Angabe, ob der Preis
-  Netzentgelte und Abgaben schon enthält.
-- Tagesziele der Verbraucher gemeinsam mit den Batterien planen.
-- Index-Tarife (z. B. nach dem Österreichischen Strompreisindex ÖSPI): eine
-  Posten-Art mit der Formel des Lieferanten, die Monatswerte des Index mit
-  Zustimmung von der Energieagentur abgerufen; damit auch Vorlagen für
-  Index-Tarife.
-- Programmgeräte (Waschmaschine, Geschirrspüler, Trockner): den Verlauf eines
-  Programms lernen und den Rest eines laufenden Programms in die Prognose der
-  nächsten Stunden aufnehmen (hilft der Abend- und Nachtplanung); später
-  eventuell bei Überschuss starten, wenn das Gerät einen Fernstart erlaubt.
+
+**Prognose**
+
 - Feiertage in der Verbrauchsprognose: ein Feiertag zu Hause wie ein
   Wochenendtag geplant, aus einem Kalender der Home-Assistant-Integration
   **Holiday** für den eigenen Kanton oder das eigene Bundesland (sonst die
   landesweiten Feiertage des in Home Assistant eingestellten Landes).
+- Eigene Prognose für den Urlaub: ein Grundlastprofil, gelernt aus ganzen
+  Urlaubstagen (alle Urlaube zusammen), und ein Faktor für die Wärmepumpe aus
+  denselben Tagen; bis etwa drei Urlaubstage gelernt sind, die heutige
+  Schätzung.
+- Programmgeräte (Waschmaschine, Geschirrspüler, Trockner): den Verlauf eines
+  Programms lernen und den Rest eines laufenden Programms in die Prognose der
+  nächsten Stunden aufnehmen (hilft der Abend- und Nachtplanung); später
+  eventuell bei Überschuss starten, wenn das Gerät einen Fernstart erlaubt.
+
+**Verbraucher**
+
+- SG Ready / Smart Grid der Wärmepumpe: bei PV-Überschuss oder günstigen
+  Preisen die Solltemperatur anheben (Gebäude, Pufferspeicher, Warmwasser als
+  Wärmespeicher), über die SG-Ready-Zustände oder eine Offset-Entität;
+  Vorheizen und Vorkühlen als Freigabe mit Grenzen (höchste Temperatur,
+  Offset, Dauer), nicht als Tagesziel. Die Prognose weiß, dass die vorgezogene
+  Wärme später fehlt.
+- Temperatur-Tagesziele mit Sicherheitsnetz: fällt die Temperatur außerhalb
+  des Zeitfensters unter das Minimum (z. B. Warmwasser nach dem Duschen am
+  Abend), wird das Minimum innerhalb einer eingestellten Zeit wieder erreicht
+  statt erst zur Frist am nächsten Tag.
+
+**Batterien und Anlagen**
+
+- Batteriegruppen mit gemeinsamer Absicherung: mehrere Batterien an einem
+  Stromkreis (z. B. zwei Venus hinter einem Leitungsschutzschalter) bekommen
+  eine gemeinsame Höchstleistung, die sich die aktiven Batterien der Gruppe
+  teilen, statt fest der Hälfte für jede.
+- Weitere Anlagenarten: Batterien mit eigener PV (DC-gekoppelt), eigenem
+  Zähler oder einem Notstromausgang mit Lasten dahinter, und Batterien an
+  mehreren Wechselrichtern.
 - Laufende Prüfung der Batterien im Betrieb: saubere Änderungen der Vorgabe
   (eine Batterie, kein schaltender Verbraucher, ruhiger Smart Meter) mit dem
   Smart Meter und der gemeldeten Leistung verglichen; nach vielen

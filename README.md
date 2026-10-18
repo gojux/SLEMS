@@ -2026,10 +2026,11 @@ language of their creation; only the displayed names change.
 
 ## Roadmap
 
-Possible extensions:
+Possible extensions, grouped by topic. Wanted: feedback from users with a real
+wallbox on the [evcc guide](docs/wallbox-evcc.md).
 
-- Feedback from users with a real wallbox on the
-  [evcc guide](docs/wallbox-evcc.md).
+**Electric car**
+
 - Wallbox with evcc (mode A) as comfortable as evcc itself: a daily target by
   the state of charge of the car ("80 % by 7:00", from evcc via ha-evcc), a
   switch to charge right away with full power (until unplugged or up to a
@@ -2037,39 +2038,73 @@ Possible extensions:
 - Batteries with an availability (e.g. "car plugged in") and a reserve until
   a time of day: the basis for a car supplying the house (V2H).
 - Learned presence of the car for the planning.
+
+**Planning and prices**
+
+- One planning for all battery goals: charging, discharging and feeding in
+  per quarter hour by costs over the next 36–48 hours (prices, night
+  discharge, feed-in cap, grid friendly charging), instead of separate rules
+  each with its own horizon. Part of it:
+  - the daily targets of the consumers planned together with the batteries,
+  - a more stable plan of the price aware control (changed only when clearly
+    better).
+- Consumers preferred at negative prices (e.g. the heating rod).
+- Estimated prices from the weather: the forecast of wind, solar and load of
+  the bidding zone (Energy-Charts) moves the estimate; with them known
+  exactly, the deviation of the last year would have dropped by about a
+  third.
+
+**Tariffs**
+
+- Prices from a Home Assistant entity of the supplier (e.g. the Tibber
+  integration, Octopus Germany, Ostrom): a line type with adapters for the
+  common forecast formats, stating whether the price already includes the
+  grid fees and levies.
+- Index tariffs (e.g. on the Austrian electricity price index ÖSPI): a line
+  type with the supplier's formula, the monthly index values fetched (with
+  consent) from the Austrian Energy Agency; templates for index tariffs too.
 - Feeding in from the batteries also in the estimate of the tariff
   comparison.
 - Tariff comparison with other hardware: what a larger battery, more charge
   power, another maximum state of charge or more PV would have brought in the
   recorded year (the battery model of the estimate with the settings of the
   simulation).
-- Consumers preferred at negative prices (e.g. the heating rod).
-- Price aware control: a more stable plan (changed only when clearly
-  better).
-- One planning for all battery goals: charging, discharging and feeding in
-  per quarter hour by costs over the next 36–48 hours (prices, night
-  discharge, feed-in cap, grid friendly charging), instead of separate rules
-  each with its own horizon.
-- Estimated prices from the weather: the forecast of wind, solar and load of
-  the bidding zone (Energy-Charts) moves the estimate; with them known
-  exactly, the deviation of the last year would have dropped by about a
-  third.
-- Prices from a Home Assistant entity of the supplier (e.g. the Tibber
-  integration, Octopus Germany, Ostrom): a line type with adapters for the
-  common forecast formats, stating whether the price already includes the
-  grid fees and levies.
-- Daily targets of the consumers planned together with the batteries.
-- Index tariffs (e.g. on the Austrian electricity price index ÖSPI): a line
-  type with the supplier's formula, the monthly index values fetched (with
-  consent) from the Austrian Energy Agency; templates for index tariffs too.
-- Program devices (washing machine, dishwasher, dryer): learn the course of a
-  program and add the rest of a running program to the forecast of the next
-  hours (helps the evening and night planning); later possibly starting them
-  with surplus if the device allows a remote start.
+
+**Forecast**
+
 - Public holidays in the consumption forecast: a holiday at home planned like
   a weekend day, from a calendar of the Home Assistant integration
   **Holiday** for the own canton or state (else the national holidays of
   the country set in Home Assistant).
+- Own forecast for vacations: a base load profile learned from whole vacation
+  days (all vacations together) and a factor for the heat pump from the same
+  days; until about three vacation days are learned the estimate of today.
+- Program devices (washing machine, dishwasher, dryer): learn the course of a
+  program and add the rest of a running program to the forecast of the next
+  hours (helps the evening and night planning); later possibly starting them
+  with surplus if the device allows a remote start.
+
+**Consumers**
+
+- SG Ready / smart grid of the heat pump: raise the set temperature with PV
+  surplus or at cheap prices (building, buffer tank, hot water as heat
+  storage), through the SG Ready states or an offset entity; heating and
+  cooling ahead as a release with limits (highest temperature, offset,
+  duration), not as a daily target. The forecast knows that the heat drawn
+  ahead is missing later.
+- Temperature targets with a safety net: if the temperature drops below the
+  minimum outside the target's window (e.g. hot water after showering in the
+  evening), the minimum is reached again within a set time instead of only
+  by the next day's deadline.
+
+**Batteries and installations**
+
+- Battery groups with a shared fuse: several batteries on one circuit (e.g.
+  two Venus behind one circuit breaker) get a highest power together, which
+  the active batteries of the group share, instead of a fixed half for each.
+- Further kinds of installations: batteries with their own PV (DC coupled),
+  their own meter or a backup output with loads behind it, and batteries
+  serving several inverters.
 - Ongoing check of the batteries in normal operation: clean set point changes
   (one battery, no consumer switching, a quiet smart meter) compared with the
   smart meter and the reported power; after many consistent mismatches (e.g. a
