@@ -112,7 +112,8 @@ SLEMS plant voraus und regelt genau:
   auf und kann optional günstig aus dem Netz laden oder teuer einspeisen; ein
   monatlicher Tarifvergleich zeigt, was ein anderer Tarif gekostet hätte.
 - **Genaue Regelung ohne Schwingen.** Ereignisgesteuert bei jeder Meldung des
-  Smart Meters; die gelernte Reaktionszeit der Batterien wird ausgeglichen,
+  Smart Meters; die gelernte Reaktionszeit der Batterien (auch eines Starts
+  aus dem Standby und eines Richtungswechsels) wird ausgeglichen,
   die Regelverstärkung passt sich selbst an.
 - **Batterieschonung und Sicherheit.** Ladezustandsfenster, Leistungsgrenzen
   (z. B. 800 W), Ladebegrenzung nach Temperatur, Überwachung des Zell-Deltas
@@ -126,8 +127,10 @@ SLEMS plant voraus und regelt genau:
   Vollladung, die das BMS knapp unter 100 % beendet, und misst dabei das
   Zell-Delta am oberen Ladeende.
 - **Lernt statt zu fragen.** Neben der Verbrauchsprognose lernt SLEMS die
-  Umwandlungsverluste und die Reaktionszeit der Batterien, das Meldeintervall
-  des Smart Meters, die Regelverstärkung und die Verbrauchsspitzen; auf Wunsch
+  Umwandlungsverluste und die Reaktionszeit der Batterien, die Phase von
+  Batterien und Verbrauchern (mit einem Smart Meter, der jede Phase misst), das
+  Meldeintervall des Smart Meters, die Regelverstärkung und die
+  Verbrauchsspitzen; auf Wunsch
   auch die Prognose-Puffer, die Ziel-Netzüberschüsse, die Regelzeiten, die
   nutzbare Kapazität jeder Batterie sowie Leistung und Thermostatverhalten von
   Verbrauchern (siehe **Gelernte Werte**). Jeder gelernte Wert lässt sich wieder
@@ -177,8 +180,8 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Wirkungsgrad der Batterie (Batteriezähler, gelernt oder manuell), gelernte nutzbare Kapazität | ✅ |
 | Verschleißkosten je Batterie (aus Kaufpreis und Zyklen) in der Planung | ✅ |
 | Batteriemenü: Kommunikation für Firmware-Updates pausieren, Batterie deaktivieren, Gerät öffnen | ✅ |
-| Aufteilung auf Batterien nach Wirkungsgrad, Wechsel mit sanftem Übergang | ✅ |
-| Grenzen je Batterie: minimaler/maximaler Ladezustand, Grenze Lade-/Entladeleistung (z. B. 800 W), Ladebegrenzung nach Temperatur | ✅ |
+| Aufteilung auf Batterien nach Wirkungsgrad, die schnellste Batterie übernimmt rasche Änderungen zuerst, Wechsel mit sanftem Übergang | ✅ |
+| Grenzen je Batterie: minimaler/maximaler Ladezustand, Grenze Lade-/Entladeleistung (z. B. 800 W), Ladebegrenzung nach Temperatur, vorzeitiger Entladestopp des BMS nahe dem Minimum erkannt | ✅ |
 | Erkennung von Batterien, die die vorgegebene Leistung nicht liefern, Bestätigung der Vorgaben | ✅ |
 | Zell-Delta und aktiver Zellausgleich (Marstek Venus E 3.0) | ✅ |
 | Selbsttest einer Batterie: Wirkung am Smart Meter, Vorzeichen und Einheit der Leistung, Energiezähler, Ladezustand, Reaktionszeit | ✅ |
@@ -194,7 +197,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Verbraucher mit eigenem Thermostat: Pausen erkannt, ihre Leistung geht solange an die Batterien | ✅ |
 | Temperaturfühler eines Speichers: gelernte Energie pro Grad, noch aufnehmbare Energie, gelernte Abkühlung je Stunde | ✅ |
 | Einsatz eines Verbrauchers in der Einspeisebegrenzung (unterstützend, normal, nie) | ✅ |
-| Tagesziele: Laufzeit, Freigabezeit, Energie oder Temperatur, mit Frist und Quelle (Überschuss, Batterie, Netz) | ✅ |
+| Tagesziele: Laufzeit, Freigabezeit, Energie oder Temperatur, mit frühestem Start, Frist und Quelle (Überschuss, Batterie, Netz) | ✅ |
 | Batterie-Unterstützung je Verbraucher (immer, automatisch mit der Energie, die die Batterien übrig haben, nie) | ✅ |
 | Wallbox / evcc-Ladepunkt: Stromvorgabe in A mit Phasen, Start/Stopp ([Anleitung](docs/wallbox-evcc.de.md)) | ✅ (noch nicht mit einer echten Wallbox getestet) |
 
@@ -207,7 +210,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Netzdienliches Laden: PV-Einspeisespitzen abfangen | ✅ |
 | Einspeisebegrenzung: PV-Energie über einer Einspeisegrenze speichern, rechtzeitig Platz schaffen | ✅ |
 | Nachtentladung bis zu einer prognosebasierten Reserve | ✅ |
-| Bezugsspitzen abfangen bei niedrigem Ladezustand (manuell aktivierbar) | ✅ |
+| Bezugsspitzen abfangen: eine Bezugsgrenze (fest oder automatisch aus der Verbrauchsstatistik), unter einer Ladezustand-Schwelle halten die Batterien ihre Energie für die Spitzen zurück (manuell aktivierbar) | ✅ |
 
 | Dashboard | Status |
 |---|---|

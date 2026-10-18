@@ -112,7 +112,8 @@ controls precisely:
   optionally charge cheaply from the grid or feed in when it pays; a monthly
   tariff comparison shows what another tariff would have cost.
 - **Precise control without oscillation.** Event driven on every report of the
-  smart meter; the learned response time of the batteries is compensated and
+  smart meter; the learned response time of the batteries (also of starts out
+  of standby and reversals) is compensated and
   the control gain adapts itself.
 - **Battery care and safety.** State of charge window, power limits (e.g. 800
   W), temperature charge limit, cell delta monitoring with active cell
@@ -125,7 +126,8 @@ controls precisely:
   higher. It also recognises a full charge the BMS ends slightly below 100 %,
   and it measures the cell delta at the top.
 - **Learns instead of asking.** Besides the consumption forecast, SLEMS learns
-  the conversion losses and the response time of the batteries, the smart
+  the conversion losses and the response time of the batteries, the phase of
+  batteries and consumers (with a smart meter measuring each phase), the smart
   meter interval, the control gain and the consumption peaks; on request also
   the forecast buffers, the grid surplus targets, the control timing, the
   usable capacity of every battery and the power and thermostat behaviour of
@@ -175,8 +177,8 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Battery efficiency (battery counters, learned or manual), learned usable capacity | ✅ |
 | Wear costs per battery (from purchase price and cycles) in the planning | ✅ |
 | Battery menu: pause the communication for firmware updates, disable a battery, open its device | ✅ |
-| Distribution between batteries by efficiency, rotation with smooth transition | ✅ |
-| Battery limits: minimum/maximum SoC, charge/discharge power limit (e.g. 800 W), temperature charge limit | ✅ |
+| Distribution between batteries by efficiency, the fastest battery takes quick changes first, rotation with smooth transition | ✅ |
+| Battery limits: minimum/maximum SoC, charge/discharge power limit (e.g. 800 W), temperature charge limit, an early discharge stop of the BMS near the minimum detected | ✅ |
 | Detection of batteries that do not deliver the commanded power, confirmation of set points | ✅ |
 | Cell delta and active cell balancing (Marstek Venus E 3.0) | ✅ |
 | Self-test of a battery: effect at the smart meter, sign and unit of the power, energy counters, state of charge, response time | ✅ |
@@ -192,7 +194,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Consumers with their own thermostat: pauses recognised, their power goes to the batteries meanwhile | ✅ |
 | Temperature sensors of a storage: learned energy per degree, remaining capacity, learned cooling per hour | ✅ |
 | Role of a consumer in the feed-in cap (supporting, normal, never) | ✅ |
-| Daily targets: runtime, enabled time, energy or temperature, with deadline and source (surplus, batteries, grid) | ✅ |
+| Daily targets: runtime, enabled time, energy or temperature, with earliest start, deadline and source (surplus, batteries, grid) | ✅ |
 | Battery support per consumer (always, automatic with the energy the batteries can spare, never) | ✅ |
 | Wallbox / evcc loadpoint: current set point in A with phases, start/stop ([guide](docs/wallbox-evcc.md)) | ✅ (not yet tested with a real wallbox) |
 
@@ -205,7 +207,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Grid friendly charging: absorb PV feed-in peaks | ✅ |
 | Feed-in cap: store the PV energy above a feed-in limit, make room in time | ✅ |
 | Night discharge to a forecast based reserve | ✅ |
-| Import peak shaving at low state of charge (manually enabled) | ✅ |
+| Import peak shaving: an import limit (fixed or automatic from the consumption statistics), below a state of charge threshold the batteries keep their energy for the peaks (manually enabled) | ✅ |
 
 | Dashboard | Status |
 |---|---|
