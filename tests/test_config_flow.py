@@ -124,3 +124,27 @@ def test_output_control_keeps_its_input_and_mode() -> None:
     # Without own PV the input and the forecast go too.
     data = config_flow._entity_battery_data({"battery_control": "none", "input_entity": "sensor.input", "own_pv_forecast_entry": "f"})
     assert data == {"battery_control": "none"}
+
+
+async def test_own_pv_of_a_battery_cannot_be_entered_as_pv_system() -> None:
+    from types import SimpleNamespace
+
+    battery = SimpleNamespace(
+        title="Balcony", data={"own_pv": True, "own_pv_entity": "sensor.modules", "output_entity": "sensor.output"}
+    )
+    entry = SimpleNamespace(subentries={"b": battery, "c": SimpleNamespace(title="Car", data={})})
+    assert config_flow._own_pv_owners(entry) == {"sensor.modules": "Balcony", "sensor.output": "Balcony"}
+    assert config_flow._own_pv_owners(None) == {}
+
+    flow = config_flow.SlemsOptionsFlow.__new__(config_flow.SlemsOptionsFlow)
+    flow.hass = SimpleNamespace(states=SimpleNamespace(get=lambda entity_id: None))
+    flow._entry = lambda: entry
+    flow._current = {}
+    done = AsyncMock(return_value="done")
+    flow._async_system_done = done
+    with patch.object(config_flow, "async_forecast_provider_entries", AsyncMock(return_value=[])):
+        result = await flow.async_step_system({"grid_power_entity": "sensor.grid", "pv_power_entity": ["sensor.roof", "sensor.output"]})
+        assert result["errors"] == {"pv_power_entity": "pv_is_own_pv"}
+        assert result["description_placeholders"]["own_pv"] == "sensor.output (Balcony)"
+        done.assert_not_called()
+        assert await flow.async_step_system({"grid_power_entity": "sensor.grid", "pv_power_entity": ["sensor.roof"]}) == "done"

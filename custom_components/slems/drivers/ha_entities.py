@@ -227,6 +227,9 @@ class HomeAssistantEntityDriver(BatteryDriver):
         self._probe = OutputProbe()
         self._at_top = False
         self._curtail_w = 0.0
+        # Highest PV read while curtailing on purpose (W): the PV read then
+        # follows the output and is no measure of the PV the modules could give.
+        self._curtail_pv_w: float | None = None
         # Output last written (W), for the dead band of an output following the PV.
         self._output_written: float | None = None
 
@@ -313,6 +316,20 @@ class HomeAssistantEntityDriver(BatteryDriver):
         self._at_top = at_top
         self._curtail_w = max(0.0, curtail_w)
 
+    def own_pv_available_w(self, pv_w: float) -> float:
+        return max(pv_w, self._curtail_pv_w or 0.0)
+
+    def own_pv_diagnostics(self) -> dict | None:
+        if not self._config.own_pv:
+            return None
+        return {
+            "at_top": self._at_top,
+            "curtail_w": self._curtail_w,
+            "curtail_pv_w": self._curtail_pv_w,
+            "probe": self._probe.diagnostics(),
+            "output_written_w": self._output_written,
+        }
+
     def needs_write(self, net_power_w: int) -> bool:
         if self._config.control is not BatteryControl.OUTPUT or self._output_written is None:
             return False
@@ -357,7 +374,9 @@ class HomeAssistantEntityDriver(BatteryDriver):
         if self._curtail_w > 0:
             # Curtailed on purpose: a lower output, no input.
             self._probe.reset()
+            self._curtail_pv_w = pv = max(pv, self._curtail_pv_w or 0.0)
             return ports(power + self._curtail_w, pv, config.max_output_w, False)
+        self._curtail_pv_w = None
         grid_input, output = ports(power, pv, config.max_output_w, has_input)
         if grid_input > 0 or power < 0 or not self._at_top or config.passes_pv_through:
             self._probe.reset()

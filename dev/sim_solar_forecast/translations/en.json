@@ -1,0 +1,11 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Simulated solar forecast",
+        "data": {"name": "Name", "peak_w": "Peak power (W)"}
+      }
+    },
+    "abort": {"already_configured": "An entry with this name exists."}
+  }
+}

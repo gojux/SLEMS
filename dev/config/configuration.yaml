@@ -61,6 +61,14 @@ input_number:
   # Simulated plug-in battery with its own PV modules (2.24 kWh, 800 W
   # output, 1200 W input from the grid), SLEMS battery type "Home Assistant
   # entities" with "Own PV modules at the battery" and control "Output".
+  # Shift of the simulated solar forecasts (dev/sim_solar_forecast) in hours.
+  sim_solar_forecast_shift:
+    name: Simulated solar forecast shift
+    min: -12
+    max: 12
+    step: 1
+    unit_of_measurement: h
+    initial: 0
   sim_plug_in_pv:
     name: Simulated plug-in battery PV power
     min: 0

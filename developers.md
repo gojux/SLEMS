@@ -74,7 +74,11 @@ blocked via `input_boolean.sim_heating_rod_blocked`, and a wallbox
 `input_number.sim_wallbox_phases` while `input_boolean.sim_wallbox_enabled`
 and `input_boolean.sim_car_connected` are on) for a consumer with current
 control (start/stop entity: the enable switch). For a PV forecast add the
-Forecast.Solar integration in the dev instance (no account needed).
+integration **Simulated solar forecast** (`dev/sim_solar_forecast`, mounted
+in the dev and end-to-end instances): a fixed day curve from 06:00 to 20:00
+with the peak power of the entry, for today and tomorrow, without internet
+(`input_number.sim_solar_forecast_shift` shifts it by hours, e.g. to have sun
+at night); or Forecast.Solar (no account needed).
 
 A simulated plug-in battery with its own PV modules (2.24 kWh, 800 W output,
 1200 W input from the grid) is built from template entities:
@@ -90,7 +94,8 @@ the state of charge every second. Add it in SLEMS as **Existing Home
 Assistant entities** with **Own PV modules at the battery** and the control
 **Output** (mode options Input / Output); the smart meter subtracts its
 output and adds its input. The end-to-end test (`dev/e2e`) sets it up that
-way.
+way, with a simulated forecast "Roof" (3 kW) for the system and "Balcony"
+(600 W) as the forecast of its modules.
 
 `dev/seed_statistics.py` imports 60 days of synthetic hourly statistics (see
 its docstring) so the consumption forecast has history to learn from. An
@@ -1473,13 +1478,20 @@ CH395 can be sent from the simulator container to test it.
   curtailed PV (`OutputProbe`) unless `passes_pv_through`; `curtail_w` is
   the share of the feed-in cap curtailment (`CurtailControl`, integrating
   the export above `CapControl.max_export_w` once the allocation reports
-  `cap_excess_w`). `feasible_command_w` cuts the command to what the PV read
+  `cap_excess_w`; sensor `own_pv_curtailed`, the driver's state in the
+  diagnostics via `own_pv_diagnostics`). `feasible_command_w` cuts the command to what the PV read
   allows before the delivery monitor judges it. Limits: charge ≤ PV without
   an input, discharge ≤ highest output − PV, `min_charge_w` = PV − highest
   output unless full (the distribution gives it first). The plans use
   `_power_limits(plan=True)` (PV of the hour instead of now) and
   `OwnPvBattery` (stored energy apart, charging at most the forecast of the
-  battery's `own_pv_forecast_entry`, never from the grid).
+  battery's `own_pv_forecast_entry`, never from the grid); the night
+  discharge (also inside the projection) and the refill of the automatic
+  peak shaving limit take per hour at most `own_charge_limit` (the others'
+  charge power + the own forecast), the simulation scales
+  `own_pv_forecasts` with the PV. The system step
+  rejects own PV or output entities as PV systems (`_own_pv_owners`, error
+  `pv_is_own_pv`) and does not suggest them.
 - **Dev instance**: `venus-sim-3` is controlled only through Modbus and
   template entities (`dev/config/configuration.yaml`: template numbers for
   charge/discharge power, template select for the force mode, Modbus switch

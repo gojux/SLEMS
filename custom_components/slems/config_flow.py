@@ -470,16 +470,31 @@ class _GridModbusSteps:
 
     async def async_step_system(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """The system settings, suggested from the devices and the energy dashboard."""
+        errors: dict[str, str] = {}
+        twice: list[str] = []
         if user_input is not None:
-            return await self._async_system_done(user_input, self._current)
-        if self._devices_changed:
+            owners = _own_pv_owners(self._entry())
+            twice = [
+                f"{entity_id} ({owners[entity_id]})"
+                for entity_id in entity_ids(user_input.get(CONF_PV_POWER_ENTITY))
+                if entity_id in owners
+            ]
+            if not twice:
+                return await self._async_system_done(user_input, self._current)
+            errors[CONF_PV_POWER_ENTITY] = "pv_is_own_pv"
+            defaults = user_input
+        elif self._devices_changed:
             defaults = {**self._current, **self._suggested}
         else:
             defaults = {**self._suggested, **self._current}
         return self.async_show_form(
             step_id="system",
             data_schema=await _async_system_schema(self.hass, defaults),
-            description_placeholders=_now_placeholders(self.hass, defaults),
+            errors=errors,
+            description_placeholders={
+                **_now_placeholders(self.hass, defaults),
+                "own_pv": ", ".join(twice) or "-",
+            },
         )
 
     async def _async_system_done(
@@ -1683,6 +1698,9 @@ async def _async_suggest_system(
             pv_power.append(power)
     if not pv_devices:
         pv_power = list(dashboard.pv_power)
+    # The own PV of a battery counts already; as a PV system it would count twice.
+    owners = _own_pv_owners(entry)
+    pv_power = [entity_id for entity_id in pv_power if entity_id not in owners]
     if pv_power:
         data[CONF_PV_POWER_ENTITY] = pv_power
 
@@ -1701,6 +1719,18 @@ async def _async_suggest_system(
                     data[CONF_OUTDOOR_TEMPERATURE_ENTITY] = outdoor
                     break
     return data
+
+
+def _own_pv_owners(entry: ConfigEntry | None) -> dict[str, str]:
+    """Own PV modules and outputs of the batteries (entity id: battery name);
+    their production counts with the battery, as a PV system it would count twice."""
+    owners: dict[str, str] = {}
+    for subentry in entry.subentries.values() if entry is not None else ():
+        if subentry.data.get(CONF_OWN_PV):
+            for key in (CONF_OWN_PV_ENTITY, CONF_OUTPUT_ENTITY):
+                if entity_id := subentry.data.get(key):
+                    owners.setdefault(entity_id, subentry.title)
+    return owners
 
 
 def _now_placeholders(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, str]:

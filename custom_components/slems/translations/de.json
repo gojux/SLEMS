@@ -79,7 +79,8 @@
       "no_sunspec": "Das Gerät meldet keine SunSpec-Modellkette (Register 40000, 0 oder 50000).",
       "no_meter": "Die SunSpec-Modellkette enthält keinen Zähler (Modell 201 bis 204).",
       "sign_undecidable": "Die Netzleistung ist zu klein, um das Vorzeichen zu vergleichen (Modbus {modbus} W, Entität {entity} W). Später erneut versuchen oder das Vorzeichen wählen.",
-      "sign_mismatch": "Modbus ({modbus} W) und Entität ({entity} W) passen mit keinem Vorzeichen zusammen. Ist der richtige Zähler gewählt? Sonst das Vorzeichen wählen."
+      "sign_mismatch": "Modbus ({modbus} W) und Entität ({entity} W) passen mit keinem Vorzeichen zusammen. Ist der richtige Zähler gewählt? Sonst das Vorzeichen wählen.",
+      "pv_is_own_pv": "Diese Entitäten sind eigene PV-Module oder der Ausgang einer Batterie: {own_pv}. SLEMS zählt ihre Erzeugung schon bei der Batterie; als PV-Anlage würde sie doppelt zählen. Entferne sie bei **PV-Leistung**."
     }
   },
   "options": {
@@ -159,7 +160,8 @@
       "no_sunspec": "Das Gerät meldet keine SunSpec-Modellkette (Register 40000, 0 oder 50000).",
       "no_meter": "Die SunSpec-Modellkette enthält keinen Zähler (Modell 201 bis 204).",
       "sign_undecidable": "Die Netzleistung ist zu klein, um das Vorzeichen zu vergleichen (Modbus {modbus} W, Entität {entity} W). Später erneut versuchen oder das Vorzeichen wählen.",
-      "sign_mismatch": "Modbus ({modbus} W) und Entität ({entity} W) passen mit keinem Vorzeichen zusammen. Ist der richtige Zähler gewählt? Sonst das Vorzeichen wählen."
+      "sign_mismatch": "Modbus ({modbus} W) und Entität ({entity} W) passen mit keinem Vorzeichen zusammen. Ist der richtige Zähler gewählt? Sonst das Vorzeichen wählen.",
+      "pv_is_own_pv": "Diese Entitäten sind eigene PV-Module oder der Ausgang einer Batterie: {own_pv}. SLEMS zählt ihre Erzeugung schon bei der Batterie; als PV-Anlage würde sie doppelt zählen. Entferne sie bei **PV-Leistung**."
     }
   },
   "config_subentries": {
@@ -926,6 +928,9 @@
       },
       "pv_power": {
         "name": "PV-Leistung"
+      },
+      "own_pv_curtailed": {
+        "name": "Abgeregelte eigene PV"
       },
       "house_power": {
         "name": "Hausverbrauch"

@@ -16,6 +16,8 @@ services:
     volumes:
       - ./dev/config:/config
       - ./custom_components/slems:/config/custom_components/slems:ro
+      # PV forecast provider without internet (dev/sim_solar_forecast).
+      - ./dev/sim_solar_forecast:/config/custom_components/sim_solar_forecast:ro
     environment:
       TZ: Europe/Vienna
     depends_on:

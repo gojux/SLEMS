@@ -1,0 +1,12 @@
+{
+  "domain": "sim_solar_forecast",
+  "name": "Simulated solar forecast",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/gojux/slems",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "requirements": [],
+  "version": "1.0.0"
+}

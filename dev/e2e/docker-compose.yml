@@ -25,6 +25,7 @@ services:
     volumes:
       - ../config/configuration.yaml:/config/configuration.yaml:ro
       - ../../custom_components/slems:/config/custom_components/slems:ro
+      - ../sim_solar_forecast:/config/custom_components/sim_solar_forecast:ro
     environment:
       TZ: Europe/Vienna
     depends_on:

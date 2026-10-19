@@ -89,6 +89,7 @@ def plan_night_discharge(
     max_charge_w: float | None = None,
     demands: Sequence[SurplusDemand] = (),
     keep: Callable[[datetime], float | None] | None = None,
+    charge_limit: Callable[[datetime], float] | None = None,
 ) -> NightDischargePlan | None:
     """Plan the night discharge; None if not applicable right now.
 
@@ -99,7 +100,9 @@ def plan_night_discharge(
     (default: the capacity), ``max_charge_w`` the charge power of the
     batteries (AC), ``demands`` the parts of the daily targets expected
     from the surplus and ``keep`` the stored energy the price plan keeps at
-    a moment (None: no plan then). Not applicable while PV already
+    a moment (None: no plan then). ``charge_limit`` replaces ``max_charge_w``
+    per hour start (batteries with own PV charge at most the forecast of
+    their modules, see soc_projection.own_charge_limit). Not applicable while PV already
     exceeds consumption, or if no crossover is found within the lookahead.
     """
     pv_forecast = hourly(pv_forecast)
@@ -118,7 +121,8 @@ def plan_night_discharge(
     while start < day_end:
         hour_surplus = max(0.0, _energy(pv_forecast, start) - _energy(consumption_forecast, start))
         surplus += hour_surplus
-        chargeable += hour_surplus if max_charge_w is None else min(hour_surplus, max_charge_w)
+        limit = charge_limit(start) if charge_limit is not None else max_charge_w
+        chargeable += hour_surplus if limit is None else min(hour_surplus, limit)
         start += PERIOD
     # Daily targets taking surplus that day: what is left besides the refill
     # must cover them, otherwise the refill is short by the difference.

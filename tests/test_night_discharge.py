@@ -132,3 +132,20 @@ def test_target_not_below_what_the_price_plan_keeps() -> None:
     # Outside the price plan, or below the target: no change.
     assert plan(soc=80, pv_per_hour=2400, keep=lambda _moment: None).target_wh == pytest.approx(2400)
     assert plan(soc=80, pv_per_hour=2400, keep=lambda _moment: 1000.0).target_wh == pytest.approx(2400)
+
+
+def test_refill_of_a_battery_with_own_pv_only_from_its_modules() -> None:
+    from custom_components.slems.soc_projection import OwnPvBattery, own_charge_limit
+
+    # 2000 W of 2500 W charge power are a battery with own PV whose modules
+    # make 300 W: per hour at most 500 W + 300 W of the 1 kWh surplus.
+    own = OwnPvBattery(
+        stored_wh=1000, full_wh=2000, floor_wh=0, max_charge_w=2000,
+        pv={_day(1).replace(hour=h): 300 for h in range(8, 16)},
+    )
+    limit = own_charge_limit([own], 2500)
+    assert limit(_day(1).replace(hour=10)) == 800 and limit(_day(1).replace(hour=20)) == 500
+    # 8 h x 800 Wh - 1 kWh buffer = 5.4 kWh -> target 4.6 kWh (3 kWh with the group).
+    assert plan(80, 1400, max_charge_w=2500, charge_limit=limit).target_wh == pytest.approx(4600)
+    assert plan(80, 1400, max_charge_w=2500).target_wh == pytest.approx(3000)
+    assert own_charge_limit([], 2500) is None

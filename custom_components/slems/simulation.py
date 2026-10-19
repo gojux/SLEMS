@@ -198,6 +198,10 @@ def simulate(coordinator: SlemsCoordinator, request: dict[str, Any]) -> dict[str
     sim_snapshot = replace(
         snapshot,
         pv_forecast={k: v * pv_factor for k, v in snapshot.pv_forecast.items()},
+        own_pv_forecasts={
+            subentry_id: {k: v * pv_factor for k, v in own.items()}
+            for subentry_id, own in snapshot.own_pv_forecasts.items()
+        },
         consumption_forecast=None
         if forecast is None
         else replace(forecast, total={k: v * load_factor for k, v in forecast.total.items()}),

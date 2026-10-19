@@ -1,5 +1,7 @@
 """Tests for batteries with own PV modules: ports, curtailed PV, curtailing."""
 
+import pytest
+
 from custom_components.slems.own_pv import (
     PROBE_INTERVAL_S,
     PROBE_SETTLE_S,
@@ -85,11 +87,13 @@ def test_curtailment_integrates_the_export_above_the_limit() -> None:
     control = CurtailControl()
     # Nothing to curtail while batteries and consumers take the surplus.
     assert control.update(-50, 600, 0, 500) == 0
-    assert control.update(900, 600, 300, 500) == 150
-    assert control.update(750, 600, 0, 500) == 225
+    assert control.update(900, 600, 300, 500) == pytest.approx(60)
+    assert control.update(750, 600, 0, 500) == pytest.approx(90)
     # Not more than the batteries can curtail.
-    assert control.update(1600, 600, 0, 300) == 300
+    assert control.update(3000, 600, 0, 300) == 300
     # Export below the limit: less until it ends.
+    assert control.update(0, 600, 0, 300) == pytest.approx(180)
+    assert control.update(0, 600, 0, 300) == pytest.approx(60)
     assert control.update(0, 600, 0, 300) == 0
     control.update(900, 600, 300, 500)
     assert control.update(None, 600, 0, 500) == 0

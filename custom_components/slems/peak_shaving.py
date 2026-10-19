@@ -22,7 +22,7 @@ night), because peak shaving only acts then.
 from __future__ import annotations
 
 from bisect import bisect_right
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from itertools import accumulate
@@ -85,6 +85,7 @@ def hours_until_refill(
     pv: Mapping[datetime, float],
     consumption: Mapping[datetime, float],
     refill_wh: float,
+    charge_limit: Callable[[datetime], float] | None = None,
 ) -> list[tuple[int, float]]:
     """(local hour of the day, share of the hour) without PV surplus until the refill.
 
@@ -94,6 +95,8 @@ def hours_until_refill(
     rainy day does not end the period. Hours with surplus are not included
     (the batteries charge then). During a surplus right now the period starts
     when it ends, e.g. in the evening, because peak shaving only acts then.
+    ``charge_limit``: charge power of the batteries per hour start, with
+    batteries with own PV (see soc_projection.own_charge_limit).
     """
     local_now = dt_util.as_local(now)
     end = local_now + MAX_HORIZON
@@ -112,6 +115,8 @@ def hours_until_refill(
     while hour < end:
         surplus = surplus_wh(hour)
         if surplus > 0:
+            if charge_limit is not None:
+                surplus = min(surplus, charge_limit(hour))
             charged += surplus * share(hour)
             if charged >= refill_wh:
                 break

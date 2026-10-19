@@ -30,6 +30,9 @@ surplus above the limit, the batteries with own PV curtail the rest
 (``CurtailControl``). The curtailed PV is not measured, so the control
 integrates the export above the limit instead of the planned excess: it
 rises while the export stays above the limit and falls while it is below.
+Curtailed, the PV read follows the output; the driver keeps the highest PV
+read meanwhile as the PV of the modules (``own_pv_available_w``), otherwise
+output = PV − curtailment would sink to 0 and what can be curtailed with it.
 A battery that passes its PV through when full cannot curtail then.
 """
 
@@ -41,7 +44,7 @@ PROBE_INTERVAL_S = 60.0
 # Time for the device and its integration to show the PV after a probe.
 PROBE_SETTLE_S = 10.0
 # Share of the export error per control cycle the curtailment moves by.
-CURTAIL_GAIN = 0.5
+CURTAIL_GAIN = 0.2
 # Curtailment below this ends.
 CURTAIL_MIN_W = 10.0
 
@@ -96,6 +99,15 @@ class OutputProbe:
     @property
     def probing(self) -> bool:
         return self._probe_at is not None
+
+    def diagnostics(self) -> dict:
+        return {
+            "probing": self.probing,
+            "probe_output_w": self._probe_output if self.probing else None,
+            "probe_step_w": self._probe_step if self.probing else None,
+            "followed": self._followed,
+            "accepted_w": self.accepted_w,
+        }
 
     def reset(self) -> None:
         self._probe_at = None

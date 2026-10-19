@@ -760,7 +760,8 @@ SLEMS funktioniert auch ohne Batterie: einfach nur die Verbraucher anlegen.
   den höchsten Ausgang (z. B. 800 W). SLEMS zählt die Module als PV und die
   Batterieleistung als eigene PV + Eingang − Ausgang, damit die Bilanz stimmt; trag die
   Module oder den Ausgang nicht zusätzlich als PV-Anlage ein. SLEMS weist darauf
-  hin und bietet an, sie dort zu entfernen. Mit der Steuerung **Ausgang** setzt
+  hin und bietet an, sie dort zu entfernen; auch die Systemeinstellungen nehmen
+  sie bei **PV-Leistung** nicht an. Mit der Steuerung **Ausgang** setzt
   SLEMS Ausgang = eigene PV − Ladeleistung und schreibt ihn neu, wenn sich die
   eigene PV ändert. Ohne Eingang aus dem Netz lädt eine solche Batterie
   höchstens, was ihre Module liefern (nachts keines), und entlädt höchstens den
@@ -791,13 +792,16 @@ SLEMS funktioniert auch ohne Batterie: einfach nur die Verbraucher anlegen.
   regelt nur die **Einspeisebegrenzung** eine solche Batterie ab: Können weder
   die Batterien noch die Verbraucher den Überschuss über der Grenze nehmen,
   senken die Batterien mit eigener PV ihren Ausgang, bis die Einspeisung an der
-  Grenze liegt.
+  Grenze liegt. Der Sensor **Abgeregelte eigene PV** zeigt, wie viel sie
+  abregeln.
 
   **PV-Prognose der Module** (optional): der Prognose-Eintrag der Module der
   Batterie (z. B. eine Forecast.Solar-Fläche des Balkons). Er zählt zur
   PV-Prognose der Anlage, auch wenn er in den Systemeinstellungen nicht
-  ausgewählt ist. In der Prognose des Ladezustands, der Einspeisebegrenzung und
-  dem Preisplan lädt die Batterie höchstens diese Prognose und nur aus ihr;
+  ausgewählt ist. In der Prognose des Ladezustands, der Einspeisebegrenzung, dem
+  Preisplan, der Nachtentladung (Wiederaufladen am nächsten Tag), der
+  automatischen Grenze der Spitzenkappung und der Simulation lädt die Batterie
+  höchstens diese Prognose und nur aus ihr;
   ohne den Eintrag lädt sie dort nicht, und ihre eigene PV bleibt aus der
   PV-Korrektur (Ist / Prognose) heraus.
 

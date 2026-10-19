@@ -175,6 +175,15 @@ class BatteryDriver(ABC):
         temperature), so PV curtailed by a lower output has to be found again,
         and the PV to curtail on purpose (feed-in cap)."""
 
+    def own_pv_available_w(self, pv_w: float) -> float:
+        """PV the own modules could give with ``pv_w`` read: more while the
+        driver curtails them on purpose (the PV read then follows the output)."""
+        return pv_w
+
+    def own_pv_diagnostics(self) -> dict | None:
+        """State of a battery with own PV for the diagnostics (None without)."""
+        return None
+
     def needs_write(self, net_power_w: int) -> bool:
         """True if the set point for ``net_power_w`` differs from the one
         written although the command did not change (e.g. an output that

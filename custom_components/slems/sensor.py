@@ -357,6 +357,7 @@ def _energy_forecast(key: str, day_offset: int) -> SystemSensorDescription:
 SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
     SystemSensorDescription(**_power("grid_power"), value_fn=lambda s, _: s.grid_power_w),
     SystemSensorDescription(**_power("pv_power"), value_fn=lambda s, _: s.pv_power_w),
+    SystemSensorDescription(**_power("own_pv_curtailed"), value_fn=lambda s, _: s.own_pv_curtail_w),
     SystemSensorDescription(**_power("house_power"), value_fn=lambda s, _: s.house_power_w),
     SystemSensorDescription(**_power("base_load"), value_fn=lambda s, _: s.base_load_w),
     SystemSensorDescription(
@@ -735,6 +736,11 @@ async def async_setup_entry(
         for description in SYSTEM_SENSORS
         if (config.get(CONF_PV_FORECAST_ENTRIES) or not description.key.startswith("pv_forecast"))
         and (config.get(CONF_WEATHER_ENTITY) or description.key != "outdoor_temperature")
+        # Only with a battery that can curtail its own PV for the feed-in cap.
+        and (
+            description.key != "own_pv_curtailed"
+            or any(b.driver.capabilities.own_pv and b.driver.capabilities.controllable for b in coordinator.batteries)
+        )
     )
     async_add_entities(
         ConsumptionForecastSensor(coordinator, key, day_offset)

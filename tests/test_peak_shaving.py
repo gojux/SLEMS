@@ -84,3 +84,13 @@ def test_small_surplus_on_a_rainy_day_does_not_refill() -> None:
     assert 11 in covered and 15 in covered  # continues after the small surplus
     assert 12 not in covered  # the batteries charge a little then
     assert len(hours) == 36 - 4  # never refilled: the whole horizon without surplus hours
+
+
+def test_refill_with_own_pv_counts_only_what_the_batteries_can_take() -> None:
+    pv, consumption = forecasts(lambda hour: 2000.0 if 8 <= hour < 17 else 0.0)
+    # 1.5 kWh surplus per hour refills 3 kWh the next morning; if only 300 W
+    # can charge (9 h x 300 Wh), the evening and night after count as well.
+    hours = hours_until_refill(at(1, 20, 30), pv, consumption, 3000)
+    assert hours[-1] == (7, 1.0)
+    limited = hours_until_refill(at(1, 20, 30), pv, consumption, 3000, lambda hour: 300.0)
+    assert limited[: len(hours)] == hours and (17, 1.0) in limited[len(hours):]

@@ -722,7 +722,7 @@ SLEMS also works without any battery: add the consumers only.
   (e.g. 800 W). SLEMS counts the modules as PV and the battery power as own
   PV + input − output, so the balance stays right; do not enter the modules or the
   output as a PV system as well. SLEMS points that out and offers to remove
-  them there. With the control **Output** SLEMS sets output = own PV − charge
+  them there; the system settings do not accept them as **PV power** either. With the control **Output** SLEMS sets output = own PV − charge
   power and writes it again when the own PV changes. Without an input from
   the grid such a battery charges at most what its modules produce (none at
   night) and discharges at most the highest output minus its own PV: at
@@ -751,14 +751,16 @@ SLEMS also works without any battery: add the consumers only.
   keeps the output above what the battery takes. Only the **Feed-in cap**
   curtails such a battery on purpose: when neither the batteries nor the
   consumers can take the surplus above the limit, the batteries with own PV
-  lower their output until the export is at the limit.
+  lower their output until the export is at the limit. The sensor
+  **Curtailed own PV** shows how much they curtail.
 
   **PV forecast of the modules** (optional): the forecast entry of the
   battery's modules (e.g. a Forecast.Solar plane of the balcony). It counts
   towards the PV forecast of the installation, also if it is not chosen in
   the system settings. In the forecast of the state of charge, the feed-in
-  cap and the price plan the battery charges at most this forecast, and
-  only from it; without the entry it does not charge in them, and its own
+  cap, the price plan, the night discharge (refill the next day), the
+  automatic limit of peak shaving and the simulation the battery charges at
+  most this forecast, and only from it; without the entry it does not charge in them, and its own
   PV is left out of the PV correction (actual / forecast).
 
   Optionally a **remote control** switch or select (e.g. **Manual battery

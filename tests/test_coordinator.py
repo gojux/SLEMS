@@ -2,6 +2,8 @@
 
 from types import SimpleNamespace
 
+import pytest
+
 from custom_components.slems.const import ConsumerType, ControlMode, ReleaseState
 from custom_components.slems.consumers import ConsumerConfig, ConsumerState
 from custom_components.slems.coordinator import SystemSnapshot
@@ -458,6 +460,7 @@ def _plug_in(subentry_id: str, *, passes_pv_through: bool = False) -> SimpleName
             passes_pv_through=passes_pv_through,
         ),
         set_own_pv_state=lambda **kw: states.append(kw),
+        own_pv_available_w=lambda pv_w: pv_w,
         states=states,
     )
     return SimpleNamespace(
@@ -493,13 +496,13 @@ def test_batteries_with_own_pv_curtail_for_the_feed_in_cap() -> None:
     allocation = Allocation(Strategy.FEED_IN_CAP, cap_excess_w=500)
     cap = CapControl(limit_w=700, margin_w=100)
     SlemsCoordinator._own_pv_control(coordinator, snapshot, allocation, cap, controller_cycle=True)
-    # Half the export above 600 W, within the 400 W the first one can curtail.
-    assert snapshot.own_pv_curtail_w == 250
-    assert first.driver.states[-1] == {"at_top": False, "curtail_w": 250}
+    # A fifth of the export above 600 W, within the 400 W the first one can curtail.
+    assert snapshot.own_pv_curtail_w == pytest.approx(100)
+    assert first.driver.states[-1] == {"at_top": False, "curtail_w": pytest.approx(100)}
     assert full.driver.states[-1] == {"at_top": True, "curtail_w": 0}
     # A slow update keeps the curtailment of the controller.
     SlemsCoordinator._own_pv_control(coordinator, snapshot, Allocation(Strategy.IDLE), None, controller_cycle=False)
-    assert snapshot.own_pv_curtail_w == 250
+    assert snapshot.own_pv_curtail_w == pytest.approx(100)
 
 
 def test_delivery_counts_only_what_the_pv_read_allows() -> None:

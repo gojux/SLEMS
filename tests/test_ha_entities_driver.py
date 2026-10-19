@@ -366,10 +366,23 @@ async def test_curtailing_and_probing_at_the_top() -> None:
     battery.set_own_pv_state(at_top=False, curtail_w=150)
     await battery.apply_power(400)
     assert float(fake.value("number.output")) == 50
+    # The device curtails its modules to the output: the PV read before stays
+    # the reference, the output does not sink further.
+    fake._states["sensor.pv"] = SimpleNamespace(entity_id="sensor.pv", state="50", attributes={"unit_of_measurement": "W"})
+    await battery.apply_power(400)
+    assert float(fake.value("number.output")) == 50
+    assert battery.own_pv_available_w(50) == 600
+    battery.set_own_pv_state(at_top=False, curtail_w=0)
+    assert battery.own_pv_available_w(50) == 600  # until the next write
+    await battery.apply_power(400)
+    assert battery.own_pv_available_w(50) == 50
+    fake._states["sensor.pv"] = SimpleNamespace(entity_id="sensor.pv", state="600", attributes={"unit_of_measurement": "W"})
     # At the top the output is raised a step above the output read (200 W).
     battery.set_own_pv_state(at_top=True, curtail_w=0)
     await battery.apply_power(400)
     assert float(fake.value("number.output")) == 250
+    state = battery.own_pv_diagnostics()
+    assert state["at_top"] and state["probe"]["probing"] and state["probe"]["probe_output_w"] == 250
     # A device that passes its PV through needs no probe.
     fake = hass()
     battery = plug_in(

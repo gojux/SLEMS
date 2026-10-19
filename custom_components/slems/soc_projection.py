@@ -98,6 +98,20 @@ class OwnPvBattery:
     pv: PvForecast = field(default_factory=dict)
 
 
+def own_charge_limit(own: Sequence[OwnPvBattery], max_charge_w: float) -> Callable[[datetime], float] | None:
+    """Charge power of the batteries in a local hour (start): those with own
+    PV at most the forecast of their modules (None without such batteries)."""
+    if not own:
+        return None
+    others_w = max(0.0, max_charge_w - sum(b.max_charge_w for b in own))
+    parts = [(b.max_charge_w, hourly(b.pv) if b.pv else {}) for b in own]
+
+    def limit(hour: datetime) -> float:
+        return others_w + sum(min(max_w, pv.get(hour, 0.0)) for max_w, pv in parts)
+
+    return limit
+
+
 class _OwnSplit:
     """Stored energy of the batteries with own PV and of the others."""
 
@@ -211,6 +225,7 @@ def project_soc(
     left = [demand.energy_wh for demand in demands]
     budget_left = budget_wh
     split = _OwnSplit(own, battery, stored) if own else None
+    own_limit = own_charge_limit(own, battery.max_charge_w)
 
     def charge_plan(hour: datetime, start: datetime) -> dict[datetime, float]:
         day_end = dt_util.start_of_local_day(hour) + timedelta(days=1)
@@ -307,6 +322,7 @@ def project_soc(
                 cap,
                 demands,
                 night_keep,
+                own_limit,
             )
             if (export := (battery_export or {}).get(hour)):
                 # Planned feed-in from the batteries on top (see grid_charge).
@@ -371,8 +387,10 @@ def _discharge(
     cap: CapPlan | None = None,
     demands: Sequence[SurplusDemand] = (),
     night_keep: Callable[[datetime], float | None] | None = None,
+    charge_limit: Callable[[datetime], float] | None = None,
 ) -> float:
-    """Stored energy after covering ``deficit_w`` for ``share`` of an hour."""
+    """Stored energy after covering ``deficit_w`` for ``share`` of an hour;
+    ``charge_limit``: see night_discharge."""
     capacity = battery.capacity_wh
     efficiency = battery.charge_efficiency or 1.0
     floor = battery.min_soc_pct / 100 * capacity
@@ -402,6 +420,7 @@ def _discharge(
         max_charge_w=battery.max_charge_w,
         demands=demands,
         keep=night_keep,
+        charge_limit=charge_limit,
     )
     if plan is None:
         return after

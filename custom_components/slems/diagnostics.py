@@ -78,6 +78,7 @@ def _battery(coordinator: SlemsCoordinator, battery: BatteryRuntime) -> dict:
             "discharge_blocked": battery.soc_window.discharge_blocked,
         },
         "power_limits": _plain(battery.power_limits),
+        "own_pv": battery.driver.own_pv_diagnostics(),
         "telemetry": _plain(telemetry),
         "planned_power_w": distribution.power_w.get(battery.subentry_id) if distribution else None,
         "last_command": None
@@ -141,6 +142,8 @@ def _system(coordinator: SlemsCoordinator) -> dict:
             "grid_power_filtered_w": data.grid_power_filtered_w,
             "grid_without_batteries_filtered_w": data.grid_without_batteries_filtered_w,
             "pv_power_w": data.pv_power_w,
+            "own_pv_power_w": data.own_pv_power_w,
+            "own_pv_curtail_w": data.own_pv_curtail_w,
             "house_power_w": data.house_power_w,
             "battery_power_w": data.battery_power_w,
             "available_power_w": data.available_power_w,

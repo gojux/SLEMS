@@ -79,7 +79,8 @@
       "no_sunspec": "The device reports no SunSpec model chain (register 40000, 0 or 50000).",
       "no_meter": "The SunSpec model chain contains no meter (model 201 to 204).",
       "sign_undecidable": "The grid power is too small to compare the sign (Modbus {modbus} W, entity {entity} W). Try again later or choose the sign.",
-      "sign_mismatch": "Modbus ({modbus} W) and entity ({entity} W) match with neither sign. Is the right meter chosen? Otherwise choose the sign."
+      "sign_mismatch": "Modbus ({modbus} W) and entity ({entity} W) match with neither sign. Is the right meter chosen? Otherwise choose the sign.",
+      "pv_is_own_pv": "These entities are the own PV modules or the output of a battery: {own_pv}. SLEMS counts their production with the battery; as a PV system it would count twice. Remove them from **PV power**."
     }
   },
   "options": {
@@ -159,7 +160,8 @@
       "no_sunspec": "The device reports no SunSpec model chain (register 40000, 0 or 50000).",
       "no_meter": "The SunSpec model chain contains no meter (model 201 to 204).",
       "sign_undecidable": "The grid power is too small to compare the sign (Modbus {modbus} W, entity {entity} W). Try again later or choose the sign.",
-      "sign_mismatch": "Modbus ({modbus} W) and entity ({entity} W) match with neither sign. Is the right meter chosen? Otherwise choose the sign."
+      "sign_mismatch": "Modbus ({modbus} W) and entity ({entity} W) match with neither sign. Is the right meter chosen? Otherwise choose the sign.",
+      "pv_is_own_pv": "These entities are the own PV modules or the output of a battery: {own_pv}. SLEMS counts their production with the battery; as a PV system it would count twice. Remove them from **PV power**."
     }
   },
   "config_subentries": {
@@ -926,6 +928,9 @@
       },
       "pv_power": {
         "name": "PV power"
+      },
+      "own_pv_curtailed": {
+        "name": "Curtailed own PV"
       },
       "house_power": {
         "name": "House consumption"

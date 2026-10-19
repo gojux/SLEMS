@@ -232,7 +232,7 @@ from .pv_forecast import (
     mean_power,
     power_lookup,
 )
-from .soc_projection import OwnPvBattery, ProjectionSettings, SocProjection, project_soc
+from .soc_projection import OwnPvBattery, ProjectionSettings, SocProjection, own_charge_limit, project_soc
 from .util import entity_ids, state_as_float, state_as_kwh, state_as_watts, watts_factor
 
 _LOGGER = logging.getLogger(__name__)
@@ -2638,6 +2638,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 full_wh=battery.full_soc_pct / 100 * battery.capacity_wh,
                 max_charge_w=plan_battery.max_charge_w,
                 demands=self.target_demands,
+                charge_limit=own_charge_limit(self._own_pv_batteries(snapshot, wall_now), plan_battery.max_charge_w),
                 keep=_price_keep(forecast_plan.grid_charge, forecast_plan.price_hold, battery),
             )
         cap_control = (
@@ -2765,7 +2766,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if battery.driver.capabilities.passes_pv_through and full:
                 continue
             power = snapshot.distribution.power_w.get(battery.subentry_id, 0.0)
-            curtailable[battery.subentry_id] = max(0.0, telemetry.pv_w - max(0.0, power))
+            available = battery.driver.own_pv_available_w(telemetry.pv_w)
+            curtailable[battery.subentry_id] = max(0.0, available - max(0.0, power))
         if controller_cycle:
             export = None if snapshot.grid_power_filtered_w is None else -snapshot.grid_power_filtered_w
             self._curtail.update(
@@ -3013,8 +3015,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 result.feed_in_limit_w = min(result.feed_in_limit_w, cap.limit_w)
         pv_hourly = hourly(pv_forecast) if pv_forecast is not None else None
         consumption_hourly = self._with_target_load(consumption.total) if consumption else None
+        own = self._own_pv_batteries(snapshot, wall_now)
         result.peak_threshold_pct, result.peak_limit_w = self._peak_shaving(
-            battery, wall_now, pv_hourly, consumption_hourly, settings
+            battery, wall_now, pv_hourly, consumption_hourly, settings, own
         )
         if pv_forecast is None:
             return result
@@ -3056,7 +3059,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 result.grid_charge = self._grid_charge(
                     battery, wall_now, pv_forecast, pv_hourly, consumption_hourly, grid_load, until, settings,
                     result.peak_limit_w, cap, tariff, background,
-                    own=self._own_pv_batteries(snapshot, wall_now),
+                    own=own,
                 )
                 if result.grid_charge is None:
                     result.price_hold = self._price_hold(
@@ -3110,7 +3113,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 battery_export=result.grid_charge.hourly_export_w if result.grid_charge else None,
                 charge_caps=result.grid_charge.hourly_caps_w if result.grid_charge else None,
                 night_keep=_price_keep(result.grid_charge, result.price_hold, battery),
-                own=self._own_pv_batteries(snapshot, wall_now),
+                own=own,
             )
         pv_power = power_lookup(self._pv_native(snapshot, wall_now))
         result.day_plan = self._day_plan(
@@ -4281,6 +4284,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         pv_hourly: dict[datetime, float] | None,
         consumption_hourly: dict[datetime, float] | None,
         settings: ControlSettings,
+        own: Sequence[OwnPvBattery] = (),
     ) -> tuple[float, float]:
         """SoC threshold and import limit of peak shaving in effect.
 
@@ -4318,7 +4322,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             )
             limit = auto_limit(
                 profile,
-                hours_until_refill(wall_now, pv_hourly, consumption_hourly, refill_wh),
+                hours_until_refill(
+                    wall_now, pv_hourly, consumption_hourly, refill_wh, own_charge_limit(own, battery.max_charge_w)
+                ),
                 usable_wh,
                 settings.peak_shaving_reserve_pct / 100,
             )

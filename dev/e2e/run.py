@@ -284,6 +284,23 @@ FLOW = "/api/config/config_entries/flow"
 SUBENTRY_FLOW = "/api/config/config_entries/subentries/flow"
 
 
+# Simulated PV forecasts (dev/sim_solar_forecast): the roof for the system,
+# the balcony as the forecast of the plug-in battery's modules.
+FORECASTS = {"Roof": 3000, "Balcony": 600}
+
+
+def forecast_entry(token: str, name: str) -> str:
+    for entry in request("GET", "/api/config/config_entries/entry", token=token):
+        if entry["domain"] == "sim_solar_forecast" and entry["title"] == name:
+            return entry["entry_id"]
+    raise Failure(f"no simulated forecast {name}")
+
+
+def forecasts(token: str) -> None:
+    for name, peak in FORECASTS.items():
+        run_flow(token, FLOW, {"handler": "sim_solar_forecast"}, {"user": {"name": name, "peak_w": peak}}, f"Forecast {name}")
+
+
 def setup_system(token: str) -> None:
     run_flow(
         token,
@@ -295,6 +312,7 @@ def setup_system(token: str) -> None:
             "system": {
                 "grid_power_entity": "sensor.smart_meter_power",
                 "pv_power_entity": ["sensor.pv_power"],
+                "pv_forecast_entries": [forecast_entry(token, "Roof")],
                 # Only to set up the phase entities; the simulation has no phases to learn from.
                 **{f"grid_power_{phase}_entity": "sensor.smart_meter_power" for phase in ("l1", "l2", "l3")},
             },
@@ -374,6 +392,7 @@ def battery_plug_in(token: str) -> None:
                 "output_entity": "sensor.plug_in_battery_output",
                 "input_entity": "sensor.plug_in_battery_input",
                 "passes_pv_through": False,
+                "own_pv_forecast_entry": forecast_entry(token, "Balcony"),
             },
             "ha_output": {
                 "output_setpoint_entity": "number.plug_in_battery_output_limit",
@@ -549,6 +568,21 @@ def options(token: str) -> None:
         "Options: smart meter over Modbus",
     )
     check(token, "Options")
+    # The output of the plug-in battery is no PV system (it would count twice).
+    path = "/api/config/config_entries/options/flow"
+    result = request("POST", path, {"handler": entry_id}, token)
+    while result.get("step_id") != "system":
+        result = request("POST", f"{path}/{result['flow_id']}", fill(result, {}), token)
+    result = request(
+        "POST",
+        f"{path}/{result['flow_id']}",
+        fill(result, {"pv_power_entity": ["sensor.pv_power", "sensor.plug_in_battery_output"]}),
+        token,
+    )
+    if result.get("errors") != {"pv_power_entity": "pv_is_own_pv"}:
+        raise Failure(f"own PV as a PV system: {result.get('type')} {result.get('errors')}")
+    request("DELETE", f"{path}/{result['flow_id']}", token=token)
+    print("  own PV as a PV system: rejected")
 
 
 def subentries(token: str) -> list[dict]:
@@ -634,6 +668,8 @@ def main() -> int:
     token = onboard()
     print("Onboarded")
     remove_entries(token)
+    if not any(e["domain"] == "sim_solar_forecast" for e in request("GET", "/api/config/config_entries/entry", token=token)):
+        forecasts(token)
     try:
         for label, scenario in SCENARIOS:
             print(label)
