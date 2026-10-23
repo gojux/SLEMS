@@ -18,7 +18,9 @@ themselves when the problem is gone:
   ``tariff_updates``),
 * the phase of a battery or consumer seems to have changed, or learning it
   anew gave the same phase (both with a dialog to answer, see ``repairs``),
-* the smart meter's energy counters do not net the phases (``netting``).
+* the smart meter's energy counters do not net the phases (``netting``),
+* problems a battery driver reports (``BatteryDriver.issues``, e.g. a profile
+  register outside its range at rest).
 
 Notifications (bell) for events: the end of an active cell balancing run,
 except when the user cancelled it. The problems of the feed-in cap come from
@@ -49,6 +51,7 @@ from .currency import currency_code, market_prices_usable
 from .tariff_comparison import configured_tariffs
 from .tariff_updates import TARIFF_ISSUE_PREFIX
 from .controller import ControlStatus
+from .drivers.profile import ISSUES as DRIVER_ISSUES
 from .phases import label
 
 if TYPE_CHECKING:
@@ -114,8 +117,8 @@ class ProblemReporter:
     def __init__(self, hass: HomeAssistant, coordinator: SlemsCoordinator) -> None:
         self._hass = hass
         self._coordinator = coordinator
-        # Issue ids created by this instance; None until the first update.
-        self._active: set[str] | None = None
+        # Issues created by this instance (id -> placeholders); None until the first update.
+        self._active: dict[str, dict[str, str]] | None = None
         # Feed-in cap problems with a notification shown.
         self._cap_notified: set[str] = set()
         # Since when the consumers draw more than the house, since when no longer
@@ -144,8 +147,11 @@ class ProblemReporter:
                 _unreadable_issue(battery),
                 _release_issue(battery),
                 _house_inaccurate_issue(battery),
+                *(f"{key}_{battery.subentry_id}" for key in DRIVER_ISSUES),
             }
             placeholders = {"name": battery.name}
+            for key, values in battery.driver.issues().items():
+                wanted[f"{key}_{battery.subentry_id}"] = (key, {**placeholders, **values})
             if battery.not_responding:
                 wanted[_not_responding_issue(battery)] = ("battery_not_responding", placeholders)
             since = battery.unreadable_since
@@ -200,7 +206,8 @@ class ProblemReporter:
                 )
 
         for issue_id, (translation_key, placeholders) in wanted.items():
-            if self._active is None or issue_id not in self._active:
+            # Created again when its values change (e.g. other registers outside their range).
+            if self._active is None or self._active.get(issue_id) != placeholders:
                 ir.async_create_issue(
                     self._hass,
                     DOMAIN,
@@ -223,7 +230,7 @@ class ProblemReporter:
         for issue_id in possible - wanted.keys():
             if self._active is None or issue_id in self._active:
                 ir.async_delete_issue(self._hass, DOMAIN, issue_id)
-        self._active = set(wanted)
+        self._active = {issue_id: placeholders for issue_id, (_, placeholders) in wanted.items()}
         self._update_cap_notifications(now, snapshot)
 
     def _consumers_exceed(self, now: float, snapshot: SystemSnapshot | None) -> bool:

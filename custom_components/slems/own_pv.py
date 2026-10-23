@@ -38,6 +38,9 @@ A battery that passes its PV through when full cannot curtail then.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+import time
+
 PROBE_STEP_W = 50.0
 PROBE_MAX_STEP_W = 400.0
 PROBE_INTERVAL_S = 60.0
@@ -47,6 +50,8 @@ PROBE_SETTLE_S = 10.0
 CURTAIL_GAIN = 0.2
 # Curtailment below this ends.
 CURTAIL_MIN_W = 10.0
+# An output that follows the own PV is written again from this difference.
+OUTPUT_DEADBAND_W = 20.0
 
 
 def ports(
@@ -188,3 +193,61 @@ class CurtailControl:
         total = self.total_w + CURTAIL_GAIN * (export_w - max_export_w)
         self.total_w = min(curtailable_w, total) if total >= CURTAIL_MIN_W else 0.0
         return self.total_w
+
+
+class OwnPvPorts:
+    """Input and output a driver writes for a battery with own PV: the ports
+    of a battery power, the probe for curtailed PV at the top of the charge,
+    curtailing for the feed-in cap and the output written (see above)."""
+
+    def __init__(self, max_output_w: float | None, has_input: bool, passes_pv_through: bool) -> None:
+        self._max_output_w = max_output_w
+        self._has_input = has_input
+        self._passes_pv_through = passes_pv_through
+        self.probe = OutputProbe()
+        self.at_top = False
+        self.curtail_w = 0.0
+        # Highest PV read while curtailing on purpose (W): the PV read then
+        # follows the output and is no measure of the PV the modules could give.
+        self.curtail_pv_w: float | None = None
+        # Output last written (W), for the dead band of an output following the PV.
+        self.output_written: float | None = None
+
+    def set_state(self, *, at_top: bool, curtail_w: float) -> None:
+        self.at_top = at_top
+        self.curtail_w = max(0.0, curtail_w)
+
+    def available_w(self, pv_w: float) -> float:
+        return max(pv_w, self.curtail_pv_w or 0.0)
+
+    def diagnostics(self) -> dict:
+        return {
+            "at_top": self.at_top,
+            "curtail_w": self.curtail_w,
+            "curtail_pv_w": self.curtail_pv_w,
+            "probe": self.probe.diagnostics(),
+            "output_written_w": self.output_written,
+        }
+
+    def ports(self, power: float, pv_w: float, output_read: Callable[[], float]) -> tuple[float, float]:
+        """(input, output) that make the battery take ``power`` from the own PV
+        ``pv_w``; ``output_read`` gives the output read now (only for a probe)."""
+        if self.curtail_w > 0:
+            # Curtailed on purpose: a lower output, no input.
+            self.probe.reset()
+            self.curtail_pv_w = pv_w = max(pv_w, self.curtail_pv_w or 0.0)
+            return ports(power + self.curtail_w, pv_w, self._max_output_w, False)
+        self.curtail_pv_w = None
+        grid_input, output = ports(power, pv_w, self._max_output_w, self._has_input)
+        if grid_input > 0 or power < 0 or not self.at_top or self._passes_pv_through:
+            self.probe.reset()
+            return grid_input, output
+        return 0.0, self.probe.output(time.monotonic(), power, pv_w, output_read(), self._max_output_w)
+
+    def needs_write(self, output_w: float) -> bool:
+        """Whether ``output_w`` differs enough from the output written."""
+        return self.output_written is not None and abs(output_w - self.output_written) >= OUTPUT_DEADBAND_W
+
+    def released(self) -> None:
+        self.probe.reset()
+        self.output_written = None

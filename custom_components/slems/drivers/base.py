@@ -184,6 +184,10 @@ class BatteryDriver(ABC):
         """State of a battery with own PV for the diagnostics (None without)."""
         return None
 
+    def issues(self) -> dict[str, dict[str, str]]:
+        """Problems of the driver shown as repairs: translation key -> placeholders."""
+        return {}
+
     def needs_write(self, net_power_w: int) -> bool:
         """True if the set point for ``net_power_w`` differs from the one
         written although the command did not change (e.g. an output that

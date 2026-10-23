@@ -7,10 +7,21 @@ mode the force mode and set points drive the AC power; the DC battery power
 differs by the conversion losses (15 W + 4 % + 1e-5 * P², like the SLEMS default
 model); the state of charge is integrated once per second.
 
-Like the real device it accepts only one TCP connection at a time. A second,
-read-only port (``SIM_TAP_PORT``) serves the same registers to any number of
-clients; the dev instance reads the AC power there every second to build a
-realistic smart meter.
+Firmware quirks of a real Venus E 3.0 (EMS 148, measured 2026-10-23 with
+``tools/venus_quirks.py``):
+
+* only one TCP connection at a time: the port does not listen while it is
+  taken and ``RECONNECT_BLOCK_S`` after it closed (connection refused),
+* one answer every ``FRAME_S`` per connection: a request sent sooner waits,
+* reads that touch an unassigned register (e.g. 42000-42010) and writes
+  outside the control registers are refused with exception 2,
+* exception responses declare an MBAP length of 4 for their 3 bytes,
+* switched off (``SIM_OFF_FILE``), the connection is accepted but nothing is
+  answered and no power flows.
+
+A second, read-only port (``SIM_TAP_PORT``) serves the same registers to any
+number of clients, without the connection and timing quirks; the dev instance
+reads the AC power there every second to build a realistic smart meter.
 
 Cell voltages follow an LFP curve. One cell is ahead by
 ``SIM_CELL_OFFSET_PCT`` of SoC, so the cell delta is tiny in the middle and
@@ -29,6 +40,9 @@ Environment variables:
                       flows (test of the non-responding detection; default
                       /tmp/venus_fault, e.g. ``docker compose exec venus-sim-1
                       touch /tmp/venus_fault``)
+    SIM_OFF_FILE      while this file exists, the battery is switched off: the
+                      control port accepts the connection but answers nothing
+                      (default /tmp/venus_off)
     SIM_CAPACITY_WH   usable capacity (default 5120)
     SIM_INITIAL_SOC   initial state of charge in % (default 50)
 """
@@ -50,6 +64,7 @@ REG_TOTAL_DISCHARGING_ENERGY = 33002
 REG_INTERNAL_TEMPERATURE = 35000
 REG_INVERTER_STATE = 35100
 FAULT_FILE = os.environ.get("SIM_FAULT_FILE", "/tmp/venus_fault")
+OFF_FILE = os.environ.get("SIM_OFF_FILE", "/tmp/venus_off")
 OTA_FILE = os.environ.get("SIM_OTA_FILE", "/tmp/venus_ota")
 # Static device information (register -> words), as a Venus E 3.0 reports it.
 DEVICE_INFO = {
@@ -68,8 +83,19 @@ REG_FORCE_MODE = 42010
 REG_SET_CHARGE_POWER = 42020
 REG_SET_DISCHARGE_POWER = 42021
 
-RS485_ENABLE = 0x55AA
 MAX_POWER_W = 2500
+RS485_ENABLE = 0x55AA
+RS485_DISABLE = 0x55BB
+# Registers a client may write (control registers, highest charge/discharge power).
+WRITABLE = frozenset({REG_RS485_CONTROL, REG_FORCE_MODE, REG_SET_CHARGE_POWER, REG_SET_DISCHARGE_POWER, 44002, 44003})
+# Assigned registers the model does not compute (30002-30005 lie in a block a
+# real Venus answers in one frame).
+STATIC_REGISTERS = {
+    REG_RS485_CONTROL: RS485_DISABLE, REG_FORCE_MODE: 0, REG_SET_CHARGE_POWER: 0, REG_SET_DISCHARGE_POWER: 0,
+    30002: 0, 30003: 0, 30004: 0, 30005: 0, 44002: MAX_POWER_W, 44003: MAX_POWER_W,
+}
+FRAME_S = 0.15
+RECONNECT_BLOCK_S = 0.5
 TICK_S = 1.0
 
 
@@ -95,7 +121,7 @@ class VenusModel:
     """Register store plus battery physics."""
 
     def __init__(self, capacity_wh: float, soc: float) -> None:
-        self.registers: dict[int, int] = {}
+        self.registers: dict[int, int] = dict(STATIC_REGISTERS)
         self._cell_offset = float(os.environ.get("SIM_CELL_OFFSET_PCT", "2.0"))
         self._bleed_per_tick = float(os.environ.get("SIM_BLEED_PCT_PER_MIN", "0.2")) * TICK_S / 60
         self._capacity_wh = capacity_wh
@@ -104,8 +130,12 @@ class VenusModel:
         self._discharged_wh = 0.0
         self.tick()
 
-    def read(self, address: int, count: int) -> list[int]:
-        return [self.registers.get(address + i, 0) for i in range(count)]
+    def read(self, address: int, count: int) -> list[int] | None:
+        """Register values; None if one of them is unassigned (refused)."""
+        addresses = range(address, address + count)
+        if any(a not in self.registers for a in addresses):
+            return None
+        return [self.registers[a] for a in addresses]
 
     def write(self, address: int, values: list[int]) -> None:
         for offset, value in enumerate(values):
@@ -113,7 +143,7 @@ class VenusModel:
 
     def tick(self) -> None:
         power = 0
-        if self.registers.get(REG_RS485_CONTROL) == RS485_ENABLE:
+        if self.registers.get(REG_RS485_CONTROL) == RS485_ENABLE and not os.path.exists(OFF_FILE):
             force_mode = self.registers.get(REG_FORCE_MODE, 0)
             if force_mode == 1:
                 power = min(self.registers.get(REG_SET_CHARGE_POWER, 0), MAX_POWER_W)
@@ -183,14 +213,20 @@ def handle_pdu(model: VenusModel, pdu: bytes, read_only: bool = False) -> bytes:
             if not 1 <= count <= 125:
                 return bytes((function | 0x80, EXC_ILLEGAL_ADDRESS))
             values = model.read(address, count)
+            if values is None:
+                return bytes((function | 0x80, EXC_ILLEGAL_ADDRESS))
             return bytes((function, count * 2)) + struct.pack(f">{count}H", *values)
         if function == 6:
             address, value = struct.unpack(">HH", pdu[1:5])
+            if address not in WRITABLE:
+                return bytes((function | 0x80, EXC_ILLEGAL_ADDRESS))
             model.write(address, [value])
             return pdu[:5]
         if function == 16:
             address, count, _byte_count = struct.unpack(">HHB", pdu[1:6])
             values = list(struct.unpack(f">{count}H", pdu[6 : 6 + count * 2]))
+            if any(address + i not in WRITABLE for i in range(count)):
+                return bytes((function | 0x80, EXC_ILLEGAL_ADDRESS))
             model.write(address, values)
             return pdu[:5]
     except struct.error:
@@ -198,44 +234,65 @@ def handle_pdu(model: VenusModel, pdu: bytes, read_only: bool = False) -> bytes:
     return bytes((function | 0x80, EXC_ILLEGAL_FUNCTION))
 
 
+def frame(transaction_id: int, protocol_id: int, unit_id: int, response: bytes) -> bytes:
+    """Modbus TCP answer; exception responses declare one byte too many like the v3 firmware."""
+    length = len(response) + 1 + (1 if response[0] & 0x80 else 0)
+    return struct.pack(">HHHB", transaction_id, protocol_id, length, unit_id) + response
+
+
 class ModbusServer:
-    """Modbus TCP server; the control port accepts a single client like the real battery."""
+    """Modbus TCP server; the control port behaves like the real battery (see above)."""
 
     def __init__(self, model: VenusModel, *, single_client: bool, read_only: bool) -> None:
         self._model = model
         self._single_client = single_client
         self._read_only = read_only
         self._busy = False
+        self._port = 0
+        self._server: asyncio.Server | None = None
+
+    async def listen(self, port: int) -> None:
+        self._port = port
+        self._server = await asyncio.start_server(self.handle_client, "0.0.0.0", port)
 
     async def handle_client(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         peer = writer.get_extra_info("peername")
+        loop = asyncio.get_running_loop()
         if self._single_client and self._busy:
-            _LOGGER.warning("Rejecting second connection from %s", peer)
             writer.close()
             return
         if self._single_client:
             self._busy = True
+            # Stop listening: further connections are refused like on the device.
+            if self._server is not None:
+                self._server.close()
+                self._server = None
             _LOGGER.info("Client connected: %s", peer)
+        next_answer = 0.0
         try:
             while True:
                 header = await reader.readexactly(7)
                 transaction_id, protocol_id, length, unit_id = struct.unpack(">HHHB", header)
                 pdu = await reader.readexactly(length - 1)
+                if self._single_client and os.path.exists(OFF_FILE):
+                    continue
                 response = handle_pdu(self._model, pdu, self._read_only)
-                writer.write(
-                    struct.pack(">HHHB", transaction_id, protocol_id, len(response) + 1, unit_id)
-                    + response
-                )
+                if self._single_client:
+                    await asyncio.sleep(max(0.0, next_answer - loop.time()))
+                    next_answer = loop.time() + FRAME_S
+                writer.write(frame(transaction_id, protocol_id, unit_id, response))
                 await writer.drain()
         except (asyncio.IncompleteReadError, ConnectionError):
             pass
         finally:
             writer.close()
             if self._single_client:
-                self._busy = False
                 _LOGGER.info("Client disconnected: %s", peer)
+                await asyncio.sleep(RECONNECT_BLOCK_S)
+                self._busy = False
+                await self.listen(self._port)
 
 
 async def run_model(model: VenusModel) -> None:
@@ -254,13 +311,10 @@ async def main() -> None:
     tap_port = int(os.environ.get("SIM_TAP_PORT", "5020"))
     control = ModbusServer(model, single_client=True, read_only=False)
     tap = ModbusServer(model, single_client=False, read_only=True)
-    control_server = await asyncio.start_server(control.handle_client, "0.0.0.0", port)
-    tap_server = await asyncio.start_server(tap.handle_client, "0.0.0.0", tap_port)
+    await control.listen(port)
+    await tap.listen(tap_port)
     _LOGGER.info("Venus E 3.0 simulator listening on port %d (read-only tap %d)", port, tap_port)
-    async with control_server, tap_server:
-        await asyncio.gather(
-            control_server.serve_forever(), tap_server.serve_forever(), run_model(model)
-        )
+    await run_model(model)
 
 
 if __name__ == "__main__":

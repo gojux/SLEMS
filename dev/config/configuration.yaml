@@ -141,6 +141,7 @@ template:
               - states('sensor.sim_venus_1_ac_power') | float(0)
               - states('sensor.sim_venus_2_ac_power') | float(0)
               - states('sensor.sim_venus_3_ac_power') | float(0)
+              - states('sensor.sim_venus_4_ac_power') | float(0)
               - states('sensor.plug_in_battery_output') | float(0)
               + states('sensor.plug_in_battery_input') | float(0)) | round(0) }}
   # Plug-in battery with own PV: in mode Output the output follows its set
@@ -321,6 +322,20 @@ modbus:
     sensors:
       - name: Sim Venus 2 AC power
         unique_id: sim_venus_2_ac_power
+        device_address: 1
+        address: 30006
+        input_type: holding
+        data_type: int16
+        unit_of_measurement: W
+        device_class: power
+        scan_interval: 1
+  - name: venus_sim_4_tap
+    type: tcp
+    host: venus-sim-4
+    port: 5020
+    sensors:
+      - name: Sim Venus 4 AC power
+        unique_id: sim_venus_4_ac_power
         device_address: 1
         address: 30006
         input_type: holding

@@ -37,10 +37,13 @@ def coordinator(batteries) -> SimpleNamespace:
     )
 
 
+NO_DRIVER_ISSUES = SimpleNamespace(issues=dict)
+
+
 def test_first_update_removes_issues_of_removed_batteries() -> None:
     kept = SimpleNamespace(
         subentry_id="kept", name="Kept", not_responding=True, unreadable_since=None,
-        release_pending_since=None,
+        release_pending_since=None, driver=NO_DRIVER_ISSUES,
     )
     registry = FakeIssues(
         {
@@ -64,7 +67,7 @@ def test_first_update_removes_issues_of_removed_batteries() -> None:
 def test_outstanding_release_becomes_a_repair_issue() -> None:
     battery = SimpleNamespace(
         subentry_id="b1", name="Venus", not_responding=False, unreadable_since=None,
-        release_pending_since=100.0, communication_paused=False,
+        release_pending_since=100.0, communication_paused=False, driver=NO_DRIVER_ISSUES,
     )
     registry = FakeIssues(set())
     reporter = problems.ProblemReporter(None, coordinator([battery]))
@@ -89,7 +92,7 @@ def test_outstanding_release_becomes_a_repair_issue() -> None:
 def test_unreadable_disabled_battery_on_its_own_logic_makes_house_power_inaccurate() -> None:
     battery = SimpleNamespace(
         subentry_id="b1", name="Venus", not_responding=False, unreadable_since=100.0,
-        release_pending_since=None, communication_paused=False,
+        release_pending_since=None, communication_paused=False, driver=NO_DRIVER_ISSUES,
     )
     state = coordinator([battery])
     unknown = {"b1": True}
@@ -220,3 +223,30 @@ def test_phase_and_netting_issues() -> None:
         moved.choose(Phase.L2, manual=False)
         reporter.update(1.0)
     assert (DOMAIN, "phase_changed_venus_l2") not in registry.issues
+
+
+def test_driver_issues_become_repairs() -> None:
+    reported = {"profile_outside_rest": {"registers": "42010 = 7 (0–2)"}}
+    battery = SimpleNamespace(
+        subentry_id="b1", name="Venus", not_responding=False, unreadable_since=None,
+        release_pending_since=None, communication_paused=False, driver=SimpleNamespace(issues=lambda: reported),
+    )
+    registry = FakeIssues(set())
+    reporter = problems.ProblemReporter(None, coordinator([battery]))
+    issue = (DOMAIN, "profile_outside_rest_b1")
+    with (
+        patch.object(problems, "ir", registry),
+        patch.object(reporter, "_update_cap_notifications", lambda *_: None),
+    ):
+        reporter.update(0.0)
+        assert registry.issues[issue]["translation_key"] == "profile_outside_rest"
+        assert registry.issues[issue]["translation_placeholders"] == {
+            "name": "Venus", "registers": "42010 = 7 (0–2)"
+        }
+        # Other values: the issue shows them.
+        reported = {"profile_outside_rest": {"registers": "42010 = 5 (0–2)"}}
+        reporter.update(0.5)
+        assert registry.issues[issue]["translation_placeholders"]["registers"] == "42010 = 5 (0–2)"
+        reported = {}
+        reporter.update(1.0)
+        assert issue not in registry.issues

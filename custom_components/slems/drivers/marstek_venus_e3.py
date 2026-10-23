@@ -54,6 +54,10 @@ START_DELAY_S = 2.7
 # meter, also with set points changing every 0.5 s meanwhile).
 START_EXTRA_S = 1.6
 REVERSAL_EXTRA_S = 0.6
+# A Venus refuses connections for about 0.5 s after the last one closed
+# (measured 2026-10-23), e.g. right after the battery search read it: a probe
+# tries again once after this time.
+PROBE_RETRY_S = 1.0
 
 RS485_ENABLE = 0x55AA
 RS485_DISABLE = 0x55BB
@@ -404,18 +408,22 @@ class MarstekVenusE3Driver(BatteryDriver):
     async def read_soc(cls, host: str, port: int, unit_id: int) -> float | None:
         """State of charge (%) read once from host:port, None without an answer."""
         spec = TELEMETRY_REGISTERS[0]
-        link = ModbusTcpLink(
-            host,
-            port,
-            unit_id,
-            message_wait_s=MESSAGE_WAIT_S,
-            timeout_s=TIMEOUT_S,
-            patch_v3_frames=True,
-        )
-        try:
-            if not await link.connect():
-                return None
-            words = await link.read(spec.address, 1)
-            return None if words is None else words[0] * spec.scale
-        finally:
-            await link.close()
+        for attempt in range(2):
+            if attempt:
+                await asyncio.sleep(PROBE_RETRY_S)
+            link = ModbusTcpLink(
+                host,
+                port,
+                unit_id,
+                message_wait_s=MESSAGE_WAIT_S,
+                timeout_s=TIMEOUT_S,
+                patch_v3_frames=True,
+            )
+            try:
+                if not await link.connect():
+                    continue
+                words = await link.read(spec.address, 1)
+                return None if words is None else words[0] * spec.scale
+            finally:
+                await link.close()
+        return None

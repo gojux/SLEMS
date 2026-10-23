@@ -344,6 +344,16 @@ def battery_modbus(token: str) -> None:
             },
             f"Marstek Venus E 3.0 {number} (simulator)",
         )
+    # The fourth through the Venus profile (needs SLEMS_DEV_PROFILES, see the compose file).
+    subentry(
+        token,
+        "battery",
+        {
+            "user": {"model": "modbus_profile"},
+            "modbus_profile": {"name": "Venus 4", "profile_id": "marstek_venus_e3", "host": "venus-sim-4"},
+        },
+        "Venus E 3.0 from the Modbus profile (simulator)",
+    )
 
 
 def battery_entities(token: str) -> None:
@@ -602,6 +612,7 @@ def reconfigure(token: str) -> None:
             "battery": {
                 "reconfigure": {},
                 "marstek_venus_e3": {},
+                "modbus_profile": {},
                 "ha_device": {},
                 "ha_entities": {},
                 "ha_split": {},

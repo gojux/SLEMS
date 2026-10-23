@@ -214,6 +214,38 @@
             "self_test_on_setup": "Empfohlen: SLEMS lädt und entlädt die Batterie für einige Minuten mit kleiner Leistung und prüft, ob Smart Meter und Messwerte passen (Vorzeichen, Einheiten, Zähler, Ladezustand). Er startet, sobald SLEMS im Betriebsmodus **Aktiv** ist; das Ergebnis erscheint als Benachrichtigung."
           }
         },
+        "modbus_profile": {
+          "title": "Batterie aus einem Modbus-Profil (Entwicklung)",
+          "description": "Nur für Entwicklung und Tests: eine Batterie, die über ein mit SLEMS geliefertes Profil gesteuert wird. Mit dem eigenen Client nimmt die Batterie nur eine Modbus-Verbindung an: Betreibe nicht gleichzeitig eine andere Integration oder eine andere Batterie auf derselben Batterie.",
+          "data": {
+            "name": "Name",
+            "profile_id": "Profil",
+            "host": "Host / IP-Adresse",
+            "port": "Port",
+            "unit_id": "Modbus Unit-ID",
+            "transport": "Verbindung",
+            "capacity_wh": "Nutzbare Kapazität",
+            "max_charge_power_w": "Maximale Ladeleistung",
+            "max_discharge_power_w": "Maximale Entladeleistung",
+            "skip_connection_test": "Verbindungstest überspringen",
+            "efficiency_mode": "Quelle des Wirkungsgrads",
+            "round_trip_efficiency_pct": "Gesamtwirkungsgrad",
+            "release_state": "Zustand, wenn SLEMS die Batterie freigibt",
+            "purchase_price_eur": "Anschaffungspreis",
+            "rated_cycles": "Zyklen laut Hersteller",
+            "self_test_on_setup": "Nach dem Speichern einen Selbsttest machen"
+          },
+          "data_description": {
+            "transport": "Eigener Modbus-Client: die eigene Verbindung von SLEMS mit den Korrekturen für die Firmware der Marstek Venus. Home Assistant Modbus: eine Verbindung des Modbus-Backends von Home Assistant, die andere Integrationen auf demselben Gerät mitnutzen.",
+            "skip_connection_test": "Ohne Verbindungstest speichern, z. B. solange eine andere Integration die Modbus-Verbindung belegt.",
+            "efficiency_mode": "Batteriezähler (empfohlen): aus den Gesamtzählern der Batterie für Laden und Entladen; sofort genau, weil die Batterie ihre ganze Betriebszeit mitzählt. Gelernt: aus der von SLEMS gemessenen Leistung; braucht erst etwa drei volle Ladezyklen. Manuell: fester Wert.",
+            "round_trip_efficiency_pct": "Entnommene / eingespeicherte Energie (AC). Im manuellen Modus fester Wert, sonst Startwert, bis genug Messdaten vorliegen.",
+            "release_state": "Automatik: die eigene Logik der Batterie übernimmt wieder (z. B. ihre Nulleinspeisung). Standby: die Batterie bleibt bei 0 W stehen, bis etwas anderes sie übernimmt. Gilt, wenn SLEMS die Steuerung beendet, z. B. im Betriebsmodus Aus, ohne Werte des Smart Meters oder wenn die Batterie aus SLEMS entfernt wird.",
+            "purchase_price_eur": "Optional, mit den Zyklen: für die Verschleißkosten je kWh (Preis ÷ (Zyklen × nutzbare Kapazität)), die preisbewusste Aktionen mit zusätzlichem Zyklus berücksichtigen, z. B. Laden aus dem Netz. 0: keine Verschleißkosten (Heimspeicher altern vor allem mit der Zeit, der Temperatur und dem Ladezustand, oft bevor ihre Zyklen aufgebraucht sind). Ohne Angabe nimmt SLEMS einen niedrigen Schätzwert von 1 ct/kWh an.",
+            "rated_cycles": "Optional: volle Zyklen laut Hersteller (z. B. aus Datenblatt oder Garantie).",
+            "self_test_on_setup": "Empfohlen: SLEMS lädt und entlädt die Batterie für einige Minuten mit kleiner Leistung und prüft, ob Smart Meter und Messwerte passen (Vorzeichen, Einheiten, Zähler, Ladezustand). Er startet, sobald SLEMS im Betriebsmodus **Aktiv** ist; das Ergebnis erscheint als Benachrichtigung."
+          }
+        },
         "ha_device": {
           "title": "Batterie aus vorhandenen Entitäten",
           "description": "Wähle das Gerät der Batterie in Home Assistant aus: SLEMS schlägt in den nächsten Schritten seine Entitäten vor, auch aus dem Energie-Dashboard, du prüfst und korrigierst sie. Die am besten passenden Geräte stehen oben; die Batterie eines Hybrid-Wechselrichters, den du als PV-Anlage eingerichtet hast, oder eine aus dem Energie-Dashboard ist vorausgewählt. Lass das Feld leer, um alle Entitäten selbst auszuwählen.",
@@ -367,7 +399,8 @@
         "output_needs_own_pv": "**Ausgang** braucht **Eigene PV-Module an der Batterie**.",
         "input_needs_sensor": "Eine Vorgabe des Eingangs braucht den **Eingang aus dem Netz** im vorigen Schritt.",
         "own_pv_counted_twice": "Diese Entitäten sind auch als PV-Anlagen eingetragen: {pv_systems}. Ihre Erzeugung würde doppelt zählen. Wähle **Bei den PV-Anlagen entfernen** aus oder andere Entitäten.",
-        "power_required": "SLEMS braucht die Batterieleistung, um die Batterie zu steuern."
+        "power_required": "SLEMS braucht die Batterieleistung, um die Batterie zu steuern.",
+        "release_state_not_in_profile": "Das Profil kennt diesen Zustand nicht; wähle einen anderen aus."
       },
       "abort": {
         "reconfigure_successful": "Batterie aktualisiert."
@@ -685,7 +718,8 @@
     "model": {
       "options": {
         "marstek_venus_e3": "Marstek Venus E 3.0 (Modbus TCP)",
-        "ha_entities": "Vorhandene Home-Assistant-Entitäten (lesen oder steuern)"
+        "ha_entities": "Vorhandene Home-Assistant-Entitäten (lesen oder steuern)",
+        "modbus_profile": "Batterie aus einem Modbus-Profil (Entwicklung)"
       }
     },
     "consumer_type": {
@@ -814,6 +848,12 @@
         "l2": "L2",
         "l3": "L3",
         "three_phase": "Dreiphasig"
+      }
+    },
+    "transport": {
+      "options": {
+        "own": "Eigener Modbus-Client",
+        "home_assistant": "Home Assistant Modbus"
       }
     }
   },
@@ -1741,6 +1781,18 @@
     "grid_counters_not_netted": {
       "title": "Energiezähler des Smart Meters saldieren nicht über die Phasen",
       "description": "Bezugs- und Einspeisezähler des Smart Meters sind in mehreren Viertelstunden beide gelaufen, während die Netzleistung weniger zeigte: Sie zählen je Phase, während dein Zähler des Netzbetreibers meist über die Phasen saldiert (in Deutschland und Österreich). Tarife und Rechnungen von SLEMS würden dann Energie zählen, die nie über den Zähler ging. Für einen Shelly Pro 3EM liefert die Integration Shelly Phase Netting saldierte Zähler (mehr erfahren); bei anderen Zählern teile die Netzleistung mit Template-Sensoren und Helfern **Integral** in Bezug und Einspeisung auf. Oder entferne die Zähler in den SLEMS-Einstellungen: SLEMS verwendet dann seine eigenen saldierten Werte. Ignoriere den Hinweis, wenn auch dein Zähler des Netzbetreibers je Phase zählt."
+    },
+    "profile_outside_rest": {
+      "title": "{name}: Register außerhalb des Ruhebereichs",
+      "description": "SLEMS steuert {name} nicht: Diese Register des Profils haben Werte außerhalb ihres Ruhebereichs (gelesener Wert, erlaubte Werte): {registers}. Die Adresse im Profil ist womöglich verschoben, oder die Batterie ist in einem Zustand, den das Profil nicht kennt. Prüfe die Register gegen das Handbuch. SLEMS liest sie vor der nächsten Vorgabe erneut."
+    },
+    "profile_persistent_frequent": {
+      "title": "{name}: gespeichertes Register oft geändert",
+      "description": "Ein Register von {name}, das die Batterie dauerhaft speichert (Flash), hat sich innerhalb einer Minute erneut geändert: {registers}. Häufiges Schreiben verschleißt den Speicher. Prüfe, ob sich das Register wirklich so oft ändern muss."
+    },
+    "profile_persistent_blocked": {
+      "title": "{name}: gespeichertes Register gesperrt",
+      "description": "Ein Register von {name}, das die Batterie dauerhaft speichert (Flash), hat sich in 24 Stunden öfter geändert als erlaubt (Register, Grenze): {registers}. SLEMS schreibt es nicht mehr, bis die älteste Änderung 24 Stunden alt ist; die Batterie folgt den Vorgaben deshalb womöglich nicht. Prüfe das Profil; die Grenze ist max_changes_per_day."
     }
   }
 }

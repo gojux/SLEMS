@@ -20,10 +20,13 @@ services:
       - ./dev/sim_solar_forecast:/config/custom_components/sim_solar_forecast:ro
     environment:
       TZ: Europe/Vienna
+      # Offers batteries from a Modbus profile (until the setup with profile choice exists).
+      SLEMS_DEV_PROFILES: "1"
     depends_on:
       - venus-sim-1
       - venus-sim-2
       - venus-sim-3
+      - venus-sim-4
       - sunspec-meter
     restart: unless-stopped
 
@@ -44,6 +47,13 @@ services:
     <<: *venus-sim
     environment:
       SIM_INITIAL_SOC: "55"
+
+  # Controlled through the Venus profile (battery from a Modbus profile), to
+  # compare it with the direct driver of venus-sim-1/2.
+  venus-sim-4:
+    <<: *venus-sim
+    environment:
+      SIM_INITIAL_SOC: "60"
 
   # SunSpec meter like at a SolarEdge inverter (host sunspec-meter, port 502),
   # fed with the simulated grid power by Home Assistant through port 5021.

@@ -54,6 +54,11 @@ CONF_MODEL: Final = "model"
 CONF_HOST: Final = "host"
 CONF_PORT: Final = "port"
 CONF_UNIT_ID: Final = "unit_id"
+# Battery from a Modbus profile: the profile id and the transport (ModbusTransport).
+CONF_PROFILE_ID: Final = "profile_id"
+CONF_TRANSPORT: Final = "transport"
+# Set in the dev and end-to-end environments: offers BatteryModel.MODBUS_PROFILE.
+DEV_PROFILES_ENV: Final = "SLEMS_DEV_PROFILES"
 CONF_CAPACITY_WH: Final = "capacity_wh"
 CONF_MAX_CHARGE_POWER_W: Final = "max_charge_power_w"
 CONF_MAX_DISCHARGE_POWER_W: Final = "max_discharge_power_w"
@@ -211,6 +216,10 @@ class BatteryModel(StrEnum):
     # Battery backed by existing Home Assistant entities: read-only (e.g. while
     # another integration still controls the device) or controlled through them.
     HA_ENTITIES = "ha_entities"
+    # Battery described by a Modbus profile (battery_profiles); only offered
+    # while the environment variable SLEMS_DEV_PROFILES is set, until the
+    # setup with profile choice exists.
+    MODBUS_PROFILE = "modbus_profile"
 
 
 class BatteryControl(StrEnum):
@@ -228,6 +237,15 @@ class BatteryControl(StrEnum):
     # (W, >= 0), optionally one with the input from the grid and a mode
     # select; the driver converts the battery power into them.
     OUTPUT = "output"
+
+
+class ModbusTransport(StrEnum):
+    """How a battery from a Modbus profile is reached."""
+
+    # SLEMS' own Modbus client (one connection per battery).
+    OWN = "own"
+    # A unit of Home Assistant's Modbus backend, shared with other integrations.
+    HOME_ASSISTANT = "home_assistant"
 
 
 class ReleaseState(StrEnum):

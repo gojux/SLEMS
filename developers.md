@@ -58,6 +58,8 @@ docker compose down
 |---|---|
 | `homeassistant` | HA 2026.10.1 (same version as production) on <http://localhost:8123>. `custom_components/slems` is mounted read-only. |
 | `venus-sim-1`, `venus-sim-2` | Modbus TCP simulators of a Venus E 3.0 (`dev/venus_sim/simulator.py`), reachable as host `venus-sim-1` / `venus-sim-2`, port 502. |
+| `venus-sim-3` | The same, controlled through Modbus and template entities of the dev instance (a battery from entities). |
+| `venus-sim-4` | The same, for a battery from the Venus profile (model `modbus_profile`, offered because `SLEMS_DEV_PROFILES` is set for `homeassistant`), to compare it with the direct driver. |
 | `evcc` (profile `evcc`) | evcc 0.316 for the [evcc guide](docs/wallbox-evcc.md), host network, configured in its web UI (data in `dev/evcc`, not committed); start with `docker compose --profile evcc up -d evcc`. Home Assistant reaches it at the bridge gateway (e.g. `http://10.240.6.1:7070`), the browser at the host IP, which evcc also uses for the Home Assistant login. [ha-evcc](https://github.com/marq24/ha-evcc) is copied into `dev/config/custom_components` by hand. |
 | `sunspec-meter` | SunSpec meter in the layout of a SolarEdge inverter with two meters (`dev/sunspec_meter/meter_sim.py`), host `sunspec-meter`, port 502, export positive. An automation of the dev instance writes the simulated grid power through port 5021 at every change of `sensor.smart_meter_power`. |
 | `tests` | pytest in an image based on the HA image, so Python and HA versions match production. It runs as root on the mounted repository, so it writes no bytecode and no pytest cache (they would be owned by root). |
@@ -105,8 +107,15 @@ scratch, stop the stack and delete everything in `dev/config` except
 `configuration.yaml`.
 
 The simulator deliberately has no dependencies (plain asyncio Modbus TCP) so it
-is independent of pymodbus API changes. Like the real device it accepts only a
-single TCP connection. The set points drive the AC power; the DC power (30001)
+is independent of pymodbus API changes. Its control port has the quirks of a
+real Venus E 3.0 measured with `tools/venus_quirks.py` (see *Marstek Venus
+E 3.0*): a single TCP connection (refused while taken and 0.5 s after it
+closed), one answer every 150 ms, exception 2 for reads over unassigned
+registers and writes outside the control registers, exception frames with
+the MBAP length 4. While `SIM_OFF_FILE` (default `/tmp/venus_off`) exists it
+is switched off: it accepts the connection but answers nothing
+(`docker compose exec venus-sim-1 touch /tmp/venus_off`). At rest 42000 is
+0x55BB like on the device. The set points drive the AC power; the DC power (30001)
 differs by conversion losses (same shape as the SLEMS default loss model), so
 the loss learning can be tested.
 
@@ -1558,16 +1567,16 @@ added through its entities (`ha_entities`), read-only or controlled.
 
 `battery_profiles.py` (no HA dependency): the YAML format of Modbus profiles
 of batteries, its loader with line numbers (`parse_profile`, `ProfileError`
-with code, path and line) and the checks. Not used by a driver or the setup
-yet. Shipped profiles are in `templates/battery_profiles/`
-(`bundled_profiles()`, reads files: run it in the executor); the Venus
-profile describes the same registers and steps as the Venus driver, which
-stays (a test compares them, another one runs the profile against the
+with code, path and line) and the checks. Shipped profiles are in
+`templates/battery_profiles/` (`bundled_profiles()`, reads files: run it in
+the executor; `async_setup_entry` loads them before building the drivers);
+the Venus profile describes the same registers and steps as the Venus driver,
+which stays (a test compares them, another one runs the profile against the
 simulator's register model).
 
 - The format has no conditions, loops or free writes: unknown keys are
   refused, only `control.apply` registers are written, `release` only writes
-  those. Anything beyond belongs into a Python subclass of the future profile
+  those. Anything beyond belongs into a Python subclass of the profile
   driver. The transport is not part of a profile.
 - Read keys carry their unit (`soc_pct`, `power_dc_w`, `charged_kwh`, ...) and
   map to `BatteryTelemetry` fields or `extra` keys (`READ_KEYS`, `STATES`);
@@ -1587,6 +1596,49 @@ simulator's register model).
   change within 60 s and blocks above `max_changes_per_day` in 24 h.
 - `confirm: true` on a step reads it back after a complete write or the
   release; a profile without any is unconfirmed.
+
+`drivers/profile.py` (`ProfileDriver`, model `modbus_profile`) carries a
+profile out:
+
+- Transport (`CONF_TRANSPORT`, `ModbusTransport`): SLEMS' own client
+  (`ModbusTcpLink` with the profile's spacing and timeout; the fix for the
+  Venus exception frames touches no other device) or `HaUnitTransport`, a
+  unit of Home Assistant's Modbus backend (`async_get_unit`, shared with other
+  integrations; `close` drops the shared connection, the next request opens
+  it again). The backend lets every request of a silent device wait for its
+  time-out (a switched off Venus cost 31–88 s per read); `HaUnitTransport`
+  therefore drops the connection at the first request without an answer,
+  fails the rest of the read at once and is used again only after
+  `RECONNECT_SETTLE_S` (1 s); reconnecting is left to the backend.
+- Reading: registers at most `BLOCK_GAP` (5) apart are read in one frame
+  (`read_blocks`; for the Venus profile exactly the blocks of the Venus
+  driver), refused blocks are remembered and read one by one, slow values
+  every 60 s. A block whose failure dropped the connection is read one by one
+  the next time and, if its registers answer, asked once more; only failing
+  again makes it refused: over Home Assistant's backend an exception frame of
+  the Venus v3 (MBAP length 4) times out like a silent device instead of
+  reporting the refusal.
+- Range at rest: checked on every take-over (first write after connecting,
+  after a release, after a failed write or read-back) and on every read-back,
+  not before every write (that would cost the Venus about 0.45 s per step).
+  While a register is outside, nothing is written (repair
+  `profile_outside_rest`).
+- Persistent registers through `PersistentGuard`; frequent changes and the
+  block become repairs (`profile_persistent_frequent`, `_blocked`).
+  `BatteryDriver.issues()` hands driver problems to `problems.py`.
+- `setpoint: connection` with own PV: `OwnPvPorts` in `own_pv.py` (shared with
+  the control **Output** of entity batteries: ports, probe for curtailed PV,
+  curtailing for the feed-in cap, dead band of the output). The PV comes
+  from the last telemetry.
+- The model is offered in the config flow only while the environment
+  variable `SLEMS_DEV_PROFILES` is set (dev and end-to-end instances): step
+  `modbus_profile` with a shipped profile, host, port, unit, transport,
+  limits and release state, until the setup with profile choice, YAML, probe
+  reading and write preview exists. The connection test reads the probe
+  register within its range.
+- Setup probes (Venus and profiles) try a refused connection once more after
+  1 s: a Venus refuses connections for about 0.5 s after the last one closed,
+  e.g. right after the battery search read it.
 
 ## Consumption forecast
 
@@ -1775,6 +1827,24 @@ Firmware quirks handled in `modbus_client.py`:
   proves a connection, until then reconnects wait `BACKOFF_S` (5, 10, 20, 40,
   then every 60 s).
 
+Checked on a real Venus E 3.0 (EMS firmware 148) with `tools/venus_quirks.py`
+(2026-10-23):
+
+- Exception responses declare an MBAP length of 4 for 3 bytes (unit,
+  function, code), e.g. `00 05 00 00 00 04 01 83 02` for a refused block;
+  the connection keeps working afterwards.
+- A second connection while one is open is refused at once (connection
+  refused), not accepted and left silent.
+- A connect right after closing is refused; after 0.5 s it works and the
+  first read answers within 10 ms.
+- The firmware answers one frame every 150 ms by itself: with shorter gaps
+  (0.1 to 0 s) every request was answered after 150 ms minus the gap, without
+  time-outs or late replies (20 reads per gap). Shorter gaps gain nothing.
+- At rest, also right after switching it off and on with its button: 42000 =
+  0x55BB, 42010/42020/42021 = 0. Switched off (dark), its LAN port still
+  answers pings and accepts the Modbus TCP connection, but no request is
+  answered: the case the client drops the connection and backs off for.
+
 The coordinator reads all batteries in parallel (`asyncio.gather`; each has
 its own connection and lock) and evaluates them afterwards in their order, so
 a slow or silent battery does not delay the others. Set points are still
@@ -1895,6 +1965,18 @@ python3 tools/read_blocks.py <battery-ip>
 python3 tools/read_blocks.py <battery-ip> --blocks 30001:6 42000:11 --rounds 5
 ```
 
+`tools/venus_quirks.py` checks the firmware quirks the Modbus client handles
+(only reads, never writes): the control registers at rest (`rest`), the raw
+exception responses with their declared MBAP length (`exception`), a second
+connection while one is open (`second`), reconnects after 0–5 s
+(`reconnect`) and, with `--spacing`, gaps shorter than 150 ms with time-outs
+and late replies (it may make the firmware stop answering for a while):
+
+```bash
+python3 -B tools/venus_quirks.py <battery-ip>
+python3 -B tools/venus_quirks.py <battery-ip> --tests spacing --reads 20
+```
+
 `tools/set_power.py` charges or discharges a Venus with a fixed power (same
 control registers as the driver: RS485 control, set points, force mode, set
 point written again every 30 s) and shows DC/AC power, SoC, inverter state and
@@ -1964,7 +2046,7 @@ development instance is not touched) starts a fresh Home Assistant with its
 configuration in memory, the development `configuration.yaml` and its own
 simulators, onboards it and runs the config flows through the REST and
 websocket API of the frontend (`run.py`, standard library only): setup,
-batteries (Modbus simulator, entities), consumers of every control mode,
+batteries (Modbus simulator, Venus profile, entities), consumers of every control mode,
 tariffs (by hand, YAML, Austrian and German templates, EEG), the options with
 the smart meter over Modbus, every subentry reconfigured, and the dashboard
 commands. A form gets its defaults and suggested values like in the frontend

@@ -8,9 +8,11 @@ from typing import Any
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.event import async_track_time_change
 
+from .battery_profiles import bundled_profiles
 from .battery_wear import wear_cost
 from .const import (
     CONF_EFFICIENCY_MODE,
@@ -20,6 +22,8 @@ from .const import (
     CONF_RATED_CYCLES,
     CONF_OWN_PV_ENTITY,
     CONF_OWN_PV_FORECAST_ENTRY,
+    CONF_MODEL,
+    CONF_PROFILE_ID,
     CONF_SELF_TEST_ON_SETUP,
     DEFAULT_ROUND_TRIP_EFFICIENCY_PCT,
     DOMAIN,
@@ -28,6 +32,7 @@ from .const import (
     SUBENTRY_TYPE_BATTERY,
     SUBENTRY_TYPE_CONSUMER,
     SUBENTRY_TYPE_TARIFF,
+    BatteryModel,
     EfficiencyMode,
 )
 from .consumers import ConsumerConfig
@@ -66,10 +71,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
         model="Energy manager",
     )
     batteries = []
+    profiles = None
     for subentry in entry.subentries.values():
         if subentry.subentry_type != SUBENTRY_TYPE_BATTERY:
             continue
-        driver = create_driver(hass, subentry.data)
+        profile = None
+        if subentry.data.get(CONF_MODEL) == BatteryModel.MODBUS_PROFILE:
+            if profiles is None:
+                profiles = await hass.async_add_executor_job(bundled_profiles)
+            if (profile := profiles.get(subentry.data[CONF_PROFILE_ID])) is None:
+                raise ConfigEntryError(f"Unknown battery profile {subentry.data[CONF_PROFILE_ID]}")
+        driver = create_driver(hass, subentry.data, entry, profile)
         batteries.append(
             BatteryRuntime(
                 subentry_id=subentry.subentry_id,

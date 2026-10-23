@@ -214,6 +214,38 @@
             "self_test_on_setup": "Recommended: SLEMS charges and discharges the battery with little power for a few minutes and checks whether smart meter and readings match (sign, units, counters, state of charge). It starts as soon as SLEMS is in operating mode **Active**; the result appears as a notification."
           }
         },
+        "modbus_profile": {
+          "title": "Battery from a Modbus profile (development)",
+          "description": "Only for development and tests: a battery controlled through a profile shipped with SLEMS. The battery accepts only one Modbus connection with the own client: do not run another integration or another battery on the same battery at the same time.",
+          "data": {
+            "name": "Name",
+            "profile_id": "Profile",
+            "host": "Host / IP address",
+            "port": "Port",
+            "unit_id": "Modbus unit ID",
+            "transport": "Connection",
+            "capacity_wh": "Usable capacity",
+            "max_charge_power_w": "Maximum charge power",
+            "max_discharge_power_w": "Maximum discharge power",
+            "skip_connection_test": "Skip connection test",
+            "efficiency_mode": "Efficiency source",
+            "round_trip_efficiency_pct": "Round trip efficiency",
+            "release_state": "State when SLEMS releases the battery",
+            "purchase_price_eur": "Purchase price",
+            "rated_cycles": "Rated cycles",
+            "self_test_on_setup": "Run a self-test after saving"
+          },
+          "data_description": {
+            "transport": "Own Modbus client: SLEMS' own connection with the fixes for the Marstek Venus firmware. Home Assistant Modbus: a connection of Home Assistant's Modbus backend, shared with other integrations on the same device.",
+            "skip_connection_test": "Save without testing the connection, e.g. while another integration still holds the Modbus connection.",
+            "efficiency_mode": "Battery counters (recommended): from the lifetime charge and discharge counters of the battery; accurate at once, because the battery counts its whole operating time. Learned: from the battery power measured by SLEMS; needs about three full charge cycles first. Manual: fixed value.",
+            "round_trip_efficiency_pct": "Energy out / energy in (AC). Fixed value in manual mode, otherwise used until enough data has been measured.",
+            "release_state": "Automatic: the battery's own logic takes over again (e.g. its zero export). Standby: the battery stays idle at 0 W until something else takes it over. Applies when SLEMS stops controlling it, e.g. in operating mode Off, without smart meter values or when the battery is removed from SLEMS.",
+            "purchase_price_eur": "Optional, with the rated cycles: for the wear costs per kWh (price ÷ (cycles × usable capacity)) used by price aware actions that cost a cycle, e.g. charging from the grid. 0: no wear costs (home storage systems age mostly with time, temperature and state of charge, often before their rated cycles are used up). Without it SLEMS assumes a low estimate of 1 ct/kWh.",
+            "rated_cycles": "Optional: full cycles according to the manufacturer (e.g. from the data sheet or warranty).",
+            "self_test_on_setup": "Recommended: SLEMS charges and discharges the battery with little power for a few minutes and checks whether smart meter and readings match (sign, units, counters, state of charge). It starts as soon as SLEMS is in operating mode **Active**; the result appears as a notification."
+          }
+        },
         "ha_device": {
           "title": "Battery from existing entities",
           "description": "Select the device of the battery in Home Assistant: SLEMS suggests its entities in the next steps, also from the energy dashboard, you check and correct them. The devices that fit best come first; the battery of a hybrid inverter you set up as a PV system, or one of the energy dashboard, is preselected. Leave empty to choose all entities by hand.",
@@ -367,7 +399,8 @@
         "output_needs_own_pv": "**Output** needs **Own PV modules at the battery**.",
         "input_needs_sensor": "An input set point needs the **Input from the grid** in the previous step.",
         "own_pv_counted_twice": "These entities are also entered as PV systems: {pv_systems}. Their production would count twice. Select **Remove them from the PV systems** or choose other entities.",
-        "power_required": "SLEMS needs the battery power to control the battery."
+        "power_required": "SLEMS needs the battery power to control the battery.",
+        "release_state_not_in_profile": "The profile has no such state; choose another one."
       },
       "abort": {
         "reconfigure_successful": "Battery updated."
@@ -685,7 +718,8 @@
     "model": {
       "options": {
         "marstek_venus_e3": "Marstek Venus E 3.0 (Modbus TCP)",
-        "ha_entities": "Existing Home Assistant entities (read or control)"
+        "ha_entities": "Existing Home Assistant entities (read or control)",
+        "modbus_profile": "Battery from a Modbus profile (development)"
       }
     },
     "consumer_type": {
@@ -814,6 +848,12 @@
         "l2": "L2",
         "l3": "L3",
         "three_phase": "Three phases"
+      }
+    },
+    "transport": {
+      "options": {
+        "own": "Own Modbus client",
+        "home_assistant": "Home Assistant Modbus"
       }
     }
   },
@@ -1741,6 +1781,18 @@
     "grid_counters_not_netted": {
       "title": "Energy counters of the smart meter do not net the phases",
       "description": "The import and the export counter of the smart meter both ran in several quarter hours while the grid power showed less: they count per phase, while your utility meter usually nets the phases (in Germany and Austria). Tariffs and bills of SLEMS would then count energy that never crossed the meter. For a Shelly Pro 3EM the Shelly Phase Netting integration provides netted counters (learn more); with other meters, split the grid power into import and export with template sensors and **Integral** helpers. Or remove the counters in the SLEMS settings: SLEMS then uses its own netted values. Ignore this if your utility meter counts per phase as well."
+    },
+    "profile_outside_rest": {
+      "title": "{name}: register outside its range at rest",
+      "description": "SLEMS does not control {name}: these registers of the profile hold values outside their range at rest (read value, allowed values): {registers}. The address in the profile may be shifted, or the battery is in a state the profile does not know. Check the registers against the manual. SLEMS reads them again before the next command."
+    },
+    "profile_persistent_frequent": {
+      "title": "{name}: stored register changed often",
+      "description": "A register of {name} that the battery stores permanently (flash) changed again within a minute: {registers}. Frequent writes wear the memory. Check whether the register really has to change that often."
+    },
+    "profile_persistent_blocked": {
+      "title": "{name}: stored register blocked",
+      "description": "A register of {name} that the battery stores permanently (flash) changed more often than allowed in 24 hours (register, limit): {registers}. SLEMS no longer writes it until the oldest change is 24 hours old, so the battery may not follow the commands. Check the profile; the limit is max_changes_per_day."
     }
   }
 }

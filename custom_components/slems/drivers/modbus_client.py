@@ -166,16 +166,15 @@ class ModbusTcpLink:
             )
         self._answered = False
 
-    async def read(self, address: int, count: int) -> list[int] | None:
-        """Read holding registers; return raw words or None on failure."""
+    async def read(self, address: int, count: int, *, input_registers: bool = False) -> list[int] | None:
+        """Read holding (or input) registers; return raw words or None on failure."""
         async with self._lock:
             if self._client is None:
                 return None
+            method = self._client.read_input_registers if input_registers else self._client.read_holding_registers
             try:
                 result = await asyncio.wait_for(
-                    self._client.read_holding_registers(
-                        address=address, count=count, **{self._unit_kwarg: self._unit_id}
-                    ),
+                    method(address=address, count=count, **{self._unit_kwarg: self._unit_id}),
                     timeout=self._request_timeout_s,
                 )
             except (ModbusException, TimeoutError) as err:
@@ -191,18 +190,21 @@ class ModbusTcpLink:
                 return None
             return list(result.registers)
 
-    async def write(self, address: int, value: int) -> bool:
-        """Write a single holding register."""
+    async def write(self, address: int, value: int | list[int]) -> bool:
+        """Write a single holding register, or several in one frame (a list)."""
         async with self._lock:
             if self._client is None:
                 return False
-            try:
-                result = await asyncio.wait_for(
-                    self._client.write_register(
-                        address=address, value=value, **{self._unit_kwarg: self._unit_id}
-                    ),
-                    timeout=self._request_timeout_s,
+            if isinstance(value, list):
+                request = self._client.write_registers(
+                    address=address, values=value, **{self._unit_kwarg: self._unit_id}
                 )
+            else:
+                request = self._client.write_register(
+                    address=address, value=value, **{self._unit_kwarg: self._unit_id}
+                )
+            try:
+                result = await asyncio.wait_for(request, timeout=self._request_timeout_s)
             except (ModbusException, TimeoutError) as err:
                 _LOGGER.debug("Write of register %d failed: %s", address, err)
                 self._drop()

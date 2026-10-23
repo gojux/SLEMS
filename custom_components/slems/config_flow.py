@@ -15,6 +15,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+import os
 import socket
 from typing import Any
 
@@ -151,8 +152,12 @@ from .const import (
     CONF_SELF_TEST_ON_SETUP,
     CONF_SOC_ENTITY,
     CONF_UNIT_ID,
+    CONF_PROFILE_ID,
+    CONF_TRANSPORT,
     CONF_WEATHER_ENTITY,
     DEFAULT_MODBUS_PORT,
+    DEV_PROFILES_ENV,
+    ModbusTransport,
     DEFAULT_UNIT_ID,
     DOMAIN,
     SUBENTRY_TYPE_BATTERY,
@@ -162,9 +167,11 @@ from .const import (
     ControlMode,
     EfficiencyMode,
 )
+from .battery_profiles import bundled_profiles
 from .discovery import async_find_batteries
 from .drivers.ha_entities import EntityBatteryConfig
 from .drivers.marstek_venus_e3 import HARDWARE_MAX_POWER_W, MarstekVenusE3Driver
+from .drivers.profile import probe as probe_profile
 from .entity_match import (
     CAPACITY,
     EntityInfo,
@@ -748,7 +755,7 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                         CONF_MODEL, default=model.value
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
-                            options=[model.value for model in BatteryModel],
+                            options=[model.value for model in _battery_models()],
                             translation_key=CONF_MODEL,
                         )
                     )
@@ -766,6 +773,8 @@ class BatterySubentryFlow(ConfigSubentryFlow):
     async def _async_step_model(
         self, user_input: dict[str, Any] | None
     ) -> SubentryFlowResult:
+        if self._model is BatteryModel.MODBUS_PROFILE:
+            return await self.async_step_modbus_profile()
         if self._model is BatteryModel.MARSTEK_VENUS_E3:
             if self.source == SOURCE_RECONFIGURE:
                 return await self.async_step_marstek_venus_e3(user_input)
@@ -849,6 +858,69 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         return self.async_show_form(
             step_id="marstek_venus_e3", data_schema=schema, errors=errors
         )
+
+    async def async_step_modbus_profile(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """A battery from a shipped Modbus profile (only with SLEMS_DEV_PROFILES, until
+        the setup with profile choice, YAML, probe reading and write preview exists)."""
+        errors: dict[str, str] = {}
+        profiles = await self.hass.async_add_executor_job(bundled_profiles)
+        if user_input is not None:
+            user_input[CONF_PORT] = int(user_input[CONF_PORT])
+            user_input[CONF_UNIT_ID] = int(user_input[CONF_UNIT_ID])
+            profile = profiles[user_input[CONF_PROFILE_ID]]
+            skip_test = user_input.pop(CONF_SKIP_CONNECTION_TEST, False) or self._same_connection(user_input)
+            if ReleaseState(user_input[CONF_RELEASE_STATE]) not in profile.control.release:
+                errors[CONF_RELEASE_STATE] = "release_state_not_in_profile"
+            elif skip_test or await probe_profile(
+                profile, user_input[CONF_HOST], user_input[CONF_PORT], user_input[CONF_UNIT_ID]
+            ):
+                return self._async_finish(user_input)
+            else:
+                errors["base"] = "cannot_connect"
+
+        defaults = self._defaults(user_input)
+        first = next(iter(profiles.values()))
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, first.name)): str,
+                vol.Required(CONF_PROFILE_ID, default=defaults.get(CONF_PROFILE_ID, first.id)): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value=profile.id, label=profile.name)
+                            for profile in profiles.values()
+                        ]
+                    )
+                ),
+                vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, vol.UNDEFINED)): str,
+                vol.Required(
+                    CONF_PORT, default=defaults.get(CONF_PORT, first.connection.port)
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1, max=65535, mode=selector.NumberSelectorMode.BOX)
+                ),
+                vol.Required(
+                    CONF_UNIT_ID, default=defaults.get(CONF_UNIT_ID, first.connection.unit_id)
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1, max=247, mode=selector.NumberSelectorMode.BOX)
+                ),
+                vol.Required(
+                    CONF_TRANSPORT, default=defaults.get(CONF_TRANSPORT, ModbusTransport.OWN.value)
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[transport.value for transport in ModbusTransport], translation_key=CONF_TRANSPORT
+                    )
+                ),
+                **self._limits_schema(defaults, HARDWARE_MAX_POWER_W, list(EfficiencyMode)),
+                vol.Required(
+                    CONF_RELEASE_STATE,
+                    default=defaults.get(CONF_RELEASE_STATE, ReleaseState.AUTO.value),
+                ): _release_state_selector(),
+                vol.Optional(CONF_SKIP_CONNECTION_TEST, default=False): selector.BooleanSelector(),
+                **self._self_test_schema(),
+            }
+        )
+        return self.async_show_form(step_id="modbus_profile", data_schema=schema, errors=errors)
 
     async def _async_battery_devices(self) -> tuple[dict[str, _DeviceCandidate], set[str], EnergyDashboard]:
         """Devices with entities, those that are a battery SLEMS does not have yet and are a PV system of the
@@ -1745,6 +1817,13 @@ def _now_placeholders(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, st
         "grid_now": watts([grid] if grid else []),
         "pv_now": watts(entity_ids(data.get(CONF_PV_POWER_ENTITY))),
     }
+
+
+def _battery_models() -> list[BatteryModel]:
+    """Models offered when adding a battery (a Modbus profile only in dev, see DEV_PROFILES_ENV)."""
+    return [
+        model for model in BatteryModel if model is not BatteryModel.MODBUS_PROFILE or os.environ.get(DEV_PROFILES_ENV)
+    ]
 
 
 def _battery_data(user_input: dict[str, Any], model: BatteryModel) -> dict[str, Any]:
