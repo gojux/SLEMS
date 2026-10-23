@@ -1729,8 +1729,10 @@ controlled only after its self-test with the checks of the profile (see
   firmware / observing, unclear with its
   dialog, failed with the problems from the last notification,
   `TrialState.details`), the self-test notification with a second block for
-  the checks of the profile, a hint on the dashboard's battery card and the
-  diagnostics. The step `modbus_profile` has no self-test option.
+  the checks of the profile, a hint on the dashboard's battery card (in its
+  trial: greyed out with "trial"; observed: a second line "observed after
+  update" with an eye icon, the card stays active) and in its details dialog,
+  and the diagnostics. The step `modbus_profile` has no self-test option.
 
 ## Consumption forecast
 

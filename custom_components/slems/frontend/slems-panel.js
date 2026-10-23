@@ -277,6 +277,7 @@ const STRINGS = {
     unreadable: "cannot be read",
     unreadableText: "SLEMS cannot read the battery; it is neither planned with nor controlled.",
     trial: "trial",
+    observedAfterUpdate: "observed after update",
     trialText: {
       waiting: "Trial of the profile: SLEMS controls the battery once its self-test with the checks of the profile has passed. It starts by itself as soon as it is possible.",
       running: "Trial of the profile: the self-test with the checks of the profile is running.",
@@ -946,6 +947,7 @@ const STRINGS = {
     unreadable: "nicht lesbar",
     unreadableText: "SLEMS kann die Batterie nicht lesen; sie wird weder eingeplant noch gesteuert.",
     trial: "Probebetrieb",
+    observedAfterUpdate: "nach Update beobachtet",
     trialText: {
       waiting: "Probebetrieb des Profils: SLEMS steuert die Batterie, sobald ihr Selbsttest mit den Prüfungen des Profils bestanden ist. Er startet von selbst, sobald er möglich ist.",
       running: "Probebetrieb des Profils: Der Selbsttest mit den Prüfungen des Profils läuft.",
@@ -2902,7 +2904,8 @@ class SlemsPanel extends HTMLElement {
       const notResponding = this._state("not_responding", battery.device_id)?.state === "on";
       const paused = this._state("communication_paused", battery.device_id)?.state === "on";
       const unreadable = !paused && this._state("battery_soc", battery.device_id)?.state === "unavailable";
-      const inTrial = TRIAL_STATES.includes(this._state("profile_trial", battery.device_id)?.state);
+      const trialState = this._state("profile_trial", battery.device_id)?.state;
+      const inTrial = TRIAL_STATES.includes(trialState);
       nodes.push({
         id: `battery-${battery.id}`,
         role: "battery",
@@ -2912,6 +2915,8 @@ class SlemsPanel extends HTMLElement {
         soc: num("battery_soc", battery.device_id),
         entity: this._entityId("ac_power", battery.device_id) || this._entityId("battery_power", battery.device_id),
         disabled: !enabled || balancing || notResponding || unreadable || paused || inTrial,
+        // Controlled, but watched closely after a firmware update (see trial.py).
+        note: trialState === "observing" ? t.observedAfterUpdate : "",
         detail: paused
           ? t.paused
           : unreadable
@@ -3015,6 +3020,7 @@ class SlemsPanel extends HTMLElement {
             ? `<div class="fbox-detail" title="${escapeHtml(this._t.storageTemperature)}"><ha-icon icon="mdi:water-boiler" data-field="detailicon" hidden></ha-icon><span data-field="detail"></span></div>`
             : `<div class="fbox-detail" data-field="detail"></div>`
         }
+        ${n.role === "battery" ? `<div class="fbox-note" data-field="note" hidden><ha-icon icon="mdi:eye-outline"></ha-icon><span data-field="notetext"></span></div>` : ""}
       </div>`;
     const byRole = (role) => nodes.filter((n) => n.role === role).map(box).join("");
     const hasConsumers = nodes.some((n) => n.role === "consumer");
@@ -3052,6 +3058,9 @@ class SlemsPanel extends HTMLElement {
       badge.hidden = !n.badge;
     }
     if (n.role === "battery") {
+      set("notetext", n.note || "");
+      const note = element.querySelector('[data-field="note"]');
+      if (note) note.hidden = !n.note;
       set("soc", n.soc === null ? "–" : `${Math.round(n.soc)} %`);
       const bar = element.querySelector('[data-field="socbar"]');
       if (bar) bar.style.width = `${Math.max(0, Math.min(100, n.soc ?? 0))}%`;
@@ -5238,6 +5247,9 @@ const STYLE = `
   .fbox-value { font-size: 20px; font-weight: 500; margin-top: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .fbox-detail { font-size: 12px; color: var(--secondary-text-color); min-height: 16px; margin-top: auto; display: flex; align-items: center; gap: 4px; }
   .fbox-detail ha-icon { --mdc-icon-size: 16px; }
+  .fbox-note { font-size: 12px; color: var(--info-color, #039be5); min-height: 16px; display: flex; align-items: center; gap: 4px; }
+  .fbox-note[hidden] { display: none; }
+  .fbox-note ha-icon { --mdc-icon-size: 14px; flex-shrink: 0; }
   .fbox-detail ha-icon[hidden] { display: none; }
   .fbox-soc { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; }
   .fbox-soc .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--divider-color); overflow: hidden; min-width: 40px; }
