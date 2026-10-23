@@ -135,7 +135,8 @@ def test_blocks_of_the_venus_profile_are_the_drivers() -> None:
 
 
 async def test_telemetry_like_the_venus_driver() -> None:
-    model = SIM.VenusModel(5120, 63.0)
+    # 169 × 0.1 is 16.900000000000002 unrounded.
+    model = SIM.VenusModel(5120, 16.9)
     model.write(42000, [SIM.RS485_ENABLE])
     model.write(42010, [2])
     model.write(42021, [1200])

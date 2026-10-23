@@ -462,15 +462,19 @@ class ProfileDriver(BatteryDriver):
             parts = [words[register] for register in read.registers]
             if any(part is None for part in parts):
                 continue
-            values[key] = sum(
-                decode(part, register.type, register.word_order) * register.scale  # type: ignore[operator]
-                for part, register in zip(parts, read.registers, strict=True)
+            # Rounded like the Venus driver (a scale of 0.1 gives 16.900000000000002).
+            values[key] = round(
+                sum(
+                    decode(part, register.type, register.word_order) * register.scale  # type: ignore[operator]
+                    for part, register in zip(parts, read.registers, strict=True)
+                ),
+                3,
             )
         soc = profile.read["soc_pct"]
         if "soc_pct" not in values and soc.fallback is not None and any(w is not None for w in words.values()):
             register = soc.fallback
             if (part := await self._transport.read(register.address, register.size, input_registers=register.input)):
-                values["soc_pct"] = decode(part, register.type, register.word_order) * register.scale  # type: ignore[operator]
+                values["soc_pct"] = round(decode(part, register.type, register.word_order) * register.scale, 3)  # type: ignore[operator]
         state = None
         if profile.state is not None and (part := words.get(profile.state.register)) is not None:
             raw = decode(part, profile.state.register.type, profile.state.register.word_order)
