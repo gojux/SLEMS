@@ -125,6 +125,14 @@ def _battery(coordinator: SlemsCoordinator, battery: BatteryRuntime) -> dict:
         else {**_plain(battery.self_test.as_dict()), "power_w": battery.self_test_power_w},
         "self_test_pending": battery.self_test_pending,
         "self_test_last": battery.self_test_last,
+        "trial": None
+        if battery.trial is None
+        else {
+            **battery.trial.as_dict(),
+            "in_trial": battery.in_trial,
+            "device_info_checked": battery.device_info_checked,
+            "register_reads": battery.self_test.register_reads() if battery.self_test is not None else None,
+        },
         "learn_capacity": battery.learn_capacity,
         "capacity_in_use_wh": battery.capacity_wh,
         "capacity_learner": battery.capacity_learner.as_dict(),

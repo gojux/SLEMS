@@ -275,6 +275,8 @@ class CellBalancingSwitch(SlemsBatteryEntity, SwitchEntity):
             )
         if self.battery.self_test_requested:
             raise ServiceValidationError(translation_domain=DOMAIN, translation_key="balancing_self_test")
+        if self.battery.in_trial:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="balancing_trial")
         self.coordinator.start_balancing(self.battery)
         self.async_write_ha_state()
 

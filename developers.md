@@ -114,7 +114,13 @@ closed), one answer every 150 ms, exception 2 for reads over unassigned
 registers and writes outside the control registers, exception frames with
 the MBAP length 4. While `SIM_OFF_FILE` (default `/tmp/venus_off`) exists it
 is switched off: it accepts the connection but answers nothing
-(`docker compose exec venus-sim-1 touch /tmp/venus_off`). At rest 42000 is
+(`docker compose exec venus-sim-1 touch /tmp/venus_off`). For the trial of a
+profile (all off by default): `SIM_FOREIGN_FILE` (`/tmp/venus_foreign`) makes
+"another system" write 42020 every 10 s, `SIM_FIRMWARE_FILE`
+(`/tmp/venus_firmware`) sets the EMS version to its content,
+`SIM_WATCHDOG_S` ends RS485 control after that many seconds without a write
+(a real Venus does not) and `SIM_CLAMP_W` cuts a set point to it 15 s after
+the last write. At rest 42000 is
 0x55BB like on the device. The set points drive the AC power; the DC power (30001)
 differs by conversion losses (same shape as the SLEMS default loss model), so
 the loss learning can be tested.
@@ -636,7 +642,12 @@ automatic pause triggers when the telemetry reports `inverter_state`
 `ota_upgrade` (register 35100 = 5). Only drivers with `has_connection` get the
 switch. Simulator: `SIM_OTA_FILE` (default `/tmp/venus_ota`) makes it report
 the update. Device information (`read_device_info`) is read after connecting
-and every 6 h and shown in the dashboard's details dialog.
+and every 6 h and shown in the dashboard's details dialog. A battery with a
+trial (Modbus profile) reads it again when a pause ends and is controlled
+only after it was compared (`device_info_checked`, reset when a pause
+begins: the pause ends by the clock, before the next poll resumes it): a
+changed value is a firmware update and begins its observation (see *Battery
+profiles*).
 
 ### Self-test
 
@@ -689,6 +700,37 @@ last result in its attributes), notification in `problems.py`.
   soon as `self_test_blocked` allows it; the store keeps
   `self_test_on_setup_done` and `self_test_last`. A running test is not
   stored; after a restart the battery is in normal operation again.
+- Trial of a profile (`SelfTest(..., trial=TrialSpec)`, from
+  `BatteryDriver.trial_spec`): the same test with more phases and checks,
+  reported apart (`trial_checks`, `as_dict()["trial"]`; `result` is the worst
+  of both parts). Without a trial nothing changes.
+  - QUIET first (nothing sent, the others not held): the write registers are
+    read every `REGISTER_READ_S` (10 s) for `QUIET_S` (60 s). A register
+    changing by itself (`changing`) or outside its range at rest
+    (`outside_rest`) ends the test without any write and without a release;
+    unreadable is unclear.
+  - Before each direction a small step (`TrialSpec.small_w`: 100 W or the
+    profile's `min_power_w`) until it shows plus `SMALL_HOLD_S` (at most
+    `SMALL_MAX_S`), then `SETTLE_S` (15 s) at 0 W, then the test power (its
+    response stays comparable with a plain test). Beyond 3× or the wrong way
+    for `SMALL_ABORT_S` (5 s) ends the test before the full power; with a
+    restless meter only the battery's own power counts for "too large".
+  - Late read back: once a full step showed, `wants_refresh` makes the
+    controller write it once more completely (with read back), then
+    `writes_paused` stops every write, keep-alive included, for
+    `TrialSpec.late_s` (90 s, with `keepalive_s` up to 5 s before it: 55 s for
+    the Venus) while the registers are read. A register going to a value of a
+    release state (`fallback`: the firmware's own time-out is shorter than the
+    keep-alive) or changing otherwise (`changed`, e.g. another system) fails;
+    a power cut to a lower value is a warning (`clamped`, with `limit_w`).
+  - After the release the registers are read at once and after
+    `RELEASE_LATE_S` (90 s, phase `RELEASE_LATE`, the others no longer held):
+    those the release writes hold its values, the others are in their range
+    at rest.
+  - The coordinator reads the registers with the telemetry when
+    `registers_due` asks (`read_control_registers`) and passes them in the
+    sample (`Sample.registers`); `register_reads()` shows them in the
+    diagnostics.
 
 ### Cell balancing
 
@@ -1640,6 +1682,56 @@ profile out:
   1 s: a Venus refuses connections for about 0.5 s after the last one closed,
   e.g. right after the battery search read it.
 
+Trial (`trial.py`, `TrialState` per battery in the store, `BatteryRuntime.trial`;
+only drivers with a `trial_spec`, i.e. profiles): a battery from a profile is
+controlled only after its self-test with the checks of the profile (see
+*Self-test*) passed.
+
+- Begins for a new battery and when `trial_key` (`id@revision` of the
+  profile) differs from the stored one.
+- A firmware update (a value of the device information differs from the one
+  read before; only keys read both times count) of a battery that had passed
+  begins an observation instead (`Observation`, status `observing`): the
+  write registers are read at rest first (`quiet_check`, as in the trial,
+  nothing written; changing → `failed` at once), then the battery is
+  controlled while SLEMS watches it for `OBSERVE_S` (24 h): the first
+  commands of a direction are capped to the small step (`Observation.cap` on
+  the power limits) until it delivered half of one for `SHOWN_S`; its own
+  power beyond 3× (2× once shown) or against the command is a finding; while
+  it runs a direction that did not run for `OBSERVE_DIRECTION_S` (1 h) yet,
+  the registers are read every 10 s and compared with `written_values()`
+  (only reads without a write meanwhile, `write_count`; a difference seen
+  twice in a row: `fallback` / `changed`, a power cut is only noted); the next
+  release is read at once and after 90 s (dropped if controlled again
+  meanwhile); not delivering (`not_responding`) is a finding as well. A
+  finding hands the battery back and begins the full trial (notification
+  `observation_found`). The observation ends after 24 h with 1 h in each
+  direction and a checked release. Detected while SLEMS controls the battery
+  (the 6-hourly read), it is handed back before the registers are read at
+  rest.
+- In its trial (`in_trial`; also while the device information was not
+  compared yet) the battery is neither planned with nor controlled
+  (`participating`/`plannable`), runs on its own logic and is reported
+  missing as `trial`; no cell balancing. Only its test writes: the release
+  is written only when the test wrote (`TrialState.wrote`, stored, so a
+  restart in the middle releases it).
+- The test starts by itself when `self_test_blocked` allows it (`due`).
+  `judge` takes the result: a failed check anywhere → `failed` (stays until
+  the profile changes or a test started by hand passes; cannot be
+  confirmed); an unclear one (except the small steps, which a device with a
+  minimum power may ignore) → `unclear`, retried after `RETRY_S` (10 min) and
+  confirmable in its repair (`repairs.TrialFlow`, `confirm_trial`); else
+  `passed`. A test stopped early (cancelled, not active, …) is started again
+  after `RETRY_S`.
+- Visible as the sensor `profile_trial` (waiting, running, unclear, failed,
+  passed, confirmed, observing; reason, firmware change, the checks and the
+  observation as attributes), the repairs `profile_trial_*` (new / profile /
+  firmware / observing, unclear with its
+  dialog, failed with the problems from the last notification,
+  `TrialState.details`), the self-test notification with a second block for
+  the checks of the profile, a hint on the dashboard's battery card and the
+  diagnostics. The step `modbus_profile` has no self-test option.
+
 ## Consumption forecast
 
 `forecast/` – horizon today and tomorrow, hourly. The forecast covers the
@@ -2248,3 +2340,5 @@ repository (otherwise its *brands* check fails).
 | 2026-10-13 | An on/off consumer found running after a start counts as switched on: after a restart a heat pump in a hot water run counted as off, its power as available; with the charge not secured the batteries took it and charged 1.8 kW from the grid while the heat pump, its release withdrawn, finished its run. |
 | 2026-10-13 | The batteries never charge more than the surplus at the meter with the consumers as they draw now (except planned grid charging), instead of trusting that a consumer allotted less stops at once: a released heat pump finishes its run anyway, and battery support *always* did not help because the allocation saw a surplus, not a deficit. One rule for every way into it (restart, release withdrawn, a device not following) instead of single cases. |
 | 2026-10-13 | Learned start and reversal times have a floor: the learned step time plus the driver's least extra time (Venus: 1.6 s and 0.6 s, measured with set points changing every 0.5 s as in the control loop). The learned start times of a real installation were 0.6 s against 2.6–2.9 s measured: measurements in the control loop end early when another change of the grid moves the meter. A floor relative to the step time keeps the meter's own delay in. |
+| 2026-10-23 | After a firmware update a battery from a profile that had passed is not tested again but observed in normal operation for a day (registers read at rest before the first write, small first commands, registers compared with what was written, the next release read back); only a finding begins the full trial. The profile is proven, only the firmware is new, and the full test would hold the other batteries and the consumers and wait for a moment it is possible; the observation cannot check the effect at the meter, but compares the battery's own power with the commands. |
+| 2026-10-23 | A battery from a Modbus profile has a trial: the self-test with extra phases and checks of the profile (registers unchanged at rest before any write, a small first step, nothing written for up to 90 s after a step showed, the registers after the release), one test with its result in two parts instead of a second test logic. It runs again after a profile change (a firmware update is observed instead, see above): the self-test sees the effect at the meter, but not a write that hit a wrong register, a firmware falling back to its own logic or another system writing the same register. Only a trial without a failed check can be taken as passed by the user. |

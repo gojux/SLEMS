@@ -216,7 +216,7 @@
         },
         "modbus_profile": {
           "title": "Battery from a Modbus profile (development)",
-          "description": "Only for development and tests: a battery controlled through a profile shipped with SLEMS. The battery accepts only one Modbus connection with the own client: do not run another integration or another battery on the same battery at the same time.",
+          "description": "Only for development and tests: a battery controlled through a profile shipped with SLEMS. The battery accepts only one Modbus connection with the own client: do not run another integration or another battery on the same battery at the same time. SLEMS controls it only after its trial has passed: a self-test with the checks of the profile that starts by itself.",
           "data": {
             "name": "Name",
             "profile_id": "Profile",
@@ -232,8 +232,7 @@
             "round_trip_efficiency_pct": "Round trip efficiency",
             "release_state": "State when SLEMS releases the battery",
             "purchase_price_eur": "Purchase price",
-            "rated_cycles": "Rated cycles",
-            "self_test_on_setup": "Run a self-test after saving"
+            "rated_cycles": "Rated cycles"
           },
           "data_description": {
             "transport": "Own Modbus client: SLEMS' own connection with the fixes for the Marstek Venus firmware. Home Assistant Modbus: a connection of Home Assistant's Modbus backend, shared with other integrations on the same device.",
@@ -242,8 +241,7 @@
             "round_trip_efficiency_pct": "Energy out / energy in (AC). Fixed value in manual mode, otherwise used until enough data has been measured.",
             "release_state": "Automatic: the battery's own logic takes over again (e.g. its zero export). Standby: the battery stays idle at 0 W until something else takes it over. Applies when SLEMS stops controlling it, e.g. in operating mode Off, without smart meter values or when the battery is removed from SLEMS.",
             "purchase_price_eur": "Optional, with the rated cycles: for the wear costs per kWh (price ÷ (cycles × usable capacity)) used by price aware actions that cost a cycle, e.g. charging from the grid. 0: no wear costs (home storage systems age mostly with time, temperature and state of charge, often before their rated cycles are used up). Without it SLEMS assumes a low estimate of 1 ct/kWh.",
-            "rated_cycles": "Optional: full cycles according to the manufacturer (e.g. from the data sheet or warranty).",
-            "self_test_on_setup": "Recommended: SLEMS charges and discharges the battery with little power for a few minutes and checks whether smart meter and readings match (sign, units, counters, state of charge). It starts as soon as SLEMS is in operating mode **Active**; the result appears as a notification."
+            "rated_cycles": "Optional: full cycles according to the manufacturer (e.g. from the data sheet or warranty)."
           }
         },
         "ha_device": {
@@ -1228,6 +1226,18 @@
           "l3": "L3",
           "three_phase": "Three phases"
         }
+      },
+      "profile_trial": {
+        "name": "Trial",
+        "state": {
+          "waiting": "Waiting for the self-test",
+          "running": "Self-test running",
+          "unclear": "Partly unclear",
+          "failed": "Failed",
+          "passed": "Passed",
+          "confirmed": "Taken as passed",
+          "observing": "Observed after a firmware update"
+        }
       }
     },
     "switch": {
@@ -1691,6 +1701,60 @@
     },
     "balancing_self_test": {
       "message": "Cell balancing cannot be started during a self-test."
+    },
+    "battery_missing_trial": {
+      "message": "{name} (trial of its profile)"
+    },
+    "balancing_trial": {
+      "message": "Cell balancing cannot be started while the battery is in its trial."
+    },
+    "self_test_trial_header": {
+      "message": "Checks of the profile (trial):"
+    },
+    "self_test_check_trial_quiet": {
+      "message": "Registers stay unchanged without writing"
+    },
+    "self_test_check_trial_small_charge": {
+      "message": "Small first charge step"
+    },
+    "self_test_check_trial_small_discharge": {
+      "message": "Small first discharge step"
+    },
+    "self_test_check_trial_late_charge": {
+      "message": "Registers hold while charging without writing"
+    },
+    "self_test_check_trial_late_discharge": {
+      "message": "Registers hold while discharging without writing"
+    },
+    "self_test_check_trial_release": {
+      "message": "Registers after the hand back"
+    },
+    "observation_found_title": {
+      "message": "{name} behaves differently after the firmware update"
+    },
+    "observation_found_message": {
+      "message": "Since the firmware update {name} behaves differently: {problem}.\n\nSLEMS handed it back to its own logic and checks it in its trial (a self-test with the checks of the profile, starting by itself)."
+    },
+    "observation_quiet_message": {
+      "message": "After the firmware update the registers of the profile of {name} do not stay as they are without writing:\n\n{problem}\n\nThe new firmware likely uses these registers differently. SLEMS does not control the battery; check the profile against the manual of the new firmware."
+    },
+    "observation_problem_too_large": {
+      "message": "its power ({power_w} W) is a multiple of the command ({command_w} W)"
+    },
+    "observation_problem_reversed": {
+      "message": "its power ({power_w} W) runs against the command ({command_w} W)"
+    },
+    "observation_problem_fallback": {
+      "message": "register {address} fell back from {written} to {read} by itself"
+    },
+    "observation_problem_changed": {
+      "message": "register {address} holds {read} instead of the {written} written"
+    },
+    "observation_problem_release": {
+      "message": "after the hand back the registers are not as expected (read value, expected value): {registers}"
+    },
+    "observation_problem_not_delivering": {
+      "message": "it does not deliver the commanded power"
     }
   },
   "issues": {
@@ -1793,6 +1857,41 @@
     "profile_persistent_blocked": {
       "title": "{name}: stored register blocked",
       "description": "A register of {name} that the battery stores permanently (flash) changed more often than allowed in 24 hours (register, limit): {registers}. SLEMS no longer writes it until the oldest change is 24 hours old, so the battery may not follow the commands. Check the profile; the limit is max_changes_per_day."
+    },
+    "profile_trial_new": {
+      "title": "{name} is in its trial",
+      "description": "SLEMS does not control {name} yet: a battery from a Modbus profile is only controlled after its self-test with the checks of the profile has passed. The test starts by itself as soon as it is possible (operating mode **Active**, battery switched on and readable) and takes about 10 minutes; meanwhile the other batteries and the consumers keep their set points."
+    },
+    "profile_trial_profile": {
+      "title": "{name} is in its trial again",
+      "description": "The profile of {name} changed, so SLEMS checks it again before controlling the battery. The self-test with the checks of the profile starts by itself as soon as it is possible (operating mode **Active**, battery switched on and readable) and takes about 10 minutes."
+    },
+    "profile_trial_firmware": {
+      "title": "{name}: firmware update, back in its trial",
+      "description": "The device information of {name} changed ({changes}), likely through a firmware update. A new firmware may treat the registers of the profile differently, so SLEMS does not control the battery until the self-test with the checks of the profile has passed again. It starts by itself as soon as it is possible (operating mode **Active**, battery switched on and readable)."
+    },
+    "profile_trial_unclear": {
+      "title": "{name}: trial partly unclear",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Take the trial of {name} as passed",
+            "description": "The self-test of {name} found nothing wrong, but could not check everything:\n\n{details}\n\nSLEMS repeats it in 10 minutes. If you are sure the profile is right, submit to let SLEMS control {name} without a passed trial. It goes back into its trial when the profile or the firmware changes."
+          }
+        },
+        "abort": {
+          "not_loaded": "SLEMS is not running.",
+          "not_needed": "Not needed any more: the trial is no longer unclear."
+        }
+      }
+    },
+    "profile_trial_failed": {
+      "title": "{name}: trial failed",
+      "description": "The self-test of {name} found errors in the profile, so SLEMS does not control the battery:\n\n{details}\n\nCheck the profile against the manual of the battery. After a correction the trial starts again; you can also repeat the self-test with the switch **Self-test**."
+    },
+    "profile_trial_observing": {
+      "title": "{name}: firmware update, observed",
+      "description": "The device information of {name} changed ({changes}), likely through a firmware update. SLEMS keeps controlling the battery, but first reads the registers of the profile without writing and then watches it closely for a day: the first commands of each direction are limited to 100 W, the registers are compared with what was written, and the next hand back to its own logic is checked. If anything does not fit, the battery goes into its trial."
     }
   }
 }

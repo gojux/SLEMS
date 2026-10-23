@@ -134,7 +134,8 @@ from .battery_limits import (
 )
 from .cell_balancing import BMS_END_CELL_V, BMS_END_SOC_PCT, BalancingPhase, CellBalancer, CellMonitor
 from .own_pv import CurtailControl, feasible_command_w
-from .self_test import Phase as SelfTestPhase, Sample, SelfTest, self_test_power_w, step_power_w
+from .self_test import Outcome, Phase as SelfTestPhase, Sample, SelfTest, self_test_power_w, step_power_w
+from .trial import TrialState
 from .delivery_monitor import Action, DeliveryMonitor
 from .full_charge import REST_S as FULL_CHARGE_REST_S, FullChargeCandidate, due_battery
 from .feed_in_cap import CAP_MARGIN_W, CapConsumer, CapPlan, CapSettings, auto_buffer, plan_cap
@@ -317,6 +318,15 @@ class BatteryRuntime:
     self_test_last: dict | None = None
     # A self-test was asked for when the battery was added and has not run yet.
     self_test_pending: bool = False
+    # Trial of a battery from a Modbus profile (see trial.py), None without one.
+    trial: TrialState | None = None
+    # A battery with a trial is controlled only once its device information
+    # was compared after the start and after a pause (a firmware update).
+    device_info_checked: bool = True
+    # The write registers read for the next sample of a trial.
+    trial_registers: dict[int, float | None] | None = None
+    # The write registers read for an observation, and whether nothing was written during the read.
+    observed_registers: tuple[dict[int, float | None], bool] | None = None
     # Duration of the last telemetry read (s), None before the first one.
     telemetry_read_s: float | None = None
     # Monotonic time of the first failed read since the last successful one.
@@ -374,6 +384,11 @@ class BatteryRuntime:
         return self.self_test is not None
 
     @property
+    def in_trial(self) -> bool:
+        """Not controlled yet: in its trial or its device information not compared yet."""
+        return (self.trial is not None and self.trial.in_trial) or not self.device_info_checked
+
+    @property
     def not_responding(self) -> bool:
         """Excluded for a while because it did not deliver the commanded power."""
         return self.delivery.excluded(time.monotonic())
@@ -388,7 +403,7 @@ class BatteryRuntime:
         return (
             (self.enabled and not self.balancing_requested and not self.self_test_requested)
             or self.leaving_until is not None
-        ) and not self.not_responding and not self.communication_paused
+        ) and not self.not_responding and not self.communication_paused and not self.in_trial
 
     @property
     def plannable(self) -> bool:
@@ -399,6 +414,7 @@ class BatteryRuntime:
             and not self.self_test_requested
             and not self.not_responding
             and not self.communication_paused
+            and not self.in_trial
         )
 
     @property
@@ -1001,6 +1017,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             battery.self_test_last = data.get("self_test_last")
             if data.get("self_test_on_setup_done"):
                 battery.self_test_pending = False
+            if battery.driver.trial_spec is not None:
+                battery.trial = TrialState.restore(
+                    data.get("trial"), battery.driver.trial_key, dt_util.utcnow().timestamp()
+                )
+                battery.device_info_checked = False
+                if battery.trial.wrote:
+                    # Written during the trial before the restart: handed back first.
+                    battery.release_pending_since = time.monotonic()
 
         grid_entity = self._config[CONF_GRID_POWER_ENTITY]
         self._add_grid_sample(self.hass.states.get(grid_entity))
@@ -1433,6 +1457,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 "capacity_learner": b.capacity_learner.as_dict(),
                 "self_test_last": b.self_test_last,
                 "self_test_on_setup_done": not b.self_test_pending,
+                "trial": b.trial.as_dict() if b.trial is not None else None,
             }
             for b in self.batteries
         }
@@ -1772,7 +1797,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 now, telemetry.soc_pct, telemetry.power_w, battery.driver.capabilities.capacity_wh
             )
             battery.power_limits = self._power_limits(battery, telemetry)
+            if (
+                battery.trial is not None
+                and (observation := battery.trial.observation) is not None
+                and observation.quiet_ok
+                and (spec := battery.driver.trial_spec) is not None
+            ):
+                battery.power_limits = observation.cap(battery.power_limits, spec.small_w)
             self._check_delivery(battery, telemetry, now)
+            self._update_observation(battery, telemetry, now)
         self._set_pv_power(snapshot)
         self._integrate_pv(self._forecast_pv_power_w(snapshot), now)
         # After all batteries were read: the balancing share of the surplus
@@ -2125,6 +2158,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
         battery.pause_reason = reason
         battery.unreadable_since = None
+        if battery.trial is not None:
+            # A firmware update shows in the device information: compared
+            # before it is controlled again (the pause ends by the clock,
+            # before the next poll resumes it).
+            battery.device_info_checked = False
         # Nothing is sent while paused: an outstanding release is given up (the
         # user paused on purpose, e.g. another integration holds the connection).
         battery.release_pending_since = None
@@ -2145,6 +2183,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             _LOGGER.info("Battery %s: communication resumed", battery.name)
         battery.paused_until = None
         battery.pause_reason = None
+        if battery.trial is not None:
+            battery.device_info_checked = False
         self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
 
     def _unread_battery_power_w(self, snapshot: SystemSnapshot, now: float) -> float | None:
@@ -2212,17 +2252,126 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         battery.unreadable_since = None
         if telemetry.extra.get("inverter_state") != "ota_upgrade":
             await self._async_read_device_info(battery, now)
+        battery.trial_registers = None
+        if battery.self_test is not None and battery.self_test.registers_due(now):
+            try:
+                battery.trial_registers = await battery.driver.read_control_registers()
+            except BatteryDriverError as err:
+                _LOGGER.debug("Battery %s: registers of the trial not read: %s", battery.name, err)
+                battery.trial_registers = {r.address: None for r in battery.self_test.trial.registers}  # type: ignore[union-attr]
+        battery.observed_registers = None
+        observation = battery.trial.observation if battery.trial is not None else None
+        if (
+            observation is not None
+            and battery.self_test is None
+            and battery.device_info_checked
+            and observation.registers_due(now, self._command_direction(battery), not self.controls(battery))
+        ):
+            count = battery.driver.write_count
+            try:
+                registers = await battery.driver.read_control_registers()
+            except BatteryDriverError as err:
+                _LOGGER.debug("Battery %s: registers not read for its observation: %s", battery.name, err)
+            else:
+                battery.observed_registers = (registers, battery.driver.write_count == count)
         return telemetry
 
+    def _command_direction(self, battery: BatteryRuntime) -> str | None:
+        """Direction of the latest command while SLEMS controls the battery."""
+        state = self.controller.command_state(battery.subentry_id) if self.controls(battery) else None
+        if state is None or abs(state[0]) < 1:
+            return None
+        return "charge" if state[0] > 0 else "discharge"
+
+    def _update_observation(self, battery: BatteryRuntime, telemetry: BatteryTelemetry, now: float) -> None:
+        """One step of the observation after a firmware update (see trial.py)."""
+        trial = battery.trial
+        observation = trial.observation if trial is not None else None
+        read, battery.observed_registers = battery.observed_registers, None
+        if trial is None or observation is None or battery.self_test is not None:
+            return
+        spec = battery.driver.trial_spec
+        assert spec is not None
+        wall = dt_util.utcnow().timestamp()
+        registers, quiet_write = read if read is not None else (None, False)
+        if not observation.quiet_ok:
+            if registers is None or (check := observation.quiet(spec, now, registers)) is None:
+                return
+            if check.outcome is Outcome.OK:
+                _LOGGER.info("Battery %s: registers unchanged at rest after the firmware update, controlled under observation", battery.name)
+                self.controller.request()
+            elif check.outcome is Outcome.FAILED:
+                trial.observation_failed(wall, quiet=True)
+                self._observation_found(battery, {"reason": "quiet", "check": check.as_dict()})
+            self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+            return
+        problem = None
+        if self.controls(battery):
+            state = self.controller.command_state(battery.subentry_id)
+            problem = observation.observe_power(
+                now, state[0] if state else None, telemetry.grid_side_power_w, spec.small_w
+            )
+            if problem is None and registers is not None and quiet_write:
+                problem = observation.observe_registers(spec, now, registers, battery.driver.written_values())
+            if observation.release_pending:
+                observation.taken_over()
+        elif registers is not None and observation.release_pending:
+            problem = observation.observe_release(spec, now, registers)
+        if problem is None and battery.not_responding:
+            problem = {"reason": "not_delivering"}
+        if problem is not None:
+            trial.observation_failed(wall)
+            if self.controls(battery) or battery.leaving_until is not None:
+                # Handed back to its own logic until its trial.
+                trial.wrote = True
+                battery.release_pending_since = time.monotonic()
+            self._observation_found(battery, problem)
+            self.controller.request()
+        elif observation.complete(wall):
+            trial.observation_passed()
+            _LOGGER.info("Battery %s: observation after the firmware update passed", battery.name)
+        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+
+    def _observation_found(self, battery: BatteryRuntime, problem: dict) -> None:
+        _LOGGER.warning("Battery %s behaves differently after the firmware update: %s", battery.name, problem)
+        self.config_entry.async_create_background_task(
+            self.hass,
+            self.problems.async_notify_observation(battery, problem),
+            "slems observation notification",
+        )
+
     async def _async_read_device_info(self, battery: BatteryRuntime, now: float) -> None:
-        """Read the device information once after connecting and then every few hours."""
-        if battery.device_info_read is not None and now - battery.device_info_read < DEVICE_INFO_INTERVAL_S:
+        """Read the device information once after connecting and then every few hours;
+        for a battery with a trial compared with the one before (a firmware update)."""
+        if (
+            battery.device_info_checked
+            and battery.device_info_read is not None
+            and now - battery.device_info_read < DEVICE_INFO_INTERVAL_S
+        ):
             return
         battery.device_info_read = now
         try:
-            battery.device_info = await battery.driver.read_device_info() or battery.device_info
+            info = await battery.driver.read_device_info()
         except BatteryDriverError as err:
             _LOGGER.debug("Battery %s: device information not read: %s", battery.name, err)
+            return
+        battery.device_info = info or battery.device_info
+        if battery.trial is None:
+            return
+        controlled = self.controls(battery)
+        if battery.trial.device_info_read(info, dt_util.utcnow().timestamp()):
+            _LOGGER.warning(
+                "Battery %s: device information changed (%s), observed",
+                battery.name,
+                ", ".join(f"{key} {old} -> {new}" for key, (old, new) in battery.trial.firmware_change.items()),
+            )
+            if controlled:
+                # It still holds a set point of SLEMS: handed back to its own logic.
+                battery.trial.wrote = True
+                battery.release_pending_since = time.monotonic()
+            self.controller.request()
+        battery.device_info_checked = True
+        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
 
     @property
     def self_test_holds(self) -> bool:
@@ -2243,7 +2392,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             return "self_test_balancing"
         if any(b.self_test is not None for b in self.batteries if b is not battery):
             return "self_test_other_running"
-        if battery.power_limits is None or battery.unreadable_since is not None:
+        if battery.power_limits is None or battery.unreadable_since is not None or not battery.device_info_checked:
             return "self_test_unreadable"
         return None
 
@@ -2258,6 +2407,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             step_power_w(power, limits.discharge_w if limits else 0.0),
             dt_util.utcnow().timestamp(),
             battery.driver.release_state.value,
+            battery.driver.trial_spec if battery.trial is not None and battery.trial.in_trial else None,
         )
         battery.self_test_power_w = None
         battery.self_test_pending = False
@@ -2278,6 +2428,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         battery.self_test_power_w = None
         battery.leaving_until = None
         battery.self_test_last = test.as_dict()
+        if test.trial is not None and battery.trial is not None:
+            battery.trial.finished(battery.self_test_last, dt_util.utcnow().timestamp())
+            _LOGGER.info("Trial of %s: %s", battery.name, battery.trial.status)
         if (phase := test.grid_phase()) is not None and battery.subentry_id in self.phase_model.devices:
             self.phase_learner(battery.subentry_id).observe(phase)
             self._phase_changed()
@@ -2301,11 +2454,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     def _update_self_test(self, battery: BatteryRuntime, snapshot: SystemSnapshot, now: float) -> None:
         """One step of a running self-test, or the start of one asked for at the setup."""
         test = battery.self_test
+        wall = dt_util.utcnow().timestamp()
         if test is None:
-            if battery.self_test_pending and self.self_test_blocked(battery) is None:
+            due = battery.self_test_pending or (battery.trial is not None and battery.trial.due(wall))
+            if due and self.self_test_blocked(battery) is None:
                 self.start_self_test(battery)
             return
-        wall = dt_util.utcnow().timestamp()
         if not battery.enabled:
             self.end_self_test(battery, "cancelled")
             return
@@ -2350,7 +2504,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             telemetry.extra.get("total_discharging_energy"),
             self._grid_phases_w(),
             tuple(others),
+            battery.trial_registers,
         )
+        battery.trial_registers = None
         battery.self_test_power_w = test.step(now, sample, ready=battery.leaving_until is None, wall=wall)
         if test.phase is SelfTestPhase.DONE:
             self.end_self_test(battery)
@@ -4266,6 +4422,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 reason = "balancing"
             elif battery.not_responding:
                 reason = "not_responding"
+            elif battery.in_trial and battery.subentry_id in snapshot.batteries:
+                reason = "trial"
             else:
                 reason = "unreadable"
             missing.append((battery.name, reason))
@@ -4519,7 +4677,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         update while SLEMS does not control the battery (see
         ``release_pending_since``).
         """
-        if not battery.driver.capabilities.controllable:
+        if not battery.driver.capabilities.controllable or (
+            battery.trial is not None and battery.trial.in_trial and not battery.trial.wrote
+        ):
+            # A battery in its trial is written only by its test: the release
+            # would write the registers under trial.
             battery.release_pending_since = None
             return True
         if battery.communication_paused:
@@ -4539,6 +4701,28 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if battery.release_pending_since is not None:
             _LOGGER.info("Battery %s released", battery.name)
         battery.release_pending_since = None
+        if battery.trial is not None and battery.trial.wrote:
+            battery.trial.wrote = False
+            self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        if battery.trial is not None and battery.trial.observation is not None:
+            battery.trial.observation.released(time.monotonic())
+        return True
+
+    def trial_writing(self, battery: BatteryRuntime) -> None:
+        """The test of a battery in its trial writes: from now on it is to be released."""
+        if battery.trial is not None and battery.trial.in_trial and not battery.trial.wrote:
+            battery.trial.wrote = True
+            self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+
+    @callback
+    def confirm_trial(self, battery: BatteryRuntime) -> bool:
+        """The user takes an unclear trial as passed; False if it cannot be confirmed."""
+        if battery.trial is None or battery.self_test is not None or not battery.trial.confirm():
+            return False
+        _LOGGER.info("Trial of %s confirmed by the user", battery.name)
+        self.controller.request()
+        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self.async_update_listeners()
         return True
 
     def controls(self, battery: BatteryRuntime) -> bool:

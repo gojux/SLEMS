@@ -40,6 +40,8 @@ const COLORS = {
 
 // Days of a forecast comparison before its accuracy is shown.
 const MIN_ACCURACY_DAYS = 7;
+// States of the sensor profile_trial in which SLEMS does not control the battery yet.
+const TRIAL_STATES = ["waiting", "running", "unclear", "failed"];
 
 const STRINGS = {
   en: {
@@ -274,6 +276,14 @@ const STRINGS = {
     notResponding: "not responding",
     unreadable: "cannot be read",
     unreadableText: "SLEMS cannot read the battery; it is neither planned with nor controlled.",
+    trial: "trial",
+    trialText: {
+      waiting: "Trial of the profile: SLEMS controls the battery once its self-test with the checks of the profile has passed. It starts by itself as soon as it is possible.",
+      running: "Trial of the profile: the self-test with the checks of the profile is running.",
+      unclear: "Trial of the profile partly unclear: SLEMS repeats the self-test; you can take it as passed under Settings → Repairs.",
+      failed: "Trial of the profile failed: SLEMS does not control the battery. The repair under Settings → Repairs lists the errors.",
+      observing: "Observed after a firmware update: SLEMS controls the battery, limits the first commands of each direction to 100 W and compares its registers with what it wrote, for a day.",
+    },
     gridStale: "Smart meter does not report",
     gridStaleText: "The batteries follow their own logic until the smart meter reports again.",
     notRespondingText: "does not deliver the commanded power ({reason}); handed back to its own logic, retried at {time}",
@@ -348,6 +358,7 @@ const STRINGS = {
       disabled: "disabled",
       not_responding: "not responding",
       unreadable: "cannot be read",
+      trial: "trial of its profile",
     },
     capBufferAuto: " (learned from {days} days)",
     capBufferWaiting: " (fixed; automatic from 14 recorded days, {days} so far)",
@@ -934,6 +945,14 @@ const STRINGS = {
     notResponding: "reagiert nicht",
     unreadable: "nicht lesbar",
     unreadableText: "SLEMS kann die Batterie nicht lesen; sie wird weder eingeplant noch gesteuert.",
+    trial: "Probebetrieb",
+    trialText: {
+      waiting: "Probebetrieb des Profils: SLEMS steuert die Batterie, sobald ihr Selbsttest mit den Prüfungen des Profils bestanden ist. Er startet von selbst, sobald er möglich ist.",
+      running: "Probebetrieb des Profils: Der Selbsttest mit den Prüfungen des Profils läuft.",
+      unclear: "Probebetrieb des Profils teilweise unklar: SLEMS wiederholt den Selbsttest; unter Einstellungen → Reparaturen kannst du ihn als bestanden übernehmen.",
+      failed: "Probebetrieb des Profils nicht bestanden: SLEMS steuert die Batterie nicht. Die Reparatur unter Einstellungen → Reparaturen nennt die Fehler.",
+      observing: "Nach einem Firmware-Update beobachtet: SLEMS steuert die Batterie, begrenzt die ersten Vorgaben je Richtung auf 100 W und vergleicht einen Tag lang ihre Register mit dem Geschriebenen.",
+    },
     gridStale: "Smart Meter meldet nicht",
     gridStaleText: "Die Batterien folgen ihrer eigenen Logik, bis der Smart Meter wieder meldet.",
     notRespondingText: "liefert die vorgegebene Leistung nicht ({reason}); an die eigene Logik übergeben, neuer Versuch um {time}",
@@ -1008,6 +1027,7 @@ const STRINGS = {
       disabled: "deaktiviert",
       not_responding: "reagiert nicht",
       unreadable: "nicht lesbar",
+      trial: "Probebetrieb seines Profils",
     },
     capBufferAuto: " (gelernt aus {days} Tagen)",
     capBufferWaiting: " (fest; automatisch ab 14 aufgezeichneten Tagen, bisher {days})",
@@ -2882,6 +2902,7 @@ class SlemsPanel extends HTMLElement {
       const notResponding = this._state("not_responding", battery.device_id)?.state === "on";
       const paused = this._state("communication_paused", battery.device_id)?.state === "on";
       const unreadable = !paused && this._state("battery_soc", battery.device_id)?.state === "unavailable";
+      const inTrial = TRIAL_STATES.includes(this._state("profile_trial", battery.device_id)?.state);
       nodes.push({
         id: `battery-${battery.id}`,
         role: "battery",
@@ -2890,11 +2911,13 @@ class SlemsPanel extends HTMLElement {
         power,
         soc: num("battery_soc", battery.device_id),
         entity: this._entityId("ac_power", battery.device_id) || this._entityId("battery_power", battery.device_id),
-        disabled: !enabled || balancing || notResponding || unreadable || paused,
+        disabled: !enabled || balancing || notResponding || unreadable || paused || inTrial,
         detail: paused
           ? t.paused
           : unreadable
           ? t.unreadable
+          : inTrial
+          ? t.trial
           : !enabled
           ? t.disabled
           : notResponding
@@ -4355,6 +4378,11 @@ class SlemsPanel extends HTMLElement {
               <button class="link" data-action="menu-extend" data-entity="${pause.entity_id}">${escapeHtml(this._extendLabel())}</button></div>`;
           } else if (s("battery_soc")?.state === "unavailable") {
             problem = `<div class="problem"><ha-icon icon="mdi:alert-circle"></ha-icon><span><b>${t.unreadable}</b> – ${t.unreadableText}</span></div>`;
+          } else if ([...TRIAL_STATES, "observing"].includes(s("profile_trial")?.state)) {
+            const state = s("profile_trial").state;
+            const box = state === "failed" ? "problem" : "info-box";
+            const icon = state === "failed" ? "mdi:alert-circle" : "mdi:clipboard-check-outline";
+            problem = `<div class="${box}"><ha-icon icon="${icon}"></ha-icon><span>${escapeHtml(t.trialText[state])}</span></div>`;
           } else if (notResponding?.state === "on") {
             const attrs = notResponding.attributes;
             const retry = attrs.retry_at ? new Date(attrs.retry_at).toLocaleTimeString(this._hass.locale?.language, { hour: "2-digit", minute: "2-digit" }) : "–";

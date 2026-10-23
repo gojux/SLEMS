@@ -1,4 +1,5 @@
-"""Dialogs of the repair issues that ask something: the phase of a battery or consumer."""
+"""Dialogs of the repair issues that ask something: the phase of a battery or
+consumer, and whether an unclear trial of a battery is taken as passed."""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from homeassistant.helpers import selector
 
 from .const import DOMAIN
 from .phases import Phase, label
+from .trial import TrialStatus
 
 
 class PhaseFlow(RepairsFlow):
@@ -51,8 +53,36 @@ class PhaseFlow(RepairsFlow):
         )
 
 
+class TrialFlow(RepairsFlow):
+    """Take the unclear trial of a battery as passed (not possible for a failed one)."""
+
+    def __init__(self, subentry_id: str) -> None:
+        self._subentry_id = subentry_id
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> data_entry_flow.FlowResult:
+        entries = self.hass.config_entries.async_loaded_entries(DOMAIN)
+        if not entries:
+            return self.async_abort(reason="not_loaded")
+        coordinator = entries[0].runtime_data
+        battery = next((b for b in coordinator.batteries if b.subentry_id == self._subentry_id), None)
+        if battery is None or battery.trial is None or battery.trial.status is not TrialStatus.UNCLEAR:
+            return self.async_abort(reason="not_needed")
+        if user_input is not None:
+            if not coordinator.confirm_trial(battery):
+                return self.async_abort(reason="not_needed")
+            return self.async_create_entry(data={})
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema({}),
+            description_placeholders={"name": battery.name, "details": battery.trial.details or "–"},
+        )
+
+
 async def async_create_fix_flow(
     hass: HomeAssistant, issue_id: str, data: dict[str, str | int | float | None] | None
 ) -> RepairsFlow:
     """The dialog of a SLEMS repair issue."""
-    return PhaseFlow(str((data or {})["subentry_id"]))
+    data = data or {}
+    if data.get("kind") == "trial":
+        return TrialFlow(str(data["subentry_id"]))
+    return PhaseFlow(str(data["subentry_id"]))

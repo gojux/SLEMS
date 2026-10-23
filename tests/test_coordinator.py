@@ -385,6 +385,7 @@ def test_release_leaves_a_paused_battery_alone() -> None:
         driver=SimpleNamespace(capabilities=SimpleNamespace(controllable=True), release_control=release_control),
         communication_paused=True,
         release_pending_since=None,
+        trial=None,
     )
     coordinator = SlemsCoordinator.__new__(SlemsCoordinator)
     # E.g. switching to "Observe only" while the battery is paused: no connection.

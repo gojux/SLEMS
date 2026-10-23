@@ -63,6 +63,7 @@ from ..battery_profiles import (
 )
 from ..const import ReleaseState
 from ..own_pv import OwnPvPorts
+from ..self_test import SMALL_W, TrialRegister, TrialSpec
 from .base import BatteryCapabilities, BatteryDriver, BatteryDriverError, BatteryTelemetry
 from .modbus_client import ModbusTcpLink
 
@@ -281,6 +282,7 @@ class ProfileDriver(BatteryDriver):
         )
         # Raw words written per register; unchanged values are not written again.
         self._written: dict[int, list[int]] = {}
+        self._write_count = 0
         # The write registers are checked against their range at rest before the next write.
         self._take_over = True
         self._guard = PersistentGuard(profile.control.apply)
@@ -348,6 +350,49 @@ class ProfileDriver(BatteryDriver):
     @property
     def reversal_extra_s(self) -> float:
         return self._profile.timing.reversal_extra_s
+
+    @property
+    def trial_spec(self) -> TrialSpec:
+        control = self._profile.control
+        released = {step.address: raw for step, raw in release_values(self._profile, self._release_state)}
+        fallback: dict[int, set[float]] = {}
+        for state in control.release:
+            for step, raw in release_values(self._profile, state):
+                fallback.setdefault(step.address, set()).add(raw)
+        return TrialSpec(
+            tuple(
+                TrialRegister(
+                    step.address,
+                    step.rests_at,
+                    released.get(step.address),
+                    frozenset(fallback.get(step.address, ())),
+                    power=step.value in (PLACEHOLDER_CHARGE, PLACEHOLDER_DISCHARGE, PLACEHOLDER_POWER),
+                    scale=step.scale,
+                )
+                for step in control.apply
+            ),
+            small_w=max(SMALL_W, self._profile.limits.min_power_w),
+            keepalive_s=control.keepalive_s,
+        )
+
+    @property
+    def trial_key(self) -> str:
+        return f"{self._profile.id}@{self._profile.revision}"
+
+    async def read_control_registers(self) -> dict[int, float | None]:
+        await self._ensure_connected()
+        return await self._read_writes(list(self._profile.control.apply))
+
+    @property
+    def write_count(self) -> int:
+        return self._write_count
+
+    def written_values(self) -> dict[int, float]:
+        return {
+            step.address: decode(words, step.type, step.word_order)  # type: ignore[misc]
+            for step in self._profile.control.apply
+            if (words := self._written.get(step.address)) is not None
+        }
 
     def issues(self) -> dict[str, dict[str, str]]:
         now = time.monotonic()
@@ -593,6 +638,7 @@ class ProfileDriver(BatteryDriver):
                 if step.address in self._blocked:
                     ok = False
                 continue
+            self._write_count += 1
             if await self._transport.write(step.address, words if len(words) > 1 else words[0]):
                 self._written[step.address] = words
                 self._guard.written(step.address, raw, now)
@@ -687,6 +733,7 @@ class ProfileDriver(BatteryDriver):
                     failed.append(step.address)
                 continue
             words = encode(raw, step.type, step.word_order)
+            self._write_count += 1
             if await self._transport.write(step.address, words if len(words) > 1 else words[0]):
                 self._guard.written(step.address, raw, now)
             else:

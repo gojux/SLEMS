@@ -767,20 +767,31 @@ class RealTimeController:
             if target is None:
                 continue
             target = round(target)
+            test = battery.self_test if testing else None
+            if test is not None and test.writes_paused(now):
+                # The late read back of a trial: nothing is written, not even a keep-alive.
+                continue
             previous = self._balancing_commands.get(battery_id)
             refresh = previous is None or now - previous[1] >= (
                 battery.driver.keepalive_s or BATTERY_KEEPALIVE_S
             )
+            # A trial step that showed is written once more completely before its late read back.
+            wants_refresh = test is not None and test.wants_refresh
+            refresh = refresh or wants_refresh
             if previous is not None and not refresh:
                 same_direction = (previous[0] > 0) == (target > 0) and (previous[0] < 0) == (target < 0)
                 if abs(previous[0] - target) < BATTERY_DEADBAND_W and same_direction:
                     continue
             _LOGGER.debug("Battery %s: balancing or self-test set point %d W", battery.name, target)
+            if test is not None and test.trial is not None:
+                self._coordinator.trial_writing(battery)
             if await self._apply(battery, target, refresh):
                 # The time of the last complete write is kept for the keep-alive.
                 self._balancing_commands[battery_id] = (
                     target, now if refresh else previous[1]
                 )
+                if wants_refresh:
+                    test.refreshed(now)  # type: ignore[union-attr]
 
     # --- consumers ------------------------------------------------------------
 

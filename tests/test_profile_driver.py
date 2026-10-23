@@ -68,7 +68,7 @@ class SimLink:
         if any(address + i not in SIM.WRITABLE for i in range(len(values))):
             return False
         if address not in self.ignored:
-            self.model.write(address, values)
+            self.model.command(address, values)
         return True
 
     def writes(self) -> list[tuple]:

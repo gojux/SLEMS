@@ -46,6 +46,7 @@ from .grid_friendly import correction_weight
 from .learning import CONSUMPTION_MIN_DAYS, MORNING_MIN_DAYS, PV_MIN_DAYS, TARGET_MIN_SAMPLES
 from .problems import CAP_EXCEEDED_AFTER_S
 from .pv_forecast import energy_on_day
+from .trial import TrialStatus
 
 
 ATTRIBUTES_INTERVAL_S = 60.0
@@ -780,6 +781,7 @@ async def async_setup_entry(
                     if battery.driver.capabilities.controllable
                     else []
                 ),
+                *([TrialSensor(coordinator, battery)] if battery.trial is not None else []),
             ],
             config_subentry_id=battery.subentry_id,
         )
@@ -1012,6 +1014,53 @@ class SelfTestSensor(SlemsBatteryEntity, SensorEntity):
             "started_at": iso(data.get("started_at")),
             "finished_at": iso(data.get("finished_at")),
             "checks": data.get("checks") or [],
+            # The checks of the profile of a trial (see TrialSensor).
+            "trial": data.get("trial"),
+        }
+
+
+TRIAL_STATES = ["waiting", "running", "unclear", "failed", "passed", "confirmed", "observing"]
+
+
+class TrialSensor(SlemsBatteryEntity, SensorEntity):
+    """Trial of a battery from a Modbus profile (see trial.py)."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = TRIAL_STATES
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:clipboard-check-outline"
+
+    def __init__(self, coordinator: SlemsCoordinator, battery) -> None:
+        super().__init__(coordinator, battery, "profile_trial")
+
+    @property
+    def native_value(self) -> str | None:
+        trial = self.battery.trial
+        if trial is None:
+            return None
+        if trial.status is TrialStatus.TRIAL:
+            return "running" if self.battery.self_test is not None else "waiting"
+        return trial.status.value
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        trial = self.battery.trial
+        if trial is None:
+            return {}
+
+        def iso(timestamp: float | None) -> str | None:
+            return None if timestamp is None else dt_util.utc_from_timestamp(timestamp).isoformat()
+
+        last = (self.battery.self_test_last or {}).get("trial") or {}
+        return {
+            "reason": trial.reason.value,
+            "since": iso(trial.since),
+            "retry_at": iso(trial.retry_at) if trial.status in (TrialStatus.TRIAL, TrialStatus.UNCLEAR) else None,
+            "firmware_change": trial.firmware_change,
+            "trial_result": last.get("result"),
+            "self_test_result": last.get("self_test_result"),
+            "trial_checks": last.get("checks") or [],
+            "observation": trial.observation.as_dict() if trial.observation is not None else None,
         }
 
 

@@ -43,7 +43,7 @@ NO_DRIVER_ISSUES = SimpleNamespace(issues=dict)
 def test_first_update_removes_issues_of_removed_batteries() -> None:
     kept = SimpleNamespace(
         subentry_id="kept", name="Kept", not_responding=True, unreadable_since=None,
-        release_pending_since=None, driver=NO_DRIVER_ISSUES,
+        release_pending_since=None, driver=NO_DRIVER_ISSUES, trial=None,
     )
     registry = FakeIssues(
         {
@@ -67,7 +67,7 @@ def test_first_update_removes_issues_of_removed_batteries() -> None:
 def test_outstanding_release_becomes_a_repair_issue() -> None:
     battery = SimpleNamespace(
         subentry_id="b1", name="Venus", not_responding=False, unreadable_since=None,
-        release_pending_since=100.0, communication_paused=False, driver=NO_DRIVER_ISSUES,
+        release_pending_since=100.0, communication_paused=False, driver=NO_DRIVER_ISSUES, trial=None,
     )
     registry = FakeIssues(set())
     reporter = problems.ProblemReporter(None, coordinator([battery]))
@@ -92,7 +92,7 @@ def test_outstanding_release_becomes_a_repair_issue() -> None:
 def test_unreadable_disabled_battery_on_its_own_logic_makes_house_power_inaccurate() -> None:
     battery = SimpleNamespace(
         subentry_id="b1", name="Venus", not_responding=False, unreadable_since=100.0,
-        release_pending_since=None, communication_paused=False, driver=NO_DRIVER_ISSUES,
+        release_pending_since=None, communication_paused=False, driver=NO_DRIVER_ISSUES, trial=None,
     )
     state = coordinator([battery])
     unknown = {"b1": True}
@@ -229,7 +229,7 @@ def test_driver_issues_become_repairs() -> None:
     reported = {"profile_outside_rest": {"registers": "42010 = 7 (0–2)"}}
     battery = SimpleNamespace(
         subentry_id="b1", name="Venus", not_responding=False, unreadable_since=None,
-        release_pending_since=None, communication_paused=False, driver=SimpleNamespace(issues=lambda: reported),
+        release_pending_since=None, communication_paused=False, driver=SimpleNamespace(issues=lambda: reported), trial=None,
     )
     registry = FakeIssues(set())
     reporter = problems.ProblemReporter(None, coordinator([battery]))

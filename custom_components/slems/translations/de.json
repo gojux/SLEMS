@@ -216,7 +216,7 @@
         },
         "modbus_profile": {
           "title": "Batterie aus einem Modbus-Profil (Entwicklung)",
-          "description": "Nur für Entwicklung und Tests: eine Batterie, die über ein mit SLEMS geliefertes Profil gesteuert wird. Mit dem eigenen Client nimmt die Batterie nur eine Modbus-Verbindung an: Betreibe nicht gleichzeitig eine andere Integration oder eine andere Batterie auf derselben Batterie.",
+          "description": "Nur für Entwicklung und Tests: eine Batterie, die über ein mit SLEMS geliefertes Profil gesteuert wird. Mit dem eigenen Client nimmt die Batterie nur eine Modbus-Verbindung an: Betreibe nicht gleichzeitig eine andere Integration oder eine andere Batterie auf derselben Batterie. SLEMS steuert sie erst, wenn ihr Probebetrieb bestanden ist: ein Selbsttest mit den Prüfungen des Profils, der von selbst startet.",
           "data": {
             "name": "Name",
             "profile_id": "Profil",
@@ -232,8 +232,7 @@
             "round_trip_efficiency_pct": "Gesamtwirkungsgrad",
             "release_state": "Zustand, wenn SLEMS die Batterie freigibt",
             "purchase_price_eur": "Anschaffungspreis",
-            "rated_cycles": "Zyklen laut Hersteller",
-            "self_test_on_setup": "Nach dem Speichern einen Selbsttest machen"
+            "rated_cycles": "Zyklen laut Hersteller"
           },
           "data_description": {
             "transport": "Eigener Modbus-Client: die eigene Verbindung von SLEMS mit den Korrekturen für die Firmware der Marstek Venus. Home Assistant Modbus: eine Verbindung des Modbus-Backends von Home Assistant, die andere Integrationen auf demselben Gerät mitnutzen.",
@@ -242,8 +241,7 @@
             "round_trip_efficiency_pct": "Entnommene / eingespeicherte Energie (AC). Im manuellen Modus fester Wert, sonst Startwert, bis genug Messdaten vorliegen.",
             "release_state": "Automatik: die eigene Logik der Batterie übernimmt wieder (z. B. ihre Nulleinspeisung). Standby: die Batterie bleibt bei 0 W stehen, bis etwas anderes sie übernimmt. Gilt, wenn SLEMS die Steuerung beendet, z. B. im Betriebsmodus Aus, ohne Werte des Smart Meters oder wenn die Batterie aus SLEMS entfernt wird.",
             "purchase_price_eur": "Optional, mit den Zyklen: für die Verschleißkosten je kWh (Preis ÷ (Zyklen × nutzbare Kapazität)), die preisbewusste Aktionen mit zusätzlichem Zyklus berücksichtigen, z. B. Laden aus dem Netz. 0: keine Verschleißkosten (Heimspeicher altern vor allem mit der Zeit, der Temperatur und dem Ladezustand, oft bevor ihre Zyklen aufgebraucht sind). Ohne Angabe nimmt SLEMS einen niedrigen Schätzwert von 1 ct/kWh an.",
-            "rated_cycles": "Optional: volle Zyklen laut Hersteller (z. B. aus Datenblatt oder Garantie).",
-            "self_test_on_setup": "Empfohlen: SLEMS lädt und entlädt die Batterie für einige Minuten mit kleiner Leistung und prüft, ob Smart Meter und Messwerte passen (Vorzeichen, Einheiten, Zähler, Ladezustand). Er startet, sobald SLEMS im Betriebsmodus **Aktiv** ist; das Ergebnis erscheint als Benachrichtigung."
+            "rated_cycles": "Optional: volle Zyklen laut Hersteller (z. B. aus Datenblatt oder Garantie)."
           }
         },
         "ha_device": {
@@ -1228,6 +1226,18 @@
           "l3": "L3",
           "three_phase": "Dreiphasig"
         }
+      },
+      "profile_trial": {
+        "name": "Probebetrieb",
+        "state": {
+          "waiting": "Wartet auf den Selbsttest",
+          "running": "Selbsttest läuft",
+          "unclear": "Teilweise unklar",
+          "failed": "Nicht bestanden",
+          "passed": "Bestanden",
+          "confirmed": "Als bestanden übernommen",
+          "observing": "Nach Firmware-Update beobachtet"
+        }
       }
     },
     "switch": {
@@ -1691,6 +1701,60 @@
     },
     "balancing_self_test": {
       "message": "Der Zellausgleich kann nicht während eines Selbsttests gestartet werden."
+    },
+    "battery_missing_trial": {
+      "message": "{name} (Probebetrieb seines Profils)"
+    },
+    "balancing_trial": {
+      "message": "Der Zellausgleich kann nicht gestartet werden, solange die Batterie im Probebetrieb ist."
+    },
+    "self_test_trial_header": {
+      "message": "Prüfungen des Profils (Probebetrieb):"
+    },
+    "self_test_check_trial_quiet": {
+      "message": "Register bleiben ohne Schreiben unverändert"
+    },
+    "self_test_check_trial_small_charge": {
+      "message": "Kleiner erster Ladeschritt"
+    },
+    "self_test_check_trial_small_discharge": {
+      "message": "Kleiner erster Entladeschritt"
+    },
+    "self_test_check_trial_late_charge": {
+      "message": "Register halten beim Laden ohne Schreiben"
+    },
+    "self_test_check_trial_late_discharge": {
+      "message": "Register halten beim Entladen ohne Schreiben"
+    },
+    "self_test_check_trial_release": {
+      "message": "Register nach der Rückgabe"
+    },
+    "observation_found_title": {
+      "message": "{name} verhält sich nach dem Firmware-Update anders"
+    },
+    "observation_found_message": {
+      "message": "Seit dem Firmware-Update verhält sich {name} anders: {problem}.\n\nSLEMS hat die Batterie an ihre eigene Logik zurückgegeben und prüft sie im Probebetrieb (ein Selbsttest mit den Prüfungen des Profils, der von selbst startet)."
+    },
+    "observation_quiet_message": {
+      "message": "Nach dem Firmware-Update bleiben die Register des Profils von {name} ohne Schreiben nicht unverändert:\n\n{problem}\n\nDie neue Firmware nutzt diese Register vermutlich anders. SLEMS steuert die Batterie nicht; prüfe das Profil gegen das Handbuch der neuen Firmware."
+    },
+    "observation_problem_too_large": {
+      "message": "ihre Leistung ({power_w} W) beträgt ein Vielfaches der Vorgabe ({command_w} W)"
+    },
+    "observation_problem_reversed": {
+      "message": "ihre Leistung ({power_w} W) läuft gegen die Vorgabe ({command_w} W)"
+    },
+    "observation_problem_fallback": {
+      "message": "Register {address} ist von selbst von {written} auf {read} zurückgefallen"
+    },
+    "observation_problem_changed": {
+      "message": "Register {address} hat den Wert {read} statt des geschriebenen {written}"
+    },
+    "observation_problem_release": {
+      "message": "nach der Rückgabe stehen die Register nicht wie erwartet (gelesener Wert, erwarteter Wert): {registers}"
+    },
+    "observation_problem_not_delivering": {
+      "message": "sie liefert die vorgegebene Leistung nicht"
     }
   },
   "issues": {
@@ -1793,6 +1857,41 @@
     "profile_persistent_blocked": {
       "title": "{name}: gespeichertes Register gesperrt",
       "description": "Ein Register von {name}, das die Batterie dauerhaft speichert (Flash), hat sich in 24 Stunden öfter geändert als erlaubt (Register, Grenze): {registers}. SLEMS schreibt es nicht mehr, bis die älteste Änderung 24 Stunden alt ist; die Batterie folgt den Vorgaben deshalb womöglich nicht. Prüfe das Profil; die Grenze ist max_changes_per_day."
+    },
+    "profile_trial_new": {
+      "title": "{name} ist im Probebetrieb",
+      "description": "SLEMS steuert {name} noch nicht: Eine Batterie aus einem Modbus-Profil wird erst gesteuert, wenn ihr Selbsttest mit den Prüfungen des Profils bestanden ist. Der Test startet von selbst, sobald er möglich ist (Betriebsart **Aktiv**, Batterie eingeschaltet und lesbar), und dauert etwa 10 Minuten; die anderen Batterien und die Verbraucher behalten währenddessen ihre Vorgaben."
+    },
+    "profile_trial_profile": {
+      "title": "{name} ist wieder im Probebetrieb",
+      "description": "Das Profil von {name} hat sich geändert, deshalb prüft SLEMS es erneut, bevor es die Batterie steuert. Der Selbsttest mit den Prüfungen des Profils startet von selbst, sobald er möglich ist (Betriebsart **Aktiv**, Batterie eingeschaltet und lesbar), und dauert etwa 10 Minuten."
+    },
+    "profile_trial_firmware": {
+      "title": "{name}: Firmware-Update, wieder im Probebetrieb",
+      "description": "Die Geräteinformationen von {name} haben sich geändert ({changes}), vermutlich durch ein Firmware-Update. Eine neue Firmware kann die Register des Profils anders behandeln, deshalb steuert SLEMS die Batterie erst wieder, wenn der Selbsttest mit den Prüfungen des Profils erneut bestanden ist. Er startet von selbst, sobald er möglich ist (Betriebsart **Aktiv**, Batterie eingeschaltet und lesbar)."
+    },
+    "profile_trial_unclear": {
+      "title": "{name}: Probebetrieb teilweise unklar",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Probebetrieb von {name} als bestanden übernehmen",
+            "description": "Der Selbsttest von {name} hat nichts Falsches gefunden, konnte aber nicht alles prüfen:\n\n{details}\n\nSLEMS wiederholt ihn in 10 Minuten. Wenn du sicher bist, dass das Profil stimmt, bestätige, damit SLEMS {name} ohne bestandenen Probebetrieb steuert. Ändern sich das Profil oder die Firmware, geht die Batterie wieder in den Probebetrieb."
+          }
+        },
+        "abort": {
+          "not_loaded": "SLEMS läuft nicht.",
+          "not_needed": "Nicht mehr nötig: Der Probebetrieb ist nicht mehr unklar."
+        }
+      }
+    },
+    "profile_trial_failed": {
+      "title": "{name}: Probebetrieb nicht bestanden",
+      "description": "Der Selbsttest von {name} hat Fehler im Profil gefunden, deshalb steuert SLEMS die Batterie nicht:\n\n{details}\n\nPrüfe das Profil gegen das Handbuch der Batterie. Nach einer Korrektur beginnt der Probebetrieb erneut; du kannst den Selbsttest auch mit dem Schalter **Selbsttest** wiederholen."
+    },
+    "profile_trial_observing": {
+      "title": "{name}: Firmware-Update, unter Beobachtung",
+      "description": "Die Geräteinformationen von {name} haben sich geändert ({changes}), vermutlich durch ein Firmware-Update. SLEMS steuert die Batterie weiter, liest aber zuerst die Register des Profils ohne zu schreiben und beobachtet sie dann einen Tag lang genauer: Die ersten Vorgaben je Richtung sind auf 100 W begrenzt, die Register werden mit dem Geschriebenen verglichen, und die nächste Rückgabe an die eigene Logik wird geprüft. Passt etwas nicht, geht die Batterie in den Probebetrieb."
     }
   }
 }

@@ -917,7 +917,7 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                     default=defaults.get(CONF_RELEASE_STATE, ReleaseState.AUTO.value),
                 ): _release_state_selector(),
                 vol.Optional(CONF_SKIP_CONNECTION_TEST, default=False): selector.BooleanSelector(),
-                **self._self_test_schema(),
+                # No choice of a self-test: a battery from a profile is tested in its trial.
             }
         )
         return self.async_show_form(step_id="modbus_profile", data_schema=schema, errors=errors)

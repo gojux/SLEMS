@@ -43,6 +43,17 @@ Environment variables:
     SIM_OFF_FILE      while this file exists, the battery is switched off: the
                       control port accepts the connection but answers nothing
                       (default /tmp/venus_off)
+    SIM_FOREIGN_FILE  while this file exists, "another system" writes a new value
+                      into 42020 every 10 s (trial checks of a profile; default
+                      /tmp/venus_foreign)
+    SIM_FIRMWARE_FILE while this file exists, its content is the EMS firmware
+                      version (30200; default /tmp/venus_firmware), e.g. with
+                      SIM_OTA_FILE to play a firmware update
+    SIM_WATCHDOG_S    if set, RS485 control ends after this many seconds without
+                      a write (42010 = 0, 42000 = 0x55BB); a real Venus does not
+                      do that (default off)
+    SIM_CLAMP_W       if set, a charge or discharge set point above it is cut to
+                      it 15 s after the last write (default off)
     SIM_CAPACITY_WH   usable capacity (default 5120)
     SIM_INITIAL_SOC   initial state of charge in % (default 50)
 """
@@ -66,6 +77,10 @@ REG_INVERTER_STATE = 35100
 FAULT_FILE = os.environ.get("SIM_FAULT_FILE", "/tmp/venus_fault")
 OFF_FILE = os.environ.get("SIM_OFF_FILE", "/tmp/venus_off")
 OTA_FILE = os.environ.get("SIM_OTA_FILE", "/tmp/venus_ota")
+FOREIGN_FILE = os.environ.get("SIM_FOREIGN_FILE", "/tmp/venus_foreign")
+FIRMWARE_FILE = os.environ.get("SIM_FIRMWARE_FILE", "/tmp/venus_firmware")
+FOREIGN_EVERY_S = 10
+CLAMP_AFTER_S = 15
 # Static device information (register -> words), as a Venus E 3.0 reports it.
 DEVICE_INFO = {
     31000: "VNSE3-SIM",  # device name, 10 registers
@@ -128,6 +143,10 @@ class VenusModel:
         self._energy_wh = capacity_wh * soc / 100
         self._charged_wh = 0.0
         self._discharged_wh = 0.0
+        self.watchdog_s = float(os.environ.get("SIM_WATCHDOG_S", "0"))
+        self.clamp_w = int(os.environ.get("SIM_CLAMP_W", "0"))
+        self._ticks = 0
+        self._since_command_s = 0.0
         self.tick()
 
     def read(self, address: int, count: int) -> list[int] | None:
@@ -141,7 +160,27 @@ class VenusModel:
         for offset, value in enumerate(values):
             self.registers[address + offset] = value & 0xFFFF
 
+    def command(self, address: int, values: list[int]) -> None:
+        """A write of a client."""
+        self.write(address, values)
+        self._since_command_s = 0.0
+
+    def _firmware_quirks(self) -> None:
+        """Watchdog, cut set points and another system writing (all off by default)."""
+        self._ticks += 1
+        self._since_command_s += TICK_S
+        registers = self.registers
+        if self.watchdog_s and self._since_command_s >= self.watchdog_s and registers[REG_RS485_CONTROL] == RS485_ENABLE:
+            registers[REG_FORCE_MODE] = 0
+            registers[REG_RS485_CONTROL] = RS485_DISABLE
+        if self.clamp_w and self._since_command_s >= CLAMP_AFTER_S:
+            for address in (REG_SET_CHARGE_POWER, REG_SET_DISCHARGE_POWER):
+                registers[address] = min(registers[address], self.clamp_w)
+        if os.path.exists(FOREIGN_FILE) and self._ticks % FOREIGN_EVERY_S == 0:
+            registers[REG_SET_CHARGE_POWER] = (registers[REG_SET_CHARGE_POWER] + 100) % 300
+
     def tick(self) -> None:
+        self._firmware_quirks()
         power = 0
         if self.registers.get(REG_RS485_CONTROL) == RS485_ENABLE and not os.path.exists(OFF_FILE):
             force_mode = self.registers.get(REG_FORCE_MODE, 0)
@@ -183,6 +222,8 @@ class VenusModel:
             self.write(address, _chars(text, 10 if address == 31000 else 6))
         for address, version in DEVICE_VERSIONS.items():
             self.write(address, [version])
+        if (ems := _firmware()) is not None:
+            self.write(30200, [ems])
         self.write(REG_BATTERY_SOC, [round(soc)])
         self.write(REG_BATTERY_SOC_FINE, [round(soc * 10)])
         self.write(REG_CYCLE_COUNT, [int(self._charged_wh / self._capacity_wh)])
@@ -191,6 +232,15 @@ class VenusModel:
         self.write(REG_MIN_CELL_VOLTAGE, [round((lfp_cell_voltage(soc) + charge_lift) * 1000)])
         self.write(REG_TOTAL_CHARGING_ENERGY, _split_32(int(self._charged_wh / 10)))
         self.write(REG_TOTAL_DISCHARGING_ENERGY, _split_32(int(self._discharged_wh / 10)))
+
+
+def _firmware() -> int | None:
+    """The EMS version from SIM_FIRMWARE_FILE, None without it."""
+    try:
+        with open(FIRMWARE_FILE, encoding="ascii") as file:
+            return int(file.read().strip())
+    except (OSError, ValueError):
+        return None
 
 
 def _chars(text: str, registers: int) -> list[int]:
@@ -220,14 +270,14 @@ def handle_pdu(model: VenusModel, pdu: bytes, read_only: bool = False) -> bytes:
             address, value = struct.unpack(">HH", pdu[1:5])
             if address not in WRITABLE:
                 return bytes((function | 0x80, EXC_ILLEGAL_ADDRESS))
-            model.write(address, [value])
+            model.command(address, [value])
             return pdu[:5]
         if function == 16:
             address, count, _byte_count = struct.unpack(">HHB", pdu[1:6])
             values = list(struct.unpack(f">{count}H", pdu[6 : 6 + count * 2]))
             if any(address + i not in WRITABLE for i in range(count)):
                 return bytes((function | 0x80, EXC_ILLEGAL_ADDRESS))
-            model.write(address, values)
+            model.command(address, values)
             return pdu[:5]
     except struct.error:
         return bytes((function | 0x80, EXC_ILLEGAL_ADDRESS))

@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..const import ReleaseState
+from ..self_test import TrialSpec
 
 
 @dataclass(frozen=True)
@@ -186,6 +187,30 @@ class BatteryDriver(ABC):
 
     def issues(self) -> dict[str, dict[str, str]]:
         """Problems of the driver shown as repairs: translation key -> placeholders."""
+        return {}
+
+    @property
+    def trial_spec(self) -> TrialSpec | None:
+        """The checks of a trial (batteries from a Modbus profile, see trial.py);
+        None: the battery has no trial."""
+        return None
+
+    @property
+    def trial_key(self) -> str:
+        """Changes when what the trial checked changes (e.g. the profile)."""
+        return ""
+
+    async def read_control_registers(self) -> dict[int, float | None]:
+        """Raw values of the registers the trial checks (None: not read)."""
+        return {}
+
+    @property
+    def write_count(self) -> int:
+        """Number of register writes so far (a read between two equal counts saw no write)."""
+        return 0
+
+    def written_values(self) -> dict[int, float]:
+        """Raw values last written per register of the trial (empty after a release)."""
         return {}
 
     def needs_write(self, net_power_w: int) -> bool:

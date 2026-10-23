@@ -20,10 +20,16 @@ themselves when the problem is gone:
   anew gave the same phase (both with a dialog to answer, see ``repairs``),
 * the smart meter's energy counters do not net the phases (``netting``),
 * problems a battery driver reports (``BatteryDriver.issues``, e.g. a profile
-  register outside its range at rest).
+  register outside its range at rest),
+* a battery from a Modbus profile in its trial (new, profile changed or
+  after a finding of its observation), observed after a firmware update, its
+  trial unclear (with a dialog to take it as passed, see ``repairs``) or
+  failed; the problems of the last test come from its notification
+  (``TrialState.details``).
 
 Notifications (bell) for events: the end of an active cell balancing run,
-except when the user cancelled it. The problems of the feed-in cap come from
+except when the user cancelled it, and a battery behaving differently after a
+firmware update (its observation found something). The problems of the feed-in cap come from
 the forecast and are notifications as well; each one is created when the
 problem appears and dismissed when it is gone: the batteries are too small for
 the space needed, there is not enough time or power left to feed in before
@@ -53,6 +59,8 @@ from .tariff_updates import TARIFF_ISSUE_PREFIX
 from .controller import ControlStatus
 from .drivers.profile import ISSUES as DRIVER_ISSUES
 from .phases import label
+from .self_test import Check, Outcome
+from .trial import TrialStatus
 
 if TYPE_CHECKING:
     from .coordinator import BatteryRuntime, SlemsCoordinator, SystemSnapshot
@@ -111,6 +119,36 @@ def _house_inaccurate_issue(battery: BatteryRuntime) -> str:
     return f"house_power_inaccurate_{battery.subentry_id}"
 
 
+# Trial issues: the subentry id follows.
+TRIAL_ISSUE = "profile_trial_"
+TRIAL_UNCLEAR_ISSUE = "profile_trial_unclear_"
+TRIAL_FAILED_ISSUE = "profile_trial_failed_"
+
+
+def _trial_issues(battery: BatteryRuntime) -> dict[str, tuple[str, dict[str, str]]]:
+    trial = battery.trial
+    if trial is None:
+        return {}
+    placeholders = {"name": battery.name}
+    details = {**placeholders, "details": trial.details or "–"}
+    if trial.status is TrialStatus.TRIAL:
+        changes = ", ".join(f"{key} {old} → {new}" for key, (old, new) in trial.firmware_change.items())
+        # The reason is a placeholder as well: a new reason creates the issue anew.
+        return {
+            f"{TRIAL_ISSUE}{battery.subentry_id}": (
+                f"profile_trial_{trial.reason.value}", {**placeholders, "reason": trial.reason.value, "changes": changes or "–"}
+            )
+        }
+    if trial.status is TrialStatus.OBSERVING:
+        changes = ", ".join(f"{key} {old} → {new}" for key, (old, new) in trial.firmware_change.items())
+        return {f"{TRIAL_ISSUE}{battery.subentry_id}": ("profile_trial_observing", {**placeholders, "changes": changes or "–"})}
+    if trial.status is TrialStatus.UNCLEAR:
+        return {f"{TRIAL_UNCLEAR_ISSUE}{battery.subentry_id}": ("profile_trial_unclear", details)}
+    if trial.status is TrialStatus.FAILED:
+        return {f"{TRIAL_FAILED_ISSUE}{battery.subentry_id}": ("profile_trial_failed", details)}
+    return {}
+
+
 class ProblemReporter:
     """Keeps the repair issues of one SLEMS entry in line with the current state."""
 
@@ -148,7 +186,12 @@ class ProblemReporter:
                 _release_issue(battery),
                 _house_inaccurate_issue(battery),
                 *(f"{key}_{battery.subentry_id}" for key in DRIVER_ISSUES),
+                *(f"{prefix}{battery.subentry_id}" for prefix in (TRIAL_ISSUE, TRIAL_UNCLEAR_ISSUE, TRIAL_FAILED_ISSUE)),
             }
+            for issue_id, issue in _trial_issues(battery).items():
+                wanted[issue_id] = issue
+                if issue_id.startswith(TRIAL_UNCLEAR_ISSUE):
+                    fixable[issue_id] = {"subentry_id": battery.subentry_id, "kind": "trial"}
             placeholders = {"name": battery.name}
             for key, values in battery.driver.issues().items():
                 wanted[f"{key}_{battery.subentry_id}"] = (key, {**placeholders, **values})
@@ -375,12 +418,23 @@ class ProblemReporter:
         text = await self._texts()
         result = test.result or "failed"
         if result in ("ok", "unclear", "warning", "failed"):
-            lines = "\n".join(
+            lines = [
                 f"- {text(f'self_test_check_{check.key}')}: {text(f'self_test_outcome_{check.outcome.value}')}"
                 for check in test.checks
                 if check.outcome.value != "skipped"
-            )
-            message = text(f"self_test_{result}_message", name=battery.name, checks=lines)
+            ]
+            if test.trial is not None:
+                lines += [text("self_test_trial_header")] + [
+                    f"- {_check_line(text, check)}" for check in test.trial_checks if check.outcome.value != "skipped"
+                ]
+            message = text(f"self_test_{result}_message", name=battery.name, checks="\n".join(lines))
+            if test.trial is not None and battery.trial is not None:
+                # What the repair of an unclear or failed trial lists.
+                battery.trial.details = "\n".join(
+                    f"- {_check_line(text, check)}"
+                    for check in test.checks + test.trial_checks
+                    if check.outcome.value in ("failed", "unclear", "warning")
+                ) or None
         else:
             message = text("self_test_stopped_message", name=battery.name, reason=text(f"self_test_reason_{result}"))
         persistent_notification.async_create(
@@ -388,6 +442,33 @@ class ProblemReporter:
             message,
             title=text("self_test_title", name=battery.name),
             notification_id=f"{DOMAIN}_self_test_{battery.subentry_id}",
+        )
+
+    async def async_notify_observation(self, battery: BatteryRuntime, problem: dict) -> None:
+        """Notification: the observation after a firmware update found something."""
+        text = await self._texts()
+        reason = problem["reason"]
+        if reason == "quiet":
+            check = problem["check"]
+            values = {k: v for k, v in check.items() if k not in ("key", "outcome")}
+            found = _check_line(text, Check(check["key"], Outcome(check["outcome"]), values))
+        else:
+            registers = ", ".join(
+                f"{r['address']} = {r['value']} ({r['expected']})" for r in problem.get("registers") or ()
+            )
+            found = text(
+                f"observation_problem_{reason}",
+                **{key: str(value) for key, value in problem.items() if key != "registers"},
+                registers=registers,
+            )
+        if battery.trial is not None:
+            battery.trial.details = f"- {found}"
+        key = "observation_quiet" if reason == "quiet" else "observation_found"
+        persistent_notification.async_create(
+            self._hass,
+            text(f"{key}_message", name=battery.name, problem=found),
+            title=text("observation_found_title", name=battery.name),
+            notification_id=f"{DOMAIN}_observation_{battery.subentry_id}",
         )
 
     async def async_notify_target_missed(
@@ -424,6 +505,22 @@ class ProblemReporter:
             title=text("target_missed_title", **placeholders),
             notification_id=f"{DOMAIN}_target_{subentry_id}",
         )
+
+
+def _check_line(text, check: Check) -> str:
+    """A check with its outcome and the registers it found, e.g. "42020: 625 → 0 (48 s)"."""
+    line = f"{text(f'self_test_check_{check.key}')}: {text(f'self_test_outcome_{check.outcome.value}')}"
+    parts = []
+    for item in check.values.get("changes") or check.values.get("registers") or []:
+        if not isinstance(item, dict):
+            parts.append(f"{item} = ?")
+        elif "before" in item:
+            parts.append(f"{item['address']}: {item['before']} → {item['after']} ({item['after_s']} s)")
+        elif item.get("expected") is not None:
+            parts.append(f"{item['address']} = {item['value']} ({item['expected']})")
+        else:
+            parts.append(f"{item['address']} = {item['value']}")
+    return f"{line} ({', '.join(parts)})" if parts else line
 
 
 def _duration(seconds: float) -> str:

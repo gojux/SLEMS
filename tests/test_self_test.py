@@ -10,11 +10,15 @@ from custom_components.slems.self_test import (
     ABORT_S,
     HOLD_S,
     IDLE_S,
+    QUIET_S,
+    SETTLE_S,
     STEP_MAX_S,
     Outcome,
     Phase,
     Sample,
     SelfTest,
+    TrialRegister,
+    TrialSpec,
     self_test_power_w,
     step_power_w,
 )
@@ -40,11 +44,14 @@ def run(
     release_ok: bool | None = True,
     after_release: Callable[[float], float] | None = None,
     house: Callable[[float], float] | None = None,
+    registers: Callable[[float, float, bool], dict[int, float | None]] | None = None,
 ) -> SelfTest:
     """Drive a test with a simulated battery: 1 s samples until the end.
 
     After the release the battery's power is ``after_release(power before)``,
-    by default its own logic covering the house (auto) or 0 (standby).
+    by default its own logic covering the house (auto) or 0 (standby). A
+    trial reads ``registers(now, command, released)`` whenever it asks for
+    them; a complete write it asks for happens at once.
     """
     rng = random.Random(1)
     now = 0.0
@@ -86,12 +93,17 @@ def run(
             phases = tuple(
                 meter / 3 + (actual * 2 / 3 if k == on_phase else -actual / 3) + moved[k] for k in range(3)
             )
+        read = None
+        if registers is not None and test.registers_due(now):
+            read = registers(now, command, released_at is not None)
         sample = Sample(
             now, meter, reported, soc,
             round(c, counter_digits) if counters else None, round(d, counter_digits) if counters else None,
-            phases, others,
+            phases, others, read,
         )
         result = test.step(now, sample, ready=True, wall=1000.0)
+        if test.wants_refresh:
+            test.refreshed(now)
         power = result if result is not None else power
         if result is not None and result != command:
             commands.append((now, result))
@@ -326,3 +338,189 @@ def test_release_not_confirmed_or_not_needed() -> None:
     release = next(c for c in test.checks if c.key == "release")
     assert (release.outcome, release.values["reason"]) == (Outcome.FAILED, "readback")
     assert "release" not in outcomes(run(SelfTest(600, 600, 0.0), release_ok=None))
+
+
+# --- trial of a profile -------------------------------------------------------
+
+RS485, MODE, CHARGE_W, DISCHARGE_W = 42000, 42010, 42020, 42021
+ON, OFF = 0x55AA, 0x55BB
+
+
+def venus_spec(keepalive_s: float | None = 60.0) -> TrialSpec:
+    """The checks of the Venus profile (release to auto)."""
+    return TrialSpec(
+        (
+            TrialRegister(RS485, lambda v: v in (ON, OFF), OFF, frozenset({OFF, ON})),
+            TrialRegister(MODE, lambda v: 0 <= v <= 2, 0, frozenset({0})),
+            TrialRegister(CHARGE_W, lambda v: 0 <= v <= 2500, 0, frozenset({0}), power=True),
+            TrialRegister(DISCHARGE_W, lambda v: 0 <= v <= 2500, 0, frozenset({0}), power=True),
+        ),
+        keepalive_s=keepalive_s,
+    )
+
+
+def venus_registers(_now: float, command: float, released: bool) -> dict[int, float | None]:
+    """The registers as a Venus holds them for the last command (at rest for 0 W)."""
+    if released or command == 0:
+        return {RS485: OFF, MODE: 0, CHARGE_W: 0, DISCHARGE_W: 0}
+    return {RS485: ON, MODE: 1 if command > 0 else 2, CHARGE_W: max(0.0, command), DISCHARGE_W: max(0.0, -command)}
+
+
+def trial_outcomes(test: SelfTest) -> dict[str, str]:
+    return {check.key: check.outcome.value for check in test.trial_checks}
+
+
+def trial_check(test: SelfTest, key: str):
+    return next(check for check in test.trial_checks if check.key == key)
+
+
+def late_after(test: SelfTest, phase: Phase, seconds: float, now: float) -> bool:
+    record = test._records.get(phase)
+    return record is not None and record.late_start is not None and now >= record.late_start + seconds
+
+
+def test_a_plain_self_test_reads_no_registers() -> None:
+    test = run(SelfTest(600, 600, 0.0), registers=lambda *_: pytest.fail("no registers without a trial"))
+    assert test.result == "ok"
+    assert test.as_dict()["trial"] is None
+
+
+def test_a_correct_profile_passes_its_trial() -> None:
+    test = run(SelfTest(600, 600, 0.0, trial=venus_spec()), registers=venus_registers)
+    assert test.result == "ok", (outcomes(test), test.trial_checks)
+    assert trial_outcomes(test) == {
+        "trial_quiet": "ok",
+        "trial_small_charge": "ok",
+        "trial_late_charge": "ok",
+        "trial_small_discharge": "ok",
+        "trial_late_discharge": "ok",
+        "trial_release": "ok",
+    }
+    assert set(outcomes(test).values()) == {"ok"}
+    # Read every 10 s at rest; the late read back lasts until shortly before the keep-alive.
+    assert trial_check(test, "trial_quiet").values["reads"] == QUIET_S / 10 + 1
+    assert trial_check(test, "trial_late_charge").values["window_s"] == 55
+    data = test.as_dict()["trial"]
+    assert data["result"] == "ok" and data["self_test_result"] == "ok"
+    reads = test.register_reads()
+    assert len(reads["late"]["charge"]) >= 5 and len(reads["release"]) == 2
+
+
+def test_the_small_step_comes_first_and_settles() -> None:
+    test = run(SelfTest(600, 600, 0.0, trial=venus_spec()), registers=venus_registers)
+    assert test._records[Phase.SMALL_CHARGE].target_w == 100
+    assert test._records[Phase.SMALL_DISCHARGE].target_w == -100
+    # The last settling (0 W) before the full discharge.
+    assert test._records[Phase.DISCHARGE].start - test._records[Phase.SETTLE].start == pytest.approx(SETTLE_S, abs=1)
+
+
+def test_a_register_changing_at_rest_ends_the_trial_without_writing() -> None:
+    def registers(now: float, command: float, released: bool) -> dict[int, float | None]:
+        assert command == 0, "nothing may be written"
+        return {**venus_registers(now, command, released), CHARGE_W: 0 if now < 30 else 37}
+
+    test = run(SelfTest(600, 600, 0.0, trial=venus_spec()), registers=registers)
+    assert test.result == "failed"
+    check = trial_check(test, "trial_quiet")
+    assert check.values["reason"] == "changing"
+    assert check.values["registers"][0]["address"] == CHARGE_W
+    assert test.checks == [] and test.as_dict()["trial"]["self_test_result"] is None
+    assert Phase.IDLE not in test._records
+
+
+def test_a_register_outside_its_range_at_rest_ends_the_trial() -> None:
+    test = run(
+        SelfTest(600, 600, 0.0, trial=venus_spec()),
+        registers=lambda now, c, r: {**venus_registers(now, c, r), MODE: 5600},
+    )
+    check = trial_check(test, "trial_quiet")
+    assert check.outcome is Outcome.FAILED and check.values["reason"] == "outside_rest"
+    assert Phase.IDLE not in test._records
+
+
+def test_unreadable_registers_at_rest_are_unclear() -> None:
+    test = run(
+        SelfTest(600, 600, 0.0, trial=venus_spec()),
+        registers=lambda now, c, r: {**venus_registers(now, c, r), MODE: None},
+    )
+    assert trial_outcomes(test) == {"trial_quiet": "unclear"}
+    assert test.result == "unclear"
+
+
+def test_a_small_step_ten_times_too_large_ends_the_test() -> None:
+    test = run(SelfTest(600, 600, 0.0, trial=venus_spec()), effect=10.0, registers=venus_registers)
+    check = trial_check(test, "trial_small_charge")
+    assert check.outcome is Outcome.FAILED and check.values["reason"] == "too_large"
+    assert check.values["aborted"]
+    # Ended before the full power was sent, then released and watched.
+    assert Phase.CHARGE not in test._records
+    assert test.result == "failed"
+    assert "trial_release" in trial_outcomes(test)
+
+
+def test_the_firmware_falling_back_fails_the_late_read_back() -> None:
+    test = SelfTest(600, 600, 0.0, trial=venus_spec())
+
+    def registers(now: float, command: float, released: bool) -> dict[int, float | None]:
+        values = venus_registers(now, command, released)
+        if late_after(test, Phase.CHARGE, 30, now) and test.phase is Phase.CHARGE:
+            values[MODE] = 0
+        return values
+
+    run(test, registers=registers)
+    check = trial_check(test, "trial_late_charge")
+    assert check.outcome is Outcome.FAILED and check.values["reason"] == "fallback"
+    change = check.values["changes"][0]
+    assert (change["address"], change["before"], change["after"]) == (MODE, 1, 0)
+    assert change["after_s"] == pytest.approx(30, abs=10)
+
+
+def test_a_power_cut_by_the_firmware_is_a_warning_with_its_limit() -> None:
+    test = SelfTest(600, 600, 0.0, trial=venus_spec())
+
+    def registers(now: float, command: float, released: bool) -> dict[int, float | None]:
+        values = venus_registers(now, command, released)
+        if late_after(test, Phase.CHARGE, 20, now) and test.phase is Phase.CHARGE:
+            values[CHARGE_W] = 500
+        return values
+
+    run(test, registers=registers)
+    check = trial_check(test, "trial_late_charge")
+    assert check.outcome is Outcome.WARNING and check.values["reason"] == "clamped"
+    assert check.values["changes"][0]["limit_w"] == 500
+    assert test.result == "warning"
+
+
+def test_nothing_is_written_during_the_late_read_back() -> None:
+    test = SelfTest(600, 600, 0.0, trial=venus_spec(keepalive_s=30.0))
+    paused: list[float] = []
+
+    def registers(now: float, command: float, released: bool) -> dict[int, float | None]:
+        if test.writes_paused(now):
+            paused.append(now)
+        return venus_registers(now, command, released)
+
+    run(test, registers=registers)
+    record = test._records[Phase.CHARGE]
+    assert trial_check(test, "trial_late_charge").values["window_s"] == 25
+    charge_paused = [t for t in paused if record.start <= t < test._records[Phase.REST].start]
+    assert min(charge_paused) >= record.late_start and max(charge_paused) < record.late_start + 25
+    assert not test.writes_paused(record.late_start + 25)
+
+
+def test_a_wrong_release_fails() -> None:
+    def registers(now: float, command: float, released: bool) -> dict[int, float | None]:
+        values = venus_registers(now, command, released)
+        if released:
+            values[RS485] = ON
+        return values
+
+    test = run(SelfTest(600, 600, 0.0, trial=venus_spec()), registers=registers)
+    check = trial_check(test, "trial_release")
+    assert check.outcome is Outcome.FAILED and check.values["reason"] == "wrong"
+    assert check.values["registers"][0] == {"address": RS485, "value": ON, "expected": OFF, "after_s": 0}
+
+
+def test_a_release_not_confirmed_fails_the_trial_release() -> None:
+    test = run(SelfTest(600, 600, 0.0, trial=venus_spec()), registers=venus_registers, release_ok=False)
+    assert trial_check(test, "trial_release").values["reason"] == "readback"
