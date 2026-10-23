@@ -155,6 +155,21 @@ async def test_telemetry_like_the_venus_driver() -> None:
     assert sorted(by_profile.reads()) == sorted(read for read in direct.reads() if read[0] not in (42000, 42010))
 
 
+async def test_values_at_rest_like_the_venus_driver() -> None:
+    # Integers stay integers (cycles 29, not 29.0) and a power of 0 is not -0.0.
+    model = SIM.VenusModel(5120, 18.8)
+    model.tick()
+    expected = await venus_driver(SimLink(model)).read_telemetry()
+    telemetry = await venus_profile_driver(SimLink(model)).read_telemetry()
+
+    assert repr(telemetry.soc_pct) == repr(expected.soc_pct) == "18.8"
+    assert repr(telemetry.power_w) == repr(expected.power_w) == "0"
+    assert repr(telemetry.ac_power_w) == repr(expected.ac_power_w) == "0"
+    for key, value in expected.extra.items():
+        if key not in ("rs485_control", "force_mode"):
+            assert repr(telemetry.extra[key]) == repr(value), key
+
+
 async def test_slow_values_are_read_once_a_minute() -> None:
     model = SIM.VenusModel(5120, 63.0)
     link = SimLink(model)

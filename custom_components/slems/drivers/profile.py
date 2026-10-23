@@ -462,19 +462,13 @@ class ProfileDriver(BatteryDriver):
             parts = [words[register] for register in read.registers]
             if any(part is None for part in parts):
                 continue
-            # Rounded like the Venus driver (a scale of 0.1 gives 16.900000000000002).
-            values[key] = round(
-                sum(
-                    decode(part, register.type, register.word_order) * register.scale  # type: ignore[operator]
-                    for part, register in zip(parts, read.registers, strict=True)
-                ),
-                3,
-            )
+            # Rounded once more: a sum of registers (e.g. MPPT inputs) adds float errors again.
+            values[key] = round(sum(_scaled(part, register) for part, register in zip(parts, read.registers, strict=True)), 3)
         soc = profile.read["soc_pct"]
         if "soc_pct" not in values and soc.fallback is not None and any(w is not None for w in words.values()):
             register = soc.fallback
             if (part := await self._transport.read(register.address, register.size, input_registers=register.input)):
-                values["soc_pct"] = round(decode(part, register.type, register.word_order) * register.scale, 3)  # type: ignore[operator]
+                values["soc_pct"] = _scaled(part, register)
         state = None
         if profile.state is not None and (part := words.get(profile.state.register)) is not None:
             raw = decode(part, profile.state.register.type, profile.state.register.word_order)
@@ -497,7 +491,8 @@ class ProfileDriver(BatteryDriver):
         if value is None:
             return None
         positive = self._profile.read[key].positive
-        return -value if positive in ("discharge", "output") else value
+        # 0 - x instead of -x: no -0.0 for a power of 0.
+        return 0 - value if positive in ("discharge", "output") else value
 
     def _telemetry(self, values: dict[str, float], state: str | None) -> BatteryTelemetry:
         extra: dict[str, Any] = {
@@ -519,7 +514,7 @@ class ProfileDriver(BatteryDriver):
             ac_power = pv + (grid_input or 0.0) - output
         if ac_power is not None:
             # The sensor AC power keeps the sign of the energy dashboard (+discharge).
-            extra["ac_power"] = round(-ac_power, 3)
+            extra["ac_power"] = round(0 - ac_power, 3)
         return BatteryTelemetry(
             soc_pct=values.get("soc_pct"),
             power_w=power if power is not None else ac_power,
@@ -711,6 +706,15 @@ class ProfileDriver(BatteryDriver):
         ]
         if wrong:
             raise BatteryDriverError(f"release not confirmed: {', '.join(wrong)}")
+
+
+def _scaled(words: list[int], register: Register) -> float:
+    """A read value with its scale, rounded like the Venus driver (a scale of
+    0.1 gives 16.900000000000002); without a scale an integer stays one."""
+    value = decode(words, register.type, register.word_order)
+    if register.scale == 1:
+        return value  # type: ignore[return-value]
+    return round(value * register.scale, 3)  # type: ignore[operator]
 
 
 def _rest_text(step: WriteStep, value: float | None) -> str:
