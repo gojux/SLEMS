@@ -659,6 +659,23 @@ last result in its attributes), notification in `problems.py`.
   battery's reported one within 20 %; such a step does not count for the
   power checks. An unclear step below 300 W gets reason `small` (nearly full
   or empty battery: repeat at a medium state of charge).
+- A step aborts the whole test when the meter runs against the command (and
+  never ran along it) or beyond `TOO_LARGE_FACTOR` (2×) for `ABORT_S` (10 s),
+  confirmed by the battery's own reported power if there is one (so a
+  switched on kettle does not end it), and only while the rest before was
+  quiet. The effect check of that step fails with `aborted`; the evaluation
+  of the full steps also fails above 2× (`too_large`).
+- The release happens straight from the last step (`_last_step`): the
+  controller releases when `commanding` turns false, the coordinator passes
+  the driver's result (`released(ok, wall, now)`, `awaiting_release`), and the
+  test keeps sampling in `RELEASE` with the others held (`holds_others`) for up
+  to `RELEASE_OBSERVE_S`, deciding on the mean of the last `RELEASE_MEAN_S`
+  against the step and its rest (the meter, or the battery's power if the
+  rest was noisy). Standby: back by at least half the step (else `held` below
+  20 %, `partial` between); auto (`release_state` from the driver): moved by
+  at least 20 % of the test power (its own zero export often covers only the
+  house), else `same` (unclear). A failed driver release is `readback`, a
+  step not seen at the meter `no_step`.
 - A battery added with `self_test_on_setup` (subentry data) is tested once as
   soon as `self_test_blocked` allows it; the store keeps
   `self_test_on_setup_done` and `self_test_last`. A running test is not
@@ -1536,6 +1553,40 @@ Open points before other brands:
 
 Until then any battery with SoC and power entities in Home Assistant can be
 added through its entities (`ha_entities`), read-only or controlled.
+
+### Battery profiles (Modbus)
+
+`battery_profiles.py` (no HA dependency): the YAML format of Modbus profiles
+of batteries, its loader with line numbers (`parse_profile`, `ProfileError`
+with code, path and line) and the checks. Not used by a driver or the setup
+yet. Shipped profiles are in `templates/battery_profiles/`
+(`bundled_profiles()`, reads files: run it in the executor); the Venus
+profile describes the same registers and steps as the Venus driver, which
+stays (a test compares them, another one runs the profile against the
+simulator's register model).
+
+- The format has no conditions, loops or free writes: unknown keys are
+  refused, only `control.apply` registers are written, `release` only writes
+  those. Anything beyond belongs into a Python subclass of the future profile
+  driver. The transport is not part of a profile.
+- Read keys carry their unit (`soc_pct`, `power_dc_w`, `charged_kwh`, ...) and
+  map to `BatteryTelemetry` fields or `extra` keys (`READ_KEYS`, `STATES`);
+  power keys may be a sum of registers (MPPT inputs).
+- Own PV (`own_pv` with the traits of `BatteryCapabilities`): `pv_w` plus
+  `output_w`/`input_w` or a signed `connection_w`; `control.setpoint`
+  `battery` (the battery power, e.g. hybrid inverters) or `connection` (the
+  AC connection: charge = input, discharge = output, converted like the
+  control **Output** of entity batteries).
+- Values in `apply`/`release` are raw; the power placeholders are W and
+  become raw through `scale` (one raw unit = `scale` W, as when reading).
+  `at_rest` / `at_rest_values` (raw) are required in own profiles; fixed
+  values, mode values and the highest powers must lie inside, which also
+  catches a wrong scale. `rest_violations` is the check before writing.
+- `persistent` registers (flash) must not hold a power placeholder;
+  `PersistentGuard` skips unchanged values (also on keep-alive), warns at a
+  change within 60 s and blocks above `max_changes_per_day` in 24 h.
+- `confirm: true` on a step reads it back after a complete write or the
+  release; a profile without any is unconfirmed.
 
 ## Consumption forecast
 

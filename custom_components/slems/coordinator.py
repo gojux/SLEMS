@@ -2257,6 +2257,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             step_power_w(power, limits.charge_w if limits else 0.0),
             step_power_w(power, limits.discharge_w if limits else 0.0),
             dt_util.utcnow().timestamp(),
+            battery.driver.release_state.value,
         )
         battery.self_test_power_w = None
         battery.self_test_pending = False
@@ -2311,12 +2312,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if test.phase is SelfTestPhase.DONE:
             self.end_self_test(battery)
             return
-        if test.phase is SelfTestPhase.RELEASE:
-            if not self.controller.has_override(battery.subentry_id):
-                # Released by the controller (None: nothing was sent before).
-                test.released(self.controller.pop_release_result(battery.subentry_id), wall)
+        if test.awaiting_release:
+            if self.controller.has_override(battery.subentry_id):
+                return
+            # Released by the controller (None: nothing was sent before); the meter is watched then.
+            test.released(self.controller.pop_release_result(battery.subentry_id), wall, now)
+            if test.phase is SelfTestPhase.DONE:
                 self.end_self_test(battery)
-            return
+                return
         if self.settings.operating_mode is not OperatingMode.ACTIVE:
             self.end_self_test(battery, "not_active")
             return
@@ -2348,7 +2351,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self._grid_phases_w(),
             tuple(others),
         )
-        battery.self_test_power_w = test.step(now, sample, ready=battery.leaving_until is None)
+        battery.self_test_power_w = test.step(now, sample, ready=battery.leaving_until is None, wall=wall)
+        if test.phase is SelfTestPhase.DONE:
+            self.end_self_test(battery)
 
     @callback
     def start_balancing(self, battery: BatteryRuntime) -> None:

@@ -1,11 +1,13 @@
 """Tests for the self-test of a battery (simulated battery and meter)."""
 
+from collections.abc import Callable
 import random
 
 import pytest
 
 from custom_components.slems.phases import Phase as GridPhase
 from custom_components.slems.self_test import (
+    ABORT_S,
     HOLD_S,
     IDLE_S,
     STEP_MAX_S,
@@ -35,23 +37,44 @@ def run(
     on_phase: int | None = None,
     handover_at: float | None = None,
     handover_until: float = 3600.0,
+    release_ok: bool | None = True,
+    after_release: Callable[[float], float] | None = None,
+    house: Callable[[float], float] | None = None,
 ) -> SelfTest:
-    """Drive a test with a simulated battery: 1 s samples until the release."""
+    """Drive a test with a simulated battery: 1 s samples until the end.
+
+    After the release the battery's power is ``after_release(power before)``,
+    by default its own logic covering the house (auto) or 0 (standby).
+    """
     rng = random.Random(1)
     now = 0.0
     commands: list[tuple[float, float]] = []
     charged = discharged = 100.0
     power = 0.0
-    while test.phase is not Phase.RELEASE and now < 3600:
+    released_at: float | None = None
+    before_release = 0.0
+    if after_release is None:
+        after_release = (lambda _: 0.0) if test.release_state == "standby" else (lambda _: -HOUSE_W)
+    while test.phase is not Phase.DONE and now < 3600:
+        if test.awaiting_release:
+            test.released(release_ok, 1000.0, now)
+            released_at = now
         command = commands[-1][1] if commands else 0.0
         # The battery follows its command after the delay.
         actual = next((c for t, c in reversed(commands) if t <= now - delay_s), 0.0) * effect
+        if released_at is None:
+            before_release = actual
+        elif now >= released_at + delay_s:
+            actual = after_release(before_release)
+        else:
+            actual = before_release
         if actual > 0:
             charged += actual / 3600 / 1000
         elif actual < 0:
             discharged += -actual / 3600 / 1000
         soc += actual / 3600 / 5000 * 100
-        meter = HOUSE_W + actual + (rng.uniform(-noise_w, noise_w) if noise_w else 0.0)
+        house_w = house(now) if house is not None else HOUSE_W
+        meter = house_w + actual + (rng.uniform(-noise_w, noise_w) if noise_w else 0.0)
         reported = actual * sign * scale
         c, d = (discharged, charged) if swap_counters else (charged, discharged)
         phases = None
@@ -68,12 +91,11 @@ def run(
             round(c, counter_digits) if counters else None, round(d, counter_digits) if counters else None,
             phases, others,
         )
-        result = test.step(now, sample, ready=True)
+        result = test.step(now, sample, ready=True, wall=1000.0)
         power = result if result is not None else power
         if result is not None and result != command:
             commands.append((now, result))
         now += 1.0
-    test.released(True, 1000.0)
     return test
 
 
@@ -209,3 +231,98 @@ def test_a_full_battery_is_unclear_not_conspicuous() -> None:
     # The noisy charge step does not count for the power checks.
     assert checks["power_scale"].outcome is Outcome.OK
     assert test.result == "unclear"
+
+
+def test_a_wrong_direction_ends_the_test_at_once() -> None:
+    # Inverted set point, the battery reports its power right: no discharge step after the charge.
+    test = run(SelfTest(600, 600, 0.0), effect=-1.0)
+    checks = {check.key: check for check in test.checks}
+    assert checks["effect_charge"].outcome is Outcome.FAILED
+    assert checks["effect_charge"].values["reason"] == "reversed"
+    assert checks["effect_charge"].values["aborted"]
+    assert "effect_discharge" not in checks
+    assert test.result == "failed"
+    # Released right after ABORT_S (plus the battery's delay), not after STEP_MAX_S.
+    assert test.phase_start <= IDLE_S + 4 + ABORT_S + 2
+
+
+def test_a_wrong_direction_is_judged_late_when_the_battery_disagrees() -> None:
+    # The battery's power says otherwise (its sign is inverted too): the steps run to the end.
+    test = run(SelfTest(600, 600, 0.0), effect=-1.0, sign=-1)
+    checks = {check.key: check for check in test.checks}
+    assert "aborted" not in checks["effect_charge"].values
+    assert checks["effect_discharge"].values["reason"] == "reversed"
+
+
+def test_a_too_large_effect_ends_the_test() -> None:
+    # A wrong factor of the set point: three times the command.
+    test = run(SelfTest(600, 600, 0.0), effect=3.0)
+    checks = {check.key: check for check in test.checks}
+    assert checks["effect_charge"].values["reason"] == "too_large"
+    assert checks["effect_charge"].values["aborted"]
+    assert "effect_discharge" not in checks
+    # Up to twice is no error (e.g. own limits of the meter averaging).
+    assert outcomes(run(SelfTest(600, 600, 0.0), effect=1.8))["effect_charge"] == "ok"
+
+
+def test_a_switched_on_kettle_does_not_end_the_test() -> None:
+    # 2 kW for 30 s while charging: the meter runs far, the battery's own power does not.
+    test = run(SelfTest(600, 600, 0.0), house=lambda t: HOUSE_W + (2000.0 if 70 <= t < 100 else 0.0))
+    checks = {check.key: check for check in test.checks}
+    assert "aborted" not in checks["effect_charge"].values
+    assert "effect_discharge" in checks
+
+
+def test_the_release_is_watched_at_the_meter() -> None:
+    test = run(SelfTest(600, 600, 0.0))
+    release = next(c for c in test.checks if c.key == "release")
+    assert release.outcome is Outcome.OK
+    assert release.values["state"] == "auto"
+    # Its own logic covered the house: up to 200 W less discharge than the test power.
+    assert 120 <= release.values["change_w"] <= 200
+    assert release.values["step_w"] == -600
+
+
+def test_release_to_standby() -> None:
+    test = run(SelfTest(600, 600, 0.0, "standby"))
+    release = next(c for c in test.checks if c.key == "release")
+    assert release.outcome is Outcome.OK and release.values["state"] == "standby"
+    # Still in remote control at the last set point although the driver confirmed the release.
+    test = run(SelfTest(600, 600, 0.0, "standby"), after_release=lambda before: before)
+    release = next(c for c in test.checks if c.key == "release")
+    assert (release.outcome, release.values["reason"]) == (Outcome.FAILED, "held")
+    assert test.result == "failed"
+    # Halfway down.
+    test = run(SelfTest(600, 600, 0.0, "standby"), after_release=lambda before: before * 0.6)
+    assert next(c for c in test.checks if c.key == "release").values["reason"] == "partial"
+
+
+def test_release_to_its_own_logic_holding_the_same_power_is_unclear() -> None:
+    test = run(SelfTest(600, 600, 0.0), after_release=lambda before: before)
+    release = next(c for c in test.checks if c.key == "release")
+    assert (release.outcome, release.values["reason"]) == (Outcome.UNCLEAR, "same")
+    assert test.result == "unclear"
+
+
+def test_release_watching_holds_the_others_and_ends() -> None:
+    test = SelfTest(600, 0, 0.0)
+    now = 0.0
+    while not test.awaiting_release:
+        test.step(now, Sample(now, HOUSE_W, 0.0, 50.0), ready=True)
+        now += 1.0
+    assert test.holds_others and not test.commanding
+    test.released(True, 500.0, now)
+    assert test.holds_others and test.phase is Phase.RELEASE
+    # The meter did not show the charge step: nothing to compare, decided at once.
+    test.step(now + 1, Sample(now + 1, HOUSE_W, 0.0, 50.0), ready=True, wall=501.0)
+    assert test.phase is Phase.DONE and test.finished_at == 501.0
+    release = next(c for c in test.checks if c.key == "release")
+    assert release.values["reason"] == "no_step"
+    assert not test.holds_others
+
+
+def test_release_not_confirmed_or_not_needed() -> None:
+    test = run(SelfTest(600, 600, 0.0), release_ok=False)
+    release = next(c for c in test.checks if c.key == "release")
+    assert (release.outcome, release.values["reason"]) == (Outcome.FAILED, "readback")
+    assert "release" not in outcomes(run(SelfTest(600, 600, 0.0), release_ok=None))

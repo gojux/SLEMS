@@ -606,7 +606,7 @@ const STRINGS = {
     selfTestCancel: "Cancel self-test",
     selfTestTitle: "Self-test of {name}",
     selfTestText:
-      "For a few minutes SLEMS rests the battery, charges it with {power}, rests it again and discharges it with {power}. Meanwhile the other batteries and the consumers keep their set points, so a little energy may come from the grid or go into it. SLEMS compares the effect at the smart meter with the values of the battery: sign, units, energy counters, state of charge, response time. Best at a quiet time (no large consumers switching, little change of PV).",
+      "For a few minutes SLEMS rests the battery, charges it with {power}, rests it again and discharges it with {power}. Meanwhile the other batteries and the consumers keep their set points, so a little energy may come from the grid or go into it. SLEMS compares the effect at the smart meter with the values of the battery: sign, units, energy counters, state of charge, response time. If the battery runs the wrong way or far too strongly, the test ends at once. Afterwards SLEMS releases the battery and checks at the smart meter that it really leaves the test power. Best at a quiet time (no large consumers switching, little change of PV).",
     selfTestConfirm: "Start",
     selfTestNeedsActive: "The self-test can only be started in operating mode active.",
     selfTestNeedsEnabled: "The self-test needs an enabled battery.",
@@ -640,6 +640,8 @@ const STRINGS = {
       effect_none: "The smart meter did not move ({meter} at a command of {expected}): the command does not arrive. Wrong entity or register, remote control not enabled, or the battery is not behind the smart meter.",
       effect_reversed: "The smart meter moved the other way ({meter} at a command of {expected}): the set point is inverted (setting “Invert set point sign”) or charge and discharge are swapped.",
       effect_partial: "Only part of it arrived ({meter} at a command of {expected}): the battery limits itself (state of charge, temperature, own limits) or the set point has a wrong factor.",
+      effect_too_large: "The smart meter moved by more than twice the command ({meter} at a command of {expected}): the set point has a wrong factor (e.g. W instead of 0.1 kW).",
+      effect_aborted: "SLEMS ended the test at once and released the battery.",
       effect_unclear: "The house consumption changed too much (±{spread}); repeat the test at a quieter time.",
       effect_unclear_charge_small: "The battery was nearly full and could only charge {expected}, too little against the changing house consumption (±{spread}). Not a fault; repeat the test when the battery is not full.",
       effect_unclear_discharge_small: "The battery was nearly empty and could only discharge {expected}, too little against the changing house consumption (±{spread}). Not a fault; repeat the test when the battery is not empty.",
@@ -664,8 +666,13 @@ const STRINGS = {
       soc_range: "The state of charge was outside 0–100 % ({min}–{max}): wrong register or factor.",
       soc_jump: "The state of charge jumped by {jump} percentage points.",
       soc_against: "The state of charge moved against the direction of the power.",
-      release_ok: "The battery runs on its own logic again.",
-      release_failed: "The battery could not be handed back to its own logic; SLEMS keeps trying.",
+      release_ok: "Released: the smart meter shows that the battery left the test power ({change}).",
+      release_readback: "The battery could not be handed back to its own logic; SLEMS keeps trying.",
+      release_held: "Released to “Standby”, the battery stayed at the test power ({change}) although it confirmed the release: it is still remote controlled. Check how the battery is released (e.g. its remote control entity or the release script).",
+      release_partial: "Released to “Standby”, the battery went back only partly ({change} after a step of {step}).",
+      release_same: "After the release the battery kept about the test power ({change}); its own logic may want just that. Not checkable; repeat the test at another time.",
+      release_noisy: "Not checkable: neither the smart meter nor the battery's power showed the release clearly.",
+      release_no_step: "Not checkable: the last step did not show at the smart meter.",
     },
     lastBalancing: "Last cell balancing",
     balancingResults: {
@@ -1259,7 +1266,7 @@ const STRINGS = {
     selfTestCancel: "Selbsttest abbrechen",
     selfTestTitle: "Selbsttest von {name}",
     selfTestText:
-      "SLEMS lässt die Batterie einige Minuten ruhen, lädt sie mit {power}, lässt sie wieder ruhen und entlädt sie mit {power}. So lange halten die anderen Batterien und die Verbraucher ihre Vorgaben; es kann also etwas Energie aus dem Netz kommen oder eingespeist werden. SLEMS vergleicht die Wirkung am Smart Meter mit den Werten der Batterie: Vorzeichen, Einheiten, Energiezähler, Ladezustand, Reaktionszeit. Am besten zu einer ruhigen Zeit (keine großen Verbraucher, die schalten, wenig wechselnde PV).",
+      "SLEMS lässt die Batterie einige Minuten ruhen, lädt sie mit {power}, lässt sie wieder ruhen und entlädt sie mit {power}. So lange halten die anderen Batterien und die Verbraucher ihre Vorgaben; es kann also etwas Energie aus dem Netz kommen oder eingespeist werden. SLEMS vergleicht die Wirkung am Smart Meter mit den Werten der Batterie: Vorzeichen, Einheiten, Energiezähler, Ladezustand, Reaktionszeit. Läuft die Batterie in die falsche Richtung oder viel zu stark, endet der Test sofort. Danach gibt SLEMS die Batterie frei und prüft am Smart Meter, dass sie die Testleistung wirklich verlässt. Am besten zu einer ruhigen Zeit (keine großen Verbraucher, die schalten, wenig wechselnde PV).",
     selfTestConfirm: "Starten",
     selfTestNeedsActive: "Der Selbsttest kann nur im Betriebsmodus „Aktiv“ gestartet werden.",
     selfTestNeedsEnabled: "Der Selbsttest braucht eine aktivierte Batterie.",
@@ -1293,6 +1300,8 @@ const STRINGS = {
       effect_none: "Der Smart Meter hat sich nicht bewegt ({meter} bei einer Vorgabe von {expected}): Der Befehl kommt nicht an. Falsche Entität oder falsches Register, Fernsteuerung nicht freigegeben, oder die Batterie hängt nicht hinter dem Smart Meter.",
       effect_reversed: "Der Smart Meter hat sich in die Gegenrichtung bewegt ({meter} bei einer Vorgabe von {expected}): Die Vorgabe ist invertiert (Einstellung „Vorzeichen des Sollwerts umkehren“) oder Laden und Entladen sind vertauscht.",
       effect_partial: "Nur ein Teil kam an ({meter} bei einer Vorgabe von {expected}): Die Batterie begrenzt selbst (Ladezustand, Temperatur, eigene Grenzen) oder die Vorgabe hat einen falschen Faktor.",
+      effect_too_large: "Der Smart Meter hat sich um mehr als das Doppelte der Vorgabe bewegt ({meter} bei einer Vorgabe von {expected}): Die Vorgabe hat einen falschen Faktor (z. B. W statt 0,1 kW).",
+      effect_aborted: "SLEMS hat den Test sofort beendet und die Batterie freigegeben.",
       effect_unclear: "Der Hausverbrauch hat zu stark geschwankt (±{spread}); wiederhole den Test zu einer ruhigeren Zeit.",
       effect_unclear_charge_small: "Die Batterie war fast voll und konnte nur mit {expected} laden, zu wenig gegen den schwankenden Hausverbrauch (±{spread}). Kein Fehler; wiederhole den Test, wenn die Batterie nicht voll ist.",
       effect_unclear_discharge_small: "Die Batterie war fast leer und konnte nur mit {expected} entladen, zu wenig gegen den schwankenden Hausverbrauch (±{spread}). Kein Fehler; wiederhole den Test, wenn die Batterie nicht leer ist.",
@@ -1317,8 +1326,13 @@ const STRINGS = {
       soc_range: "Der Ladezustand lag außerhalb von 0–100 % ({min}–{max}): falsches Register oder falscher Faktor.",
       soc_jump: "Der Ladezustand sprang um {jump} Prozentpunkte.",
       soc_against: "Der Ladezustand bewegte sich gegen die Richtung der Leistung.",
-      release_ok: "Die Batterie läuft wieder nach ihrer eigenen Logik.",
-      release_failed: "Die Batterie konnte nicht an ihre eigene Logik zurückgegeben werden; SLEMS versucht es weiter.",
+      release_ok: "Freigegeben: Der Smart Meter zeigt, dass die Batterie die Testleistung verlassen hat ({change}).",
+      release_readback: "Die Batterie konnte nicht an ihre eigene Logik zurückgegeben werden; SLEMS versucht es weiter.",
+      release_held: "Bei Freigabe „Standby“ blieb die Batterie bei der Testleistung ({change}), obwohl sie die Freigabe bestätigt hat: Sie wird noch ferngesteuert. Prüfe, wie die Batterie freigegeben wird (z. B. die Fernsteuerungs-Entität oder das Freigabe-Skript).",
+      release_partial: "Bei Freigabe „Standby“ ging die Batterie nur teilweise zurück ({change} nach einem Schritt von {step}).",
+      release_same: "Nach der Freigabe blieb die Batterie ungefähr bei der Testleistung ({change}); vielleicht will ihre eigene Logik genau das. Nicht prüfbar; wiederhole den Test zu einer anderen Zeit.",
+      release_noisy: "Nicht prüfbar: Weder der Smart Meter noch die Leistung der Batterie haben die Freigabe deutlich gezeigt.",
+      release_no_step: "Nicht prüfbar: Der letzte Schritt war am Smart Meter nicht zu sehen.",
     },
     lastBalancing: "Letzter Zellausgleich",
     balancingResults: {
@@ -2223,7 +2237,9 @@ class SlemsPanel extends HTMLElement {
         .replace("{discharge}", seconds(check.discharge_s))
         .replace("{min}", percent(check.min_pct))
         .replace("{max}", percent(check.max_pct))
-        .replace("{jump}", check.jump_pct ?? "–");
+        .replace("{jump}", check.jump_pct ?? "–")
+        .replace("{change}", signed(check.change_w))
+        .replace("{step}", signed(check.step_w));
     const outcome = check.outcome;
     if (check.key.startsWith("effect_")) {
       if (outcome === "ok") return fill("effect_ok");
@@ -2231,7 +2247,7 @@ class SlemsPanel extends HTMLElement {
         // A small step: the battery was nearly full (charge) or empty (discharge).
         return fill(check.reason === "small" ? `effect_unclear_${check.key.slice("effect_".length)}_small` : "effect_unclear");
       }
-      return fill(`effect_${check.reason}`);
+      return fill(`effect_${check.reason}`) + (check.aborted ? ` ${texts.effect_aborted}` : "");
     }
     if (check.key === "power_sign" || check.key === "power_scale") {
       if (outcome === "skipped" || outcome === "unclear") return check.key === "power_sign" ? fill(`power_${outcome}`) : "";
@@ -2244,7 +2260,7 @@ class SlemsPanel extends HTMLElement {
       return fill(`counters_${check.reason}`);
     }
     if (check.key === "soc") return outcome === "ok" ? fill("soc_ok") : check.reason ? fill(`soc_${check.reason}`) : "";
-    if (check.key === "release") return fill(`release_${outcome}`);
+    if (check.key === "release") return fill(`release_${check.reason ?? (outcome === "failed" ? "readback" : "ok")}`);
     return "";
   }
 

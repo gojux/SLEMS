@@ -12,7 +12,13 @@ battery alone:
    most ``STEP_MAX_S``. Skipped if the battery may not charge now (e.g. full).
 4. REST: 0 W for ``IDLE_S``, the reference of the discharge.
 5. DISCHARGE: the test power the other way, like the charge.
-6. RELEASE: back to its own logic; the result is final once that is confirmed.
+6. RELEASE: back to its own logic straight from the last step; the meter
+   shows whether it really left the test power (up to ``RELEASE_OBSERVE_S``,
+   the others still held). The result is final then.
+
+A step whose meter runs the wrong way, or by more than ``TOO_LARGE_FACTOR``
+times the test power, for ``ABORT_S`` ends the whole test at once: the
+battery is released instead of running on with a wrong set point.
 
 The smart meter is the independent reference: the grid power minus the
 reported power of the other batteries (``meter``) changes by the AC power of
@@ -21,14 +27,19 @@ over the last ``MEAN_S`` of a phase. The checks:
 
 * effect: the meter moves in the commanded direction by at least half of the
   test power (no movement: wrong register or remote control not enabled;
-  the other way round: the set point is inverted),
+  the other way round: the set point is inverted; more than twice: a wrong
+  factor of the set point),
 * power_sign / power_scale: the reported battery power changes like the meter
   (inverted sign, a factor such as kW for W),
 * response: time until the meter shows half of the command,
 * counters: the charge counter rises while charging, the discharge counter
   while discharging, not the other one and not by a multiple,
 * soc: within 0-100 %, without jumps, not against the direction,
-* release: the battery was handed back to its own logic.
+* release: the battery was handed back to its own logic. The driver's read
+  back alone is not enough (a wrong profile confirms itself): released to
+  standby, battery and meter go back to the rest; released to its own logic
+  (auto), it leaves the test power. A battery whose own logic happens to hold
+  the same power is unclear, one that stays there in standby failed.
 
 With the smart meter's power per phase the test also shows the battery's
 phase (``grid_phase``): its step shows up on one phase alone (see
@@ -73,6 +84,14 @@ NOISE_SHARE = 0.3
 SCALE_OK = (0.75, 1.33)
 SCALE_WARNING = (0.5, 2.0)
 SLOW_RESPONSE_S = 60.0
+# A meter this many times the test power along the command: wrong factor.
+TOO_LARGE_FACTOR = 2.0
+# How long a wrong direction or a too large effect lasts before the test ends.
+ABORT_S = 10.0
+# Watching the meter after the release: at most this long, decided on the
+# mean of the last RELEASE_MEAN_S (and not before).
+RELEASE_OBSERVE_S = 60.0
+RELEASE_MEAN_S = 15.0
 SOC_JUMP_PCT = 5.0
 SOC_AGAINST_PCT = 1.0
 # A counter rising by more than this multiple of the energy moved: wrong unit.
@@ -139,15 +158,21 @@ class _Record:
     samples: list[Sample] = field(default_factory=list)
     reached_meter: float | None = None
     reached_power: float | None = None
+    # The meter ran the commanded way; since when it runs the wrong way or too far (sample time).
+    ran_along: bool = False
+    against_since: float | None = None
+    excess_since: float | None = None
+    # Why the test ended in this step ("reversed", "too_large").
+    aborted: str | None = None
 
-    def window(self) -> list[Sample]:
+    def window(self, span: float = MEAN_S) -> list[Sample]:
         if not self.samples:
             return []
         end = self.samples[-1].t
-        return [s for s in self.samples if s.t >= end - MEAN_S]
+        return [s for s in self.samples if s.t >= end - span]
 
-    def mean(self, attribute: str) -> float | None:
-        values = [v for s in self.window() if (v := getattr(s, attribute)) is not None]
+    def mean(self, attribute: str, span: float = MEAN_S) -> float | None:
+        values = [v for s in self.window(span) if (v := getattr(s, attribute)) is not None]
         return statistics.fmean(values) if values else None
 
     def phase_means(self) -> list[float] | None:
@@ -192,9 +217,13 @@ def step_power_w(power_w: float, allowed_w: float) -> float:
 class SelfTest:
     """The steps of one self-test and their evaluation."""
 
-    def __init__(self, charge_w: float, discharge_w: float, started_at: float) -> None:
+    def __init__(
+        self, charge_w: float, discharge_w: float, started_at: float, release_state: str = "auto"
+    ) -> None:
         self.charge_w = charge_w
         self.discharge_w = discharge_w
+        # State the battery is released to ("auto" or "standby", see ReleaseState).
+        self.release_state = release_state
         # Wall clock (UNIX time) of the start and the end.
         self.started_at = started_at
         self.finished_at: float | None = None
@@ -204,6 +233,9 @@ class SelfTest:
         self.result: str | None = None
         self._records: dict[Phase, _Record] = {}
         self._current: _Record | None = None
+        # The last step before the release and the samples after it (None: not released yet).
+        self._last_step: _Record | None = None
+        self._released: _Record | None = None
 
     @property
     def commanding(self) -> bool:
@@ -213,10 +245,23 @@ class SelfTest:
     @property
     def holds_others(self) -> bool:
         """Whether the other batteries and the consumers are held meanwhile."""
-        return self.phase in _MEASURING
+        return self.phase in _MEASURING or self.phase is Phase.RELEASE
 
-    def step(self, now: float, sample: Sample | None, ready: bool) -> float | None:
-        """Next power (+charge / -discharge), None while nothing is sent."""
+    @property
+    def awaiting_release(self) -> bool:
+        """Whether the battery is to be released and that has not happened yet."""
+        return self.phase is Phase.RELEASE and self._released is None
+
+    def step(self, now: float, sample: Sample | None, ready: bool, wall: float | None = None) -> float | None:
+        """Next power (+charge / -discharge), None while nothing is sent; ``wall`` (UNIX
+        time) ends a test whose release was watched long enough."""
+        if self.phase is Phase.RELEASE:
+            if self._released is not None and sample is not None:
+                self._released.samples.append(sample)
+                if (check := self._release_check(now)) is not None:
+                    self.checks.append(check)
+                    self._finish(now if wall is None else wall)
+            return None
         if self.phase is Phase.PREPARE:
             if not ready:
                 return None
@@ -228,6 +273,10 @@ class SelfTest:
             record.samples.append(sample)
             if record.target_w:
                 self._update_reached(record, sample)
+                if (reason := self._runs_wrong(record, sample)) is not None:
+                    record.aborted = reason
+                    self._release(now)
+                    return None
         elapsed = now - record.start
         if record.target_w == 0:
             if elapsed >= IDLE_S:
@@ -286,13 +335,21 @@ class SelfTest:
         }
         return found.pop() if len(found) == 1 else None
 
-    def released(self, ok: bool | None, wall: float) -> None:
-        """The battery was handed back (None: nothing had to be released)."""
-        if self.phase is not Phase.RELEASE:
+    def released(self, ok: bool | None, wall: float, now: float) -> None:
+        """The driver handed the battery back (None: nothing had to be released; False:
+        not confirmed). After a step the meter is watched before the test ends."""
+        if not self.awaiting_release:
             return
-        if ok is not None:
-            self.checks.append(Check("release", Outcome.OK if ok else Outcome.FAILED))
-        self._finish(wall)
+        if ok is None:
+            self._finish(wall)
+        elif not ok:
+            self.checks.append(Check("release", Outcome.FAILED, {"state": self.release_state, "reason": "readback"}))
+            self._finish(wall)
+        elif self._last_step is None:
+            self.checks.append(Check("release", Outcome.OK, {"state": self.release_state}))
+            self._finish(wall)
+        else:
+            self._released = _Record(Phase.RELEASE, now, 0.0)
 
     def stop(self, reason: str, wall: float) -> None:
         """End early: cancelled by the user or no longer possible (e.g. not active)."""
@@ -339,9 +396,96 @@ class SelfTest:
         elif phase is Phase.REST:
             self._enter(Phase.DISCHARGE, now, -self.discharge_w)
         else:
-            self.phase = Phase.RELEASE
-            self._current = None
-            self.checks = self._evaluate()
+            self._release(now)
+
+    def _release(self, now: float) -> None:
+        """Evaluate the steps and hand the battery back (see ``released``)."""
+        if self._current is not None and self._current.target_w:
+            self._last_step = self._current
+        self.phase = Phase.RELEASE
+        self.phase_start = now
+        self._current = None
+        self.checks = self._evaluate()
+
+    def _runs_wrong(self, record: _Record, sample: Sample) -> str | None:
+        """Why the step has to end the test now: the meter runs the wrong way (and never
+        ran the right one) or too far for ``ABORT_S``, confirmed by the battery's own
+        power if it reports one; None while the house moves the meter as much."""
+        reference = self._reference(record.phase)
+        if reference is None or sample.meter_w is None:
+            return None
+        meter_ref = reference.mean("meter_w")
+        spread = reference.spread()
+        size = abs(record.target_w)
+        if meter_ref is None or (spread is not None and spread > NOISE_SHARE * size):
+            return None
+        sign = 1 if record.target_w > 0 else -1
+        along = (sample.meter_w - meter_ref) * sign
+        power_ref = reference.mean("power_w")
+        power = None
+        if sample.power_w is not None and power_ref is not None:
+            power = (sample.power_w - power_ref) * sign
+        if along >= REACHED_SHARE * size:
+            record.ran_along = True
+        against = (
+            not record.ran_along
+            and along <= -REACHED_SHARE * size
+            and (power is None or power <= -REACHED_SHARE * size)
+        )
+        excess = along >= TOO_LARGE_FACTOR * size and (power is None or power >= TOO_LARGE_FACTOR * size)
+        if not against:
+            record.against_since = None
+        elif record.against_since is None:
+            record.against_since = sample.t
+        if not excess:
+            record.excess_since = None
+        elif record.excess_since is None:
+            record.excess_since = sample.t
+        if record.against_since is not None and sample.t - record.against_since >= ABORT_S:
+            return "reversed"
+        if record.excess_since is not None and sample.t - record.excess_since >= ABORT_S:
+            return "too_large"
+        return None
+
+    def _release_check(self, now: float) -> Check | None:
+        """The release judged at the meter (see the module docstring), None while watching."""
+        observed = self._released
+        last = self._last_step
+        reference = self._reference(last.phase) if last is not None else None
+        if observed is None or last is None or reference is None:
+            return None
+        elapsed = now - observed.start
+        final = elapsed >= RELEASE_OBSERVE_S
+        values: dict[str, Any] = {"state": self.release_state}
+        size = abs(last.target_w)
+        # The meter unless the house moved it as much as the step, then the battery's own power.
+        attribute = "meter_w"
+        if (spread := reference.spread()) is not None and spread > NOISE_SHARE * size:
+            attribute = "power_w"
+        step, rest = last.mean(attribute), reference.mean(attribute)
+        after = observed.mean(attribute, RELEASE_MEAN_S)
+        if step is None or rest is None or after is None:
+            return Check("release", Outcome.UNCLEAR, {**values, "reason": "noisy"}) if final else None
+        change = step - rest
+        values |= {"step_w": round(change), "change_w": round(after - step)}
+        if abs(change) < NO_EFFECT_SHARE * size:
+            # The step did not show: nothing to compare the release with.
+            return Check("release", Outcome.UNCLEAR, {**values, "reason": "no_step"})
+        if elapsed < RELEASE_MEAN_S:
+            return None
+        back = (step - after) / change
+        if self.release_state == "standby":
+            if back >= 1 - REACHED_SHARE:
+                return Check("release", Outcome.OK, values)
+            if not final:
+                return None
+            if back < NO_EFFECT_SHARE:
+                return Check("release", Outcome.FAILED, {**values, "reason": "held"})
+            return Check("release", Outcome.WARNING, {**values, "reason": "partial"})
+        # Its own logic often only covers the house (zero export): a smaller change counts.
+        if abs(after - step) >= NO_EFFECT_SHARE * size:
+            return Check("release", Outcome.OK, values)
+        return Check("release", Outcome.UNCLEAR, {**values, "reason": "same"}) if final else None
 
     @staticmethod
     def _counter_moved(record: _Record) -> bool:
@@ -412,6 +556,8 @@ class SelfTest:
             "spread_w": None if spread is None else round(spread),
         }
         key = f"effect_{record.phase.value}"
+        if record.aborted is not None:
+            return Check(key, Outcome.FAILED, {**values, "reason": record.aborted, "aborted": True})
         if meter is None:
             return Check(key, Outcome.UNCLEAR, values)
         along = meter * (1 if target > 0 else -1)
@@ -423,6 +569,8 @@ class SelfTest:
             if size < MIN_POWER_W:
                 values["reason"] = "small"
             return Check(key, Outcome.UNCLEAR, values)
+        if along > TOO_LARGE_FACTOR * size:
+            return Check(key, Outcome.FAILED, {**values, "reason": "too_large"})
         if along >= REACHED_SHARE * size:
             return Check(key, Outcome.OK, values)
         if along <= -REACHED_SHARE * size:

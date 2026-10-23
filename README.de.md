@@ -184,7 +184,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Grenzen je Batterie: minimaler/maximaler Ladezustand, Grenze Lade-/Entladeleistung (z. B. 800 W), Ladebegrenzung nach Temperatur, vorzeitiger Entladestopp des BMS nahe dem Minimum erkannt | ✅ |
 | Erkennung von Batterien, die die vorgegebene Leistung nicht liefern, Bestätigung der Vorgaben | ✅ |
 | Zell-Delta und aktiver Zellausgleich (Marstek Venus E 3.0) | ✅ |
-| Selbsttest einer Batterie: Wirkung am Smart Meter, Vorzeichen und Einheit der Leistung, Energiezähler, Ladezustand, Reaktionszeit | ✅ |
+| Selbsttest einer Batterie: Wirkung am Smart Meter, Vorzeichen und Einheit der Leistung, Energiezähler, Ladezustand, Reaktionszeit, Freigabe am Smart Meter geprüft, sofortiger Abbruch bei falscher Richtung | ✅ |
 | Regelmäßige Vollladung zur SoC-Kalibrierung der LFP-Zellen (immer eine Batterie, aus dem Überschuss, beim Entladen geschont) | ✅ |
 
 | Verbraucher | Status |
@@ -1045,7 +1045,9 @@ Ablauf, zusammen etwa 5–10 Minuten:
    zeigen, dann noch 45 Sekunden und bis sich der Ladezähler bewegt hat
    (höchstens 4 Minuten).
 4. 60 Sekunden Ruhe, dann Entladen wie beim Laden.
-5. Rückgabe an die eigene Logik der Batterie, danach normale Planung.
+5. Rückgabe an die eigene Logik der Batterie direkt aus dem Entladen (oder dem
+   letzten Schritt), bis zu 60 Sekunden am Smart Meter beobachtet, während die
+   anderen weiter halten; danach normale Planung.
 
 Darf die Batterie gerade nicht laden (z. B. voll) oder nicht entladen (leer),
 fällt dieser Schritt aus. Während der Messung halten die anderen Batterien und
@@ -1060,7 +1062,11 @@ Geprüft wird:
   Vorgabe in die richtige Richtung? Bewegt er sich nicht, kommt der Befehl
   nicht an (falsche Entität oder falsches Register, Fernsteuerung nicht
   freigegeben, Batterie nicht hinter dem Smart Meter); in die Gegenrichtung:
-  die Vorgabe ist invertiert.
+  die Vorgabe ist invertiert; um mehr als das Doppelte: die Vorgabe hat einen
+  falschen Faktor. Läuft der Smart Meter 10 Sekunden lang in die falsche
+  Richtung oder mehr als doppelt so weit (und bestätigt die Leistung der
+  Batterie das), endet der Test sofort, und SLEMS gibt die Batterie frei,
+  statt mit einer falschen Vorgabe weiterzulaufen.
 - **Vorzeichen und Höhe der Batterieleistung**: Ändert sich die gemeldete
   Leistung wie am Smart Meter? Erkennt ein umgekehrtes Vorzeichen und einen
   falschen Faktor (z. B. kW statt W); eine kleinere Abweichung deutet auf die
@@ -1071,7 +1077,12 @@ Geprüft wird:
   Zähler im kurzen Test nicht, gilt das nicht als Fehler.
 - **Ladezustand**: zwischen 0 und 100 %, ohne Sprünge, nicht gegen die
   Richtung.
-- **Rückgabe** an die eigene Logik.
+- **Rückgabe** an die eigene Logik: Die Batterie bestätigt sie, und der Smart
+  Meter zeigt sie. Mit dem Zustand bei Freigabe **Standby** gehen Batterie und
+  Smart Meter zurück auf die Ruhe; bleibt die Batterie bei der Testleistung,
+  wird sie noch ferngesteuert (Fehler). Mit **Automatik** verlässt die Batterie
+  die Testleistung; will ihre eigene Logik zufällig ungefähr dieselbe
+  Leistung, ist die Prüfung unklar.
 
 Misst der Smart Meter jede Phase, lernt der Test auch die
 [Phase](#phasen-optional) der Batterie: die Phase, an der sich die Schritte

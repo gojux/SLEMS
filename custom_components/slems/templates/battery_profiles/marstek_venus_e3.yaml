@@ -1,0 +1,72 @@
+# Marstek Venus E 3.0 (v3 firmware) over Modbus TCP, the same registers and
+# steps as the driver drivers/marstek_venus_e3.py (based on Omnibattery).
+slems_battery_profile: 1
+id: marstek_venus_e3
+name: Marstek Venus E 3.0
+manufacturer: Marstek
+revision: 1
+notes: v3 firmware; accepts only one Modbus TCP connection.
+
+connection:
+  port: 502
+  unit_id: 1
+  message_spacing_s: 0.15
+  timeout_s: 3
+
+limits:
+  max_charge_w: 2500
+  max_discharge_w: 2500
+
+# Measured on a Venus E 3.0 (2026-10-12/13), see the driver.
+timing:
+  start_delay_s: 2.7
+  start_extra_s: 1.6
+  reversal_extra_s: 0.6
+
+read:
+  soc_pct:        {address: 34002, type: uint16, scale: 0.1, fallback: {address: 37005, type: uint16}}
+  power_dc_w:     {address: 30001, type: int16, positive: charge}
+  power_ac_w:     {address: 30006, type: int16, positive: discharge}
+  voltage_v:      {address: 30100, type: uint16, scale: 0.01}
+  charged_kwh:    {address: 33000, type: uint32, scale: 0.01}
+  discharged_kwh: {address: 33002, type: int32, scale: 0.01}
+  temperature_c:  {address: 35000, type: int16, scale: 0.1}
+  max_cell_v:     {address: 37007, type: int16, scale: 0.001}
+  min_cell_v:     {address: 37008, type: int16, scale: 0.001}
+  cycles:         {address: 34003, type: uint16}
+  state:
+    address: 35100
+    type: uint16
+    values: {0: sleep, 1: standby, 2: charge, 3: discharge, 4: backup, 5: firmware_update, 6: bypass}
+
+device_info:
+  device_name:          {address: 31000, type: char, count: 10}
+  ems_version:          {address: 30200, type: uint16}
+  vms_version:          {address: 30202, type: uint16}
+  bms_version:          {address: 30204, type: uint16}
+  comm_module_firmware: {address: 30350, type: char, count: 6}
+  mac_address:          {address: 30304, type: char, count: 6}
+
+control:
+  type: split
+  keepalive_s: 60
+  confirm: {delay_s: 0.2, tolerance_w: 100, tolerance_pct: 10}
+  # RS485 control first (it can drop after a reconnect or a BMS cut-off), the
+  # set points before the force mode so a new direction starts with valid values.
+  apply:
+    - {address: 42000, value: 0x55AA, at_rest_values: [0, 0x55AA, 0x55BB], confirm: true}
+    - {address: 42021, value: "{discharge_w}", at_rest: [0, 2500], confirm: true}
+    - {address: 42020, value: "{charge_w}", at_rest: [0, 2500], confirm: true}
+    - {address: 42010, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2], confirm: true}
+  release:
+    auto:
+      - {address: 42021, value: 0}
+      - {address: 42020, value: 0}
+      - {address: 42010, value: 0, confirm: true}
+      - {address: 42000, value: 0x55BB, confirm: true}
+    standby:
+      - {address: 42021, value: 0}
+      - {address: 42020, value: 0}
+      - {address: 42010, value: 0, confirm: true}
+
+probe: {address: 34002, type: uint16, range: [0, 1000]}

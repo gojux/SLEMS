@@ -181,7 +181,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Battery limits: minimum/maximum SoC, charge/discharge power limit (e.g. 800 W), temperature charge limit, an early discharge stop of the BMS near the minimum detected | ✅ |
 | Detection of batteries that do not deliver the commanded power, confirmation of set points | ✅ |
 | Cell delta and active cell balancing (Marstek Venus E 3.0) | ✅ |
-| Self-test of a battery: effect at the smart meter, sign and unit of the power, energy counters, state of charge, response time | ✅ |
+| Self-test of a battery: effect at the smart meter, sign and unit of the power, energy counters, state of charge, response time, release checked at the smart meter, stops at once on a wrong direction | ✅ |
 | Regular full charge for the SoC calibration of LFP cells (one battery at a time, from the surplus, spared when discharging) | ✅ |
 
 | Consumers | Status |
@@ -988,7 +988,9 @@ Steps, about 5–10 minutes together:
    most 800 W, until smart meter and battery show at least half of it, then 45
    seconds more and until the charge counter moved (at most 4 minutes).
 4. 60 seconds of rest, then discharging like the charging.
-5. Hand-back to the battery's own logic, then normal planning.
+5. Hand-back to the battery's own logic straight from the discharge (or the
+   last step), watched at the smart meter for up to 60 seconds while the
+   others keep holding; then normal planning.
 
 If the battery may not charge right now (e.g. full) or not discharge (empty),
 that step is left out. While measuring, the other batteries and the consumers
@@ -1001,7 +1003,11 @@ Checked are:
 - **Effect at the smart meter**: does it move by at least half of the command
   in the right direction? If it does not move, the command does not arrive
   (wrong entity or register, remote control not enabled, battery not behind
-  the smart meter); the other way round: the set point is inverted.
+  the smart meter); the other way round: the set point is inverted; more than
+  twice the command: the set point has a wrong factor. If the smart meter runs
+  the wrong way or more than twice as far for 10 seconds (and the battery's
+  own power confirms it), the test ends at once and SLEMS releases the
+  battery instead of running on with a wrong set point.
 - **Sign and size of the battery power**: does the reported power change like
   the smart meter? Finds an inverted sign and a wrong factor (e.g. kW instead
   of W); a smaller difference points to the DC instead of the AC power.
@@ -1012,7 +1018,12 @@ Checked are:
   counters that do not move in the short test are no error.
 - **State of charge**: between 0 and 100 %, without jumps, not against the
   direction.
-- **Hand-back** to its own logic.
+- **Hand-back** to its own logic: the battery confirms it, and the smart
+  meter shows it. With the release state **Standby**, battery and smart meter
+  go back to the rest; if the battery stays at the test power, it is still
+  remote controlled (error). With **Automatic**, the battery leaves the test
+  power; if its own logic happens to want about the same power, the check is
+  unclear.
 
 If the smart meter measures each phase, the test also learns the battery's
 [phase](#phases-optional): the phase on which the steps show up.
