@@ -912,15 +912,19 @@ Batterie mit der Gesamtkapazität. Trag dieselbe Batteriebank nie zweimal ein
 zwei Regelkreise arbeiteten gegeneinander.
 
 1. **Profil erstellen** aus der Registerliste mit dem
-   [KI-Prompt](docs/battery-profile-prompt.de.md). Ohne Registerliste sucht
-   die KI online mehrere Quellen, vergleicht sie und nennt sie oben im
-   Profil. Prüfe die Zeilen mit `# unsicher` und `# Frage`.
+   [KI-Prompt](docs/battery-profile-prompt.de.md), in einer KI mit
+   Websuche; ChatGPT, Claude und Mistral haben sich in Probeläufen bewährt.
+   Ohne Registerliste sucht die KI online mehrere Quellen, vergleicht sie
+   und nennt sie oben im Profil. Ein Profil von einer KI ist ein Entwurf:
+   Prüfe die Zeilen mit `# unsicher` und `# Frage`.
 2. **Batterie hinzufügen** → Modell **Batterie aus einem Modbus-Profil
-   (experimentell)** und das Profil einfügen. SLEMS prüft es und zeigt einen
-   Fehler mit Zeile und Schlüssel, z. B. einen unbekannten Schlüssel oder
-   einen Wert außerhalb des Ruhebereichs. Liefert SLEMS ein Profil für dein
-   Modell mit oder hat eine andere Batterie ein eigenes Profil, wähl es
-   stattdessen aus.
+   (experimentell)** und das Profil einfügen (die ganze Antwort der KI geht
+   auch, wenn sie nur einen Codeblock enthält). SLEMS prüft es und zeigt
+   einen Fehler mit Zeile und Schlüssel, z. B. einen unbekannten Schlüssel
+   oder einen Wert außerhalb des Ruhebereichs: Gib die Fehlermeldung im
+   selben Chat an die KI zurück und füge ihr korrigiertes Profil ein.
+   Liefert SLEMS ein Profil für dein Modell mit oder hat eine andere
+   Batterie ein eigenes Profil, wähl es stattdessen aus.
 3. **Verbindung**: Host, Port und Unit-ID (aus dem Profil vorbelegt) und die
    Verbindung, **Eigener Modbus-Client** oder **Home Assistant Modbus**
    (geteilt mit anderen Integrationen am selben Gerät). Viele Batterien nehmen
@@ -931,11 +935,12 @@ zwei Regelkreise arbeiteten gegeneinander.
    falscher Wert bedeutet meist eine falsche Adresse oder einen falschen
    Faktor. ⚠ markiert unwahrscheinliche Werte (Temperatur, Zellspannungen,
    Leistungen über dem Doppelten der Grenze, negative Zähler, unbekannte
-   Zustände, nicht lesbare Werte). In Ruhe ist die Leistung 0 W: Lass die
-   Batterie laden oder entladen (eigene Logik oder ihre App) und wähl
-   **Erneut lesen**, dann zeigt sich auch ein falsches Vorzeichen der
-   Leistung. **Weiter** gibt es nur, wenn der
-   Ladezustand lesbar ist und zwischen 0 und 100 % liegt und jedes
+   Zustände, eine Leistung gegen den gelesenen Zustand, nicht lesbare
+   Werte). In Ruhe ist die Leistung 0 W: Lass die Batterie laden oder
+   entladen (eigene Logik oder ihre App) und wähl **Erneut lesen**, dann
+   zeigt sich auch ein falsches Vorzeichen der Leistung. Gib falsche Werte
+   mit den gelesenen Werten an die KI zurück. **Weiter** gibt es nur, wenn
+   der Ladezustand lesbar ist und zwischen 0 und 100 % liegt und jedes
    Schreibregister lesbar ist und in seinem Ruhebereich (`at_rest`) liegt;
    ein Register außerhalb enthält meist etwas anderes (eine verschobene
    Adresse). Sonst **Profil bearbeiten** oder **Verbindung ändern**.

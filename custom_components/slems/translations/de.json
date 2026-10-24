@@ -223,7 +223,7 @@
         },
         "profile_yaml": {
           "title": "Eigenes Profil (YAML)",
-          "description": "Füge das ganze Profil ein (Format `slems_battery_profile: 1`), z. B. mit Hilfe einer KI aus dem Handbuch der Batterie erstellt: [Anleitung]({prompt_url}). SLEMS prüft es und zeigt Fehler mit Zeile und Schlüssel. Danach liest SLEMS jedes Register einmal, bevor etwas geschrieben wird.",
+          "description": "Füge das ganze Profil ein (Format `slems_battery_profile: 1`), z. B. mit Hilfe einer KI aus dem Handbuch der Batterie erstellt: [Anleitung]({prompt_url}). Die ganze Antwort der KI geht auch, wenn sie nur einen Codeblock enthält. SLEMS prüft es und zeigt Fehler mit Zeile und Schlüssel: Gib sie an die KI zurück. Danach liest SLEMS jedes Register einmal, bevor etwas geschrieben wird.",
           "data": {
             "profile_yaml": "Profil"
           }
@@ -478,7 +478,8 @@
         "profile_outside_at_rest": "Wert außerhalb des Ruhebereichs (`at_rest`): {where}, Wert {detail}.",
         "profile_persistent_power": "Eine Leistungsvorgabe darf nicht `persistent` (Flash) sein: {where}.",
         "profile_undeclared_register": "Die Freigabe schreibt ein Register, das nicht in `control.apply` steht: {where}.",
-        "profile_key_value_range": "Fester Wert mit weitem Ruhebereich: {where} ({detail}). Gib die Kennwerte des Registers als `at_rest_values` an."
+        "profile_key_value_range": "Fester Wert mit weitem Ruhebereich: {where} ({detail}). Gib die Kennwerte des Registers als `at_rest_values` an.",
+        "profile_release_type": "Die Freigabe schreibt ein Register mit anderem Typ oder anderer Wortfolge als in `control.apply`: {where} ({detail}). Lass `type` und `word_order` in der Freigabe weg oder gib dieselben an."
       },
       "abort": {
         "reconfigure_successful": "Batterie aktualisiert."

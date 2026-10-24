@@ -2,10 +2,11 @@
 
 [Deutsch](battery-profile-prompt.de.md)
 
-An AI (e.g. Claude or ChatGPT) can read the Modbus register list of a battery
-or hybrid inverter and turn it into a battery profile for SLEMS. Paste the
-result in SLEMS under **Settings → Devices & services → SLEMS → Add battery**
-with the model **Battery from a Modbus profile (experimental)**.
+An AI (ChatGPT, Claude and Mistral proved themselves in trials) can read
+the Modbus register list of a battery or hybrid inverter and turn it into a
+battery profile for SLEMS. Paste the result in SLEMS under
+**Settings → Devices & services → SLEMS → Add battery** with the model
+**Battery from a Modbus profile (experimental)**.
 The whole way from the manual to a controlled battery is described in the
 README under
 [Battery from a Modbus profile](../README.md#battery-from-a-modbus-profile-experimental).
@@ -23,15 +24,19 @@ How to do it:
 3. Check the answer: lines marked `# uncertain`, the `# question` lines at the
    top and above all every register under `control` against the manual or
    the sources at the top (address, unit, range).
-4. Paste the YAML in SLEMS. It reads every register once and shows the
-   values, then what it would write, before anything is written.
+4. Paste the YAML in SLEMS (the whole answer works too if it holds only one
+   code block). SLEMS reads every register once and shows the values, then
+   what it would write, before anything is written.
+5. If SLEMS shows an error or a value read looks wrong (marked, or different
+   from the battery's app), give the error message or the values read back
+   to the AI in the same chat and paste its corrected profile.
 
-An AI can misread a table or count addresses wrongly. A value written to a
-wrong register can change a setting of the battery; the checks of SLEMS catch
-most of these errors, but not all. Compare the write registers with the
-manual before you save the battery. A profile from sources found online is
-less certain than one from the manual: open the sources named at the top and
-check the write registers there.
+A profile from an AI is a draft. An AI can misread a table or count
+addresses wrongly. A value written to a wrong register can change a setting
+of the battery; the checks of SLEMS catch most of these errors, but not all.
+Compare the write registers with the manual before you save the battery. A
+profile from sources found online is less certain than one from the manual:
+open the sources named at the top and check the write registers there.
 
 ## Prompt
 
@@ -52,7 +57,8 @@ power), or if the register of the power set point itself is stored
 permanently (flash, EEPROM), output no profile: say in one sentence why the
 battery cannot be controlled this way. Settings stored permanently (e.g. the
 highest power) and uncertain sources are no reason for that: output the
-profile with "# uncertain".
+profile with "# uncertain". If you output no profile, name the sources you
+found.
 
 Format (every key that exists; no other keys are allowed):
 
@@ -97,7 +103,7 @@ read:                                         # values SLEMS reads; soc_pct is r
   cycles:         {...}                       # full cycles
   state:                                      # battery state
     address: ...
-    type: uint16
+    type: uint16                              # or int16, uint32, int32
     values: {<raw value>: <sleep|standby|charge|discharge|backup|firmware_update|bypass>}
 device_info:                                  # read only, free lower case names
   <name>: {address: ..., type: ...}
@@ -108,7 +114,7 @@ control:
   keepalive_s: <s>                            # write everything again after this time
   confirm: {delay_s: 0.2, tolerance_w: 100, tolerance_pct: 0}   # optional
   apply:                                      # written to charge and discharge, in this order
-    - {address: ..., value: ..., at_rest: [min, max], confirm: true}
+    - {address: ..., type: ..., value: ..., at_rest: [min, max], confirm: true}
   release:                                    # written when SLEMS hands the battery back
     auto:                                     # its own logic takes over again
       - {address: ..., value: ...}
@@ -129,7 +135,8 @@ A power may be the sum of several registers: a list of registers (e.g. the
 PV inputs of several MPPTs).
 
 Keys of a step under control.apply:
-  address, type (no char), word_order as above
+  address, word_order as above
+  type                 required: uint16 for one register, uint32, int32 or float32 for two (no char)
   value                a fixed raw value, or a placeholder:
                          "{charge_w}" and "{discharge_w}" (split), "{power_w}" (signed): power in W
                          "{mode}" with modes: {idle: ..., charge: ..., discharge: ...}
@@ -147,7 +154,8 @@ Example of a fictional battery (do not copy any address or value from it):
 # Source: "Example battery Modbus protocol V1.2", table 5, pages 8-11.
 # Addresses: holding registers numbered from 40001 (address = number - 40001),
 # input registers numbered from 30001 (address = number - 30001).
-# question: the manual does not say whether 40001-40004 are stored in flash.
+# question: page 5: "Modbus control" must be enabled once in the app; is it?
+# question: the manual does not say whether 40001-40007 are stored in flash.
 slems_battery_profile: 1
 id: example_battery
 name: Example battery 5 kWh
@@ -184,24 +192,26 @@ device_info:
 
 control:
   type: split
-  keepalive_s: 30           # page 10: back to automatic after 60 s without a write
+  keepalive_s: 60           # half of the time-out written to 40007
   apply:
     # 40001 "Remote control" (page 10): 0xA5A5 = on, 0x5A5A = off
-    - {address: 0, value: 0xA5A5, at_rest_values: [0xA5A5, 0x5A5A], confirm: true}
-    # 40004 "Discharge power" (page 10): 10 W units, 0-250
-    - {address: 3, value: "{discharge_w}", scale: 10, at_rest: [0, 250], confirm: true}
-    # 40003 "Charge power" (page 10): 10 W units, 0-250
-    - {address: 2, value: "{charge_w}", scale: 10, at_rest: [0, 250], confirm: true}
+    - {address: 0, type: uint16, value: 0xA5A5, at_rest_values: [0xA5A5, 0x5A5A], confirm: true}
+    # 40007 "Remote time-out" (page 10): s, 0-3600; back to automatic after it without a write
+    - {address: 6, type: uint16, value: 120, at_rest: [0, 3600], confirm: true}
+    # 40005-40006 "Discharge power" (page 10): U32, high word first, 10 W units, 0-250
+    - {address: 4, type: uint32, value: "{discharge_w}", scale: 10, at_rest: [0, 250], confirm: true}
+    # 40003-40004 "Charge power" (page 10): U32, high word first, 10 W units, 0-250
+    - {address: 2, type: uint32, value: "{charge_w}", scale: 10, at_rest: [0, 250], confirm: true}
     # 40002 "Force mode" (page 10): 0 = none, 1 = charge, 2 = discharge
-    - {address: 1, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2], confirm: true}
+    - {address: 1, type: uint16, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2], confirm: true}
   release:
     auto:
-      - {address: 3, value: 0}
+      - {address: 4, value: 0}
       - {address: 2, value: 0}
       - {address: 1, value: 0, confirm: true}
       - {address: 0, value: 0x5A5A, confirm: true}
     standby:
-      - {address: 3, value: 0}
+      - {address: 4, value: 0}
       - {address: 2, value: 0}
       - {address: 1, value: 0, confirm: true}
 
@@ -218,15 +228,22 @@ Rules:
   Take a write register only if at least two independent sources agree on
   its address, values and range (a copy or fork of another source is not
   independent); otherwise leave it out. If the sources differ on a read
-  register, add "# uncertain: sources differ".
+  register, add "# uncertain: sources differ". A document of the
+  manufacturer found online (e.g. a Modbus protocol or a technical note)
+  counts as the manual.
 - Addresses are the protocol address sent in the Modbus frame (0-65535).
   Manuals often number registers instead: with a prefix (40001, 400001 for
   holding, 30001 for input registers) subtract it; numbered from 1, subtract
-  1; hexadecimal addresses may be written as 0x1A2B. Say at the top of the
-  profile how the manual counts and what you subtracted. If the manual does
-  not make this clear, add "# question: ..." at the top.
+  1. Write addresses as the source does: a hexadecimal address stays
+  hexadecimal (e.g. 0xE004). Say at the top of the profile how the manual
+  counts and what you subtracted. If the manual does not make this clear,
+  add "# question: ..." at the top.
 - Registers of function code 04 (input registers, often 3xxxx) get
   input: true. Registers SLEMS writes are always holding registers.
+- Every step under control.apply needs type, also uint16: a value over two
+  registers (32 bit) is uint32, int32 or float32, with word_order if the
+  low word comes first. The format has no 64 bit types: leave such
+  registers out (e.g. 64 bit counters).
 - For every power register state its unit and sign from the manual in a
   comment (e.g. "positive: discharging"). positive is required for
   power_dc_w, power_ac_w and connection_w; if the sign is not given, write
@@ -241,34 +258,48 @@ Rules:
   highest powers as raw values (max_charge_w / scale), fixed values, all
   values of modes and every value written by release must lie inside it.
   A register with key values (e.g. 0xA5A5 = on, 0x5A5A = off) gets
-  at_rest_values with exactly these values, never a range.
+  at_rest_values with exactly these values, never a range; a time-out or
+  a duration gets its range from the manual.
 - Leave out a write register without a clear entry in the manual; never
   guess one. Write only registers SLEMS needs to charge, discharge and
   release; no settings, limits, protection or reset registers.
+- Settings the manual requires once before remote control (e.g. enabling
+  remote control, allowing charging from the grid, a default mode) are not
+  written: name each at the top as "# question: ...". If release auto needs
+  such a setting (e.g. a storage control mode switched to remote and back),
+  write it in apply and release with persistent: true.
 - Registers the manual describes as a setting, parameter, EEPROM or flash
   get persistent: true. Never a register with a power placeholder. If the
   manual says nothing about it for a write register, add
   "# question: is <register> stored permanently?" at the top.
-- Order of apply: first enable remote control, then the powers, then the
-  mode, so a new direction starts with valid values.
-- release: give auto and/or standby, whichever the manual supports. They
-  write only registers from apply, with fixed numbers: powers 0, mode
-  idle, remote control off for auto. Never leave out the release.
+- Order of apply: first enable remote control and set a time-out, then the
+  powers, then the mode, so a new direction starts with valid values.
+- release: give auto and/or standby, whichever the manual supports and
+  holds without SLEMS writing again. If the battery falls back to a set
+  mode after a time-out, leave that state out or add "# question: ...".
+  They write only registers from apply, with fixed numbers: powers 0
+  (if the battery's own logic uses these registers as limits, the highest
+  powers instead), mode idle, remote control off for auto. Always give at
+  least one state.
 - confirm: true on every write register the manual says can be read back.
 - min_power_w only if the manual names a least power; never estimate it.
 - keepalive_s: if the manual names a time-out after which the battery falls
   back to its own logic, a value clearly below it (e.g. half); else leave it
-  out.
+  out. If that time-out (or the duration of a forced charge) is a register,
+  write it as a fixed value under apply, as short as possible: about two to
+  four times keepalive_s.
 - message_spacing_s and timeout_s only if the manual names a least time
   between requests or a response time; if it says nothing, add
   "# question: least time between requests?" at the top.
 - timing: leave it out (SLEMS learns the response times) unless the manual
   names a delay of the set points or a least time between them.
 - device_info: the firmware versions and the serial number, if given:
-  SLEMS notices a firmware update by them.
+  SLEMS notices a firmware update by them. For a hybrid inverter the
+  firmware of both the inverter and the battery.
 - probe: the register of the state of charge with its raw range (e.g.
   [0, 1000] for 0.1 %).
 - state: only the states listed above; leave out raw values that fit none.
+  A state over two registers is uint32 or int32.
 - own_pv only for a battery with own PV modules: then pv_w, and output_w
   (with input_w if it charges from the grid) or connection_w.
 - SLEMS reaches the battery only over Modbus TCP. If the manual describes

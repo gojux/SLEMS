@@ -179,6 +179,7 @@ from .battery_profiles import (
     bundled_profiles,
     parse_profile,
     profile_of,
+    profile_text,
 )
 from .discovery import async_find_batteries
 from .drivers.ha_entities import EntityBatteryConfig
@@ -939,7 +940,7 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         errors: dict[str, str] = {}
         placeholders = {"where": "", "detail": ""}
         if user_input is not None:
-            text = user_input[CONF_PROFILE_YAML]
+            text = profile_text(user_input[CONF_PROFILE_YAML])
             self._yaml = text
             bundled = await self.hass.async_add_executor_job(bundled_profiles)
             try:
@@ -947,6 +948,10 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             except ProfileError as err:
                 errors["base"] = f"profile_{err.code}"
                 placeholders = {"where": _profile_where(err, self.hass.config.language), "detail": err.detail}
+                if (shipped := _shipped_id(text)) in bundled:
+                    # A shipped profile pasted unchanged fails only on what own profiles need more.
+                    errors["base"] = "profile_bundled_id"
+                    placeholders = {"where": "", "detail": shipped}
             else:
                 if profile.id in bundled:
                     errors["base"] = "profile_bundled_id"
@@ -1834,6 +1839,14 @@ _PROFILE_WORDS = {
 
 def _profile_words(language: str) -> dict[str, str]:
     return _PROFILE_WORDS["de" if language.startswith("de") else "en"]
+
+
+def _shipped_id(text: str) -> str | None:
+    """The id of a profile that loads with the rules of shipped profiles, else None."""
+    try:
+        return parse_profile(text, bundled=True).id
+    except ProfileError:
+        return None
 
 
 def _profile_where(err: ProfileError, language: str) -> str:

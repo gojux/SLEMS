@@ -9,8 +9,8 @@ concept, sections 5 and 6):
   cannot be read or lies outside 0–100 %, a write register that cannot be
   read or lies outside its range at rest. The profile cannot be saved.
 * Marked: values that are possible but unlikely (temperature, cell voltages,
-  powers far beyond the limits, negative counters, an unknown state) and
-  values that cannot be read.
+  powers far beyond the limits, negative counters, an unknown state, a
+  battery power against the state read) and values that cannot be read.
 
 The texts are built here in the language of Home Assistant, as markdown lists
 for the description of a step.
@@ -40,6 +40,8 @@ TEMPERATURE_RANGE_C = (-30.0, 80.0)
 CELL_RANGE_V = (2.0, 4.5)
 # A power beyond this many times the largest limit is marked.
 POWER_FACTOR = 2.0
+# A battery power at least this far against the state read (charge, discharge) is marked.
+STATE_POWER_MIN_W = 50.0
 
 # Power read keys with a sign (shown like SLEMS: +charge, +input).
 _SIGNED = ("power_dc_w", "power_ac_w", "connection_w")
@@ -101,6 +103,8 @@ def check(profile: BatteryProfile, reading: ProbeReading) -> dict[str, Mark]:
             marks["state"] = Mark(WARN, "unreadable")
         elif reading.state not in profile.state.values:
             marks["state"] = Mark(WARN, "unknown_state")
+        else:
+            _check_state_power(profile.state.values[reading.state], values, marks)
     for key, value in reading.device_info.items():
         if value is None:
             marks[key] = Mark(WARN, "unreadable")
@@ -111,6 +115,18 @@ def check(profile: BatteryProfile, reading: ProbeReading) -> dict[str, Mark]:
         elif not step.rests_at(raw):
             marks[f"write_{step.address}"] = Mark(BLOCK, "outside")
     return marks
+
+
+def _check_state_power(state: str, values: Mapping[str, float | None], marks: dict[str, Mark]) -> None:
+    """Marks the battery power (DC, else AC) if it points against a state of charging
+    or discharging: mostly its sign is wrong."""
+    key = next((key for key in ("power_dc_w", "power_ac_w") if values.get(key) is not None), None)
+    if key is None or key in marks:
+        return
+    power = values[key]
+    assert power is not None
+    if (state == "charge" and power <= -STATE_POWER_MIN_W) or (state == "discharge" and power >= STATE_POWER_MIN_W):
+        marks[key] = Mark(WARN, "against_state")
 
 
 def blocked(marks: Mapping[str, Mark]) -> bool:
@@ -171,6 +187,7 @@ _WORDS: dict[str, dict[str, str]] = {
         "negative": "negative",
         "cells_swapped": "lower than the lowest cell",
         "unknown_state": "unknown value",
+        "against_state": "against the state (sign?)",
         "outside": "outside",
         "allowed": "allowed",
         "blocked": "**Cannot be saved:** fix the values marked ⛔ (profile or connection).",
@@ -215,6 +232,7 @@ _WORDS: dict[str, dict[str, str]] = {
         "negative": "negativ",
         "cells_swapped": "niedriger als die niedrigste Zelle",
         "unknown_state": "unbekannter Wert",
+        "against_state": "widerspricht dem Zustand (Vorzeichen?)",
         "outside": "außerhalb",
         "allowed": "erlaubt",
         "blocked": "**Nicht speicherbar:** Korrigiere die mit ⛔ markierten Werte (Profil oder Verbindung).",

@@ -309,9 +309,9 @@ read:
 control:
   type: split
   apply:
-    - {address: 200, value: "{charge_w}", at_rest: [0, 2000]}
-    - {address: 201, value: "{discharge_w}", at_rest: [0, 2000]}
-    - {address: 202, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2], persistent: true,
+    - {address: 200, type: uint16, value: "{charge_w}", at_rest: [0, 2000]}
+    - {address: 201, type: uint16, value: "{discharge_w}", at_rest: [0, 2000]}
+    - {address: 202, type: uint16, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2], persistent: true,
        max_changes_per_day: 3}
   release:
     auto:
@@ -368,7 +368,7 @@ control:
   setpoint: connection
   positive: discharge
   apply:
-    - {address: 10064, value: 3, at_rest: [0, 3]}
+    - {address: 10064, type: uint16, value: 3, at_rest: [0, 3]}
     - {address: 10071, value: "{power_w}", type: int32, at_rest: [-2500, 1200]}
   release:
     auto:

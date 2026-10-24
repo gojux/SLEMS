@@ -1,6 +1,6 @@
 """The AI prompts for battery profiles (docs/battery-profile-prompt*.md): their
-example loads as an own profile, is the same in both languages, and the prompt
-names every key of the format."""
+example loads as an own profile, is the same in both languages, both are built
+the same way, and the prompt names every key of the format."""
 
 from pathlib import Path
 import re
@@ -10,6 +10,7 @@ import pytest
 from custom_components.slems.battery_profiles import (
     FORMAT_KEY,
     PLACEHOLDERS,
+    POWER_PLACEHOLDERS,
     READ_KEYS,
     REGISTER_TYPES,
     STATES,
@@ -49,11 +50,24 @@ def test_example_loads_as_an_own_profile(name: str) -> None:
     assert profile.id not in bundled_profiles()
     assert all(step.at_rest or step.at_rest_values for step in profile.control.apply)
     assert profile.device_info
+    # A 32 bit power register and a time-out written as a fixed value with its range.
+    assert any(step.size == 2 and step.value in POWER_PLACEHOLDERS for step in profile.control.apply)
+    assert any(isinstance(step.value, int) and step.at_rest for step in profile.control.apply)
+    assert profile.control.keepalive_s
 
 
 def test_example_is_the_same_in_both_languages() -> None:
     hashes = {parse_profile(example(name)).content_hash for name in PROMPTS}
     assert len(hashes) == 1
+
+
+def test_prompts_are_built_the_same_way() -> None:
+    texts = [(DOCS / name).read_text(encoding="utf-8") for name in PROMPTS]
+    # Steps of the instructions, rules of the prompt, comment lines of the example.
+    patterns = (r"^\d+\. ", r"^- ", r"^# ")
+    for pattern in patterns:
+        counts = {len(re.findall(pattern, text, re.M)) for text in texts}
+        assert len(counts) == 1, pattern
 
 
 @pytest.mark.parametrize("name", PROMPTS)

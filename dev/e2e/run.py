@@ -13,6 +13,7 @@ import base64
 import json
 import os
 from pathlib import Path
+import re
 import socket
 import struct
 import sys
@@ -361,9 +362,14 @@ def battery_modbus(token: str) -> None:
     )
 
 
-# The shipped Venus profile as an own one (mounted by the compose file).
+# The shipped Venus profile as an own one (mounted by the compose file), which
+# needs the type of every write step.
 OWN_PROFILE = (
-    Path("/profiles/marstek_venus_e3.yaml").read_text(encoding="utf-8").replace("id: marstek_venus_e3", "id: own_venus")
+    re.sub(
+        r"(- \{address: \w+, )value",
+        r"\1type: uint16, value",
+        Path("/profiles/marstek_venus_e3.yaml").read_text(encoding="utf-8").replace("id: marstek_venus_e3", "id: own_venus"),
+    )
     if Path("/profiles/marstek_venus_e3.yaml").exists()
     else ""
 )
@@ -408,16 +414,17 @@ def battery_own_profile(token: str) -> None:
         raise Failure(f"Own profile: unknown key not shown with its line: {result.get('errors')} {result.get('description_placeholders')}")
     print("  Own profile: unknown key shown with its line")
     # 42020 shifted onto the battery voltage.
-    shifted = OWN_PROFILE.replace('{address: 42020, value: "{charge_w}"', '{address: 30100, value: "{charge_w}"').replace(
-        "- {address: 42020, value: 0}", "- {address: 30100, value: 0}"
-    )
+    shifted = OWN_PROFILE.replace(
+        '{address: 42020, type: uint16, value: "{charge_w}"', '{address: 30100, type: uint16, value: "{charge_w}"'
+    ).replace("- {address: 42020, type: uint16, value: 0}", "- {address: 30100, type: uint16, value: 0}")
     result = step(token, flow_id, {"profile_yaml": shifted})
     result = step(token, flow_id, {"host": "venus-sim-5", "port": 502, "unit_id": 1, "transport": "own"})
     if result.get("step_id") != "profile_read" or "profile_limits" in result.get("menu_options", []):
         raise Failure(f"Own profile: shifted register not blocked: {result.get('step_id')} {result.get('menu_options')}")
     print("  Own profile: shifted write register blocks saving")
     result = step(token, flow_id, {"next_step_id": "profile_yaml"})
-    result = step(token, flow_id, {"profile_yaml": OWN_PROFILE})
+    # The whole answer of an AI, with text around its code block.
+    result = step(token, flow_id, {"profile_yaml": f"The profile:\n\n```yaml\n{OWN_PROFILE}```\n\nCheck it.\n"})
     result = step(token, flow_id, fill(result, {}))
     if "profile_limits" not in result.get("menu_options", []):
         raise Failure(f"Own profile: reading blocked: {result.get('step_id')} {result.get('errors')} {result.get('description_placeholders')}")

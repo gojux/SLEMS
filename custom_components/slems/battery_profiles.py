@@ -130,8 +130,10 @@ DEFAULT_TIMEOUT_S = 3.0
 DEFAULT_CONFIRM_DELAY_S = 0.2
 DEFAULT_CONFIRM_TOLERANCE_W = 100.0
 DEFAULT_MAX_CHANGES_PER_DAY = 100
-# A step with a fixed value holds key values at rest (e.g. 0x55AA/0x55BB): a
-# range at rest wider than this would also pass a shifted address.
+# A fixed value from this size on is a key value (e.g. 0x55AA/0x55BB): a range
+# at rest wider than ``KEY_VALUE_MAX_SPAN`` would also pass a shifted address.
+# Smaller fixed values (durations, time-outs) may have a range.
+KEY_VALUE_MIN = 4096
 KEY_VALUE_MAX_SPAN = 255
 # A persistent register changed again within this time is warned about.
 PERSISTENT_WARN_S = 60.0
@@ -141,7 +143,7 @@ PERSISTENT_WINDOW_S = 24 * 3600.0
 ERROR_CODES = (
     "syntax", "not_profile", "version_newer", "duplicate_key", "unknown_key", "missing_key", "invalid",
     "own_pv", "control", "duplicate_address", "outside_at_rest", "persistent_power", "undeclared_register",
-    "key_value_range",
+    "key_value_range", "release_type",
 )
 # Keys that only describe a profile: changing them does not change its content hash.
 DESCRIPTIVE_KEYS = ("name", "manufacturer", "notes")
@@ -515,6 +517,16 @@ def parse_profile(text: str, *, bundled: bool = False) -> BatteryProfile:
     return dataclasses.replace(profile, content_hash=digest)
 
 
+def profile_text(text: str) -> str:
+    """The YAML of a pasted answer: the content of its only Markdown code block
+    (text before and after it left out); else the text as it is."""
+    lines = text.splitlines(keepends=True)
+    fences = [index for index, line in enumerate(lines) if line.lstrip().startswith("```")]
+    if len(fences) != 2 or lines[fences[0]].strip()[3:].strip().lower() not in ("", "yaml", "yml"):
+        return text
+    return "".join(lines[fences[0] + 1 : fences[1]])
+
+
 def _canonical(value: Any) -> str:
     """A text of a loaded YAML value that does not depend on order, layout or comments."""
     if isinstance(value, dict):
@@ -803,8 +815,8 @@ class _Parser:
         if "state" not in read:
             return None
         register, m = self._register(read["state"], "read.state", read, "state", extra=("values",))
-        if register.type not in ("uint16", "int16"):
-            raise self._fail("invalid", "read.state.type", m, "type", "uint16 or int16")
+        if register.type not in ("uint16", "int16", "uint32", "int32"):
+            raise self._fail("invalid", "read.state.type", m, "type", "uint16, int16, uint32 or int32")
         values = self._required(m, "values", "read.state")
         if not isinstance(values, _LineDict) or not values:
             raise self._fail("invalid", "read.state.values", m, "values", "mapping value: state")
@@ -888,6 +900,9 @@ class _Parser:
             "persistent", "max_changes_per_day", "confirm",
         ), parent, "apply")
         address = self._address(m, path)
+        if "type" not in m and not self._bundled:
+            # Without it a 32 bit register would be written as its first word only.
+            raise self._fail("missing_key", f"{path}.type", m)
         data_type = self._choice(m, "type", path, WRITE_TYPES, default="uint16")
         value = self._required(m, "value", path)
         placeholder = isinstance(value, str)
@@ -923,7 +938,10 @@ class _Parser:
             at_rest_values = tuple(values)
         if at_rest is None and at_rest_values is None and not self._bundled:
             raise self._fail("missing_key", f"{path}.at_rest", m)
-        if at_rest is not None and not placeholder and at_rest[1] - at_rest[0] > KEY_VALUE_MAX_SPAN:
+        if (
+            at_rest is not None and not placeholder and abs(value) >= KEY_VALUE_MIN
+            and at_rest[1] - at_rest[0] > KEY_VALUE_MAX_SPAN
+        ):
             raise self._fail("key_value_range", f"{path}.at_rest", m, "at_rest", f"{at_rest[0]}-{at_rest[1]}")
         persistent = self._flag(m, "persistent", path)
         if persistent and value in POWER_PLACEHOLDERS:
@@ -1029,13 +1047,19 @@ class _Parser:
             steps = []
             for index, item in enumerate(items):
                 item_path = f"{path}[{index}]"
-                sm = self._mapping(item, item_path, ("address", "value", "confirm"), rm, state.value)
+                keys = ("address", "value", "type", "word_order", "confirm")
+                sm = self._mapping(item, item_path, keys, rm, state.value)
                 address = self._address(sm, item_path)
                 declared = by_address.get(address)
                 if declared is None:
                     raise self._fail(
                         "undeclared_register", f"{item_path}.address", sm, "address", "not in control.apply"
                     )
+                # type and word_order may repeat those of the step in apply, never differ.
+                for key in ("type", "word_order"):
+                    if key in sm and sm[key] != getattr(declared, key):
+                        detail = f"{key}: {sm[key]}, in control.apply {getattr(declared, key)}"
+                        raise self._fail("release_type", f"{item_path}.{key}", sm, key, detail)
                 value = self._required(sm, "value", item_path)
                 if isinstance(value, bool) or not isinstance(value, (int, float)):
                     raise self._fail("invalid", f"{item_path}.value", sm, "value", "a fixed number")

@@ -862,15 +862,18 @@ capacity would count twice and two control loops would work against each
 other.
 
 1. **Make the profile** from the register list with the
-   [AI prompt](docs/battery-profile-prompt.md). Without a register list the
-   AI searches online for several sources, compares them and names them at
-   the top of the profile. Check the lines marked `# uncertain` and
-   `# question`.
+   [AI prompt](docs/battery-profile-prompt.md), in an AI with web search;
+   ChatGPT, Claude and Mistral proved themselves in trials. Without a
+   register list the AI searches online for several sources, compares them
+   and names them at the top of the profile. A profile from an AI is a
+   draft: check the lines marked `# uncertain` and `# question`.
 2. **Add battery** → model **Battery from a Modbus profile (experimental)**
-   and paste the profile. SLEMS checks it and shows an error with the line and
-   the key, e.g. an unknown key or a value outside the range at rest. If SLEMS
-   ships a profile for your model or another battery has an own profile,
-   select it instead.
+   and paste the profile (the whole answer of the AI works too if it holds
+   only one code block). SLEMS checks it and shows an error with the line and
+   the key, e.g. an unknown key or a value outside the range at rest: give
+   the error message back to the AI in the same chat and paste its corrected
+   profile. If SLEMS ships a profile for your model or another battery has
+   an own profile, select it instead.
 3. **Connection**: host, port and unit ID (preset from the profile) and the
    connection, **Own Modbus client** or **Home Assistant Modbus** (shared with
    other integrations on the same device). Many batteries accept only one
@@ -879,14 +882,14 @@ other.
    Compare the values with the battery's app or display: a wrong value
    usually means a wrong address or scale. ⚠ marks unlikely values
    (temperature, cell voltages, powers beyond twice the limit, negative
-   counters, unknown states, unreadable values). At rest the power is 0 W:
-   let the battery charge or discharge (its own logic or its app) and
-   **Read again**, so a wrong sign of the power shows too. **Continue** is
-   offered only
-   if the state of charge is readable and 0–100 % and every write register is
-   readable and inside its range at rest (`at_rest`); a register outside
-   usually holds something else (a shifted address). Otherwise
-   **Edit the profile** or **Change the connection**.
+   counters, unknown states, a power against the state read, unreadable
+   values). At rest the power is 0 W: let the battery charge or discharge
+   (its own logic or its app) and **Read again**, so a wrong sign of the
+   power shows too. Give wrong values back to the AI with the values read.
+   **Continue** is offered only if the state of charge is readable and
+   0–100 % and every write register is readable and inside its range at rest
+   (`at_rest`); a register outside usually holds something else (a shifted
+   address). Otherwise **Edit the profile** or **Change the connection**.
 5. **Limits** as for the other batteries; **State when SLEMS releases the
    battery** offers only the states of the profile.
 6. **Write preview**: what SLEMS writes in the trial, register by register

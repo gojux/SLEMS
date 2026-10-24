@@ -223,7 +223,7 @@
         },
         "profile_yaml": {
           "title": "Own profile (YAML)",
-          "description": "Paste the whole profile (format `slems_battery_profile: 1`), e.g. made from the manual of the battery with the help of an AI: [guide]({prompt_url}). SLEMS checks it and shows errors with the line and the key. Next SLEMS reads every register once, before anything is written.",
+          "description": "Paste the whole profile (format `slems_battery_profile: 1`), e.g. made from the manual of the battery with the help of an AI: [guide]({prompt_url}). The whole answer of the AI works too if it holds only one code block. SLEMS checks it and shows errors with the line and the key: give them back to the AI. Next SLEMS reads every register once, before anything is written.",
           "data": {
             "profile_yaml": "Profile"
           }
@@ -478,7 +478,8 @@
         "profile_outside_at_rest": "Value outside the range at rest (`at_rest`): {where}, value {detail}.",
         "profile_persistent_power": "A power set point must not be `persistent` (flash): {where}.",
         "profile_undeclared_register": "The release writes a register that is not in `control.apply`: {where}.",
-        "profile_key_value_range": "A fixed value with a wide range at rest: {where} ({detail}). Give the key values of the register as `at_rest_values`."
+        "profile_key_value_range": "A fixed value with a wide range at rest: {where} ({detail}). Give the key values of the register as `at_rest_values`.",
+        "profile_release_type": "The release writes a register with another type or word order than in `control.apply`: {where} ({detail}). Leave out `type` and `word_order` in the release or give the same."
       },
       "abort": {
         "reconfigure_successful": "Battery updated."

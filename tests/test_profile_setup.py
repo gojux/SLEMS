@@ -39,8 +39,10 @@ from test_profile_driver import SIM, SimLink, no_confirm_delay  # noqa: F401
 
 STRINGS = json.loads((Path(config_flow.__file__).parent / "strings.json").read_text())
 VENUS_TEXT = bundled_profile_text("marstek_venus_e3")
-# The Venus profile as an own one.
-OWN_TEXT = VENUS_TEXT.replace("id: marstek_venus_e3", "id: my_venus")
+# The Venus profile as an own one (which needs the type of every write step).
+OWN_TEXT = re.sub(
+    r"(- \{address: \w+, )value", r"\1type: uint16, value", VENUS_TEXT.replace("id: marstek_venus_e3", "id: my_venus")
+)
 
 
 def venus():
@@ -139,8 +141,8 @@ async def test_wrong_scale_of_the_state_of_charge_blocks() -> None:
 
 async def test_shifted_write_register_blocks() -> None:
     # 42020 shifted onto the battery voltage (e.g. 5300 for 53.00 V).
-    text = OWN_TEXT.replace('{address: 42020, value: "{charge_w}"', '{address: 30100, value: "{charge_w}"')
-    text = text.replace("- {address: 42020, value: 0}", "- {address: 30100, value: 0}")
+    text = OWN_TEXT.replace('{address: 42020, type: uint16, value: "{charge_w}"', '{address: 30100, type: uint16, value: "{charge_w}"')
+    text = text.replace("- {address: 42020, type: uint16, value: 0}", "- {address: 30100, type: uint16, value: 0}")
     profile, reading, _ = await read(text)
     marks = check(profile, reading)
     assert marks["write_30100"] == type(marks["write_30100"])(BLOCK, "outside")
@@ -203,6 +205,30 @@ def test_unlikely_values_are_marked() -> None:
     assert all(mark.level == WARN for mark in marks.values()) and not blocked(marks)
     assert check(profile, ProbeReading(probe=1001, values={"soc_pct": None}))["soc_pct"].level == BLOCK
     assert check(profile, ProbeReading(probe=1001, values={}))["probe"].level == BLOCK
+
+
+@pytest.mark.parametrize(
+    ("state", "values", "marked"),
+    [
+        # Venus: 2 charge, 3 discharge; the DC power is checked first, else the AC power.
+        (2, {"power_dc_w": -300.0, "power_ac_w": 280.0}, "power_dc_w"),
+        (3, {"power_dc_w": 300.0}, "power_dc_w"),
+        (3, {"power_ac_w": 300.0}, "power_ac_w"),
+        (2, {"power_dc_w": -49.0}, None),
+        (2, {"power_dc_w": 300.0}, None),
+        (1, {"power_dc_w": -300.0}, None),
+    ],
+)
+def test_power_against_the_state_is_marked(state: int, values: dict, marked: str | None) -> None:
+    profile = venus()
+    reading = ProbeReading(
+        probe=500, values={"soc_pct": 50.0, **values}, state=state, writes={42000: 0x55BB, 42021: 0, 42020: 0, 42010: 0}
+    )
+    marks = check(profile, reading)
+    assert {key for key, mark in marks.items() if mark.reason == "against_state"} == ({marked} if marked else set())
+    assert not blocked(marks)
+    if marked:
+        assert "widerspricht dem Zustand" in describe_reading(profile, reading, marks, "de")
 
 
 def test_preview_shows_each_register_with_the_value_it_holds_then() -> None:
@@ -379,6 +405,25 @@ async def test_own_profile_errors_show_line_and_key(sim) -> None:
     assert result["errors"] == {"base": "profile_bundled_id"}
     # The text stays in the field.
     assert flow._yaml == VENUS_TEXT
+
+
+async def test_own_profile_pasted_with_the_text_of_the_answer(sim) -> None:
+    flow = make_flow()
+    await flow.async_step_profile({"profile": "own"})
+    answer = f"I checked the manual first, here is the profile.\n\n```yaml\n{OWN_TEXT}```\n\nCompare the registers.\n"
+    result = await flow.async_step_profile_yaml({"profile_yaml": answer})
+    assert result["step_id"] == "profile_connection"
+    # Only the YAML is kept.
+    assert flow._yaml == OWN_TEXT
+
+
+async def test_shipped_profile_pasted_unchanged_is_named(sim) -> None:
+    # It lacks what own profiles need more (type of every write step), but is shipped anyway.
+    flow = make_flow()
+    await flow.async_step_profile({"profile": "own"})
+    result = await flow.async_step_profile_yaml({"profile_yaml": f"```yaml\n{VENUS_TEXT}```"})
+    assert result["errors"] == {"base": "profile_bundled_id"}
+    assert result["description_placeholders"]["detail"] == "marstek_venus_e3"
 
 
 async def test_own_profile_needs_the_manual_checked(sim) -> None:

@@ -14,6 +14,7 @@ from custom_components.slems.battery_profiles import (
     decode,
     encode,
     parse_profile,
+    profile_text,
     release_values,
     rest_violations,
     split_power,
@@ -34,9 +35,9 @@ read:
 control:
   type: split
   apply:
-    - {address: 200, value: "{charge_w}", at_rest: [0, 2000]}
-    - {address: 201, value: "{discharge_w}", at_rest: [0, 1500]}
-    - {address: 202, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2], confirm: true}
+    - {address: 200, type: uint16, value: "{charge_w}", at_rest: [0, 2000]}
+    - {address: 201, type: uint16, value: "{discharge_w}", at_rest: [0, 1500]}
+    - {address: 202, type: uint16, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2], confirm: true}
   release:
     auto:
       - {address: 202, value: 0, confirm: true}
@@ -183,16 +184,18 @@ def test_minimal_profile() -> None:
         ("id: test", "id: Test Battery", "invalid", "id", 2),
         ("  soc_pct: {address: 100, type: uint16}\n", "", "missing_key", "read.soc_pct", None),
         ("limits: {max_charge_w: 2000,", "limits: {max_charge_w: 0,", "invalid", "limits.max_charge_w", 4),
-        ("address: 200, value", "address: 70000, value", "invalid", "control.apply[0].address", 11),
+        ("address: 200, type: uint16, value", "address: 70000, type: uint16, value", "invalid",
+         "control.apply[0].address", 11),
         # A register in the release that is not declared under apply.
         ("{address: 202, value: 0, confirm: true}", "{address: 300, value: 0}", "undeclared_register",
          "control.release.auto[0].address", 16),
         ("{address: 202, value: 0, confirm: true}", "{address: 202, value: 5}", "outside_at_rest",
          "control.release.auto[0].value", 16),
         # Same register twice.
-        ("{address: 201, value", "{address: 200, value", "duplicate_address", "control.apply[1].address", None),
-        ('{address: 201, value: "{discharge_w}"', '{address: 201, value: "{charge_w}"', "control", "control.apply",
-         None),
+        ("{address: 201, type: uint16, value", "{address: 200, type: uint16, value", "duplicate_address",
+         "control.apply[1].address", None),
+        ('{address: 201, type: uint16, value: "{discharge_w}"', '{address: 201, type: uint16, value: "{charge_w}"', "control",
+         "control.apply", None),
         ("type: split", "type: signed\n  positive: charge", "control", "control.apply", None),
         ('value: "{mode}"', 'value: "{soc}"', "invalid", "control.apply[2].value", 13),
         ("at_rest: [0, 2], confirm", "at_rest: [1, 2], confirm", "outside_at_rest", "control.apply[2].modes", 13),
@@ -207,8 +210,8 @@ def test_minimal_profile() -> None:
         ("{address: 100, type: uint16, range", "{address: 100, type: uint16, scale: 0.1, range", "invalid",
          "probe.scale", 17),
         # Key values (on 0x55AA, off 0x55BB) as a range: a shifted address holding 5178 (51.78 V) would pass.
-        ("  release:\n", "    - {address: 203, value: 0x55AA, at_rest: [0, 0x55BB]}\n  release:\n", "key_value_range",
-         "control.apply[3].at_rest", 14),
+        ("  release:\n", "    - {address: 203, type: uint16, value: 0x55AA, at_rest: [0, 0x55BB]}\n  release:\n",
+         "key_value_range", "control.apply[3].at_rest", 14),
     ],
 )
 def test_format_errors(old: str, new: str, code: str, path: str, line: int | None) -> None:
@@ -236,10 +239,71 @@ def test_at_rest_is_required_for_own_profiles_only() -> None:
     assert parse_profile(text, bundled=True).control.apply[0].at_rest is None
 
 
+def test_type_of_write_steps_is_required_for_own_profiles_only() -> None:
+    # Without it a 32 bit power would be written as its first word only.
+    text = MINIMAL.replace('{address: 200, type: uint16, value: "{charge_w}"', '{address: 200, value: "{charge_w}"')
+    err = error(text)
+    assert (err.code, err.path, err.line) == ("missing_key", "control.apply[0].type", 11)
+    assert parse_profile(text, bundled=True).control.apply[0].type == "uint16"
+
+
+def test_durations_may_have_a_range_at_rest() -> None:
+    # A time-out after which the battery returns to its own logic (e.g. 0-1440 min) is no key value.
+    for step in (
+        "{address: 203, type: uint16, value: 1440, at_rest: [0, 1440]}",
+        "{address: 203, type: uint32, word_order: little, value: 4095, at_rest: [0, 86400]}",
+    ):
+        parse_profile(MINIMAL.replace("  release:", f"    - {step}\n  release:"))
+    key_value = "    - {address: 203, type: uint16, value: 4096, at_rest: [0, 4351]}\n  release:"
+    assert error(MINIMAL.replace("  release:", key_value)).code == "key_value_range"
+    narrow = "    - {address: 203, type: uint16, value: 0x55AA, at_rest: [0x5500, 0x55FF]}\n  release:"
+    parse_profile(MINIMAL.replace("  release:", narrow))
+
+
+def test_release_may_repeat_type_and_word_order() -> None:
+    step = "{address: 202, value: 0, confirm: true}"
+    same = MINIMAL.replace(step, "{address: 202, type: uint16, word_order: big, value: 0, confirm: true}")
+    assert parse_profile(same).control.release[ReleaseState.AUTO] == parse_profile(MINIMAL).control.release[
+        ReleaseState.AUTO
+    ]
+    for key, value in (("type", "int16"), ("word_order", "little")):
+        err = error(MINIMAL.replace(step, f"{{address: 202, {key}: {value}, value: 0}}"))
+        assert (err.code, err.path, err.line) == ("release_type", f"control.release.auto[0].{key}", 16)
+
+
+@pytest.mark.parametrize(("data_type", "order"), [("uint16", "big"), ("uint32", "big"), ("int32", "little")])
+def test_state_registers(data_type: str, order: str) -> None:
+    state = f"  state: {{address: 110, type: {data_type}, word_order: {order}, values: {{3: charge, 4: discharge}}}}\n"
+    text = MINIMAL.replace("control:\n", f"{state}control:\n", 1)
+    register = parse_profile(text).state.register
+    assert (register.type, register.word_order) == (data_type, order)
+    assert decode(encode(4, data_type, order), data_type, order) == 4
+
+
+@pytest.mark.parametrize("data_type", ["float32", "uint64"])
+def test_state_registers_refused(data_type: str) -> None:
+    state = f"  state: {{address: 110, type: {data_type}, values: {{3: charge}}}}\n"
+    err = error(MINIMAL.replace("control:\n", f"{state}control:\n", 1))
+    assert (err.code, err.path) == ("invalid", "read.state.type")
+
+
+def test_profile_text_takes_the_only_code_block() -> None:
+    answer = f"I checked the technical note first.\n\n```yaml\n{MINIMAL}```\n\nCompare the write registers.\n"
+    assert profile_text(answer) == MINIMAL
+    assert parse_profile(profile_text(answer)).id == "test"
+    assert profile_text(f"```\n{MINIMAL}```") == MINIMAL
+    assert profile_text(MINIMAL) == MINIMAL
+    # Two blocks or another language: left as it is (the loader then names the error).
+    two = f"{answer}```yaml\nother: 1\n```\n"
+    assert profile_text(two) == two
+    shell = f"```sh\n{MINIMAL}```"
+    assert profile_text(shell) == shell
+
+
 def test_values_and_scale() -> None:
     text = MINIMAL.replace(
-        '{address: 200, value: "{charge_w}", at_rest: [0, 2000]}',
-        '{address: 200, value: "{charge_w}", scale: 100, at_rest: [0, 20]}',
+        '{address: 200, type: uint16, value: "{charge_w}", at_rest: [0, 2000]}',
+        '{address: 200, type: uint16, value: "{charge_w}", scale: 100, at_rest: [0, 20]}',
     )
     profile = parse_profile(text)
     assert [raw for _, raw in apply_values(profile, 1340, 0)] == [13, 0, 1]
@@ -249,8 +313,8 @@ def test_values_and_scale() -> None:
 
 def test_signed_control_with_32_bit_set_point() -> None:
     text = MINIMAL.replace("type: split", "type: signed\n  positive: discharge").replace(
-        '    - {address: 200, value: "{charge_w}", at_rest: [0, 2000]}\n'
-        '    - {address: 201, value: "{discharge_w}", at_rest: [0, 1500]}\n',
+        '    - {address: 200, type: uint16, value: "{charge_w}", at_rest: [0, 2000]}\n'
+        '    - {address: 201, type: uint16, value: "{discharge_w}", at_rest: [0, 1500]}\n',
         '    - {address: 200, value: "{power_w}", type: int32, at_rest: [-2000, 1500]}\n',
     )
     profile = parse_profile(text)
@@ -261,14 +325,15 @@ def test_signed_control_with_32_bit_set_point() -> None:
     # The range at rest must hold the highest powers in both directions.
     assert error(text.replace("[-2000, 1500]", "[-1500, 1500]")).code == "outside_at_rest"
     # A 32 bit register overlapping another one.
-    overlap = text.replace("{address: 202, value", "{address: 201, value")
+    overlap = text.replace("{address: 202, type: uint16, value", "{address: 201, type: uint16, value")
     assert error(overlap).code == "duplicate_address"
 
 
 def test_persistent_registers() -> None:
     text = MINIMAL.replace(
         "  release:",
-        "    - {address: 203, value: 3, at_rest: [0, 3], persistent: true, max_changes_per_day: 5}\n  release:",
+        "    - {address: 203, type: uint16, value: 3, at_rest: [0, 3], persistent: true, max_changes_per_day: 5}\n"
+        "  release:",
     )
     step = parse_profile(text).control.apply[3]
     assert (step.persistent, step.max_changes_per_day) == (True, 5)
@@ -296,9 +361,9 @@ read:
 control:
   type: split
   apply:
-    - {address: 42021, value: "{discharge_w}", at_rest: [0, 2500]}
-    - {address: 42020, value: "{charge_w}", at_rest: [0, 2500]}
-    - {address: 42010, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2]}
+    - {address: 42021, type: uint16, value: "{discharge_w}", at_rest: [0, 2500]}
+    - {address: 42020, type: uint16, value: "{charge_w}", at_rest: [0, 2500]}
+    - {address: 42010, type: uint16, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2]}
   release:
     standby:
       - {address: 42010, value: 0}
@@ -326,7 +391,7 @@ control:
   positive: discharge
   keepalive_s: 30
   apply:
-    - {address: 10064, value: 3, at_rest: [0, 3]}
+    - {address: 10064, type: uint16, value: 3, at_rest: [0, 3]}
     - {address: 10071, value: "{power_w}", type: int32, at_rest: [-2500, 1200]}
   release:
     auto:
@@ -350,7 +415,7 @@ control:
   type: split
   setpoint: connection
   apply:
-    - {address: 10, value: "{discharge_w}", at_rest: [0, 800]}
+    - {address: 10, type: uint16, value: "{discharge_w}", at_rest: [0, 800]}
   release:
     auto:
       - {address: 10, value: 800}
@@ -393,9 +458,9 @@ def test_own_pv_profiles() -> None:
          "own_pv", "read.output_w"),
         (MINIMAL, "type: split", "type: split\n  setpoint: connection", "own_pv", "control.setpoint"),
         # Without an input there is no charge set point at the connection.
-        (OUTPUT_ONLY, '    - {address: 10, value: "{discharge_w}", at_rest: [0, 800]}\n',
-         '    - {address: 10, value: "{discharge_w}", at_rest: [0, 800]}\n'
-         '    - {address: 11, value: "{charge_w}", at_rest: [0, 1800]}\n', "control", "control.apply"),
+        (OUTPUT_ONLY, '    - {address: 10, type: uint16, value: "{discharge_w}", at_rest: [0, 800]}\n',
+         '    - {address: 10, type: uint16, value: "{discharge_w}", at_rest: [0, 800]}\n'
+         '    - {address: 11, type: uint16, value: "{charge_w}", at_rest: [0, 1800]}\n', "control", "control.apply"),
         # The output limit bounds the set point at the connection.
         (OUTPUT_ONLY, "max_output_w: 800,", "max_output_w: 900,", "outside_at_rest", "control.apply[0].at_rest"),
         (OWN_PV_BATTERY, "positive: output", "positive: charge", "invalid", "read.connection_w.positive"),
@@ -445,7 +510,8 @@ def test_rest_violations() -> None:
 def test_persistent_guard() -> None:
     text = MINIMAL.replace(
         "  release:",
-        "    - {address: 203, value: 3, at_rest: [0, 3], persistent: true, max_changes_per_day: 3}\n  release:",
+        "    - {address: 203, type: uint16, value: 3, at_rest: [0, 3], persistent: true, max_changes_per_day: 3}\n"
+        "  release:",
     )
     guard = PersistentGuard(parse_profile(text).control.apply)
     assert guard.decide(200, 500, 0) == PersistentGuard.WRITE

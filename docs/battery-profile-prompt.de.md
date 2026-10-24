@@ -2,12 +2,13 @@
 
 [English](battery-profile-prompt.md)
 
-Eine KI (z. B. Claude oder ChatGPT) kann die Modbus-Registerliste einer
-Batterie oder eines Hybrid-Wechselrichters lesen und daraus ein
-Batterieprofil für SLEMS erstellen. Füge das Ergebnis in SLEMS unter
+Eine KI (ChatGPT, Claude und Mistral haben sich in Probeläufen bewährt)
+kann die Modbus-Registerliste einer Batterie oder eines
+Hybrid-Wechselrichters lesen und daraus ein Batterieprofil für SLEMS
+erstellen. Füge das Ergebnis in SLEMS unter
 **Einstellungen → Geräte & Dienste → SLEMS → Batterie hinzufügen** mit dem
-Modell **Batterie aus einem Modbus-Profil (experimentell)** ein. Den ganzen Weg vom Handbuch bis zur geregelten Batterie beschreibt die
-README unter
+Modell **Batterie aus einem Modbus-Profil (experimentell)** ein. Den ganzen
+Weg vom Handbuch bis zur geregelten Batterie beschreibt die README unter
 [Batterie aus einem Modbus-Profil](../README.de.md#batterie-aus-einem-modbus-profil-experimentell).
 
 So geht's:
@@ -24,16 +25,21 @@ So geht's:
 3. Prüfe die Antwort: Zeilen mit `# unsicher`, die Zeilen `# Frage` oben und
    vor allem jedes Register unter `control` gegen das Handbuch oder die
    Quellen oben (Adresse, Einheit, Bereich).
-4. Füge das YAML in SLEMS ein. SLEMS liest jedes Register einmal und zeigt
+4. Füge das YAML in SLEMS ein (die ganze Antwort geht auch, wenn sie nur
+   einen Codeblock enthält). SLEMS liest jedes Register einmal und zeigt
    die Werte, danach was es schreiben würde, bevor etwas geschrieben wird.
+5. Zeigt SLEMS einen Fehler oder sieht ein gelesener Wert falsch aus
+   (markiert oder anders als in der App der Batterie), gib die
+   Fehlermeldung oder die gelesenen Werte im selben Chat an die KI zurück
+   und füge ihr korrigiertes Profil ein.
 
-Eine KI kann eine Tabelle falsch lesen oder Adressen falsch zählen. Ein Wert
-im falschen Register kann eine Einstellung der Batterie ändern; die
-Prüfungen von SLEMS fangen die meisten dieser Fehler ab, aber nicht alle.
-Vergleiche die Schreibregister mit dem Handbuch, bevor du die Batterie
-speicherst. Ein Profil aus Quellen im Netz ist unsicherer als eines aus dem
-Handbuch: Öffne die Quellen, die oben genannt sind, und prüfe die
-Schreibregister dort.
+Ein Profil von einer KI ist ein Entwurf. Eine KI kann eine Tabelle falsch
+lesen oder Adressen falsch zählen. Ein Wert im falschen Register kann eine
+Einstellung der Batterie ändern; die Prüfungen von SLEMS fangen die meisten
+dieser Fehler ab, aber nicht alle. Vergleiche die Schreibregister mit dem
+Handbuch, bevor du die Batterie speicherst. Ein Profil aus Quellen im Netz
+ist unsicherer als eines aus dem Handbuch: Öffne die Quellen, die oben
+genannt sind, und prüfe die Schreibregister dort.
 
 ## Prompt
 
@@ -55,7 +61,8 @@ mit Vorzeichen), oder wird das Register der Leistungsvorgabe selbst
 dauerhaft gespeichert (Flash, EEPROM), gib kein Profil aus: sag in einem
 Satz, warum sich die Batterie so nicht steuern lässt. Dauerhaft gespeicherte
 Einstellungen (z. B. die Höchstleistung) und unsichere Quellen sind dafür
-kein Grund: Gib das Profil mit "# unsicher" aus.
+kein Grund: Gib das Profil mit "# unsicher" aus. Gibst du kein Profil aus,
+nenne die Quellen, die du gefunden hast.
 
 Format (alle Schlüssel, die es gibt; andere Schlüssel sind nicht erlaubt):
 
@@ -100,7 +107,7 @@ read:                                         # Werte, die SLEMS liest; soc_pct 
   cycles:         {...}                       # Vollzyklen
   state:                                      # Zustand der Batterie
     address: ...
-    type: uint16
+    type: uint16                              # oder int16, uint32, int32
     values: {<Rohwert>: <sleep|standby|charge|discharge|backup|firmware_update|bypass>}
 device_info:                                  # nur lesend, frei gewählte Namen in Kleinbuchstaben
   <name>: {address: ..., type: ...}
@@ -111,7 +118,7 @@ control:
   keepalive_s: <s>                            # nach dieser Zeit alles erneut schreiben
   confirm: {delay_s: 0.2, tolerance_w: 100, tolerance_pct: 0}   # optional
   apply:                                      # geschrieben zum Laden und Entladen, in dieser Reihenfolge
-    - {address: ..., value: ..., at_rest: [min, max], confirm: true}
+    - {address: ..., type: ..., value: ..., at_rest: [min, max], confirm: true}
   release:                                    # geschrieben, wenn SLEMS die Batterie freigibt
     auto:                                     # ihre eigene Logik übernimmt wieder
       - {address: ..., value: ...}
@@ -132,7 +139,8 @@ Eine Leistung darf die Summe mehrerer Register sein: eine Liste von Registern
 (z. B. die PV-Eingänge mehrerer MPPTs).
 
 Schlüssel eines Schritts unter control.apply:
-  address, type (kein char), word_order wie oben
+  address, word_order wie oben
+  type                 Pflicht: uint16 für ein Register, uint32, int32 oder float32 für zwei (kein char)
   value                ein fester Rohwert oder ein Platzhalter:
                          "{charge_w}" und "{discharge_w}" (split), "{power_w}" (signed): Leistung in W
                          "{mode}" mit modes: {idle: ..., charge: ..., discharge: ...}
@@ -150,7 +158,8 @@ Beispiel einer erfundenen Batterie (übernimm keine Adresse und keinen Wert dara
 # Quelle: „Example battery Modbus protocol V1.2“, Tabelle 5, Seiten 8-11.
 # Adressen: Holding-Register ab 40001 nummeriert (Adresse = Nummer - 40001),
 # Input-Register ab 30001 nummeriert (Adresse = Nummer - 30001).
-# Frage: Das Handbuch sagt nicht, ob 40001-40004 im Flash gespeichert werden.
+# Frage: Seite 5: „Modbus control“ muss einmal in der App eingeschaltet werden; ist es das?
+# Frage: Das Handbuch sagt nicht, ob 40001-40007 im Flash gespeichert werden.
 slems_battery_profile: 1
 id: example_battery
 name: Example battery 5 kWh
@@ -187,24 +196,26 @@ device_info:
 
 control:
   type: split
-  keepalive_s: 30           # Seite 10: nach 60 s ohne Schreiben zurück in den Automatikbetrieb
+  keepalive_s: 60           # die Hälfte des Timeouts in 40007
   apply:
     # 40001 „Remote control“ (Seite 10): 0xA5A5 = an, 0x5A5A = aus
-    - {address: 0, value: 0xA5A5, at_rest_values: [0xA5A5, 0x5A5A], confirm: true}
-    # 40004 „Discharge power“ (Seite 10): in 10 W, 0-250
-    - {address: 3, value: "{discharge_w}", scale: 10, at_rest: [0, 250], confirm: true}
-    # 40003 „Charge power“ (Seite 10): in 10 W, 0-250
-    - {address: 2, value: "{charge_w}", scale: 10, at_rest: [0, 250], confirm: true}
+    - {address: 0, type: uint16, value: 0xA5A5, at_rest_values: [0xA5A5, 0x5A5A], confirm: true}
+    # 40007 „Remote time-out“ (Seite 10): s, 0-3600; danach ohne Schreiben zurück in den Automatikbetrieb
+    - {address: 6, type: uint16, value: 120, at_rest: [0, 3600], confirm: true}
+    # 40005-40006 „Discharge power“ (Seite 10): U32, höheres Wort zuerst, in 10 W, 0-250
+    - {address: 4, type: uint32, value: "{discharge_w}", scale: 10, at_rest: [0, 250], confirm: true}
+    # 40003-40004 „Charge power“ (Seite 10): U32, höheres Wort zuerst, in 10 W, 0-250
+    - {address: 2, type: uint32, value: "{charge_w}", scale: 10, at_rest: [0, 250], confirm: true}
     # 40002 „Force mode“ (Seite 10): 0 = keiner, 1 = Laden, 2 = Entladen
-    - {address: 1, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2], confirm: true}
+    - {address: 1, type: uint16, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2], confirm: true}
   release:
     auto:
-      - {address: 3, value: 0}
+      - {address: 4, value: 0}
       - {address: 2, value: 0}
       - {address: 1, value: 0, confirm: true}
       - {address: 0, value: 0x5A5A, confirm: true}
     standby:
-      - {address: 3, value: 0}
+      - {address: 4, value: 0}
       - {address: 2, value: 0}
       - {address: 1, value: 0, confirm: true}
 
@@ -222,15 +233,21 @@ Regeln:
   Adresse, Werten und Bereich übereinstimmen (eine Kopie oder ein Fork
   einer anderen Quelle ist nicht unabhängig); sonst lass es weg. Weichen
   die Quellen bei einem Leseregister ab, schreib "# unsicher: Quellen
-  weichen ab".
+  weichen ab". Ein Dokument des Herstellers aus dem Netz (z. B. ein
+  Modbus-Protokoll oder eine Technical Note) zählt als Handbuch.
 - Adressen sind die Protokolladresse, die im Modbus-Frame steht (0-65535).
   Handbücher nummerieren Register oft stattdessen: Mit einem Präfix (40001,
   400001 für Holding-, 30001 für Input-Register) zieh es ab; ab 1
-  nummeriert, zieh 1 ab; hexadezimale Adressen dürfen als 0x1A2B stehen.
-  Schreib oben ins Profil, wie das Handbuch zählt und was du abgezogen hast.
+  nummeriert, zieh 1 ab. Schreib Adressen wie die Quelle: Eine
+  hexadezimale Adresse bleibt hexadezimal (z. B. 0xE004). Schreib oben ins
+  Profil, wie das Handbuch zählt und was du abgezogen hast.
   Ist das im Handbuch nicht eindeutig, schreib oben "# Frage: ...".
 - Register mit Funktionscode 04 (Input-Register, oft 3xxxx) bekommen
   input: true. Register, die SLEMS schreibt, sind immer Holding-Register.
+- Jeder Schritt unter control.apply braucht type, auch uint16: Ein Wert
+  über zwei Register (32 Bit) ist uint32, int32 oder float32, mit
+  word_order, wenn das niedrige Wort zuerst kommt. Das Format kennt keine
+  64-Bit-Typen: Lass solche Register weg (z. B. 64-Bit-Zähler).
 - Nenne für jedes Leistungsregister Einheit und Vorzeichen aus dem Handbuch
   in einem Kommentar (z. B. „positiv: Entladen“). positive ist Pflicht bei
   power_dc_w, power_ac_w und connection_w; steht das Vorzeichen nicht im
@@ -246,28 +263,41 @@ Regeln:
   Darin müssen 0, die Höchstleistungen als Rohwerte (max_charge_w / scale),
   feste Werte, alle Werte von modes und jeder Wert der Freigabe liegen.
   Ein Register mit Kennwerten (z. B. 0xA5A5 = an, 0x5A5A = aus) bekommt
-  at_rest_values mit genau diesen Werten, nie einen Bereich.
+  at_rest_values mit genau diesen Werten, nie einen Bereich; ein Timeout
+  oder eine Dauer bekommt seinen Bereich aus dem Handbuch.
 - Lass ein Schreibregister ohne eindeutigen Eintrag im Handbuch weg; rate
   nie. Schreib nur Register, die SLEMS zum Laden, Entladen und Freigeben
   braucht; keine Einstellungen, Grenzen, Schutz- oder Reset-Register.
+- Einstellungen, die das Handbuch einmalig vor der Fernsteuerung verlangt
+  (z. B. Fernsteuerung freischalten, Laden aus dem Netz erlauben, ein
+  Standardmodus), werden nicht geschrieben: Nenne jede oben als
+  "# Frage: ...". Braucht die Freigabe auto eine solche Einstellung (z. B.
+  einen Speichermodus, der auf Fernsteuerung und zurück geschaltet wird),
+  schreib sie in apply und release mit persistent: true.
 - Register, die das Handbuch als Einstellung, Parameter, EEPROM oder Flash
   beschreibt, bekommen persistent: true. Nie ein Register mit einem
   Leistungs-Platzhalter. Sagt das Handbuch dazu bei einem Schreibregister
   nichts, schreib oben "# Frage: Wird <Register> dauerhaft gespeichert?".
-- Reihenfolge in apply: zuerst die Fernsteuerung einschalten, dann die
-  Leistungen, dann den Modus, damit eine neue Richtung mit gültigen Werten
-  beginnt.
+- Reihenfolge in apply: zuerst die Fernsteuerung einschalten und ein
+  Timeout setzen, dann die Leistungen, dann den Modus, damit eine neue
+  Richtung mit gültigen Werten beginnt.
 - release: gib auto und/oder standby an, je nachdem, was das Handbuch
-  unterstützt. Sie schreiben nur Register aus apply, mit festen Zahlen:
-  Leistungen 0, Modus idle, bei auto die Fernsteuerung aus. Lass die
-  Freigabe nie weg.
+  unterstützt und was hält, ohne dass SLEMS erneut schreibt. Fällt die
+  Batterie nach einem Timeout auf einen eingestellten Modus zurück, lass
+  diesen Zustand weg oder schreib "# Frage: ...". Sie schreiben nur
+  Register aus apply, mit festen Zahlen: Leistungen 0 (nutzt die eigene
+  Logik der Batterie diese Register als Grenzen, stattdessen die
+  Höchstleistungen), Modus idle, bei auto die Fernsteuerung aus. Gib immer
+  mindestens einen Zustand an.
 - confirm: true an jedem Schreibregister, das sich laut Handbuch
   zurücklesen lässt.
 - min_power_w nur, wenn das Handbuch eine kleinste Leistung nennt; nie
   schätzen.
 - keepalive_s: Nennt das Handbuch eine Zeit, nach der die Batterie in ihre
   eigene Logik zurückfällt, einen Wert deutlich darunter (z. B. die
-  Hälfte); sonst weglassen.
+  Hälfte); sonst weglassen. Ist dieses Timeout (oder die Dauer einer
+  Zwangsladung) ein Register, schreib es als festen Wert unter apply, so
+  kurz wie möglich: etwa zwei- bis viermal keepalive_s.
 - message_spacing_s und timeout_s nur, wenn das Handbuch einen kleinsten
   Abstand zwischen Anfragen oder eine Antwortzeit nennt; sagt es nichts,
   schreib oben "# Frage: kleinster Abstand zwischen Anfragen?".
@@ -275,11 +305,12 @@ Regeln:
   nennt eine Verzögerung der Vorgaben oder einen kleinsten Abstand zwischen
   ihnen.
 - device_info: die Firmware-Versionen und die Seriennummer, falls
-  vorhanden: Daran erkennt SLEMS ein Firmware-Update.
+  vorhanden: Daran erkennt SLEMS ein Firmware-Update. Bei einem
+  Hybrid-Wechselrichter die Firmware von Wechselrichter und Batterie.
 - probe: das Register des Ladezustands mit seinem Rohbereich (z. B.
   [0, 1000] bei 0,1 %).
 - state: nur die oben genannten Zustände; Rohwerte, die zu keinem passen,
-  weglassen.
+  weglassen. Ein Zustand über zwei Register ist uint32 oder int32.
 - own_pv nur für eine Batterie mit eigenen PV-Modulen: dann pv_w, und
   output_w (mit input_w, wenn sie aus dem Netz lädt) oder connection_w.
 - SLEMS erreicht die Batterie nur über Modbus TCP. Beschreibt das Handbuch
