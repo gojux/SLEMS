@@ -475,7 +475,9 @@
         "profile_own_pv": "Own PV incomplete or contradictory: {where}. {detail}",
         "profile_control": "Control incomplete or contradictory: {where}. {detail}",
         "profile_duplicate_address": "Register written twice: {where}. {detail}",
-        "profile_outside_at_rest": "Value outside the range at rest (`at_rest`): {where}, value {detail}."
+        "profile_outside_at_rest": "Value outside the range at rest (`at_rest`): {where}, value {detail}.",
+        "profile_persistent_power": "A power set point must not be `persistent` (flash): {where}.",
+        "profile_undeclared_register": "The release writes a register that is not in `control.apply`: {where}."
       },
       "abort": {
         "reconfigure_successful": "Battery updated."

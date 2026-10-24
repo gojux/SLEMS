@@ -4,6 +4,7 @@ loading of unusable profiles and the steps of the config flow."""
 
 import json
 from pathlib import Path
+import re
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -11,7 +12,7 @@ from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
 import pytest
 
-from custom_components.slems import config_flow
+from custom_components.slems import battery_profiles, config_flow
 from custom_components.slems.battery_profiles import (
     ERROR_CODES,
     ProfileError,
@@ -84,6 +85,14 @@ def test_every_profile_error_has_a_text() -> None:
         for code in ERROR_CODES:
             assert f"profile_{code}" in errors, f"{name}: {code}"
         assert "profile_unusable" in texts["issues"]
+
+
+def test_every_code_the_loader_raises_is_known() -> None:
+    source = Path(battery_profiles.__file__).read_text()
+    raised = set(re.findall(r'(?:ProfileError|_fail)\(\s*"(\w+)"', source))
+    # unknown_profile comes from profile_of (a repair, not the dialog).
+    assert raised - {"unknown_profile"} <= set(ERROR_CODES)
+    assert {"persistent_power", "undeclared_register"} <= raised
 
 
 def test_trial_begins_again_at_another_address() -> None:

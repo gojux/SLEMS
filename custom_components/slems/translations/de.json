@@ -475,7 +475,9 @@
         "profile_own_pv": "Eigene PV unvollständig oder widersprüchlich: {where}. {detail}",
         "profile_control": "Steuerung unvollständig oder widersprüchlich: {where}. {detail}",
         "profile_duplicate_address": "Register doppelt geschrieben: {where}. {detail}",
-        "profile_outside_at_rest": "Wert außerhalb des Ruhebereichs (`at_rest`): {where}, Wert {detail}."
+        "profile_outside_at_rest": "Wert außerhalb des Ruhebereichs (`at_rest`): {where}, Wert {detail}.",
+        "profile_persistent_power": "Eine Leistungsvorgabe darf nicht `persistent` (Flash) sein: {where}.",
+        "profile_undeclared_register": "Die Freigabe schreibt ein Register, das nicht in `control.apply` steht: {where}."
       },
       "abort": {
         "reconfigure_successful": "Batterie aktualisiert."

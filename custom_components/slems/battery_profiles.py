@@ -137,7 +137,7 @@ PERSISTENT_WINDOW_S = 24 * 3600.0
 # Codes of ``ProfileError``.
 ERROR_CODES = (
     "syntax", "not_profile", "version_newer", "duplicate_key", "unknown_key", "missing_key", "invalid",
-    "own_pv", "control", "duplicate_address", "outside_at_rest",
+    "own_pv", "control", "duplicate_address", "outside_at_rest", "persistent_power", "undeclared_register",
 )
 # Keys that only describe a profile: changing them does not change its content hash.
 DESCRIPTIVE_KEYS = ("name", "manufacturer", "notes")
