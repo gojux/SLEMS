@@ -14,12 +14,16 @@ So geht's:
 
 1. Besorg dir die Modbus-Registerliste deiner Batterie (Handbuch,
    „Modbus-Protokoll“ oder „Register Map“ des Herstellers, als PDF oder
-   Text) und notiere Modell und Firmware-Version.
+   Text) und notiere Modell und Firmware-Version. Viele Hersteller
+   veröffentlichen keine: Dann häng nichts an, und die KI sucht online
+   mehrere Quellen (Integrationen für Home Assistant oder ioBroker, evcc,
+   andere Open-Source-Projekte) und vergleicht sie. Dafür braucht die KI
+   eine Websuche.
 2. Kopiere den Prompt unten in einen neuen Chat, füll die ersten Zeilen aus
-   und häng die Registerliste an.
+   und häng die Registerliste an, falls du eine hast.
 3. Prüfe die Antwort: Zeilen mit `# unsicher`, die Zeilen `# Frage` oben und
-   vor allem jedes Register unter `control` gegen das Handbuch (Adresse,
-   Einheit, Bereich).
+   vor allem jedes Register unter `control` gegen das Handbuch oder die
+   Quellen oben (Adresse, Einheit, Bereich).
 4. Füge das YAML in SLEMS ein. SLEMS liest jedes Register einmal und zeigt
    die Werte, danach was es schreiben würde, bevor etwas geschrieben wird.
 
@@ -27,7 +31,9 @@ Eine KI kann eine Tabelle falsch lesen oder Adressen falsch zählen. Ein Wert
 im falschen Register kann eine Einstellung der Batterie ändern; die
 Prüfungen von SLEMS fangen die meisten dieser Fehler ab, aber nicht alle.
 Vergleiche die Schreibregister mit dem Handbuch, bevor du die Batterie
-speicherst.
+speicherst. Ein Profil aus Quellen im Netz ist unsicherer als eines aus dem
+Handbuch: Öffne die Quellen, die oben genannt sind, und prüfe die
+Schreibregister dort.
 
 ## Prompt
 
@@ -36,19 +42,25 @@ Batterie: <Hersteller und Modell>
 Firmware: <Firmware-Version, falls bekannt>
 
 Lies die angehängte Modbus-Registerliste und gib ein Batterieprofil für SLEMS
-im Format "slems_battery_profile", Version 1, aus. Gib nur das YAML in einem
-Codeblock aus, ohne weitere Erklärungen. Schreib die Kommentare in der
-Sprache dieser Nachricht; die Schlüssel bleiben wie angegeben.
+im Format "slems_battery_profile", Version 1, aus. Ist keine Registerliste
+angehängt, such online nach den Registern dieses Modells: beim Hersteller,
+in Integrationen für Home Assistant oder ioBroker, bei evcc, in anderen
+Open-Source-Projekten; nimm mehrere unabhängige Quellen und vergleiche sie.
+Gib nur das YAML in einem Codeblock aus, ohne weitere Erklärungen. Schreib
+die Kommentare in der Sprache dieser Nachricht; die Schlüssel bleiben wie
+angegeben.
 
-Hat die Registerliste kein Register für die Lade- und Entladeleistung (oder
-eine Leistung mit Vorzeichen), oder speichert die Batterie laut Handbuch die
-Leistungsvorgabe dauerhaft (Flash, EEPROM), gib kein Profil aus: sag in
-einem Satz, warum sich die Batterie so nicht steuern lässt.
+Gibt es kein Register für die Lade- und Entladeleistung (oder eine Leistung
+mit Vorzeichen), oder wird das Register der Leistungsvorgabe selbst
+dauerhaft gespeichert (Flash, EEPROM), gib kein Profil aus: sag in einem
+Satz, warum sich die Batterie so nicht steuern lässt. Dauerhaft gespeicherte
+Einstellungen (z. B. die Höchstleistung) und unsichere Quellen sind dafür
+kein Grund: Gib das Profil mit "# unsicher" aus.
 
 Format (alle Schlüssel, die es gibt; andere Schlüssel sind nicht erlaubt):
 
 slems_battery_profile: 1
-id: <Kleinbuchstaben, Ziffern und _, z. B. acme_x5; nicht marstek_venus_e3>
+id: <Hersteller und Modell in Kleinbuchstaben, Ziffern und _, z. B. acme_x5>
 name: <Hersteller und Modell>
 manufacturer: <Hersteller>                    # optional
 revision: 1
@@ -111,7 +123,7 @@ Schlüssel eines Registers (read, device_info, probe):
   address     Protokolladresse 0-65535 (siehe Regeln)
   type        uint16, int16, uint32, int32, float32 oder char (Text, mit count)
   count       nur char: Anzahl der Register
-  scale       Wert = Rohwert × scale (z. B. 0.1 für 0,1 %); Standard 1
+  scale       Wert = Rohwert × scale (z. B. 0.1 für 0,1 %); Standard 1; nicht bei probe (Bereich roh)
   word_order  big (Standard) oder little: Reihenfolge der zwei Register bei 32 Bit
   input       true für Input-Register (Funktionscode 04); Standard Holding (03)
   positive    nur Leistungen mit Vorzeichen, siehe oben
@@ -177,8 +189,8 @@ control:
   type: split
   keepalive_s: 30           # Seite 10: nach 60 s ohne Schreiben zurück in den Automatikbetrieb
   apply:
-    # 40001 „Remote control“ (Seite 10): 0 = aus, 1 = an
-    - {address: 0, value: 1, at_rest: [0, 1], confirm: true}
+    # 40001 „Remote control“ (Seite 10): 0xA5A5 = an, 0x5A5A = aus
+    - {address: 0, value: 0xA5A5, at_rest_values: [0xA5A5, 0x5A5A], confirm: true}
     # 40004 „Discharge power“ (Seite 10): in 10 W, 0-250
     - {address: 3, value: "{discharge_w}", scale: 10, at_rest: [0, 250], confirm: true}
     # 40003 „Charge power“ (Seite 10): in 10 W, 0-250
@@ -190,7 +202,7 @@ control:
       - {address: 3, value: 0}
       - {address: 2, value: 0}
       - {address: 1, value: 0, confirm: true}
-      - {address: 0, value: 0, confirm: true}
+      - {address: 0, value: 0x5A5A, confirm: true}
     standby:
       - {address: 3, value: 0}
       - {address: 2, value: 0}
@@ -200,9 +212,17 @@ probe: {address: 100, type: uint16, input: true, range: [0, 1000]}
 ```
 
 Regeln:
-- Nimm jedes Register aus der angehängten Liste. Erfinde keine Register,
-  Adressen, Faktoren oder Bereiche. Ist ein Wert unsicher, schreib ans
-  Zeilenende den Kommentar "# unsicher: <Grund>".
+- Nimm jedes Register aus der angehängten Liste oder, ohne Liste, aus den
+  gefundenen Quellen; „das Handbuch“ in diesen Regeln meint sie. Erfinde
+  keine Register, Adressen, Faktoren oder Bereiche. Ist ein Wert unsicher,
+  schreib ans Zeilenende den Kommentar "# unsicher: <Grund>".
+- Quellen aus dem Netz: Nenne jede oben im Profil mit Link (und Datei).
+  Schreib in den Kommentar jedes Registers, welche Quellen es nennen. Nimm
+  ein Schreibregister nur, wenn mindestens zwei unabhängige Quellen bei
+  Adresse, Werten und Bereich übereinstimmen (eine Kopie oder ein Fork
+  einer anderen Quelle ist nicht unabhängig); sonst lass es weg. Weichen
+  die Quellen bei einem Leseregister ab, schreib "# unsicher: Quellen
+  weichen ab".
 - Adressen sind die Protokolladresse, die im Modbus-Frame steht (0-65535).
   Handbücher nummerieren Register oft stattdessen: Mit einem Präfix (40001,
   400001 für Holding-, 30001 für Input-Register) zieh es ab; ab 1
@@ -225,6 +245,8 @@ Regeln:
   aus dem Handbuch: den Bereich des Rohwerts, solange die Batterie ruht.
   Darin müssen 0, die Höchstleistungen als Rohwerte (max_charge_w / scale),
   feste Werte, alle Werte von modes und jeder Wert der Freigabe liegen.
+  Ein Register mit Kennwerten (z. B. 0xA5A5 = an, 0x5A5A = aus) bekommt
+  at_rest_values mit genau diesen Werten, nie einen Bereich.
 - Lass ein Schreibregister ohne eindeutigen Eintrag im Handbuch weg; rate
   nie. Schreib nur Register, die SLEMS zum Laden, Entladen und Freigeben
   braucht; keine Einstellungen, Grenzen, Schutz- oder Reset-Register.
@@ -241,6 +263,8 @@ Regeln:
   Freigabe nie weg.
 - confirm: true an jedem Schreibregister, das sich laut Handbuch
   zurücklesen lässt.
+- min_power_w nur, wenn das Handbuch eine kleinste Leistung nennt; nie
+  schätzen.
 - keepalive_s: Nennt das Handbuch eine Zeit, nach der die Batterie in ihre
   eigene Logik zurückfällt, einen Wert deutlich darunter (z. B. die
   Hälfte); sonst weglassen.
@@ -274,8 +298,9 @@ derselben Batterie werden. Melde es als
 - dem Ergebnis seines Probebetriebs (die Benachrichtigung des Selbsttests
   oder die Diagnose),
 - der Quelle der Registerliste (ein Link oder Name und Version des
-  Handbuchs).
+  Handbuchs, oder die Quellen aus dem Netz).
 
 Ein Profil wird mitgeliefert, sobald es bei mindestens einer, besser zwei
 Batterien den Probebetrieb bestanden hat, seine Schreibregister gegen das
-Handbuch geprüft sind und es einen Test im Repository hat.
+Handbuch oder mehrere Quellen geprüft sind und es einen Test im Repository
+hat.

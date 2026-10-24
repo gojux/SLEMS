@@ -167,6 +167,10 @@ def test_minimal_profile() -> None:
     assert profile.control.confirmed
     assert profile.timing.start_delay_s is None
     assert profile.control.release.keys() == {ReleaseState.AUTO}
+    # The release names only the mode: the powers are set to 0 W before it.
+    assert [(step.address, step.value, step.confirm) for step in profile.control.release[ReleaseState.AUTO]] == [
+        (200, 0, False), (201, 0, False), (202, 0, True),
+    ]
 
 
 @pytest.mark.parametrize(
@@ -199,6 +203,12 @@ def test_minimal_profile() -> None:
          "persistent_power", "control.apply[0].persistent", 11),
         ("{address: 100, type: uint16, range", "{address: 100, type: char, count: 2, range", "invalid", "probe.type",
          17),
+        # The probe range is raw: a scale would be ignored.
+        ("{address: 100, type: uint16, range", "{address: 100, type: uint16, scale: 0.1, range", "invalid",
+         "probe.scale", 17),
+        # Key values (on 0x55AA, off 0x55BB) as a range: a shifted address holding 5178 (51.78 V) would pass.
+        ("  release:\n", "    - {address: 203, value: 0x55AA, at_rest: [0, 0x55BB]}\n  release:\n", "key_value_range",
+         "control.apply[3].at_rest", 14),
     ],
 )
 def test_format_errors(old: str, new: str, code: str, path: str, line: int | None) -> None:

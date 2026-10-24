@@ -130,6 +130,9 @@ DEFAULT_TIMEOUT_S = 3.0
 DEFAULT_CONFIRM_DELAY_S = 0.2
 DEFAULT_CONFIRM_TOLERANCE_W = 100.0
 DEFAULT_MAX_CHANGES_PER_DAY = 100
+# A step with a fixed value holds key values at rest (e.g. 0x55AA/0x55BB): a
+# range at rest wider than this would also pass a shifted address.
+KEY_VALUE_MAX_SPAN = 255
 # A persistent register changed again within this time is warned about.
 PERSISTENT_WARN_S = 60.0
 PERSISTENT_WINDOW_S = 24 * 3600.0
@@ -138,6 +141,7 @@ PERSISTENT_WINDOW_S = 24 * 3600.0
 ERROR_CODES = (
     "syntax", "not_profile", "version_newer", "duplicate_key", "unknown_key", "missing_key", "invalid",
     "own_pv", "control", "duplicate_address", "outside_at_rest", "persistent_power", "undeclared_register",
+    "key_value_range",
 )
 # Keys that only describe a profile: changing them does not change its content hash.
 DESCRIPTIVE_KEYS = ("name", "manufacturer", "notes")
@@ -826,6 +830,8 @@ class _Parser:
         register, m = self._register(self._required(doc, "probe", ""), "probe", doc, "probe", extra=("range",))
         if register.type == "char":
             raise self._fail("invalid", "probe.type", m, "type", "a number type")
+        if "scale" in m:
+            raise self._fail("invalid", "probe.scale", m, "scale", "the range is in raw values")
         self._required(m, "range", "probe")
         return Probe(register, self._range(m, "range", "probe"))
 
@@ -917,6 +923,8 @@ class _Parser:
             at_rest_values = tuple(values)
         if at_rest is None and at_rest_values is None and not self._bundled:
             raise self._fail("missing_key", f"{path}.at_rest", m)
+        if at_rest is not None and not placeholder and at_rest[1] - at_rest[0] > KEY_VALUE_MAX_SPAN:
+            raise self._fail("key_value_range", f"{path}.at_rest", m, "at_rest", f"{at_rest[0]}-{at_rest[1]}")
         persistent = self._flag(m, "persistent", path)
         if persistent and value in POWER_PLACEHOLDERS:
             raise self._fail(
@@ -1047,5 +1055,12 @@ class _Parser:
                 steps.append(step)
             if len({step.address for step in steps}) != len(steps):
                 raise self._fail("duplicate_address", path, rm, state.value)
-            release[state] = tuple(steps)
+            # Powers the release leaves out are set to 0 W first, so no old set point stays.
+            listed = {step.address for step in steps}
+            zeros = [
+                dataclasses.replace(step, value=raw_value(step), confirm=False)
+                for step in apply
+                if step.value in POWER_PLACEHOLDERS and step.address not in listed
+            ]
+            release[state] = (*zeros, *steps)
         return release

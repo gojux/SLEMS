@@ -897,9 +897,11 @@ Schreibbefehle. Batterien aus einem Profil sind experimentell: Bitte berichte
 deine Erfahrungen in einem [Issue](https://github.com/gojux/SLEMS/issues).
 
 **Voraussetzungen**: Modbus TCP (eine Batterie nur mit RS485 / Modbus RTU
-braucht einen Modbus-TCP-Adapter); die Modbus-Registerliste des Herstellers
-mit Registern für Ladezustand, Leistung sowie Lade- und Entladeleistung (oder
-eine Leistung mit Vorzeichen); ein Smart Meter in SLEMS für den Probebetrieb.
+braucht einen Modbus-TCP-Adapter); Register für Ladezustand, Leistung sowie
+Lade- und Entladeleistung (oder eine Leistung mit Vorzeichen), aus der
+Registerliste des Herstellers oder, da viele Hersteller keine
+veröffentlichen, aus mehreren Quellen im Netz; ein Smart Meter in SLEMS für
+den Probebetrieb.
 
 **Eine Batterie, ein Steuerpunkt**: Eine Batterie in SLEMS ist ein
 Steuerpunkt mit einem Ladezustand, egal wie viele Wechselrichter oder Module
@@ -910,8 +912,9 @@ Batterie mit der Gesamtkapazität. Trag dieselbe Batteriebank nie zweimal ein
 zwei Regelkreise arbeiteten gegeneinander.
 
 1. **Profil erstellen** aus der Registerliste mit dem
-   [KI-Prompt](docs/battery-profile-prompt.de.md). Prüfe die Zeilen mit
-   `# unsicher` und `# Frage`.
+   [KI-Prompt](docs/battery-profile-prompt.de.md). Ohne Registerliste sucht
+   die KI online mehrere Quellen, vergleicht sie und nennt sie oben im
+   Profil. Prüfe die Zeilen mit `# unsicher` und `# Frage`.
 2. **Batterie hinzufügen** → Modell **Batterie aus einem Modbus-Profil
    (experimentell)** und das Profil einfügen. SLEMS prüft es und zeigt einen
    Fehler mit Zeile und Schlüssel, z. B. einen unbekannten Schlüssel oder
@@ -928,7 +931,10 @@ zwei Regelkreise arbeiteten gegeneinander.
    falscher Wert bedeutet meist eine falsche Adresse oder einen falschen
    Faktor. ⚠ markiert unwahrscheinliche Werte (Temperatur, Zellspannungen,
    Leistungen über dem Doppelten der Grenze, negative Zähler, unbekannte
-   Zustände, nicht lesbare Werte). **Weiter** gibt es nur, wenn der
+   Zustände, nicht lesbare Werte). In Ruhe ist die Leistung 0 W: Lass die
+   Batterie laden oder entladen (eigene Logik oder ihre App) und wähl
+   **Erneut lesen**, dann zeigt sich auch ein falsches Vorzeichen der
+   Leistung. **Weiter** gibt es nur, wenn der
    Ladezustand lesbar ist und zwischen 0 und 100 % liegt und jedes
    Schreibregister lesbar ist und in seinem Ruhebereich (`at_rest`) liegt;
    ein Register außerhalb enthält meist etwas anderes (eine verschobene
@@ -937,8 +943,8 @@ zwei Regelkreise arbeiteten gegeneinander.
    Batterie freigibt** bietet nur die Zustände des Profils an.
 6. **Schreibvorschau**: was SLEMS im Probebetrieb schreibt, Register für
    Register mit dem Wert jetzt und dann: Laden, Entladen und die Freigabe.
-   Vergleiche jedes Schreibregister mit dem Handbuch (Adresse, Einheit,
-   Bereich) und bestätige **Ich habe die Schreibregister mit dem Handbuch
+   Vergleiche jedes Schreibregister mit dem Handbuch oder den Quellen im
+   Profil (Adresse, Einheit, Bereich) und bestätige **Ich habe die Schreibregister mit dem Handbuch
    verglichen**. Die Prüfungen von SLEMS fangen die meisten Fehler ab, aber
    nicht alle: Ein Wert im falschen Register kann eine Einstellung der
    Batterie ändern.

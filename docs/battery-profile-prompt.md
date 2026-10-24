@@ -14,19 +14,24 @@ How to do it:
 
 1. Get the Modbus register list of your battery (manual, "Modbus protocol" or
    "register map" of the manufacturer, PDF or text) and note the model and
-   its firmware version.
+   its firmware version. Many manufacturers publish none: then attach
+   nothing, and the AI searches online for several sources (integrations
+   for Home Assistant or ioBroker, evcc, other open source projects) and
+   compares them. For that the AI needs web search.
 2. Copy the prompt below into a new chat, fill in the first lines and attach
-   the register list.
+   the register list, if you have one.
 3. Check the answer: lines marked `# uncertain`, the `# question` lines at the
-   top and above all every register under `control` against the manual
-   (address, unit, range).
+   top and above all every register under `control` against the manual or
+   the sources at the top (address, unit, range).
 4. Paste the YAML in SLEMS. It reads every register once and shows the
    values, then what it would write, before anything is written.
 
 An AI can misread a table or count addresses wrongly. A value written to a
 wrong register can change a setting of the battery; the checks of SLEMS catch
 most of these errors, but not all. Compare the write registers with the
-manual before you save the battery.
+manual before you save the battery. A profile from sources found online is
+less certain than one from the manual: open the sources named at the top and
+check the write registers there.
 
 ## Prompt
 
@@ -35,19 +40,24 @@ Battery: <manufacturer and model>
 Firmware: <firmware version, if known>
 
 Read the attached Modbus register list and output a battery profile for
-SLEMS in the format "slems_battery_profile", version 1. Output only the YAML
-in a code block, without further explanations. Write the comments in the
-language of this message; the keys stay as given.
+SLEMS in the format "slems_battery_profile", version 1. If no register list
+is attached, search online for the registers of this model: the
+manufacturer, integrations for Home Assistant or ioBroker, evcc, other open
+source projects; use several independent sources and compare them. Output
+only the YAML in a code block, without further explanations. Write the
+comments in the language of this message; the keys stay as given.
 
-If the register list has no register for the charge and discharge power (or
-one signed power), or if the manual says the power set point is stored
+If there is no register for the charge and discharge power (or one signed
+power), or if the register of the power set point itself is stored
 permanently (flash, EEPROM), output no profile: say in one sentence why the
-battery cannot be controlled this way.
+battery cannot be controlled this way. Settings stored permanently (e.g. the
+highest power) and uncertain sources are no reason for that: output the
+profile with "# uncertain".
 
 Format (every key that exists; no other keys are allowed):
 
 slems_battery_profile: 1
-id: <lower case letters, digits and _, e.g. acme_x5; not marstek_venus_e3>
+id: <manufacturer and model in lower case letters, digits and _, e.g. acme_x5>
 name: <manufacturer and model>
 manufacturer: <manufacturer>                  # optional
 revision: 1
@@ -110,7 +120,7 @@ Keys of a register (read, device_info, probe):
   address     protocol address 0-65535 (see the rules)
   type        uint16, int16, uint32, int32, float32 or char (text, with count)
   count       char only: number of registers
-  scale       value = raw value × scale (e.g. 0.1 for 0.1 %); default 1
+  scale       value = raw value × scale (e.g. 0.1 for 0.1 %); default 1; not for probe (its range is raw)
   word_order  big (default) or little: order of the two registers of 32 bit values
   input       true for input registers (function code 04); default holding (03)
   positive    powers with a sign only, see above
@@ -176,8 +186,8 @@ control:
   type: split
   keepalive_s: 30           # page 10: back to automatic after 60 s without a write
   apply:
-    # 40001 "Remote control" (page 10): 0 = off, 1 = on
-    - {address: 0, value: 1, at_rest: [0, 1], confirm: true}
+    # 40001 "Remote control" (page 10): 0xA5A5 = on, 0x5A5A = off
+    - {address: 0, value: 0xA5A5, at_rest_values: [0xA5A5, 0x5A5A], confirm: true}
     # 40004 "Discharge power" (page 10): 10 W units, 0-250
     - {address: 3, value: "{discharge_w}", scale: 10, at_rest: [0, 250], confirm: true}
     # 40003 "Charge power" (page 10): 10 W units, 0-250
@@ -189,7 +199,7 @@ control:
       - {address: 3, value: 0}
       - {address: 2, value: 0}
       - {address: 1, value: 0, confirm: true}
-      - {address: 0, value: 0, confirm: true}
+      - {address: 0, value: 0x5A5A, confirm: true}
     standby:
       - {address: 3, value: 0}
       - {address: 2, value: 0}
@@ -199,9 +209,16 @@ probe: {address: 100, type: uint16, input: true, range: [0, 1000]}
 ```
 
 Rules:
-- Take every register from the attached list. Do not invent registers,
-  addresses, scales or ranges. If a value is uncertain, add the comment
-  "# uncertain: <reason>" at the end of the line.
+- Take every register from the attached list or, without one, from the
+  sources found; "the manual" in these rules means them. Do not invent
+  registers, addresses, scales or ranges. If a value is uncertain, add the
+  comment "# uncertain: <reason>" at the end of the line.
+- Sources found online: name each at the top of the profile with its link
+  (and file). Say in the comment of every register which sources name it.
+  Take a write register only if at least two independent sources agree on
+  its address, values and range (a copy or fork of another source is not
+  independent); otherwise leave it out. If the sources differ on a read
+  register, add "# uncertain: sources differ".
 - Addresses are the protocol address sent in the Modbus frame (0-65535).
   Manuals often number registers instead: with a prefix (40001, 400001 for
   holding, 30001 for input registers) subtract it; numbered from 1, subtract
@@ -223,6 +240,8 @@ Rules:
   manual: the raw range the register holds while the battery rests. 0, the
   highest powers as raw values (max_charge_w / scale), fixed values, all
   values of modes and every value written by release must lie inside it.
+  A register with key values (e.g. 0xA5A5 = on, 0x5A5A = off) gets
+  at_rest_values with exactly these values, never a range.
 - Leave out a write register without a clear entry in the manual; never
   guess one. Write only registers SLEMS needs to charge, discharge and
   release; no settings, limits, protection or reset registers.
@@ -236,6 +255,7 @@ Rules:
   write only registers from apply, with fixed numbers: powers 0, mode
   idle, remote control off for auto. Never leave out the release.
 - confirm: true on every write register the manual says can be read back.
+- min_power_w only if the manual names a least power; never estimate it.
 - keepalive_s: if the manual names a time-out after which the battery falls
   back to its own logic, a value clearly below it (e.g. half); else leave it
   out.
@@ -264,8 +284,8 @@ same battery. Open an [issue](https://github.com/gojux/SLEMS/issues) with:
 - manufacturer, model and firmware versions (in the diagnostics of SLEMS),
 - the result of its trial (the self-test notification or the diagnostics),
 - where the register list comes from (a link or the name and version of the
-  manual).
+  manual, or the sources found online).
 
 A profile becomes a shipped one once it passed its trial with at least one,
-better two batteries, its write registers are checked against the manual and
-it has a test in the repository.
+better two batteries, its write registers are checked against the manual or
+several sources and it has a test in the repository.

@@ -464,7 +464,7 @@
         "address_in_use": "This address is already used by the battery {battery}. A battery takes only one connection: remove {battery} first, or choose another address.",
         "not_checked": "Compare the write registers with the manual first.",
         "others_not_at_rest": "Not changed, they do not answer or a write register is outside its range at rest with the new profile: {batteries}. Leave them out or check them.",
-        "profile_bundled_id": "A shipped profile has the id **{detail}**; give your profile an id of its own.",
+        "profile_bundled_id": "A shipped profile has the id **{detail}**; select it under **Profile** or give your profile an id of its own.",
         "profile_syntax": "The text is no valid YAML ({where}): {detail}",
         "profile_not_profile": "This is no SLEMS battery profile: the line `slems_battery_profile: 1` is missing.",
         "profile_version_newer": "The profile has format version {detail}; this SLEMS knows an older one. Update SLEMS.",
@@ -477,7 +477,8 @@
         "profile_duplicate_address": "Register written twice: {where}. {detail}",
         "profile_outside_at_rest": "Value outside the range at rest (`at_rest`): {where}, value {detail}.",
         "profile_persistent_power": "A power set point must not be `persistent` (flash): {where}.",
-        "profile_undeclared_register": "The release writes a register that is not in `control.apply`: {where}."
+        "profile_undeclared_register": "The release writes a register that is not in `control.apply`: {where}.",
+        "profile_key_value_range": "A fixed value with a wide range at rest: {where} ({detail}). Give the key values of the register as `at_rest_values`."
       },
       "abort": {
         "reconfigure_successful": "Battery updated."

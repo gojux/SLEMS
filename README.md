@@ -848,9 +848,10 @@ from a profile are experimental: please report your experience in an
 [issue](https://github.com/gojux/SLEMS/issues).
 
 **Requirements**: Modbus TCP (a battery with only RS485 / Modbus RTU needs a
-Modbus TCP adapter); the Modbus register list of the manufacturer with
-registers for the state of charge, the power and the charge and discharge
-power (or one signed power); a smart meter in SLEMS for the trial.
+Modbus TCP adapter); registers for the state of charge, the power and the
+charge and discharge power (or one signed power), from the manufacturer's
+register list or, as many manufacturers publish none, from several sources
+found online; a smart meter in SLEMS for the trial.
 
 **One battery, one control point**: a battery in SLEMS is one control point
 with one state of charge, however many inverters or modules are behind it.
@@ -861,8 +862,10 @@ capacity would count twice and two control loops would work against each
 other.
 
 1. **Make the profile** from the register list with the
-   [AI prompt](docs/battery-profile-prompt.md). Check the lines marked
-   `# uncertain` and `# question`.
+   [AI prompt](docs/battery-profile-prompt.md). Without a register list the
+   AI searches online for several sources, compares them and names them at
+   the top of the profile. Check the lines marked `# uncertain` and
+   `# question`.
 2. **Add battery** → model **Battery from a Modbus profile (experimental)**
    and paste the profile. SLEMS checks it and shows an error with the line and
    the key, e.g. an unknown key or a value outside the range at rest. If SLEMS
@@ -876,7 +879,10 @@ other.
    Compare the values with the battery's app or display: a wrong value
    usually means a wrong address or scale. ⚠ marks unlikely values
    (temperature, cell voltages, powers beyond twice the limit, negative
-   counters, unknown states, unreadable values). **Continue** is offered only
+   counters, unknown states, unreadable values). At rest the power is 0 W:
+   let the battery charge or discharge (its own logic or its app) and
+   **Read again**, so a wrong sign of the power shows too. **Continue** is
+   offered only
    if the state of charge is readable and 0–100 % and every write register is
    readable and inside its range at rest (`at_rest`); a register outside
    usually holds something else (a shifted address). Otherwise
@@ -885,7 +891,8 @@ other.
    battery** offers only the states of the profile.
 6. **Write preview**: what SLEMS writes in the trial, register by register
    with the value now and then: charging, discharging and the release.
-   Compare every write register with the manual (address, unit, range) and
+   Compare every write register with the manual or the sources named in the
+   profile (address, unit, range) and
    confirm **I compared the write registers with the manual**. The checks of
    SLEMS catch most errors, but not all: a value in a wrong register can
    change a setting of the battery.

@@ -464,7 +464,7 @@
         "address_in_use": "Diese Adresse nutzt schon die Batterie {battery}. Eine Batterie nimmt nur eine Verbindung an: Entferne zuerst {battery} oder wähle eine andere Adresse.",
         "not_checked": "Vergleiche zuerst die Schreibregister mit dem Handbuch.",
         "others_not_at_rest": "Nicht geändert, sie antworten nicht oder ein Schreibregister liegt mit dem neuen Profil außerhalb seines Ruhebereichs: {batteries}. Lass sie weg oder prüfe sie.",
-        "profile_bundled_id": "Ein mitgeliefertes Profil hat die id **{detail}**; gib deinem Profil eine eigene id.",
+        "profile_bundled_id": "Ein mitgeliefertes Profil hat die id **{detail}**; wähl es unter **Profil** aus oder gib deinem Profil eine eigene id.",
         "profile_syntax": "Der Text ist kein gültiges YAML ({where}): {detail}",
         "profile_not_profile": "Das ist kein SLEMS-Batterieprofil: Die Zeile `slems_battery_profile: 1` fehlt.",
         "profile_version_newer": "Das Profil hat Formatversion {detail}; dieses SLEMS kennt eine ältere. Aktualisiere SLEMS.",
@@ -477,7 +477,8 @@
         "profile_duplicate_address": "Register doppelt geschrieben: {where}. {detail}",
         "profile_outside_at_rest": "Wert außerhalb des Ruhebereichs (`at_rest`): {where}, Wert {detail}.",
         "profile_persistent_power": "Eine Leistungsvorgabe darf nicht `persistent` (Flash) sein: {where}.",
-        "profile_undeclared_register": "Die Freigabe schreibt ein Register, das nicht in `control.apply` steht: {where}."
+        "profile_undeclared_register": "Die Freigabe schreibt ein Register, das nicht in `control.apply` steht: {where}.",
+        "profile_key_value_range": "Fester Wert mit weitem Ruhebereich: {where} ({detail}). Gib die Kennwerte des Registers als `at_rest_values` an."
       },
       "abort": {
         "reconfigure_successful": "Batterie aktualisiert."
