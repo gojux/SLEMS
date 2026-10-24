@@ -833,6 +833,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.forecaster = ConsumptionForecaster(hass, self._forecast_sources())
         self.controller = RealTimeController(self)
         self.problems = ProblemReporter(hass, self)
+        # Batteries left out because their profile cannot be used (subentry id -> name, error).
+        self.unusable_profiles: dict[str, dict[str, str]] = {}
         # Day-ahead prices, fetched only when the user switches it on.
         self.market_prices = MarketPrices(hass, entry.entry_id)
         # Grid import / export per quarter hour (see grid_quarters), own store.
@@ -1019,7 +1021,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 battery.self_test_pending = False
             if battery.driver.trial_spec is not None:
                 battery.trial = TrialState.restore(
-                    data.get("trial"), battery.driver.trial_key, dt_util.utcnow().timestamp()
+                    data.get("trial"), battery.driver.trial_key, dt_util.utcnow().timestamp(), battery.driver.trial_device
                 )
                 battery.device_info_checked = False
                 if battery.trial.wrote:

@@ -15,6 +15,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+import logging
 import os
 import socket
 from typing import Any
@@ -27,6 +28,7 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
+    ConfigSubentry,
     ConfigSubentryFlow,
     SOURCE_RECONFIGURE,
     OptionsFlow,
@@ -34,11 +36,12 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er, selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.translation import async_get_translations
 from homeassistant.util import dt as dt_util
-from modbus_connection import ModbusTcpParams
+from modbus_connection import ModbusError, ModbusTcpParams
 
 from .const import (
     CONF_GRID_EXPORT_ENERGY_ENTITY,
@@ -153,6 +156,7 @@ from .const import (
     CONF_SOC_ENTITY,
     CONF_UNIT_ID,
     CONF_PROFILE_ID,
+    CONF_PROFILE_YAML,
     CONF_TRANSPORT,
     CONF_WEATHER_ENTITY,
     DEFAULT_MODBUS_PORT,
@@ -167,11 +171,27 @@ from .const import (
     ControlMode,
     EfficiencyMode,
 )
-from .battery_profiles import bundled_profiles
+from .battery_profiles import (
+    BatteryProfile,
+    ProfileError,
+    bundled_profile_text,
+    bundled_profiles,
+    parse_profile,
+    profile_of,
+)
 from .discovery import async_find_batteries
 from .drivers.ha_entities import EntityBatteryConfig
 from .drivers.marstek_venus_e3 import HARDWARE_MAX_POWER_W, MarstekVenusE3Driver
-from .drivers.profile import probe as probe_profile
+from .drivers.profile import (
+    HaUnitTransport,
+    ProfileDriver,
+    ProfileTransport,
+    connect_new,
+    own_link,
+    read_profile,
+)
+from .profile_check import BLOCK, ProbeReading, blocked, check, describe_preview, describe_reading, preview
+from .self_test import self_test_power_w
 from .entity_match import (
     CAPACITY,
     EntityInfo,
@@ -736,6 +756,15 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         self._data: dict[str, Any] = {}
         # PV systems to remove on saving: they are the battery's own PV.
         self._remove_from_pv: list[str] = []
+        # Battery from a Modbus profile: the profile, its YAML (own profiles),
+        # address and transport, what was read there and name and limits.
+        self._profile: BatteryProfile | None = None
+        self._yaml: str | None = None
+        self._connection: dict[str, Any] = {}
+        self._reading: ProbeReading | None = None
+        self._limits: dict[str, Any] = {}
+        # Reconfigured: only name and limits change (nothing read, the trial stays).
+        self._limits_only = False
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -774,7 +803,9 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         self, user_input: dict[str, Any] | None
     ) -> SubentryFlowResult:
         if self._model is BatteryModel.MODBUS_PROFILE:
-            return await self.async_step_modbus_profile()
+            if self.source == SOURCE_RECONFIGURE:
+                return await self.async_step_profile_reconfigure()
+            return await self.async_step_profile()
         if self._model is BatteryModel.MARSTEK_VENUS_E3:
             if self.source == SOURCE_RECONFIGURE:
                 return await self.async_step_marstek_venus_e3(user_input)
@@ -859,48 +890,106 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             step_id="marstek_venus_e3", data_schema=schema, errors=errors
         )
 
-    async def async_step_modbus_profile(
-        self, user_input: dict[str, Any] | None = None
-    ) -> SubentryFlowResult:
-        """A battery from a shipped Modbus profile (only with SLEMS_DEV_PROFILES, until
-        the setup with profile choice, YAML, probe reading and write preview exists)."""
+    # --- battery from a Modbus profile ------------------------------------------
+
+    async def async_step_profile(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Choose a shipped profile, paste an own one or copy that of another battery."""
+        bundled = await self.hass.async_add_executor_job(bundled_profiles)
+        copies = self._profile_copies()
+        if user_input is not None:
+            choice = user_input[CONF_PROFILE]
+            if choice == OWN_PROFILE:
+                if self._profile is None or self._profile.bundled:
+                    self._yaml = None
+                return await self.async_step_profile_yaml()
+            if choice in copies:
+                self._yaml = copies[choice][0]
+                return await self.async_step_profile_yaml()
+            self._profile, self._yaml = bundled[choice], None
+            return await self.async_step_profile_connection()
+        words = _profile_words(self.hass.config.language)
+        options = [selector.SelectOptionDict(value=profile.id, label=profile.name) for profile in bundled.values()]
+        options += [
+            selector.SelectOptionDict(value=key, label=words["copy"].format(battery=title, profile=profile.name))
+            for key, (_, title, profile) in copies.items()
+        ]
+        options.append(selector.SelectOptionDict(value=OWN_PROFILE, label=OWN_PROFILE))
+        if self._profile is not None:
+            default = OWN_PROFILE if self._yaml else self._profile.id
+        else:
+            default = next(iter(bundled), OWN_PROFILE)
+        return self.async_show_form(
+            step_id="profile",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_PROFILE, default=default): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=options, translation_key=CONF_PROFILE)
+                    )
+                }
+            ),
+        )
+
+    async def async_step_profile_yaml(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Paste an own profile; errors with line and key."""
         errors: dict[str, str] = {}
-        profiles = await self.hass.async_add_executor_job(bundled_profiles)
+        placeholders = {"where": "", "detail": ""}
+        if user_input is not None:
+            text = user_input[CONF_PROFILE_YAML]
+            self._yaml = text
+            bundled = await self.hass.async_add_executor_job(bundled_profiles)
+            try:
+                profile = parse_profile(text)
+            except ProfileError as err:
+                errors["base"] = f"profile_{err.code}"
+                placeholders = {"where": _profile_where(err, self.hass.config.language), "detail": err.detail}
+            else:
+                if profile.id in bundled:
+                    errors["base"] = "profile_bundled_id"
+                    placeholders["detail"] = profile.id
+                else:
+                    self._profile = profile
+                    return await self.async_step_profile_connection()
+        return self.async_show_form(
+            step_id="profile_yaml",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_PROFILE_YAML, default=self._yaml or vol.UNDEFINED): selector.TextSelector(
+                        selector.TextSelectorConfig(multiline=True)
+                    )
+                }
+            ),
+            errors=errors,
+            description_placeholders=placeholders,
+        )
+
+    async def async_step_profile_connection(
+        self, user_input: dict[str, Any] | None = None, errors: dict[str, str] | None = None
+    ) -> SubentryFlowResult:
+        """Address and transport; then every register of the profile is read once."""
+        assert self._profile is not None
+        errors = dict(errors or {})
+        placeholders = {"battery": ""}
         if user_input is not None:
             user_input[CONF_PORT] = int(user_input[CONF_PORT])
             user_input[CONF_UNIT_ID] = int(user_input[CONF_UNIT_ID])
-            profile = profiles[user_input[CONF_PROFILE_ID]]
-            skip_test = user_input.pop(CONF_SKIP_CONNECTION_TEST, False) or self._same_connection(user_input)
-            if ReleaseState(user_input[CONF_RELEASE_STATE]) not in profile.control.release:
-                errors[CONF_RELEASE_STATE] = "release_state_not_in_profile"
-            elif skip_test or await probe_profile(
-                profile, user_input[CONF_HOST], user_input[CONF_PORT], user_input[CONF_UNIT_ID]
-            ):
-                return self._async_finish(user_input)
+            self._connection = user_input
+            if (other := self._battery_at(user_input)) is not None:
+                errors["base"] = "address_in_use"
+                placeholders["battery"] = other
+            elif await self._async_read_profile():
+                return await self.async_step_profile_read()
             else:
                 errors["base"] = "cannot_connect"
-
-        defaults = self._defaults(user_input)
-        first = next(iter(profiles.values()))
+        defaults = self._connection or self._defaults(None)
+        connection = self._profile.connection
         schema = vol.Schema(
             {
-                vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, first.name)): str,
-                vol.Required(CONF_PROFILE_ID, default=defaults.get(CONF_PROFILE_ID, first.id)): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[
-                            selector.SelectOptionDict(value=profile.id, label=profile.name)
-                            for profile in profiles.values()
-                        ]
-                    )
-                ),
                 vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, vol.UNDEFINED)): str,
-                vol.Required(
-                    CONF_PORT, default=defaults.get(CONF_PORT, first.connection.port)
-                ): selector.NumberSelector(
+                vol.Required(CONF_PORT, default=defaults.get(CONF_PORT, connection.port)): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1, max=65535, mode=selector.NumberSelectorMode.BOX)
                 ),
                 vol.Required(
-                    CONF_UNIT_ID, default=defaults.get(CONF_UNIT_ID, first.connection.unit_id)
+                    CONF_UNIT_ID, default=defaults.get(CONF_UNIT_ID, connection.unit_id)
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1, max=247, mode=selector.NumberSelectorMode.BOX)
                 ),
@@ -911,16 +1000,310 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                         options=[transport.value for transport in ModbusTransport], translation_key=CONF_TRANSPORT
                     )
                 ),
-                **self._limits_schema(defaults, HARDWARE_MAX_POWER_W, list(EfficiencyMode)),
-                vol.Required(
-                    CONF_RELEASE_STATE,
-                    default=defaults.get(CONF_RELEASE_STATE, ReleaseState.AUTO.value),
-                ): _release_state_selector(),
-                vol.Optional(CONF_SKIP_CONNECTION_TEST, default=False): selector.BooleanSelector(),
-                # No choice of a self-test: a battery from a profile is tested in its trial.
             }
         )
-        return self.async_show_form(step_id="modbus_profile", data_schema=schema, errors=errors)
+        return self.async_show_form(
+            step_id="profile_connection",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"profile": self._profile.name, **placeholders},
+        )
+
+    async def async_step_profile_read(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """The values read; go on only if nothing blocks saving."""
+        assert self._profile is not None and self._reading is not None
+        marks = check(self._profile, self._reading)
+        options = [] if blocked(marks) else ["profile_limits"]
+        if not self._profile.bundled:
+            options.append("profile_yaml")
+        options += ["profile", "profile_connection", "profile_reread"]
+        return self.async_show_menu(
+            step_id="profile_read",
+            menu_options=options,
+            description_placeholders={
+                "profile": self._profile.name,
+                "reading": describe_reading(self._profile, self._reading, marks, self.hass.config.language),
+            },
+        )
+
+    async def async_step_profile_reread(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Read the registers again with the same connection."""
+        if await self._async_read_profile():
+            return await self.async_step_profile_read()
+        return await self.async_step_profile_connection(None, errors={"base": "cannot_connect"})
+
+    async def async_step_profile_limits(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Name, limits and release state; after it the write preview (not when only these change)."""
+        assert self._profile is not None
+        profile = self._profile
+        if user_input is not None:
+            self._limits = user_input
+            if self._limits_only:
+                return self._async_finish_profile()
+            return await self.async_step_profile_preview()
+        defaults = self._limits or self._defaults(None)
+        states = [state for state in ReleaseState if state in profile.control.release]
+        default_state = defaults.get(CONF_RELEASE_STATE, ReleaseState.AUTO.value)
+        if ReleaseState(default_state) not in states:
+            default_state = states[0].value
+        limit = max(profile.limits.max_charge_w, profile.limits.max_discharge_w)
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, profile.name)): str,
+                **self._limits_schema(
+                    {
+                        CONF_MAX_CHARGE_POWER_W: profile.limits.max_charge_w,
+                        CONF_MAX_DISCHARGE_POWER_W: profile.limits.max_discharge_w,
+                        **defaults,
+                    },
+                    limit,
+                    list(EfficiencyMode),
+                ),
+                vol.Required(CONF_RELEASE_STATE, default=default_state): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[state.value for state in states], translation_key=CONF_RELEASE_STATE
+                    )
+                ),
+            }
+        )
+        return self.async_show_form(
+            step_id="profile_limits", data_schema=schema, description_placeholders={"profile": profile.name}
+        )
+
+    async def async_step_profile_preview(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """What SLEMS would write; an own profile needs the confirmation that its write
+        registers were compared with the manual."""
+        assert self._profile is not None and self._reading is not None
+        profile = self._profile
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if profile.bundled or user_input.get(CONF_CHECKED):
+                if self._other_profile_users():
+                    return await self.async_step_profile_others()
+                return self._async_finish_profile()
+            errors["base"] = "not_checked"
+        state = ReleaseState(self._limits[CONF_RELEASE_STATE])
+        test_w = self_test_power_w(
+            min(self._limits[CONF_MAX_CHARGE_POWER_W], profile.limits.max_charge_w),
+            min(self._limits[CONF_MAX_DISCHARGE_POWER_W], profile.limits.max_discharge_w),
+        )
+        phases = preview(profile, self._reading.writes, test_w, state)
+        fields = {} if profile.bundled else {vol.Required(CONF_CHECKED, default=False): selector.BooleanSelector()}
+        return self.async_show_form(
+            step_id="profile_preview",
+            data_schema=vol.Schema(fields),
+            errors=errors,
+            description_placeholders={
+                "profile": profile.name,
+                "preview": describe_preview(profile, phases, test_w, state, self.hass.config.language),
+            },
+        )
+
+    async def async_step_profile_others(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Change the same profile of other batteries as well; each is read first and
+        left as it is if a write register is not at rest."""
+        assert self._profile is not None and self._yaml is not None
+        others = self._other_profile_users()
+        errors: dict[str, str] = {}
+        placeholders = {"batteries": ""}
+        selected = [key for key, (_, same) in others.items() if same]
+        if user_input is not None:
+            selected = [key for key in user_input[CONF_BATTERIES] if key in others]
+            failed = [key for key in selected if not await self._async_still_at_rest(others[key][0])]
+            if not failed:
+                entry = self._get_entry()
+                for key in selected:
+                    subentry = others[key][0]
+                    self.hass.config_entries.async_update_subentry(
+                        entry,
+                        subentry,
+                        data={**subentry.data, CONF_PROFILE_ID: self._profile.id, CONF_PROFILE_YAML: self._yaml},
+                    )
+                return self._async_finish_profile()
+            errors["base"] = "others_not_at_rest"
+            placeholders["batteries"] = ", ".join(others[key][0].title for key in failed)
+            selected = [key for key in selected if key not in failed]
+        words = _profile_words(self.hass.config.language)
+        options = [
+            selector.SelectOptionDict(value=key, label=f"{subentry.title} ({words['same' if same else 'differs']})")
+            for key, (subentry, same) in others.items()
+        ]
+        return self.async_show_form(
+            step_id="profile_others",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_BATTERIES, default=selected): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=options, multiple=True)
+                    )
+                }
+            ),
+            errors=errors,
+            description_placeholders={"profile": self._profile.name, **placeholders},
+        )
+
+    async def async_step_profile_reconfigure(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Change the profile (read again, preview, trial), only name and limits, or show the profile."""
+        data = self._get_reconfigure_subentry().data
+        self._yaml = data.get(CONF_PROFILE_YAML)
+        bundled = await self.hass.async_add_executor_job(bundled_profiles)
+        try:
+            self._profile = profile_of(data, bundled)
+        except ProfileError:
+            # E.g. checked more strictly by a newer SLEMS: to be corrected first.
+            self._profile = None
+            if self._yaml:
+                return await self.async_step_profile_yaml({CONF_PROFILE_YAML: self._yaml})
+            return await self.async_step_profile()
+        return self.async_show_menu(
+            step_id="profile_reconfigure",
+            menu_options=["profile", "profile_settings", "profile_export"],
+            description_placeholders={"profile": self._profile.name},
+        )
+
+    async def async_step_profile_settings(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """Only name and limits: nothing is read and the trial stays."""
+        self._limits_only = True
+        return await self.async_step_profile_limits()
+
+    async def async_step_profile_export(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        """The profile as YAML to copy (nothing is changed)."""
+        assert self._profile is not None
+        if user_input is not None:
+            return await self.async_step_profile_reconfigure()
+        text = self._yaml or await self.hass.async_add_executor_job(bundled_profile_text, self._profile.id)
+        return self.async_show_form(
+            step_id="profile_export",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_PROFILE_YAML, default=text): selector.TextSelector(
+                        selector.TextSelectorConfig(multiline=True)
+                    )
+                }
+            ),
+            description_placeholders={"profile": self._profile.name},
+        )
+
+    def _profile_copies(self) -> dict[str, tuple[str, str, BatteryProfile]]:
+        """Own profiles of the other batteries: choice -> (YAML, battery, profile)."""
+        copies = {}
+        own = self._get_reconfigure_subentry().subentry_id if self.source == SOURCE_RECONFIGURE else None
+        for subentry in self._get_entry().subentries.values():
+            text = subentry.data.get(CONF_PROFILE_YAML)
+            if subentry.subentry_type != SUBENTRY_TYPE_BATTERY or not text or subentry.subentry_id == own:
+                continue
+            try:
+                profile = parse_profile(text)
+            except ProfileError:
+                continue
+            copies[f"{COPY_PREFIX}{subentry.subentry_id}"] = (text, subentry.title, profile)
+        return copies
+
+    def _other_profile_users(self) -> dict[str, tuple[ConfigSubentry, bool]]:
+        """When the own profile of a reconfigured battery changed: the other batteries
+        with a profile of the same id (subentry id -> subentry, same content as before)."""
+        if self.source != SOURCE_RECONFIGURE or self._profile is None or self._profile.bundled:
+            return {}
+        own = self._get_reconfigure_subentry()
+        before = own.data.get(CONF_PROFILE_YAML)
+        try:
+            old = parse_profile(before) if before else None
+        except ProfileError:
+            old = None
+        if old is None or old.key == self._profile.key:
+            return {}
+        others = {}
+        for subentry in self._get_entry().subentries.values():
+            text = subentry.data.get(CONF_PROFILE_YAML)
+            if subentry.subentry_type != SUBENTRY_TYPE_BATTERY or not text or subentry.subentry_id == own.subentry_id:
+                continue
+            try:
+                profile = parse_profile(text)
+            except ProfileError:
+                continue
+            if profile.id == old.id:
+                others[subentry.subentry_id] = (subentry, profile.key == old.key)
+        return others
+
+    def _battery_at(self, connection: dict[str, Any]) -> str | None:
+        """Name of another battery at the same address (host, port, unit)."""
+        own = self._get_reconfigure_subentry().subentry_id if self.source == SOURCE_RECONFIGURE else None
+        for subentry in self._get_entry().subentries.values():
+            if subentry.subentry_type != SUBENTRY_TYPE_BATTERY or subentry.subentry_id == own:
+                continue
+            if all(subentry.data.get(key) == connection[key] for key in (CONF_HOST, CONF_PORT, CONF_UNIT_ID)):
+                return subentry.title
+        return None
+
+    def _running_transport(self, subentry_id: str) -> ProfileTransport | None:
+        """The transport of a running battery from a profile (it holds the connection)."""
+        coordinator = getattr(self._get_entry(), "runtime_data", None)
+        for battery in getattr(coordinator, "batteries", ()):
+            if battery.subentry_id == subentry_id and isinstance(battery.driver, ProfileDriver):
+                return battery.driver.transport
+        return None
+
+    async def _async_read(
+        self, profile: BatteryProfile, connection: Mapping[str, Any], subentry_id: str | None
+    ) -> ProbeReading | None:
+        """Read every register of ``profile``; over the running battery's transport
+        when ``subentry_id`` is that battery at the same address, else over a
+        connection of its own with the chosen transport."""
+        if subentry_id is not None and (transport := self._running_transport(subentry_id)) is not None:
+            return await read_profile(profile, transport)
+        host, port, unit_id = connection[CONF_HOST], connection[CONF_PORT], connection[CONF_UNIT_ID]
+        if ModbusTransport(connection.get(CONF_TRANSPORT, ModbusTransport.OWN)) is ModbusTransport.OWN:
+            if (link := await connect_new(lambda: own_link(host, port, unit_id, profile))) is None:
+                return None
+            try:
+                return await read_profile(profile, link)
+            finally:
+                await link.close()
+        try:
+            async with async_get_temporary_unit(self.hass, ModbusTcpParams(host=host, port=port), unit_id) as unit:
+                return await read_profile(
+                    profile,
+                    HaUnitTransport(
+                        lambda: unit,
+                        message_spacing_s=profile.connection.message_spacing_s,
+                        timeout_s=profile.connection.timeout_s,
+                    ),
+                )
+        except (HomeAssistantError, ModbusError, OSError) as err:
+            _LOGGER.debug("Reading the profile %s failed: %s", profile.id, err)
+            return None
+
+    async def _async_read_profile(self) -> bool:
+        """Read the chosen profile at the chosen address (False: no answer)."""
+        assert self._profile is not None
+        running = None
+        if self._same_connection(self._connection):
+            running = self._get_reconfigure_subentry().subentry_id
+        self._reading = await self._async_read(self._profile, self._connection, running)
+        return self._reading is not None
+
+    async def _async_still_at_rest(self, subentry: ConfigSubentry) -> bool:
+        """Whether another battery answers the new profile with its write registers at rest."""
+        assert self._profile is not None
+        reading = await self._async_read(self._profile, subentry.data, subentry.subentry_id)
+        if reading is None:
+            return False
+        marks = check(self._profile, reading)
+        return "probe" not in marks and not any(
+            key.startswith("write_") and mark.level == BLOCK for key, mark in marks.items()
+        )
+
+    def _async_finish_profile(self) -> SubentryFlowResult:
+        assert self._profile is not None
+        if self.source == SOURCE_RECONFIGURE:
+            current = self._get_reconfigure_subentry()
+            base: dict[str, Any] = {CONF_NAME: current.title, **current.data}
+        else:
+            base = {}
+        user_input = {**base, **self._connection, **self._limits, CONF_PROFILE_ID: self._profile.id}
+        user_input.pop(CONF_PROFILE_YAML, None)
+        if self._yaml and not self._profile.bundled:
+            user_input[CONF_PROFILE_YAML] = self._yaml
+        return self._async_finish(user_input)
 
     async def _async_battery_devices(self) -> tuple[dict[str, _DeviceCandidate], set[str], EnergyDashboard]:
         """Devices with entities, those that are a battery SLEMS does not have yet and are a PV system of the
@@ -1402,8 +1785,36 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         return self.async_create_entry(title=title, data=data)
 
 
+_LOGGER = logging.getLogger(__name__)
+
 # Choice in the search step for entering the address by hand.
 MANUAL = "manual"
+# Profile step: the field, the choice to paste an own profile and the prefix
+# of the choices copying the own profile of another battery.
+CONF_PROFILE = "profile"
+OWN_PROFILE = "own"
+COPY_PREFIX = "copy_"
+# Write preview: an own profile's write registers compared with the manual.
+CONF_CHECKED = "checked"
+# Other batteries to change to the same profile.
+CONF_BATTERIES = "batteries"
+
+_PROFILE_WORDS = {
+    "en": {"copy": "Copy of {battery}: {profile}", "same": "same profile", "differs": "changed since", "line": "line"},
+    "de": {"copy": "Kopie von {battery}: {profile}", "same": "gleiches Profil", "differs": "inzwischen geändert", "line": "Zeile"},
+}
+
+
+def _profile_words(language: str) -> dict[str, str]:
+    return _PROFILE_WORDS["de" if language.startswith("de") else "en"]
+
+
+def _profile_where(err: ProfileError, language: str) -> str:
+    """Where a profile error is: '`control.apply[1]` (line 42)'."""
+    line = f"{_profile_words(language)['line']} {err.line}" if err.line is not None else ""
+    if err.path:
+        return f"`{err.path}` ({line})" if line else f"`{err.path}`"
+    return line or "–"
 
 
 async def _async_battery_hosts(hass: HomeAssistant, entry: ConfigEntry) -> set[str]:

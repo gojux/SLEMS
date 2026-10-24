@@ -28,13 +28,14 @@ services:
       - ../sim_solar_forecast:/config/custom_components/sim_solar_forecast:ro
     environment:
       TZ: Europe/Vienna
-      # Offers batteries from a Modbus profile (until the setup with profile choice exists).
+      # Offers batteries from a Modbus profile (until they are offered to everyone).
       SLEMS_DEV_PROFILES: "1"
     depends_on:
       - venus-sim-1
       - venus-sim-2
       - venus-sim-3
       - venus-sim-4
+      - venus-sim-5
       - sunspec-meter
 
   venus-sim-1:
@@ -59,6 +60,13 @@ services:
     environment:
       SIM_INITIAL_SOC: "60"
 
+  # Only here, outside the smart meter loop: a battery from an own profile (a
+  # copy of the Venus profile), set up until its trial waits.
+  venus-sim-5:
+    <<: *venus-sim
+    environment:
+      SIM_INITIAL_SOC: "45"
+
   sunspec-meter:
     image: python:3.13-alpine
     command: ["python", "/sim/meter_sim.py"]
@@ -70,6 +78,7 @@ services:
     command: ["python", "-u", "/e2e/run.py"]
     volumes:
       - .:/e2e:ro
+      - ../../custom_components/slems/templates/battery_profiles:/profiles:ro
     environment:
       HA_URL: http://homeassistant:8123
       PYTHONDONTWRITEBYTECODE: "1"

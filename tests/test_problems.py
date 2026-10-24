@@ -23,9 +23,10 @@ class FakeIssues:
         self.issues.pop((domain, issue_id), None)
 
 
-def coordinator(batteries) -> SimpleNamespace:
+def coordinator(batteries, unusable_profiles=None) -> SimpleNamespace:
     return SimpleNamespace(
         batteries=batteries,
+        unusable_profiles=unusable_profiles or {},
         settings=SimpleNamespace(operating_mode=OperatingMode.ACTIVE),
         controller=SimpleNamespace(status=ControlStatus.ACTIVE),
         grid_meter=None,
@@ -62,6 +63,19 @@ def test_first_update_removes_issues_of_removed_batteries() -> None:
         (DOMAIN, "battery_not_responding_kept"),
         ("other", "battery_not_responding_removed"),
     }
+
+
+def test_battery_with_an_unusable_profile_becomes_a_repair_issue() -> None:
+    registry = FakeIssues(set())
+    reporter = problems.ProblemReporter(
+        None, coordinator([], {"b1": {"name": "Pack", "error": "control.apply (line 3): invalid"}})
+    )
+    with (
+        patch.object(problems, "ir", registry),
+        patch.object(reporter, "_update_cap_notifications", lambda *_: None),
+    ):
+        reporter.update(0.0)
+    assert (DOMAIN, "profile_unusable_b1") in registry.issues
 
 
 def test_outstanding_release_becomes_a_repair_issue() -> None:

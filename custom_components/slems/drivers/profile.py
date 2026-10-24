@@ -63,6 +63,7 @@ from ..battery_profiles import (
 )
 from ..const import ReleaseState
 from ..own_pv import OwnPvPorts
+from ..profile_check import ProbeReading
 from ..self_test import SMALL_W, TrialRegister, TrialSpec
 from .base import BatteryCapabilities, BatteryDriver, BatteryDriverError, BatteryTelemetry
 from .modbus_client import ModbusTcpLink
@@ -203,26 +204,63 @@ def own_link(host: str, port: int, unit_id: int, profile: BatteryProfile) -> Mod
     )
 
 
-async def probe(profile: BatteryProfile, host: str, port: int, unit_id: int) -> bool:
-    """Whether the probe register of the profile answers within its range (own client;
-    a refused connection is tried once more, see ``PROBE_RETRY_S``)."""
-    register = profile.probe.register
-    words = None
+async def connect_new(new: Callable[[], ProfileTransport]) -> ProfileTransport | None:
+    """A connected new transport for the setup; a refused connection is tried once
+    more with another one (see ``PROBE_RETRY_S``; a failed one waits its backoff)."""
     for attempt in range(2):
         if attempt:
             await asyncio.sleep(PROBE_RETRY_S)
-        link = own_link(host, port, unit_id, profile)
-        try:
-            if not await link.connect():
-                continue
-            words = await link.read(register.address, register.size, input_registers=register.input)
-            break
-        finally:
-            await link.close()
-    if words is None:
-        return False
-    value = decode(words, register.type, register.word_order)
-    return profile.probe.range[0] <= value <= profile.probe.range[1]  # type: ignore[operator]
+        transport = new()
+        if await transport.connect():
+            return transport
+    return None
+
+
+async def read_profile(profile: BatteryProfile, transport: ProfileTransport) -> ProbeReading | None:
+    """Every register of the profile read once for the setup (nothing written); None if
+    the battery does not answer the probe register.
+
+    A transport that is not connected (that of a paused battery) is connected
+    for it and closed again; a connected one is only used.
+    """
+    opened = False
+    if not transport.connected:
+        if not await transport.connect():
+            return None
+        opened = True
+    try:
+        register = profile.probe.register
+        words = await transport.read(register.address, register.size, input_registers=register.input)
+        if words is None:
+            return None
+        reading = ProbeReading(probe=decode(words, register.type, register.word_order))  # type: ignore[arg-type]
+        # A driver of its own for the blocks; it neither connects nor writes here.
+        driver = ProfileDriver(profile, transport, capacity_wh=0, max_charge_power_w=0, max_discharge_power_w=0)
+        registers = [register for read in profile.read.values() for register in read.registers]
+        if profile.state is not None:
+            registers.append(profile.state.register)
+        read = await driver._read(registers)
+        for key, value in profile.read.items():
+            parts = [read[register] for register in value.registers]
+            total = None
+            if all(part is not None for part in parts):
+                total = round(sum(_scaled(part, r) for part, r in zip(parts, value.registers, strict=True)), 3)  # type: ignore[arg-type]
+            elif value.fallback is not None:
+                fallback = value.fallback
+                if (part := await transport.read(fallback.address, fallback.size, input_registers=fallback.input)):
+                    total = _scaled(part, fallback)
+            reading.values[key] = driver._signed(key, total) if value.positive else total
+        if profile.state is not None and (part := read[profile.state.register]) is not None:
+            state = profile.state.register
+            reading.state = decode(part, state.type, state.word_order)  # type: ignore[assignment]
+        for key, info in profile.device_info.items():
+            part = await transport.read(info.address, info.size, input_registers=info.input)
+            reading.device_info[key] = (str(decode(part, info.type, info.word_order)) or None) if part else None
+        reading.writes = await driver._read_writes(list(profile.control.apply))
+        return reading
+    finally:
+        if opened:
+            await transport.close()
 
 
 def read_blocks(registers: list[Register]) -> list[tuple[int, int, bool]]:
@@ -259,9 +297,11 @@ class ProfileDriver(BatteryDriver):
         max_charge_power_w: int,
         max_discharge_power_w: int,
         release_state: ReleaseState = ReleaseState.AUTO,
+        device: str = "",
     ) -> None:
         self._profile = profile
         self._transport = transport
+        self._device = device
         if release_state not in profile.control.release:
             release_state = next(iter(profile.control.release))
         self._release_state = release_state
@@ -303,6 +343,10 @@ class ProfileDriver(BatteryDriver):
     @property
     def profile(self) -> BatteryProfile:
         return self._profile
+
+    @property
+    def transport(self) -> ProfileTransport:
+        return self._transport
 
     @property
     def capabilities(self) -> BatteryCapabilities:
@@ -377,7 +421,11 @@ class ProfileDriver(BatteryDriver):
 
     @property
     def trial_key(self) -> str:
-        return f"{self._profile.id}@{self._profile.revision}"
+        return self._profile.key
+
+    @property
+    def trial_device(self) -> str:
+        return self._device
 
     async def read_control_registers(self) -> dict[int, float | None]:
         await self._ensure_connected()

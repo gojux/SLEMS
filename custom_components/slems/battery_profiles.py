@@ -50,8 +50,10 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Iterable, Mapping
+import dataclasses
 from dataclasses import dataclass, field
 import functools
+import hashlib
 from pathlib import Path
 import re
 import struct
@@ -59,7 +61,7 @@ from typing import Any
 
 import yaml
 
-from .const import ReleaseState
+from .const import CONF_PROFILE_ID, CONF_PROFILE_YAML, ReleaseState
 
 FORMAT_KEY = "slems_battery_profile"
 FORMAT_VERSION = 1
@@ -131,6 +133,14 @@ DEFAULT_MAX_CHANGES_PER_DAY = 100
 # A persistent register changed again within this time is warned about.
 PERSISTENT_WARN_S = 60.0
 PERSISTENT_WINDOW_S = 24 * 3600.0
+
+# Codes of ``ProfileError``.
+ERROR_CODES = (
+    "syntax", "not_profile", "version_newer", "duplicate_key", "unknown_key", "missing_key", "invalid",
+    "own_pv", "control", "duplicate_address", "outside_at_rest",
+)
+# Keys that only describe a profile: changing them does not change its content hash.
+DESCRIPTIVE_KEYS = ("name", "manufacturer", "notes")
 
 _ID_PATTERN = re.compile(r"[a-z0-9][a-z0-9_]*")
 _INFO_KEY_PATTERN = re.compile(r"[a-z][a-z0-9_]*")
@@ -295,6 +305,14 @@ class BatteryProfile:
     control: Control
     probe: Probe
     bundled: bool = False
+    # Own profiles: hash of the content without the descriptive keys.
+    content_hash: str = ""
+
+    @property
+    def key(self) -> str:
+        """What a passed trial holds for: ``id@revision``, for an own profile with its content hash."""
+        key = f"{self.id}@{self.revision}"
+        return f"{key}#{self.content_hash}" if self.content_hash else key
 
     @property
     def write_addresses(self) -> tuple[int, ...]:
@@ -485,7 +503,41 @@ def parse_profile(text: str, *, bundled: bool = False) -> BatteryProfile:
         raise ProfileError("syntax", line=line, detail=str(getattr(err, "problem", ""))) from err
     if not isinstance(document, _LineDict) or FORMAT_KEY not in document:
         raise ProfileError("not_profile")
-    return _Parser(bundled).profile(document)
+    profile = _Parser(bundled).profile(document)
+    if bundled:
+        return profile
+    content = {key: value for key, value in document.items() if key not in DESCRIPTIVE_KEYS}
+    digest = hashlib.sha256(_canonical(content).encode()).hexdigest()[:12]
+    return dataclasses.replace(profile, content_hash=digest)
+
+
+def _canonical(value: Any) -> str:
+    """A text of a loaded YAML value that does not depend on order, layout or comments."""
+    if isinstance(value, dict):
+        items = sorted((_canonical(key), _canonical(item)) for key, item in value.items())
+        return "{" + ",".join(f"{key}:{item}" for key, item in items) + "}"
+    if isinstance(value, list):
+        return "[" + ",".join(_canonical(item) for item in value) + "]"
+    return f"{type(value).__name__}:{value!r}"
+
+
+def profile_of(data: Mapping[str, Any], bundled: Mapping[str, BatteryProfile]) -> BatteryProfile:
+    """The profile of a battery's subentry data: its own YAML or a shipped one by id;
+    raises ``ProfileError``."""
+    if text := data.get(CONF_PROFILE_YAML):
+        return parse_profile(text)
+    if (profile := bundled.get(data.get(CONF_PROFILE_ID, ""))) is None:
+        raise ProfileError("unknown_profile", detail=str(data.get(CONF_PROFILE_ID)))
+    return profile
+
+
+def bundled_profile_text(profile_id: str) -> str:
+    """The YAML of a shipped profile (reads files: not in the event loop)."""
+    for path in sorted(BUNDLED_DIR.glob("*.yaml")):
+        text = path.read_text(encoding="utf-8")
+        if parse_profile(text, bundled=True).id == profile_id:
+            return text
+    raise KeyError(profile_id)
 
 
 @functools.cache

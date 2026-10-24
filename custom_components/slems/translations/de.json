@@ -214,20 +214,52 @@
             "self_test_on_setup": "Empfohlen: SLEMS lädt und entlädt die Batterie für einige Minuten mit kleiner Leistung und prüft, ob Smart Meter und Messwerte passen (Vorzeichen, Einheiten, Zähler, Ladezustand). Er startet, sobald SLEMS im Betriebsmodus **Aktiv** ist; das Ergebnis erscheint als Benachrichtigung."
           }
         },
-        "modbus_profile": {
-          "title": "Batterie aus einem Modbus-Profil (Entwicklung)",
-          "description": "Nur für Entwicklung und Tests: eine Batterie, die über ein mit SLEMS geliefertes Profil gesteuert wird. Mit dem eigenen Client nimmt die Batterie nur eine Modbus-Verbindung an: Betreibe nicht gleichzeitig eine andere Integration oder eine andere Batterie auf derselben Batterie. SLEMS steuert sie erst, wenn ihr Probebetrieb bestanden ist: ein Selbsttest mit den Prüfungen des Profils, der von selbst startet.",
+        "profile": {
+          "title": "Profil",
+          "description": "Ein Profil beschreibt die Register der Batterie und wie SLEMS sie lädt, entlädt und freigibt. Wähle ein mit SLEMS geliefertes Profil aus, füge ein eigenes als YAML ein oder kopiere das eigene Profil einer anderen Batterie.",
           "data": {
-            "name": "Name",
-            "profile_id": "Profil",
+            "profile": "Profil"
+          }
+        },
+        "profile_yaml": {
+          "title": "Eigenes Profil (YAML)",
+          "description": "Füge das ganze Profil ein (Format `slems_battery_profile: 1`). SLEMS prüft es und zeigt Fehler mit Zeile und Schlüssel. Danach liest SLEMS jedes Register einmal, bevor etwas geschrieben wird.",
+          "data": {
+            "profile_yaml": "Profil"
+          }
+        },
+        "profile_connection": {
+          "title": "Verbindung",
+          "description": "Adresse der Batterie für **{profile}**. Danach liest SLEMS jedes Register des Profils einmal; geschrieben wird nichts. Viele Batterien nehmen nur eine Modbus-Verbindung an: Betreibe dann nicht gleichzeitig eine andere Integration auf derselben Batterie.",
+          "data": {
             "host": "Host / IP-Adresse",
             "port": "Port",
             "unit_id": "Modbus Unit-ID",
-            "transport": "Verbindung",
+            "transport": "Verbindung"
+          },
+          "data_description": {
+            "transport": "Eigener Modbus-Client: die eigene Verbindung von SLEMS mit den Korrekturen für die Firmware der Marstek Venus. Home Assistant Modbus: eine Verbindung des Modbus-Backends von Home Assistant, die andere Integrationen auf demselben Gerät mitnutzen."
+          }
+        },
+        "profile_read": {
+          "title": "Gelesene Werte",
+          "description": "**{profile}**: Vergleiche die Werte mit der App oder der Anzeige der Batterie. Falsche Werte bedeuten meist eine falsche Adresse oder einen falschen Faktor im Profil.\n\n{reading}",
+          "menu_options": {
+            "profile_limits": "Weiter",
+            "profile_yaml": "Profil bearbeiten",
+            "profile": "Anderes Profil auswählen",
+            "profile_connection": "Verbindung ändern",
+            "profile_reread": "Erneut lesen"
+          }
+        },
+        "profile_limits": {
+          "title": "Grenzen",
+          "description": "Grenzen der Batterie aus **{profile}**.",
+          "data": {
+            "name": "Name",
             "capacity_wh": "Nutzbare Kapazität",
             "max_charge_power_w": "Maximale Ladeleistung",
             "max_discharge_power_w": "Maximale Entladeleistung",
-            "skip_connection_test": "Verbindungstest überspringen",
             "efficiency_mode": "Quelle des Wirkungsgrads",
             "round_trip_efficiency_pct": "Gesamtwirkungsgrad",
             "release_state": "Zustand, wenn SLEMS die Batterie freigibt",
@@ -235,13 +267,44 @@
             "rated_cycles": "Zyklen laut Hersteller"
           },
           "data_description": {
-            "transport": "Eigener Modbus-Client: die eigene Verbindung von SLEMS mit den Korrekturen für die Firmware der Marstek Venus. Home Assistant Modbus: eine Verbindung des Modbus-Backends von Home Assistant, die andere Integrationen auf demselben Gerät mitnutzen.",
-            "skip_connection_test": "Ohne Verbindungstest speichern, z. B. solange eine andere Integration die Modbus-Verbindung belegt.",
             "efficiency_mode": "Batteriezähler (empfohlen): aus den Gesamtzählern der Batterie für Laden und Entladen; sofort genau, weil die Batterie ihre ganze Betriebszeit mitzählt. Gelernt: aus der von SLEMS gemessenen Leistung; braucht erst etwa drei volle Ladezyklen. Manuell: fester Wert.",
             "round_trip_efficiency_pct": "Entnommene / eingespeicherte Energie (AC). Im manuellen Modus fester Wert, sonst Startwert, bis genug Messdaten vorliegen.",
             "release_state": "Automatik: die eigene Logik der Batterie übernimmt wieder (z. B. ihre Nulleinspeisung). Standby: die Batterie bleibt bei 0 W stehen, bis etwas anderes sie übernimmt. Gilt, wenn SLEMS die Steuerung beendet, z. B. im Betriebsmodus Aus, ohne Werte des Smart Meters oder wenn die Batterie aus SLEMS entfernt wird.",
             "purchase_price_eur": "Optional, mit den Zyklen: für die Verschleißkosten je kWh (Preis ÷ (Zyklen × nutzbare Kapazität)), die preisbewusste Aktionen mit zusätzlichem Zyklus berücksichtigen, z. B. Laden aus dem Netz. 0: keine Verschleißkosten (Heimspeicher altern vor allem mit der Zeit, der Temperatur und dem Ladezustand, oft bevor ihre Zyklen aufgebraucht sind). Ohne Angabe nimmt SLEMS einen niedrigen Schätzwert von 1 ct/kWh an.",
             "rated_cycles": "Optional: volle Zyklen laut Hersteller (z. B. aus Datenblatt oder Garantie)."
+          }
+        },
+        "profile_preview": {
+          "title": "Schreibvorschau",
+          "description": "Was SLEMS im Probebetrieb in **{profile}** schreibt, in dieser Reihenfolge (Wert jetzt → Wert dann). Der Probebetrieb beginnt je Richtung mit 100 W, dann mit dieser Leistung.\n\n{preview}\n\nSLEMS speichert die Batterie, steuert sie aber erst, wenn ihr Probebetrieb bestanden ist: ein Selbsttest mit den Prüfungen des Profils, der von selbst startet.",
+          "data": {
+            "checked": "Ich habe die Schreibregister mit dem Handbuch verglichen"
+          },
+          "data_description": {
+            "checked": "Ein eigenes Profil: Prüfe Adresse, Faktor und Bereich jedes Schreibregisters gegen das Handbuch der Batterie. Die Prüfungen fangen die meisten Fehler ab, aber nicht alle; ein Wert im falschen Register kann eine Einstellung der Batterie ändern."
+          }
+        },
+        "profile_others": {
+          "title": "Weitere Batterien mit diesem Profil",
+          "description": "Diese Batterien nutzen ein Profil mit der id von **{profile}**. Wähle die aus, die das geänderte Profil ebenfalls bekommen; jede wird vorher gelesen und beginnt ihren Probebetrieb neu. Eine Batterie, deren Profil inzwischen geändert wurde, behält ihre eigenen Änderungen nur, wenn du sie weglässt.",
+          "data": {
+            "batteries": "Batterien"
+          }
+        },
+        "profile_reconfigure": {
+          "title": "Batterie aus einem Profil",
+          "description": "Profil: **{profile}**.",
+          "menu_options": {
+            "profile": "Profil oder Verbindung ändern",
+            "profile_settings": "Name und Grenzen",
+            "profile_export": "Profil als YAML anzeigen"
+          }
+        },
+        "profile_export": {
+          "title": "Profil als YAML",
+          "description": "**{profile}**: Kopiere den Text, um das Profil aufzuheben oder für eine andere Batterie zu verwenden. Hier wird nichts geändert.",
+          "data": {
+            "profile_yaml": "Profil"
           }
         },
         "ha_device": {
@@ -398,7 +461,21 @@
         "input_needs_sensor": "Eine Vorgabe des Eingangs braucht den **Eingang aus dem Netz** im vorigen Schritt.",
         "own_pv_counted_twice": "Diese Entitäten sind auch als PV-Anlagen eingetragen: {pv_systems}. Ihre Erzeugung würde doppelt zählen. Wähle **Bei den PV-Anlagen entfernen** aus oder andere Entitäten.",
         "power_required": "SLEMS braucht die Batterieleistung, um die Batterie zu steuern.",
-        "release_state_not_in_profile": "Das Profil kennt diesen Zustand nicht; wähle einen anderen aus."
+        "address_in_use": "Diese Adresse nutzt schon die Batterie {battery}. Eine Batterie nimmt nur eine Verbindung an: Entferne zuerst {battery} oder wähle eine andere Adresse.",
+        "not_checked": "Vergleiche zuerst die Schreibregister mit dem Handbuch.",
+        "others_not_at_rest": "Nicht geändert, sie antworten nicht oder ein Schreibregister liegt mit dem neuen Profil außerhalb seines Ruhebereichs: {batteries}. Lass sie weg oder prüfe sie.",
+        "profile_bundled_id": "Ein mitgeliefertes Profil hat die id **{detail}**; gib deinem Profil eine eigene id.",
+        "profile_syntax": "Der Text ist kein gültiges YAML ({where}): {detail}",
+        "profile_not_profile": "Das ist kein SLEMS-Batterieprofil: Die Zeile `slems_battery_profile: 1` fehlt.",
+        "profile_version_newer": "Das Profil hat Formatversion {detail}; dieses SLEMS kennt eine ältere. Aktualisiere SLEMS.",
+        "profile_duplicate_key": "Schlüssel doppelt: {where}.",
+        "profile_unknown_key": "Unbekannter Schlüssel {detail}: {where}.",
+        "profile_missing_key": "Schlüssel fehlt: {where}. {detail}",
+        "profile_invalid": "Ungültiger Wert: {where}. {detail}",
+        "profile_own_pv": "Eigene PV unvollständig oder widersprüchlich: {where}. {detail}",
+        "profile_control": "Steuerung unvollständig oder widersprüchlich: {where}. {detail}",
+        "profile_duplicate_address": "Register doppelt geschrieben: {where}. {detail}",
+        "profile_outside_at_rest": "Wert außerhalb des Ruhebereichs (`at_rest`): {where}, Wert {detail}."
       },
       "abort": {
         "reconfigure_successful": "Batterie aktualisiert."
@@ -717,7 +794,7 @@
       "options": {
         "marstek_venus_e3": "Marstek Venus E 3.0 (Modbus TCP)",
         "ha_entities": "Vorhandene Home-Assistant-Entitäten (lesen oder steuern)",
-        "modbus_profile": "Batterie aus einem Modbus-Profil (Entwicklung)"
+        "modbus_profile": "Batterie aus einem Modbus-Profil (experimentell)"
       }
     },
     "consumer_type": {
@@ -852,6 +929,11 @@
       "options": {
         "own": "Eigener Modbus-Client",
         "home_assistant": "Home Assistant Modbus"
+      }
+    },
+    "profile": {
+      "options": {
+        "own": "Eigenes Profil (YAML) einfügen"
       }
     }
   },
@@ -1845,6 +1927,10 @@
     "grid_counters_not_netted": {
       "title": "Energiezähler des Smart Meters saldieren nicht über die Phasen",
       "description": "Bezugs- und Einspeisezähler des Smart Meters sind in mehreren Viertelstunden beide gelaufen, während die Netzleistung weniger zeigte: Sie zählen je Phase, während dein Zähler des Netzbetreibers meist über die Phasen saldiert (in Deutschland und Österreich). Tarife und Rechnungen von SLEMS würden dann Energie zählen, die nie über den Zähler ging. Für einen Shelly Pro 3EM liefert die Integration Shelly Phase Netting saldierte Zähler (mehr erfahren); bei anderen Zählern teile die Netzleistung mit Template-Sensoren und Helfern **Integral** in Bezug und Einspeisung auf. Oder entferne die Zähler in den SLEMS-Einstellungen: SLEMS verwendet dann seine eigenen saldierten Werte. Ignoriere den Hinweis, wenn auch dein Zähler des Netzbetreibers je Phase zählt."
+    },
+    "profile_unusable": {
+      "title": "{name}: Profil nicht nutzbar",
+      "description": "SLEMS hat die Batterie {name} ausgelassen: Ihr Profil ist nicht nutzbar ({error}). Korrigiere es mit **Neu konfigurieren** an der Batterie unter **Einstellungen** → **Geräte & Dienste** → **SLEMS**."
     },
     "profile_outside_rest": {
       "title": "{name}: Register außerhalb des Ruhebereichs",

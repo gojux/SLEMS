@@ -12,6 +12,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+from pathlib import Path
 import socket
 import struct
 import sys
@@ -350,10 +351,107 @@ def battery_modbus(token: str) -> None:
         "battery",
         {
             "user": {"model": "modbus_profile"},
-            "modbus_profile": {"name": "Venus 4", "profile_id": "marstek_venus_e3", "host": "venus-sim-4"},
+            "profile": {"profile": "marstek_venus_e3"},
+            "profile_connection": {"host": "venus-sim-4"},
+            "profile_read": "profile_limits",
+            "profile_limits": {"name": "Venus 4"},
+            "profile_preview": {},
         },
         "Venus E 3.0 from the Modbus profile (simulator)",
     )
+
+
+# The shipped Venus profile as an own one (mounted by the compose file).
+OWN_PROFILE = (
+    Path("/profiles/marstek_venus_e3.yaml").read_text(encoding="utf-8").replace("id: marstek_venus_e3", "id: own_venus")
+    if Path("/profiles/marstek_venus_e3.yaml").exists()
+    else ""
+)
+
+
+def step(token: str, flow_id: str, body: dict) -> dict:
+    return request("POST", f"{SUBENTRY_FLOW}/{flow_id}", body, token)
+
+
+def trial_sensor(token: str, name: str) -> dict:
+    """The trial sensor of a battery once it is available (a battery that connects
+    within the Venus' 0.5 s block after the setup read it waits 5 s first)."""
+    deadline = time.monotonic() + 60
+    while True:
+        found = [
+            state for state in request("GET", "/api/states", token=token)
+            if state["entity_id"].startswith("sensor.") and state["entity_id"].endswith("_trial")
+            and state["attributes"].get("friendly_name", "").startswith(name)
+        ]
+        if found and found[0]["state"] not in ("unavailable", "unknown"):
+            return found[0]
+        if time.monotonic() > deadline:
+            raise Failure(f"no available trial sensor of {name}: {found}")
+        time.sleep(2)
+
+
+def battery_own_profile(token: str) -> None:
+    """An own profile: errors with line and key, a shifted register blocks before
+    anything is written, then Venus 5 from it in its trial; a changed profile
+    begins the trial again."""
+    entry_id = slems_entry(token)["entry_id"]
+    result = request("POST", SUBENTRY_FLOW, {"handler": [entry_id, "battery"]}, token)
+    result = step(token, result["flow_id"], {"model": "modbus_profile"})
+    result = step(token, result["flow_id"], {"profile": "own"})
+    flow_id = result["flow_id"]
+    result = step(token, flow_id, {"profile_yaml": OWN_PROFILE.replace("  port: 502\n", "  port: 502\n  speed: 9600\n")})
+    if result.get("errors") != {"base": "profile_unknown_key"} or "12" not in result["description_placeholders"]["where"]:
+        raise Failure(f"Own profile: unknown key not shown with its line: {result.get('errors')} {result.get('description_placeholders')}")
+    print("  Own profile: unknown key shown with its line")
+    # 42020 shifted onto the battery voltage.
+    shifted = OWN_PROFILE.replace('{address: 42020, value: "{charge_w}"', '{address: 30100, value: "{charge_w}"').replace(
+        "- {address: 42020, value: 0}", "- {address: 30100, value: 0}"
+    )
+    result = step(token, flow_id, {"profile_yaml": shifted})
+    result = step(token, flow_id, {"host": "venus-sim-5", "port": 502, "unit_id": 1, "transport": "own"})
+    if result.get("step_id") != "profile_read" or "profile_limits" in result.get("menu_options", []):
+        raise Failure(f"Own profile: shifted register not blocked: {result.get('step_id')} {result.get('menu_options')}")
+    print("  Own profile: shifted write register blocks saving")
+    result = step(token, flow_id, {"next_step_id": "profile_yaml"})
+    result = step(token, flow_id, {"profile_yaml": OWN_PROFILE})
+    result = step(token, flow_id, fill(result, {}))
+    if "profile_limits" not in result.get("menu_options", []):
+        raise Failure(f"Own profile: reading blocked: {result.get('step_id')} {result.get('errors')} {result.get('description_placeholders')}")
+    result = step(token, flow_id, {"next_step_id": "profile_limits"})
+    result = step(token, flow_id, fill(result, {"name": "Venus 5"}))
+    result = step(token, flow_id, {"checked": False})
+    if result.get("errors") != {"base": "not_checked"}:
+        raise Failure(f"Own profile: saved without the manual checked: {result}")
+    result = step(token, flow_id, {"checked": True})
+    if result.get("type") != "create_entry":
+        raise Failure(f"Own profile: {result}")
+    print("  Own profile: Venus 5 created")
+    check(token, "Venus 5")
+    state = trial_sensor(token, "Venus 5")
+    if state["state"] != "waiting" or state["attributes"].get("reason") != "new":
+        raise Failure(f"Venus 5 not in its trial: {state['state']} {state['attributes'].get('reason')}")
+    print("  Venus 5 in its trial")
+    venus_5 = next(item for item in subentries(token) if item["title"] == "Venus 5")
+    run_flow(
+        token,
+        SUBENTRY_FLOW,
+        {"handler": [entry_id, "battery"], "subentry_id": venus_5["subentry_id"]},
+        {
+            "profile_reconfigure": "profile",
+            "profile": {"profile": "own"},
+            "profile_yaml": {"profile_yaml": OWN_PROFILE.replace("revision: 1", "revision: 2")},
+            "profile_connection": {},
+            "profile_read": "profile_limits",
+            "profile_limits": {},
+            "profile_preview": {"checked": True},
+        },
+        "Venus 5 with a changed profile",
+    )
+    check(token, "Venus 5 changed")
+    state = trial_sensor(token, "Venus 5")
+    if state["attributes"].get("reason") != "profile":
+        raise Failure(f"Venus 5: changed profile did not begin the trial again: {state['attributes'].get('reason')}")
+    print("  Venus 5: changed profile begins the trial again")
 
 
 def battery_entities(token: str) -> None:
@@ -612,7 +710,8 @@ def reconfigure(token: str) -> None:
             "battery": {
                 "reconfigure": {},
                 "marstek_venus_e3": {},
-                "modbus_profile": {},
+                "profile_reconfigure": "profile_settings",
+                "profile_limits": {},
                 "ha_device": {},
                 "ha_entities": {},
                 "ha_split": {},
@@ -663,6 +762,7 @@ def dashboard(token: str) -> None:
 SCENARIOS = [
     ("Setup", setup_system),
     ("Batteries", battery_modbus),
+    ("Battery from an own profile", battery_own_profile),
     ("Battery from entities", battery_entities),
     ("Battery with own PV", battery_plug_in),
     ("Consumers", consumers),

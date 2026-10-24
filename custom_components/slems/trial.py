@@ -18,8 +18,9 @@ and runs on its own logic; SLEMS writes to it only during the test.
   closely for ``OBSERVE_S`` (``Observation``). Anything that does not fit
   hands it back and begins the full trial.
 
-A trial begins for a new battery and when the profile changed (its key: id
-and revision of a shipped profile). A firmware update shows in the device
+A trial begins for a new battery, when the profile changed (its key: id and
+revision, for an own profile with the hash of its content) and when the
+battery got another address (it may be another device). A firmware update shows in the device
 information: a value differs from the one read before (only keys read both
 times count, a failed read changes nothing).
 
@@ -330,6 +331,8 @@ class TrialState:
     details: str | None = None
     # Normal operation watched after a firmware update (status observing).
     observation: Observation | None = None
+    # The device checked (``BatteryDriver.trial_device``).
+    device: str = ""
 
     @property
     def in_trial(self) -> bool:
@@ -409,13 +412,14 @@ class TrialState:
             "wrote": self.wrote,
             "details": self.details,
             "observation": self.observation.as_dict() if self.observation is not None else None,
+            "device": self.device,
         }
 
     @classmethod
-    def restore(cls, data: dict[str, Any] | None, profile_key: str, wall: float) -> TrialState:
-        """The stored state, or a new trial (no state yet, or the profile changed)."""
+    def restore(cls, data: dict[str, Any] | None, profile_key: str, wall: float, device: str = "") -> TrialState:
+        """The stored state, or a new trial (no state yet, the profile or the device changed)."""
         if not data:
-            return cls(profile_key, since=wall)
+            return cls(profile_key, since=wall, device=device)
         state = cls(
             profile_key=data.get("profile_key", ""),
             status=TrialStatus(data.get("status", TrialStatus.TRIAL)),
@@ -427,10 +431,17 @@ class TrialState:
             wrote=bool(data.get("wrote")),
             details=data.get("details"),
             observation=Observation.from_dict(data["observation"]) if data.get("observation") else None,
+            device=data.get("device", ""),
         )
         if state.status is TrialStatus.OBSERVING and state.observation is None:
             state.observation = Observation(wall)
         if state.profile_key != profile_key:
             state.profile_key = profile_key
             state.begin(TrialReason.PROFILE, wall)
+        # A state stored before the device was kept adopts it.
+        if device and state.device and state.device != device:
+            # Another address may be another battery: its device information is no reference.
+            state.begin(TrialReason.NEW, wall)
+            state.device_info = {}
+        state.device = device
         return state

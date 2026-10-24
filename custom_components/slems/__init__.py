@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 import json
+import logging
 from typing import Any
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.event import async_track_time_change
 
-from .battery_profiles import bundled_profiles
+from .battery_profiles import ProfileError, bundled_profiles, profile_of
 from .battery_wear import wear_cost
 from .const import (
     CONF_EFFICIENCY_MODE,
@@ -23,7 +23,6 @@ from .const import (
     CONF_OWN_PV_ENTITY,
     CONF_OWN_PV_FORECAST_ENTRY,
     CONF_MODEL,
-    CONF_PROFILE_ID,
     CONF_SELF_TEST_ON_SETUP,
     DEFAULT_ROUND_TRIP_EFFICIENCY_PCT,
     DOMAIN,
@@ -45,6 +44,8 @@ from .simulation import async_register_websocket
 from .price_chart import async_register_websocket as async_register_price_websocket
 from .tariff_comparison import async_register_websocket as async_register_tariff_websocket
 from .tariff_updates import async_check_tariff_updates
+
+_LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -72,6 +73,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
     )
     batteries = []
     profiles = None
+    # Batteries left out because their profile cannot be used: subentry id -> repair placeholders.
+    unusable: dict[str, dict[str, str]] = {}
     for subentry in entry.subentries.values():
         if subentry.subentry_type != SUBENTRY_TYPE_BATTERY:
             continue
@@ -79,8 +82,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
         if subentry.data.get(CONF_MODEL) == BatteryModel.MODBUS_PROFILE:
             if profiles is None:
                 profiles = await hass.async_add_executor_job(bundled_profiles)
-            if (profile := profiles.get(subentry.data[CONF_PROFILE_ID])) is None:
-                raise ConfigEntryError(f"Unknown battery profile {subentry.data[CONF_PROFILE_ID]}")
+            try:
+                profile = profile_of(subentry.data, profiles)
+            except ProfileError as err:
+                # E.g. an own profile a newer SLEMS checks more strictly: only this battery is left out.
+                _LOGGER.warning("Battery %s left out, its profile cannot be used: %s", subentry.title, err)
+                unusable[subentry.subentry_id] = {"name": subentry.title, "error": str(err)}
+                continue
         driver = create_driver(hass, subentry.data, entry, profile)
         batteries.append(
             BatteryRuntime(
@@ -107,6 +115,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
         if subentry.subentry_type == SUBENTRY_TYPE_CONSUMER
     ]
     coordinator = SlemsCoordinator(hass, entry, batteries, consumers, system_device.id)
+    coordinator.unusable_profiles = unusable
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
 

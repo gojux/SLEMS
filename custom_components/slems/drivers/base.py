@@ -200,6 +200,11 @@ class BatteryDriver(ABC):
         """Changes when what the trial checked changes (e.g. the profile)."""
         return ""
 
+    @property
+    def trial_device(self) -> str:
+        """The device the trial checked (its address); another one begins a new trial."""
+        return ""
+
     async def read_control_registers(self) -> dict[int, float | None]:
         """Raw values of the registers the trial checks (None: not read)."""
         return {}

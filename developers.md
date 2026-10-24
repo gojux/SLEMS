@@ -1673,22 +1673,54 @@ profile out:
   curtailing for the feed-in cap, dead band of the output). The PV comes
   from the last telemetry.
 - The model is offered in the config flow only while the environment
-  variable `SLEMS_DEV_PROFILES` is set (dev and end-to-end instances): step
-  `modbus_profile` with a shipped profile, host, port, unit, transport,
-  limits and release state, until the setup with profile choice, YAML, probe
-  reading and write preview exists. The connection test reads the probe
-  register within its range.
-- Setup probes (Venus and profiles) try a refused connection once more after
-  1 s: a Venus refuses connections for about 0.5 s after the last one closed,
-  e.g. right after the battery search read it.
+  variable `SLEMS_DEV_PROFILES` is set (dev and end-to-end instances), until
+  the AI prompt and the guide for own profiles exist.
+- Setup (`BatterySubentryFlow`, steps `profile*`): `profile` (a shipped
+  profile, **Paste an own profile (YAML)** or a copy of another battery's own
+  profile) → `profile_yaml` (own profiles; a `ProfileError` becomes the error
+  `profile_<code>` with `where` = path and line; the id of a shipped profile is
+  refused) → `profile_connection` (address and transport; another battery at
+  the same host, port and unit is refused) → `profile_read`, a menu showing
+  the probe reading → `profile_limits` → `profile_preview` (own profiles need
+  **I compared the write registers with the manual**). Config flows have no
+  back button: the menu leads back to the profile, its YAML or the
+  connection, and offers **Continue** only while nothing blocks.
+- Probe reading (`read_profile`, checks and texts in `profile_check.py`, no
+  HA dependency): every read and write register and the device information
+  once, nothing written. Blocking: the probe register outside its range, the
+  state of charge unreadable or outside 0–100 %, a write register unreadable
+  or outside its range at rest. Marked only: temperature, cell voltages,
+  powers beyond twice the limits, negative counters, unknown states,
+  unreadable values. The write preview shows charging and then discharging
+  with the self-test power and the release after it, each register with the
+  value it holds then.
+- A new connection for the setup is tried once more after 1 s with a new
+  client (`connect_new`): a Venus refuses connections for about 0.5 s after
+  the last one closed, and a client whose connect failed waits its backoff.
+  Reconfigured at the same address, the setup reads over the transport of the
+  running battery instead (it holds the only connection of a Venus).
+- Storage: a shipped profile by its id, an own one as YAML in the battery's
+  data (`profile_yaml`). Reconfiguring offers **Change the profile or the
+  connection**, **Name and limits** (nothing read, the trial stays) and **Show
+  the profile as YAML**. A changed own profile is offered to the other
+  batteries with a profile of the same id (`profile_others`; unchanged copies
+  preselected); each is read first and left as it is if its write registers
+  are not at rest.
+- A profile that cannot be loaded (`profile_of` raises, e.g. an own profile a
+  newer SLEMS checks more strictly) leaves out only its battery, with the
+  repair `profile_unusable`.
 
 Trial (`trial.py`, `TrialState` per battery in the store, `BatteryRuntime.trial`;
 only drivers with a `trial_spec`, i.e. profiles): a battery from a profile is
 controlled only after its self-test with the checks of the profile (see
 *Self-test*) passed.
 
-- Begins for a new battery and when `trial_key` (`id@revision` of the
-  profile) differs from the stored one.
+- Begins for a new battery, when `trial_key` differs from the stored one
+  (`id@revision`, for an own profile `id@revision#hash`: the hash of the
+  loaded content without `name`, `manufacturer` and `notes`, so comments and
+  layout do not count) and when `trial_device` (host, port and unit) differs
+  (reason `new`; the device information is no reference then). A state
+  stored without a device adopts it.
 - A firmware update (a value of the device information differs from the one
   read before; only keys read both times count) of a battery that had passed
   begins an observation instead (`Observation`, status `observing`): the
@@ -2140,7 +2172,10 @@ development instance is not touched) starts a fresh Home Assistant with its
 configuration in memory, the development `configuration.yaml` and its own
 simulators, onboards it and runs the config flows through the REST and
 websocket API of the frontend (`run.py`, standard library only): setup,
-batteries (Modbus simulator, Venus profile, entities), consumers of every control mode,
+batteries (Modbus simulator, Venus profile, entities; an own profile on
+`venus-sim-5`, which only the end-to-end project has: an error shown with its
+line, a shifted write register blocking, the trial begun again by a changed
+profile), consumers of every control mode,
 tariffs (by hand, YAML, Austrian and German templates, EEG), the options with
 the smart meter over Modbus, every subentry reconfigured, and the dashboard
 commands. A form gets its defaults and suggested values like in the frontend

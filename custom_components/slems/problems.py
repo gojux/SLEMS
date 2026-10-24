@@ -120,6 +120,7 @@ def _house_inaccurate_issue(battery: BatteryRuntime) -> str:
 
 
 # Trial issues: the subentry id follows.
+UNUSABLE_PROFILE_ISSUE = "profile_unusable_"
 TRIAL_ISSUE = "profile_trial_"
 TRIAL_UNCLEAR_ISSUE = "profile_trial_unclear_"
 TRIAL_FAILED_ISSUE = "profile_trial_failed_"
@@ -179,6 +180,8 @@ class ProblemReporter:
             # Phase issues are named after what they ask about.
             *(issue_id for issue_id in self._active or () if issue_id.startswith(PHASE_ISSUE_PREFIX)),
         }
+        for subentry_id, placeholders in coordinator.unusable_profiles.items():
+            wanted[f"{UNUSABLE_PROFILE_ISSUE}{subentry_id}"] = ("profile_unusable", placeholders)
         for battery in coordinator.batteries:
             possible |= {
                 _not_responding_issue(battery),

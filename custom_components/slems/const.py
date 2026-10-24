@@ -56,6 +56,8 @@ CONF_PORT: Final = "port"
 CONF_UNIT_ID: Final = "unit_id"
 # Battery from a Modbus profile: the profile id and the transport (ModbusTransport).
 CONF_PROFILE_ID: Final = "profile_id"
+# The YAML of an own profile (a shipped one is only referred to by its id).
+CONF_PROFILE_YAML: Final = "profile_yaml"
 CONF_TRANSPORT: Final = "transport"
 # Set in the dev and end-to-end environments: offers BatteryModel.MODBUS_PROFILE.
 DEV_PROFILES_ENV: Final = "SLEMS_DEV_PROFILES"
@@ -217,8 +219,8 @@ class BatteryModel(StrEnum):
     # another integration still controls the device) or controlled through them.
     HA_ENTITIES = "ha_entities"
     # Battery described by a Modbus profile (battery_profiles); only offered
-    # while the environment variable SLEMS_DEV_PROFILES is set, until the
-    # setup with profile choice exists.
+    # while the environment variable SLEMS_DEV_PROFILES is set, until the AI
+    # prompt and the guide for own profiles exist.
     MODBUS_PROFILE = "modbus_profile"
 
 

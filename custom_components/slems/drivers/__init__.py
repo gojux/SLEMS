@@ -71,6 +71,7 @@ def create_driver(
             max_charge_power_w=data[CONF_MAX_CHARGE_POWER_W],
             max_discharge_power_w=data[CONF_MAX_DISCHARGE_POWER_W],
             release_state=ReleaseState(data.get(CONF_RELEASE_STATE, ReleaseState.AUTO)),
+            device=f"{data[CONF_HOST]}:{data[CONF_PORT]}/{data[CONF_UNIT_ID]}",
         )
     raise ValueError(f"Unsupported battery model: {model}")
 
