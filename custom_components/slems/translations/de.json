@@ -216,14 +216,14 @@
         },
         "profile": {
           "title": "Profil",
-          "description": "Ein Profil beschreibt die Register der Batterie und wie SLEMS sie lädt, entlädt und freigibt. Wähle ein mit SLEMS geliefertes Profil aus, füge ein eigenes als YAML ein oder kopiere das eigene Profil einer anderen Batterie.",
+          "description": "Ein Profil beschreibt die Register der Batterie und wie SLEMS sie lädt, entlädt und freigibt. Wähle ein mit SLEMS geliefertes Profil aus, füge ein eigenes als YAML ein oder kopiere das eigene Profil einer anderen Batterie.\n\nBatterien aus einem Profil sind experimentell. Ein eigenes Profil erstellst du mit Hilfe einer KI aus dem Handbuch der Batterie: [Anleitung]({prompt_url}).",
           "data": {
             "profile": "Profil"
           }
         },
         "profile_yaml": {
           "title": "Eigenes Profil (YAML)",
-          "description": "Füge das ganze Profil ein (Format `slems_battery_profile: 1`). SLEMS prüft es und zeigt Fehler mit Zeile und Schlüssel. Danach liest SLEMS jedes Register einmal, bevor etwas geschrieben wird.",
+          "description": "Füge das ganze Profil ein (Format `slems_battery_profile: 1`), z. B. mit Hilfe einer KI aus dem Handbuch der Batterie erstellt: [Anleitung]({prompt_url}). SLEMS prüft es und zeigt Fehler mit Zeile und Schlüssel. Danach liest SLEMS jedes Register einmal, bevor etwas geschrieben wird.",
           "data": {
             "profile_yaml": "Profil"
           }

@@ -28,7 +28,7 @@ services:
       - ../sim_solar_forecast:/config/custom_components/sim_solar_forecast:ro
     environment:
       TZ: Europe/Vienna
-      # Offers batteries from a Modbus profile (until they are offered to everyone).
+      # Offers the Venus profile for batteries from a Modbus profile (DEV_ONLY_PROFILES).
       SLEMS_DEV_PROFILES: "1"
     depends_on:
       - venus-sim-1

@@ -345,7 +345,7 @@ def battery_modbus(token: str) -> None:
             },
             f"Marstek Venus E 3.0 {number} (simulator)",
         )
-    # The fourth through the Venus profile (needs SLEMS_DEV_PROFILES, see the compose file).
+    # The fourth through the Venus profile (offered with SLEMS_DEV_PROFILES, see the compose file).
     subentry(
         token,
         "battery",
@@ -397,6 +397,10 @@ def battery_own_profile(token: str) -> None:
     entry_id = slems_entry(token)["entry_id"]
     result = request("POST", SUBENTRY_FLOW, {"handler": [entry_id, "battery"]}, token)
     result = step(token, result["flow_id"], {"model": "modbus_profile"})
+    if not result.get("description_placeholders", {}).get("prompt_url", "").endswith((
+        "/docs/battery-profile-prompt.md", "/docs/battery-profile-prompt.de.md"
+    )):
+        raise Failure(f"Profile: no link to the AI prompt: {result.get('step_id')} {result.get('description_placeholders')}")
     result = step(token, result["flow_id"], {"profile": "own"})
     flow_id = result["flow_id"]
     result = step(token, flow_id, {"profile_yaml": OWN_PROFILE.replace("  port: 502\n", "  port: 502\n  speed: 9600\n")})

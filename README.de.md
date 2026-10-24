@@ -40,6 +40,7 @@ Tiere](https://en.wikipedia.org/wiki/Sea_slug)) und *EMS*
   - [Verbrauchsprognose](#verbrauchsprognose)
 - [Ohne Batterien](#ohne-batterien)
 - [Batterien](#batterien)
+  - [Batterie aus einem Modbus-Profil (experimentell)](#batterie-aus-einem-modbus-profil-experimentell)
   - [Aufteilung auf die Batterien](#aufteilung-auf-die-batterien)
   - [Verschleißkosten der Batterie](#verschleißkosten-der-batterie)
   - [Wirkungsgrad der Batterie](#wirkungsgrad-der-batterie)
@@ -177,6 +178,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 |---|---|
 | Marstek Venus E 3.0 über Modbus TCP | ✅ |
 | Batterie aus vorhandenen Entitäten: nur lesend (z. B. solange Omnibattery steuert) oder gesteuert über Sollwert, Lade-/Entladeleistung oder Skript, Entitäten aus dem Gerät vorgeschlagen | ✅ (Steuerung experimentell) |
+| Batterie aus einem Modbus-Profil: ein eigenes Profil mit einem KI-Prompt aus dem Handbuch erstellt, gelesene Werte und Schreibvorschau, bevor etwas geschrieben wird, Probebetrieb mit dem Selbsttest, bevor sie geregelt wird, beobachtet nach einem Firmware-Update | ✅ (experimentell) |
 | Wirkungsgrad der Batterie (Batteriezähler, gelernt oder manuell), gelernte nutzbare Kapazität | ✅ |
 | Verschleißkosten je Batterie (aus Kaufpreis und Zyklen) in der Planung | ✅ |
 | Batteriemenü: Kommunikation für Firmware-Updates pausieren, Batterie deaktivieren, Gerät öffnen | ✅ |
@@ -850,7 +852,10 @@ SLEMS funktioniert auch ohne Batterie: einfach nur die Verbraucher anlegen.
   behalten soll oder wenn kein Netzwerkkabel hinreicht. Der Unterschied zeigt
   sich vor allem bei schnellen Laständerungen (Kochen, Wasserkocher).
 
-  **Ein weiteres Batteriemodell?** Soll SLEMS ein Modell direkt unterstützen,
+  **Ein weiteres Batteriemodell?** Lässt es sich über Modbus TCP steuern,
+  versuch eine
+  [Batterie aus einem Modbus-Profil](#batterie-aus-einem-modbus-profil-experimentell).
+  Soll SLEMS ein Modell direkt unterstützen,
   bitte ein [Issue](https://github.com/gojux/SLEMS/issues) anlegen mit
   Hersteller und Modell, Schnittstelle (Modbus TCP/RTU, lokale API, nur
   Cloud), Registerliste oder API-Doku, falls vorhanden, und der
@@ -868,6 +873,10 @@ SLEMS funktioniert auch ohne Batterie: einfach nur die Verbraucher anlegen.
      Zellspannungen, Zähler); diese prüfen.
   3. Automationen, die die Batterie steuern, ausschalten, damit nur SLEMS
      Vorgaben sendet.
+- **Batterie aus einem Modbus-Profil** (experimentell): eine Batterie, die
+  sich über Modbus TCP steuern lässt, beschrieben durch ein Profil, das mit
+  einem KI-Prompt aus ihrem Handbuch erstellt wird; siehe
+  [Batterie aus einem Modbus-Profil](#batterie-aus-einem-modbus-profil-experimentell).
 
 **Zustand bei Freigabe**: in welchem Zustand SLEMS die Batterie lässt, wenn es
 die Steuerung beendet, z. B. im Betriebsmodus **Aus**, ohne Werte des Smart
@@ -877,6 +886,94 @@ bei einer Batterie aus Entitäten braucht das eine Fernsteuerungs-Entität, eine
 Modus-Option für Automatik oder ein Freigabe-Skript. **Standby**: die Batterie
 bleibt bei 0 W stehen, bis etwas anderes sie übernimmt; eine Venus bleibt
 dafür in der Fernsteuerung.
+
+### Batterie aus einem Modbus-Profil (experimentell)
+
+Für eine Batterie, die SLEMS nicht direkt unterstützt, die sich aber über
+Modbus steuern lässt: Ein **Profil** beschreibt ihre Register (was SLEMS
+liest) und die Schritte zum Laden, Entladen und Freigeben. SLEMS schreibt nur
+die Register, die das Profil dafür angibt; das Format kennt keine freien
+Schreibbefehle. Batterien aus einem Profil sind experimentell: Bitte berichte
+deine Erfahrungen in einem [Issue](https://github.com/gojux/SLEMS/issues).
+
+**Voraussetzungen**: Modbus TCP (eine Batterie nur mit RS485 / Modbus RTU
+braucht einen Modbus-TCP-Adapter); die Modbus-Registerliste des Herstellers
+mit Registern für Ladezustand, Leistung sowie Lade- und Entladeleistung (oder
+eine Leistung mit Vorzeichen); ein Smart Meter in SLEMS für den Probebetrieb.
+
+**Eine Batterie, ein Steuerpunkt**: Eine Batterie in SLEMS ist ein
+Steuerpunkt mit einem Ladezustand, egal wie viele Wechselrichter oder Module
+dahinter stecken. Gestapelte Module oder ein Wechselrichter mit mehreren
+Batterieeingängen, von dem sich nur die Summe steuern lässt, sind eine
+Batterie mit der Gesamtkapazität. Trag dieselbe Batteriebank nie zweimal ein
+(z. B. je Wechselrichter oder je Stapel): Ihre Kapazität zählte doppelt, und
+zwei Regelkreise arbeiteten gegeneinander.
+
+1. **Profil erstellen** aus der Registerliste mit dem
+   [KI-Prompt](docs/battery-profile-prompt.de.md). Prüfe die Zeilen mit
+   `# unsicher` und `# Frage`.
+2. **Batterie hinzufügen** → Modell **Batterie aus einem Modbus-Profil
+   (experimentell)** und das Profil einfügen. SLEMS prüft es und zeigt einen
+   Fehler mit Zeile und Schlüssel, z. B. einen unbekannten Schlüssel oder
+   einen Wert außerhalb des Ruhebereichs. Liefert SLEMS ein Profil für dein
+   Modell mit oder hat eine andere Batterie ein eigenes Profil, wähl es
+   stattdessen aus.
+3. **Verbindung**: Host, Port und Unit-ID (aus dem Profil vorbelegt) und die
+   Verbindung, **Eigener Modbus-Client** oder **Home Assistant Modbus**
+   (geteilt mit anderen Integrationen am selben Gerät). Viele Batterien nehmen
+   nur eine Modbus-Verbindung an: Beende zuerst andere Integrationen an der
+   Batterie.
+4. **Gelesene Werte**: SLEMS liest jedes Register einmal und schreibt nichts.
+   Vergleiche die Werte mit der App oder dem Display der Batterie: Ein
+   falscher Wert bedeutet meist eine falsche Adresse oder einen falschen
+   Faktor. ⚠ markiert unwahrscheinliche Werte (Temperatur, Zellspannungen,
+   Leistungen über dem Doppelten der Grenze, negative Zähler, unbekannte
+   Zustände, nicht lesbare Werte). **Weiter** gibt es nur, wenn der
+   Ladezustand lesbar ist und zwischen 0 und 100 % liegt und jedes
+   Schreibregister lesbar ist und in seinem Ruhebereich (`at_rest`) liegt;
+   ein Register außerhalb enthält meist etwas anderes (eine verschobene
+   Adresse). Sonst **Profil bearbeiten** oder **Verbindung ändern**.
+5. **Grenzen** wie bei den anderen Batterien; **Zustand, wenn SLEMS die
+   Batterie freigibt** bietet nur die Zustände des Profils an.
+6. **Schreibvorschau**: was SLEMS im Probebetrieb schreibt, Register für
+   Register mit dem Wert jetzt und dann: Laden, Entladen und die Freigabe.
+   Vergleiche jedes Schreibregister mit dem Handbuch (Adresse, Einheit,
+   Bereich) und bestätige **Ich habe die Schreibregister mit dem Handbuch
+   verglichen**. Die Prüfungen von SLEMS fangen die meisten Fehler ab, aber
+   nicht alle: Ein Wert im falschen Register kann eine Einstellung der
+   Batterie ändern.
+7. **Probebetrieb**: SLEMS speichert die Batterie, regelt sie aber noch
+   nicht; sie läuft mit ihrer eigenen Logik. Im Betriebsmodus **Aktiv**
+   startet ihr Selbsttest mit den Prüfungen des Profils von selbst und dauert
+   etwa 8–9 Minuten, in denen die anderen Batterien und die Verbraucher
+   gehalten werden: Die Schreibregister werden eine Minute in Ruhe gelesen,
+   bevor etwas geschrieben wird, jede Richtung beginnt mit 100 W, danach
+   folgt die Leistung des Selbsttests, wobei die Register bis zu 90 s ohne
+   Schreiben gelesen werden, und nach der Freigabe werden sie noch einmal
+   gelesen. **Bestanden**: SLEMS regelt die Batterie. **Teilweise unklar**:
+   nach 10 Minuten erneut versucht; du kannst es auch in der Reparatur
+   übernehmen. **Nicht bestanden**: Die Batterie bleibt im Probebetrieb, bis
+   das Profil korrigiert ist oder ein von dir gestarteter Selbsttest besteht.
+   Der Sensor **Probebetrieb**, eine Reparatur und die Batteriekarte zeigen
+   den Stand.
+
+**Firmware-Updates**: SLEMS vergleicht die Geräteinformationen des Profils
+(z. B. die Firmware-Versionen) nach einem Start und nach einer Pause. Nach
+einer Änderung wird eine bestandene Batterie einen Tag im normalen Betrieb
+beobachtet (erste Vorgaben auf 100 W begrenzt, die Register mit dem
+Geschriebenen verglichen); erst ein Befund beginnt den vollen Probebetrieb
+erneut.
+
+**Ändern**: **Batterie bearbeiten** → **Profil oder Verbindung ändern**
+(erneut lesen, Vorschau und Probebetrieb), **Name und Grenzen** (nichts wird
+gelesen, der Probebetrieb bleibt) oder **Profil als YAML anzeigen** (zum
+Aufbewahren oder für eine andere Batterie). Ein geändertes eigenes Profil
+wird den anderen Batterien mit einem Profil derselben id angeboten. Eine
+andere Adresse beginnt den Probebetrieb erneut.
+
+**Teilen**: Ein Profil, das seinen Probebetrieb bestanden hat, kann ein
+mitgeliefertes Profil für alle mit derselben Batterie werden:
+[so schlägst du es vor](docs/battery-profile-prompt.de.md#profil-als-mitgeliefertes-profil-vorschlagen).
 
 ### Aufteilung auf die Batterien
 
@@ -2316,13 +2413,9 @@ Nutzern mit einer echten Wallbox zur [evcc-Anleitung](docs/wallbox-evcc.de.md).
   übereinstimmenden Abweichungen (z. B. ein durch ein Update der Integration
   gedrehtes Vorzeichen) rät eine Reparaturmeldung zum Selbsttest. Zuerst nur in
   den Diagnosedaten gezählt, um die Grenzen mit echten Daten festzulegen.
-- Modbus-Profile für Batterien: eine Beschreibung der Register (Messwerte,
-  Schritte zum Laden, Entladen und Freigeben), die SLEMS über die
-  Modbus-Verbindung von Home Assistant nutzt, geteilt mit anderen
-  Integrationen; Profile für bekannte Modelle liefert SLEMS mit, ein eigenes
-  wird als YAML eingefügt (mit einem KI-Prompt aus dem Handbuch erstellt) und
-  mit dem Selbsttest geprüft. Experimentell und neben dem direkten
-  Venus-Treiber, der Standard bleibt.
+- Mitgelieferte Modbus-Profile für weitere Batteriemodelle, aus eigenen
+  Profilen, die bei Nutzern dieser Batterien ihren Probebetrieb bestanden
+  haben.
 - Weitere Batteriemodelle über die Treiber-Schnittstelle.
 
 ## Entwicklung

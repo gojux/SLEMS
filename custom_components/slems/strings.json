@@ -216,14 +216,14 @@
         },
         "profile": {
           "title": "Profile",
-          "description": "A profile describes the registers of the battery and how SLEMS charges, discharges and releases it. Select a profile shipped with SLEMS, paste an own one as YAML or copy the own profile of another battery.",
+          "description": "A profile describes the registers of the battery and how SLEMS charges, discharges and releases it. Select a profile shipped with SLEMS, paste an own one as YAML or copy the own profile of another battery.\n\nBatteries from a profile are experimental. An own profile is made from the manual of the battery with the help of an AI: [guide]({prompt_url}).",
           "data": {
             "profile": "Profile"
           }
         },
         "profile_yaml": {
           "title": "Own profile (YAML)",
-          "description": "Paste the whole profile (format `slems_battery_profile: 1`). SLEMS checks it and shows errors with the line and the key. Next SLEMS reads every register once, before anything is written.",
+          "description": "Paste the whole profile (format `slems_battery_profile: 1`), e.g. made from the manual of the battery with the help of an AI: [guide]({prompt_url}). SLEMS checks it and shows errors with the line and the key. Next SLEMS reads every register once, before anything is written.",
           "data": {
             "profile_yaml": "Profile"
           }

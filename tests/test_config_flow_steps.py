@@ -88,6 +88,18 @@ def test_tariff_prompt_link_in_the_language_of_home_assistant() -> None:
         assert "{prompt_url}" in texts["config_subentries"]["tariff"]["step"]["template_energy"]["description"]
 
 
+def test_battery_profile_prompt_link_in_the_language_of_home_assistant() -> None:
+    from custom_components.slems.config_flow import battery_profile_prompt_url
+
+    assert battery_profile_prompt_url("de").endswith("/docs/battery-profile-prompt.de.md")
+    assert battery_profile_prompt_url("en").endswith("/docs/battery-profile-prompt.md")
+    assert battery_profile_prompt_url(None).endswith("/docs/battery-profile-prompt.md")
+    for name in ("strings.json", "translations/en.json", "translations/de.json"):
+        steps = json.loads((Path(config_flow.__file__).parent / name).read_text())["config_subentries"]["battery"]["step"]
+        for step_id in ("profile", "profile_yaml"):
+            assert "{prompt_url}" in steps[step_id]["description"], f"{name}: {step_id}"
+
+
 def test_select_options_named_as_their_integration_shows_them() -> None:
     import asyncio
     from types import SimpleNamespace

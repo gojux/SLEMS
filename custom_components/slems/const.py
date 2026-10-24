@@ -59,8 +59,11 @@ CONF_PROFILE_ID: Final = "profile_id"
 # The YAML of an own profile (a shipped one is only referred to by its id).
 CONF_PROFILE_YAML: Final = "profile_yaml"
 CONF_TRANSPORT: Final = "transport"
-# Set in the dev and end-to-end environments: offers BatteryModel.MODBUS_PROFILE.
+# Set in the dev and end-to-end environments: offers DEV_ONLY_PROFILES as well.
 DEV_PROFILES_ENV: Final = "SLEMS_DEV_PROFILES"
+# Shipped profiles offered only in dev: the Venus profile is there to compare
+# the profile driver with the Venus driver, which stays the way for a Venus.
+DEV_ONLY_PROFILES: Final = ("marstek_venus_e3",)
 CONF_CAPACITY_WH: Final = "capacity_wh"
 CONF_MAX_CHARGE_POWER_W: Final = "max_charge_power_w"
 CONF_MAX_DISCHARGE_POWER_W: Final = "max_discharge_power_w"
@@ -218,9 +221,7 @@ class BatteryModel(StrEnum):
     # Battery backed by existing Home Assistant entities: read-only (e.g. while
     # another integration still controls the device) or controlled through them.
     HA_ENTITIES = "ha_entities"
-    # Battery described by a Modbus profile (battery_profiles); only offered
-    # while the environment variable SLEMS_DEV_PROFILES is set, until the AI
-    # prompt and the guide for own profiles exist.
+    # Battery described by a Modbus profile (battery_profiles), experimental.
     MODBUS_PROFILE = "modbus_profile"
 
 

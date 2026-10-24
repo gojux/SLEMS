@@ -59,7 +59,7 @@ docker compose down
 | `homeassistant` | HA 2026.10.1 (same version as production) on <http://localhost:8123>. `custom_components/slems` is mounted read-only. |
 | `venus-sim-1`, `venus-sim-2` | Modbus TCP simulators of a Venus E 3.0 (`dev/venus_sim/simulator.py`), reachable as host `venus-sim-1` / `venus-sim-2`, port 502. |
 | `venus-sim-3` | The same, controlled through Modbus and template entities of the dev instance (a battery from entities). |
-| `venus-sim-4` | The same, for a battery from the Venus profile (model `modbus_profile`, offered because `SLEMS_DEV_PROFILES` is set for `homeassistant`), to compare it with the direct driver. |
+| `venus-sim-4` | The same, for a battery from the Venus profile (model `modbus_profile`; the profile is offered because `SLEMS_DEV_PROFILES` is set for `homeassistant`), to compare it with the direct driver. |
 | `evcc` (profile `evcc`) | evcc 0.316 for the [evcc guide](docs/wallbox-evcc.md), host network, configured in its web UI (data in `dev/evcc`, not committed); start with `docker compose --profile evcc up -d evcc`. Home Assistant reaches it at the bridge gateway (e.g. `http://10.240.6.1:7070`), the browser at the host IP, which evcc also uses for the Home Assistant login. [ha-evcc](https://github.com/marq24/ha-evcc) is copied into `dev/config/custom_components` by hand. |
 | `sunspec-meter` | SunSpec meter in the layout of a SolarEdge inverter with two meters (`dev/sunspec_meter/meter_sim.py`), host `sunspec-meter`, port 502, export positive. An automation of the dev instance writes the simulated grid power through port 5021 at every change of `sensor.smart_meter_power`. |
 | `tests` | pytest in an image based on the HA image, so Python and HA versions match production. It runs as root on the mounted repository, so it writes no bytecode and no pytest cache (they would be owned by root). |
@@ -1672,9 +1672,18 @@ profile out:
   the control **Output** of entity batteries: ports, probe for curtailed PV,
   curtailing for the feed-in cap, dead band of the output). The PV comes
   from the last telemetry.
-- The model is offered in the config flow only while the environment
-  variable `SLEMS_DEV_PROFILES` is set (dev and end-to-end instances), until
-  the AI prompt and the guide for own profiles exist.
+- The model is experimental. The shipped profiles in `DEV_ONLY_PROFILES`
+  (the Venus profile, which is there to compare the profile driver with the
+  Venus driver) are offered only while the environment variable
+  `SLEMS_DEV_PROFILES` is set (dev and end-to-end instances), and always to a
+  battery reconfigured that has one. With neither a shipped profile nor a
+  copy to choose, the step `profile` goes straight to `profile_yaml`.
+- Own profiles are made with the AI prompt `docs/battery-profile-prompt.md`
+  (and `.de.md`), linked from the steps `profile` and `profile_yaml`
+  (`battery_profile_prompt_url`, placeholder `prompt_url`). Its example is a
+  fictional battery: `tests/test_battery_profile_prompt.py` loads it as an
+  own profile in both languages (same content hash) and checks that the
+  prompt names every key of the format; extend the prompt with the format.
 - Setup (`BatterySubentryFlow`, steps `profile*`): `profile` (a shipped
   profile, **Paste an own profile (YAML)** or a copy of another battery's own
   profile) → `profile_yaml` (own profiles; a `ProfileError` becomes the error

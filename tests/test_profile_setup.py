@@ -283,6 +283,21 @@ def sim(no_confirm_delay):  # noqa: F811
         yield SimpleNamespace(model=model, links=links)
 
 
+@pytest.fixture
+def dev_profiles(monkeypatch):
+    """The dev environment: the Venus profile is offered as well."""
+    monkeypatch.setenv("SLEMS_DEV_PROFILES", "1")
+
+
+@pytest.fixture
+def no_dev_profiles(monkeypatch):
+    monkeypatch.delenv("SLEMS_DEV_PROFILES", raising=False)
+
+
+def options(result) -> list[str]:
+    return [option["value"] for option in result["data_schema"].schema["profile"].config["options"]]
+
+
 def test_every_profile_step_has_its_texts() -> None:
     steps = STRINGS["config_subentries"]["battery"]["step"]
     for step_id in (
@@ -293,7 +308,7 @@ def test_every_profile_step_has_its_texts() -> None:
     assert "modbus_profile" not in steps
 
 
-async def test_new_battery_from_the_shipped_profile(sim) -> None:
+async def test_new_battery_from_the_shipped_profile(sim, dev_profiles) -> None:
     flow = make_flow()
     result = await flow.async_step_profile()
     assert result["type"] is FlowResultType.FORM
@@ -314,6 +329,41 @@ async def test_new_battery_from_the_shipped_profile(sim) -> None:
     assert result["data"]["host"] == "venus" and result["data"]["model"] == "modbus_profile"
     # Nothing was written during the setup.
     assert not any(link.writes() for link in sim.links)
+
+
+async def test_without_a_profile_to_choose_straight_to_the_own_one(sim, no_dev_profiles) -> None:
+    flow = make_flow()
+    result = await flow.async_step_profile()
+    assert result["step_id"] == "profile_yaml"
+    assert result["description_placeholders"]["prompt_url"].endswith("/docs/battery-profile-prompt.de.md")
+    await flow.async_step_profile_yaml({"profile_yaml": OWN_TEXT})
+    result = await flow.async_step_profile_connection(dict(ADDRESS))
+    # Nothing else to choose: only editing the profile.
+    assert "profile_yaml" in result["menu_options"] and "profile" not in result["menu_options"]
+
+
+async def test_venus_profile_only_in_dev(sim, dev_profiles) -> None:
+    flow = make_flow()
+    result = await flow.async_step_profile()
+    assert result["step_id"] == "profile"
+    assert options(result) == ["marstek_venus_e3", "own"]
+    assert result["description_placeholders"]["prompt_url"].endswith("/docs/battery-profile-prompt.de.md")
+
+
+async def test_without_dev_a_copy_is_still_offered(sim, no_dev_profiles) -> None:
+    flow = make_flow([subentry("p1", "Pack 1", model="modbus_profile", profile_id="my_venus", profile_yaml=OWN_TEXT)])
+    result = await flow.async_step_profile()
+    assert result["step_id"] == "profile" and options(result) == ["copy_p1", "own"]
+
+
+async def test_reconfigured_battery_keeps_its_dev_profile(sim, no_dev_profiles) -> None:
+    data = {"model": "modbus_profile", "profile_id": "marstek_venus_e3", **ADDRESS, **LIMITS}
+    flow = make_flow([subentry("p1", "Pack", **data)], reconfigure="p1")
+    await flow.async_step_profile_reconfigure()
+    result = await flow.async_step_profile()
+    assert options(result) == ["marstek_venus_e3", "own"]
+    flow = make_flow()
+    assert (await flow.async_step_profile())["step_id"] == "profile_yaml"
 
 
 async def test_own_profile_errors_show_line_and_key(sim) -> None:
@@ -356,7 +406,7 @@ async def test_blocked_reading_cannot_go_on(sim) -> None:
     assert "profile_limits" not in result["menu_options"]
 
 
-async def test_no_answer_and_address_in_use(sim) -> None:
+async def test_no_answer_and_address_in_use(sim, dev_profiles) -> None:
     flow = make_flow([subentry("v1", "Venus 1", model="marstek_venus_e3", host="venus", port=502, unit_id=1)])
     await flow.async_step_profile({"profile": "marstek_venus_e3"})
     result = await flow.async_step_profile_connection(dict(ADDRESS))

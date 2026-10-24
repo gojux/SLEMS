@@ -40,6 +40,7 @@ system).
   - [Consumption forecast](#consumption-forecast)
 - [Without batteries](#without-batteries)
 - [Batteries](#batteries)
+  - [Battery from a Modbus profile (experimental)](#battery-from-a-modbus-profile-experimental)
   - [Distribution between batteries](#distribution-between-batteries)
   - [Battery wear costs](#battery-wear-costs)
   - [Battery efficiency](#battery-efficiency)
@@ -174,6 +175,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 |---|---|
 | Marstek Venus E 3.0 via Modbus TCP | ✅ |
 | Battery from existing entities: read-only (e.g. while Omnibattery is in control) or controlled by set point, charge/discharge power or script, entities suggested from the device | ✅ (control experimental) |
+| Battery from a Modbus profile: an own profile made from the manual with an AI prompt, values read and write preview before anything is written, a trial with the self-test before it is controlled, observed after a firmware update | ✅ (experimental) |
 | Battery efficiency (battery counters, learned or manual), learned usable capacity | ✅ |
 | Wear costs per battery (from purchase price and cycles) in the planning | ✅ |
 | Battery menu: pause the communication for firmware updates, disable a battery, open its device | ✅ |
@@ -805,8 +807,9 @@ SLEMS also works without any battery: add the consumers only.
   keep the battery's only Modbus connection, or if no network cable reaches
   it. The difference matters most with fast load changes (cooking, kettle).
 
-  **Another battery model?** If you would like SLEMS to support a model
-  directly, please open an [issue](https://github.com/gojux/SLEMS/issues) with
+  **Another battery model?** If it can be controlled over Modbus TCP, try a
+  [battery from a Modbus profile](#battery-from-a-modbus-profile-experimental).
+  If you would like SLEMS to support a model directly, please open an [issue](https://github.com/gojux/SLEMS/issues) with
   manufacturer and model, interface (Modbus TCP/RTU, local API, cloud only),
   a register list or API documentation if available, and the Home Assistant
   integration that exists for it.
@@ -822,6 +825,10 @@ SLEMS also works without any battery: add the consumers only.
      counters); check them.
   3. Switch off automations that control the battery, so only SLEMS sends
      set points.
+- **Battery from a Modbus profile** (experimental): a battery that can be
+  controlled over Modbus TCP, described by a profile made from its manual
+  with an AI prompt; see
+  [Battery from a Modbus profile](#battery-from-a-modbus-profile-experimental).
 
 **State when released**: what SLEMS leaves the battery in when it stops
 controlling it, e.g. in operating mode **Off**, without smart meter values or
@@ -830,6 +837,86 @@ own logic takes over again (e.g. its zero export); for a battery from entities
 this needs a remote control entity, a mode option for automatic or a release
 script. **Standby**: the battery stays idle at 0 W until something else takes it
 over; a Venus keeps its remote control on for this.
+
+### Battery from a Modbus profile (experimental)
+
+For a battery that SLEMS does not support directly but that can be controlled
+over Modbus: a **profile** describes its registers (what SLEMS reads) and the
+steps to charge, discharge and release it. SLEMS writes only the registers the
+profile declares for that; the format has no free write commands. Batteries
+from a profile are experimental: please report your experience in an
+[issue](https://github.com/gojux/SLEMS/issues).
+
+**Requirements**: Modbus TCP (a battery with only RS485 / Modbus RTU needs a
+Modbus TCP adapter); the Modbus register list of the manufacturer with
+registers for the state of charge, the power and the charge and discharge
+power (or one signed power); a smart meter in SLEMS for the trial.
+
+**One battery, one control point**: a battery in SLEMS is one control point
+with one state of charge, however many inverters or modules are behind it.
+Stacked modules, or an inverter with several battery inputs of which only the
+total can be controlled, are one battery with the total capacity. Never add
+the same battery bank twice (e.g. once per inverter or per stack): its
+capacity would count twice and two control loops would work against each
+other.
+
+1. **Make the profile** from the register list with the
+   [AI prompt](docs/battery-profile-prompt.md). Check the lines marked
+   `# uncertain` and `# question`.
+2. **Add battery** → model **Battery from a Modbus profile (experimental)**
+   and paste the profile. SLEMS checks it and shows an error with the line and
+   the key, e.g. an unknown key or a value outside the range at rest. If SLEMS
+   ships a profile for your model or another battery has an own profile,
+   select it instead.
+3. **Connection**: host, port and unit ID (preset from the profile) and the
+   connection, **Own Modbus client** or **Home Assistant Modbus** (shared with
+   other integrations on the same device). Many batteries accept only one
+   Modbus connection: stop other integrations on the battery first.
+4. **Values read**: SLEMS reads every register once and writes nothing.
+   Compare the values with the battery's app or display: a wrong value
+   usually means a wrong address or scale. ⚠ marks unlikely values
+   (temperature, cell voltages, powers beyond twice the limit, negative
+   counters, unknown states, unreadable values). **Continue** is offered only
+   if the state of charge is readable and 0–100 % and every write register is
+   readable and inside its range at rest (`at_rest`); a register outside
+   usually holds something else (a shifted address). Otherwise
+   **Edit the profile** or **Change the connection**.
+5. **Limits** as for the other batteries; **State when SLEMS releases the
+   battery** offers only the states of the profile.
+6. **Write preview**: what SLEMS writes in the trial, register by register
+   with the value now and then: charging, discharging and the release.
+   Compare every write register with the manual (address, unit, range) and
+   confirm **I compared the write registers with the manual**. The checks of
+   SLEMS catch most errors, but not all: a value in a wrong register can
+   change a setting of the battery.
+7. **Trial**: SLEMS saves the battery but does not control it yet; it runs on
+   its own logic. In the operating mode **Active** its self-test with the
+   checks of the profile starts by itself and takes about 8–9 minutes, while
+   the other batteries and the consumers are held: the write registers are
+   read at rest for a minute before anything is written, each direction
+   begins with 100 W, then the self-test power follows with the registers
+   read for up to 90 s without writing, and the registers are read again
+   after the release. **Passed**: SLEMS controls the battery. **Partly
+   unclear**: tried again after 10 minutes; you can also accept it in its
+   repair issue. **Failed**: the battery stays in its trial until the profile
+   is corrected or a self-test you start passes. The sensor **Trial**, a
+   repair issue and the battery card show where it stands.
+
+**Firmware updates**: SLEMS compares the device information of the profile
+(e.g. the firmware versions) after a start and after a pause. After a change
+a battery that had passed is observed in normal operation for a day (first
+commands capped at 100 W, the registers compared with what was written);
+only a finding begins the full trial again.
+
+**Changing it**: **Edit battery** → **Change the profile or the connection**
+(read, preview and trial again), **Name and limits** (nothing is read, the
+trial stays) or **Show the profile as YAML** (to keep it or to use it for
+another battery). A changed own profile is offered to the other batteries
+with a profile of the same id. Another address begins the trial again.
+
+**Sharing it**: a profile that passed its trial can become a shipped profile
+for everybody with the same battery:
+[how to suggest it](docs/battery-profile-prompt.md#suggest-a-profile-as-a-shipped-profile).
 
 ### Distribution between batteries
 
@@ -2177,12 +2264,8 @@ wallbox on the [evcc guide](docs/wallbox-evcc.md).
   sign turned by an update of the integration) a repair issue suggests the
   self-test. First only counted in the diagnostics to set the limits with real
   data.
-- Modbus profiles for batteries: a description of the registers (read
-  values, steps to charge, discharge and release) that SLEMS uses through the
-  Modbus connection of Home Assistant, shared with other integrations; profiles
-  for known models ship with SLEMS, an own one is pasted as YAML (made with an
-  AI prompt from the manual) and checked with the self-test. Experimental and
-  next to the direct Venus driver, which stays the default.
+- Shipped Modbus profiles for further battery models, from own profiles
+  that passed their trial with users of these batteries.
 - Further battery models via the driver interface.
 
 ## Development

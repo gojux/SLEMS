@@ -160,6 +160,7 @@ from .const import (
     CONF_TRANSPORT,
     CONF_WEATHER_ENTITY,
     DEFAULT_MODBUS_PORT,
+    DEV_ONLY_PROFILES,
     DEV_PROFILES_ENV,
     ModbusTransport,
     DEFAULT_UNIT_ID,
@@ -784,7 +785,7 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                         CONF_MODEL, default=model.value
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
-                            options=[model.value for model in _battery_models()],
+                            options=[model.value for model in BatteryModel],
                             translation_key=CONF_MODEL,
                         )
                     )
@@ -893,9 +894,12 @@ class BatterySubentryFlow(ConfigSubentryFlow):
     # --- battery from a Modbus profile ------------------------------------------
 
     async def async_step_profile(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
-        """Choose a shipped profile, paste an own one or copy that of another battery."""
-        bundled = await self.hass.async_add_executor_job(bundled_profiles)
+        """Choose a shipped profile, paste an own one or copy that of another battery;
+        with nothing to choose straight to the own profile."""
+        bundled = self._offered_profiles(await self.hass.async_add_executor_job(bundled_profiles))
         copies = self._profile_copies()
+        if user_input is None and not bundled and not copies:
+            user_input = {CONF_PROFILE: OWN_PROFILE}
         if user_input is not None:
             choice = user_input[CONF_PROFILE]
             if choice == OWN_PROFILE:
@@ -927,6 +931,7 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                     )
                 }
             ),
+            description_placeholders={"prompt_url": battery_profile_prompt_url(self.hass.config.language)},
         )
 
     async def async_step_profile_yaml(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
@@ -959,7 +964,9 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                 }
             ),
             errors=errors,
-            description_placeholders=placeholders,
+            description_placeholders={
+                **placeholders, "prompt_url": battery_profile_prompt_url(self.hass.config.language)
+            },
         )
 
     async def async_step_profile_connection(
@@ -1016,7 +1023,9 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         options = [] if blocked(marks) else ["profile_limits"]
         if not self._profile.bundled:
             options.append("profile_yaml")
-        options += ["profile", "profile_connection", "profile_reread"]
+        if await self._async_profile_choice():
+            options.append("profile")
+        options += ["profile_connection", "profile_reread"]
         return self.async_show_menu(
             step_id="profile_read",
             menu_options=options,
@@ -1182,6 +1191,24 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             ),
             description_placeholders={"profile": self._profile.name},
         )
+
+    async def _async_profile_choice(self) -> bool:
+        """Whether there is a shipped profile or a copy to choose (else only an own profile)."""
+        bundled = await self.hass.async_add_executor_job(bundled_profiles)
+        return bool(self._offered_profiles(bundled) or self._profile_copies())
+
+    def _offered_profiles(self, bundled: dict[str, BatteryProfile]) -> dict[str, BatteryProfile]:
+        """The shipped profiles to choose from: those for dev only while DEV_PROFILES_ENV
+        is set, and always the one the reconfigured battery has."""
+        current = (
+            self._get_reconfigure_subentry().data.get(CONF_PROFILE_ID) if self.source == SOURCE_RECONFIGURE else None
+        )
+        dev = bool(os.environ.get(DEV_PROFILES_ENV))
+        return {
+            profile_id: profile
+            for profile_id, profile in bundled.items()
+            if dev or profile_id not in DEV_ONLY_PROFILES or profile_id == current
+        }
 
     def _profile_copies(self) -> dict[str, tuple[str, str, BatteryProfile]]:
         """Own profiles of the other batteries: choice -> (YAML, battery, profile)."""
@@ -2230,13 +2257,6 @@ def _now_placeholders(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, st
     }
 
 
-def _battery_models() -> list[BatteryModel]:
-    """Models offered when adding a battery (a Modbus profile only in dev, see DEV_PROFILES_ENV)."""
-    return [
-        model for model in BatteryModel if model is not BatteryModel.MODBUS_PROFILE or os.environ.get(DEV_PROFILES_ENV)
-    ]
-
-
 def _battery_data(user_input: dict[str, Any], model: BatteryModel) -> dict[str, Any]:
     """Subentry data of a battery (name still included) from the form input."""
     data = dict(user_input)
@@ -2705,10 +2725,19 @@ def _tariff_select(options: list[str], key: str, *, multiple: bool = False) -> s
 
 
 
+def _prompt_url(name: str, language: str | None) -> str:
+    suffix = ".de" if (language or "").startswith("de") else ""
+    return f"https://github.com/gojux/SLEMS/blob/main/docs/{name}{suffix}.md"
+
+
 def tariff_prompt_url(language: str | None) -> str:
     """The guide to make a tariff from a bill with an AI, in German or English."""
-    suffix = ".de" if (language or "").startswith("de") else ""
-    return f"https://github.com/gojux/SLEMS/blob/main/docs/tariff-prompt{suffix}.md"
+    return _prompt_url("tariff-prompt", language)
+
+
+def battery_profile_prompt_url(language: str | None) -> str:
+    """The guide to make a battery profile from the manual with an AI, in German or English."""
+    return _prompt_url("battery-profile-prompt", language)
 
 class TariffSubentryFlow(ConfigSubentryFlow):
     """Add or edit a tariff by entering the lines of a bill (see tariff).
