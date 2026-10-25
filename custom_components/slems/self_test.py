@@ -66,7 +66,10 @@ samples whenever ``registers_due`` asks for them:
   ``REGISTER_READ_S`` for ``QUIET_S``. One changing by itself is likely a
   measured value, not a set point (a shifted address); one outside its range
   at rest cannot be taken over. Either ends the test without any write and
-  without a release (the release would write the same registers).
+  without a release (the release would write the same registers). The state
+  of charge and the probe register jumping by more than ``SOC_JUMP_PCT``
+  (of the probe's range) between two reads meanwhile is a warning: likely a
+  shifted read address (e.g. a power below 1000 W read as 0.1 %).
 * A small first step (``TrialSpec.small_w``) before each direction, then
   ``SETTLE_S`` at 0 W, then the test power: a step running the wrong way or
   beyond ``SMALL_TOO_LARGE_FACTOR`` times for ``SMALL_ABORT_S`` ends the test
@@ -196,6 +199,8 @@ class TrialSpec:
     registers: tuple[TrialRegister, ...]
     small_w: float = SMALL_W
     keepalive_s: float | None = None
+    # Raw range of the probe register (its value is read at rest, see ``reads_probe``).
+    probe_range: tuple[float, float] | None = None
 
     @property
     def late_s(self) -> float:
@@ -223,6 +228,8 @@ class Sample:
     others_w: tuple[float | None, ...] = ()
     # The write registers of a trial, read when ``registers_due`` asked for them.
     registers: Registers | None = None
+    # Raw value of the probe register, read with them while ``reads_probe``.
+    probe: float | None = None
 
 
 @dataclass
@@ -336,6 +343,8 @@ class SelfTest:
         # rest and after the release, and the time of the last read.
         self._after_settle: Phase | None = None
         self._quiet_reads: list[tuple[float, Registers]] = []
+        # Trial: state of charge and probe register at rest (time, value; None: not read).
+        self._quiet_values: list[tuple[float, float | None, float | None]] = []
         self._release_reads: list[tuple[float, Registers]] = []
         self._read_at: float | None = None
         self._release_failed = False
@@ -378,6 +387,11 @@ class SelfTest:
     def writes_paused(self, now: float) -> bool:
         """Trial: nothing at all is to be written (late read back, no keep-alive)."""
         return self._late_running(now)
+
+    @property
+    def reads_probe(self) -> bool:
+        """Trial: whether the probe register is to be read with the write registers."""
+        return self.trial is not None and self.trial.probe_range is not None and self.phase is Phase.QUIET
 
     def registers_due(self, now: float) -> bool:
         """Trial: whether the next sample is to carry the write registers."""
@@ -464,13 +478,17 @@ class SelfTest:
 
     def _step_quiet(self, now: float, sample: Sample | None, wall: float) -> None:
         """Trial: the registers at rest before anything is written."""
-        if sample is None or sample.registers is None:
+        if sample is None:
+            return
+        self._quiet_values.append((sample.t, sample.soc_pct, sample.probe))
+        if sample.registers is None:
             return
         self._quiet_reads.append((sample.t, sample.registers))
         check = self._quiet_check(final=sample.t - self._quiet_reads[0][0] >= QUIET_S)
         if check is None:
             return
         self.trial_checks.append(check)
+        self.trial_checks.append(quiet_values_check(self.trial, self._quiet_values))  # type: ignore[arg-type]
         if check.outcome is Outcome.OK:
             self._enter(Phase.IDLE, now, 0.0)
         else:
@@ -1135,6 +1153,31 @@ def quiet_check(spec: TrialSpec, reads: list[tuple[float, Registers]], *, final:
     if changed:
         return Check("trial_quiet", Outcome.FAILED, {**values, "reason": "changing", "registers": changed})
     return Check("trial_quiet", Outcome.OK, values) if final else None
+
+
+def quiet_values_check(spec: TrialSpec, values: list[tuple[float, float | None, float | None]]) -> Check:
+    """State of charge and probe register at rest: a jump by more than
+    ``SOC_JUMP_PCT`` (of the probe's range) between two reads is a warning."""
+    spans = {"soc_pct": 100.0}
+    if spec.probe_range is not None and spec.probe_range[1] > spec.probe_range[0]:
+        spans["probe"] = spec.probe_range[1] - spec.probe_range[0]
+    jumps = []
+    for index, key in enumerate(("soc_pct", "probe"), start=1):
+        if key not in spans:
+            continue
+        reads = [(item[0], item[index]) for item in values if item[index] is not None]
+        for (t1, before), (t2, after) in zip(reads, reads[1:]):
+            if abs(after - before) > SOC_JUMP_PCT / 100 * spans[key]:  # type: ignore[operator]
+                jumps.append({
+                    "address": key, "before": _raw(round(before, 1)), "after": _raw(round(after, 1)),  # type: ignore[arg-type]
+                    "after_s": round(t2 - t1),
+                })
+                break
+    if jumps:
+        return Check("trial_quiet_values", Outcome.WARNING, {"reason": "jump", "registers": jumps})
+    if not any(item[1] is not None or item[2] is not None for item in values):
+        return Check("trial_quiet_values", Outcome.SKIPPED)
+    return Check("trial_quiet_values", Outcome.OK)
 
 
 def change_kind(register: TrialRegister, before: float, after: float) -> str:

@@ -1,6 +1,7 @@
 """Tests for the self-test of a battery (simulated battery and meter)."""
 
 from collections.abc import Callable
+import dataclasses
 import random
 
 import pytest
@@ -45,13 +46,16 @@ def run(
     after_release: Callable[[float], float] | None = None,
     house: Callable[[float], float] | None = None,
     registers: Callable[[float, float, bool], dict[int, float | None]] | None = None,
+    soc_read: Callable[[float, float], float] | None = None,
+    probe: Callable[[float], float] | None = None,
 ) -> SelfTest:
     """Drive a test with a simulated battery: 1 s samples until the end.
 
     After the release the battery's power is ``after_release(power before)``,
     by default its own logic covering the house (auto) or 0 (standby). A
     trial reads ``registers(now, command, released)`` whenever it asks for
-    them; a complete write it asks for happens at once.
+    them; a complete write it asks for happens at once. ``soc_read(now, soc)``
+    is the state of charge as reported, ``probe(now)`` the probe register.
     """
     rng = random.Random(1)
     now = 0.0
@@ -93,13 +97,15 @@ def run(
             phases = tuple(
                 meter / 3 + (actual * 2 / 3 if k == on_phase else -actual / 3) + moved[k] for k in range(3)
             )
-        read = None
+        read = probed = None
         if registers is not None and test.registers_due(now):
             read = registers(now, command, released_at is not None)
+            if probe is not None and test.reads_probe:
+                probed = probe(now)
         sample = Sample(
-            now, meter, reported, soc,
+            now, meter, reported, soc_read(now, soc) if soc_read is not None else soc,
             round(c, counter_digits) if counters else None, round(d, counter_digits) if counters else None,
-            phases, others, read,
+            phases, others, read, probed,
         )
         result = test.step(now, sample, ready=True, wall=1000.0)
         if test.wants_refresh:
@@ -390,6 +396,7 @@ def test_a_correct_profile_passes_its_trial() -> None:
     assert test.result == "ok", (outcomes(test), test.trial_checks)
     assert trial_outcomes(test) == {
         "trial_quiet": "ok",
+        "trial_quiet_values": "ok",
         "trial_small_charge": "ok",
         "trial_late_charge": "ok",
         "trial_small_discharge": "ok",
@@ -438,12 +445,32 @@ def test_a_register_outside_its_range_at_rest_ends_the_trial() -> None:
     assert Phase.IDLE not in test._records
 
 
+def test_a_jumping_state_of_charge_or_probe_at_rest_is_a_warning() -> None:
+    # A SoC register shifted onto the battery power: 0.1 % per W of its own logic.
+    def shifted(now: float, _soc: float) -> float:
+        return 12.0 if now < 25 else 48.5
+
+    spec = dataclasses.replace(venus_spec(), probe_range=(0, 1000))
+    test = run(SelfTest(600, 600, 0.0, trial=spec), registers=venus_registers, soc_read=shifted,
+               probe=lambda now: 120 if now < 25 else 485)
+    check = trial_check(test, "trial_quiet_values")
+    assert check.outcome is Outcome.WARNING
+    assert [(r["address"], r["before"], r["after"]) for r in check.values["registers"]] == [
+        ("soc_pct", 12, 48.5), ("probe", 120, 485),
+    ]
+    # Only a mark: the trial goes on and writes.
+    assert Phase.CHARGE in test._records and test.result == "warning"
+
+    calm = run(SelfTest(600, 600, 0.0, trial=spec), registers=venus_registers, probe=lambda now: 500 + now / 10)
+    assert trial_check(calm, "trial_quiet_values").outcome is Outcome.OK
+
+
 def test_unreadable_registers_at_rest_are_unclear() -> None:
     test = run(
         SelfTest(600, 600, 0.0, trial=venus_spec()),
         registers=lambda now, c, r: {**venus_registers(now, c, r), MODE: None},
     )
-    assert trial_outcomes(test) == {"trial_quiet": "unclear"}
+    assert trial_outcomes(test) == {"trial_quiet": "unclear", "trial_quiet_values": "ok"}
     assert test.result == "unclear"
 
 

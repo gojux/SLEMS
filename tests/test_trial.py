@@ -49,6 +49,8 @@ PASSED_TRIAL = [("trial_quiet", "ok"), ("trial_small_charge", "unclear"), ("tria
 def test_judging_a_test() -> None:
     assert judge(result(("effect_charge", "ok"), trial=PASSED_TRIAL)) is TrialStatus.PASSED
     assert judge(result(("effect_charge", "warning"), trial=PASSED_TRIAL)) is TrialStatus.PASSED
+    # A jumping state of charge at rest is only a mark.
+    assert judge(result(trial=[*PASSED_TRIAL, ("trial_quiet_values", "warning")])) is TrialStatus.PASSED
     assert judge(result(("effect_charge", "unclear"), trial=PASSED_TRIAL)) is TrialStatus.UNCLEAR
     assert judge(result(("effect_charge", "ok"), trial=[*PASSED_TRIAL, ("trial_late_discharge", "failed")])) is (
         TrialStatus.FAILED
@@ -224,10 +226,11 @@ async def run_trial(model, release_state: ReleaseState = ReleaseState.AUTO, max_
             test.released(ok, 1000.0, now)
         telemetry = await driver.read_telemetry(complete=True)
         registers = await driver.read_control_registers() if test.registers_due(now) else None
+        probe = await driver.read_probe() if registers is not None and test.reads_probe else None
         sample = Sample(
             now, HOUSE_W + telemetry.ac_power_w, telemetry.ac_power_w, telemetry.soc_pct,
             telemetry.extra.get("total_charging_energy"), telemetry.extra.get("total_discharging_energy"),
-            registers=registers,
+            registers=registers, probe=probe,
         )
         target = test.step(now, sample, ready=True, wall=1000.0)
         if target is not None and test.commanding and not test.writes_paused(now):
@@ -270,7 +273,7 @@ async def test_a_register_written_by_another_system_at_rest_stops_the_trial(tmp_
     foreign.touch()
     monkeypatch.setattr(SIM, "FOREIGN_FILE", str(foreign))
     test, link = await run_trial(SIM.VenusModel(5120, 50.0))
-    assert outcomes(test) == {"trial_quiet": "failed"}
+    assert outcomes(test) == {"trial_quiet": "failed", "trial_quiet_values": "ok"}
     assert test.trial_checks[0].values["reason"] == "changing"
     assert link.writes() == []
 

@@ -54,10 +54,12 @@ in Integrationen für Home Assistant oder ioBroker, bei evcc, in anderen
 Open-Source-Projekten; nimm mehrere unabhängige Quellen und vergleiche sie.
 Gib nur das YAML in einem Codeblock aus, ohne weitere Erklärungen. Schreib
 die Kommentare in der Sprache dieser Nachricht; die Schlüssel bleiben wie
-angegeben.
+angegeben. Setz Texte (name, manufacturer, notes) in doppelte
+Anführungszeichen.
 
 Gibt es kein Register für die Lade- und Entladeleistung (oder eine Leistung
-mit Vorzeichen), oder wird das Register der Leistungsvorgabe selbst
+mit Vorzeichen, oder eine Leistung ohne Vorzeichen, deren Richtung ein
+Befehl setzt), oder wird das Register der Leistungsvorgabe selbst
 dauerhaft gespeichert (Flash, EEPROM), gib kein Profil aus: sag in einem
 Satz, warum sich die Batterie so nicht steuern lässt. Dauerhaft gespeicherte
 Einstellungen (z. B. die Höchstleistung) und unsichere Quellen sind dafür
@@ -68,10 +70,10 @@ Format (alle Schlüssel, die es gibt; andere Schlüssel sind nicht erlaubt):
 
 slems_battery_profile: 1
 id: <Hersteller und Modell in Kleinbuchstaben, Ziffern und _, z. B. acme_x5>
-name: <Hersteller und Modell>
-manufacturer: <Hersteller>                    # optional
+name: "<Hersteller und Modell>"
+manufacturer: "<Hersteller>"                  # optional
 revision: 1
-notes: <Firmware, Schnittstelle>              # optional
+notes: "<Firmware, Schnittstelle>"            # optional
 connection:                                   # optional, Standardwerte wie gezeigt
   port: 502
   unit_id: 1
@@ -112,7 +114,7 @@ read:                                         # Werte, die SLEMS liest; soc_pct 
 device_info:                                  # nur lesend, frei gewählte Namen in Kleinbuchstaben
   <name>: {address: ..., type: ...}
 control:
-  type: split                                 # split: Register für Laden und Entladen; signed: ein Register
+  type: split                                 # split, signed oder magnitude, siehe Regeln
   positive: charge|discharge                  # nur signed: Richtung eines positiven Werts
   setpoint: battery                           # nur eigene PV: battery oder connection
   keepalive_s: <s>                            # nach dieser Zeit alles erneut schreiben
@@ -142,8 +144,8 @@ Schlüssel eines Schritts unter control.apply:
   address, word_order wie oben
   type                 Pflicht: uint16 für ein Register, uint32, int32 oder float32 für zwei (kein char)
   value                ein fester Rohwert oder ein Platzhalter:
-                         "{charge_w}" und "{discharge_w}" (split), "{power_w}" (signed): Leistung in W
-                         "{mode}" mit modes: {idle: ..., charge: ..., discharge: ...}
+                         "{charge_w}" und "{discharge_w}" (split), "{power_w}" (signed, magnitude): Leistung in W
+                         "{mode}" mit modes: {idle: ..., charge: ..., discharge: ...} (Pflicht bei magnitude)
   scale                nur Leistungs-Platzhalter: eine Rohwert-Einheit sind scale W (z. B. 10 für 10-W-Schritte, 1000 für kW)
   at_rest: [min, max]  Bereich des Rohwerts, solange die Batterie ruht
   at_rest_values: [..] statt at_rest: die einzigen Rohwerte in Ruhe (z. B. Kennwerte)
@@ -162,10 +164,10 @@ Beispiel einer erfundenen Batterie (übernimm keine Adresse und keinen Wert dara
 # Frage: Das Handbuch sagt nicht, ob 40001-40007 im Flash gespeichert werden.
 slems_battery_profile: 1
 id: example_battery
-name: Example battery 5 kWh
-manufacturer: Example
+name: "Example battery 5 kWh"
+manufacturer: "Example"
 revision: 1
-notes: Firmware 1.2, Modbus TCP über den LAN-Anschluss.
+notes: "Firmware 1.2, Modbus TCP über den LAN-Anschluss."
 
 connection:
   port: 502
@@ -242,6 +244,10 @@ Regeln:
   hexadezimale Adresse bleibt hexadezimal (z. B. 0xE004). Schreib oben ins
   Profil, wie das Handbuch zählt und was du abgezogen hast.
   Ist das im Handbuch nicht eindeutig, schreib oben "# Frage: ...".
+  Quellen aus dem Netz schreiben entweder die Nummer des Handbuchs oder
+  die Protokolladresse (z. B. Adresse 13049 in einer Integration für
+  Register 13050 des Handbuchs): Schreib oben zu jeder Quelle, welche sie
+  schreibt, und zieh nur von Nummern des Handbuchs ab.
 - Register mit Funktionscode 04 (Input-Register, oft 3xxxx) bekommen
   input: true. Register, die SLEMS schreibt, sind immer Holding-Register.
 - Jeder Schritt unter control.apply braucht type, auch uint16: Ein Wert
@@ -252,6 +258,11 @@ Regeln:
   in einem Kommentar (z. B. „positiv: Entladen“). positive ist Pflicht bei
   power_dc_w, power_ac_w und connection_w; steht das Vorzeichen nicht im
   Handbuch, schreib "# unsicher: Vorzeichen".
+- control.type: split für ein Register zum Laden und eines zum Entladen,
+  signed für ein Register mit Vorzeichen (mit positive), magnitude für ein
+  Register ohne Vorzeichen, dessen Richtung ein Befehls- oder
+  Modus-Register setzt (dann "{power_w}" und "{mode}"). Gib nie einem
+  Register zwei Platzhalter.
 - scale ist der Faktor vom Rohwert zu %, W, kWh, V oder °C (0.1 für 0,1 %,
   1000 für kW in W). Unter control ist es umgekehrt: eine Rohwert-Einheit
   sind scale W (10 für 10-W-Schritte).
@@ -297,7 +308,11 @@ Regeln:
   eigene Logik zurückfällt, einen Wert deutlich darunter (z. B. die
   Hälfte); sonst weglassen. Ist dieses Timeout (oder die Dauer einer
   Zwangsladung) ein Register, schreib es als festen Wert unter apply, so
-  kurz wie möglich: etwa zwei- bis viermal keepalive_s.
+  kurz wie möglich: etwa zwei- bis viermal keepalive_s. Hat nur ein Modus
+  der Batterie ein solches Timeout (z. B. einen Heartbeat), nimm diesen
+  Modus, wenn die Quellen belegen, dass die Steuerregister darin wirken.
+  Gibt es keines, schreib oben "# Frage: Kein Timeout – fällt SLEMS aus,
+  gilt die letzte Vorgabe weiter".
 - message_spacing_s und timeout_s nur, wenn das Handbuch einen kleinsten
   Abstand zwischen Anfragen oder eine Antwortzeit nennt; sagt es nichts,
   schreib oben "# Frage: kleinster Abstand zwischen Anfragen?".

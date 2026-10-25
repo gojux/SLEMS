@@ -417,6 +417,7 @@ class ProfileDriver(BatteryDriver):
             ),
             small_w=max(SMALL_W, self._profile.limits.min_power_w),
             keepalive_s=control.keepalive_s,
+            probe_range=self._profile.probe.range,
         )
 
     @property
@@ -430,6 +431,12 @@ class ProfileDriver(BatteryDriver):
     async def read_control_registers(self) -> dict[int, float | None]:
         await self._ensure_connected()
         return await self._read_writes(list(self._profile.control.apply))
+
+    async def read_probe(self) -> float | None:
+        await self._ensure_connected()
+        register = self._profile.probe.register
+        words = await self._transport.read(register.address, register.size, input_registers=register.input)
+        return decode(words, register.type, register.word_order) if words else None  # type: ignore[return-value]
 
     @property
     def write_count(self) -> int:

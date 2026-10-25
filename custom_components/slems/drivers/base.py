@@ -209,6 +209,10 @@ class BatteryDriver(ABC):
         """Raw values of the registers the trial checks (None: not read)."""
         return {}
 
+    async def read_probe(self) -> float | None:
+        """Raw value of the probe register the trial checks at rest (None: not read)."""
+        return None
+
     @property
     def write_count(self) -> int:
         """Number of register writes so far (a read between two equal counts saw no write)."""

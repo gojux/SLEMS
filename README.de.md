@@ -898,7 +898,9 @@ deine Erfahrungen in einem [Issue](https://github.com/gojux/SLEMS/issues).
 
 **Voraussetzungen**: Modbus TCP (eine Batterie nur mit RS485 / Modbus RTU
 braucht einen Modbus-TCP-Adapter); Register für Ladezustand, Leistung sowie
-Lade- und Entladeleistung (oder eine Leistung mit Vorzeichen), aus der
+Lade- und Entladeleistung (oder eine Leistung mit Vorzeichen, oder eine
+Leistung ohne Vorzeichen, deren Richtung ein Befehl setzt, wie bei Sungrow),
+aus der
 Registerliste des Herstellers oder, da viele Hersteller keine
 veröffentlichen, aus mehreren Quellen im Netz; ein Smart Meter in SLEMS für
 den Probebetrieb.
@@ -958,7 +960,8 @@ zwei Regelkreise arbeiteten gegeneinander.
    startet ihr Selbsttest mit den Prüfungen des Profils von selbst und dauert
    etwa 8–9 Minuten, in denen die anderen Batterien und die Verbraucher
    gehalten werden: Die Schreibregister werden eine Minute in Ruhe gelesen,
-   bevor etwas geschrieben wird, jede Richtung beginnt mit 100 W, danach
+   bevor etwas geschrieben wird (springen Ladezustand oder Probe-Register
+   dabei, markiert SLEMS eine vermutlich verschobene Adresse), jede Richtung beginnt mit 100 W, danach
    folgt die Leistung des Selbsttests, wobei die Register bis zu 90 s ohne
    Schreiben gelesen werden, und nach der Freigabe werden sie noch einmal
    gelesen. **Bestanden**: SLEMS regelt die Batterie. **Teilweise unklar**:

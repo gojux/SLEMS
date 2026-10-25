@@ -1800,6 +1800,9 @@
     "self_test_check_trial_quiet": {
       "message": "Register bleiben ohne Schreiben unverändert"
     },
+    "self_test_check_trial_quiet_values": {
+      "message": "Ladezustand und Probe-Register springen in Ruhe nicht"
+    },
     "self_test_check_trial_small_charge": {
       "message": "Kleiner erster Ladeschritt"
     },

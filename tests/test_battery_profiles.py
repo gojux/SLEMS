@@ -329,6 +329,33 @@ def test_signed_control_with_32_bit_set_point() -> None:
     assert error(overlap).code == "duplicate_address"
 
 
+# Like a Sungrow hybrid: one power register without a sign, the direction from a command.
+def test_magnitude_control_with_direction_command() -> None:
+    text = MINIMAL.replace("type: split", "type: magnitude").replace(
+        '    - {address: 200, type: uint16, value: "{charge_w}", at_rest: [0, 2000]}\n'
+        '    - {address: 201, type: uint16, value: "{discharge_w}", at_rest: [0, 1500]}\n'
+        '    - {address: 202, type: uint16, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2], confirm: true}\n',
+        '    - {address: 200, type: uint16, value: "{power_w}", at_rest: [0, 2000]}\n'
+        '    - {address: 202, type: uint16, value: "{mode}", modes: {idle: 0xCC, charge: 0xAA, discharge: 0xBB},'
+        ' at_rest_values: [0xAA, 0xBB, 0xCC], confirm: true}\n',
+    ).replace("{address: 202, value: 0, confirm: true}", "{address: 202, value: 0xCC, confirm: true}")
+    profile = parse_profile(text)
+    assert profile.control.positive is None
+    assert [raw for _, raw in apply_values(profile, 800, 0)] == [800, 0xAA]
+    assert [raw for _, raw in apply_values(profile, 0, 600)] == [600, 0xBB]
+    assert [raw for _, raw in apply_values(profile, 0, 0)] == [0, 0xCC]
+    # The power register is set to 0 W at the start of a release that leaves it out.
+    assert [(step.address, raw) for step, raw in release_values(profile, ReleaseState.AUTO)] == [(200, 0), (202, 0xCC)]
+    # The range at rest must hold the highest power of both directions.
+    assert error(text.replace("[0, 2000]", "[0, 1500]")).path == "control.apply[0].at_rest"
+    # Without the direction, or with split placeholders.
+    no_mode = text.replace('value: "{mode}", modes: {idle: 0xCC, charge: 0xAA, discharge: 0xBB},', "value: 0xCC,")
+    assert (error(no_mode).code, error(no_mode).detail) == ("control", "magnitude needs {mode}")
+    split = text.replace('value: "{power_w}"', 'value: "{charge_w}"')
+    assert error(split).code == "control"
+    assert error(text.replace("type: magnitude", "type: magnitude\n  positive: charge")).path == "control.positive"
+
+
 def test_persistent_registers() -> None:
     text = MINIMAL.replace(
         "  release:",

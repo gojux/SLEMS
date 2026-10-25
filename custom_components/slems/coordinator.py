@@ -325,6 +325,8 @@ class BatteryRuntime:
     device_info_checked: bool = True
     # The write registers read for the next sample of a trial.
     trial_registers: dict[int, float | None] | None = None
+    # The probe register read with them while the trial reads it at rest.
+    trial_probe: float | None = None
     # The write registers read for an observation, and whether nothing was written during the read.
     observed_registers: tuple[dict[int, float | None], bool] | None = None
     # Duration of the last telemetry read (s), None before the first one.
@@ -2258,6 +2260,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if battery.self_test is not None and battery.self_test.registers_due(now):
             try:
                 battery.trial_registers = await battery.driver.read_control_registers()
+                if battery.self_test.reads_probe:
+                    battery.trial_probe = await battery.driver.read_probe()
             except BatteryDriverError as err:
                 _LOGGER.debug("Battery %s: registers of the trial not read: %s", battery.name, err)
                 battery.trial_registers = {r.address: None for r in battery.self_test.trial.registers}  # type: ignore[union-attr]
@@ -2507,8 +2511,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self._grid_phases_w(),
             tuple(others),
             battery.trial_registers,
+            battery.trial_probe,
         )
         battery.trial_registers = None
+        battery.trial_probe = None
         battery.self_test_power_w = test.step(now, sample, ready=battery.leaving_until is None, wall=wall)
         if test.phase is SelfTestPhase.DONE:
             self.end_self_test(battery)

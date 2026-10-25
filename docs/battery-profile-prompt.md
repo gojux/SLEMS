@@ -50,10 +50,11 @@ is attached, search online for the registers of this model: the
 manufacturer, integrations for Home Assistant or ioBroker, evcc, other open
 source projects; use several independent sources and compare them. Output
 only the YAML in a code block, without further explanations. Write the
-comments in the language of this message; the keys stay as given.
+comments in the language of this message; the keys stay as given. Put texts
+(name, manufacturer, notes) in double quotes.
 
 If there is no register for the charge and discharge power (or one signed
-power), or if the register of the power set point itself is stored
+power, or one power without a sign whose direction a command sets), or if the register of the power set point itself is stored
 permanently (flash, EEPROM), output no profile: say in one sentence why the
 battery cannot be controlled this way. Settings stored permanently (e.g. the
 highest power) and uncertain sources are no reason for that: output the
@@ -64,10 +65,10 @@ Format (every key that exists; no other keys are allowed):
 
 slems_battery_profile: 1
 id: <manufacturer and model in lower case letters, digits and _, e.g. acme_x5>
-name: <manufacturer and model>
-manufacturer: <manufacturer>                  # optional
+name: "<manufacturer and model>"
+manufacturer: "<manufacturer>"                # optional
 revision: 1
-notes: <firmware, interface>                  # optional
+notes: "<firmware, interface>"                # optional
 connection:                                   # optional, defaults as shown
   port: 502
   unit_id: 1
@@ -108,7 +109,7 @@ read:                                         # values SLEMS reads; soc_pct is r
 device_info:                                  # read only, free lower case names
   <name>: {address: ..., type: ...}
 control:
-  type: split                                 # split: charge and discharge registers; signed: one register
+  type: split                                 # split, signed or magnitude, see the rules
   positive: charge|discharge                  # signed only: direction of a positive value
   setpoint: battery                           # own PV only: battery or connection
   keepalive_s: <s>                            # write everything again after this time
@@ -138,8 +139,8 @@ Keys of a step under control.apply:
   address, word_order as above
   type                 required: uint16 for one register, uint32, int32 or float32 for two (no char)
   value                a fixed raw value, or a placeholder:
-                         "{charge_w}" and "{discharge_w}" (split), "{power_w}" (signed): power in W
-                         "{mode}" with modes: {idle: ..., charge: ..., discharge: ...}
+                         "{charge_w}" and "{discharge_w}" (split), "{power_w}" (signed, magnitude): power in W
+                         "{mode}" with modes: {idle: ..., charge: ..., discharge: ...} (required with magnitude)
   scale                power placeholders only: one raw unit is scale W (e.g. 10 for 10 W units, 1000 for kW)
   at_rest: [min, max]  raw range of the register while the battery rests
   at_rest_values: [..] instead of at_rest: the only raw values it holds at rest (e.g. key values)
@@ -158,10 +159,10 @@ Example of a fictional battery (do not copy any address or value from it):
 # question: the manual does not say whether 40001-40007 are stored in flash.
 slems_battery_profile: 1
 id: example_battery
-name: Example battery 5 kWh
-manufacturer: Example
+name: "Example battery 5 kWh"
+manufacturer: "Example"
 revision: 1
-notes: Firmware 1.2, Modbus TCP over the LAN port.
+notes: "Firmware 1.2, Modbus TCP over the LAN port."
 
 connection:
   port: 502
@@ -237,7 +238,10 @@ Rules:
   1. Write addresses as the source does: a hexadecimal address stays
   hexadecimal (e.g. 0xE004). Say at the top of the profile how the manual
   counts and what you subtracted. If the manual does not make this clear,
-  add "# question: ..." at the top.
+  add "# question: ..." at the top. Sources found online write either the
+  number of the manual or the protocol address (e.g. address 13049 in an
+  integration for register 13050 of the manual): say for each source at the
+  top which one it writes, and subtract only from numbers of the manual.
 - Registers of function code 04 (input registers, often 3xxxx) get
   input: true. Registers SLEMS writes are always holding registers.
 - Every step under control.apply needs type, also uint16: a value over two
@@ -248,6 +252,11 @@ Rules:
   comment (e.g. "positive: discharging"). positive is required for
   power_dc_w, power_ac_w and connection_w; if the sign is not given, write
   "# uncertain: sign".
+- control.type: split for one register for charging and one for
+  discharging, signed for one register with a sign (with positive),
+  magnitude for one register without a sign whose direction a command or
+  mode register sets (then "{power_w}" and "{mode}"). Never give one
+  register two placeholders.
 - scale is the factor from the raw value to %, W, kWh, V or °C (0.1 for
   0.1 %, 1000 for kW to W). In control it is the other way round: one raw
   unit is scale W (10 for 10 W units).
@@ -287,7 +296,11 @@ Rules:
   back to its own logic, a value clearly below it (e.g. half); else leave it
   out. If that time-out (or the duration of a forced charge) is a register,
   write it as a fixed value under apply, as short as possible: about two to
-  four times keepalive_s.
+  four times keepalive_s. If only one mode of the battery has such a
+  time-out (e.g. a heartbeat), use that mode if the sources show that the
+  control registers work in it. If there is none, add at the top
+  "# question: No time-out – if SLEMS fails, the last set point stays in
+  force".
 - message_spacing_s and timeout_s only if the manual names a least time
   between requests or a response time; if it says nothing, add
   "# question: least time between requests?" at the top.

@@ -849,7 +849,8 @@ from a profile are experimental: please report your experience in an
 
 **Requirements**: Modbus TCP (a battery with only RS485 / Modbus RTU needs a
 Modbus TCP adapter); registers for the state of charge, the power and the
-charge and discharge power (or one signed power), from the manufacturer's
+charge and discharge power (or one signed power, or one power without a
+sign whose direction a command sets, as at Sungrow), from the manufacturer's
 register list or, as many manufacturers publish none, from several sources
 found online; a smart meter in SLEMS for the trial.
 
@@ -903,7 +904,9 @@ other.
    its own logic. In the operating mode **Active** its self-test with the
    checks of the profile starts by itself and takes about 8–9 minutes, while
    the other batteries and the consumers are held: the write registers are
-   read at rest for a minute before anything is written, each direction
+   read at rest for a minute before anything is written (a state of charge
+   or probe register jumping meanwhile is marked as a likely shifted
+   address), each direction
    begins with 100 W, then the self-test power follows with the registers
    read for up to 90 s without writing, and the registers are read again
    after the release. **Passed**: SLEMS controls the battery. **Partly

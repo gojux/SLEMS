@@ -1800,6 +1800,9 @@
     "self_test_check_trial_quiet": {
       "message": "Registers stay unchanged without writing"
     },
+    "self_test_check_trial_quiet_values": {
+      "message": "State of charge and probe register without jumps at rest"
+    },
     "self_test_check_trial_small_charge": {
       "message": "Small first charge step"
     },

@@ -35,6 +35,11 @@ is ``scale`` W, as when reading). ``at_rest`` (or ``at_rest_values``) is the
 raw range of a write register while the battery rests: a register outside it
 is not written (a shifted address usually holds something else entirely).
 
+``control.type`` says how the power is written: ``split`` (one register for
+charging and one for discharging), ``signed`` (one register with a sign) or
+``magnitude`` (one register without a sign for both directions, the
+direction from the ``{mode}`` step, e.g. Sungrow's command 0xAA/0xBB/0xCC).
+
 Batteries with own PV modules (``own_pv``) read ``pv_w`` and the output into
 the house (``output_w`` and ``input_w``, or one signed ``connection_w``). The
 set point refers to the battery power (``setpoint: battery``, e.g. a hybrid
@@ -122,6 +127,7 @@ PLACEHOLDER_CHARGE = "{charge_w}"
 PLACEHOLDER_DISCHARGE = "{discharge_w}"
 PLACEHOLDER_POWER = "{power_w}"
 PLACEHOLDER_MODE = "{mode}"
+CONTROL_TYPES = ("split", "signed", "magnitude")
 POWER_PLACEHOLDERS = (PLACEHOLDER_CHARGE, PLACEHOLDER_DISCHARGE, PLACEHOLDER_POWER)
 PLACEHOLDERS = (*POWER_PLACEHOLDERS, PLACEHOLDER_MODE)
 
@@ -239,7 +245,7 @@ class Control:
     apply: tuple[WriteStep, ...]
     release: Mapping[ReleaseState, tuple[WriteStep, ...]]
     setpoint: str = "battery"
-    # signed: the direction of a positive {power_w}.
+    # signed: the direction of a positive {power_w}; magnitude: {power_w} without sign, direction from {mode}.
     positive: str | None = None
     keepalive_s: float | None = None
     confirm: Confirm = field(default_factory=Confirm)
@@ -363,8 +369,11 @@ def split_power(profile: BatteryProfile, net_power_w: float) -> tuple[int, int]:
     return charge, discharge
 
 
-def raw_value(step: WriteStep, *, charge_w: float = 0, discharge_w: float = 0, positive: str | None = None) -> float:
-    """Raw value of a step for these powers (W at the set point's reference)."""
+def raw_value(
+    step: WriteStep, *, charge_w: float = 0, discharge_w: float = 0, positive: str | None = None, magnitude: bool = False
+) -> float:
+    """Raw value of a step for these powers (W at the set point's reference); with ``magnitude`` a
+    {power_w} is the power without sign (the direction comes from {mode})."""
     if charge_w and discharge_w:
         raise ValueError("charge and discharge at once")
     value = step.value
@@ -377,6 +386,8 @@ def raw_value(step: WriteStep, *, charge_w: float = 0, discharge_w: float = 0, p
         watts = charge_w
     elif value == PLACEHOLDER_DISCHARGE:
         watts = discharge_w
+    elif magnitude:
+        watts = charge_w + discharge_w
     else:
         watts = charge_w - discharge_w
         if positive == "discharge":
@@ -389,7 +400,10 @@ def apply_values(profile: BatteryProfile, charge_w: float, discharge_w: float) -
     """The steps of ``apply`` with their raw values, in the order of the profile."""
     control = profile.control
     return [
-        (step, raw_value(step, charge_w=charge_w, discharge_w=discharge_w, positive=control.positive))
+        (step, raw_value(
+            step, charge_w=charge_w, discharge_w=discharge_w, positive=control.positive,
+            magnitude=control.type == "magnitude",
+        ))
         for step in control.apply
     ]
 
@@ -854,7 +868,7 @@ class _Parser:
             self._required(doc, "control", ""), "control",
             ("type", "setpoint", "positive", "keepalive_s", "apply", "confirm", "release"), doc, "control",
         )
-        control_type = self._choice(m, "type", "control", ("split", "signed"))
+        control_type = self._choice(m, "type", "control", CONTROL_TYPES)
         setpoint = self._choice(m, "setpoint", "control", ("battery", "connection"), default="battery")
         if setpoint == "connection" and own_pv is None:
             raise self._fail("own_pv", "control.setpoint", m, "setpoint", "connection needs own_pv")
@@ -881,7 +895,10 @@ class _Parser:
         self._check_addresses(apply, m)
         self._check_placeholders(apply, m, control_type, setpoint, own_pv)
         for index, step in enumerate(apply):
-            self._check_powers(step, f"control.apply[{index}]", steps[index], limits, own_pv, setpoint, positive)
+            self._check_powers(
+                step, f"control.apply[{index}]", steps[index], limits, own_pv, setpoint, positive,
+                control_type == "magnitude",
+            )
 
         release = self._release(m, apply)
         return Control(
@@ -997,6 +1014,8 @@ class _Parser:
                 raise self._fail("control", "control.apply", where, "apply", f"{placeholder} more than once")
         if control_type == "signed":
             needed, forbidden = {PLACEHOLDER_POWER}, {PLACEHOLDER_CHARGE, PLACEHOLDER_DISCHARGE}
+        elif control_type == "magnitude":
+            needed, forbidden = {PLACEHOLDER_POWER, PLACEHOLDER_MODE}, {PLACEHOLDER_CHARGE, PLACEHOLDER_DISCHARGE}
         else:
             needed, forbidden = {PLACEHOLDER_CHARGE, PLACEHOLDER_DISCHARGE}, {PLACEHOLDER_POWER}
             if setpoint == "connection" and own_pv is not None and not own_pv.ac_charge:
@@ -1011,7 +1030,7 @@ class _Parser:
 
     def _check_powers(
         self, step: WriteStep, path: str, where: _LineDict, limits: Limits, own_pv: OwnPv | None, setpoint: str,
-        positive: str | None,
+        positive: str | None, magnitude: bool,
     ) -> None:
         """The highest powers must fit the data type and the range at rest (catches a wrong scale)."""
         if step.value not in POWER_PLACEHOLDERS:
@@ -1028,7 +1047,7 @@ class _Parser:
         )
         key = next((key for key in ("at_rest", "at_rest_values") if key in where), "value")
         for powers in [{}, *cases]:
-            self._check_raw(step, raw_value(step, positive=positive, **powers), path, where, key)
+            self._check_raw(step, raw_value(step, positive=positive, magnitude=magnitude, **powers), path, where, key)
 
     def _release(self, m: _LineDict, apply: tuple[WriteStep, ...]) -> dict[ReleaseState, tuple[WriteStep, ...]]:
         states = [state.value for state in ReleaseState]

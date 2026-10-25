@@ -708,7 +708,11 @@ last result in its attributes), notification in `problems.py`.
     read every `REGISTER_READ_S` (10 s) for `QUIET_S` (60 s). A register
     changing by itself (`changing`) or outside its range at rest
     (`outside_rest`) ends the test without any write and without a release;
-    unreadable is unclear.
+    unreadable is unclear. Meanwhile the state of charge (every sample) and
+    the probe register (`reads_probe`, `BatteryDriver.read_probe`) jumping
+    by more than `SOC_JUMP_PCT` (of `TrialSpec.probe_range`) between two
+    reads is a warning `trial_quiet_values` (a likely shifted read address;
+    only a mark, `judge` still passes).
   - Before each direction a small step (`TrialSpec.small_w`: 100 W or the
     profile's `min_power_w`) until it shows plus `SMALL_HOLD_S` (at most
     `SMALL_MAX_S`), then `SETTLE_S` (15 s) at 0 W, then the test power (its
@@ -1628,6 +1632,10 @@ simulator's register model).
   `battery` (the battery power, e.g. hybrid inverters) or `connection` (the
   AC connection: charge = input, discharge = output, converted like the
   control **Output** of entity batteries).
+- `control.type` (`CONTROL_TYPES`): `split` (`{charge_w}` and
+  `{discharge_w}`), `signed` (`{power_w}` with `positive`) or `magnitude`
+  (`{power_w}` without sign plus a required `{mode}` for the direction,
+  e.g. Sungrow's command 0xAA/0xBB/0xCC; `raw_value(magnitude=True)`).
 - Values in `apply`/`release` are raw; the power placeholders are W and
   become raw through `scale` (one raw unit = `scale` W, as when reading).
   `at_rest` / `at_rest_values` (raw) are required in own profiles; fixed

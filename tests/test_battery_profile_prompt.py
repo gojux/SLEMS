@@ -8,6 +8,7 @@ import re
 import pytest
 
 from custom_components.slems.battery_profiles import (
+    CONTROL_TYPES,
     FORMAT_KEY,
     PLACEHOLDERS,
     POWER_PLACEHOLDERS,
@@ -76,5 +77,8 @@ def test_prompt_names_every_key_of_the_format(name: str) -> None:
     format_part = text.split("```yaml", 1)[0]
     for key in (*KEYS, *READ_KEYS):
         assert re.search(rf"\b{key}\b", format_part), key
-    for word in (*STATES, *PLACEHOLDERS, *REGISTER_TYPES):
+    for word in (*STATES, *PLACEHOLDERS, *REGISTER_TYPES, *CONTROL_TYPES):
         assert word in format_part, word
+    # The rules say when each type of control fits.
+    for word in CONTROL_TYPES:
+        assert re.search(rf"^- control\.type: .*\b{word}\b", text, re.M | re.S), word
