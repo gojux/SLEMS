@@ -149,7 +149,7 @@ Schlüssel eines Schritts unter control.apply:
   value                ein fester Rohwert oder ein Platzhalter:
                          "{charge_w}" und "{discharge_w}" (split), "{power_w}" (signed, magnitude): Leistung in W
                          "{mode}" mit modes: {idle: ..., charge: ..., discharge: ...} (Pflicht bei magnitude)
-  scale                nur Leistungs-Platzhalter: eine Rohwert-Einheit sind scale W (z. B. 10 für 10-W-Schritte, 1000 für kW)
+  scale                nur Leistungs-Platzhalter: eine Rohwert-Einheit sind scale W (z. B. 10 für 10-W-Einheiten, 1000 für kW)
   at_rest: [min, max]  Bereich des Rohwerts, solange die Batterie ruht
   at_rest_values: [..] statt at_rest: die einzigen Rohwerte in Ruhe (z. B. Kennwerte)
   confirm: true        SLEMS liest das Register nach dem Schreiben zurück
@@ -298,9 +298,10 @@ Regeln:
   Register ohne Vorzeichen, dessen Richtung ein Befehls- oder
   Modus-Register setzt (dann "{power_w}" und "{mode}"). Gib nie einem
   Register zwei Platzhalter.
-- scale ist der Faktor vom Rohwert zu %, W, kWh, V oder °C (0.1 für 0,1 %,
-  1000 für kW in W). Unter control ist es umgekehrt: eine Rohwert-Einheit
-  sind scale W (10 für 10-W-Schritte).
+- scale ist der Faktor vom Rohwert zum Wert in %, W, kWh, V oder °C:
+  Wert = Rohwert × scale (0.1 für 0,1 %, 10 für 10-W-Einheiten, 1000 für
+  kW). Unter control gilt derselbe Faktor: SLEMS schreibt Rohwert =
+  Leistung in W / scale (bei scale 10 wird aus 2500 W der Rohwert 250).
 - Nenne über jedem Schritt unter control.apply in einem Kommentar: Nummer
   und Name des Registers im Handbuch, Seite oder Tabelle und seine
   Bedeutung.

@@ -290,9 +290,10 @@ Rules:
   magnitude for one register without a sign whose direction a command or
   mode register sets (then "{power_w}" and "{mode}"). Never give one
   register two placeholders.
-- scale is the factor from the raw value to %, W, kWh, V or °C (0.1 for
-  0.1 %, 1000 for kW to W). In control it is the other way round: one raw
-  unit is scale W (10 for 10 W units).
+- scale is the factor from the raw value to the value in %, W, kWh, V or
+  °C: value = raw value × scale (0.1 for 0.1 %, 10 for 10 W units, 1000
+  for kW). Under control the factor is the same: SLEMS writes raw value =
+  power in W / scale (with scale 10, 2500 W become the raw value 250).
 - Above every step under control.apply give in a comment: the register
   number and name in the manual, the page or table, and its meaning.
 - Every step under control.apply needs at_rest (or at_rest_values) from the
