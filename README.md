@@ -848,10 +848,10 @@ from a profile are experimental: please report your experience in an
 [issue](https://github.com/gojux/SLEMS/issues).
 
 **Requirements**: Modbus TCP (a battery with only RS485 / Modbus RTU needs a
-Modbus TCP adapter); registers for the state of charge, the power and the
-charge and discharge power (or one signed power, or one power without a
-sign whose direction a command sets, as at Sungrow), from the manufacturer's
-register list or, as many manufacturers publish none, from several sources
+Modbus TCP adapter); registers for the state of charge, the power (with a
+sign, or one register per direction) and the charge and discharge power (or
+one signed power, or one power without a sign whose direction a command
+sets, as at Sungrow), from the manufacturer's register list or, as many manufacturers publish none, from several sources
 found online; a smart meter in SLEMS for the trial.
 
 **One battery, one control point**: a battery in SLEMS is one control point
@@ -883,8 +883,8 @@ other.
    Compare the values with the battery's app or display: a wrong value
    usually means a wrong address or scale. ⚠ marks unlikely values
    (temperature, cell voltages, powers beyond twice the limit, negative
-   counters, unknown states, a power against the state read, unreadable
-   values). At rest the power is 0 W: let the battery charge or discharge
+   counters or powers, unknown states, a power against the state read,
+   unreadable values). At rest the power is 0 W: let the battery charge or discharge
    (its own logic or its app) and **Read again**, so a wrong sign of the
    power shows too. Give wrong values back to the AI with the values read.
    **Continue** is offered only if the state of charge is readable and

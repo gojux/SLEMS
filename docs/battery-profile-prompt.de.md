@@ -61,9 +61,11 @@ Gibt es kein Register für die Lade- und Entladeleistung (oder eine Leistung
 mit Vorzeichen, oder eine Leistung ohne Vorzeichen, deren Richtung ein
 Befehl setzt), oder wird das Register der Leistungsvorgabe selbst
 dauerhaft gespeichert (Flash, EEPROM), gib kein Profil aus: sag in einem
-Satz, warum sich die Batterie so nicht steuern lässt. Dauerhaft gespeicherte
-Einstellungen (z. B. die Höchstleistung) und unsichere Quellen sind dafür
-kein Grund: Gib das Profil mit "# unsicher" aus. Gibst du kein Profil aus,
+Satz, warum sich die Batterie so nicht steuern lässt. Dass die Batterie
+andere Register dauerhaft speichert (z. B. ihre Höchstleistung), ist dafür
+kein Grund; solche Einstellungen schreibt das Profil nicht (siehe Regeln).
+Auch unsichere Quellen sind kein Grund: Gib das Profil aus und markiere
+jeden unsicheren Wert mit "# unsicher: <Grund>". Gibst du kein Profil aus,
 nenne die Quellen, die du gefunden hast.
 
 Format (alle Schlüssel, die es gibt; andere Schlüssel sind nicht erlaubt):
@@ -77,36 +79,33 @@ notes: "<Firmware, Schnittstelle>"            # optional
 connection:                                   # optional, Standardwerte wie gezeigt
   port: 502
   unit_id: 1
-  message_spacing_s: 0                        # kleinster Abstand zwischen zwei Anfragen in s
-  timeout_s: 3
+  message_spacing_s: 0.0                      # kleinster Abstand zwischen zwei Anfragen in s
+  timeout_s: 3.0
 limits:
   max_charge_w: <höchste Ladeleistung in W, ganze Zahl>
   max_discharge_w: <höchste Entladeleistung in W, ganze Zahl>
   min_power_w: <kleinste Leistung, die die Batterie annimmt, in W>   # optional
 timing:                                       # optional, siehe Regeln
-  start_delay_s: <s>                          # von einer Vorgabe, bis die Leistung sichtbar ist
-  start_extra_s: <s>                          # zusätzlich aus dem Standby
-  reversal_extra_s: <s>                       # zusätzlich bei einem Richtungswechsel
-  min_command_interval_s: <s>                 # kleinster Abstand zwischen zwei Vorgaben
+  start_delay_s: <s, z. B. 2.5>               # von einer Vorgabe, bis die Leistung sichtbar ist
+  start_extra_s: <s, z. B. 2.5>               # zusätzlich aus dem Standby
+  reversal_extra_s: <s, z. B. 2.5>            # zusätzlich bei einem Richtungswechsel
+  min_command_interval_s: <s, z. B. 2.5>      # kleinster Abstand zwischen zwei Vorgaben
 own_pv:                                       # nur für eine Batterie mit eigenen PV-Modulen
   max_output_w: <höchste Ausgangsleistung ins Haus in W>
   ac_charge: true                             # kann aus dem Netz laden
   passes_pv_through: false                    # gibt ihre PV voll ins Haus weiter
-read:                                         # Werte, die SLEMS liest; soc_pct ist Pflicht
-  soc_pct:        {address: ..., type: ..., scale: ...}   # Ladezustand in %
-  power_dc_w:     {..., positive: charge|discharge}       # Batterieleistung in W
-  power_ac_w:     {..., positive: charge|discharge}       # AC-Leistung in W
-  pv_w:           {...}                       # nur eigene PV: PV-Leistung in W
-  output_w:       {...}                       # nur eigene PV: Ausgang ins Haus in W
-  input_w:        {...}                       # nur eigene PV: Eingang aus dem Netz in W
-  connection_w:   {..., positive: input|output}  # nur eigene PV: Leistung am AC-Anschluss mit Vorzeichen
-  charged_kwh:    {...}                       # Ladezähler über die Lebensdauer in kWh
-  discharged_kwh: {...}                       # Entladezähler über die Lebensdauer in kWh
-  voltage_v:      {...}                       # Batteriespannung in V
-  temperature_c:  {...}                       # Temperatur in °C
-  max_cell_v:     {...}                       # höchste Zellspannung in V
-  min_cell_v:     {...}                       # niedrigste Zellspannung in V
-  cycles:         {...}                       # Vollzyklen
+read:                                         # Werte, die SLEMS liest, siehe Regeln
+  soc_pct:         {address: ..., type: ..., scale: ...}  # Ladezustand in %, Pflicht
+  battery_power_w: {..., positive: charge|discharge}      # Leistung an der Batterie (DC) in W
+  ac_power_w:      {..., positive: input|output}          # Leistung am AC-Anschluss zu Haus und Netz in W (ohne Notstrom-Ausgang)
+  pv_power_w:      {...}                      # nur eigene PV: Leistung der eigenen PV-Module in W
+  charged_kwh:     {...}                      # Ladezähler über die Lebensdauer in kWh
+  discharged_kwh:  {...}                      # Entladezähler über die Lebensdauer in kWh
+  voltage_v:       {...}                      # Batteriespannung in V
+  temperature_c:   {...}                      # Batterietemperatur in °C (Zellen oder BMS; gibt es keine, die des Geräts)
+  max_cell_v:      {...}                      # höchste Zellspannung in V
+  min_cell_v:      {...}                      # niedrigste Zellspannung in V
+  cycles:          {...}                      # Vollzyklen
   state:                                      # Zustand der Batterie
     address: ...
     type: uint16                              # oder int16, uint32, int32
@@ -117,8 +116,8 @@ control:
   type: split                                 # split, signed oder magnitude, siehe Regeln
   positive: charge|discharge                  # nur signed: Richtung eines positiven Werts
   setpoint: battery                           # nur eigene PV: battery oder connection
-  keepalive_s: <s>                            # nach dieser Zeit alles erneut schreiben
-  confirm: {delay_s: 0.2, tolerance_w: 100, tolerance_pct: 0}   # optional
+  keepalive_s: <s, z. B. 2.5>                 # nach dieser Zeit alles erneut schreiben
+  confirm: {delay_s: 0.2, tolerance_w: 100, tolerance_pct: 0.0}   # optional
   apply:                                      # geschrieben zum Laden und Entladen, in dieser Reihenfolge
     - {address: ..., type: ..., value: ..., at_rest: [min, max], confirm: true}
   release:                                    # geschrieben, wenn SLEMS die Batterie freigibt
@@ -137,8 +136,12 @@ Schlüssel eines Registers (read, device_info, probe):
   input       true für Input-Register (Funktionscode 04); Standard Holding (03)
   positive    nur Leistungen mit Vorzeichen, siehe oben
   fallback    nur soc_pct: ein zweites Register, falls das erste nicht lesbar ist
+Statt eines Registers mit positive dürfen battery_power_w und ac_power_w ein
+Paar zweier Register ohne Vorzeichen sein, eines je Richtung:
+  battery_power_w: {charge: {address: ..., type: ...}, discharge: {address: ..., type: ...}}
+  ac_power_w:      {input: {address: ..., type: ...}, output: {address: ..., type: ...}}
 Eine Leistung darf die Summe mehrerer Register sein: eine Liste von Registern
-(z. B. die PV-Eingänge mehrerer MPPTs).
+(z. B. die PV-Eingänge mehrerer MPPTs), auch je Seite eines Paars.
 
 Schlüssel eines Schritts unter control.apply:
   address, word_order wie oben
@@ -173,7 +176,7 @@ connection:
   port: 502
   unit_id: 1
   message_spacing_s: 0.1    # Seite 4: mindestens 100 ms zwischen zwei Anfragen
-  timeout_s: 3
+  timeout_s: 3.0
 
 limits:
   max_charge_w: 2500
@@ -181,11 +184,11 @@ limits:
 
 read:
   soc_pct:        {address: 100, type: uint16, input: true, scale: 0.1}          # 30101, 0,1 %
-  power_ac_w:     {address: 110, type: int32, input: true, positive: discharge}  # 30111-30112, W, „positiv: Entladen“ (Seite 9)
+  ac_power_w:     {address: 110, type: int32, input: true, positive: output}     # 30111-30112, W, „positiv: Entladen“ (Seite 9)
   voltage_v:      {address: 120, type: uint16, input: true, scale: 0.01}         # 30121, 0,01 V
   charged_kwh:    {address: 130, type: uint32, input: true, scale: 0.1}          # 30131-30132, 0,1 kWh
   discharged_kwh: {address: 132, type: uint32, input: true, scale: 0.1}          # 30133-30134, 0,1 kWh
-  temperature_c:  {address: 140, type: int16, input: true, scale: 0.1}           # 30141, 0,1 °C
+  temperature_c:  {address: 140, type: int16, input: true, scale: 0.1}           # 30141, 0,1 °C, Batterie
   state:                                                                         # 30151 (Seite 9)
     address: 150
     type: uint16
@@ -198,7 +201,7 @@ device_info:
 
 control:
   type: split
-  keepalive_s: 60           # die Hälfte des Timeouts in 40007
+  keepalive_s: 60.0         # die Hälfte des Timeouts in 40007
   apply:
     # 40001 „Remote control“ (Seite 10): 0xA5A5 = an, 0x5A5A = aus
     - {address: 0, type: uint16, value: 0xA5A5, at_rest_values: [0xA5A5, 0x5A5A], confirm: true}
@@ -255,9 +258,17 @@ Regeln:
   word_order, wenn das niedrige Wort zuerst kommt. Das Format kennt keine
   64-Bit-Typen: Lass solche Register weg (z. B. 64-Bit-Zähler).
 - Nenne für jedes Leistungsregister Einheit und Vorzeichen aus dem Handbuch
-  in einem Kommentar (z. B. „positiv: Entladen“). positive ist Pflicht bei
-  power_dc_w, power_ac_w und connection_w; steht das Vorzeichen nicht im
-  Handbuch, schreib "# unsicher: Vorzeichen".
+  in einem Kommentar (z. B. „positiv: Entladen“). battery_power_w braucht
+  positive: charge oder discharge, ac_power_w positive: input (aus dem Netz
+  in die Batterie) oder output (ins Haus); steht das Vorzeichen nicht im
+  Handbuch, schreib "# unsicher: Vorzeichen". Gibt das Handbuch eine
+  Leistung als zwei Register ohne Vorzeichen an, eines je Richtung, schreib
+  das Paar. Eine Leistung ohne Vorzeichen, deren Richtung in einem anderen
+  Register steht (z. B. ein Statusbit), lässt sich nicht lesen: Nimm ein
+  anderes Register oder lass den Schlüssel weg.
+- read braucht battery_power_w oder ac_power_w oder beide. ac_power_w ist
+  die Leistung am AC-Anschluss zu Haus und Netz, nie ein Notstrom- oder
+  EPS-Ausgang.
 - control.type: split für ein Register zum Laden und eines zum Entladen,
   signed für ein Register mit Vorzeichen (mit positive), magnitude für ein
   Register ohne Vorzeichen, dessen Richtung ein Befehls- oder
@@ -326,8 +337,9 @@ Regeln:
   [0, 1000] bei 0,1 %).
 - state: nur die oben genannten Zustände; Rohwerte, die zu keinem passen,
   weglassen. Ein Zustand über zwei Register ist uint32 oder int32.
-- own_pv nur für eine Batterie mit eigenen PV-Modulen: dann pv_w, und
-  output_w (mit input_w, wenn sie aus dem Netz lädt) oder connection_w.
+- own_pv nur für eine Batterie mit eigenen PV-Modulen: dann pv_power_w und
+  ac_power_w (Batterie und PV hinter einem Wechselrichter); ein Paar ohne
+  input nur mit ac_charge: false.
 - SLEMS erreicht die Batterie nur über Modbus TCP. Beschreibt das Handbuch
   nur RS485 (Modbus RTU), schreib oben "# Frage: Modbus-TCP-Adapter?".
 ````

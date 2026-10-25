@@ -1624,11 +1624,23 @@ simulator's register model).
   refused, only `control.apply` registers are written, `release` only writes
   those. Anything beyond belongs into a Python subclass of the profile
   driver. The transport is not part of a profile.
-- Read keys carry their unit (`soc_pct`, `power_dc_w`, `charged_kwh`, ...) and
-  map to `BatteryTelemetry` fields or `extra` keys (`READ_KEYS`, `STATES`);
-  power keys may be a sum of registers (MPPT inputs).
-- Own PV (`own_pv` with the traits of `BatteryCapabilities`): `pv_w` plus
-  `output_w`/`input_w` or a signed `connection_w`; `control.setpoint`
+- Read keys carry their unit (`soc_pct`, `battery_power_w`, `charged_kwh`,
+  ...) and map to `BatteryTelemetry` fields or `extra` keys (`READ_KEYS`,
+  `STATES`). The powers are named by where they are measured:
+  `battery_power_w` (the battery), `ac_power_w` (the device's AC connection
+  to the house and the grid, without a backup output) and `pv_power_w` (own
+  PV modules). `battery_power_w` and `ac_power_w` have a sign (`positive`:
+  `charge|discharge`, `input|output`) or are a pair of registers without
+  one (`{charge, discharge}`, `{input, output}`; `ReadValue.sides`); the
+  driver turns both into the sign of SLEMS (+charge, +input,
+  `NEGATIVE_DIRECTIONS`). A pair is a mapping without `address` (`input`
+  is also a key of a register). Every power, and every side of a pair, may
+  be a sum of registers (MPPT inputs). A magnitude with a direction
+  register (a status bit) is not part of the format. Without own PV
+  `battery_power_w` and/or `ac_power_w` are required.
+- Own PV (`own_pv` with the traits of `BatteryCapabilities`): `pv_power_w`
+  plus `ac_power_w` (battery and PV behind one inverter; a pair without
+  `input` only without `ac_charge`); `control.setpoint`
   `battery` (the battery power, e.g. hybrid inverters) or `connection` (the
   AC connection: charge = input, discharge = output, converted like the
   control **Output** of entity batteries).
@@ -1695,8 +1707,9 @@ profile out:
 - Setup (`BatterySubentryFlow`, steps `profile*`): `profile` (a shipped
   profile, **Paste an own profile (YAML)** or a copy of another battery's own
   profile) → `profile_yaml` (own profiles; a `ProfileError` becomes the error
-  `profile_<code>` with `where` = path and line; the id of a shipped profile is
-  refused) → `profile_connection` (address and transport; another battery at
+  `profile_<code>` with `where` = path and line; a text that is no YAML and
+  has no line `slems_battery_profile:`, e.g. an AI's refusal, is
+  `not_profile`, not `syntax`; the id of a shipped profile is refused) → `profile_connection` (address and transport; another battery at
   the same host, port and unit is refused) → `profile_read`, a menu showing
   the probe reading → `profile_limits` → `profile_preview` (own profiles need
   **I compared the write registers with the manual**). Config flows have no
@@ -1707,7 +1720,9 @@ profile out:
   once, nothing written. Blocking: the probe register outside its range, the
   state of charge unreadable or outside 0–100 %, a write register unreadable
   or outside its range at rest. Marked only: temperature, cell voltages,
-  powers beyond twice the limits, negative counters, unknown states,
+  powers beyond twice the limits, negative counters, PV or sides of a pair
+  (a pair shows each side), unknown states, a battery power against the
+  state read (`ac_power_w` only without own PV, with it the PV is in it),
   unreadable values. The write preview shows charging and then discharging
   with the self-test power and the release after it, each register with the
   value it holds then.

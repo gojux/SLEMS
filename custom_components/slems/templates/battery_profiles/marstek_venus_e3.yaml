@@ -24,16 +24,16 @@ timing:
   reversal_extra_s: 0.6
 
 read:
-  soc_pct:        {address: 34002, type: uint16, scale: 0.1, fallback: {address: 37005, type: uint16}}
-  power_dc_w:     {address: 30001, type: int16, positive: charge}
-  power_ac_w:     {address: 30006, type: int16, positive: discharge}
-  voltage_v:      {address: 30100, type: uint16, scale: 0.01}
-  charged_kwh:    {address: 33000, type: uint32, scale: 0.01}
-  discharged_kwh: {address: 33002, type: int32, scale: 0.01}
-  temperature_c:  {address: 35000, type: int16, scale: 0.1}
-  max_cell_v:     {address: 37007, type: int16, scale: 0.001}
-  min_cell_v:     {address: 37008, type: int16, scale: 0.001}
-  cycles:         {address: 34003, type: uint16}
+  soc_pct:         {address: 34002, type: uint16, scale: 0.1, fallback: {address: 37005, type: uint16}}
+  battery_power_w: {address: 30001, type: int16, positive: charge}
+  ac_power_w:      {address: 30006, type: int16, positive: output}
+  voltage_v:       {address: 30100, type: uint16, scale: 0.01}
+  charged_kwh:     {address: 33000, type: uint32, scale: 0.01}
+  discharged_kwh:  {address: 33002, type: int32, scale: 0.01}
+  temperature_c:   {address: 35000, type: int16, scale: 0.1}
+  max_cell_v:      {address: 37007, type: int16, scale: 0.001}
+  min_cell_v:      {address: 37008, type: int16, scale: 0.001}
+  cycles:          {address: 34003, type: uint16}
   state:
     address: 35100
     type: uint16

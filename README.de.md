@@ -897,8 +897,8 @@ Schreibbefehle. Batterien aus einem Profil sind experimentell: Bitte berichte
 deine Erfahrungen in einem [Issue](https://github.com/gojux/SLEMS/issues).
 
 **Voraussetzungen**: Modbus TCP (eine Batterie nur mit RS485 / Modbus RTU
-braucht einen Modbus-TCP-Adapter); Register für Ladezustand, Leistung sowie
-Lade- und Entladeleistung (oder eine Leistung mit Vorzeichen, oder eine
+braucht einen Modbus-TCP-Adapter); Register für Ladezustand, Leistung (mit
+Vorzeichen oder je Richtung ein Register) sowie Lade- und Entladeleistung (oder eine Leistung mit Vorzeichen, oder eine
 Leistung ohne Vorzeichen, deren Richtung ein Befehl setzt, wie bei Sungrow),
 aus der
 Registerliste des Herstellers oder, da viele Hersteller keine
@@ -936,9 +936,9 @@ zwei Regelkreise arbeiteten gegeneinander.
    Vergleiche die Werte mit der App oder dem Display der Batterie: Ein
    falscher Wert bedeutet meist eine falsche Adresse oder einen falschen
    Faktor. ⚠ markiert unwahrscheinliche Werte (Temperatur, Zellspannungen,
-   Leistungen über dem Doppelten der Grenze, negative Zähler, unbekannte
-   Zustände, eine Leistung gegen den gelesenen Zustand, nicht lesbare
-   Werte). In Ruhe ist die Leistung 0 W: Lass die Batterie laden oder
+   Leistungen über dem Doppelten der Grenze, negative Zähler oder
+   Leistungen, unbekannte Zustände, eine Leistung gegen den gelesenen
+   Zustand, nicht lesbare Werte). In Ruhe ist die Leistung 0 W: Lass die Batterie laden oder
    entladen (eigene Logik oder ihre App) und wähl **Erneut lesen**, dann
    zeigt sich auch ein falsches Vorzeichen der Leistung. Gib falsche Werte
    mit den gelesenen Werten an die KI zurück. **Weiter** gibt es nur, wenn

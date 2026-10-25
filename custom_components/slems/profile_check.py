@@ -9,8 +9,9 @@ concept, sections 5 and 6):
   cannot be read or lies outside 0–100 %, a write register that cannot be
   read or lies outside its range at rest. The profile cannot be saved.
 * Marked: values that are possible but unlikely (temperature, cell voltages,
-  powers far beyond the limits, negative counters, an unknown state, a
-  battery power against the state read) and values that cannot be read.
+  powers far beyond the limits, negative counters or sides of a pair, an
+  unknown state, a battery power against the state read) and values that
+  cannot be read.
 
 The texts are built here in the language of Home Assistant, as markdown lists
 for the description of a step.
@@ -43,9 +44,8 @@ POWER_FACTOR = 2.0
 # A battery power at least this far against the state read (charge, discharge) is marked.
 STATE_POWER_MIN_W = 50.0
 
-# Power read keys with a sign (shown like SLEMS: +charge, +input).
-_SIGNED = ("power_dc_w", "power_ac_w", "connection_w")
-_UNSIGNED_POWERS = ("pv_w", "output_w", "input_w")
+# Power read keys (shown with the sign of SLEMS: +charge, +input).
+_POWERS = ("battery_power_w", "ac_power_w", "pv_power_w")
 _COUNTERS = ("charged_kwh", "discharged_kwh", "cycles")
 
 
@@ -56,6 +56,8 @@ class ProbeReading:
     probe: float | None
     # Read keys -> value (None: not read).
     values: dict[str, float | None] = field(default_factory=dict)
+    # Read keys of a pair -> value of each side without a sign (None: not read).
+    sides: dict[str, dict[str, float | None]] = field(default_factory=dict)
     # Raw value of the state register (None: not read or no state in the profile).
     state: int | None = None
     device_info: dict[str, str | None] = field(default_factory=dict)
@@ -91,9 +93,11 @@ def check(profile: BatteryProfile, reading: ProbeReading) -> dict[str, Mark]:
             marks[key] = Mark(WARN, "unlikely")
         elif key in ("max_cell_v", "min_cell_v") and not CELL_RANGE_V[0] <= value <= CELL_RANGE_V[1]:
             marks[key] = Mark(WARN, "unlikely")
-        elif (key in _SIGNED or key in _UNSIGNED_POWERS) and abs(value) > POWER_FACTOR * limit:
+        elif key in _POWERS and abs(value) > POWER_FACTOR * limit:
             marks[key] = Mark(WARN, "unlikely")
-        elif (key in _UNSIGNED_POWERS or key in _COUNTERS) and value < 0:
+        elif (key == "pv_power_w" or key in _COUNTERS) and value < 0:
+            marks[key] = Mark(WARN, "negative")
+        elif any(side is not None and side < 0 for side in reading.sides.get(key, {}).values()):
             marks[key] = Mark(WARN, "negative")
     high_cell, low_cell = values.get("max_cell_v"), values.get("min_cell_v")
     if high_cell is not None and low_cell is not None and high_cell < low_cell and "max_cell_v" not in marks:
@@ -104,7 +108,7 @@ def check(profile: BatteryProfile, reading: ProbeReading) -> dict[str, Mark]:
         elif reading.state not in profile.state.values:
             marks["state"] = Mark(WARN, "unknown_state")
         else:
-            _check_state_power(profile.state.values[reading.state], values, marks)
+            _check_state_power(profile, profile.state.values[reading.state], values, marks)
     for key, value in reading.device_info.items():
         if value is None:
             marks[key] = Mark(WARN, "unreadable")
@@ -117,10 +121,13 @@ def check(profile: BatteryProfile, reading: ProbeReading) -> dict[str, Mark]:
     return marks
 
 
-def _check_state_power(state: str, values: Mapping[str, float | None], marks: dict[str, Mark]) -> None:
-    """Marks the battery power (DC, else AC) if it points against a state of charging
-    or discharging: mostly its sign is wrong."""
-    key = next((key for key in ("power_dc_w", "power_ac_w") if values.get(key) is not None), None)
+def _check_state_power(
+    profile: BatteryProfile, state: str, values: Mapping[str, float | None], marks: dict[str, Mark]
+) -> None:
+    """Marks the battery power (at the battery, else at the AC connection without own PV)
+    if it points against a state of charging or discharging: mostly its sign is wrong."""
+    keys = ("battery_power_w",) if profile.own_pv else ("battery_power_w", "ac_power_w")
+    key = next((key for key in keys if values.get(key) is not None), None)
     if key is None or key in marks:
         return
     power = values[key]
@@ -164,12 +171,13 @@ def preview(
 _WORDS: dict[str, dict[str, str]] = {
     "en": {
         "soc_pct": "State of charge",
-        "power_dc_w": "Power DC (+ charge)",
-        "power_ac_w": "Power AC (+ charge)",
-        "pv_w": "PV",
-        "output_w": "Output",
-        "input_w": "Input",
-        "connection_w": "Power at the connection (+ input)",
+        "battery_power_w": "Battery power (+ charge)",
+        "ac_power_w": "AC power (+ input)",
+        "pv_power_w": "PV power",
+        "side_charge": "charge",
+        "side_discharge": "discharge",
+        "side_input": "input",
+        "side_output": "output",
         "charged_kwh": "Charged",
         "discharged_kwh": "Discharged",
         "voltage_v": "Voltage",
@@ -209,12 +217,13 @@ _WORDS: dict[str, dict[str, str]] = {
     },
     "de": {
         "soc_pct": "Ladezustand",
-        "power_dc_w": "Leistung DC (+ Laden)",
-        "power_ac_w": "Leistung AC (+ Laden)",
-        "pv_w": "PV",
-        "output_w": "Ausgang",
-        "input_w": "Eingang",
-        "connection_w": "Leistung am Anschluss (+ Eingang)",
+        "battery_power_w": "Batterieleistung (+ Laden)",
+        "ac_power_w": "AC-Leistung (+ Eingang)",
+        "pv_power_w": "PV-Leistung",
+        "side_charge": "Laden",
+        "side_discharge": "Entladen",
+        "side_input": "Eingang",
+        "side_output": "Ausgang",
         "charged_kwh": "Geladen",
         "discharged_kwh": "Entladen",
         "voltage_v": "Spannung",
@@ -255,8 +264,8 @@ _WORDS: dict[str, dict[str, str]] = {
 }
 
 _UNITS = {
-    "soc_pct": "%", "power_dc_w": "W", "power_ac_w": "W", "pv_w": "W", "output_w": "W", "input_w": "W",
-    "connection_w": "W", "charged_kwh": "kWh", "discharged_kwh": "kWh", "voltage_v": "V",
+    "soc_pct": "%", "battery_power_w": "W", "ac_power_w": "W", "pv_power_w": "W",
+    "charged_kwh": "kWh", "discharged_kwh": "kWh", "voltage_v": "V",
     "temperature_c": "°C", "max_cell_v": "V", "min_cell_v": "V", "cycles": "",
 }
 
@@ -321,6 +330,12 @@ def describe_reading(profile: BatteryProfile, reading: ProbeReading, marks: Mapp
     )
     for key, value in reading.values.items():
         shown = "?" if value is None else f"{_number(language, value)} {_UNITS[key]}".rstrip()
+        if sides := reading.sides.get(key):
+            # Each register of a pair, so a swapped pair shows.
+            shown += " (" + ", ".join(
+                f"{words['side_' + side]} {'?' if part is None else _number(language, part)} {_UNITS[key]}"
+                for side, part in sides.items()
+            ) + ")"
         lines.append(f"- {words[key]}: {shown}{_mark(marks.get(key), words)}")
     if profile.state is not None:
         name = profile.state.values.get(reading.state) if reading.state is not None else None  # type: ignore[call-overload]

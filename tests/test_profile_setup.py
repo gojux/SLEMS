@@ -190,7 +190,7 @@ def test_unlikely_values_are_marked() -> None:
     reading = ProbeReading(
         probe=500,
         values={
-            "soc_pct": 50.0, "power_dc_w": 0, "power_ac_w": 6000.0, "voltage_v": 53.0, "charged_kwh": -1.0,
+            "soc_pct": 50.0, "battery_power_w": 0, "ac_power_w": 6000.0, "voltage_v": 53.0, "charged_kwh": -1.0,
             "discharged_kwh": 1.0, "temperature_c": 120.0, "max_cell_v": 3.2, "min_cell_v": 3.3, "cycles": None,
         },
         state=9,
@@ -199,7 +199,7 @@ def test_unlikely_values_are_marked() -> None:
     )
     marks = check(profile, reading)
     assert {key: mark.reason for key, mark in marks.items()} == {
-        "power_ac_w": "unlikely", "charged_kwh": "negative", "temperature_c": "unlikely",
+        "ac_power_w": "unlikely", "charged_kwh": "negative", "temperature_c": "unlikely",
         "max_cell_v": "cells_swapped", "cycles": "unreadable", "state": "unknown_state", "device_name": "unreadable",
     }
     assert all(mark.level == WARN for mark in marks.values()) and not blocked(marks)
@@ -210,13 +210,13 @@ def test_unlikely_values_are_marked() -> None:
 @pytest.mark.parametrize(
     ("state", "values", "marked"),
     [
-        # Venus: 2 charge, 3 discharge; the DC power is checked first, else the AC power.
-        (2, {"power_dc_w": -300.0, "power_ac_w": 280.0}, "power_dc_w"),
-        (3, {"power_dc_w": 300.0}, "power_dc_w"),
-        (3, {"power_ac_w": 300.0}, "power_ac_w"),
-        (2, {"power_dc_w": -49.0}, None),
-        (2, {"power_dc_w": 300.0}, None),
-        (1, {"power_dc_w": -300.0}, None),
+        # Venus: 2 charge, 3 discharge; the battery power is checked first, else the AC power.
+        (2, {"battery_power_w": -300.0, "ac_power_w": 280.0}, "battery_power_w"),
+        (3, {"battery_power_w": 300.0}, "battery_power_w"),
+        (3, {"ac_power_w": 300.0}, "ac_power_w"),
+        (2, {"battery_power_w": -49.0}, None),
+        (2, {"battery_power_w": 300.0}, None),
+        (1, {"battery_power_w": -300.0}, None),
     ],
 )
 def test_power_against_the_state_is_marked(state: int, values: dict, marked: str | None) -> None:
@@ -229,6 +229,44 @@ def test_power_against_the_state_is_marked(state: int, values: dict, marked: str
     assert not blocked(marks)
     if marked:
         assert "widerspricht dem Zustand" in describe_reading(profile, reading, marks, "de")
+
+
+MINIMAL_PAIR = """\
+slems_battery_profile: 1
+id: pair
+name: Pair
+limits: {max_charge_w: 2000, max_discharge_w: 2000}
+read:
+  soc_pct: {address: 100, type: uint16}
+  battery_power_w: {charge: {address: 101, type: uint16}, discharge: {address: 102, type: uint16}}
+control:
+  type: split
+  apply:
+    - {address: 200, type: uint16, value: "{charge_w}", at_rest: [0, 2000]}
+    - {address: 201, type: uint16, value: "{discharge_w}", at_rest: [0, 2000]}
+    - {address: 202, type: uint16, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2]}
+  release:
+    auto:
+      - {address: 202, value: 0}
+probe: {address: 100, type: uint16, range: [0, 100]}
+"""
+
+
+def test_pair_shows_its_sides_and_a_negative_side_is_marked() -> None:
+    profile = parse_profile(MINIMAL_PAIR)
+    reading = ProbeReading(
+        probe=50,
+        values={"soc_pct": 50.0, "battery_power_w": 300.0},
+        sides={"battery_power_w": {"charge": 300.0, "discharge": 0}},
+        writes={200: 0, 201: 0, 202: 0},
+    )
+    marks = check(profile, reading)
+    assert marks == {}
+    assert "- Batterieleistung (+ Laden): 300 W (Laden 300 W, Entladen 0 W)" in describe_reading(
+        profile, reading, marks, "de"
+    )
+    reading.sides["battery_power_w"]["discharge"] = -20.0
+    assert check(profile, reading)["battery_power_w"].reason == "negative"
 
 
 def test_preview_shows_each_register_with_the_value_it_holds_then() -> None:
@@ -395,8 +433,12 @@ async def test_reconfigured_battery_keeps_its_dev_profile(sim, no_dev_profiles) 
 async def test_own_profile_errors_show_line_and_key(sim) -> None:
     flow = make_flow()
     await flow.async_step_profile({"profile": "own"})
-    result = await flow.async_step_profile_yaml({"profile_yaml": "id: [unclosed"})
+    result = await flow.async_step_profile_yaml({"profile_yaml": "slems_battery_profile: 1\nid: [unclosed"})
     assert result["errors"] == {"base": "profile_syntax"}
+    # An AI's refusal without a code block is no profile, not a syntax error in it.
+    refusal = "No profile: the set point is stored in flash.\n\n* *Integration* (GitHub): [https://x](https://x)\n"
+    result = await flow.async_step_profile_yaml({"profile_yaml": refusal})
+    assert result["errors"] == {"base": "profile_not_profile"}
     result = await flow.async_step_profile_yaml({"profile_yaml": OWN_TEXT.replace("  port: 502\n", "  port: 502\n  speed: 9600\n")})
     assert result["errors"] == {"base": "profile_unknown_key"}
     assert result["description_placeholders"]["where"] == "`connection` (Zeile 12)"

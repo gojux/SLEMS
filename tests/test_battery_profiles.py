@@ -31,7 +31,7 @@ name: Test battery
 limits: {max_charge_w: 2000, max_discharge_w: 1500}
 read:
   soc_pct: {address: 100, type: uint16}
-  power_ac_w: {address: 101, type: int16, positive: charge}
+  ac_power_w: {address: 101, type: int16, positive: input}
 control:
   type: split
   apply:
@@ -76,7 +76,7 @@ def test_venus_profile_matches_the_driver() -> None:
 
     # Every telemetry register of the driver (except the control registers) with type and scale.
     by_extra = {
-        "battery_soc": "soc_pct", "battery_power": "power_dc_w", "ac_power": "power_ac_w",
+        "battery_soc": "soc_pct", "battery_power": "battery_power_w", "ac_power": "ac_power_w",
         "battery_voltage": "voltage_v", "internal_temperature": "temperature_c",
         "max_cell_voltage": "max_cell_v", "min_cell_voltage": "min_cell_v", "cycle_count": "cycles",
         "total_charging_energy": "charged_kwh", "total_discharging_energy": "discharged_kwh",
@@ -148,7 +148,7 @@ def test_venus_profile_against_the_simulator() -> None:
     for step, raw in apply_values(profile, 0, 1200):
         model.write(step.address, encode(raw, step.type, step.word_order))
     model.tick()
-    assert read(profile.read["power_ac_w"].registers[0]) == 1200
+    assert read(profile.read["ac_power_w"].registers[0]) == 1200
     assert rest_violations(profile, values()) == []
     for step, raw in release_values(profile, ReleaseState.AUTO):
         model.write(step.address, encode(raw, step.type, step.word_order))
@@ -231,6 +231,9 @@ def test_syntax_and_duplicate_keys() -> None:
     assert (err.code, err.path, err.line) == ("duplicate_key", "name", 4)
     assert error("just: text").code == "not_profile"
     assert error("- a\n- b").code == "not_profile"
+    # An answer without a profile is no YAML either: not a profile, not a syntax error.
+    refusal = "No profile: the set point is stored in flash.\n\n* *Some integration* (GitHub): [https://x](https://x)\n"
+    assert error(refusal).code == "not_profile"
 
 
 def test_at_rest_is_required_for_own_profiles_only() -> None:
@@ -379,12 +382,12 @@ limits: {max_charge_w: 1200, max_discharge_w: 1200}
 own_pv: {max_output_w: 1200, ac_charge: true}
 read:
   soc_pct: {address: 32104, type: uint16}
-  pv_w:
+  pv_power_w:
     - {address: 30037, type: uint16, scale: 0.1}
     - {address: 30038, type: uint16, scale: 0.1}
     - {address: 30039, type: uint16, scale: 0.1}
     - {address: 30040, type: uint16, scale: 0.1}
-  connection_w: {address: 30006, type: int16, positive: output}
+  ac_power_w: {address: 30006, type: int16, positive: output}
 control:
   type: split
   apply:
@@ -407,11 +410,11 @@ timing: {min_command_interval_s: 1}
 own_pv: {max_output_w: 1200}
 read:
   soc_pct: {address: 10014, type: uint16, input: true}
-  pv_w:
+  pv_power_w:
     - {address: 10002, type: int32, input: true}
     - {address: 10004, type: int32, input: true}
-  power_dc_w: {address: 10008, type: int32, input: true, positive: discharge}
-  connection_w: {address: 10100, type: int32, input: true, positive: output}
+  battery_power_w: {address: 10008, type: int32, input: true, positive: discharge}
+  ac_power_w: {address: 10100, type: int32, input: true, positive: output}
 control:
   type: signed
   setpoint: connection
@@ -436,8 +439,8 @@ limits: {max_charge_w: 1800, max_discharge_w: 800}
 own_pv: {max_output_w: 800, ac_charge: false, passes_pv_through: true}
 read:
   soc_pct: {address: 1, type: uint16}
-  pv_w: {address: 2, type: uint16}
-  output_w: {address: 3, type: uint16}
+  pv_power_w: {address: 2, type: uint16}
+  ac_power_w: {output: {address: 3, type: uint16}}
 control:
   type: split
   setpoint: connection
@@ -453,8 +456,8 @@ probe: {address: 1, type: uint16, range: [0, 100]}
 def test_own_pv_profiles() -> None:
     battery = parse_profile(OWN_PV_BATTERY)
     assert battery.own_pv.ac_charge and battery.own_pv.max_output_w == 1200
-    assert len(battery.read["pv_w"].registers) == 4
-    assert battery.read["connection_w"].positive == "output"
+    assert len(battery.read["pv_power_w"].registers) == 4
+    assert battery.read["ac_power_w"].positive == "output"
     assert not battery.control.confirmed
 
     connection = parse_profile(CONNECTION_SET_POINT)
@@ -474,15 +477,16 @@ def test_own_pv_profiles() -> None:
     ("text", "old", "new", "code", "path"),
     [
         # PV without the section own_pv, and the other way round.
-        (MINIMAL, "  power_ac_w:", "  pv_w: {address: 9, type: uint16}\n  power_ac_w:", "own_pv", "read.pv_w"),
-        (OWN_PV_BATTERY, "  pv_w:\n", "  pv_x:\n", "unknown_key", "read"),
-        (OUTPUT_ONLY, "  pv_w: {address: 2, type: uint16}\n", "", "own_pv", "read.pv_w"),
-        (OWN_PV_BATTERY, "  connection_w: {address: 30006, type: int16, positive: output}\n", "", "own_pv",
-         "read.output_w"),
+        (MINIMAL, "  ac_power_w:", "  pv_power_w: {address: 9, type: uint16}\n  ac_power_w:", "own_pv",
+         "read.pv_power_w"),
+        (OWN_PV_BATTERY, "  pv_power_w:\n", "  pv_x:\n", "unknown_key", "read"),
+        (OUTPUT_ONLY, "  pv_power_w: {address: 2, type: uint16}\n", "", "own_pv", "read.pv_power_w"),
+        (OWN_PV_BATTERY, "  ac_power_w: {address: 30006, type: int16, positive: output}\n", "", "own_pv",
+         "read.ac_power_w"),
         # Charging from the grid needs the input.
         (OUTPUT_ONLY, "ac_charge: false", "ac_charge: true", "own_pv", "own_pv.ac_charge"),
-        (OUTPUT_ONLY, "  output_w: {address: 3, type: uint16}\n", "  input_w: {address: 4, type: uint16}\n",
-         "own_pv", "read.output_w"),
+        (OUTPUT_ONLY, "{output: {address: 3, type: uint16}}", "{input: {address: 4, type: uint16}}", "missing_key",
+         "read.ac_power_w.output"),
         (MINIMAL, "type: split", "type: split\n  setpoint: connection", "own_pv", "control.setpoint"),
         # Without an input there is no charge set point at the connection.
         (OUTPUT_ONLY, '    - {address: 10, type: uint16, value: "{discharge_w}", at_rest: [0, 800]}\n',
@@ -490,10 +494,10 @@ def test_own_pv_profiles() -> None:
          '    - {address: 11, type: uint16, value: "{charge_w}", at_rest: [0, 1800]}\n', "control", "control.apply"),
         # The output limit bounds the set point at the connection.
         (OUTPUT_ONLY, "max_output_w: 800,", "max_output_w: 900,", "outside_at_rest", "control.apply[0].at_rest"),
-        (OWN_PV_BATTERY, "positive: output", "positive: charge", "invalid", "read.connection_w.positive"),
+        (OWN_PV_BATTERY, "positive: output", "positive: charge", "invalid", "read.ac_power_w.positive"),
         (OWN_PV_BATTERY, "{address: 30038, type: uint16, scale: 0.1}",
          "{address: 30038, type: uint16, scale: 0.1, fallback: {address: 1, type: uint16}}", "invalid",
-         "read.pv_w[1].fallback"),
+         "read.pv_power_w[1].fallback"),
         (MINIMAL, "  soc_pct: {address: 100, type: uint16}", "  soc_pct: [{address: 100, type: uint16}]", "invalid",
          "read.soc_pct"),
     ],
@@ -502,6 +506,52 @@ def test_own_pv_errors(text: str, old: str, new: str, code: str, path: str) -> N
     assert text.count(old) == 1
     err = error(text.replace(old, new))
     assert (err.code, err.path) == (code, path)
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "code", "path"),
+    [
+        # A battery always charges from the grid without own PV.
+        ("  ac_power_w: {address: 101, type: int16, positive: input}",
+         "  ac_power_w: {output: {address: 101, type: uint16}}", "missing_key", "read.ac_power_w.input"),
+        ("  ac_power_w: {address: 101, type: int16, positive: input}",
+         "  battery_power_w: {charge: {address: 101, type: uint16}}", "missing_key", "read.battery_power_w.discharge"),
+        # The sides are those of the key, the side gives the direction.
+        ("  ac_power_w: {address: 101, type: int16, positive: input}",
+         "  ac_power_w: {charge: {address: 101, type: uint16}, output: {address: 102, type: uint16}}", "unknown_key",
+         "read.ac_power_w"),
+        ("  ac_power_w: {address: 101, type: int16, positive: input}",
+         "  ac_power_w: {input: {address: 101, type: uint16, positive: input}, output: {address: 102, type: uint16}}",
+         "invalid", "read.ac_power_w.input.positive"),
+        ("  ac_power_w: {address: 101, type: int16, positive: input}",
+         "  ac_power_w: {input: {address: 101, type: uint16, fallback: {address: 1, type: uint16}},"
+         " output: {address: 102, type: uint16}}", "invalid", "read.ac_power_w.input.fallback"),
+        # A signed AC power is input or output, a battery power charge or discharge.
+        ("positive: input", "positive: charge", "invalid", "read.ac_power_w.positive"),
+        ("  ac_power_w: {address: 101, type: int16, positive: input}",
+         "  battery_power_w: {address: 101, type: int16, positive: output}", "invalid", "read.battery_power_w.positive"),
+        ("  ac_power_w: {address: 101, type: int16, positive: input}", "", "missing_key", "read.ac_power_w"),
+    ],
+)
+def test_power_errors(old: str, new: str, code: str, path: str) -> None:
+    assert MINIMAL.count(old) == 1
+    err = error(MINIMAL.replace(old, new))
+    assert (err.code, err.path) == (code, path)
+
+
+def test_powers_as_pairs_and_sums() -> None:
+    profile = parse_profile(MINIMAL.replace(
+        "  ac_power_w: {address: 101, type: int16, positive: input}",
+        "  battery_power_w:\n"
+        "    charge: [{address: 101, type: uint16}, {address: 102, type: uint16}]\n"
+        "    discharge: {address: 103, type: uint16, scale: 10}\n"
+        "  ac_power_w: {input: {address: 104, type: uint16}, output: {address: 105, type: uint16}}",
+    ))
+    battery = profile.read["battery_power_w"]
+    assert [r.address for r in battery.sides["charge"]] == [101, 102]
+    assert [r.address for r in battery.registers] == [101, 102, 103]
+    assert battery.positive is None
+    assert set(profile.read["ac_power_w"].sides) == {"input", "output"}
 
 
 # --- values and checks -------------------------------------------------------

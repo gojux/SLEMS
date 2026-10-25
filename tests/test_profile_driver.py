@@ -22,6 +22,7 @@ from custom_components.slems.drivers.profile import (
     HaUnitTransport,
     ProfileDriver,
     read_blocks,
+    read_profile,
 )
 
 SIMULATOR = Path(__file__).parents[1] / "dev" / "venus_sim" / "simulator.py"
@@ -305,7 +306,7 @@ name: Flash battery
 limits: {max_charge_w: 2000, max_discharge_w: 2000}
 read:
   soc_pct: {address: 100, type: uint16}
-  power_ac_w: {address: 101, type: int16, positive: charge}
+  ac_power_w: {address: 101, type: int16, positive: input}
 control:
   type: split
   apply:
@@ -361,8 +362,8 @@ limits: {max_charge_w: 2500, max_discharge_w: 2500}
 own_pv: {max_output_w: 1200, ac_charge: true}
 read:
   soc_pct: {address: 10000, type: uint16}
-  pv_w: [{address: 10002, type: uint16}, {address: 10004, type: uint16}]
-  connection_w: {address: 10012, type: int16, positive: output}
+  pv_power_w: [{address: 10002, type: uint16}, {address: 10004, type: uint16}]
+  ac_power_w: {address: 10012, type: int16, positive: output}
 control:
   type: signed
   setpoint: connection
@@ -404,6 +405,50 @@ async def test_own_pv_with_the_set_point_at_the_connection() -> None:
     assert await driver.apply_power(300)
     assert link.writes()[-1] == (10071, [0, 500])
     assert not driver.needs_write(300)
+
+
+# Like a plug-in battery that gives every power without a sign: the battery
+# power as a pair, the output into the house as the sum of two outputs.
+PAIRS = """
+slems_battery_profile: 1
+id: pairs
+name: Battery with pairs
+limits: {max_charge_w: 2000, max_discharge_w: 2000}
+own_pv: {max_output_w: 800, ac_charge: false}
+read:
+  soc_pct: {address: 1, type: uint16}
+  pv_power_w: {address: 2, type: uint16}
+  battery_power_w: {charge: {address: 3, type: uint16}, discharge: {address: 4, type: uint16}}
+  ac_power_w:
+    output: [{address: 5, type: uint16}, {address: 6, type: uint16}]
+control:
+  type: split
+  setpoint: connection
+  apply:
+    - {address: 10, type: uint16, value: "{discharge_w}", at_rest: [0, 800]}
+  release:
+    auto:
+      - {address: 10, value: 800}
+probe: {address: 1, type: uint16, range: [0, 100]}
+"""
+
+
+async def test_powers_as_pairs_without_a_sign() -> None:
+    link = RegisterLink(Registers({1: 60, 2: 500, 3: 0, 4: 150, 5: 300, 6: 350, 10: 0}))
+    driver = ProfileDriver(
+        parse_profile(PAIRS), link, capacity_wh=5000, max_charge_power_w=2000, max_discharge_power_w=2000
+    )
+    assert "input_power" not in driver.extra_telemetry_keys
+    telemetry = await driver.read_telemetry()
+    # 650 W output from 500 W PV and 150 W out of the battery; no input without charging from the grid.
+    assert (telemetry.pv_w, telemetry.output_w, telemetry.input_w) == (500, 650, None)
+    assert telemetry.power_w == telemetry.ac_power_w == -150
+
+    reading = await read_profile(driver.profile, link)
+    assert reading.values["battery_power_w"] == -150
+    assert reading.sides["battery_power_w"] == {"charge": 0, "discharge": 150}
+    assert reading.values["ac_power_w"] == -650
+    assert reading.sides["ac_power_w"] == {"output": 650}
 
 
 # --- Home Assistant's Modbus backend ---------------------------------------------

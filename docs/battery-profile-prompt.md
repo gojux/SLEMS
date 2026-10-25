@@ -56,9 +56,11 @@ comments in the language of this message; the keys stay as given. Put texts
 If there is no register for the charge and discharge power (or one signed
 power, or one power without a sign whose direction a command sets), or if the register of the power set point itself is stored
 permanently (flash, EEPROM), output no profile: say in one sentence why the
-battery cannot be controlled this way. Settings stored permanently (e.g. the
-highest power) and uncertain sources are no reason for that: output the
-profile with "# uncertain". If you output no profile, name the sources you
+battery cannot be controlled this way. That the battery stores other
+registers permanently (e.g. its highest power) is no reason for that; the
+profile does not write such settings (see the rules). Uncertain sources are
+no reason either: output the profile and mark every uncertain value with
+"# uncertain: <reason>". If you output no profile, name the sources you
 found.
 
 Format (every key that exists; no other keys are allowed):
@@ -72,36 +74,33 @@ notes: "<firmware, interface>"                # optional
 connection:                                   # optional, defaults as shown
   port: 502
   unit_id: 1
-  message_spacing_s: 0                        # least time between two requests in s
-  timeout_s: 3
+  message_spacing_s: 0.0                      # least time between two requests in s
+  timeout_s: 3.0
 limits:
   max_charge_w: <highest charge power in W, integer>
   max_discharge_w: <highest discharge power in W, integer>
   min_power_w: <smallest power the battery accepts in W>   # optional
 timing:                                       # optional, see the rules
-  start_delay_s: <s>                          # from a set point until the power shows
-  start_extra_s: <s>                          # extra time out of standby
-  reversal_extra_s: <s>                       # extra time for a change of direction
-  min_command_interval_s: <s>                 # least time between two set points
+  start_delay_s: <s, e.g. 2.5>                # from a set point until the power shows
+  start_extra_s: <s, e.g. 2.5>                # extra time out of standby
+  reversal_extra_s: <s, e.g. 2.5>             # extra time for a change of direction
+  min_command_interval_s: <s, e.g. 2.5>       # least time between two set points
 own_pv:                                       # only for a battery with own PV modules
   max_output_w: <highest output into the house in W>
   ac_charge: true                             # can charge from the grid
   passes_pv_through: false                    # feeds its PV into the house when full
-read:                                         # values SLEMS reads; soc_pct is required
-  soc_pct:        {address: ..., type: ..., scale: ...}   # state of charge in %
-  power_dc_w:     {..., positive: charge|discharge}       # battery power in W
-  power_ac_w:     {..., positive: charge|discharge}       # AC power in W
-  pv_w:           {...}                       # own PV only: PV power in W
-  output_w:       {...}                       # own PV only: output into the house in W
-  input_w:        {...}                       # own PV only: input from the grid in W
-  connection_w:   {..., positive: input|output}  # own PV only: signed power at the AC connection
-  charged_kwh:    {...}                       # lifetime charge counter in kWh
-  discharged_kwh: {...}                       # lifetime discharge counter in kWh
-  voltage_v:      {...}                       # battery voltage in V
-  temperature_c:  {...}                       # temperature in °C
-  max_cell_v:     {...}                       # highest cell voltage in V
-  min_cell_v:     {...}                       # lowest cell voltage in V
-  cycles:         {...}                       # full cycles
+read:                                         # values SLEMS reads, see the rules
+  soc_pct:         {address: ..., type: ..., scale: ...}  # state of charge in %, required
+  battery_power_w: {..., positive: charge|discharge}      # power at the battery (DC) in W
+  ac_power_w:      {..., positive: input|output}          # power at the AC connection to the house and the grid in W (without a backup output)
+  pv_power_w:      {...}                      # own PV only: power of the own PV modules in W
+  charged_kwh:     {...}                      # lifetime charge counter in kWh
+  discharged_kwh:  {...}                      # lifetime discharge counter in kWh
+  voltage_v:       {...}                      # battery voltage in V
+  temperature_c:   {...}                      # battery temperature in °C (cells or BMS; if there is none, of the device)
+  max_cell_v:      {...}                      # highest cell voltage in V
+  min_cell_v:      {...}                      # lowest cell voltage in V
+  cycles:          {...}                      # full cycles
   state:                                      # battery state
     address: ...
     type: uint16                              # or int16, uint32, int32
@@ -112,8 +111,8 @@ control:
   type: split                                 # split, signed or magnitude, see the rules
   positive: charge|discharge                  # signed only: direction of a positive value
   setpoint: battery                           # own PV only: battery or connection
-  keepalive_s: <s>                            # write everything again after this time
-  confirm: {delay_s: 0.2, tolerance_w: 100, tolerance_pct: 0}   # optional
+  keepalive_s: <s, e.g. 2.5>                  # write everything again after this time
+  confirm: {delay_s: 0.2, tolerance_w: 100, tolerance_pct: 0.0}   # optional
   apply:                                      # written to charge and discharge, in this order
     - {address: ..., type: ..., value: ..., at_rest: [min, max], confirm: true}
   release:                                    # written when SLEMS hands the battery back
@@ -132,8 +131,12 @@ Keys of a register (read, device_info, probe):
   input       true for input registers (function code 04); default holding (03)
   positive    powers with a sign only, see above
   fallback    soc_pct only: a second register if the first cannot be read
+Instead of one register with positive, battery_power_w and ac_power_w may be
+a pair of two registers without a sign, one per direction:
+  battery_power_w: {charge: {address: ..., type: ...}, discharge: {address: ..., type: ...}}
+  ac_power_w:      {input: {address: ..., type: ...}, output: {address: ..., type: ...}}
 A power may be the sum of several registers: a list of registers (e.g. the
-PV inputs of several MPPTs).
+PV inputs of several MPPTs), also each side of a pair.
 
 Keys of a step under control.apply:
   address, word_order as above
@@ -168,7 +171,7 @@ connection:
   port: 502
   unit_id: 1
   message_spacing_s: 0.1    # page 4: at least 100 ms between two requests
-  timeout_s: 3
+  timeout_s: 3.0
 
 limits:
   max_charge_w: 2500
@@ -176,11 +179,11 @@ limits:
 
 read:
   soc_pct:        {address: 100, type: uint16, input: true, scale: 0.1}          # 30101, 0.1 %
-  power_ac_w:     {address: 110, type: int32, input: true, positive: discharge}  # 30111-30112, W, "positive: discharging" (page 9)
+  ac_power_w:     {address: 110, type: int32, input: true, positive: output}     # 30111-30112, W, "positive: discharging" (page 9)
   voltage_v:      {address: 120, type: uint16, input: true, scale: 0.01}         # 30121, 0.01 V
   charged_kwh:    {address: 130, type: uint32, input: true, scale: 0.1}          # 30131-30132, 0.1 kWh
   discharged_kwh: {address: 132, type: uint32, input: true, scale: 0.1}          # 30133-30134, 0.1 kWh
-  temperature_c:  {address: 140, type: int16, input: true, scale: 0.1}           # 30141, 0.1 °C
+  temperature_c:  {address: 140, type: int16, input: true, scale: 0.1}           # 30141, 0.1 °C, battery
   state:                                                                         # 30151 (page 9)
     address: 150
     type: uint16
@@ -193,7 +196,7 @@ device_info:
 
 control:
   type: split
-  keepalive_s: 60           # half of the time-out written to 40007
+  keepalive_s: 60.0         # half of the time-out written to 40007
   apply:
     # 40001 "Remote control" (page 10): 0xA5A5 = on, 0x5A5A = off
     - {address: 0, type: uint16, value: 0xA5A5, at_rest_values: [0xA5A5, 0x5A5A], confirm: true}
@@ -249,9 +252,16 @@ Rules:
   low word comes first. The format has no 64 bit types: leave such
   registers out (e.g. 64 bit counters).
 - For every power register state its unit and sign from the manual in a
-  comment (e.g. "positive: discharging"). positive is required for
-  power_dc_w, power_ac_w and connection_w; if the sign is not given, write
-  "# uncertain: sign".
+  comment (e.g. "positive: discharging"). battery_power_w needs positive:
+  charge or discharge, ac_power_w positive: input (from the grid into the
+  battery) or output (into the house); if the sign is not given, write
+  "# uncertain: sign". If the manual gives a power as two registers without
+  a sign, one per direction, write the pair. A power without a sign whose
+  direction is in another register (e.g. a status bit) cannot be read:
+  take another register or leave the key out.
+- read needs battery_power_w or ac_power_w, or both. ac_power_w is the
+  power at the AC connection to the house and the grid, never a backup or
+  EPS output.
 - control.type: split for one register for charging and one for
   discharging, signed for one register with a sign (with positive),
   magnitude for one register without a sign whose direction a command or
@@ -313,8 +323,9 @@ Rules:
   [0, 1000] for 0.1 %).
 - state: only the states listed above; leave out raw values that fit none.
   A state over two registers is uint32 or int32.
-- own_pv only for a battery with own PV modules: then pv_w, and output_w
-  (with input_w if it charges from the grid) or connection_w.
+- own_pv only for a battery with own PV modules: then pv_power_w and
+  ac_power_w (the battery and the PV behind one inverter); a pair without
+  input only with ac_charge: false.
 - SLEMS reaches the battery only over Modbus TCP. If the manual describes
   only RS485 (Modbus RTU), add "# question: Modbus TCP adapter?" at the top.
 ````

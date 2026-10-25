@@ -14,6 +14,7 @@ from custom_components.slems.battery_profiles import (
     POWER_PLACEHOLDERS,
     READ_KEYS,
     REGISTER_TYPES,
+    SIGNED_READ_KEYS,
     STATES,
     bundled_profiles,
     parse_profile,
@@ -79,6 +80,14 @@ def test_prompt_names_every_key_of_the_format(name: str) -> None:
         assert re.search(rf"\b{key}\b", format_part), key
     for word in (*STATES, *PLACEHOLDERS, *REGISTER_TYPES, *CONTROL_TYPES):
         assert word in format_part, word
+    # A power with a sign names its directions, a pair its sides.
+    for key, directions in SIGNED_READ_KEYS.items():
+        signed = re.escape("{..., positive: " + "|".join(directions) + "}")
+        assert re.search(rf"^  {key}: +{signed}", format_part, re.M), key
+        assert re.search(rf"^  {key}: +\{{{directions[0]}: \{{.*\}}, {directions[1]}: \{{", format_part, re.M), key
+    # Times may have decimals and are written with them.
+    seconds = re.findall(r"\b\w+_s: (<[^>]*>|[^\s,}]+)", format_part)
+    assert len(seconds) == 8 and all("." in value for value in seconds), seconds
     # The rules say when each type of control fits.
     for word in CONTROL_TYPES:
         assert re.search(rf"^- control\.type: .*\b{word}\b", text, re.M | re.S), word

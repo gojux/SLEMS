@@ -47,11 +47,13 @@ from ..battery_profiles import (
     PLACEHOLDER_CHARGE,
     PLACEHOLDER_DISCHARGE,
     PLACEHOLDER_POWER,
+    NEGATIVE_DIRECTIONS,
     READ_KEYS,
     STATE_EXTRA_KEY,
     STATES,
     BatteryProfile,
     PersistentGuard,
+    ReadValue,
     Register,
     WriteStep,
     apply_values,
@@ -241,15 +243,14 @@ async def read_profile(profile: BatteryProfile, transport: ProfileTransport) -> 
             registers.append(profile.state.register)
         read = await driver._read(registers)
         for key, value in profile.read.items():
-            parts = [read[register] for register in value.registers]
-            total = None
-            if all(part is not None for part in parts):
-                total = round(sum(_scaled(part, r) for part, r in zip(parts, value.registers, strict=True)), 3)  # type: ignore[arg-type]
-            elif value.fallback is not None:
+            total, sides = _value(value, read)
+            if total is None and value.fallback is not None:
                 fallback = value.fallback
                 if (part := await transport.read(fallback.address, fallback.size, input_registers=fallback.input)):
-                    total = _scaled(part, fallback)
-            reading.values[key] = driver._signed(key, total) if value.positive else total
+                    total = _signed(value, _scaled(part, fallback))
+            reading.values[key] = total
+            if sides:
+                reading.sides[key] = sides
         if profile.state is not None and (part := read[profile.state.register]) is not None:
             state = profile.state.register
             reading.state = decode(part, state.type, state.word_order)  # type: ignore[assignment]
@@ -363,7 +364,8 @@ class ProfileDriver(BatteryDriver):
             keys.add(STATE_EXTRA_KEY)
         if self._own_pv is not None:
             keys |= {"ac_power", "own_pv_power", "output_power"}
-            if "input_w" in self._profile.read or "connection_w" in self._profile.read:
+            sides = self._profile.read["ac_power_w"].sides
+            if sides is None or "input" in sides:
                 keys.add("input_power")
         return frozenset(keys)
 
@@ -557,13 +559,13 @@ class ProfileDriver(BatteryDriver):
         words = await self._read(registers)
 
         values: dict[str, float] = {}
+        sides: dict[str, dict[str, float | None]] = {}
         for key in keys:
-            read = profile.read[key]
-            parts = [words[register] for register in read.registers]
-            if any(part is None for part in parts):
-                continue
-            # Rounded once more: a sum of registers (e.g. MPPT inputs) adds float errors again.
-            values[key] = round(sum(_scaled(part, register) for part, register in zip(parts, read.registers, strict=True)), 3)
+            value, key_sides = _value(profile.read[key], words)
+            if value is not None:
+                values[key] = value
+            if key_sides:
+                sides[key] = key_sides
         soc = profile.read["soc_pct"]
         if "soc_pct" not in values and soc.fallback is not None and any(w is not None for w in words.values()):
             register = soc.fallback
@@ -583,34 +585,30 @@ class ProfileDriver(BatteryDriver):
             self._slow_read_at = now
         else:
             values.update(self._slow)
-        self._last = self._telemetry(values, state)
+        self._last = self._telemetry(values, sides, state)
         return self._last
 
-    def _signed(self, key: str, value: float | None) -> float | None:
-        """A signed power read with the sign of SLEMS (+charge, or +input for the connection)."""
-        if value is None:
-            return None
-        positive = self._profile.read[key].positive
-        # 0 - x instead of -x: no -0.0 for a power of 0.
-        return 0 - value if positive in ("discharge", "output") else value
-
-    def _telemetry(self, values: dict[str, float], state: str | None) -> BatteryTelemetry:
+    def _telemetry(
+        self, values: dict[str, float], sides: dict[str, dict[str, float | None]], state: str | None
+    ) -> BatteryTelemetry:
+        """Telemetry of the values read (powers with the sign of SLEMS) and the sides of pairs."""
         extra: dict[str, Any] = {
             extra: round(values[key], 3) for key, extra in READ_KEYS.items() if extra and key in values
         }
         if state is not None:
             extra[STATE_EXTRA_KEY] = state
-        power = self._signed("power_dc_w", values.get("power_dc_w"))
-        ac_power = self._signed("power_ac_w", values.get("power_ac_w"))
+        power = values.get("battery_power_w")
+        ac_power = values.get("ac_power_w")
         pv = output = grid_input = None
         if self._own_pv is not None:
-            pv = max(0.0, values.get("pv_w", 0.0))
-            if "connection_w" in values:
-                connection = self._signed("connection_w", values["connection_w"]) or 0.0
+            pv = max(0.0, values.get("pv_power_w", 0.0))
+            if self._profile.read["ac_power_w"].sides is None:
+                connection = ac_power or 0.0
                 grid_input, output = max(0.0, connection), max(0.0, -connection)
             else:
-                output = max(0.0, values.get("output_w", 0.0))
-                grid_input = max(0.0, values["input_w"]) if "input_w" in values else None
+                pair = sides.get("ac_power_w", {})
+                output = max(0.0, pair.get("output") or 0.0)
+                grid_input = max(0.0, value) if (value := pair.get("input")) is not None else None
             ac_power = pv + (grid_input or 0.0) - output
         if ac_power is not None:
             # The sensor AC power keeps the sign of the energy dashboard (+discharge).
@@ -808,6 +806,35 @@ class ProfileDriver(BatteryDriver):
         ]
         if wrong:
             raise BatteryDriverError(f"release not confirmed: {', '.join(wrong)}")
+
+
+def _signed(read: ReadValue, value: float) -> float:
+    """A power read with the sign of SLEMS (+charge, +input)."""
+    # 0 - x instead of -x: no -0.0 for a power of 0.
+    return 0 - value if read.positive in NEGATIVE_DIRECTIONS else value
+
+
+def _sum(registers: tuple[Register, ...], words: dict[Register, list[int] | None]) -> float | None:
+    """The sum of registers read (None if one was not read)."""
+    parts = [words[register] for register in registers]
+    if any(part is None for part in parts):
+        return None
+    # Rounded once more: a sum of registers (e.g. MPPT inputs) adds float errors again.
+    return round(sum(_scaled(part, register) for part, register in zip(parts, registers, strict=True)), 3)  # type: ignore[arg-type]
+
+
+def _value(
+    read: ReadValue, words: dict[Register, list[int] | None]
+) -> tuple[float | None, dict[str, float | None]]:
+    """The value of a read key (a power with the sign of SLEMS) and, of a pair, the value of
+    each side (None: not read)."""
+    if read.sides is None:
+        total = _sum(read.registers, words)
+        return (None if total is None else _signed(read, total)), {}
+    sides = {side: _sum(registers, words) for side, registers in read.sides.items()}
+    if any(value is None for value in sides.values()):
+        return None, sides
+    return round(sum(0 - v if side in NEGATIVE_DIRECTIONS else v for side, v in sides.items()), 3), sides  # type: ignore[operator]
 
 
 def _scaled(words: list[int], register: Register) -> float:

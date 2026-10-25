@@ -17,7 +17,7 @@ Example (shortened, see ``templates/battery_profiles``)::
     limits: {max_charge_w: 2500, max_discharge_w: 2500}
     read:
       soc_pct:    {address: 34002, type: uint16, scale: 0.1}
-      power_ac_w: {address: 30006, type: int16, positive: discharge}
+      ac_power_w: {address: 30006, type: int16, positive: output}
     control:
       type: split
       apply:
@@ -40,11 +40,18 @@ charging and one for discharging), ``signed`` (one register with a sign) or
 ``magnitude`` (one register without a sign for both directions, the
 direction from the ``{mode}`` step, e.g. Sungrow's command 0xAA/0xBB/0xCC).
 
-Batteries with own PV modules (``own_pv``) read ``pv_w`` and the output into
-the house (``output_w`` and ``input_w``, or one signed ``connection_w``). The
-set point refers to the battery power (``setpoint: battery``, e.g. a hybrid
-inverter) or to the power at the AC connection (``setpoint: connection``:
-charge = input from the grid, discharge = output into the house).
+A power is read at the battery (``battery_power_w``), at the device's AC
+connection to the house and the grid (``ac_power_w``, without a backup
+output) or at the own PV modules (``pv_power_w``). ``battery_power_w`` and
+``ac_power_w`` have a sign (``positive``) or are a pair of registers without
+one, one per direction (``{charge, discharge}`` or ``{input, output}``); every
+power, and every side of a pair, may be the sum of several registers.
+
+Batteries with own PV modules (``own_pv``) read ``pv_power_w`` and
+``ac_power_w`` (the battery and the PV behind one inverter). The set point
+refers to the battery power (``setpoint: battery``, e.g. a hybrid inverter) or
+to the power at the AC connection (``setpoint: connection``: charge = input
+from the grid, discharge = output into the house).
 
 Registers marked ``persistent`` are stored in the device's flash: they are
 written only when their value changes, never by a keep-alive, and at most
@@ -89,12 +96,9 @@ _STRUCT = {"uint16": ">H", "int16": ">h", "uint32": ">I", "int32": ">i", "float3
 # Read keys -> key in BatteryTelemetry.extra (None: a field of BatteryTelemetry).
 READ_KEYS: dict[str, str | None] = {
     "soc_pct": None,
-    "power_dc_w": None,
-    "power_ac_w": "ac_power",
-    "pv_w": None,
-    "output_w": None,
-    "input_w": None,
-    "connection_w": None,
+    "battery_power_w": None,
+    "ac_power_w": "ac_power",
+    "pv_power_w": None,
     "charged_kwh": "total_charging_energy",
     "discharged_kwh": "total_discharging_energy",
     "voltage_v": "battery_voltage",
@@ -104,14 +108,19 @@ READ_KEYS: dict[str, str | None] = {
     "cycles": "cycle_count",
 }
 STATE_EXTRA_KEY = "inverter_state"
-# Read keys with a sign and its meaning (``positive``).
+# Read keys with a sign: the meanings of ``positive``, also the sides of a pair
+# of registers without a sign.
 SIGNED_READ_KEYS: dict[str, tuple[str, str]] = {
-    "power_dc_w": ("charge", "discharge"),
-    "power_ac_w": ("charge", "discharge"),
-    "connection_w": ("input", "output"),
+    "battery_power_w": ("charge", "discharge"),
+    "ac_power_w": ("input", "output"),
 }
+# Directions that are negative with the sign of SLEMS (+charge, +input).
+NEGATIVE_DIRECTIONS = ("discharge", "output")
+# A side of a pair that may be left out: the input of a battery with own PV that
+# does not charge from the grid.
+OPTIONAL_SIDE = {"ac_power_w": "input"}
 # Power read keys that may be the sum of several registers (e.g. MPPT inputs).
-SUM_READ_KEYS = frozenset({"power_dc_w", "power_ac_w", "pv_w", "output_w", "input_w", "connection_w"})
+SUM_READ_KEYS = frozenset({"battery_power_w", "ac_power_w", "pv_power_w"})
 # Battery states of the profile -> value of the extra ``inverter_state``.
 STATES: dict[str, str] = {
     "sleep": "sleep",
@@ -155,6 +164,7 @@ ERROR_CODES = (
 DESCRIPTIVE_KEYS = ("name", "manufacturer", "notes")
 
 _ID_PATTERN = re.compile(r"[a-z0-9][a-z0-9_]*")
+_FORMAT_LINE = re.compile(rf"^\s*{FORMAT_KEY}\s*:", re.M)
 _INFO_KEY_PATTERN = re.compile(r"[a-z][a-z0-9_]*")
 
 
@@ -189,11 +199,14 @@ class Register:
 
 @dataclass(frozen=True)
 class ReadValue:
-    """A read key: one register or the sum of several, with an optional fallback."""
+    """A read key: one register or the sum of several, with an optional fallback;
+    or a pair without a sign, the sum of each side by its direction (``sides``)."""
 
+    # All registers of the key (of a pair: those of every side).
     registers: tuple[Register, ...]
     positive: str | None = None
     fallback: Register | None = None
+    sides: Mapping[str, tuple[Register, ...]] | None = None
 
 
 @dataclass(frozen=True)
@@ -518,6 +531,9 @@ def parse_profile(text: str, *, bundled: bool = False) -> BatteryProfile:
     except ProfileError:
         raise
     except yaml.YAMLError as err:
+        if not _FORMAT_LINE.search(text):
+            # Not meant as a profile (e.g. an AI's answer without a code block that refuses).
+            raise ProfileError("not_profile") from err
         mark = getattr(err, "problem_mark", None)
         line = mark.line + 1 if mark else None
         raise ProfileError("syntax", line=line, detail=str(getattr(err, "problem", ""))) from err
@@ -779,50 +795,80 @@ class _Parser:
         m = self._mapping(self._required(doc, "read", ""), "read", (*READ_KEYS, "state"), doc, "read")
         read: dict[str, ReadValue] = {}
         for key, value in m.items():
-            if key == "state":
-                continue
-            path = f"read.{key}"
-            items = value if isinstance(value, list) else [value]
-            if isinstance(value, list) and (key not in SUM_READ_KEYS or not value):
-                raise self._fail("invalid", path, m, key, "a sum only for powers")
-            registers = []
-            positive = None
-            fallback = None
-            for index, item in enumerate(items):
-                item_path = f"{path}[{index}]" if isinstance(value, list) else path
-                register, rm = self._register(item, item_path, m, key, extra=("positive", "fallback"))
-                if key in SIGNED_READ_KEYS:
-                    sign = self._choice(rm, "positive", item_path, SIGNED_READ_KEYS[key])
-                    if positive is not None and sign != positive:
-                        raise self._fail("invalid", f"{item_path}.positive", rm, "positive", "same for all parts")
-                    positive = sign
-                elif "positive" in rm:
-                    raise self._fail("invalid", f"{item_path}.positive", rm, "positive", "only for signed powers")
-                if "fallback" in rm:
-                    if isinstance(value, list):
-                        raise self._fail("invalid", f"{item_path}.fallback", rm, "fallback", "not in a sum")
-                    fallback, _ = self._register(rm["fallback"], f"{item_path}.fallback", rm, "fallback")
-                if register.type == "char":
-                    raise self._fail("invalid", f"{item_path}.type", rm, "type", "a number type")
-                registers.append(register)
-            read[key] = ReadValue(tuple(registers), positive, fallback)
+            if key != "state":
+                read[key] = self._read_value(key, value, f"read.{key}", m)
         if "soc_pct" not in read:
             raise self._fail("missing_key", "read.soc_pct", m)
+        ac_power = read.get("ac_power_w")
         if own_pv is None:
-            if own := [key for key in ("pv_w", "output_w", "input_w", "connection_w") if key in read]:
-                raise self._fail("own_pv", f"read.{own[0]}", m, own[0], "needs the section own_pv")
-            if "power_dc_w" not in read and "power_ac_w" not in read:
-                raise self._fail("missing_key", "read.power_ac_w", m, detail="power_dc_w or power_ac_w")
+            if "pv_power_w" in read:
+                raise self._fail("own_pv", "read.pv_power_w", m, "pv_power_w", "needs the section own_pv")
+            if "battery_power_w" not in read and ac_power is None:
+                raise self._fail("missing_key", "read.ac_power_w", m, detail="battery_power_w or ac_power_w")
         else:
-            if "pv_w" not in read:
-                raise self._fail("own_pv", "read.pv_w", m, detail="own_pv needs pv_w")
-            if ("output_w" in read) == ("connection_w" in read):
-                raise self._fail("own_pv", "read.output_w", m, detail="output_w or connection_w")
-            if "input_w" in read and "output_w" not in read:
-                raise self._fail("own_pv", "read.input_w", m, "input_w", "only with output_w")
-            if own_pv.ac_charge and "output_w" in read and "input_w" not in read:
-                raise self._fail("own_pv", "own_pv.ac_charge", doc, "own_pv", "charging from the grid needs input_w")
+            if "pv_power_w" not in read:
+                raise self._fail("own_pv", "read.pv_power_w", m, detail="own_pv needs pv_power_w")
+            if ac_power is None:
+                raise self._fail("own_pv", "read.ac_power_w", m, detail="own_pv needs ac_power_w")
+        if ac_power is not None and ac_power.sides is not None and "input" not in ac_power.sides:
+            if own_pv is None:
+                raise self._fail("missing_key", "read.ac_power_w.input", m["ac_power_w"])
+            if own_pv.ac_charge:
+                detail = "charging from the grid needs the input of ac_power_w"
+                raise self._fail("own_pv", "own_pv.ac_charge", doc, "own_pv", detail)
         return read
+
+    def _read_value(self, key: str, value: Any, path: str, parent: _LineDict) -> ReadValue:
+        directions = SIGNED_READ_KEYS.get(key)
+        # A pair has no address of its own; ``input`` is also a key of a register (input: true).
+        if (
+            directions
+            and isinstance(value, _LineDict)
+            and "address" not in value
+            and any(isinstance(value.get(side), (dict, list)) for side in directions)
+        ):
+            pair = self._mapping(value, path, directions, parent, key)
+            for side in directions:
+                if side not in pair and OPTIONAL_SIDE.get(key) != side:
+                    raise self._fail("missing_key", f"{path}.{side}", pair)
+            sides = {
+                side: self._registers(key, pair[side], f"{path}.{side}", pair, side, in_pair=True)[0]
+                for side in directions
+                if side in pair
+            }
+            return ReadValue(tuple(register for registers in sides.values() for register in registers), sides=sides)
+        return ReadValue(*self._registers(key, value, path, parent, key))
+
+    def _registers(
+        self, key: str, value: Any, path: str, parent: _LineDict, at: Any, *, in_pair: bool = False
+    ) -> tuple[tuple[Register, ...], str | None, Register | None]:
+        """The registers of a read key or of a side of a pair, with ``positive`` and the fallback."""
+        items = value if isinstance(value, list) else [value]
+        if isinstance(value, list) and (key not in SUM_READ_KEYS or not value):
+            raise self._fail("invalid", path, parent, at, "a sum only for powers")
+        registers = []
+        positive = None
+        fallback = None
+        for index, item in enumerate(items):
+            item_path = f"{path}[{index}]" if isinstance(value, list) else path
+            register, rm = self._register(item, item_path, parent, at, extra=("positive", "fallback"))
+            if key in SIGNED_READ_KEYS and not in_pair:
+                sign = self._choice(rm, "positive", item_path, SIGNED_READ_KEYS[key])
+                if positive is not None and sign != positive:
+                    raise self._fail("invalid", f"{item_path}.positive", rm, "positive", "same for all parts")
+                positive = sign
+            elif "positive" in rm:
+                detail = "not in a pair, the side gives the direction" if in_pair else "only for signed powers"
+                raise self._fail("invalid", f"{item_path}.positive", rm, "positive", detail)
+            if "fallback" in rm:
+                if isinstance(value, list) or in_pair:
+                    detail = "not in a pair" if in_pair else "not in a sum"
+                    raise self._fail("invalid", f"{item_path}.fallback", rm, "fallback", detail)
+                fallback, _ = self._register(rm["fallback"], f"{item_path}.fallback", rm, "fallback")
+            if register.type == "char":
+                raise self._fail("invalid", f"{item_path}.type", rm, "type", "a number type")
+            registers.append(register)
+        return tuple(registers), positive, fallback
 
     def _state(self, doc: _LineDict) -> StateRead | None:
         read = doc["read"]
