@@ -350,7 +350,8 @@ Regeln:
   Heartbeat), setz keepalive_s deutlich darunter (z. B. die Hälfte):
   SLEMS schreibt dann spätestens nach dieser Zeit alle Schritte erneut,
   auch wenn sich nichts ändert, und die Batterie fällt nicht zurück.
-  Nennt das Handbuch keine solche Zeit, lass keepalive_s weg. Ist dieses
+  Nennt das Handbuch keine solche Zeit, lass keepalive_s weg; SLEMS
+  schreibt dann alle 60 s alle Schritte erneut. Ist dieses
   Timeout (oder die Dauer einer
   Zwangsladung) ein Register, schreib es als festen Wert unter apply, so
   kurz wie möglich: etwa zwei- bis viermal keepalive_s. Hat nur ein Modus

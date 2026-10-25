@@ -336,7 +336,8 @@ Rules:
   heartbeat), set keepalive_s clearly below it (e.g. half): SLEMS then
   writes all steps again at the latest after this time, even if nothing
   changes, and the battery does not fall back. If the manual names no such
-  time, leave keepalive_s out. If that time-out (or the duration of a forced charge) is a register,
+  time, leave keepalive_s out; SLEMS then writes all steps again every
+  60 s. If that time-out (or the duration of a forced charge) is a register,
   write it as a fixed value under apply, as short as possible: about two to
   four times keepalive_s. If only one mode of the battery has such a
   time-out (e.g. a heartbeat), use that mode if the sources show that the
