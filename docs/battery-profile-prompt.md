@@ -111,7 +111,7 @@ control:
   type: split                                 # split, signed or magnitude, see the rules
   positive: charge|discharge                  # signed only: direction of a positive value
   setpoint: battery                           # own PV only: battery or connection
-  keepalive_s: <s, e.g. 2.5>                  # write everything again after this time
+  keepalive_s: <s, e.g. 30.0>                 # write all steps again at the latest after this time, also without a change
   confirm: {delay_s: 0.2, tolerance_w: 100, tolerance_pct: 0.0}   # optional
   apply:                                      # written to charge and discharge, in this order
     - {address: ..., type: ..., value: ..., at_rest: [min, max], confirm: true}
@@ -315,20 +315,28 @@ Rules:
   get persistent: true. Never a register with a power placeholder. If the
   manual says nothing about it for a write register, add
   "# question: is <register> stored permanently?" at the top.
-- Order of apply: first enable remote control and set a time-out, then the
-  powers, then the mode, so a new direction starts with valid values.
+- Order of apply: first enable remote control and set the time-out
+  register (watchdog, heartbeat, remote control time-out; see
+  keepalive_s), then the powers, then the mode. So a new direction starts
+  with valid values, and the battery already falls back if SLEMS fails.
 - release: give auto and/or standby, whichever the manual supports and
-  holds without SLEMS writing again. If the battery falls back to a set
-  mode after a time-out, leave that state out or add "# question: ...".
-  They write only registers from apply, with fixed numbers: powers 0
-  (if the battery's own logic uses these registers as limits, the highest
-  powers instead), mode idle, remote control off for auto. Always give at
-  least one state.
+  holds without SLEMS writing again; at least one of them. If the battery
+  falls back to a set mode after a time-out, leave that state out or add
+  "# question: ...". A release writes only registers that are also in
+  apply, and only fixed numbers:
+  - power registers to 0. If the battery's own logic uses these registers
+    as an upper limit, write the highest power instead, else it would
+    stay limited to 0 W.
+  - the mode register to the value for idle.
+  - for auto, remote control off.
 - confirm: true on every write register the manual says can be read back.
 - min_power_w only if the manual names a least power; never estimate it.
-- keepalive_s: if the manual names a time-out after which the battery falls
-  back to its own logic, a value clearly below it (e.g. half); else leave it
-  out. If that time-out (or the duration of a forced charge) is a register,
+- keepalive_s: if the manual names a time after which the battery falls
+  back to its own logic without a new set point (time-out, watchdog,
+  heartbeat), set keepalive_s clearly below it (e.g. half): SLEMS then
+  writes all steps again at the latest after this time, even if nothing
+  changes, and the battery does not fall back. If the manual names no such
+  time, leave keepalive_s out. If that time-out (or the duration of a forced charge) is a register,
   write it as a fixed value under apply, as short as possible: about two to
   four times keepalive_s. If only one mode of the battery has such a
   time-out (e.g. a heartbeat), use that mode if the sources show that the

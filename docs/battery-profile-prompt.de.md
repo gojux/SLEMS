@@ -116,7 +116,7 @@ control:
   type: split                                 # split, signed oder magnitude, siehe Regeln
   positive: charge|discharge                  # nur signed: Richtung eines positiven Werts
   setpoint: battery                           # nur eigene PV: battery oder connection
-  keepalive_s: <s, z. B. 2.5>                 # nach dieser Zeit alles erneut schreiben
+  keepalive_s: <s, z. B. 30.0>                # spätestens nach dieser Zeit alle Schritte erneut schreiben, auch ohne Änderung
   confirm: {delay_s: 0.2, tolerance_w: 100, tolerance_pct: 0.0}   # optional
   apply:                                      # geschrieben zum Laden und Entladen, in dieser Reihenfolge
     - {address: ..., type: ..., value: ..., at_rest: [min, max], confirm: true}
@@ -325,24 +325,33 @@ Regeln:
   beschreibt, bekommen persistent: true. Nie ein Register mit einem
   Leistungs-Platzhalter. Sagt das Handbuch dazu bei einem Schreibregister
   nichts, schreib oben "# Frage: Wird <Register> dauerhaft gespeichert?".
-- Reihenfolge in apply: zuerst die Fernsteuerung einschalten und ein
-  Timeout setzen, dann die Leistungen, dann den Modus, damit eine neue
-  Richtung mit gültigen Werten beginnt.
-- release: gib auto und/oder standby an, je nachdem, was das Handbuch
-  unterstützt und was hält, ohne dass SLEMS erneut schreibt. Fällt die
-  Batterie nach einem Timeout auf einen eingestellten Modus zurück, lass
-  diesen Zustand weg oder schreib "# Frage: ...". Sie schreiben nur
-  Register aus apply, mit festen Zahlen: Leistungen 0 (nutzt die eigene
-  Logik der Batterie diese Register als Grenzen, stattdessen die
-  Höchstleistungen), Modus idle, bei auto die Fernsteuerung aus. Gib immer
-  mindestens einen Zustand an.
+- Reihenfolge in apply: zuerst die Fernsteuerung einschalten und das
+  Timeout-Register (Watchdog, Heartbeat, Fernsteuerungs-Timeout; siehe
+  keepalive_s) setzen, dann die Leistungen, dann den Modus. So beginnt
+  eine neue Richtung mit gültigen Werten, und die Batterie fällt bei
+  einem Ausfall von SLEMS schon zurück.
+- release: Gib auto und/oder standby an, je nachdem, was das Handbuch
+  unterstützt und was hält, ohne dass SLEMS erneut schreibt; mindestens
+  einen der beiden. Fällt die Batterie nach einem Timeout auf einen
+  eingestellten Modus zurück, lass diesen Zustand weg oder schreib
+  "# Frage: ...". Eine Freigabe schreibt nur Register, die auch in apply
+  stehen, und nur feste Zahlen:
+  - Leistungsregister auf 0. Nutzt die eigene Logik der Batterie diese
+    Register als Obergrenze, schreib stattdessen die Höchstleistung,
+    sonst bliebe sie auf 0 W begrenzt.
+  - das Modusregister auf den Wert für idle.
+  - bei auto die Fernsteuerung aus.
 - confirm: true an jedem Schreibregister, das sich laut Handbuch
   zurücklesen lässt.
 - min_power_w nur, wenn das Handbuch eine kleinste Leistung nennt; nie
   schätzen.
-- keepalive_s: Nennt das Handbuch eine Zeit, nach der die Batterie in ihre
-  eigene Logik zurückfällt, einen Wert deutlich darunter (z. B. die
-  Hälfte); sonst weglassen. Ist dieses Timeout (oder die Dauer einer
+- keepalive_s: Nennt das Handbuch eine Zeit, nach der die Batterie ohne
+  neue Vorgabe in ihre eigene Logik zurückfällt (Timeout, Watchdog,
+  Heartbeat), setz keepalive_s deutlich darunter (z. B. die Hälfte):
+  SLEMS schreibt dann spätestens nach dieser Zeit alle Schritte erneut,
+  auch wenn sich nichts ändert, und die Batterie fällt nicht zurück.
+  Nennt das Handbuch keine solche Zeit, lass keepalive_s weg. Ist dieses
+  Timeout (oder die Dauer einer
   Zwangsladung) ein Register, schreib es als festen Wert unter apply, so
   kurz wie möglich: etwa zwei- bis viermal keepalive_s. Hat nur ein Modus
   der Batterie ein solches Timeout (z. B. einen Heartbeat), nimm diesen
