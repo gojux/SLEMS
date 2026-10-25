@@ -267,6 +267,9 @@ Regeln:
   schreibt, und zieh nur von Nummern des Handbuchs ab.
 - Register mit Funktionscode 04 (Input-Register, oft 3xxxx) bekommen
   input: true. Register, die SLEMS schreibt, sind immer Holding-Register.
+  Steuert das Handbuch die Batterie über Coils (Funktionscode 05 oder 15),
+  schreib oben "# Frage: Steuerung über Coils - das Format kann keine Coils
+  schreiben".
 - Jeder Schritt unter control.apply braucht type, auch uint16: Ein Wert
   über zwei Register (32 Bit) ist uint32, int32 oder float32, mit
   word_order, wenn das niedrige Wort zuerst kommt. Das Format kennt keine
@@ -275,11 +278,18 @@ Regeln:
   in einem Kommentar (z. B. „positiv: Entladen“). battery_power_w braucht
   positive: charge oder discharge, ac_power_w positive: input (aus dem Netz
   in die Batterie) oder output (ins Haus); steht das Vorzeichen nicht im
-  Handbuch, schreib "# unsicher: Vorzeichen". Gibt das Handbuch eine
-  Leistung als zwei Register ohne Vorzeichen an, eines je Richtung, schreib
-  das Paar. Eine Leistung ohne Vorzeichen, deren Richtung in einem anderen
-  Register steht (z. B. ein Statusbit), lässt sich nicht lesen: Nimm ein
-  anderes Register oder lass den Schlüssel weg.
+  Handbuch, schreib "# unsicher: Vorzeichen". Eine Leistung kann im
+  Handbuch auf drei Arten stehen:
+  - ein Register mit Vorzeichen (z. B. int16, -1500 = Laden, +1500 =
+    Entladen): Gib es als ein Register an; positive nennt die Richtung, in
+    der der Wert positiv ist (hier positive: discharge);
+  - zwei Register ohne Vorzeichen, eines je Richtung (z. B. "Charge
+    power" und "Discharge power", beide 0 oder größer): Gib beide als Paar
+    an (siehe oben);
+  - ein Register ohne Vorzeichen, dessen Richtung nur ein anderes Register
+    zeigt (z. B. ein Statusbit "charging"): Das kann SLEMS nicht lesen.
+    Nimm ein anderes Register derselben Leistung mit Vorzeichen oder lass
+    den Schlüssel weg.
 - read braucht battery_power_w oder ac_power_w oder beide. ac_power_w ist
   die Leistung am AC-Anschluss zu Haus und Netz, nie ein Notstrom- oder
   EPS-Ausgang.

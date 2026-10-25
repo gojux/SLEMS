@@ -260,7 +260,10 @@ Rules:
   integration for register 13050 of the manual): say for each source at the
   top which one it writes, and subtract only from numbers of the manual.
 - Registers of function code 04 (input registers, often 3xxxx) get
-  input: true. Registers SLEMS writes are always holding registers.
+  input: true. Registers SLEMS writes are always holding registers. If the
+  manual controls the battery through coils (function code 05 or 15), add
+  "# question: control through coils - the format cannot write coils" at
+  the top.
 - Every step under control.apply needs type, also uint16: a value over two
   registers (32 bit) is uint32, int32 or float32, with word_order if the
   low word comes first. The format has no 64 bit types: leave such
@@ -269,10 +272,16 @@ Rules:
   comment (e.g. "positive: discharging"). battery_power_w needs positive:
   charge or discharge, ac_power_w positive: input (from the grid into the
   battery) or output (into the house); if the sign is not given, write
-  "# uncertain: sign". If the manual gives a power as two registers without
-  a sign, one per direction, write the pair. A power without a sign whose
-  direction is in another register (e.g. a status bit) cannot be read:
-  take another register or leave the key out.
+  "# uncertain: sign". A manual can give a power in three ways:
+  - one register with a sign (e.g. int16, -1500 = charging, +1500 =
+    discharging): give it as one register; positive names the direction in
+    which the value is positive (here positive: discharge);
+  - two registers without a sign, one per direction (e.g. "Charge power"
+    and "Discharge power", both 0 or more): give both as a pair (see
+    above);
+  - one register without a sign whose direction only another register
+    shows (e.g. a status bit "charging"): SLEMS cannot read this. Take
+    another register of the same power with a sign or leave the key out.
 - read needs battery_power_w or ac_power_w, or both. ac_power_w is the
   power at the AC connection to the house and the grid, never a backup or
   EPS output.
