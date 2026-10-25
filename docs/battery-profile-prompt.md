@@ -235,13 +235,27 @@ Rules:
   register, add "# uncertain: sources differ". A document of the
   manufacturer found online (e.g. a Modbus protocol or a technical note)
   counts as the manual.
-- Addresses are the protocol address sent in the Modbus frame (0-65535).
-  Manuals often number registers instead: with a prefix (40001, 400001 for
-  holding, 30001 for input registers) subtract it; numbered from 1, subtract
-  1. Write addresses as the source does: a hexadecimal address stays
-  hexadecimal (e.g. 0xE004). Say at the top of the profile how the manual
-  counts and what you subtracted. If the manual does not make this clear,
-  add "# question: ..." at the top. Sources found online write either the
+- Addresses are the protocol address sent in the Modbus frame (0-65535;
+  the first register has the address 0). Manuals often give a register
+  number counted from 1 instead (Modicon convention: the first register is
+  1, 40001 or 30001). Check which case applies:
+  - Protocol address, subtract nothing: the manual says "protocol
+    address", "PDU address", "offset", "0-based" or "zero-based", the
+    table starts at 0 (or 40000, 30000), or the addresses are hexadecimal
+    (e.g. 0xE004).
+  - Register number from 1: the manual says "register number", "PLC
+    address", "Modicon", "1-based" or "address = register - 1", or the
+    table starts at 1. Subtract 1.
+  - Register number with a prefix (40001 or 400001 for holding, 30001 or
+    300001 for input registers, "4x"/"3x reference"): subtract the prefix
+    (40001 becomes 0, 40101 becomes 100).
+  "address" or "register address" alone proves neither: manuals use them
+  for both. If the table has a number and an address column, take the
+  address. Write addresses as the source does: a hexadecimal address stays
+  hexadecimal. Say at the top of the profile how the manual counts, which
+  words or table showed it and what you subtracted. If the signs are
+  missing or contradict each other, add "# question: ..." at the top.
+  Sources found online write either the
   number of the manual or the protocol address (e.g. address 13049 in an
   integration for register 13050 of the manual): say for each source at the
   top which one it writes, and subtract only from numbers of the manual.

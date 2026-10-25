@@ -240,13 +240,27 @@ Regeln:
   die Quellen bei einem Leseregister ab, schreib "# unsicher: Quellen
   weichen ab". Ein Dokument des Herstellers aus dem Netz (z. B. ein
   Modbus-Protokoll oder eine Technical Note) zählt als Handbuch.
-- Adressen sind die Protokolladresse, die im Modbus-Frame steht (0-65535).
-  Handbücher nummerieren Register oft stattdessen: Mit einem Präfix (40001,
-  400001 für Holding-, 30001 für Input-Register) zieh es ab; ab 1
-  nummeriert, zieh 1 ab. Schreib Adressen wie die Quelle: Eine
-  hexadezimale Adresse bleibt hexadezimal (z. B. 0xE004). Schreib oben ins
-  Profil, wie das Handbuch zählt und was du abgezogen hast.
-  Ist das im Handbuch nicht eindeutig, schreib oben "# Frage: ...".
+- Adressen sind die Protokolladresse, die im Modbus-Frame steht (0-65535;
+  das erste Register hat die Adresse 0). Handbücher nennen oft stattdessen
+  eine Registernummer, die ab 1 zählt (Modicon-Konvention: Das erste
+  Register heißt 1, 40001 oder 30001). Prüf, welcher Fall zutrifft:
+  - Protokolladresse, nichts abziehen: Das Handbuch sagt "protocol
+    address", "PDU address", "offset", "0-based" oder "zero-based", die
+    Tabelle beginnt bei 0 (oder 40000, 30000), oder die Adressen sind
+    hexadezimal (z. B. 0xE004).
+  - Registernummer ab 1: Das Handbuch sagt "register number", "PLC
+    address", "Modicon", "1-based" oder "address = register - 1", oder die
+    Tabelle beginnt bei 1. Zieh 1 ab.
+  - Registernummer mit Präfix (40001 oder 400001 für Holding-, 30001 oder
+    300001 für Input-Register, "4x"/"3x reference"): Zieh das Präfix ab
+    (aus 40001 wird 0, aus 40101 wird 100).
+  "address" oder "register address" allein belegen keinen der Fälle:
+  Handbücher nutzen sie für beides. Hat die Tabelle eine Spalte für die
+  Nummer und eine für die Adresse, nimm die Adresse. Schreib Adressen wie
+  die Quelle: Eine hexadezimale Adresse bleibt hexadezimal. Schreib oben
+  ins Profil, wie das Handbuch zählt, welche Wörter oder welche Tabelle das
+  zeigen und was du abgezogen hast. Fehlen die Hinweise oder widersprechen
+  sie sich, schreib oben "# Frage: ...".
   Quellen aus dem Netz schreiben entweder die Nummer des Handbuchs oder
   die Protokolladresse (z. B. Adresse 13049 in einer Integration für
   Register 13050 des Handbuchs): Schreib oben zu jeder Quelle, welche sie
