@@ -61,12 +61,14 @@ Gibt es kein Register für die Lade- und Entladeleistung (oder eine Leistung
 mit Vorzeichen, oder eine Leistung ohne Vorzeichen, deren Richtung ein
 Befehl setzt), oder wird das Register der Leistungsvorgabe selbst
 dauerhaft gespeichert (Flash, EEPROM), gib kein Profil aus: sag in einem
-Satz, warum sich die Batterie so nicht steuern lässt. Dass die Batterie
-andere Register dauerhaft speichert (z. B. ihre Höchstleistung), ist dafür
-kein Grund; solche Einstellungen schreibt das Profil nicht (siehe Regeln).
-Auch unsichere Quellen sind kein Grund: Gib das Profil aus und markiere
-jeden unsicheren Wert mit "# unsicher: <Grund>". Gibst du kein Profil aus,
-nenne die Quellen, die du gefunden hast.
+Satz, warum sich die Batterie so nicht steuern lässt. Ebenso, wenn kein
+Register für die Leistungsvorgabe die Regeln für Quellen aus dem Netz
+erfüllt (zwei unabhängige Quellen). Dass die Batterie andere Register
+dauerhaft speichert (z. B. ihre Höchstleistung), ist dafür kein Grund;
+solche Einstellungen schreibt das Profil nicht (siehe Regeln). Sonst sind
+auch unsichere Quellen kein Grund: Gib das Profil aus und markiere jeden
+unsicheren Wert mit "# unsicher: <Grund>". Gibst du kein Profil aus, nenne
+die Quellen, die du gefunden hast.
 
 Format (alle Schlüssel, die es gibt; andere Schlüssel sind nicht erlaubt):
 
@@ -155,7 +157,8 @@ Schlüssel eines Schritts unter control.apply:
   confirm: true        SLEMS liest das Register nach dem Schreiben zurück
   persistent: true     die Batterie speichert das Register dauerhaft (Flash, EEPROM)
   max_changes_per_day  nur persistent: erlaubte Änderungen in 24 h (Standard 100)
-Schritte unter release haben nur address, value (eine feste Zahl) und confirm.
+Schritte unter release haben nur address, value (eine feste Zahl) und confirm;
+type und word_order übernimmt SLEMS vom Schritt in apply.
 
 Beispiel einer erfundenen Batterie (übernimm keine Adresse und keinen Wert daraus):
 
@@ -229,9 +232,12 @@ probe: {address: 100, type: uint16, input: true, range: [0, 1000]}
 
 Regeln:
 - Nimm jedes Register aus der angehängten Liste oder, ohne Liste, aus den
-  gefundenen Quellen; „das Handbuch“ in diesen Regeln meint sie. Erfinde
-  keine Register, Adressen, Faktoren oder Bereiche. Ist ein Wert unsicher,
-  schreib ans Zeilenende den Kommentar "# unsicher: <Grund>".
+  gefundenen Quellen; „das Handbuch“ in diesen Regeln meint sie. Fehlt in
+  der angehängten Liste ein Register, das das Profil braucht, such es online
+  wie ohne Liste und schreib oben, welche Register nicht aus der Liste
+  stammen. Erfinde keine Register, Adressen, Faktoren oder Bereiche. Ist
+  ein Wert unsicher, schreib ans Zeilenende den Kommentar
+  "# unsicher: <Grund>".
 - Quellen aus dem Netz: Nenne jede oben im Profil mit Link (und Datei).
   Schreib in den Kommentar jedes Registers, welche Quellen es nennen. Nimm
   ein Schreibregister nur, wenn mindestens zwei unabhängige Quellen bei
@@ -307,8 +313,9 @@ Regeln:
   Bedeutung.
 - Jeder Schritt unter control.apply braucht at_rest (oder at_rest_values)
   aus dem Handbuch: den Bereich des Rohwerts, solange die Batterie ruht.
-  Darin müssen 0, die Höchstleistungen als Rohwerte (max_charge_w / scale),
-  feste Werte, alle Werte von modes und jeder Wert der Freigabe liegen.
+  Darin müssen jeder feste Wert, alle Werte von modes und jeder Wert der
+  Freigabe liegen, bei einem Leistungsschritt auch 0 und die
+  Höchstleistungen als Rohwerte (max_charge_w / scale).
   Ein Register mit Kennwerten (z. B. 0xA5A5 = an, 0x5A5A = aus) bekommt
   at_rest_values mit genau diesen Werten, nie einen Bereich; ein Timeout
   oder eine Dauer bekommt seinen Bereich aus dem Handbuch.
@@ -372,9 +379,21 @@ Regeln:
   [0, 1000] bei 0,1 %).
 - state: nur die oben genannten Zustände; Rohwerte, die zu keinem passen,
   weglassen. Ein Zustand über zwei Register ist uint32 oder int32.
-- own_pv nur für eine Batterie mit eigenen PV-Modulen: dann pv_power_w und
-  ac_power_w (Batterie und PV hinter einem Wechselrichter); ein Paar ohne
-  input nur mit ac_charge: false.
+- own_pv nur, wenn PV-Module direkt an dieses Gerät angeschlossen sind
+  (nicht für eine PV-Anlage mit eigenem Wechselrichter). Dann braucht read
+  zwei Leistungen: pv_power_w, die Leistung dieser PV-Module, und
+  ac_power_w, die Leistung am AC-Anschluss des Geräts. Batterie und PV
+  teilen sich einen Wechselrichter; SLEMS rechnet die Batterieleistung aus
+  beiden zurück. Gibt die Quelle die AC-Leistung als zwei Register ohne
+  Vorzeichen an und fehlt das für den Eingang (aus dem Netz), geht das nur,
+  wenn das Gerät nicht aus dem Netz laden kann: dann ac_charge: false.
+  Ein Hybrid-Wechselrichter mit PV-Eingängen hat eigene PV, wenn seine
+  PV-Leistung als Register mit festem Faktor lesbar ist (nicht nur mit
+  einem eigenen Skalierungsregister wie bei SunSpec): dann own_pv mit
+  setpoint: battery, passes_pv_through: true und max_output_w gleich der
+  AC-Nennleistung des Wechselrichters. Sonst kein own_pv; schreib dann oben
+  "# Frage: PV dieses Wechselrichters in SLEMS als PV-Anlage eintragen
+  (Erzeugung der Module, nicht die AC-Leistung des Wechselrichters)".
 - SLEMS erreicht die Batterie nur über Modbus TCP. Beschreibt das Handbuch
   nur RS485 (Modbus RTU), schreib oben "# Frage: Modbus-TCP-Adapter?".
 ````

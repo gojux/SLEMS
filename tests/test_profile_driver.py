@@ -385,6 +385,18 @@ async def test_own_pv_with_the_set_point_at_the_connection() -> None:
         parse_profile(OWN_PV), link, capacity_wh=5000, max_charge_power_w=2500, max_discharge_power_w=2500
     )
     assert driver.capabilities.own_pv and driver.capabilities.max_output_w == 1200
+    assert driver.capabilities.controls_output
+    # Like a hybrid inverter controlled at its battery: the PV cannot be curtailed.
+    hybrid = ProfileDriver(
+        parse_profile(
+            OWN_PV.replace("setpoint: connection", "setpoint: battery").replace("[-2500, 1200]", "[-2500, 2500]")
+        ),
+        RegisterLink(Registers({})),
+        capacity_wh=5000,
+        max_charge_power_w=2500,
+        max_discharge_power_w=2500,
+    )
+    assert hybrid.capabilities.own_pv and not hybrid.capabilities.controls_output
     telemetry = await driver.read_telemetry()
     # PV 500 W, output 100 W: the battery charges 400 W.
     assert (telemetry.pv_w, telemetry.output_w, telemetry.input_w) == (500, 100, 0)

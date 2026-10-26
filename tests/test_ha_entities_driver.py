@@ -269,6 +269,8 @@ async def test_own_pv_telemetry_is_pv_minus_output() -> None:
     battery = plug_in(fake)
     assert battery.capabilities.own_pv and not battery.capabilities.ac_charge
     assert battery.capabilities.max_output_w == 800
+    # Not controlled through its output: its PV cannot be curtailed.
+    assert not battery.capabilities.controls_output
     telemetry = await battery.read_telemetry()
     assert telemetry.pv_w == 600 and telemetry.output_w == 200
     assert telemetry.ac_power_w == 400 and telemetry.power_w == 400
@@ -388,7 +390,7 @@ async def test_curtailing_and_probing_at_the_top() -> None:
     battery = plug_in(
         fake, control=BatteryControl.OUTPUT, output_setpoint_entity_id="number.output", passes_pv_through=True
     )
-    assert battery.capabilities.passes_pv_through
+    assert battery.capabilities.passes_pv_through and battery.capabilities.controls_output
     battery.set_own_pv_state(at_top=True, curtail_w=0)
     await battery.apply_power(400)
     assert float(fake.value("number.output")) == 200

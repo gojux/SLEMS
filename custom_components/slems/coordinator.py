@@ -2932,7 +2932,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             full = battery.delivery.bms_full or (
                 telemetry.soc_pct is not None and battery_full(telemetry.soc_pct, 100.0)
             )
-            if battery.driver.capabilities.passes_pv_through and full:
+            caps = battery.driver.capabilities
+            if not caps.controls_output or (caps.passes_pv_through and full):
                 continue
             power = snapshot.distribution.power_w.get(battery.subentry_id, 0.0)
             available = battery.driver.own_pv_available_w(telemetry.pv_w)

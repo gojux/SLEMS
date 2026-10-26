@@ -753,7 +753,8 @@ SLEMS also works without any battery: add the consumers only.
   keeps the output above what the battery takes. Only the **Feed-in cap**
   curtails such a battery on purpose: when neither the batteries nor the
   consumers can take the surplus above the limit, the batteries with own PV
-  lower their output until the export is at the limit. The sensor
+  lower their output until the export is at the limit; this works only with
+  the control **Output**. The sensor
   **Curtailed own PV** shows how much they curtail.
 
   **PV forecast of the modules** (optional): the forecast entry of the

@@ -316,6 +316,7 @@ class ProfileDriver(BatteryDriver):
             ac_charge=own_pv is None or own_pv.ac_charge,
             max_output_w=own_pv.max_output_w if own_pv else None,
             passes_pv_through=bool(own_pv and own_pv.passes_pv_through),
+            controls_output=own_pv is not None and profile.control.setpoint == "connection",
         )
         self._by_connection = profile.control.setpoint == "connection"
         self._own_pv = (

@@ -217,6 +217,7 @@ class HomeAssistantEntityDriver(BatteryDriver):
             ac_charge=not config.own_pv or bool(config.input_setpoint_entity_id),
             max_output_w=config.max_output_w if config.own_pv else None,
             passes_pv_through=config.own_pv and config.passes_pv_through,
+            controls_output=config.own_pv and config.control is BatteryControl.OUTPUT,
         )
         # Last value written per entity; unchanged values are not written again.
         self._written: dict[str, Any] = {}

@@ -45,6 +45,10 @@ class BatteryCapabilities:
     # The own PV passes through to the output when the battery is full,
     # whatever the set point (it cannot be curtailed then).
     passes_pv_through: bool = False
+    # The set point is the output into the house (own PV): only then can the
+    # own modules be curtailed (feed-in cap). A hybrid inverter controlled at
+    # its battery passes its PV on by itself.
+    controls_output: bool = False
 
 
 @dataclass

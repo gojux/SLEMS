@@ -444,7 +444,7 @@ def test_unread_battery_with_own_pv_keeps_only_its_output() -> None:
     assert snapshot.house_power_w == 300
 
 
-def _plug_in(subentry_id: str, *, passes_pv_through: bool = False) -> SimpleNamespace:
+def _plug_in(subentry_id: str, *, passes_pv_through: bool = False, controls_output: bool = True) -> SimpleNamespace:
     from custom_components.slems.battery_limits import PowerLimits
     from custom_components.slems.drivers.base import BatteryCapabilities
 
@@ -459,6 +459,7 @@ def _plug_in(subentry_id: str, *, passes_pv_through: bool = False) -> SimpleName
             ac_charge=False,
             max_output_w=800,
             passes_pv_through=passes_pv_through,
+            controls_output=controls_output,
         ),
         set_own_pv_state=lambda **kw: states.append(kw),
         own_pv_available_w=lambda pv_w: pv_w,
@@ -504,6 +505,32 @@ def test_batteries_with_own_pv_curtail_for_the_feed_in_cap() -> None:
     # A slow update keeps the curtailment of the controller.
     SlemsCoordinator._own_pv_control(coordinator, snapshot, Allocation(Strategy.IDLE), None, controller_cycle=False)
     assert snapshot.own_pv_curtail_w == pytest.approx(100)
+
+
+def test_a_hybrid_inverter_controlled_at_its_battery_does_not_curtail() -> None:
+    from custom_components.slems.allocation import Allocation, CapControl, Strategy
+    from custom_components.slems.battery_distribution import Distribution
+    from custom_components.slems.coordinator import SlemsCoordinator
+    from custom_components.slems.own_pv import CurtailControl
+
+    hybrid = _plug_in("hybrid", passes_pv_through=True, controls_output=False)
+    coordinator = SimpleNamespace(
+        batteries=[hybrid],
+        _curtail=CurtailControl(),
+        _own_pv_at_top=SlemsCoordinator._own_pv_at_top,
+    )
+    snapshot = SystemSnapshot(
+        grid_power_filtered_w=-1100,
+        batteries={"hybrid": BatteryTelemetry(soc_pct=60, ac_power_w=200, pv_w=600, output_w=400)},
+    )
+    snapshot.distribution = Distribution({"hybrid": 200.0}, ())
+    allocation = Allocation(Strategy.FEED_IN_CAP, cap_excess_w=500)
+    SlemsCoordinator._own_pv_control(
+        coordinator, snapshot, allocation, CapControl(limit_w=700, margin_w=100), controller_cycle=True
+    )
+    # Its set point is the battery: the PV is not counted as curtailable.
+    assert snapshot.own_pv_curtail_w == 0
+    assert hybrid.driver.states[-1] == {"at_top": False, "curtail_w": 0}
 
 
 def test_delivery_counts_only_what_the_pv_read_allows() -> None:

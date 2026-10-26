@@ -794,7 +794,7 @@ SLEMS funktioniert auch ohne Batterie: einfach nur die Verbraucher anlegen.
   regelt nur die **Einspeisebegrenzung** eine solche Batterie ab: Können weder
   die Batterien noch die Verbraucher den Überschuss über der Grenze nehmen,
   senken die Batterien mit eigener PV ihren Ausgang, bis die Einspeisung an der
-  Grenze liegt. Der Sensor **Abgeregelte eigene PV** zeigt, wie viel sie
+  Grenze liegt; das geht nur mit der Steuerung **Ausgang**. Der Sensor **Abgeregelte eigene PV** zeigt, wie viel sie
   abregeln.
 
   **PV-Prognose der Module** (optional): der Prognose-Eintrag der Module der

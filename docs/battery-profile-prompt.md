@@ -56,10 +56,12 @@ comments in the language of this message; the keys stay as given. Put texts
 If there is no register for the charge and discharge power (or one signed
 power, or one power without a sign whose direction a command sets), or if the register of the power set point itself is stored
 permanently (flash, EEPROM), output no profile: say in one sentence why the
-battery cannot be controlled this way. That the battery stores other
-registers permanently (e.g. its highest power) is no reason for that; the
-profile does not write such settings (see the rules). Uncertain sources are
-no reason either: output the profile and mark every uncertain value with
+battery cannot be controlled this way. The same applies if no register
+for the power set point meets the rules for sources found online (two
+independent sources). That the battery stores other registers permanently
+(e.g. its highest power) is no reason for that; the profile does not write
+such settings (see the rules). Otherwise uncertain sources are no reason
+either: output the profile and mark every uncertain value with
 "# uncertain: <reason>". If you output no profile, name the sources you
 found.
 
@@ -150,7 +152,8 @@ Keys of a step under control.apply:
   confirm: true        SLEMS reads the register back after writing
   persistent: true     the battery stores the register permanently (flash, EEPROM)
   max_changes_per_day  persistent only: changes allowed in 24 h (default 100)
-Steps under release have only address, value (a fixed number) and confirm.
+Steps under release have only address, value (a fixed number) and confirm;
+SLEMS takes type and word_order from the step in apply.
 
 Example of a fictional battery (do not copy any address or value from it):
 
@@ -224,9 +227,11 @@ probe: {address: 100, type: uint16, input: true, range: [0, 1000]}
 
 Rules:
 - Take every register from the attached list or, without one, from the
-  sources found; "the manual" in these rules means them. Do not invent
-  registers, addresses, scales or ranges. If a value is uncertain, add the
-  comment "# uncertain: <reason>" at the end of the line.
+  sources found; "the manual" in these rules means them. If the attached
+  list lacks a register the profile needs, search for it online as without
+  a list and say at the top which registers do not come from the list. Do
+  not invent registers, addresses, scales or ranges. If a value is
+  uncertain, add the comment "# uncertain: <reason>" at the end of the line.
 - Sources found online: name each at the top of the profile with its link
   (and file). Say in the comment of every register which sources name it.
   Take a write register only if at least two independent sources agree on
@@ -297,9 +302,10 @@ Rules:
 - Above every step under control.apply give in a comment: the register
   number and name in the manual, the page or table, and its meaning.
 - Every step under control.apply needs at_rest (or at_rest_values) from the
-  manual: the raw range the register holds while the battery rests. 0, the
-  highest powers as raw values (max_charge_w / scale), fixed values, all
-  values of modes and every value written by release must lie inside it.
+  manual: the raw range the register holds while the battery rests. Every
+  fixed value, all values of modes and every value written by release must
+  lie inside it, for a power step also 0 and the highest powers as raw
+  values (max_charge_w / scale).
   A register with key values (e.g. 0xA5A5 = on, 0x5A5A = off) gets
   at_rest_values with exactly these values, never a range; a time-out or
   a duration gets its range from the manual.
@@ -356,9 +362,21 @@ Rules:
   [0, 1000] for 0.1 %).
 - state: only the states listed above; leave out raw values that fit none.
   A state over two registers is uint32 or int32.
-- own_pv only for a battery with own PV modules: then pv_power_w and
-  ac_power_w (the battery and the PV behind one inverter); a pair without
-  input only with ac_charge: false.
+- own_pv only if PV modules are connected directly to this device (not for
+  a PV system with its own inverter). Then read needs two powers:
+  pv_power_w, the power of these PV modules, and ac_power_w, the power at
+  the AC connection of the device. The battery and the PV share one
+  inverter; SLEMS works out the battery power from both. If the source
+  gives the AC power as two registers without sign and the one for the
+  input (from the grid) is missing, that only works if the device cannot
+  charge from the grid: then ac_charge: false.
+  A hybrid inverter with PV inputs has own PV if its PV power can be read
+  from a register with a fixed factor (not only with a scale register of
+  its own as in SunSpec): then own_pv with setpoint: battery,
+  passes_pv_through: true and max_output_w = AC rated power of the
+  inverter. Otherwise no own_pv; then write at the top "# question: add
+  the PV of this inverter in SLEMS as a PV system (production of the
+  modules, not the AC power of the inverter)".
 - SLEMS reaches the battery only over Modbus TCP. If the manual describes
   only RS485 (Modbus RTU), add "# question: Modbus TCP adapter?" at the top.
 ````

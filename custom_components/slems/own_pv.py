@@ -27,7 +27,8 @@ discharging need no probe.
 
 Feed-in cap: once neither the batteries nor the consumers can take the
 surplus above the limit, the batteries with own PV curtail the rest
-(``CurtailControl``). The curtailed PV is not measured, so the control
+(``CurtailControl``), those whose set point is their output (a hybrid
+inverter controlled at its battery cannot curtail). The curtailed PV is not measured, so the control
 integrates the export above the limit instead of the planned excess: it
 rises while the export stays above the limit and falls while it is below.
 Curtailed, the PV read follows the output; the driver keeps the highest PV
