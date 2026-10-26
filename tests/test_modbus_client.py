@@ -1,5 +1,9 @@
 """Tests for Modbus register decoding, the v3 frame fix and the link."""
 
+import asyncio
+import struct
+import time
+
 import pytest
 from pymodbus.exceptions import ModbusIOException
 
@@ -30,6 +34,42 @@ def test_v3_exception_frame_is_patched() -> None:
     assert fix_v3_exception_frame(True, broken) == broken
     regular = bytes([0, 1, 0, 0, 0, 4, 1, 0x03, 2])
     assert fix_v3_exception_frame(False, regular) == regular
+
+
+async def test_the_link_reads_on_after_a_v3_exception_frame() -> None:
+    """With the real pymodbus client: a refused register is an answer at once,
+    the connection stays and the next read gets its value."""
+
+    async def battery(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        refused = False
+        while True:
+            try:
+                transaction_id, _, length, unit_id = struct.unpack(">HHHB", await reader.readexactly(7))
+                await reader.readexactly(length - 1)
+            except asyncio.IncompleteReadError:
+                return
+            if not refused:
+                refused = True
+                # Like the v3 firmware: MBAP length 4 for the 3 bytes of an exception.
+                writer.write(struct.pack(">HHHB", transaction_id, 0, 4, unit_id) + bytes([0x83, 2]))
+            else:
+                writer.write(struct.pack(">HHHBBBH", transaction_id, 0, 5, unit_id, 0x03, 2, 630))
+            await writer.drain()
+
+    server = await asyncio.start_server(battery, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    link = ModbusTcpLink("127.0.0.1", port, 1, message_wait_s=0.0, timeout_s=1.0, patch_v3_frames=True)
+    try:
+        assert await link.connect()
+        started = time.monotonic()
+        assert await link.read(35010, 1) is None
+        assert time.monotonic() - started < 0.5
+        assert link.connected
+        assert await link.read(34002, 1) == [630]
+    finally:
+        await link.close()
+        server.close()
+        await server.wait_closed()
 
 
 class FakeResult:

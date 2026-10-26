@@ -132,9 +132,9 @@ class ModbusTcpLink:
                 retries=_PYMODBUS_RETRIES,
                 reconnect_delay=0,
                 reconnect_delay_max=0,
+                # Only the constructor hands the hook to the transaction layer.
+                trace_packet=fix_v3_exception_frame if self._patch_v3_frames else None,
             )
-            if self._patch_v3_frames:
-                client.trace_packet = fix_v3_exception_frame
             self._unit_kwarg = _detect_unit_kwarg(client)
             self._client = client
             if not await client.connect():
