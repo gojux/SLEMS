@@ -57,18 +57,21 @@ die Kommentare in der Sprache dieser Nachricht; die Schlüssel bleiben wie
 angegeben. Setz Texte (name, manufacturer, notes) in doppelte
 Anführungszeichen.
 
-Gibt es kein Register für die Lade- und Entladeleistung (oder eine Leistung
-mit Vorzeichen, oder eine Leistung ohne Vorzeichen, deren Richtung ein
-Befehl setzt), oder wird das Register der Leistungsvorgabe selbst
-dauerhaft gespeichert (Flash, EEPROM), gib kein Profil aus: sag in einem
-Satz, warum sich die Batterie so nicht steuern lässt. Ebenso, wenn kein
-Register für die Leistungsvorgabe die Regeln für Quellen aus dem Netz
-erfüllt (zwei unabhängige Quellen). Dass die Batterie andere Register
-dauerhaft speichert (z. B. ihre Höchstleistung), ist dafür kein Grund;
-solche Einstellungen schreibt das Profil nicht (siehe Regeln). Sonst sind
-auch unsichere Quellen kein Grund: Gib das Profil aus und markiere jeden
-unsicheren Wert mit "# unsicher: <Grund>". Gibst du kein Profil aus, nenne
-die Quellen, die du gefunden hast.
+Gib kein Profil aus, sondern sag in einem Satz, warum sich die Batterie so
+nicht steuern lässt, wenn einer dieser Fälle zutrifft:
+- Es gibt kein Register, über das SLEMS die Leistung vorgibt: weder je
+  eines für die Lade- und die Entladeleistung noch eines für eine Leistung
+  mit Vorzeichen noch eines für eine Leistung ohne Vorzeichen, deren
+  Richtung ein Befehl setzt.
+- Das Register der Leistungsvorgabe selbst wird dauerhaft gespeichert
+  (Flash, EEPROM). Dass die Batterie andere Register dauerhaft speichert
+  (z. B. ihre Höchstleistung), ist kein Grund; solche Einstellungen
+  schreibt das Profil nicht (siehe Regeln).
+- Kein Register für die Leistungsvorgabe erfüllt die Regel für Quellen aus
+  dem Netz (zwei unabhängige Quellen, siehe Regeln).
+Sonst sind auch unsichere Quellen kein Grund: Gib das Profil aus und
+markiere jeden unsicheren Wert mit "# unsicher: <Grund>". Gibst du kein
+Profil aus, nenne die Quellen, die du gefunden hast.
 
 Format (alle Schlüssel, die es gibt; andere Schlüssel sind nicht erlaubt):
 
@@ -119,7 +122,7 @@ control:
   positive: charge|discharge                  # nur signed: Richtung eines positiven Werts
   setpoint: battery                           # nur eigene PV: battery oder connection
   keepalive_s: <s, z. B. 30.0>                # spätestens nach dieser Zeit alle Schritte erneut schreiben, auch ohne Änderung
-  confirm: {delay_s: 0.2, tolerance_w: 100, tolerance_pct: 0.0}   # optional
+  confirm: {delay_s: 0.2, tolerance_w: 100, tolerance_pct: 0.0}   # optional: Toleranzen beim Rücklesen der Schritte mit confirm: true
   apply:                                      # geschrieben zum Laden und Entladen, in dieser Reihenfolge
     - {address: ..., type: ..., value: ..., at_rest: [min, max], confirm: true}
   release:                                    # geschrieben, wenn SLEMS die Batterie freigibt
@@ -358,14 +361,13 @@ Regeln:
   SLEMS schreibt dann spätestens nach dieser Zeit alle Schritte erneut,
   auch wenn sich nichts ändert, und die Batterie fällt nicht zurück.
   Nennt das Handbuch keine solche Zeit, lass keepalive_s weg; SLEMS
-  schreibt dann alle 60 s alle Schritte erneut. Ist dieses
-  Timeout (oder die Dauer einer
-  Zwangsladung) ein Register, schreib es als festen Wert unter apply, so
-  kurz wie möglich: etwa zwei- bis viermal keepalive_s. Hat nur ein Modus
-  der Batterie ein solches Timeout (z. B. einen Heartbeat), nimm diesen
-  Modus, wenn die Quellen belegen, dass die Steuerregister darin wirken.
-  Gibt es keines, schreib oben "# Frage: Kein Timeout – fällt SLEMS aus,
-  gilt die letzte Vorgabe weiter".
+  schreibt dann alle 60 s alle Schritte erneut. Ist dieses Timeout (oder
+  die Dauer einer Zwangsladung) ein Register, schreib es als festen Wert
+  unter apply, so kurz wie möglich: etwa zwei- bis viermal keepalive_s.
+  Hat nur ein Modus der Batterie ein solches Timeout (z. B. einen
+  Heartbeat), nimm diesen Modus, wenn die Quellen belegen, dass die
+  Steuerregister darin wirken. Gibt es keines, schreib oben "# Frage: Kein
+  Timeout – fällt SLEMS aus, gilt die letzte Vorgabe weiter".
 - message_spacing_s und timeout_s nur, wenn das Handbuch einen kleinsten
   Abstand zwischen Anfragen oder eine Antwortzeit nennt; sagt es nichts,
   schreib oben "# Frage: kleinster Abstand zwischen Anfragen?".

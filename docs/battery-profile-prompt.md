@@ -53,17 +53,20 @@ only the YAML in a code block, without further explanations. Write the
 comments in the language of this message; the keys stay as given. Put texts
 (name, manufacturer, notes) in double quotes.
 
-If there is no register for the charge and discharge power (or one signed
-power, or one power without a sign whose direction a command sets), or if the register of the power set point itself is stored
-permanently (flash, EEPROM), output no profile: say in one sentence why the
-battery cannot be controlled this way. The same applies if no register
-for the power set point meets the rules for sources found online (two
-independent sources). That the battery stores other registers permanently
-(e.g. its highest power) is no reason for that; the profile does not write
-such settings (see the rules). Otherwise uncertain sources are no reason
-either: output the profile and mark every uncertain value with
-"# uncertain: <reason>". If you output no profile, name the sources you
-found.
+Output no profile but say in one sentence why the battery cannot be
+controlled this way if one of these cases applies:
+- There is no register through which SLEMS sets the power: neither one
+  each for the charge and the discharge power nor one for a signed power
+  nor one for a power without a sign whose direction a command sets.
+- The register of the power set point itself is stored permanently (flash,
+  EEPROM). That the battery stores other registers permanently (e.g. its
+  highest power) is no reason; the profile does not write such settings
+  (see the rules).
+- No register for the power set point meets the rule for sources found
+  online (two independent sources, see the rules).
+Otherwise uncertain sources are no reason either: output the profile and
+mark every uncertain value with "# uncertain: <reason>". If you output no
+profile, name the sources you found.
 
 Format (every key that exists; no other keys are allowed):
 
@@ -114,7 +117,7 @@ control:
   positive: charge|discharge                  # signed only: direction of a positive value
   setpoint: battery                           # own PV only: battery or connection
   keepalive_s: <s, e.g. 30.0>                 # write all steps again at the latest after this time, also without a change
-  confirm: {delay_s: 0.2, tolerance_w: 100, tolerance_pct: 0.0}   # optional
+  confirm: {delay_s: 0.2, tolerance_w: 100, tolerance_pct: 0.0}   # optional: tolerances when reading back the steps with confirm: true
   apply:                                      # written to charge and discharge, in this order
     - {address: ..., type: ..., value: ..., at_rest: [min, max], confirm: true}
   release:                                    # written when SLEMS hands the battery back
