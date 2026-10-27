@@ -165,6 +165,8 @@ DESCRIPTIVE_KEYS = ("name", "manufacturer", "notes")
 
 _ID_PATTERN = re.compile(r"[a-z0-9][a-z0-9_]*")
 _FORMAT_LINE = re.compile(rf"^\s*{FORMAT_KEY}\s*:", re.M)
+# A code block opened at the end of a line of text ("... online.```yaml").
+_FENCE_AT_END = re.compile(r"```\w*\s*$")
 _INFO_KEY_PATTERN = re.compile(r"[a-z][a-z0-9_]*")
 
 
@@ -485,9 +487,13 @@ class PersistentGuard:
         self._written[address] = raw
         self._changes[address].append(now)
 
-    def forget(self) -> None:
-        """The values in the device are unknown again (e.g. after a reconnect)."""
-        self._written.clear()
+    def forget(self, address: int | None = None) -> None:
+        """The values in the device are unknown again (e.g. after a reconnect),
+        or only that of the register ``address`` (changed by the device)."""
+        if address is None:
+            self._written.clear()
+        else:
+            self._written.pop(address, None)
 
 
 # --- loading -----------------------------------------------------------------
@@ -549,10 +555,13 @@ def parse_profile(text: str, *, bundled: bool = False) -> BatteryProfile:
 
 def profile_text(text: str) -> str:
     """The YAML of a pasted answer: the content of its only Markdown code block
-    (text before and after it left out); else the text as it is."""
+    (text before and after it left out, also text on the line that opens it);
+    else the text as it is."""
     lines = text.splitlines(keepends=True)
-    fences = [index for index, line in enumerate(lines) if line.lstrip().startswith("```")]
-    if len(fences) != 2 or lines[fences[0]].strip()[3:].strip().lower() not in ("", "yaml", "yml"):
+    fences = [
+        index for index, line in enumerate(lines) if line.lstrip().startswith("```") or _FENCE_AT_END.search(line)
+    ]
+    if len(fences) != 2 or lines[fences[0]].rsplit("```", 1)[1].strip().lower() not in ("", "yaml", "yml"):
         return text
     return "".join(lines[fences[0] + 1 : fences[1]])
 

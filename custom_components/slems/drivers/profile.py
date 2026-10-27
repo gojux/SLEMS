@@ -26,6 +26,8 @@ Checks before writing (see the profile concept, section 6):
   keep-alive; a change within a minute of the previous one is written with
   a warning (repair ``profile_persistent_frequent`` for an hour), more than
   ``max_changes_per_day`` in 24 h are not written (``profile_persistent_blocked``).
+  One the device changed by itself (seen when reading back) is written again
+  with the next command, as a change.
 
 A battery with own PV whose set point refers to its AC connection
 (``setpoint: connection``) gets the input and the output from own_pv, like
@@ -765,6 +767,10 @@ class ProfileDriver(BatteryDriver):
             tolerance = tolerance_w / step.scale if power else 0
             if value is None or abs(value - raw) > tolerance or not step.rests_at(value):
                 wrong.append(f"{step.address} = {value} (written {raw})")
+                if step.persistent and value is not None:
+                    # Changed by the device (e.g. a fall-back without heartbeat):
+                    # the next command writes it again, as a change.
+                    self._guard.forget(step.address)
         self._outside_rest = {
             step.address: _rest_text(step, value)
             for step, _ in checked

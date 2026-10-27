@@ -1687,7 +1687,10 @@ profile out:
   While a register is outside, nothing is written (repair
   `profile_outside_rest`).
 - Persistent registers through `PersistentGuard`; frequent changes and the
-  block become repairs (`profile_persistent_frequent`, `_blocked`).
+  block become repairs (`profile_persistent_frequent`, `_blocked`). A
+  persistent step whose read-back differs (the device changed it, e.g. a
+  Sungrow falling back from External EMS) is forgotten and written again
+  with the next command, counting as a change.
   `BatteryDriver.issues()` hands driver problems to `problems.py`.
 - `setpoint: connection` with own PV: `OwnPvPorts` in `own_pv.py` (shared with
   the control **Output** of entity batteries: ports, probe for curtailed PV,
@@ -1707,7 +1710,9 @@ profile out:
   prompt names every key of the format; extend the prompt with the format.
 - Setup (`BatterySubentryFlow`, steps `profile*`): `profile` (a shipped
   profile, **Paste an own profile (YAML)** or a copy of another battery's own
-  profile) → `profile_yaml` (own profiles; a `ProfileError` becomes the error
+  profile) → `profile_yaml` (own profiles; `profile_text` takes the only
+  code block of a pasted answer, also one opened at the end of a line of
+  text; a `ProfileError` becomes the error
   `profile_<code>` with `where` = path and line; a text that is no YAML and
   has no line `slems_battery_profile:`, e.g. an AI's refusal, is
   `not_profile`, not `syntax`; the id of a shipped profile is refused) → `profile_connection` (address and transport; another battery at

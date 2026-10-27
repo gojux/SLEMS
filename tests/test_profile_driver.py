@@ -354,6 +354,50 @@ async def test_persistent_register_warns_and_blocks() -> None:
         assert ISSUE_PERSISTENT_BLOCKED not in driver.issues()
 
 
+# A storage mode switched to remote control in flash, like the EMS mode of a
+# Sungrow hybrid in External EMS mode, which falls back by itself.
+FLASH_MODE = """
+slems_battery_profile: 1
+id: flash_mode
+name: Flash mode battery
+limits: {max_charge_w: 2000, max_discharge_w: 2000}
+read:
+  soc_pct: {address: 100, type: uint16}
+  ac_power_w: {address: 101, type: int16, positive: input}
+control:
+  type: split
+  apply:
+    - {address: 300, type: uint16, value: 3, at_rest_values: [0, 3], persistent: true, confirm: true}
+    - {address: 200, type: uint16, value: "{charge_w}", at_rest: [0, 2000], confirm: true}
+    - {address: 201, type: uint16, value: "{discharge_w}", at_rest: [0, 2000], confirm: true}
+  release:
+    auto:
+      - {address: 300, value: 0, confirm: true}
+probe: {address: 100, type: uint16, range: [0, 100]}
+"""
+
+
+async def test_persistent_register_changed_by_the_device_is_written_again() -> None:
+    link = RegisterLink(Registers({100: 50, 101: 0, 200: 0, 201: 0, 300: 0}))
+    driver = ProfileDriver(
+        parse_profile(FLASH_MODE), link, capacity_wh=5000, max_charge_power_w=2000, max_discharge_power_w=2000
+    )
+    await driver.connect()
+    now = [1000.0]
+    with patch.object(profile_driver.time, "monotonic", lambda: now[0]):
+        assert await driver.apply_power(500)
+        assert link.model.registers[300] == 3
+        # The device falls back to its own mode by itself; the keep-alive sees it.
+        link.model.registers[300] = 0
+        now[0] += 120
+        assert not await driver.apply_power(500, refresh=True)
+        # The next command writes the mode again, as a change of the flash register.
+        now[0] += 120
+        assert await driver.apply_power(500)
+        assert link.model.registers[300] == 3
+        assert driver.issues() == {}
+
+
 OWN_PV = """
 slems_battery_profile: 1
 id: own_pv

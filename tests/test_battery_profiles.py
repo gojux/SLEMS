@@ -303,6 +303,14 @@ def test_profile_text_takes_the_only_code_block() -> None:
     assert profile_text(shell) == shell
 
 
+def test_profile_text_takes_a_block_opened_at_the_end_of_a_line() -> None:
+    # Mistral (prompt test rounds 7 and 8) opens the block right after its text.
+    answer = f"I will check the data sheet online.```yaml\n{MINIMAL}```\n"
+    assert profile_text(answer) == MINIMAL
+    shell = f"Run this:```sh\n{MINIMAL}```\n"
+    assert profile_text(shell) == shell
+
+
 def test_values_and_scale() -> None:
     text = MINIMAL.replace(
         '{address: 200, type: uint16, value: "{charge_w}", at_rest: [0, 2000]}',
