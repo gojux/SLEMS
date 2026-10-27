@@ -28,6 +28,7 @@ services:
       - venus-sim-3
       - venus-sim-4
       - sunspec-meter
+      - huawei-sim
     restart: unless-stopped
 
   # Two simulated Marstek Venus E 3.0 batteries (host names venus-sim-1/2, port 502).
@@ -54,6 +55,18 @@ services:
     <<: *venus-sim
     environment:
       SIM_INITIAL_SOC: "60"
+
+  # Simulated Huawei SUN2000-8K-MAP0 hybrid inverter with LUNA2000-14-S1
+  # (host huawei-sim, port 502, unit ID 1), for batteries from a Modbus profile
+  # with own PV; Home Assistant feeds PV and grid power through port 5021.
+  huawei-sim:
+    image: python:3.13-alpine
+    command: ["python", "/sim/simulator.py"]
+    volumes:
+      - ./dev/huawei_sim:/sim:ro
+    environment:
+      SIM_INITIAL_SOC: "50"
+    restart: unless-stopped
 
   # SunSpec meter like at a SolarEdge inverter (host sunspec-meter, port 502),
   # fed with the simulated grid power by Home Assistant through port 5021.

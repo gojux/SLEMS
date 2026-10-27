@@ -10,6 +10,7 @@ logger:
     custom_components.slems: debug
     homeassistant.components.automation.feed_simulated_sunspec_meter: warning
     homeassistant.components.automation.simulate_plug_in_battery_charge: warning
+    homeassistant.components.automation.feed_simulated_huawei_inverter: warning
 
 # Simulated measurements. Adjust the sliders to play with the values.
 input_number:
@@ -27,6 +28,14 @@ input_number:
     step: 50
     unit_of_measurement: W
     initial: 1500
+  # PV modules at the simulated Huawei hybrid inverter (dev/huawei_sim).
+  sim_hybrid_pv_power:
+    name: Simulated hybrid inverter PV power
+    min: 0
+    max: 10000
+    step: 50
+    unit_of_measurement: W
+    initial: 2500
   sim_heat_pump_power:
     name: Simulated heat pump power
     min: 0
@@ -142,6 +151,7 @@ template:
               - states('sensor.sim_venus_2_ac_power') | float(0)
               - states('sensor.sim_venus_3_ac_power') | float(0)
               - states('sensor.sim_venus_4_ac_power') | float(0)
+              - states('sensor.sim_huawei_ac_power') | float(0)
               - states('sensor.plug_in_battery_output') | float(0)
               + states('sensor.plug_in_battery_input') | float(0)) | round(0) }}
   # Plug-in battery with own PV: in mode Output the output follows its set
@@ -343,6 +353,36 @@ modbus:
         unit_of_measurement: W
         device_class: power
         scan_interval: 1
+  # Simulated Huawei hybrid inverter: AC power (+output) from its read-only tap
+  # port, PV and grid power fed through its feed port (see the automation below).
+  - name: huawei_sim_tap
+    type: tcp
+    host: huawei-sim
+    port: 5020
+    sensors:
+      - name: Sim Huawei AC power
+        unique_id: sim_huawei_ac_power
+        device_address: 1
+        address: 32080
+        input_type: holding
+        data_type: int32
+        unit_of_measurement: W
+        device_class: power
+        scan_interval: 1
+  - name: huawei_sim_feed
+    type: tcp
+    host: huawei-sim
+    port: 5021
+    sensors:
+      - name: Sim Huawei fed PV power
+        unique_id: sim_huawei_fed_pv_power
+        device_address: 1
+        address: 1
+        input_type: holding
+        data_type: uint16
+        unit_of_measurement: W
+        device_class: power
+        scan_interval: 5
   # Feed port of the simulated SunSpec meter (see the automation below).
   - name: sunspec_meter_feed
     type: tcp
@@ -462,3 +502,17 @@ automation sim:
           slave: 1
           address: 40206
           value: "{{ ((trigger.to_state.state | float(0) * -1) | int) % 65536 }}"
+  - alias: Feed simulated Huawei inverter
+    mode: single
+    triggers:
+      - trigger: time_pattern
+        seconds: "/1"
+    actions:
+      - action: modbus.write_register
+        data:
+          hub: huawei_sim_feed
+          slave: 1
+          address: 1
+          value:
+            - "{{ states('input_number.sim_hybrid_pv_power') | int(0) }}"
+            - "{{ (states('sensor.smart_meter_power') | int(0)) % 65536 }}"
