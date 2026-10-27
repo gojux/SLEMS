@@ -232,8 +232,10 @@ Rules:
 - Take every register from the attached list or, without one, from the
   sources found; "the manual" in these rules means them. If the attached
   list lacks a register the profile needs, search for it online as without
-  a list and say at the top which registers do not come from the list. Do
-  not invent registers, addresses, scales or ranges. If a value is
+  a list and say at the top which registers do not come from the list. The
+  same for a fact the list does not give (e.g. the sign of a power or the
+  highest power): search for it online and name the source in the comment.
+  Do not invent registers, addresses, scales or ranges. If a value is
   uncertain, add the comment "# uncertain: <reason>" at the end of the line.
 - Sources found online: name each at the top of the profile with its link
   (and file). Say in the comment of every register which sources name it.
@@ -267,10 +269,12 @@ Rules:
   number of the manual or the protocol address (e.g. address 13049 in an
   integration for register 13050 of the manual): say for each source at the
   top which one it writes, and subtract only from numbers of the manual.
-- Registers of function code 04 (input registers, often 3xxxx) get
-  input: true. Registers SLEMS writes are always holding registers. If the
-  manual controls the battery through coils (function code 05 or 15), add
-  "# question: control through coils - the format cannot write coils" at
+- Registers for which the manual names function code 04 (input registers)
+  get input: true. An address like 3xxxx alone does not show that: some
+  devices read all registers with 03. Registers SLEMS writes are always
+  holding registers. If the manual controls the battery through coils
+  (function code 05 or 15), add "# question: control through coils - the
+  format cannot write coils" at
   the top.
 - Every step under control.apply needs type, also uint16: a value over two
   registers (32 bit) is uint32, int32 or float32, with word_order if the
@@ -302,6 +306,9 @@ Rules:
   °C: value = raw value × scale (0.1 for 0.1 %, 10 for 10 W units, 1000
   for kW). Under control the factor is the same: SLEMS writes raw value =
   power in W / scale (with scale 10, 2500 W become the raw value 250).
+  If the manual gives a gain (value = raw value / gain), scale is the unit
+  in W, %, … divided by the gain: kW with gain 1000 gives scale 1 (raw
+  value in W), % with gain 10 gives scale 0.1.
 - Above every step under control.apply give in a comment: the register
   number and name in the manual, the page or table, and its meaning.
 - Every step under control.apply needs at_rest (or at_rest_values) from the
@@ -331,7 +338,9 @@ Rules:
 - release: give auto and/or standby, whichever the manual supports and
   holds without SLEMS writing again; at least one of them. If the battery
   falls back to a set mode after a time-out, leave that state out or add
-  "# question: ...". A release writes only registers that are also in
+  "# question: ...". A state that holds only until a time-out of apply
+  ends (e.g. a heartbeat or the duration of a forced charge) does not
+  hold: leave it out. A release writes only registers that are also in
   apply, and only fixed numbers:
   - power registers to 0. If the battery's own logic uses these registers
     as an upper limit, write the highest power instead, else it would
@@ -354,7 +363,8 @@ Rules:
   "# question: No time-out – if SLEMS fails, the last set point stays in
   force".
 - message_spacing_s and timeout_s only if the manual names a least time
-  between requests or a response time; if it says nothing, add
+  between requests or a response time for Modbus TCP; values given only
+  for RS485 (Modbus RTU) do not count. If it says nothing, add
   "# question: least time between requests?" at the top.
 - timing: leave it out (SLEMS learns the response times) unless the manual
   names a delay of the set points or a least time between them.

@@ -238,9 +238,11 @@ Regeln:
   gefundenen Quellen; „das Handbuch“ in diesen Regeln meint sie. Fehlt in
   der angehängten Liste ein Register, das das Profil braucht, such es online
   wie ohne Liste und schreib oben, welche Register nicht aus der Liste
-  stammen. Erfinde keine Register, Adressen, Faktoren oder Bereiche. Ist
-  ein Wert unsicher, schreib ans Zeilenende den Kommentar
-  "# unsicher: <Grund>".
+  stammen. Ebenso eine Angabe, die die Liste nicht nennt (z. B. das
+  Vorzeichen einer Leistung oder die Höchstleistung): Such sie online und
+  nenne die Quelle im Kommentar. Erfinde keine Register, Adressen,
+  Faktoren oder Bereiche. Ist ein Wert unsicher, schreib ans Zeilenende den
+  Kommentar "# unsicher: <Grund>".
 - Quellen aus dem Netz: Nenne jede oben im Profil mit Link (und Datei).
   Schreib in den Kommentar jedes Registers, welche Quellen es nennen. Nimm
   ein Schreibregister nur, wenn mindestens zwei unabhängige Quellen bei
@@ -274,8 +276,10 @@ Regeln:
   die Protokolladresse (z. B. Adresse 13049 in einer Integration für
   Register 13050 des Handbuchs): Schreib oben zu jeder Quelle, welche sie
   schreibt, und zieh nur von Nummern des Handbuchs ab.
-- Register mit Funktionscode 04 (Input-Register, oft 3xxxx) bekommen
-  input: true. Register, die SLEMS schreibt, sind immer Holding-Register.
+- Register, für die das Handbuch Funktionscode 04 (Input-Register) nennt,
+  bekommen input: true. Eine Adresse wie 3xxxx allein belegt das nicht:
+  Manche Geräte lesen alle Register mit 03. Register, die SLEMS schreibt,
+  sind immer Holding-Register.
   Steuert das Handbuch die Batterie über Coils (Funktionscode 05 oder 15),
   schreib oben "# Frage: Steuerung über Coils - das Format kann keine Coils
   schreiben".
@@ -311,6 +315,9 @@ Regeln:
   Wert = Rohwert × scale (0.1 für 0,1 %, 10 für 10-W-Einheiten, 1000 für
   kW). Unter control gilt derselbe Faktor: SLEMS schreibt Rohwert =
   Leistung in W / scale (bei scale 10 wird aus 2500 W der Rohwert 250).
+  Nennt das Handbuch einen Gain (Wert = Rohwert / Gain), ist scale die
+  Einheit in W, %, … geteilt durch den Gain: kW mit Gain 1000 ergibt
+  scale 1 (Rohwert in W), % mit Gain 10 ergibt scale 0.1.
 - Nenne über jedem Schritt unter control.apply in einem Kommentar: Nummer
   und Name des Registers im Handbuch, Seite oder Tabelle und seine
   Bedeutung.
@@ -344,8 +351,10 @@ Regeln:
   unterstützt und was hält, ohne dass SLEMS erneut schreibt; mindestens
   einen der beiden. Fällt die Batterie nach einem Timeout auf einen
   eingestellten Modus zurück, lass diesen Zustand weg oder schreib
-  "# Frage: ...". Eine Freigabe schreibt nur Register, die auch in apply
-  stehen, und nur feste Zahlen:
+  "# Frage: ...". Ein Zustand, der nur bis zum Ende eines Timeouts aus
+  apply hält (z. B. eines Heartbeats oder der Dauer einer Zwangsladung),
+  hält nicht: Lass ihn weg. Eine Freigabe schreibt nur Register, die auch
+  in apply stehen, und nur feste Zahlen:
   - Leistungsregister auf 0. Nutzt die eigene Logik der Batterie diese
     Register als Obergrenze, schreib stattdessen die Höchstleistung,
     sonst bliebe sie auf 0 W begrenzt.
@@ -369,7 +378,8 @@ Regeln:
   Steuerregister darin wirken. Gibt es keines, schreib oben "# Frage: Kein
   Timeout – fällt SLEMS aus, gilt die letzte Vorgabe weiter".
 - message_spacing_s und timeout_s nur, wenn das Handbuch einen kleinsten
-  Abstand zwischen Anfragen oder eine Antwortzeit nennt; sagt es nichts,
+  Abstand zwischen Anfragen oder eine Antwortzeit für Modbus TCP nennt;
+  Angaben nur für RS485 (Modbus RTU) gelten nicht. Sagt es nichts,
   schreib oben "# Frage: kleinster Abstand zwischen Anfragen?".
 - timing: weglassen (SLEMS lernt die Reaktionszeiten), außer das Handbuch
   nennt eine Verzögerung der Vorgaben oder einen kleinsten Abstand zwischen
