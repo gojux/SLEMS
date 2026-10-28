@@ -153,7 +153,7 @@ Schlüssel eines Schritts unter control.apply:
   type                 Pflicht: uint16 für ein Register, uint32, int32 oder float32 für zwei (kein char)
   value                ein fester Rohwert oder ein Platzhalter:
                          "{charge_w}" und "{discharge_w}" (split), "{power_w}" (signed, magnitude): Leistung in W
-                         "{mode}" mit modes: {idle: ..., charge: ..., discharge: ...} (Pflicht bei magnitude)
+                         "{mode}" mit modes: {idle: ..., charge: ..., discharge: ...} (Pflicht bei magnitude, bei split und signed möglich)
   scale                nur Leistungs-Platzhalter: eine Rohwert-Einheit sind scale W (z. B. 10 für 10-W-Einheiten, 1000 für kW)
   at_rest: [min, max]  Bereich des Rohwerts, solange die Batterie ruht
   at_rest_values: [..] statt at_rest: die einzigen Rohwerte in Ruhe (z. B. Kennwerte)
@@ -240,9 +240,11 @@ Regeln:
   wie ohne Liste und schreib oben, welche Register nicht aus der Liste
   stammen. Ebenso eine Angabe, die die Liste nicht nennt (z. B. das
   Vorzeichen einer Leistung oder die Höchstleistung): Such sie online und
-  nenne die Quelle im Kommentar. Erfinde keine Register, Adressen,
-  Faktoren oder Bereiche. Ist ein Wert unsicher, schreib ans Zeilenende den
-  Kommentar "# unsicher: <Grund>".
+  nenne die Quelle im Kommentar. Eine Integration, die das Register im Code
+  nutzt, zählt dabei mehr als eine Registerübersicht; weichen sie ab, nimm
+  die Integration und schreib "# unsicher: Quellen weichen ab". Erfinde
+  keine Register, Adressen, Faktoren oder Bereiche. Ist ein Wert unsicher,
+  schreib ans Zeilenende den Kommentar "# unsicher: <Grund>".
 - Quellen aus dem Netz: Nenne jede oben im Profil mit Link (und Datei).
   Schreib in den Kommentar jedes Registers, welche Quellen es nennen. Nimm
   ein Schreibregister nur, wenn mindestens zwei unabhängige Quellen bei

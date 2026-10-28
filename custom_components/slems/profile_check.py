@@ -44,6 +44,9 @@ POWER_FACTOR = 2.0
 # A battery power at least this far against the state read (charge, discharge) is marked.
 STATE_POWER_MIN_W = 50.0
 
+# Values at rest from which a listed register shows them hexadecimal (key values).
+HEX_FROM = 16
+
 # Power read keys (shown with the sign of SLEMS: +charge, +input).
 _POWERS = ("battery_power_w", "ac_power_w", "pv_power_w")
 _COUNTERS = ("charged_kwh", "discharged_kwh", "cycles")
@@ -282,10 +285,11 @@ def _number(language: str, value: float) -> str:
 
 
 def _raw(step: WriteStep, value: float | None, language: str) -> str:
-    """A raw value; hexadecimal for registers with listed values at rest (e.g. 0x55BB)."""
+    """A raw value; hexadecimal for registers with key values at rest (e.g. 0x55BB,
+    0xAA), decimal for small listed values like modes 0, 1, 2."""
     if value is None:
         return "?"
-    if step.at_rest_values is not None and float(value).is_integer() and value >= 0:
+    if step.at_rest_values and max(step.at_rest_values) >= HEX_FROM and float(value).is_integer() and value >= 0:
         return f"0x{int(value):04X}"
     return _number(language, value)
 

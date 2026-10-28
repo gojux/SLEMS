@@ -148,7 +148,7 @@ Keys of a step under control.apply:
   type                 required: uint16 for one register, uint32, int32 or float32 for two (no char)
   value                a fixed raw value, or a placeholder:
                          "{charge_w}" and "{discharge_w}" (split), "{power_w}" (signed, magnitude): power in W
-                         "{mode}" with modes: {idle: ..., charge: ..., discharge: ...} (required with magnitude)
+                         "{mode}" with modes: {idle: ..., charge: ..., discharge: ...} (required with magnitude, possible with split and signed)
   scale                power placeholders only: one raw unit is scale W (e.g. 10 for 10 W units, 1000 for kW)
   at_rest: [min, max]  raw range of the register while the battery rests
   at_rest_values: [..] instead of at_rest: the only raw values it holds at rest (e.g. key values)
@@ -235,8 +235,11 @@ Rules:
   a list and say at the top which registers do not come from the list. The
   same for a fact the list does not give (e.g. the sign of a power or the
   highest power): search for it online and name the source in the comment.
-  Do not invent registers, addresses, scales or ranges. If a value is
-  uncertain, add the comment "# uncertain: <reason>" at the end of the line.
+  An integration that uses the register in its code counts more than a
+  register overview; if they differ, take the integration and add
+  "# uncertain: sources differ". Do not invent registers, addresses,
+  scales or ranges. If a value is uncertain, add the comment
+  "# uncertain: <reason>" at the end of the line.
 - Sources found online: name each at the top of the profile with its link
   (and file). Say in the comment of every register which sources name it.
   Take a write register only if at least two independent sources agree on

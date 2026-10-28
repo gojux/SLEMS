@@ -286,6 +286,15 @@ def test_preview_shows_each_register_with_the_value_it_holds_then() -> None:
     assert "**Freigabe (Automatik)**" in text
 
 
+def test_small_values_at_rest_are_shown_decimal() -> None:
+    # Listed modes 0, 1, 2 read like the manual; key values stay hexadecimal.
+    profile = parse_profile(OWN_TEXT.replace("at_rest: [0, 2]", "at_rest_values: [0, 1, 2]", 1))
+    writes = {42000: 0x55BB, 42021: 0, 42020: 0, 42010: 0}
+    text = describe_preview(profile, preview(profile, writes, 625, ReleaseState.AUTO), 625, ReleaseState.AUTO, "de")
+    assert "- 42010 Modus: 0 → 1 · rückgelesen" in text
+    assert "- 42000 fester Wert: 0x55BB → 0x55AA · rückgelesen" in text
+
+
 # --- config flow ---------------------------------------------------------------
 
 
