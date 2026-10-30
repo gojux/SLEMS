@@ -93,8 +93,9 @@ def test_battery_responses_log_each_measurement(caplog: pytest.LogCaptureFixture
     responses.command(0.0, -500.0, {"a": 1000}, started_ids=frozenset({"a"}))
     responses.sample(2.6, 200.0)
     messages = [record.getMessage() for record in caplog.records]
-    assert "Response step Venus 1: step +1000 W from -500 W arrived after 2.60 s (grid 200 W), learned 2.60 s" in messages
-    assert any(message.startswith("Response start Venus 1:") for message in messages)
+    assert "Response start Venus 1: step +1000 W from -500 W arrived after 2.60 s (grid 200 W), learned 2.60 s" in messages
+    # A start is no step.
+    assert not any(message.startswith("Response step Venus 1:") for message in messages)
     # Restored learners log with the battery name too.
     caplog.clear()
     restored = BatteryResponses({"a": "Venus 1"}.get)
@@ -162,3 +163,69 @@ def test_reversal_is_learned_until_the_new_direction_shows() -> None:
     # 60 % of the new direction.
     responses.sample(1.8, 900.0)
     assert responses.learned_reversal("a") == pytest.approx(1.8)
+
+
+def test_movement_before_the_earliest_response_drops_the_measurement() -> None:
+    responses = BatteryResponses(earliest=lambda _battery, _kind: 0.45)
+    # The stove switches off 0.26 s after a command for more discharging.
+    responses.command(0.0, 1250.0, {"a": -620.0})
+    responses.sample(0.26, -130.0)
+    responses.sample(1.0, -700.0)
+    assert responses.learned("a") is None
+    # Before the earliest response but within half the step: measured on.
+    responses.command(10.0, 1250.0, {"a": -620.0})
+    responses.sample(10.3, 1100.0)
+    responses.sample(10.9, 800.0)
+    assert responses.learned("a") == pytest.approx(0.9)
+
+
+def test_foreign_jump_at_the_arrival_drops_the_measurement() -> None:
+    responses = BatteryResponses()
+    # The grid moves twice the step: a load switched off along.
+    responses.command(0.0, 1200.0, {"a": -600.0})
+    responses.sample(0.9, 0.0)
+    assert responses.learned("a") is None
+
+
+def test_commands_on_their_way_count_in_the_expected_change() -> None:
+    responses = BatteryResponses()
+    responses.restore({"a": 1.0})
+    # The damped control: -700 W, then 0.5 s later another -400 W; both take 1 s.
+    responses.command(0.0, 1500.0, {"a": -700.0})
+    responses.command(0.5, 1500.0, {"a": -400.0})
+    responses.sample(1.0, 800.0)  # the first command arrived, not yet 60 % of the second
+    responses.sample(1.5, 400.0)
+    assert responses.learned("a") == pytest.approx(1.0)
+
+
+def test_starts_and_reversals_are_no_steps_and_short_stops_no_starts() -> None:
+    responses = BatteryResponses()
+    responses.command(0.0, -800.0, {"a": 1600.0}, {"a": -800.0})
+    responses.sample(2.0, 800.0)
+    assert responses.learned("a") is None
+    assert responses.learned_reversal("a") == pytest.approx(2.0)
+    # Started again right after a stop: nothing is learned.
+    responses.command(10.0, 0.0, {"a": 800.0}, restarted_ids=frozenset({"a"}))
+    responses.sample(11.0, 800.0)
+    assert responses.learned("a") is None and responses.learned_start("a") is None
+
+
+def test_learned_value_is_the_median_and_its_samples_are_stored() -> None:
+    response = StepResponse(default_s=3.0)
+    for start, elapsed in ((0.0, 1.0), (100.0, 0.2), (200.0, 0.9), (300.0, 1.1)):
+        response.command(start, 0.0, 1000.0)
+        response.sample(start + elapsed, 1000.0)
+    # One short outlier does not pull the value down.
+    assert response.value == pytest.approx(0.95)
+    restored = StepResponse(default_s=3.0)
+    restored.response_s = 0.5  # stored by an older version
+    restored.restore_samples(response.samples)
+    assert restored.value == pytest.approx(0.95)
+    restored.restore_samples([])
+    assert restored.value == pytest.approx(0.95)
+    responses = BatteryResponses()
+    responses.command(0.0, 0.0, {"a": 1000.0})
+    responses.sample(0.8, 1000.0)
+    again = BatteryResponses()
+    again.restore_samples(responses.samples_as_dict())
+    assert again.learned("a") == pytest.approx(0.8)

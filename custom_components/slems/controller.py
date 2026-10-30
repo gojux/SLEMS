@@ -75,6 +75,7 @@ from .consumers import amps_for, current_option
 from .response import (
     DEFAULT_BATTERY_RESPONSE_S,
     DEFAULT_CONSUMER_RESPONSE_S,
+    JUMP_RATIO,
     MIN_STEP_W,
     BatteryResponses,
     DirectionalResponse,
@@ -93,6 +94,17 @@ _LOGGER = logging.getLogger(__name__)
 GRID_STALE_S = 60.0
 BATTERY_DEADBAND_W = 25.0
 BATTERY_KEEPALIVE_S = 60.0
+# A keep-alive waits while another battery had one less than its interval
+# divided by the number of batteries ago (one cycle blocked by one battery
+# at a time), but not beyond this multiple of its interval.
+KEEPALIVE_MAX_DELAY_FACTOR = 1.5
+# A start after a shorter stop is no measurement of a start: the inverter may
+# not have stopped at all.
+START_MIN_IDLE_S = 10.0
+# Without a driver value, a step cannot show before this share of the learned
+# step time; a start or reversal not before this share of its extra time later.
+EARLIEST_STEP_SHARE = 0.5
+EARLIEST_EXTRA_SHARE = 0.75
 # Commands kept per battery to know which one the meter already shows.
 BATTERY_HISTORY = 8
 # A battery measured below this before SLEMS commands it counts as in standby.
@@ -181,14 +193,16 @@ class RealTimeController:
         self._running_on_its_own: set[str] = set()
         self._last_grid_w: float | None = None
         self.meter = MeterCadence()
-        self.battery_response = StepResponse(DEFAULT_BATTERY_RESPONSE_S, label="step all batteries")
+        self.battery_response = StepResponse(
+            DEFAULT_BATTERY_RESPONSE_S, label="step all batteries", jump_ratio=JUMP_RATIO, track_in_flight=True
+        )
         # Steps of all batteries together that reverse the direction, until the
         # new direction shows; used for a battery whose own reversals are not
         # learned yet.
         self.battery_reversal_response = StepResponse(
-            DEFAULT_BATTERY_RESPONSE_S, label="reversal all batteries"
+            DEFAULT_BATTERY_RESPONSE_S, label="reversal all batteries", jump_ratio=JUMP_RATIO
         )
-        self.battery_responses = BatteryResponses(self._battery_name)
+        self.battery_responses = BatteryResponses(self._battery_name, self.earliest_response_s)
         self.battery_starts = BatteryStarts()
         self.consumer_response: dict[str, DirectionalResponse] = {}
         self.gain_adapter = AdaptiveGain(coordinator.settings.control_gain)
@@ -287,6 +301,44 @@ class RealTimeController:
             learned = driver.start_delay_s
         least = normal + (driver.start_extra_s if driver is not None else 0.0)
         return least if learned is None else max(least, learned)
+
+    def earliest_response_s(self, battery_id: str, kind: str) -> float:
+        """Earliest time the grid meter can show a command of this battery
+        (``kind``: step, start or reversal); a response measurement whose grid
+        moved before is dropped."""
+        driver = self._driver(battery_id)
+        earliest = driver.earliest_response_s if driver is not None else None
+        if earliest is None:
+            learned = self.battery_responses.learned(battery_id)
+            earliest = EARLIEST_STEP_SHARE * (learned if learned is not None else self.battery_response.value)
+        if driver is None:
+            return earliest
+        if kind == "start":
+            return earliest + EARLIEST_EXTRA_SHARE * driver.start_extra_s
+        if kind == "reversal":
+            return earliest + EARLIEST_EXTRA_SHARE * driver.reversal_extra_s
+        return earliest
+
+    def _keepalive_due(self, battery_id: str, keepalive_s: float, now: float) -> bool:
+        """Whether a battery's complete write is due; the first write always is.
+
+        Keep-alives of several batteries are spread over the interval so one
+        cycle never writes all of them completely.
+        """
+        last = self._battery_refreshed.get(battery_id)
+        if last is None:
+            return True
+        age = now - last
+        if age < keepalive_s:
+            return False
+        if age >= KEEPALIVE_MAX_DELAY_FACTOR * keepalive_s:
+            return True
+        spacing = keepalive_s / len(self._battery_refreshed)
+        return all(
+            now - refreshed >= spacing
+            for other, refreshed in self._battery_refreshed.items()
+            if other != battery_id
+        )
 
     def _driver(self, battery_id: str) -> BatteryDriver | None:
         return next((b.driver for b in self._coordinator.batteries if b.subentry_id == battery_id), None)
@@ -678,6 +730,9 @@ class RealTimeController:
         # battery id -> power before a command that reverses the direction
         reversed_from: dict[str, float] = {}
         started_ids: set[str] = set()
+        # Starts after a short stop and the time each battery was written.
+        restarted_ids: set[str] = set()
+        issued: dict[str, float] = {}
         # A self-test measures the effect of its battery: the others keep their set points.
         hold = self._coordinator.self_test_holds
         # Batteries that reduce their power are written first: while power
@@ -690,8 +745,9 @@ class RealTimeController:
             latest = self._latest_command(battery.subentry_id)
             if hold and latest is not None:
                 target = round(latest)
-            last_refresh = self._battery_refreshed.get(battery.subentry_id, 0.0)
-            refresh = now - last_refresh >= (battery.driver.keepalive_s or BATTERY_KEEPALIVE_S)
+            refresh = self._keepalive_due(
+                battery.subentry_id, battery.driver.keepalive_s or BATTERY_KEEPALIVE_S, now
+            )
             history = self._battery_history.get(battery.subentry_id)
             if history and now - history[-1][0] < battery.driver.min_command_interval_s:
                 new_total += latest
@@ -706,16 +762,23 @@ class RealTimeController:
                     new_total += latest
                     continue
             _LOGGER.debug("Battery %s: set point %d W", battery.name, target)
+            # Writing an earlier battery takes time: the command counts from its own write.
+            sent_at = time.monotonic()
+            stopped_at = self._direction_since.get(battery.subentry_id)
             if await self._apply(battery, target, refresh):
-                self._record_command(battery.subentry_id, target, now)
+                self._record_command(battery.subentry_id, target, sent_at)
                 if refresh:
-                    self._battery_refreshed[battery.subentry_id] = now
+                    self._battery_refreshed[battery.subentry_id] = sent_at
                 new_total += target
                 changes[battery.subentry_id] = target - (latest or 0.0)
+                issued[battery.subentry_id] = sent_at
                 if latest is not None and latest * target < 0:
                     reversed_from[battery.subentry_id] = latest
                 elif latest == 0 and target != 0:
-                    started_ids.add(battery.subentry_id)
+                    if stopped_at is not None and sent_at - stopped_at < START_MIN_IDLE_S:
+                        restarted_ids.add(battery.subentry_id)
+                    else:
+                        started_ids.add(battery.subentry_id)
             else:
                 if battery.delivery.record_comm_failure(now) is not Action.NONE:
                     self.request()
@@ -723,15 +786,32 @@ class RealTimeController:
                     new_total += latest
         if not changes:
             return None
-        # The grid power moves by the change of the battery power.
-        self.battery_response.command(now, self._last_grid_w, new_total - previous_total)
+        # The grid power moves by the change of the battery power; a start or
+        # reversal of a battery takes longer than a step.
+        if reversed_from or started_ids or restarted_ids:
+            self.battery_response.cancel()
+        else:
+            earliest = max(self.earliest_response_s(battery_id, "step") for battery_id in changes)
+            self.battery_response.command(
+                now, self._last_grid_w, new_total - previous_total, earliest_s=earliest
+            )
         self.battery_responses.command(
-            now, self._last_grid_w, changes, reversed_from, frozenset(started_ids)
+            now,
+            self._last_grid_w,
+            changes,
+            reversed_from,
+            frozenset(started_ids),
+            restarted_ids=frozenset(restarted_ids),
+            issued=issued,
         )
         if previous_total * new_total < 0:
             # Measured until the new direction shows: the stop shows up earlier.
             baseline = None if self._last_grid_w is None else self._last_grid_w - previous_total
-            self.battery_reversal_response.command(now, baseline, new_total)
+            earliest = max(
+                (self.earliest_response_s(battery_id, "reversal") for battery_id in reversed_from),
+                default=max(self.earliest_response_s(battery_id, "step") for battery_id in changes),
+            )
+            self.battery_reversal_response.command(now, baseline, new_total, earliest_s=earliest)
         elif abs(new_total - previous_total) >= MIN_STEP_W:
             self.battery_reversal_response.cancel()
         return new_total

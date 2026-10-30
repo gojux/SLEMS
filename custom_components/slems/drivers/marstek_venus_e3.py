@@ -54,6 +54,10 @@ START_DELAY_S = 2.7
 # meter, also with set points changing every 0.5 s meanwhile).
 START_EXTRA_S = 1.6
 REVERSAL_EXTRA_S = 0.6
+# Earliest time the grid meter can show a step (steps 0.7-1.1 s, meter
+# reports about every 0.5 s); a measurement whose grid moved before was moved
+# by something else.
+EARLIEST_RESPONSE_S = 0.45
 # A Venus refuses connections for about 0.5 s after the last one closed
 # (measured 2026-10-23), e.g. right after the battery search read it: a probe
 # tries again once after this time.
@@ -211,6 +215,10 @@ class MarstekVenusE3Driver(BatteryDriver):
     @property
     def reversal_extra_s(self) -> float:
         return REVERSAL_EXTRA_S
+
+    @property
+    def earliest_response_s(self) -> float | None:
+        return EARLIEST_RESPONSE_S
 
     async def read_device_info(self) -> dict[str, str]:
         await self._ensure_connected()

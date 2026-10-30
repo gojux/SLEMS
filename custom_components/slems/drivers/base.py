@@ -144,6 +144,13 @@ class BatteryDriver(ABC):
         other step; the learned reversal time never goes below."""
         return 0.0
 
+    @property
+    def earliest_response_s(self) -> float | None:
+        """Earliest time the grid meter can show a step of this battery; a
+        response measurement whose grid moved before is dropped. None: half
+        the learned step time."""
+        return None
+
     async def read_device_info(self) -> dict[str, str]:
         """Firmware versions and other static device information (may be empty)."""
         return {}

@@ -132,3 +132,50 @@ def test_commands_report_starts_and_stops() -> None:
     (counts,) = controller.battery_starts.days["a"].values()
     # The reversal is no start.
     assert counts == {"starts": 2, "within_60_s": 1, "within_300_s": 1}
+
+
+def test_keepalives_of_several_batteries_are_spread() -> None:
+    from custom_components.slems.controller import RealTimeController
+
+    coordinator = SimpleNamespace(hass=None, batteries=[], settings=SimpleNamespace(control_gain=0.5))
+    controller = RealTimeController(coordinator)
+    # The first write of each battery is complete.
+    assert controller._keepalive_due("a", 60.0, 0.0)
+    # Activated together: all three would be due in the same cycle.
+    controller._battery_refreshed.update({"a": 0.0, "b": 0.0, "c": 0.0})
+    assert not controller._keepalive_due("a", 60.0, 59.0)
+    assert controller._keepalive_due("a", 60.0, 60.0)
+    controller._battery_refreshed["a"] = 60.0
+    # b waits until a's keep-alive is a third of the interval ago.
+    assert not controller._keepalive_due("b", 60.0, 60.5)
+    assert controller._keepalive_due("b", 60.0, 80.0)
+    controller._battery_refreshed["b"] = 80.0
+    # c would wait another third, but never longer than 1.5 intervals.
+    assert not controller._keepalive_due("c", 60.0, 89.0)
+    assert controller._keepalive_due("c", 60.0, 90.0)
+    controller._battery_refreshed["c"] = 90.0
+    # Next round: a after 60 s, then b and c each a third later.
+    assert controller._keepalive_due("a", 60.0, 120.0)
+    controller._battery_refreshed["a"] = 120.0
+    assert controller._keepalive_due("b", 60.0, 140.0)
+    controller._battery_refreshed["b"] = 140.0
+    assert not controller._keepalive_due("c", 60.0, 150.0)
+    assert controller._keepalive_due("c", 60.0, 160.0)
+
+
+def test_earliest_response_from_the_driver_or_the_learned_step() -> None:
+    from custom_components.slems.controller import RealTimeController
+
+    venus = SimpleNamespace(earliest_response_s=0.45, start_extra_s=1.6, reversal_extra_s=0.6)
+    plain = SimpleNamespace(earliest_response_s=None, start_extra_s=0.0, reversal_extra_s=0.0)
+    batteries = [
+        SimpleNamespace(subentry_id="a", name="A", driver=venus, measured_power_w=None),
+        SimpleNamespace(subentry_id="b", name="B", driver=plain, measured_power_w=None),
+    ]
+    coordinator = SimpleNamespace(hass=None, batteries=batteries, settings=SimpleNamespace(control_gain=0.5), consumers=[])
+    controller = RealTimeController(coordinator)
+    assert controller.earliest_response_s("a", "step") == 0.45
+    assert controller.earliest_response_s("a", "start") == pytest.approx(0.45 + 0.75 * 1.6)
+    assert controller.earliest_response_s("a", "reversal") == pytest.approx(0.45 + 0.75 * 0.6)
+    controller.battery_responses.restore({"b": 2.0})
+    assert controller.earliest_response_s("b", "step") == 1.0

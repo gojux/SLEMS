@@ -1003,6 +1003,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self.controller.battery_responses.restore_starts(control.get("battery_start_responses") or {})
             if reversal := control.get("battery_reversal_start_response_s"):
                 self.controller.battery_reversal_response.response_s = reversal
+            samples = control.get("battery_response_samples") or {}
+            self.controller.battery_response.restore_samples(samples.get("all") or [])
+            self.controller.battery_reversal_response.restore_samples(samples.get("reversal_all") or [])
+            self.controller.battery_responses.restore_samples(samples)
         self.controller.battery_starts.restore(control.get("battery_starts") or {})
         for battery in self.batteries:
             data = stored.get(battery.subentry_id) or {}
@@ -1491,6 +1495,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             "battery_reversal_start_response_s": self.controller.battery_reversal_response.response_s,
             "battery_reversal_start_responses": self.controller.battery_responses.reversals_as_dict(),
             "battery_start_responses": self.controller.battery_responses.starts_as_dict(),
+            # The measurements behind the learned times (their medians, stored above too).
+            "battery_response_samples": {
+                "all": self.controller.battery_response.samples,
+                "reversal_all": self.controller.battery_reversal_response.samples,
+                **self.controller.battery_responses.samples_as_dict(),
+            },
             "battery_starts": self.controller.battery_starts.as_dict(),
             "grid_source": self.grid_source_configured,
             "bad_weather": self.bad_weather.as_dict(),

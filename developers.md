@@ -472,13 +472,25 @@ sends commands.
   feedforward from the energy balance, dead time compensation with the
   learned battery response time, proportional correction with an adaptive
   gain.
-- **Learned timing** (`response.py`, moving averages):
+- **Learned timing** (`response.py`; meter cadence a moving average, response
+  times the median of the last 9 measurements, stored with them):
   meter cadence from every report of the grid meter (also unchanged values,
   `EVENT_STATE_REPORTED`); battery response time from commands with ≥ 300 W
-  change until the meter moved 60 % of it (smaller corrections the same way
-  keep the measurement, one the other way ends it; stored with the gain), per
-  battery also apart for steps that reverse its direction and for steps out
-  of standby (from 0 W, diagnostics only); consumer response times
+  change until the meter moved 60 % of it beyond the commands still on their
+  way (same direction, issued within 1.5 × the learned time; smaller
+  corrections the same way keep the measurement, one the other way ends it;
+  stored with the gain), per battery also apart for steps that reverse its
+  direction and for steps out of standby (from 0 W, only after a stop of at
+  least 10 s, `START_MIN_IDLE_S`); starts and reversals do not count as
+  steps. A battery measurement is dropped when the meter moved by half the
+  step (or half the other way) before the earliest response
+  (`earliest_response_s`: driver value, Venus 0.45 s, else half the learned
+  step; a start or reversal 0.75 × the driver's extra time later) or by more
+  than 1.5 × the expected change when it arrived (`JUMP_RATIO`, a foreign load
+  switched along); dropped measurements are logged at debug level with the
+  reason. Replayed against debug logs of a stove and a coffee machine
+  (2026-10-13/30): the step time of a Venus came out 0.9–1.1 s (measured by
+  hand 0.8–1.05 s) instead of 0.4–0.6 s; consumer response times
   (`DirectionalResponse`) from commands with ≥ 100 W change until the
   consumer's own power sensor moved 60 % (at the meter ≥ 300 W), switching on
   and off learned apart, each measured up to 5 min (`CONSUMER_MAX_RESPONSE_S`):
@@ -491,7 +503,11 @@ sends commands.
   `grid_response_on_s`, `grid_response_off_s`).
 - **Batteries**: new set point only when it changes by ≥ 25 W or changes
   direction; every 60 s a complete write as keep-alive (also re-enables RS485
-  control). The Venus driver skips registers whose value did not change, so a
+  control). Keep-alives of several batteries are spread over the interval
+  (one waits while another's was less than interval / number of batteries
+  ago, at most 1.5 intervals after its last), so no cycle writes all
+  batteries completely; each command counts from the write of its own
+  battery. The Venus driver skips registers whose value did not change, so a
   power change is usually a single write (150 ms).
   Batteries that reduce their power are written first, so the short gap
   between the writes causes a little import instead of feeding battery energy
@@ -2425,3 +2441,5 @@ repository (otherwise its *brands* check fails).
 | 2026-10-13 | Learned start and reversal times have a floor: the learned step time plus the driver's least extra time (Venus: 1.6 s and 0.6 s, measured with set points changing every 0.5 s as in the control loop). The learned start times of a real installation were 0.6 s against 2.6–2.9 s measured: measurements in the control loop end early when another change of the grid moves the meter. A floor relative to the step time keeps the meter's own delay in. |
 | 2026-10-23 | After a firmware update a battery from a profile that had passed is not tested again but observed in normal operation for a day (registers read at rest before the first write, small first commands, registers compared with what was written, the next release read back); only a finding begins the full trial. The profile is proven, only the firmware is new, and the full test would hold the other batteries and the consumers and wait for a moment it is possible; the observation cannot check the effect at the meter, but compares the battery's own power with the commands. |
 | 2026-10-23 | A battery from a Modbus profile has a trial: the self-test with extra phases and checks of the profile (registers unchanged at rest before any write, a small first step, nothing written for up to 90 s after a step showed, the registers after the release), one test with its result in two parts instead of a second test logic. It runs again after a profile change (a firmware update is observed instead, see above): the self-test sees the effect at the meter, but not a write that hit a wrong register, a firmware falling back to its own logic or another system writing the same register. Only a trial without a failed check can be taken as passed by the user. |
+| 2026-10-30 | Keep-alives without blocking the control: the Venus driver checks RS485 control and force mode with the telemetry (every 5 s) instead of reading back after a complete write, a keep-alive skips what the telemetry confirmed and the set points without effect (standby), and the keep-alives of several batteries are spread over the interval. A debug log showed every minute one cycle of 4–5 s that wrote all three batteries completely (4 writes and a read back of 1.3 s each); meanwhile SLEMS did not react to the grid (a stove switching off gave 5 s of 1.3 kW export). A lost RS485 control is now seen within 5 s instead of 60 s. |
+| 2026-10-30 | Battery response times are learned cleaner: the median of the last 9 measurements instead of a moving average, commands still on their way counted in, measurements dropped when the meter moved before the earliest response or by more than 1.5 × the expected change, starts and reversals no longer learned as steps, starts only after a stop of 10 s. The commands of the control answer movements of the grid that often go on or back by themselves, and the damped control follows a step with smaller ones: a debug log with a cycling stove taught a Venus 0.39 s (measured 0.8–1.05 s), and a battery whose reversals counted as steps learned 1.31 s against 0.79 s of an identical one. A replay of three debug logs gave 0.9–1.1 s. |

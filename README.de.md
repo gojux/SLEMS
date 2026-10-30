@@ -832,7 +832,13 @@ SLEMS funktioniert auch ohne Batterie: einfach nur die Verbraucher anlegen.
   neuen Richtung eines Richtungswechsels, etwa 2,7 s aus dem Standby (der
   Wechselrichter tut etwa 2 s lang nichts, egal wie lange er stand), etwa 4 s
   über Omnibattery (Entitäten); Batterien über eine Cloud sind meist noch
-  langsamer. Eine langsamere
+  langsamer. Die gelernte Zeit ist der Median der letzten Messungen; eine
+  Messung zählt nicht, wenn sich der Smart Meter bewegt hat, bevor die Batterie
+  reagieren konnte, oder viel weiter als der Schritt (ein anderes Gerät hat im
+  selben Moment geschaltet), und Befehle, die noch unterwegs sind, werden
+  eingerechnet, damit die vielen Korrekturen der Regelung hintereinander die
+  Zeit nicht zu kurz machen. Ein Start kurz nach einem Stopp zählt nicht als
+  Start. Eine langsamere
   Batterie bedeutet mehr Netzaustausch nach Laständerungen und eine gröbere
   Regelung; zusammen mit schnelleren Batterien übernehmen diese die Änderungen
   zuerst (siehe [Aufteilung auf die Batterien](#aufteilung-auf-die-batterien)).

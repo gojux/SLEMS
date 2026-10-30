@@ -20,17 +20,35 @@
   the start delay of the device (e.g. a compressor), switching off is usually
   only the reporting delay.
 
-All values are exponential moving averages of individual measurements; a
+All values are medians of the last ``SAMPLES_KEPT`` measurements; a
 measurement is dropped when another command interferes or nothing happens
 within ``MAX_RESPONSE_S``. Learners with a label log every measurement at
-debug level.
+debug level, also the dropped ones with the reason.
+
+The commands of the control loop answer a movement of the grid, which often
+goes on or back by itself (a stove switching, a cloud edge), and the damped
+control follows a step with smaller ones the same way. Battery measurements
+are therefore cleaned up:
+
+* Commands still on their way (issued within ``IN_FLIGHT_FACTOR`` × the
+  learned time before, the same way) are added to the expected change, so
+  their arrival does not end the measurement of the later step early.
+* A grid that moves by half the step before the earliest possible response
+  (``earliest_s``, from the driver or half the learned time) was moved by
+  something else: the measurement is dropped.
+* So is one whose grid moves more than ``JUMP_RATIO`` × the expected change
+  when it arrives (a foreign load jumped along).
+* The step time is learned from steps only, not from starts or reversals; a
+  start counts only after a stop of a while (see the controller).
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections import deque
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 import logging
+from statistics import median
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,6 +62,16 @@ CONSUMER_MAX_RESPONSE_S = 300.0
 
 # Share of a step one battery must carry for the step to count as its own.
 OWN_STEP_SHARE = 0.8
+
+# Measurements kept per learner; the learned value is their median.
+SAMPLES_KEPT = 9
+# Share of a step the grid may move before the earliest possible response.
+EARLY_RATIO = 0.5
+# Battery measurements: a grid moving more than this multiple of the expected
+# change at the arrival was moved by a foreign load too.
+JUMP_RATIO = 1.5
+# Commands issued within this multiple of the learned time are still on their way.
+IN_FLIGHT_FACTOR = 1.5
 
 DEFAULT_METER_INTERVAL_S = 2.0
 DEFAULT_BATTERY_RESPONSE_S = 3.0
@@ -78,6 +106,9 @@ class _PendingStep:
     start: float
     baseline: float
     change: float
+    # Commands still on their way the same way (W, same sign as ``change``).
+    in_flight: float = 0.0
+    earliest_s: float = 0.0
 
 
 class StepResponse:
@@ -90,20 +121,76 @@ class StepResponse:
         max_response_s: float = MAX_RESPONSE_S,
         *,
         label: str | None = None,
+        jump_ratio: float | None = None,
+        track_in_flight: bool = False,
     ) -> None:
         self._default_s = default_s
         self._min_step_w = min_step_w
         self._max_response_s = max_response_s
         self._label = label
-        self.response_s: float | None = None
+        self._jump_ratio = jump_ratio
+        self._track_in_flight = track_in_flight
+        self._samples: deque[float] = deque(maxlen=SAMPLES_KEPT)
         self._pending: _PendingStep | None = None
+        # Recent commands (time, change) for the ones still on their way.
+        self._recent: deque[tuple[float, float]] = deque(maxlen=16)
+
+    @property
+    def response_s(self) -> float | None:
+        """Median of the kept measurements; None until measured."""
+        return median(self._samples) if self._samples else None
+
+    @response_s.setter
+    def response_s(self, value: float | None) -> None:
+        """Start from a single value (e.g. stored by an older version)."""
+        self._samples.clear()
+        if value is not None:
+            self._samples.append(value)
+
+    @property
+    def samples(self) -> list[float]:
+        return list(self._samples)
+
+    def restore_samples(self, samples: Iterable[float]) -> None:
+        """Take stored measurements; none keeps the current value."""
+        values = [float(value) for value in samples]
+        if values:
+            self._samples.clear()
+            self._samples.extend(values)
 
     @property
     def value(self) -> float:
-        return self.response_s if self.response_s is not None else self._default_s
+        learned = self.response_s
+        return learned if learned is not None else self._default_s
 
-    def command(self, timestamp: float, baseline: float | None, change: float) -> None:
-        """A command changes the measured value by ``change`` (sign included)."""
+    def in_flight_w(self, timestamp: float, change: float, recent: Iterable[tuple[float, float]]) -> float:
+        """Sum of the ``recent`` commands the same way as ``change`` that may not
+        have shown yet."""
+        window = IN_FLIGHT_FACTOR * self.value
+        return sum(
+            earlier
+            for issued, earlier in recent
+            if timestamp - issued < window and earlier * change > 0
+        )
+
+    def command(
+        self,
+        timestamp: float,
+        baseline: float | None,
+        change: float,
+        *,
+        in_flight: float | None = None,
+        earliest_s: float = 0.0,
+    ) -> None:
+        """A command changes the measured value by ``change`` (sign included).
+
+        ``in_flight``: change of earlier commands still on their way (None:
+        from the commands this learner saw, if it tracks them);
+        ``earliest_s``: the measured value cannot follow the command earlier.
+        """
+        if in_flight is None:
+            in_flight = self.in_flight_w(timestamp, change, self._recent) if self._track_in_flight else 0.0
+        self._recent.append((timestamp, change))
         if baseline is None or abs(change) < self._min_step_w:
             # A small correction the same way (the damped control follows a
             # step with those) keeps a pending measurement; one the other way
@@ -112,7 +199,7 @@ class StepResponse:
             if pending is not None and change * pending.change < 0:
                 self._pending = None
             return
-        self._pending = _PendingStep(timestamp, baseline, change)
+        self._pending = _PendingStep(timestamp, baseline, change, in_flight, earliest_s)
 
     def cancel(self) -> None:
         """Drop a measurement still waiting (another command interfered)."""
@@ -135,20 +222,43 @@ class StepResponse:
                     self._max_response_s,
                 )
             return
+        # In shares of the step; the commands on their way may move it up to ``ahead`` first.
         moved = (value - pending.baseline) / pending.change
-        if moved >= ARRIVED_RATIO:
-            self.response_s = _ema(self.response_s, max(0.1, elapsed))
-            self._pending = None
-            if self._label is not None:
-                _LOGGER.debug(
-                    "Response %s: step %+.0f W from %.0f W arrived after %.2f s (grid %.0f W), learned %.2f s",
-                    self._label,
-                    pending.change,
-                    pending.baseline,
-                    elapsed,
-                    value,
-                    self.response_s,
-                )
+        ahead = pending.in_flight / pending.change
+        if elapsed < pending.earliest_s and (moved >= ahead + EARLY_RATIO or moved <= -EARLY_RATIO):
+            self._drop(pending, elapsed, f"moved before {pending.earliest_s:.2f} s", value)
+            return
+        if moved < ahead + ARRIVED_RATIO:
+            return
+        if self._jump_ratio is not None and moved > self._jump_ratio * (1 + ahead):
+            self._drop(pending, elapsed, f"moved {moved / (1 + ahead):.1f} times the expected change", value)
+            return
+        self._samples.append(max(0.1, elapsed))
+        self._pending = None
+        if self._label is not None:
+            _LOGGER.debug(
+                "Response %s: step %+.0f W from %.0f W%s arrived after %.2f s (grid %.0f W), learned %.2f s",
+                self._label,
+                pending.change,
+                pending.baseline,
+                f" ({pending.in_flight:+.0f} W on the way)" if pending.in_flight else "",
+                elapsed,
+                value,
+                self.response_s,
+            )
+
+    def _drop(self, pending: _PendingStep, elapsed: float, reason: str, value: float) -> None:
+        self._pending = None
+        if self._label is not None:
+            _LOGGER.debug(
+                "Response %s: step %+.0f W from %.0f W dropped after %.2f s (grid %.0f W): %s",
+                self._label,
+                pending.change,
+                pending.baseline,
+                elapsed,
+                value,
+                reason,
+            )
 
 
 class BatteryResponses:
@@ -157,17 +267,26 @@ class BatteryResponses:
     A step counts for a battery when it carries at least ``OWN_STEP_SHARE`` of
     the moved power; a larger step shared by several batteries ends all
     pending measurements. Most steps are shared, so a battery can stay
-    unlearned for a long time.
+    unlearned for a long time. Starts and reversals are learned apart, not as
+    steps; a start right after a stop (``restarted_ids``) is not learned.
     """
 
-    def __init__(self, names: Callable[[str], str] | None = None) -> None:
+    def __init__(
+        self,
+        names: Callable[[str], str] | None = None,
+        earliest: Callable[[str, str], float] | None = None,
+    ) -> None:
         # Battery name for the debug log.
         self._names = names
+        # Earliest response of a battery by kind (step, start, reversal).
+        self._earliest = earliest
         self.learners: dict[str, StepResponse] = {}
         # Steps of a battery that reverse its direction, until the new direction shows.
         self.reversals: dict[str, StepResponse] = {}
         # Steps of a battery out of standby (from 0 W).
         self.starts: dict[str, StepResponse] = {}
+        # Recent own changes (time, W) of each battery.
+        self._recent: dict[str, deque[tuple[float, float]]] = {}
 
     def command(
         self,
@@ -176,17 +295,28 @@ class BatteryResponses:
         changes: dict[str, float],
         reversed_from: dict[str, float] | None = None,
         started_ids: frozenset[str] = frozenset(),
+        *,
+        restarted_ids: frozenset[str] = frozenset(),
+        issued: dict[str, float] | None = None,
     ) -> None:
         """The batteries' commanded powers changed by ``changes`` (battery id -> W);
         the commands of ``reversed_from`` changed their direction (battery id ->
-        power before), the ones of ``started_ids`` left standby."""
+        power before), the ones of ``started_ids`` left standby, the ones of
+        ``restarted_ids`` started again right after a stop. ``issued``: when
+        each battery was written (default ``timestamp``)."""
         reversed_from = reversed_from or {}
+        issued = issued or {}
         total = sum(changes.values())
         moved = sum(abs(change) for change in changes.values())
+        recent_before = {battery_id: list(recent) for battery_id, recent in self._recent.items()}
+        for battery_id, change in changes.items():
+            self._recent.setdefault(battery_id, deque(maxlen=16)).append(
+                (issued.get(battery_id, timestamp), change)
+            )
         if moved < MIN_STEP_W:
             # Small corrections: each pending measurement decides by direction.
             for learner in self._all():
-                learner.command(timestamp, baseline, total)
+                learner.command(timestamp, baseline, total, in_flight=0.0)
             return
         own = next(
             (
@@ -196,8 +326,9 @@ class BatteryResponses:
             ),
             None,
         )
+        special = own in reversed_from or own in started_ids or own in restarted_ids
         for battery_id, learner in self.learners.items():
-            if battery_id != own:
+            if battery_id != own or special:
                 learner.cancel()
         for battery_id, learner in self.reversals.items():
             if battery_id != own or own not in reversed_from:
@@ -205,26 +336,47 @@ class BatteryResponses:
         for battery_id, learner in self.starts.items():
             if battery_id != own or own not in started_ids:
                 learner.cancel()
-        if own is not None:
-            self._learner(self.learners, "step", own).command(
-                timestamp, baseline, total
+        if own is None:
+            return
+        start = issued.get(own, timestamp)
+        if own in restarted_ids:
+            if self._names is not None:
+                _LOGGER.debug("Response start %s: not measured, started right after a stop", self._names(own))
+            return
+        if own in reversed_from:
+            # Until the new direction shows: the stop of the old power
+            # moves the grid first.
+            stopped = reversed_from[own]
+            self._learner(self.reversals, "reversal", own).command(
+                start,
+                None if baseline is None else baseline - stopped,
+                total + stopped,
+                in_flight=0.0,
+                earliest_s=self._earliest_s(own, "reversal"),
             )
-            if own in reversed_from:
-                # Until the new direction shows: the stop of the old power
-                # moves the grid first.
-                stopped = reversed_from[own]
-                self._learner(self.reversals, "reversal", own).command(
-                    timestamp, None if baseline is None else baseline - stopped, total + stopped
-                )
-            if own in started_ids:
-                self._learner(self.starts, "start", own).command(
-                    timestamp, baseline, total
-                )
+        elif own in started_ids:
+            self._learner(self.starts, "start", own).command(
+                start, baseline, total, in_flight=0.0, earliest_s=self._earliest_s(own, "start")
+            )
+        else:
+            learner = self._learner(self.learners, "step", own)
+            learner.command(
+                start,
+                baseline,
+                total,
+                in_flight=learner.in_flight_w(start, total, recent_before.get(own, [])),
+                earliest_s=self._earliest_s(own, "step"),
+            )
+
+    def _earliest_s(self, battery_id: str, kind: str) -> float:
+        return self._earliest(battery_id, kind) if self._earliest is not None else 0.0
 
     def _learner(self, learners: dict[str, StepResponse], kind: str, battery_id: str) -> StepResponse:
         if (learner := learners.get(battery_id)) is None:
             name = self._names(battery_id) if self._names is not None else battery_id
-            learner = learners[battery_id] = StepResponse(DEFAULT_BATTERY_RESPONSE_S, label=f"{kind} {name}")
+            learner = learners[battery_id] = StepResponse(
+                DEFAULT_BATTERY_RESPONSE_S, label=f"{kind} {name}", jump_ratio=JUMP_RATIO
+            )
         return learner
 
     def _all(self) -> list[StepResponse]:
@@ -265,6 +417,22 @@ class BatteryResponses:
 
     def restore(self, data: dict[str, float]) -> None:
         self._restore(self.learners, "step", data)
+
+    def samples_as_dict(self) -> dict[str, dict[str, list[float]]]:
+        """The kept measurements of every learner, by kind and battery."""
+        return {
+            kind: {battery_id: learner.samples for battery_id, learner in learners.items() if learner.samples}
+            for kind, learners in self._kinds().items()
+        }
+
+    def restore_samples(self, data: dict[str, dict[str, list[float]]]) -> None:
+        for kind, learners in self._kinds().items():
+            for battery_id, samples in (data.get(kind) or {}).items():
+                if samples:
+                    self._learner(learners, kind, battery_id).restore_samples(samples)
+
+    def _kinds(self) -> dict[str, dict[str, StepResponse]]:
+        return {"step": self.learners, "reversal": self.reversals, "start": self.starts}
 
     def _restore(self, learners: dict[str, StepResponse], kind: str, data: dict[str, float]) -> None:
         for battery_id, response_s in data.items():

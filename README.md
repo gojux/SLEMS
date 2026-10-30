@@ -790,7 +790,12 @@ SLEMS also works without any battery: add the consumers only.
   new direction of a change of direction, about 2.7 s out of standby (the
   inverter does nothing for about 2 s, however long it was idle), about 4 s
   through Omnibattery (entities); batteries behind a cloud are usually
-  slower still. A slower
+  slower still. The learned time is the median of the last measurements; a
+  measurement is dropped when the smart meter moved before the battery could
+  react or much more than the step (another device switched at the same
+  moment), and commands still on their way count in, so the many corrections
+  of the control in a row do not make the time too short. A start right after
+  a stop does not count as a start. A slower
   battery means more grid exchange after load changes and a coarser control;
   together with faster batteries, those take the changes first (see
   [distribution between batteries](#distribution-between-batteries)).
