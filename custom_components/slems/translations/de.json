@@ -216,7 +216,7 @@
         },
         "profile": {
           "title": "Profil",
-          "description": "Ein Profil beschreibt die Register der Batterie und wie SLEMS sie lädt, entlädt und freigibt. Wähle ein mit SLEMS geliefertes Profil aus, füge ein eigenes als YAML ein oder kopiere das eigene Profil einer anderen Batterie.\n\nBatterien aus einem Profil sind experimentell. Ein eigenes Profil erstellst du mit Hilfe einer KI aus dem Handbuch der Batterie: [Anleitung]({prompt_url}).",
+          "description": "Ein Profil beschreibt die Register der Batterie und wie SLEMS sie lädt, entlädt und freigibt. Wähle ein mit SLEMS geliefertes Profil aus, füge ein eigenes als YAML ein oder kopiere das eigene Profil einer anderen Batterie.\n\nBatterien aus einem Profil sind experimentell. Ein mitgeliefertes Profil mit dem Zusatz (ungeprüft) hat seinen Probebetrieb noch an keiner echten Batterie bestanden. Ein eigenes Profil erstellst du mit Hilfe einer KI aus dem Handbuch der Batterie: [Anleitung]({prompt_url}).",
           "data": {
             "profile": "Profil"
           }
@@ -278,10 +278,12 @@
           "title": "Schreibvorschau",
           "description": "Was SLEMS im Probebetrieb in **{profile}** schreibt, in dieser Reihenfolge (Wert jetzt → Wert dann). Der Probebetrieb beginnt je Richtung mit 100 W, dann mit dieser Leistung.\n\n{preview}\n\nSLEMS speichert die Batterie, steuert sie aber erst, wenn ihr Probebetrieb bestanden ist: ein Selbsttest mit den Prüfungen des Profils, der von selbst startet.",
           "data": {
-            "checked": "Ich habe die Schreibregister mit dem Handbuch verglichen"
+            "checked": "Ich habe die Schreibregister mit dem Handbuch verglichen",
+            "checked_unverified": "Mir ist bewusst, dass dieses Profil noch an keiner echten Batterie geprüft wurde; ich habe die Schreibregister mit dem Handbuch verglichen, soweit es eines gibt"
           },
           "data_description": {
-            "checked": "Ein eigenes Profil: Prüfe Adresse, Faktor und Bereich jedes Schreibregisters gegen das Handbuch der Batterie. Die Prüfungen fangen die meisten Fehler ab, aber nicht alle; ein Wert im falschen Register kann eine Einstellung der Batterie ändern."
+            "checked": "Ein eigenes Profil: Prüfe Adresse, Faktor und Bereich jedes Schreibregisters gegen das Handbuch der Batterie. Die Prüfungen fangen die meisten Fehler ab, aber nicht alle; ein Wert im falschen Register kann eine Einstellung der Batterie ändern.",
+            "checked_unverified": "Besteht deine Batterie den Probebetrieb, melde es bitte in einem Issue mit dem Modell und dem Abschnitt `trial` deiner Batterie aus dem Diagnose-Download. Dann wird das Profil als geprüft geführt."
           }
         },
         "profile_others": {
@@ -463,6 +465,7 @@
         "power_required": "SLEMS braucht die Batterieleistung, um die Batterie zu steuern.",
         "address_in_use": "Diese Adresse nutzt schon die Batterie {battery}. Eine Batterie nimmt nur eine Verbindung an: Entferne zuerst {battery} oder wähle eine andere Adresse.",
         "not_checked": "Vergleiche zuerst die Schreibregister mit dem Handbuch.",
+        "not_checked_unverified": "Bestätige zuerst den Hinweis zum ungeprüften Profil.",
         "others_not_at_rest": "Nicht geändert, sie antworten nicht oder ein Schreibregister liegt mit dem neuen Profil außerhalb seines Ruhebereichs: {batteries}. Lass sie weg oder prüfe sie.",
         "profile_bundled_id": "Ein mitgeliefertes Profil hat die id **{detail}**; wähl es unter **Profil** aus oder gib deinem Profil eine eigene id.",
         "profile_syntax": "Der Text ist kein gültiges YAML ({where}): {detail}",

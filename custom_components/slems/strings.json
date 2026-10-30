@@ -216,7 +216,7 @@
         },
         "profile": {
           "title": "Profile",
-          "description": "A profile describes the registers of the battery and how SLEMS charges, discharges and releases it. Select a profile shipped with SLEMS, paste an own one as YAML or copy the own profile of another battery.\n\nBatteries from a profile are experimental. An own profile is made from the manual of the battery with the help of an AI: [guide]({prompt_url}).",
+          "description": "A profile describes the registers of the battery and how SLEMS charges, discharges and releases it. Select a profile shipped with SLEMS, paste an own one as YAML or copy the own profile of another battery.\n\nBatteries from a profile are experimental. A shipped profile marked (unverified) has not passed its trial on a real battery yet. An own profile is made from the manual of the battery with the help of an AI: [guide]({prompt_url}).",
           "data": {
             "profile": "Profile"
           }
@@ -278,10 +278,12 @@
           "title": "Write preview",
           "description": "What SLEMS writes to **{profile}** in its trial, in this order (value now → value then). The trial begins with 100 W in each direction, then this power.\n\n{preview}\n\nSLEMS saves the battery but controls it only after its trial passed: a self-test with the checks of the profile that starts by itself.",
           "data": {
-            "checked": "I compared the write registers with the manual"
+            "checked": "I compared the write registers with the manual",
+            "checked_unverified": "I know that this profile has not been verified on a real battery yet; I compared the write registers with the manual, if there is one"
           },
           "data_description": {
-            "checked": "An own profile: check address, scale and range of each write register against the manual of the battery. The checks catch most errors, but not all; a value in a wrong register can change a setting of the battery."
+            "checked": "An own profile: check address, scale and range of each write register against the manual of the battery. The checks catch most errors, but not all; a value in a wrong register can change a setting of the battery.",
+            "checked_unverified": "If your battery passes its trial, please report it in an issue with the model and the section `trial` of your battery from the diagnostics download. The profile is then listed as verified."
           }
         },
         "profile_others": {
@@ -463,6 +465,7 @@
         "power_required": "SLEMS needs the battery power to control the battery.",
         "address_in_use": "This address is already used by the battery {battery}. A battery takes only one connection: remove {battery} first, or choose another address.",
         "not_checked": "Compare the write registers with the manual first.",
+        "not_checked_unverified": "Confirm the note on the unverified profile first.",
         "others_not_at_rest": "Not changed, they do not answer or a write register is outside its range at rest with the new profile: {batteries}. Leave them out or check them.",
         "profile_bundled_id": "A shipped profile has the id **{detail}**; select it under **Profile** or give your profile an id of its own.",
         "profile_syntax": "The text is no valid YAML ({where}): {detail}",

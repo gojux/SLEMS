@@ -965,7 +965,8 @@ zwei Regelkreise arbeiteten gegeneinander.
    Profil (Adresse, Einheit, Bereich) und bestätige **Ich habe die Schreibregister mit dem Handbuch
    verglichen**. Die Prüfungen von SLEMS fangen die meisten Fehler ab, aber
    nicht alle: Ein Wert im falschen Register kann eine Einstellung der
-   Batterie ändern.
+   Batterie ändern. Ein mitgeliefertes Profil braucht keine Bestätigung,
+   außer einem ungeprüften (siehe unten).
 7. **Probebetrieb**: SLEMS speichert die Batterie, regelt sie aber noch
    nicht; sie läuft mit ihrer eigenen Logik. Im Betriebsmodus **Aktiv**
    startet ihr Selbsttest mit den Prüfungen des Profils von selbst und dauert
@@ -999,6 +1000,22 @@ andere Adresse beginnt den Probebetrieb erneut.
 **Teilen**: Ein Profil, das seinen Probebetrieb bestanden hat, kann ein
 mitgeliefertes Profil für alle mit derselben Batterie werden:
 [so schlägst du es vor](docs/battery-profile-prompt.de.md#profil-als-mitgeliefertes-profil-vorschlagen).
+
+**Ungeprüfte mitgelieferte Profile**: Ein mitgeliefertes Profil mit dem
+Zusatz **(ungeprüft)** ist aus der Registerliste des Herstellers und anderen
+Quellen erstellt, hat seinen Probebetrieb aber noch an keiner echten Batterie
+bestanden. Es durchläuft dieselben Prüfungen und denselben Probebetrieb wie
+ein eigenes Profil, und in seiner Schreibvorschau bestätigst du **Mir ist
+bewusst, dass dieses Profil noch an keiner echten Batterie geprüft wurde; ich
+habe die Schreibregister mit dem Handbuch verglichen, soweit es eines gibt**.
+Besteht deine Batterie den Probebetrieb (der Sensor **Probebetrieb** zeigt
+**Bestanden**; **Als bestanden übernommen** aus der Reparatur zählt nicht),
+melde es bitte in einem [Issue](https://github.com/gojux/SLEMS/issues) mit
+dem Modell und dem Abschnitt `trial` deiner Batterie aus den Diagnosedaten
+(**Einstellungen → Geräte & Dienste → SLEMS → ⋮ → Diagnosedaten
+herunterladen**). Dann wird das Profil als geprüft geführt, mit der Firmware
+deiner Batterie. Stell nur diesen Abschnitt ein: Der Download enthält auch
+deine ganze Konfiguration.
 
 ### Aufteilung auf die Batterien
 

@@ -910,7 +910,8 @@ other.
    profile (address, unit, range) and
    confirm **I compared the write registers with the manual**. The checks of
    SLEMS catch most errors, but not all: a value in a wrong register can
-   change a setting of the battery.
+   change a setting of the battery. A shipped profile needs no confirmation,
+   except an unverified one (see below).
 7. **Trial**: SLEMS saves the battery but does not control it yet; it runs on
    its own logic. In the operating mode **Active** its self-test with the
    checks of the profile starts by itself and takes about 8–9 minutes, while
@@ -941,6 +942,20 @@ with a profile of the same id. Another address begins the trial again.
 **Sharing it**: a profile that passed its trial can become a shipped profile
 for everybody with the same battery:
 [how to suggest it](docs/battery-profile-prompt.md#suggest-a-profile-as-a-shipped-profile).
+
+**Unverified shipped profiles**: a shipped profile marked **(unverified)**
+was made from the manufacturer's register list and other sources but has not
+passed its trial on a real battery yet. It goes through the same checks and
+the same trial as an own profile, and its write preview asks you to confirm
+**I know that this profile has not been verified on a real battery yet; I
+compared the write registers with the manual, if there is one**. If your
+battery passes its trial (the sensor **Trial** shows **Passed**; **Taken as
+passed** from the repair issue does not count), please report it in an
+[issue](https://github.com/gojux/SLEMS/issues) with the model and the section
+`trial` of your battery from the diagnostics (**Settings → Devices & services
+→ SLEMS → ⋮ → Download diagnostics**). The profile is then listed as
+verified, with the firmware of your battery. Post only that section: the
+download also holds your whole configuration.
 
 ### Distribution between batteries
 

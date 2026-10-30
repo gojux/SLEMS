@@ -64,6 +64,7 @@ from collections import deque
 from collections.abc import Iterable, Mapping
 import dataclasses
 from dataclasses import dataclass, field
+import datetime
 import functools
 import hashlib
 from pathlib import Path
@@ -161,7 +162,7 @@ ERROR_CODES = (
     "key_value_range", "release_type",
 )
 # Keys that only describe a profile: changing them does not change its content hash.
-DESCRIPTIVE_KEYS = ("name", "manufacturer", "notes")
+DESCRIPTIVE_KEYS = ("name", "manufacturer", "notes", "verified")
 
 _ID_PATTERN = re.compile(r"[a-z0-9][a-z0-9_]*")
 _FORMAT_LINE = re.compile(rf"^\s*{FORMAT_KEY}\s*:", re.M)
@@ -316,6 +317,14 @@ class Probe:
 
 
 @dataclass(frozen=True)
+class Verification:
+    """A trial a shipped profile passed on a real battery."""
+
+    firmware: str
+    date: datetime.date
+
+
+@dataclass(frozen=True)
 class BatteryProfile:
     id: str
     name: str
@@ -332,14 +341,20 @@ class BatteryProfile:
     control: Control
     probe: Probe
     bundled: bool = False
-    # Own profiles: hash of the content without the descriptive keys.
+    # Shipped profiles: the trials passed on real batteries; without one a shipped profile is unverified.
+    verified: tuple[Verification, ...] = ()
+    # Hash of the content without the descriptive keys.
     content_hash: str = ""
 
     @property
     def key(self) -> str:
-        """What a passed trial holds for: ``id@revision``, for an own profile with its content hash."""
-        key = f"{self.id}@{self.revision}"
-        return f"{key}#{self.content_hash}" if self.content_hash else key
+        """What a passed trial holds for: ``id@revision#content hash``."""
+        return f"{self.id}@{self.revision}#{self.content_hash}"
+
+    @property
+    def unverified(self) -> bool:
+        """A shipped profile that has not passed a trial on a real battery yet."""
+        return self.bundled and not self.verified
 
     @property
     def write_addresses(self) -> tuple[int, ...]:
@@ -530,7 +545,7 @@ _Loader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _constru
 def parse_profile(text: str, *, bundled: bool = False) -> BatteryProfile:
     """Load and check a profile; raises ``ProfileError``.
 
-    Profiles shipped with SLEMS (``bundled``) may leave out ``at_rest``.
+    Only profiles shipped with SLEMS (``bundled``) may say where they were ``verified``.
     """
     try:
         document = yaml.load(text, Loader=_Loader)  # noqa: S506 - safe loader subclass
@@ -546,8 +561,6 @@ def parse_profile(text: str, *, bundled: bool = False) -> BatteryProfile:
     if not isinstance(document, _LineDict) or FORMAT_KEY not in document:
         raise ProfileError("not_profile")
     profile = _Parser(bundled).profile(document)
-    if bundled:
-        return profile
     content = {key: value for key, value in document.items() if key not in DESCRIPTIVE_KEYS}
     digest = hashlib.sha256(_canonical(content).encode()).hexdigest()[:12]
     return dataclasses.replace(profile, content_hash=digest)
@@ -695,7 +708,7 @@ class _Parser:
     def profile(self, doc: _LineDict) -> BatteryProfile:
         self._mapping(doc, "", (
             FORMAT_KEY, "id", "name", "manufacturer", "revision", "notes", "connection", "limits",
-            "timing", "own_pv", "read", "device_info", "control", "probe",
+            "timing", "own_pv", "read", "device_info", "control", "probe", *(("verified",) if self._bundled else ()),
         ), None, None)
         version = doc[FORMAT_KEY]
         if isinstance(version, bool) or not isinstance(version, int) or version < 1:
@@ -725,6 +738,7 @@ class _Parser:
             control=control,
             probe=self._probe(doc),
             bundled=self._bundled,
+            verified=self._verified(doc),
         )
 
     def _connection(self, doc: _LineDict) -> Connection:
@@ -751,6 +765,24 @@ class _Parser:
             max_discharge_w=self._number(m, "max_discharge_w", "limits", integer=True, exclusive=True),
             min_power_w=self._number(m, "min_power_w", "limits", default=0, integer=True),
         )
+
+    def _verified(self, doc: _LineDict) -> tuple[Verification, ...]:
+        if "verified" not in doc:
+            return ()
+        items = doc["verified"]
+        if not isinstance(items, list) or not items:
+            raise self._fail("invalid", "verified", doc, "verified", "list of {firmware, date} expected")
+        verified = []
+        for index, item in enumerate(items):
+            path = f"verified[{index}]"
+            m = self._mapping(item, path, ("firmware", "date"), doc, "verified")
+            firmware = self._text(m, "firmware", path)
+            date = self._required(m, "date", path)
+            # A datetime is a date too, but a trial is noted by its day.
+            if type(date) is not datetime.date:
+                raise self._fail("invalid", f"{path}.date", m, "date", "date expected (YYYY-MM-DD)")
+            verified.append(Verification(firmware=firmware, date=date))
+        return tuple(verified)
 
     def _timing(self, doc: _LineDict) -> Timing:
         if "timing" not in doc:
@@ -972,10 +1004,8 @@ class _Parser:
             "persistent", "max_changes_per_day", "confirm",
         ), parent, "apply")
         address = self._address(m, path)
-        if "type" not in m and not self._bundled:
-            # Without it a 32 bit register would be written as its first word only.
-            raise self._fail("missing_key", f"{path}.type", m)
-        data_type = self._choice(m, "type", path, WRITE_TYPES, default="uint16")
+        # Without it a 32 bit register would be written as its first word only.
+        data_type = self._choice(m, "type", path, WRITE_TYPES)
         value = self._required(m, "value", path)
         placeholder = isinstance(value, str)
         if placeholder and value not in PLACEHOLDERS:
@@ -1008,7 +1038,7 @@ class _Parser:
             ):
                 raise self._fail("invalid", f"{path}.at_rest_values", m, "at_rest_values", "list of values expected")
             at_rest_values = tuple(values)
-        if at_rest is None and at_rest_values is None and not self._bundled:
+        if at_rest is None and at_rest_values is None:
             raise self._fail("missing_key", f"{path}.at_rest", m)
         if (
             at_rest is not None and not placeholder and abs(value) >= KEY_VALUE_MIN

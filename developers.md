@@ -1819,9 +1819,10 @@ simulator's register model).
   e.g. Sungrow's command 0xAA/0xBB/0xCC; `raw_value(magnitude=True)`).
 - Values in `apply`/`release` are raw; the power placeholders are W and
   become raw through `scale` (one raw unit = `scale` W, as when reading).
-  `at_rest` / `at_rest_values` (raw) are required in own profiles; fixed
-  values, mode values and the highest powers must lie inside, which also
-  catches a wrong scale. `rest_violations` is the check before writing.
+  `at_rest` / `at_rest_values` (raw) and the `type` of every step in
+  `control.apply` are required; fixed values, mode values and the highest
+  powers must lie inside, which also catches a wrong scale.
+  `rest_violations` is the check before writing.
 - `persistent` registers (flash) must not hold a power placeholder;
   `PersistentGuard` skips unchanged values (also on keep-alive), warns at a
   change within 60 s and blocks above `max_changes_per_day` in 24 h.
@@ -1864,6 +1865,35 @@ profile out:
   the control **Output** of entity batteries: ports, probe for curtailed PV,
   curtailing for the feed-in cap, dead band of the output). The PV comes
   from the last telemetry.
+- Shipped and own profiles load with the same rules; only a shipped profile
+  may have the head key `verified` (a list of `{firmware, date}`, one per
+  trial passed on a real battery; in an own profile it is `unknown_key`).
+  Without it a shipped profile is unverified (`BatteryProfile.unverified`):
+  the step `profile` names it with **(unverified)**, and its write preview
+  needs the confirmation `checked_unverified` instead of `checked` (a
+  verified one needs none). **Edit the profile** is not offered for shipped
+  profiles. The AI prompt does not mention `verified`.
+- Adding a shipped profile: a YAML file in `templates/battery_profiles/`
+  (`test_every_shipped_profile_loads_with_the_rules` loads each one) and a
+  test against a simulator. Sources: the manufacturer's register list; an
+  Omnibattery driver counts as one for every register its code reads or
+  writes if the driver is in a release and an issue or discussion shows it
+  working on real hardware with a named firmware. The range at rest and
+  whether a register is stored in flash still need a second source, else
+  the line is marked `# uncertain`. It is shipped without `verified`.
+- `verified` gets an entry when a user reports a passed trial on a real
+  battery with the section `trial` of the diagnostics: `trial.status`
+  `passed` (`confirmed`, accepted by the user in the repair, does not
+  count), `trial.profile_key` the key of the shipped profile, the firmware
+  from `trial.device_info`, the date from `trial.since`. A profile counts as
+  verified (concept: at least one, better two batteries with the firmware
+  noted) once it also has its write registers checked against the manual
+  and a test in the repository. `verified` does not change the content hash.
+  An entry holds for the content it was reported with: a report counts only
+  if its `trial.profile_key` is the current key of the profile, and a change
+  that changes the key (content or revision) removes all entries, so the
+  profile is unverified again until a trial with the new key is reported.
+  Changes of `name`, `manufacturer`, `notes` or comments keep them.
 - The model is experimental. The shipped profiles in `DEV_ONLY_PROFILES`
   (the Venus profile, which is there to compare the profile driver with the
   Venus driver) are offered only while the environment variable
@@ -1886,7 +1916,8 @@ profile out:
   `not_profile`, not `syntax`; the id of a shipped profile is refused) → `profile_connection` (address and transport; another battery at
   the same host, port and unit is refused) → `profile_read`, a menu showing
   the probe reading → `profile_limits` → `profile_preview` (own profiles need
-  **I compared the write registers with the manual**). Config flows have no
+  **I compared the write registers with the manual**, unverified shipped
+  profiles the confirmation that they are unverified). Config flows have no
   back button: the menu leads back to the profile, its YAML or the
   connection, and offers **Continue** only while nothing blocks.
 - Probe reading (`read_profile`, checks and texts in `profile_check.py`, no
@@ -1922,9 +1953,10 @@ controlled only after its self-test with the checks of the profile (see
 *Self-test*) passed.
 
 - Begins for a new battery, when `trial_key` differs from the stored one
-  (`id@revision`, for an own profile `id@revision#hash`: the hash of the
-  loaded content without `name`, `manufacturer` and `notes`, so comments and
-  layout do not count) and when `trial_device` (host, port and unit) differs
+  (`id@revision#hash` for shipped and own profiles: the hash of the loaded
+  content without `name`, `manufacturer`, `notes` and `verified`, so
+  comments and layout do not count, but a change of a shipped profile
+  without a higher revision does) and when `trial_device` (host, port and unit) differs
   (reason `new`; the device information is no reference then). A state
   stored without a device adopts it.
 - A firmware update (a value of the device information differs from the one

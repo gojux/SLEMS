@@ -54,10 +54,10 @@ control:
   # RS485 control first (it can drop after a reconnect or a BMS cut-off), the
   # set points before the force mode so a new direction starts with valid values.
   apply:
-    - {address: 42000, value: 0x55AA, at_rest_values: [0x55AA, 0x55BB], confirm: true}
-    - {address: 42021, value: "{discharge_w}", at_rest: [0, 2500], confirm: true}
-    - {address: 42020, value: "{charge_w}", at_rest: [0, 2500], confirm: true}
-    - {address: 42010, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2], confirm: true}
+    - {address: 42000, type: uint16, value: 0x55AA, at_rest_values: [0x55AA, 0x55BB], confirm: true}
+    - {address: 42021, type: uint16, value: "{discharge_w}", at_rest: [0, 2500], confirm: true}
+    - {address: 42020, type: uint16, value: "{charge_w}", at_rest: [0, 2500], confirm: true}
+    - {address: 42010, type: uint16, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2], confirm: true}
   release:
     auto:
       - {address: 42021, value: 0}

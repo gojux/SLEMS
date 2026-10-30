@@ -1,14 +1,17 @@
 """Tests for the Modbus profiles of batteries (format, loader and checks)."""
 
+import datetime
 import importlib.util
 from pathlib import Path
 
 import pytest
 
 from custom_components.slems.battery_profiles import (
+    BUNDLED_DIR,
     PLACEHOLDER_CHARGE,
     PersistentGuard,
     ProfileError,
+    Verification,
     apply_values,
     bundled_profiles,
     decode,
@@ -233,18 +236,66 @@ def test_syntax_and_duplicate_keys() -> None:
     assert error(refusal).code == "not_profile"
 
 
-def test_at_rest_is_required_for_own_profiles_only() -> None:
+def test_at_rest_is_required_for_every_profile() -> None:
     text = MINIMAL.replace(', at_rest: [0, 2000]', '')
     assert error(text).code == "missing_key"
-    assert parse_profile(text, bundled=True).control.apply[0].at_rest is None
+    assert error(text, bundled=True).code == "missing_key"
 
 
-def test_type_of_write_steps_is_required_for_own_profiles_only() -> None:
+def test_type_of_write_steps_is_required_for_every_profile() -> None:
     # Without it a 32 bit power would be written as its first word only.
     text = MINIMAL.replace('{address: 200, type: uint16, value: "{charge_w}"', '{address: 200, value: "{charge_w}"')
-    err = error(text)
-    assert (err.code, err.path, err.line) == ("missing_key", "control.apply[0].type", 11)
-    assert parse_profile(text, bundled=True).control.apply[0].type == "uint16"
+    for bundled in (False, True):
+        err = error(text, bundled=bundled)
+        assert (err.code, err.path, err.line) == ("missing_key", "control.apply[0].type", 11)
+
+
+VERIFIED = """\
+verified:
+  - {firmware: "EMS 148", date: 2026-10-30}
+  - {firmware: "EMS 151", date: 2026-11-02}
+"""
+
+
+def test_only_shipped_profiles_are_verified() -> None:
+    profile = parse_profile(MINIMAL + VERIFIED, bundled=True)
+    assert profile.verified == (
+        Verification("EMS 148", datetime.date(2026, 10, 30)), Verification("EMS 151", datetime.date(2026, 11, 2)),
+    )
+    assert not profile.unverified
+    assert parse_profile(MINIMAL, bundled=True).unverified
+    # An own profile is neither verified nor unverified: it has its own confirmation.
+    assert not parse_profile(MINIMAL).unverified
+    err = error(MINIMAL + VERIFIED)
+    assert (err.code, err.path, err.detail) == ("unknown_key", "", "verified")
+
+
+@pytest.mark.parametrize(
+    ("verified", "code", "path"),
+    [
+        ("verified: []", "invalid", "verified"),
+        ("verified: {firmware: EMS 148, date: 2026-10-30}", "invalid", "verified"),
+        ("verified:\n  - EMS 148", "invalid", "verified[0]"),
+        ("verified:\n  - {date: 2026-10-30}", "missing_key", "verified[0].firmware"),
+        ("verified:\n  - {firmware: 148, date: 2026-10-30}", "invalid", "verified[0].firmware"),
+        ("verified:\n  - {firmware: EMS 148}", "missing_key", "verified[0].date"),
+        ('verified:\n  - {firmware: EMS 148, date: "2026-10-30"}', "invalid", "verified[0].date"),
+        ("verified:\n  - {firmware: EMS 148, date: 2026-10-30 12:00:00}", "invalid", "verified[0].date"),
+        ("verified:\n  - {firmware: EMS 148, date: 2026-10-30, user: me}", "unknown_key", "verified[0]"),
+    ],
+)
+def test_invalid_verified_entries(verified: str, code: str, path: str) -> None:
+    err = error(f"{MINIMAL}{verified}\n", bundled=True)
+    assert (err.code, err.path) == (code, path)
+
+
+def test_every_shipped_profile_loads_with_the_rules() -> None:
+    for path in sorted(BUNDLED_DIR.glob("*.yaml")):
+        text = path.read_text(encoding="utf-8")
+        profile = parse_profile(text, bundled=True)
+        if profile.unverified:
+            # The same rules as for an own profile (verified aside).
+            assert parse_profile(text).content_hash == profile.content_hash, path.name
 
 
 def test_durations_may_have_a_range_at_rest() -> None:

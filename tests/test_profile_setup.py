@@ -12,7 +12,7 @@ from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
 import pytest
 
-from custom_components.slems import battery_profiles, config_flow
+from custom_components.slems import battery_profiles, config_flow, diagnostics
 from custom_components.slems.battery_profiles import (
     ERROR_CODES,
     ProfileError,
@@ -39,10 +39,9 @@ from test_profile_driver import SIM, SimLink, no_confirm_delay  # noqa: F401
 
 STRINGS = json.loads((Path(config_flow.__file__).parent / "strings.json").read_text())
 VENUS_TEXT = bundled_profile_text("marstek_venus_e3")
-# The Venus profile as an own one (which needs the type of every write step).
-OWN_TEXT = re.sub(
-    r"(- \{address: \w+, )value", r"\1type: uint16, value", VENUS_TEXT.replace("id: marstek_venus_e3", "id: my_venus")
-)
+# The Venus profile as an own one.
+OWN_TEXT = VENUS_TEXT.replace("id: marstek_venus_e3", "id: my_venus")
+VERIFIED = 'verified:\n  - {firmware: "EMS 148", date: 2026-10-30}\n'
 
 
 def venus():
@@ -52,9 +51,13 @@ def venus():
 # --- content hash and trial key ----------------------------------------------
 
 
-def test_shipped_profile_keeps_its_trial_key() -> None:
-    assert venus().key == "marstek_venus_e3@1"
-    assert venus().content_hash == ""
+def test_shipped_profile_key_has_the_hash_of_its_content() -> None:
+    assert venus().key.startswith("marstek_venus_e3@1#") and len(venus().content_hash) == 12
+    # A passed trial noted in the profile does not change it.
+    assert parse_profile(VENUS_TEXT + VERIFIED, bundled=True).key == venus().key
+    # A register does, also without a higher revision.
+    changed = VENUS_TEXT.replace("at_rest: [0, 2], confirm: true", "at_rest: [0, 3], confirm: true")
+    assert parse_profile(changed, bundled=True).key != venus().key
 
 
 def test_own_profile_key_has_the_hash_of_its_content() -> None:
@@ -110,6 +113,18 @@ def test_trial_begins_again_at_another_address() -> None:
     assert adopted.status is TrialStatus.PASSED and adopted.device == "a:502/1"
 
 
+def test_trial_in_the_diagnostics_is_redacted() -> None:
+    # It is posted in an issue to verify a shipped profile.
+    state = TrialState(
+        "p@1#abc", status=TrialStatus.PASSED, device="192.168.1.20:502/1",
+        device_info={"ems_version": 148, "mac_address": "aa:bb:cc:dd:ee:ff"},
+    )
+    battery = SimpleNamespace(trial=state, in_trial=False, device_info_checked=True, self_test=None)
+    trial = diagnostics._trial(battery)
+    assert trial["device"] == "**REDACTED**" and trial["device_info"]["mac_address"] == "**REDACTED**"
+    assert (trial["profile_key"], trial["status"], trial["device_info"]["ems_version"]) == ("p@1#abc", "passed", 148)
+
+
 # --- probe reading and write preview -----------------------------------------
 
 
@@ -142,7 +157,7 @@ async def test_wrong_scale_of_the_state_of_charge_blocks() -> None:
 async def test_shifted_write_register_blocks() -> None:
     # 42020 shifted onto the battery voltage (e.g. 5300 for 53.00 V).
     text = OWN_TEXT.replace('{address: 42020, type: uint16, value: "{charge_w}"', '{address: 30100, type: uint16, value: "{charge_w}"')
-    text = text.replace("- {address: 42020, type: uint16, value: 0}", "- {address: 30100, type: uint16, value: 0}")
+    text = text.replace("- {address: 42020, value: 0}", "- {address: 30100, value: 0}")
     profile, reading, _ = await read(text)
     marks = check(profile, reading)
     assert marks["write_30100"] == type(marks["write_30100"])(BLOCK, "outside")
@@ -367,8 +382,23 @@ def no_dev_profiles(monkeypatch):
     monkeypatch.delenv("SLEMS_DEV_PROFILES", raising=False)
 
 
+@pytest.fixture
+def verified_venus(monkeypatch):
+    """The Venus profile as if it had passed a trial on a real battery."""
+    profile = parse_profile(VENUS_TEXT + VERIFIED, bundled=True)
+    monkeypatch.setattr(config_flow, "bundled_profiles", lambda: {profile.id: profile})
+
+
 def options(result) -> list[str]:
     return [option["value"] for option in result["data_schema"].schema["profile"].config["options"]]
+
+
+def labels(result) -> dict[str, str]:
+    return {option["value"]: option["label"] for option in result["data_schema"].schema["profile"].config["options"]}
+
+
+def preview_fields(result) -> list[str]:
+    return [str(key) for key in result["data_schema"].schema]
 
 
 def test_every_profile_step_has_its_texts() -> None:
@@ -394,14 +424,29 @@ async def test_new_battery_from_the_shipped_profile(sim, dev_profiles) -> None:
     assert "profile_yaml" not in result["menu_options"]
     assert "Ladezustand: 63 %" in result["description_placeholders"]["reading"]
     result = await flow.async_step_profile_limits(dict(LIMITS))
-    assert result["step_id"] == "profile_preview" and "checked" not in str(result["data_schema"].schema)
-    result = await flow.async_step_profile_preview({})
+    # The Venus profile has not passed a trial on a real battery: that must be known.
+    assert result["step_id"] == "profile_preview" and preview_fields(result) == ["checked_unverified"]
+    result = await flow.async_step_profile_preview({"checked_unverified": False})
+    assert result["errors"] == {"base": "not_checked_unverified"}
+    result = await flow.async_step_profile_preview({"checked_unverified": True})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Pack"
     assert result["data"]["profile_id"] == "marstek_venus_e3" and "profile_yaml" not in result["data"]
     assert result["data"]["host"] == "venus" and result["data"]["model"] == "modbus_profile"
     # Nothing was written during the setup.
     assert not any(link.writes() for link in sim.links)
+
+
+async def test_verified_shipped_profile_needs_no_confirmation(sim, dev_profiles, verified_venus) -> None:
+    flow = make_flow()
+    result = await flow.async_step_profile()
+    assert labels(result)["marstek_venus_e3"] == "Marstek Venus E 3.0"
+    await flow.async_step_profile({"profile": "marstek_venus_e3"})
+    await flow.async_step_profile_connection(dict(ADDRESS))
+    result = await flow.async_step_profile_limits(dict(LIMITS))
+    assert result["step_id"] == "profile_preview" and preview_fields(result) == []
+    result = await flow.async_step_profile_preview({})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
 async def test_without_a_profile_to_choose_straight_to_the_own_one(sim, no_dev_profiles) -> None:
@@ -420,6 +465,7 @@ async def test_venus_profile_only_in_dev(sim, dev_profiles) -> None:
     result = await flow.async_step_profile()
     assert result["step_id"] == "profile"
     assert options(result) == ["marstek_venus_e3", "own"]
+    assert labels(result)["marstek_venus_e3"] == "Marstek Venus E 3.0 (ungeprüft)"
     assert result["description_placeholders"]["prompt_url"].endswith("/docs/battery-profile-prompt.de.md")
 
 
@@ -469,10 +515,13 @@ async def test_own_profile_pasted_with_the_text_of_the_answer(sim) -> None:
 
 
 async def test_shipped_profile_pasted_unchanged_is_named(sim) -> None:
-    # It lacks what own profiles need more (type of every write step), but is shipped anyway.
     flow = make_flow()
     await flow.async_step_profile({"profile": "own"})
     result = await flow.async_step_profile_yaml({"profile_yaml": f"```yaml\n{VENUS_TEXT}```"})
+    assert result["errors"] == {"base": "profile_bundled_id"}
+    assert result["description_placeholders"]["detail"] == "marstek_venus_e3"
+    # A verified one has a key own profiles must not have, but is shipped anyway.
+    result = await flow.async_step_profile_yaml({"profile_yaml": VENUS_TEXT + VERIFIED})
     assert result["errors"] == {"base": "profile_bundled_id"}
     assert result["description_placeholders"]["detail"] == "marstek_venus_e3"
 

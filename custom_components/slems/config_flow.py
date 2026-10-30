@@ -913,7 +913,12 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             self._profile, self._yaml = bundled[choice], None
             return await self.async_step_profile_connection()
         words = _profile_words(self.hass.config.language)
-        options = [selector.SelectOptionDict(value=profile.id, label=profile.name) for profile in bundled.values()]
+        options = [
+            selector.SelectOptionDict(
+                value=profile.id, label=f"{profile.name}{words['unverified'] if profile.unverified else ''}"
+            )
+            for profile in bundled.values()
+        ]
         options += [
             selector.SelectOptionDict(value=key, label=words["copy"].format(battery=title, profile=profile.name))
             for key, (_, title, profile) in copies.items()
@@ -949,7 +954,7 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                 errors["base"] = f"profile_{err.code}"
                 placeholders = {"where": _profile_where(err, self.hass.config.language), "detail": err.detail}
                 if (shipped := _shipped_id(text)) in bundled:
-                    # A shipped profile pasted unchanged fails only on what own profiles need more.
+                    # A shipped profile pasted unchanged fails only on what own profiles must not have.
                     errors["base"] = "profile_bundled_id"
                     placeholders = {"where": "", "detail": shipped}
             else:
@@ -1086,23 +1091,24 @@ class BatterySubentryFlow(ConfigSubentryFlow):
 
     async def async_step_profile_preview(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         """What SLEMS would write; an own profile needs the confirmation that its write
-        registers were compared with the manual."""
+        registers were compared with the manual, an unverified shipped one that this is known."""
         assert self._profile is not None and self._reading is not None
         profile = self._profile
         errors: dict[str, str] = {}
         if user_input is not None:
-            if profile.bundled or user_input.get(CONF_CHECKED):
+            if (checked := _profile_check(profile)) is None or user_input.get(checked):
                 if self._other_profile_users():
                     return await self.async_step_profile_others()
                 return self._async_finish_profile()
-            errors["base"] = "not_checked"
+            errors["base"] = f"not_{checked}"
         state = ReleaseState(self._limits[CONF_RELEASE_STATE])
         test_w = self_test_power_w(
             min(self._limits[CONF_MAX_CHARGE_POWER_W], profile.limits.max_charge_w),
             min(self._limits[CONF_MAX_DISCHARGE_POWER_W], profile.limits.max_discharge_w),
         )
         phases = preview(profile, self._reading.writes, test_w, state)
-        fields = {} if profile.bundled else {vol.Required(CONF_CHECKED, default=False): selector.BooleanSelector()}
+        checked = _profile_check(profile)
+        fields = {} if checked is None else {vol.Required(checked, default=False): selector.BooleanSelector()}
         return self.async_show_form(
             step_id="profile_preview",
             data_schema=vol.Schema(fields),
@@ -1826,19 +1832,34 @@ MANUAL = "manual"
 CONF_PROFILE = "profile"
 OWN_PROFILE = "own"
 COPY_PREFIX = "copy_"
-# Write preview: an own profile's write registers compared with the manual.
+# Write preview: an own profile's write registers compared with the manual; known that a
+# shipped profile has not been verified on a real battery yet.
 CONF_CHECKED = "checked"
+CONF_CHECKED_UNVERIFIED = "checked_unverified"
 # Other batteries to change to the same profile.
 CONF_BATTERIES = "batteries"
 
 _PROFILE_WORDS = {
-    "en": {"copy": "Copy of {battery}: {profile}", "same": "same profile", "differs": "changed since", "line": "line"},
-    "de": {"copy": "Kopie von {battery}: {profile}", "same": "gleiches Profil", "differs": "inzwischen geändert", "line": "Zeile"},
+    "en": {
+        "copy": "Copy of {battery}: {profile}", "same": "same profile", "differs": "changed since", "line": "line",
+        "unverified": " (unverified)",
+    },
+    "de": {
+        "copy": "Kopie von {battery}: {profile}", "same": "gleiches Profil", "differs": "inzwischen geändert",
+        "line": "Zeile", "unverified": " (ungeprüft)",
+    },
 }
 
 
 def _profile_words(language: str) -> dict[str, str]:
     return _PROFILE_WORDS["de" if language.startswith("de") else "en"]
+
+
+def _profile_check(profile: BatteryProfile) -> str | None:
+    """The confirmation the write preview of a profile needs, if any."""
+    if not profile.bundled:
+        return CONF_CHECKED
+    return CONF_CHECKED_UNVERIFIED if profile.unverified else None
 
 
 def _shipped_id(text: str) -> str | None:

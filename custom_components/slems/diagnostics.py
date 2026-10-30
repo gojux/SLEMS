@@ -24,6 +24,7 @@ from .const import CONF_HOST, DOMAIN
 from .coordinator import BatteryRuntime, SlemsConfigEntry, SlemsCoordinator
 
 TO_REDACT = {CONF_HOST, "mac_address"}
+TRIAL_TO_REDACT = {*TO_REDACT, "device"}
 
 
 def _plain(value: Any) -> Any:
@@ -136,18 +137,27 @@ def _battery(coordinator: SlemsCoordinator, battery: BatteryRuntime) -> dict:
             "low_loss": battery.low_loss.as_dict(),
             "thresholds_w": coordinator.min_power_thresholds.get(battery.subentry_id),
         },
-        "trial": None
-        if battery.trial is None
-        else {
+        "trial": _trial(battery),
+        "learn_capacity": battery.learn_capacity,
+        "capacity_in_use_wh": battery.capacity_wh,
+        "capacity_learner": battery.capacity_learner.as_dict(),
+    }
+
+
+def _trial(battery: BatteryRuntime) -> dict | None:
+    """The trial of a battery from a profile; posted in an issue to verify a shipped
+    profile, so its device (host, port and unit) and MAC address are redacted as well."""
+    if battery.trial is None:
+        return None
+    return async_redact_data(
+        {
             **battery.trial.as_dict(),
             "in_trial": battery.in_trial,
             "device_info_checked": battery.device_info_checked,
             "register_reads": battery.self_test.register_reads() if battery.self_test is not None else None,
         },
-        "learn_capacity": battery.learn_capacity,
-        "capacity_in_use_wh": battery.capacity_wh,
-        "capacity_learner": battery.capacity_learner.as_dict(),
-    }
+        TRIAL_TO_REDACT,
+    )
 
 
 def _system(coordinator: SlemsCoordinator) -> dict:
