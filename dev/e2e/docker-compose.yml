@@ -75,7 +75,9 @@ services:
       - ../sunspec_meter:/sim:ro
 
   # Its Modbus hubs are in the development configuration; with an unknown host
-  # Home Assistant 2026.9 does not finish starting (no automations run).
+  # Home Assistant 2026.9 does not finish starting (no automations run). Its
+  # battery stays idle: in self-consumption it would move the fed grid power
+  # to 0, and the sign of the SunSpec meter could not be found.
   huawei-sim:
     image: python:3.13-alpine
     command: ["python", "/sim/simulator.py"]
@@ -83,6 +85,7 @@ services:
       - ../huawei_sim:/sim:ro
     environment:
       SIM_INITIAL_SOC: "50"
+      SIM_WORKING_MODE: "5"
 
   e2e:
     image: python:3.13-alpine
