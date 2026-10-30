@@ -217,8 +217,12 @@ async def test_unchanged_registers_are_not_written_again() -> None:
     # Only the discharge set point changed.
     assert link.writes == [(REG_SET_DISCHARGE_POWER, 900)]
     link.writes.clear()
+    # Keep-alive without a read back by the telemetry: RS485, force mode and
+    # the active set point (the charge set point has no effect while discharging).
     await driver.apply_power(-900, refresh=True)
-    assert len(link.writes) == 4
+    assert sorted(link.writes) == sorted(
+        [(REG_RS485_CONTROL, RS485_ENABLE), (REG_SET_DISCHARGE_POWER, 900), (REG_FORCE_MODE, FORCE_DISCHARGE)]
+    )
 
 
 async def test_soc_falls_back_to_whole_percent_register() -> None:
@@ -227,21 +231,68 @@ async def test_soc_falls_back_to_whole_percent_register() -> None:
     assert telemetry.soc_pct == 64
 
 
-async def test_complete_write_is_confirmed_by_read_back() -> None:
-    link = FakeLink({})
+async def test_keepalive_skips_registers_the_telemetry_confirmed(monkeypatch) -> None:
+    clock = [100.0]
+    monkeypatch.setattr(venus.time, "monotonic", lambda: clock[0])
+    link = FakeLink({34002: 500, 30001: 0})
     driver = make_driver(link)
+    assert await driver.apply_power(-900)
+    clock[0] += 55
+    await driver.read_telemetry()
+    link.writes.clear()
+    clock[0] += 5
     assert await driver.apply_power(-900, refresh=True)
-    # The battery dropped RS485 control: the next complete write is not confirmed.
-    original_write = link.write
+    assert link.writes == [(REG_SET_DISCHARGE_POWER, 900)]
+    # In standby with a confirmed force mode a keep-alive writes nothing.
+    assert await driver.apply_power(0)
+    clock[0] += 55
+    await driver.read_telemetry()
+    link.writes.clear()
+    clock[0] += 5
+    assert await driver.apply_power(0, refresh=True)
+    assert link.writes == []
+    # A confirmation older than VERIFIED_MAX_AGE_S does not count.
+    clock[0] += venus.VERIFIED_MAX_AGE_S
+    assert await driver.apply_power(0, refresh=True)
+    assert sorted(link.writes) == sorted([(REG_RS485_CONTROL, RS485_ENABLE), (REG_FORCE_MODE, FORCE_NONE)])
 
-    async def ignore_rs485(address: int, value: int) -> bool:
-        if address == 42000:
-            link.registers[address] = 0x55BB
-            return True
-        return await original_write(address, value)
 
-    link.write = ignore_rs485
-    assert not await driver.apply_power(-900, refresh=True)
+async def test_lost_control_seen_by_the_telemetry_is_written_again(monkeypatch) -> None:
+    clock = [100.0]
+    monkeypatch.setattr(venus.time, "monotonic", lambda: clock[0])
+    link = FakeLink({34002: 500, 30001: 0})
+    driver = make_driver(link)
+    assert await driver.apply_power(-900)
+    assert not driver.needs_write(-900)
+    # The battery dropped RS485 control (e.g. after a BMS cut-off).
+    link.registers[REG_RS485_CONTROL] = RS485_DISABLE
+    clock[0] += 1
+    await driver.read_telemetry()
+    assert driver.needs_write(-900)
+    link.writes.clear()
+    assert await driver.apply_power(-900)
+    assert link.writes == [(REG_RS485_CONTROL, RS485_ENABLE)]
+    assert not driver.needs_write(-900)
+
+
+async def test_a_write_during_the_telemetry_read_is_not_compared(monkeypatch) -> None:
+    clock = [100.0]
+    monkeypatch.setattr(venus.time, "monotonic", lambda: clock[0])
+    link = FakeLink({34002: 500, 30001: 0})
+    driver = make_driver(link)
+    assert await driver.apply_power(-900)
+    original_read = link.read
+
+    async def read_then_write(address: int, count: int) -> list[int] | None:
+        words = await original_read(address, count)
+        if address == REG_RS485_CONTROL:
+            # The control loop changes the force mode while the telemetry reads.
+            await driver.apply_power(900)
+        return words
+
+    link.read = read_then_write
+    await driver.read_telemetry()
+    assert not driver.needs_write(900)
 
 
 async def test_failed_release_is_reported() -> None:

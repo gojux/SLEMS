@@ -591,10 +591,18 @@ then exclusion for 5 min: `participating`/`plannable` are false, the
 controller releases the battery at the start of the next cycle and it is
 retried after the cooldown (`tick`). Failed or unconfirmed writes
 (`apply_power` returns False) are recorded by the controller without a wake
-attempt. The Venus driver reads 42000, 42010 and 42020/42021 back after
-every complete write (`refresh`, i.e. the first write and the keep-alive
-every 60 s; 0.2 s settle time, tolerance max(100 W, 10 %)) — not after every
-write, to keep the control cycle short. A BMS stop below 20 % SoC sets
+attempt. The Venus driver has no read back in the control cycle: its
+telemetry reads 42000 and 42010 every poll (5 s) and compares them with the
+values written before the read; a deviating register is dropped from the
+written values, so `needs_write` makes the next cycle write it again (a lost
+RS485 control is seen within 5 s, before within the 60 s keep-alive). A
+keep-alive skips RS485 and force mode when the telemetry confirmed them
+within 30 s (`VERIFIED_MAX_AGE_S`) and writes only the set point of the
+active direction (in standby none): mostly one write, in standby none, instead
+of 4 writes plus a read back of 1.3 s per battery, which blocked the control
+4–5 s a minute with three batteries. Set points that do not take effect show
+in the delivery monitor. A battery from a Modbus profile still reads back
+after every complete write (`control.confirm`). A BMS stop below 20 % SoC sets
 `bms_limit_w` (passed to `power_limits`): first half the command (at least
 300 W, judged again after `ENGAGE_GRACE_S`), after a second stop 0. At the
 top (highest cell ≥ `BMS_END_CELL_V` 3.45 V, without cell voltages SoC ≥

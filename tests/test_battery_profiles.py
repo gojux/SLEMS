@@ -70,9 +70,6 @@ def test_venus_profile_matches_the_driver() -> None:
     assert profile.timing.start_delay_s == venus.START_DELAY_S
     assert profile.timing.start_extra_s == venus.START_EXTRA_S
     assert profile.timing.reversal_extra_s == venus.REVERSAL_EXTRA_S
-    assert profile.control.confirm.delay_s == venus.CONFIRM_DELAY_S
-    assert profile.control.confirm.tolerance_w == venus.CONFIRM_TOLERANCE_W
-    assert profile.control.confirm.tolerance_pct / 100 == venus.CONFIRM_TOLERANCE_RATIO
 
     # Every telemetry register of the driver (except the control registers) with type and scale.
     by_extra = {

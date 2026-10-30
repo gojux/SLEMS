@@ -186,18 +186,20 @@ async def test_slow_values_are_read_once_a_minute() -> None:
 
 
 async def test_writes_like_the_venus_driver() -> None:
-    commands = [(800, False), (800, False), (-600, False), (-600, True), (0, False), (1500, True)]
+    # Keep-alives differ: the Venus driver checks its control registers with the
+    # telemetry and skips confirmed ones, a profile writes completely and reads back.
+    commands = [800, 800, -600, -600, 0, 1500]
     direct, by_profile = SimLink(SIM.VenusModel(5120, 50.0)), SimLink(SIM.VenusModel(5120, 50.0))
     driver, profile = venus_driver(direct), venus_profile_driver(by_profile)
     await driver.connect()
     await profile.connect()
-    for power, refresh in commands:
-        assert await driver.apply_power(power, refresh=refresh)
-        assert await profile.apply_power(power, refresh=refresh)
+    for power in commands:
+        assert await driver.apply_power(power)
+        assert await profile.apply_power(power)
     assert by_profile.writes() == direct.writes()
-    # Read before the first write (range at rest) and after every complete write, like the driver.
-    assert sorted(by_profile.reads()) == sorted([*CONTROL_READS, *CONTROL_READS, *CONTROL_READS])
-    assert sorted(direct.reads()) == sorted([*CONTROL_READS, *CONTROL_READS])
+    # The profile reads the range at rest before the first write.
+    assert sorted(by_profile.reads()) == sorted(CONTROL_READS)
+    assert direct.reads() == []
     assert by_profile.model.registers[42020] == 1500
 
 
