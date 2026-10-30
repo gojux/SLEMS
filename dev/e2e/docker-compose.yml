@@ -19,7 +19,7 @@ x-venus-sim: &venus-sim
 services:
   homeassistant:
     # By default the same version as the development instance.
-    image: ghcr.io/home-assistant/home-assistant:${HA_VERSION:-2026.10.1}
+    image: ghcr.io/home-assistant/home-assistant:${HA_VERSION:-2026.10.4}
     tmpfs:
       - /config
     volumes:
@@ -37,6 +37,7 @@ services:
       - venus-sim-4
       - venus-sim-5
       - sunspec-meter
+      - huawei-sim
 
   venus-sim-1:
     <<: *venus-sim
@@ -72,6 +73,16 @@ services:
     command: ["python", "/sim/meter_sim.py"]
     volumes:
       - ../sunspec_meter:/sim:ro
+
+  # Its Modbus hubs are in the development configuration; with an unknown host
+  # Home Assistant 2026.9 does not finish starting (no automations run).
+  huawei-sim:
+    image: python:3.13-alpine
+    command: ["python", "/sim/simulator.py"]
+    volumes:
+      - ../huawei_sim:/sim:ro
+    environment:
+      SIM_INITIAL_SOC: "50"
 
   e2e:
     image: python:3.13-alpine

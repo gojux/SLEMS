@@ -26,6 +26,8 @@ from typing import Any
 URL = os.environ.get("HA_URL", "http://localhost:8123")
 CLIENT = f"{URL}/"
 START_TIMEOUT_S = 300
+# Below the 300 s after which Home Assistant starts anyway with setups pending.
+RUNNING_TIMEOUT_S = 120
 LOAD_TIMEOUT_S = 60
 
 
@@ -143,6 +145,19 @@ def wait_for_home_assistant() -> None:
         except (urllib.error.URLError, ConnectionError, TimeoutError):
             time.sleep(2)
     raise Failure("Home Assistant did not start")
+
+
+def wait_running(token: str) -> None:
+    """Onboarding works before the start is finished; automations (the feeds of
+    the simulators) only run after it."""
+    deadline = time.monotonic() + RUNNING_TIMEOUT_S
+    state = None
+    while time.monotonic() < deadline:
+        state = request("GET", "/api/config", token=token).get("state")
+        if state == "RUNNING":
+            return
+        time.sleep(2)
+    raise Failure(f"Home Assistant is {state}, not RUNNING")
 
 
 PASSWORD = "test-only-password"
@@ -789,6 +804,11 @@ def main() -> int:
     wait_for_home_assistant()
     token = onboard()
     print("Onboarded")
+    try:
+        wait_running(token)
+    except Failure as err:
+        print(f"FAILED: {err}")
+        return 1
     remove_entries(token)
     if not any(e["domain"] == "sim_solar_forecast" for e in request("GET", "/api/config/config_entries/entry", token=token)):
         forecasts(token)

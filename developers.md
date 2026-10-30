@@ -56,7 +56,7 @@ docker compose down
 
 | Service | Purpose |
 |---|---|
-| `homeassistant` | HA 2026.10.1 (same version as production) on <http://localhost:8123>. `custom_components/slems` is mounted read-only. |
+| `homeassistant` | HA 2026.10.4 (same version as production) on <http://localhost:8123>. `custom_components/slems` is mounted read-only. |
 | `venus-sim-1`, `venus-sim-2` | Modbus TCP simulators of a Venus E 3.0 (`dev/venus_sim/simulator.py`), reachable as host `venus-sim-1` / `venus-sim-2`, port 502. |
 | `venus-sim-3` | The same, controlled through Modbus and template entities of the dev instance (a battery from entities). |
 | `venus-sim-4` | The same, for a battery from the Venus profile (model `modbus_profile`; the profile is offered because `SLEMS_DEV_PROFILES` is set for `homeassistant`), to compare it with the direct driver. |
