@@ -592,6 +592,7 @@ def _probe_coordinator(battery):
         last_battery_change=lambda: None,
         last_consumer_command=lambda: None,
         request=lambda: None,
+        meter=SimpleNamespace(interval_s=0.48),
     )
     coordinator._probe_quiet = QuietWatch()
     coordinator._store = SimpleNamespace(async_delay_save=lambda *_args: None)
@@ -603,7 +604,7 @@ def _probe_battery():
     from types import SimpleNamespace
 
     from custom_components.slems.battery_limits import PowerLimits
-    from custom_components.slems.response_probe import ProbeRecord
+    from custom_components.slems.response_probe import ProbeHints, ProbeRecord
 
     return SimpleNamespace(
         subentry_id="a",
@@ -617,6 +618,7 @@ def _probe_battery():
         power_limits=PowerLimits(2500.0, 2500.0),
         probe=None,
         probe_record=ProbeRecord(),
+        probe_hints=ProbeHints(),
     )
 
 
@@ -667,6 +669,7 @@ def test_finished_probe_step_feeds_the_learner_and_moved_too_early_asks_again() 
     assert battery.probe_record.dead_time_s == 0.49
     assert coordinator.probe_dead_time_s("a") == 0.49
     assert coordinator.controller.battery_responses.learned("a") == 0.98
+    assert battery.probe_record.arrived_s == 0.98 and battery.probe_record.meter_interval_s == 0.48
     # More than half of the last measurements dropped as too early: due again.
     responses = coordinator.controller.battery_responses
     responses._outcomes["a"].extend(["learned"] * (OUTCOMES_KEPT // 2 - 1) + ["early"] * (OUTCOMES_KEPT // 2 + 1))

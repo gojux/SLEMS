@@ -1207,6 +1207,12 @@ second. If the grid is not quiet for 15 minutes or a measurement stays unclear,
 SLEMS tries again after an hour. The result is under ⋮ → **Details** (**Dead
 time**) and in the diagnostics.
 
+Hints in the log (level info, each at most once a day; they start no probe
+step): the smart meter reports for a day more than half faster or slower than
+at the last probe step; the learned response time differs by more than 30 %
+from the probe step's or scatters widely; the battery did not deliver its set
+point twice within a day. A probe step by hand may help then.
+
 ### Firmware updates and battery menu
 
 During a firmware update of a Marstek battery there must be no Modbus

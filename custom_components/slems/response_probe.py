@@ -44,11 +44,19 @@ integration (``fingerprint``; the learned response times are dropped then),
 more than ``EARLY_SHARE`` of the last ``EARLY_COUNT`` measurements dropped as
 too early, ``MAX_AGE_S`` after the last one, or by hand. A probe that ends
 unclear or stopped is tried again after ``RETRY_S``.
+
+``ProbeHints`` only logs signs that the result may be outdated, at most once
+per ``HINT_INTERVAL_S`` each: the meter cadence differs by more than
+``CADENCE_RATIO`` from the one at the last probe for ``CADENCE_HOLD_S``, the
+learned step time differs by more than ``DRIFT_RATIO`` from the probe's or
+scatters (interquartile range over ``SCATTER_RATIO`` of the median), or the
+battery did not deliver ``DELIVERY_COUNT`` times within a day.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections import deque
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 import hashlib
@@ -128,6 +136,14 @@ RETRY_S = 3600.0
 MAX_AGE_S = 90 * 86400.0
 EARLY_COUNT = 20
 EARLY_SHARE = 0.5
+
+HINT_INTERVAL_S = 86400.0
+CADENCE_RATIO = 0.5
+CADENCE_HOLD_S = 86400.0
+DRIFT_RATIO = 0.3
+SCATTER_RATIO = 0.5
+SCATTER_MIN_SAMPLES = 5
+DELIVERY_COUNT = 2
 
 # Subentry data of a battery whose change is a new setup for the probe.
 CONFIG_KEYS = (
@@ -436,6 +452,9 @@ class ProbeRecord:
     requested: str | None = None
     # Start of the last probe that did not end with a result.
     tried_at: float | None = None
+    # At the last successful probe: median time until 60 % and the meter cadence.
+    arrived_s: float | None = None
+    meter_interval_s: float | None = None
 
     def check(self, fingerprint: Mapping[str, Mapping[str, str]]) -> list[str]:
         """Compare the current fingerprint (part -> values); returns the parts that
@@ -476,9 +495,11 @@ class ProbeRecord:
             return "age"
         return None
 
-    def finished(self, probe: ResponseProbe, wall: float) -> None:
+    def finished(self, probe: ResponseProbe, wall: float, meter_interval_s: float | None = None) -> None:
         if probe.result == "ok":
             self.at = wall
+            self.arrived_s = statistics.median(probe.arrived_s) if probe.arrived_s else None
+            self.meter_interval_s = meter_interval_s
             self.reason = probe.reason
             self.result = probe.result
             self.dead_time_s = probe.dead_time_s
@@ -506,6 +527,8 @@ class ProbeRecord:
             "failed": self.failed,
             "requested": self.requested,
             "tried_at": self.tried_at,
+            "arrived_s": self.arrived_s,
+            "meter_interval_s": self.meter_interval_s,
         }
 
     @classmethod
@@ -523,4 +546,56 @@ class ProbeRecord:
             failed=data.get("failed"),
             requested=data.get("requested"),
             tried_at=data.get("tried_at"),
+            arrived_s=data.get("arrived_s"),
+            meter_interval_s=data.get("meter_interval_s"),
         )
+
+
+class ProbeHints:
+    """Signs that a battery's probe result may be outdated; the coordinator only
+    logs them (monotonic time)."""
+
+    def __init__(self) -> None:
+        self._cadence_since: float | None = None
+        self._failures: deque[float] = deque()
+        self._logged: dict[str, float] = {}
+
+    def check(
+        self,
+        now: float,
+        record: ProbeRecord,
+        meter_interval_s: float | None,
+        step_samples: Sequence[float],
+    ) -> list[str]:
+        """The hints to log now: ``cadence``, ``drift``, ``scatter``."""
+        hints = []
+        reference = record.meter_interval_s
+        if reference and meter_interval_s and abs(meter_interval_s - reference) > CADENCE_RATIO * reference:
+            if self._cadence_since is None:
+                self._cadence_since = now
+            if now - self._cadence_since >= CADENCE_HOLD_S:
+                hints.append("cadence")
+        else:
+            self._cadence_since = None
+        if len(step_samples) >= SCATTER_MIN_SAMPLES:
+            middle = statistics.median(step_samples)
+            if record.arrived_s and abs(middle - record.arrived_s) > DRIFT_RATIO * record.arrived_s:
+                hints.append("drift")
+            low, _, high = statistics.quantiles(step_samples, n=4)
+            if middle > 0 and high - low > SCATTER_RATIO * middle:
+                hints.append("scatter")
+        return [hint for hint in hints if self._due(hint, now)]
+
+    def not_delivered(self, now: float) -> bool:
+        """The battery did not deliver; True if this is a hint to log now."""
+        self._failures.append(now)
+        while self._failures and self._failures[0] < now - HINT_INTERVAL_S:
+            self._failures.popleft()
+        return len(self._failures) >= DELIVERY_COUNT and self._due("delivery", now)
+
+    def _due(self, hint: str, now: float) -> bool:
+        logged = self._logged.get(hint)
+        if logged is not None and now - logged < HINT_INTERVAL_S:
+            return False
+        self._logged[hint] = now
+        return True

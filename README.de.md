@@ -1283,6 +1283,13 @@ nicht ruhig oder bleibt eine Messung unklar, versucht SLEMS es nach einer Stunde
 wieder. Das Ergebnis steht unter ⋮ → **Details** (**Totzeit**) und in der
 Diagnose.
 
+Hinweise im Log (Stufe Info, je Hinweis höchstens einmal am Tag; sie starten
+keinen Probeschritt): Der Smart Meter meldet einen Tag lang um mehr als die
+Hälfte schneller oder langsamer als beim letzten Probeschritt; die gelernte
+Reaktionszeit weicht um mehr als 30 % von der des Probeschritts ab oder streut
+stark; die Batterie hat innerhalb eines Tages zweimal ihre Vorgabe nicht
+geliefert. Dann kann ein Probeschritt von Hand helfen.
+
 ### Firmware-Updates und Batterie-Menü
 
 Während eines Firmware-Updates einer Marstek-Batterie darf keinerlei

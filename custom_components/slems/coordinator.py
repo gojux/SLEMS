@@ -9,6 +9,7 @@ from functools import partial
 import asyncio
 import logging
 import math
+import statistics
 import time
 from typing import Any
 
@@ -140,6 +141,7 @@ from .response_probe import (
     EARLY_SHARE,
     METER_KEYS,
     SETTLED_S,
+    ProbeHints,
     ProbeRecord,
     QuietWatch,
     Report as ProbeReport,
@@ -336,6 +338,7 @@ class BatteryRuntime:
     # Running probe step (see response_probe), None without one, and the last result.
     probe: ResponseProbe | None = None
     probe_record: ProbeRecord = field(default_factory=ProbeRecord)
+    probe_hints: ProbeHints = field(default_factory=ProbeHints)
     # Fingerprint of the configuration that decides how the battery is
     # controlled (response_probe.CONFIG_KEYS) and the entity SLEMS writes
     # (batteries from entities), for the probe step.
@@ -2147,6 +2150,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             telemetry.soc_pct,
             telemetry.extra.get("max_cell_voltage"),
         )
+        if action in (Action.WAKE, Action.EXCLUDE) and battery.probe_hints.not_delivered(now):
+            _LOGGER.info(
+                "Battery %s did not deliver its command repeatedly within a day; "
+                "a probe step (Measure response time and phase) may help",
+                battery.name,
+            )
         if action is Action.WAKE:
             self.controller.force_refresh(battery.subentry_id)
         elif action is Action.EXCLUDE:
@@ -2546,12 +2555,38 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 )
                 battery.probe_record.request("early")
                 responses.reset_outcomes(battery.subentry_id)
+            self._log_probe_hints(battery, now)
             reason = battery.probe_record.due(wall)
             if reason is None or self.probe_blocked(battery) is not None:
                 continue
             _LOGGER.info("Battery %s: probe step (%s)", battery.name, reason)
             battery.probe = ResponseProbe(reason, now)
             return
+
+    def _log_probe_hints(self, battery: BatteryRuntime, now: float) -> None:
+        """Log signs that the battery's probe result may be outdated (no probe is started)."""
+        record = battery.probe_record
+        learner = self.controller.battery_responses.learners.get(battery.subentry_id)
+        samples = learner.samples if learner is not None else []
+        for hint in battery.probe_hints.check(now, record, self.controller.meter.interval_s, samples):
+            if hint == "cadence":
+                _LOGGER.info(
+                    "Battery %s: the smart meter reports every %.2f s for a day, at the last probe step every %.2f s; "
+                    "a probe step (Measure response time and phase) may help",
+                    battery.name, self.controller.meter.interval_s, record.meter_interval_s,
+                )
+            elif hint == "drift":
+                _LOGGER.info(
+                    "Battery %s: learned step time %.2f s, %.2f s at the last probe step; "
+                    "a probe step (Measure response time and phase) may help",
+                    battery.name, statistics.median(samples), record.arrived_s,
+                )
+            else:
+                _LOGGER.info(
+                    "Battery %s: the learned step times scatter widely (%s s); "
+                    "a probe step (Measure response time and phase) may help",
+                    battery.name, ", ".join(f"{value:.2f}" for value in samples),
+                )
 
     @callback
     def end_probe(self, battery: BatteryRuntime, reason: str | None = None) -> None:
@@ -2562,7 +2597,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if reason is not None:
             probe.stop(reason)
         battery.probe = None
-        battery.probe_record.finished(probe, dt_util.utcnow().timestamp())
+        battery.probe_record.finished(probe, dt_util.utcnow().timestamp(), self.controller.meter.interval_s)
         if probe.result == "ok":
             responses = self.controller.battery_responses
             for seconds in probe.arrived_s:

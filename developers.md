@@ -836,6 +836,14 @@ battery's set point, no learning from its commands, `earliest_response_s`),
   grid stale, BMS full or stopped, feed-in cap active (surplus of the house
   above the limit − `CAP_MARGIN_W`, not checked while holding). A running
   probe that gets blocked stops; one probe at a time.
+- Hints (`ProbeHints`, in memory, logged at info, at most once a day each,
+  they start no probe): the meter cadence differs by more than 50 % from the
+  one at the last probe (`ProbeRecord.meter_interval_s`) for a day; the
+  median of the step learner (at least 5 samples) differs by more than 30 %
+  from the probe's median time until 60 % (`ProbeRecord.arrived_s`) or its
+  interquartile range exceeds half the median; the delivery monitor woke or
+  excluded the battery twice within a day (`not_delivered`, from
+  `_check_delivery`). Checked with every poll in `_update_probes`.
 
 ### Cell balancing
 

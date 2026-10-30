@@ -251,3 +251,34 @@ def test_record_survives_a_restart() -> None:
     restored = ProbeRecord.from_dict(record.as_dict())
     assert restored == record
     assert ProbeRecord.from_dict(None) == ProbeRecord()
+
+
+def test_hints_that_the_probe_result_may_be_outdated() -> None:
+    from custom_components.slems.response_probe import HINT_INTERVAL_S, ProbeHints, ProbeRecord
+
+    record = ProbeRecord(arrived_s=0.9, meter_interval_s=0.5)
+    hints = ProbeHints()
+    steady = [0.85, 0.9, 0.95, 0.9, 0.88]
+    assert hints.check(0.0, record, 0.5, steady) == []
+    # The meter reports every second: a hint only after a day of it.
+    assert hints.check(100.0, record, 1.0, steady) == []
+    assert hints.check(100.0 + 86400.0, record, 1.0, steady) == ["cadence"]
+    # Then at most once a day.
+    assert hints.check(200.0 + 86400.0, record, 1.0, steady) == []
+    # Learned step time far from the probe's, and widely scattered values.
+    hints = ProbeHints()
+    assert hints.check(0.0, record, 0.5, [1.3, 1.4, 1.35, 1.3, 1.4]) == ["drift"]
+    assert hints.check(10.0, record, 0.5, [0.4, 0.9, 1.5, 0.5, 1.4, 0.9]) == ["scatter"]
+    # Not delivered twice within a day.
+    assert not hints.not_delivered(0.0)
+    assert hints.not_delivered(3600.0)
+    assert not hints.not_delivered(7200.0)
+    assert not hints.not_delivered(3600.0 + HINT_INTERVAL_S + 90000.0)
+
+
+def test_probe_record_keeps_the_reference_for_the_hints() -> None:
+    from custom_components.slems.response_probe import ProbeRecord
+
+    record = ProbeRecord.from_dict({"arrived_s": 0.9, "meter_interval_s": 0.48})
+    assert ProbeRecord.from_dict(record.as_dict()).arrived_s == 0.9
+    assert ProbeRecord.from_dict(record.as_dict()).meter_interval_s == 0.48
