@@ -1,0 +1,98 @@
+# CANDIDATE, not shipped: Marstek Venus A (AC battery with 4 PV inputs in its
+# micro inverter), Modbus TCP over its LAN port or a Modbus TCP bridge. Paste
+# it as an own profile.
+#
+# What a tester should check (and report in an issue, with the firmware):
+# 1. Where the set point acts while the own PV produces: with a charge set
+#    point of 1000 W and some hundred W of PV, does the AC connection (30006)
+#    take 1000 W from the house, or does the battery charge with 1000 W? With
+#    a discharge set point of 1000 W, does the AC connection give 1000 W?
+#    (setpoint: connection below is not proven; on the A the PV stage sits in
+#    the micro inverter itself.)
+# 2. With a full battery, is the PV fed into the house (passes_pv_through)?
+# 3. Does the probe reading work with at most 32 registers per read
+#    (measured only on a Venus D), and does the battery answer reliably
+#    (Omnibattery #445: firmware 150 stopped answering)?
+# 4. Does the RS485 control (42000) end by itself when the app or the cloud
+#    changes something (ViperRNMC #267: set points back after 1-8 h)?
+# 5. The power the battery really delivers at the highest set point.
+#
+# Sources (retrieved 2026-10-30/31):
+# [RE] sphings79/Marstek-Venus-Firmware-Reverse-Engineering @3429952 (static
+#      firmware analysis of Control 1509/151 with Micro 1211):
+#      Modbus_RS485_TCP/VNSA_Register_Reference.md, VNSA_Register_Map_Final_generated.csv
+# [OB] ffunes/Omnibattery v1.5.0 @ce03e67 const/registers_va.py, registers_common.py,
+#      drivers/marstek.py; real batteries: #93, #445 (firmware 150), #591 (V153)
+# [VR] ViperRNMC/marstek_venus_modbus @cb5a241 registers/a.yaml ("untested")
+# Addresses are protocol addresses (RE), read with 0x03.
+#
+# question: No time-out – if SLEMS fails, the last set point stays in force
+#   (RE: no watchdog; RAM only).
+# question: 30001 is the battery power without the PV ("battery_power =
+#   30001 + mppt1..4", RE); it is left out, SLEMS works the battery power out
+#   from the AC power and the PV.
+# question: the AC power 30006 has a fixed offset of +24 W and a 3 % correction
+#   below -50 W (RE register map, line 8); the format cannot take it off.
+# question: least time between requests and time-out? OB uses 150 ms and 3 s.
+slems_battery_profile: 1
+id: marstek_venus_a
+name: Marstek Venus A
+manufacturer: Marstek
+revision: 1
+notes: Candidate; the micro inverter holds the PV inputs.
+
+connection:
+  port: 502
+  unit_id: 1
+  message_spacing_s: 0.15  # uncertain: OB
+  max_read_registers: 32   # uncertain: measured on the Venus D
+
+limits:
+  max_charge_w: 1450     # RE: 42020 accepts 0-2500, effective at most 1450 W (OB/VR 1500, evcc 1200)
+  max_discharge_w: 1450  # RE: as 42020
+
+own_pv: {max_output_w: 1450, passes_pv_through: true}  # uncertain: passes_pv_through (ViperRNMC #293)
+
+read:
+  soc_pct:    {address: 32104, type: uint16}  # RE: whole percent, mean of the packs online
+  pv_power_w:                                  # RE/OB/VR: MPPT 1-4, 0.1 W, all together at most 2400 W
+    - {address: 30037, type: uint16, scale: 0.1}
+    - {address: 30038, type: uint16, scale: 0.1}
+    - {address: 30039, type: uint16, scale: 0.1}
+    - {address: 30040, type: uint16, scale: 0.1}
+  ac_power_w: {address: 30006, type: int16, positive: output}  # RE: "+ = export/feed-in"
+  temperature_c: {address: 35000, type: int16, scale: 0.1}  # RE: inverter/heat sink, no battery temperature known
+  state:
+    address: 35100
+    type: uint16
+    values: {1: standby, 2: charge, 3: discharge, 4: backup, 6: bypass}  # RE: 0 inverter off or no data, no state 5
+
+device_info:
+  model:            {address: 31000, type: char, count: 10}  # RE: always "VNSA-0"
+  ems_version:      {address: 30200, type: uint16}
+  inverter_version: {address: 30202, type: uint16}
+  bms_version:      {address: 30204, type: uint16}
+
+control:
+  type: split
+  setpoint: connection  # uncertain: RE names 42020/42021 only "A micro charge/discharge setpoint"
+  keepalive_s: 60
+  confirm: {delay_s: 0.2, tolerance_w: 100, tolerance_pct: 10}
+  # RS485 control first, the set points before the force mode (as the Venus E 3.0).
+  apply:
+    - {address: 42000, type: uint16, value: 0x55AA, at_rest_values: [0x55AA, 0x55BB], confirm: true}  # RE: 0x55FF while internal mode 4
+    - {address: 42021, type: uint16, value: "{discharge_w}", at_rest: [0, 2500], confirm: true}
+    - {address: 42020, type: uint16, value: "{charge_w}", at_rest: [0, 2500], confirm: true}
+    - {address: 42010, type: uint16, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2], confirm: true}
+  release:
+    auto:
+      - {address: 42021, value: 0}
+      - {address: 42020, value: 0}
+      - {address: 42010, value: 0, confirm: true}
+      - {address: 42000, value: 0x55BB, confirm: true}
+    standby:
+      - {address: 42021, value: 0}
+      - {address: 42020, value: 0}
+      - {address: 42010, value: 0, confirm: true}
+
+probe: {address: 32104, type: uint16, range: [0, 100]}

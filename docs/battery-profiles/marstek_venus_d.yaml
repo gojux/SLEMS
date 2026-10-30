@@ -1,0 +1,100 @@
+# CANDIDATE, not shipped: Marstek Venus D (AC battery with 4 PV inputs),
+# Modbus TCP over its LAN port (not over WLAN). Paste it as an own profile.
+#
+# What a tester should check (and report in an issue, with the firmware):
+# 1. Where the set point acts while the own PV produces: with a charge set
+#    point of 1000 W and some hundred W of PV, does the AC connection (30006)
+#    take 1000 W from the house, or does the battery charge with 1000 W? With
+#    a discharge set point of 1000 W, does the AC connection give 1000 W?
+#    (setpoint: connection below is not proven.)
+# 2. With a full battery, is the PV fed into the house (passes_pv_through)?
+# 3. 44002/44003 (the highest powers, a setting): read 0 after a restart or
+#    a reconnect, and the battery stops discharging (Omnibattery #548)?
+# 4. Does the RS485 control (42000) end by itself when the app or the cloud
+#    changes something?
+# 5. The power the battery really delivers at the highest set point.
+#
+# Sources (retrieved 2026-10-30/31):
+# [RE] sphings79/Marstek-Venus-Firmware-Reverse-Engineering @3429952 (static
+#      firmware analysis of Control 147-151): Modbus_RS485_TCP/VNSD_Register_Reference.md,
+#      VNSD_Register_Map_Final_generated.csv, VNSD_Modbus_TCP_Connection_Reference.md,
+#      Control_FW/VNSD_Control_Charge_Power_PV_Curtailment_v150.md
+# [OB] ffunes/Omnibattery v1.5.0 @ce03e67 const/registers_va.py, registers_vd.py,
+#      registers_common.py, drivers/marstek.py; real batteries: #322 (EMS 147),
+#      #415 (v150, 7 packs), #503 (EMS 150), #548 (EMS 151, BMS 117.7, VMS 115)
+# [EV] evcc PR #33473 (6 days on a Venus D: 30001 follows the AC power,
+#      the PV is not in it)
+# Addresses are protocol addresses ("PDU address = register number", RE),
+# read with 0x03, 32 bit values high word first.
+#
+# question: No time-out – if SLEMS fails, the last set point stays in force
+#   (RE: 42000/42010/42020/42021 have no watchdog; RAM only, after a restart
+#   0x55BB/0/0/0).
+# question: 30001 is the DC side of the inverter stage, not the battery
+#   (battery = 30001 + PV); it is left out, SLEMS works the battery power out
+#   from the AC power and the PV.
+# question: no battery temperature, voltage or cell voltages for the whole
+#   battery: 30100, 34003, 37007/37008 are those of pack 1 only (RE, OB #415).
+slems_battery_profile: 1
+id: marstek_venus_d
+name: Marstek Venus D
+manufacturer: Marstek
+revision: 1
+notes: Candidate; LAN only, one Modbus TCP connection.
+
+connection:
+  port: 502
+  unit_id: 1
+  message_spacing_s: 0.15  # uncertain: OB (150 ms, a wait in the battery's TCP server)
+  timeout_s: 6.0           # OB #503: the battery does not answer for about 4 s every 5 min
+  max_read_registers: 32   # RE: a read of more than 32 registers gets no answer
+
+limits:
+  max_charge_w: 2500     # RE: 42020 0-2500 W
+  max_discharge_w: 2500  # uncertain: 2200 W before EMS 149 (OB), about 2200 W delivered on EMS 151 (OB #548)
+
+own_pv: {max_output_w: 2500, passes_pv_through: true}  # uncertain: passes_pv_through (RE: surplus feed-in only from 100 % under conditions)
+
+read:
+  soc_pct:    {address: 32104, type: uint16}  # RE: whole percent, mean of the packs online
+  pv_power_w:                                  # RE/OB/EV: MPPT 1-4, 0.1 W
+    - {address: 30037, type: uint16, scale: 0.1}
+    - {address: 30038, type: uint16, scale: 0.1}
+    - {address: 30039, type: uint16, scale: 0.1}
+    - {address: 30040, type: uint16, scale: 0.1}
+  ac_power_w: {address: 30006, type: int16, positive: output}  # RE: "> 0 = feed-in"; OB #361 -783 W while charging
+  temperature_c: {address: 35000, type: int16, scale: 0.1}  # RE: inverter/heat sink, no battery temperature known
+  state:
+    address: 35100
+    type: uint16
+    values: {0: sleep, 1: standby, 2: charge, 3: discharge, 4: backup, 5: firmware_update, 6: bypass}  # RE
+
+device_info:
+  model:       {address: 31000, type: char, count: 10}  # RE: always "VNSD-0"
+  ems_version: {address: 30200, type: uint16}
+  vms_version: {address: 30202, type: uint16}
+  bms_version: {address: 30204, type: uint16}
+
+control:
+  type: split
+  setpoint: connection  # uncertain: RE names 42020/42021 only a "power reference" of the inverter stage
+  keepalive_s: 60
+  confirm: {delay_s: 0.2, tolerance_w: 100, tolerance_pct: 10}
+  # RS485 control first, the set points before the force mode (as the Venus E 3.0).
+  apply:
+    - {address: 42000, type: uint16, value: 0x55AA, at_rest_values: [0x55AA, 0x55BB], confirm: true}  # RE: other values exception 3; 0x55FF while internal mode 4
+    - {address: 42021, type: uint16, value: "{discharge_w}", at_rest: [0, 2500], confirm: true}
+    - {address: 42020, type: uint16, value: "{charge_w}", at_rest: [0, 2500], confirm: true}
+    - {address: 42010, type: uint16, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2], confirm: true}
+  release:
+    auto:
+      - {address: 42021, value: 0}
+      - {address: 42020, value: 0}
+      - {address: 42010, value: 0, confirm: true}
+      - {address: 42000, value: 0x55BB, confirm: true}  # RE: back to the work mode of 43000
+    standby:
+      - {address: 42021, value: 0}
+      - {address: 42020, value: 0}
+      - {address: 42010, value: 0, confirm: true}
+
+probe: {address: 32104, type: uint16, range: [0, 100]}
