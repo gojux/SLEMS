@@ -1875,7 +1875,8 @@ profile out:
   profiles. The AI prompt does not mention `verified`.
 - Adding a shipped profile: a YAML file in `templates/battery_profiles/`
   (`test_every_shipped_profile_loads_with_the_rules` loads each one) and a
-  test against a simulator. Sources: the manufacturer's register list; an
+  test of its steps (the raw values of `apply_values` and `release_values`);
+  a test against a simulator is a criterion for verified. Sources: the manufacturer's register list; an
   Omnibattery driver counts as one for every register its code reads or
   writes if the driver is in a release and an issue or discussion shows it
   working on real hardware with a named firmware. The range at rest and

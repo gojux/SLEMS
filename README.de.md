@@ -179,7 +179,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 |---|---|
 | Marstek Venus E 3.0 über Modbus TCP | ✅ |
 | Batterie aus vorhandenen Entitäten: nur lesend (z. B. solange Omnibattery steuert) oder gesteuert über Sollwert, Lade-/Entladeleistung oder Skript, Entitäten aus dem Gerät vorgeschlagen | ✅ (Steuerung experimentell) |
-| Batterie aus einem Modbus-Profil: ein eigenes Profil mit einem KI-Prompt aus dem Handbuch erstellt, gelesene Werte und Schreibvorschau, bevor etwas geschrieben wird, Probebetrieb mit dem Selbsttest, bevor sie geregelt wird, beobachtet nach einem Firmware-Update | ✅ (experimentell) |
+| Batterie aus einem Modbus-Profil: ein eigenes Profil mit einem KI-Prompt aus dem Handbuch erstellt, gelesene Werte und Schreibvorschau, bevor etwas geschrieben wird, Probebetrieb mit dem Selbsttest, bevor sie geregelt wird, beobachtet nach einem Firmware-Update; mitgeliefert (ungeprüft): Marstek Venus E Gen 2 | ✅ (experimentell) |
 | Wirkungsgrad der Batterie (Batteriezähler, gelernt oder manuell), gelernte nutzbare Kapazität | ✅ |
 | Verschleißkosten je Batterie (aus Kaufpreis und Zyklen) in der Planung | ✅ |
 | Batteriemenü: Kommunikation für Firmware-Updates pausieren, Batterie deaktivieren, Gerät öffnen | ✅ |
@@ -1004,8 +1004,9 @@ mitgeliefertes Profil für alle mit derselben Batterie werden:
 **Ungeprüfte mitgelieferte Profile**: Ein mitgeliefertes Profil mit dem
 Zusatz **(ungeprüft)** ist aus der Registerliste des Herstellers und anderen
 Quellen erstellt, hat seinen Probebetrieb aber noch an keiner echten Batterie
-bestanden. Es durchläuft dieselben Prüfungen und denselben Probebetrieb wie
-ein eigenes Profil, und in seiner Schreibvorschau bestätigst du **Mir ist
+bestanden (bisher die **Marstek Venus E Gen 2**, über RS485 mit einem
+Modbus-TCP-Gateway, z. B. einem Elfin EW11). Es durchläuft dieselben
+Prüfungen und denselben Probebetrieb wie ein eigenes Profil, und in seiner Schreibvorschau bestätigst du **Mir ist
 bewusst, dass dieses Profil noch an keiner echten Batterie geprüft wurde; ich
 habe die Schreibregister mit dem Handbuch verglichen, soweit es eines gibt**.
 Besteht deine Batterie den Probebetrieb (der Sensor **Probebetrieb** zeigt

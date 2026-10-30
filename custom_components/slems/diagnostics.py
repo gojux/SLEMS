@@ -3,8 +3,8 @@
 Besides the configuration and the current measurements it contains internal
 states that no entity shows, e.g. the counters and timers of a cell balancing
 run or of the top cell delta measurement. Times of the monotonic clock are
-given as seconds before (negative: after) the download. IP addresses and MAC
-addresses are redacted.
+given as seconds before (negative: after) the download. IP addresses, MAC
+addresses and the serial numbers of the device information are redacted.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from enum import Enum
 import time
 from typing import Any
 
-from homeassistant.components.diagnostics import async_redact_data
+from homeassistant.components.diagnostics import REDACTED, async_redact_data
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.util import dt as dt_util
@@ -25,6 +25,13 @@ from .coordinator import BatteryRuntime, SlemsConfigEntry, SlemsCoordinator
 
 TO_REDACT = {CONF_HOST, "mac_address"}
 TRIAL_TO_REDACT = {*TO_REDACT, "device"}
+
+
+def _device_info(info: dict) -> dict:
+    """Device information (keys named by the profile) without MAC address and serial numbers."""
+    return {
+        key: REDACTED if key in TO_REDACT or "serial" in str(key).lower() else value for key, value in info.items()
+    }
 
 
 def _plain(value: Any) -> Any:
@@ -72,7 +79,7 @@ def _battery(coordinator: SlemsCoordinator, battery: BatteryRuntime) -> dict:
         "communication_paused": battery.communication_paused,
         "paused_until": battery.paused_until,
         "pause_reason": battery.pause_reason,
-        "device_info": async_redact_data(battery.device_info, TO_REDACT),
+        "device_info": _device_info(battery.device_info),
         "limits": _plain(battery.limits),
         "soc_window": {
             "charge_blocked": battery.soc_window.charge_blocked,
@@ -146,12 +153,15 @@ def _battery(coordinator: SlemsCoordinator, battery: BatteryRuntime) -> dict:
 
 def _trial(battery: BatteryRuntime) -> dict | None:
     """The trial of a battery from a profile; posted in an issue to verify a shipped
-    profile, so its device (host, port and unit) and MAC address are redacted as well."""
+    profile, so its device (host, port and unit), MAC address and serial numbers are redacted as well."""
     if battery.trial is None:
         return None
+    trial = battery.trial.as_dict()
     return async_redact_data(
         {
-            **battery.trial.as_dict(),
+            **trial,
+            "device_info": _device_info(trial["device_info"]),
+            "firmware_change": _device_info(trial["firmware_change"]),
             "in_trial": battery.in_trial,
             "device_info_checked": battery.device_info_checked,
             "register_reads": battery.self_test.register_reads() if battery.self_test is not None else None,

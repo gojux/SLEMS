@@ -117,11 +117,12 @@ def test_trial_in_the_diagnostics_is_redacted() -> None:
     # It is posted in an issue to verify a shipped profile.
     state = TrialState(
         "p@1#abc", status=TrialStatus.PASSED, device="192.168.1.20:502/1",
-        device_info={"ems_version": 148, "mac_address": "aa:bb:cc:dd:ee:ff"},
+        device_info={"ems_version": 148, "mac_address": "aa:bb:cc:dd:ee:ff", "serial_number": "VNSE3-123"},
     )
     battery = SimpleNamespace(trial=state, in_trial=False, device_info_checked=True, self_test=None)
     trial = diagnostics._trial(battery)
     assert trial["device"] == "**REDACTED**" and trial["device_info"]["mac_address"] == "**REDACTED**"
+    assert trial["device_info"]["serial_number"] == "**REDACTED**"
     assert (trial["profile_key"], trial["status"], trial["device_info"]["ems_version"]) == ("p@1#abc", "passed", 148)
 
 
@@ -389,6 +390,13 @@ def verified_venus(monkeypatch):
     monkeypatch.setattr(config_flow, "bundled_profiles", lambda: {profile.id: profile})
 
 
+@pytest.fixture
+def only_dev_profiles(monkeypatch):
+    """Only the profiles for dev are shipped (the case without a profile to offer)."""
+    profile = venus()
+    monkeypatch.setattr(config_flow, "bundled_profiles", lambda: {profile.id: profile})
+
+
 def options(result) -> list[str]:
     return [option["value"] for option in result["data_schema"].schema["profile"].config["options"]]
 
@@ -449,7 +457,7 @@ async def test_verified_shipped_profile_needs_no_confirmation(sim, dev_profiles,
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
-async def test_without_a_profile_to_choose_straight_to_the_own_one(sim, no_dev_profiles) -> None:
+async def test_without_a_profile_to_choose_straight_to_the_own_one(sim, no_dev_profiles, only_dev_profiles) -> None:
     flow = make_flow()
     result = await flow.async_step_profile()
     assert result["step_id"] == "profile_yaml"
@@ -464,18 +472,25 @@ async def test_venus_profile_only_in_dev(sim, dev_profiles) -> None:
     flow = make_flow()
     result = await flow.async_step_profile()
     assert result["step_id"] == "profile"
-    assert options(result) == ["marstek_venus_e3", "own"]
+    assert options(result) == ["marstek_venus_e3", "marstek_venus_e_v2", "own"]
     assert labels(result)["marstek_venus_e3"] == "Marstek Venus E 3.0 (ungeprüft)"
     assert result["description_placeholders"]["prompt_url"].endswith("/docs/battery-profile-prompt.de.md")
 
 
-async def test_without_dev_a_copy_is_still_offered(sim, no_dev_profiles) -> None:
+async def test_without_dev_the_unverified_venus_v2_profile_is_offered(sim, no_dev_profiles) -> None:
+    flow = make_flow()
+    result = await flow.async_step_profile()
+    assert result["step_id"] == "profile" and options(result) == ["marstek_venus_e_v2", "own"]
+    assert labels(result)["marstek_venus_e_v2"] == "Marstek Venus E Gen 2 (ungeprüft)"
+
+
+async def test_without_dev_a_copy_is_still_offered(sim, no_dev_profiles, only_dev_profiles) -> None:
     flow = make_flow([subentry("p1", "Pack 1", model="modbus_profile", profile_id="my_venus", profile_yaml=OWN_TEXT)])
     result = await flow.async_step_profile()
     assert result["step_id"] == "profile" and options(result) == ["copy_p1", "own"]
 
 
-async def test_reconfigured_battery_keeps_its_dev_profile(sim, no_dev_profiles) -> None:
+async def test_reconfigured_battery_keeps_its_dev_profile(sim, no_dev_profiles, only_dev_profiles) -> None:
     data = {"model": "modbus_profile", "profile_id": "marstek_venus_e3", **ADDRESS, **LIMITS}
     flow = make_flow([subentry("p1", "Pack", **data)], reconfigure="p1")
     await flow.async_step_profile_reconfigure()

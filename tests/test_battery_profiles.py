@@ -126,6 +126,25 @@ def test_venus_profile_writes_like_the_driver() -> None:
     ]
 
 
+def test_venus_v2_profile_writes_the_steps_of_its_sources() -> None:
+    # Duravolt 485 protocol v1.1 and Omnibattery registers_v2.py / marstek.py.
+    profile = bundled_profiles()["marstek_venus_e_v2"]
+    assert profile.unverified
+    writes = [(step.address, raw) for step, raw in apply_values(profile, 800, 0)]
+    assert writes == [(42000, 0x55AA), (42021, 0), (42020, 800), (42010, 1)]
+    assert [raw for _, raw in apply_values(profile, 0, 600)] == [0x55AA, 600, 0, 2]
+    assert [raw for _, raw in apply_values(profile, 0, 0)] == [0x55AA, 0, 0, 0]
+    auto = [(step.address, raw) for step, raw in release_values(profile, ReleaseState.AUTO)]
+    assert auto == [(42021, 0), (42020, 0), (42010, 0), (42000, 0x55BB)]
+    standby = [(step.address, raw) for step, raw in release_values(profile, ReleaseState.STANDBY)]
+    assert standby == auto[:3]
+    assert {key: (value.registers[0].address, value.registers[0].type) for key, value in profile.read.items()} == {
+        "soc_pct": (32104, "uint16"), "battery_power_w": (32102, "int32"), "ac_power_w": (32202, "int32"),
+        "voltage_v": (32100, "uint16"), "charged_kwh": (33000, "uint32"), "discharged_kwh": (33002, "uint32"),
+        "temperature_c": (35000, "int16"), "max_cell_v": (37007, "int16"), "min_cell_v": (37008, "int16"),
+    }
+
+
 def test_venus_profile_against_the_simulator() -> None:
     sim = load_simulator()
     model = sim.VenusModel(5120, 63.0)

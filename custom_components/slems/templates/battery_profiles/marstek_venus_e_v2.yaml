@@ -1,0 +1,83 @@
+# Marstek Venus E Gen 2 (v2 register set), RS485 (Modbus RTU, 115200 8N1,
+# address 1) through a Modbus TCP gateway (e.g. Elfin EW11, Waveshare
+# RS485-to-ETH); no evidence of built-in Modbus TCP on the Gen 2.
+#
+# Sources (retrieved 2026-10-30):
+# [DV] Duravolt "Plug-In thuisbatterij 485 protocol" v1.1 (dealer document of
+#      a rebranded Venus E, pages 2-3), in rweijnen/marstek-venus-e-firmware-notes
+#      @262808a assets/Duravolt-Plug-in-Battery-Modbus.pdf
+# [OB] ffunes/Omnibattery v1.5.0 @ce03e67: const/registers_v2.py, drivers/marstek.py;
+#      run on real batteries: issue #77 (3x Venus E v2, firmware 215/216),
+#      #231 (firmware V158)
+# [VR] ViperRNMC/marstek_venus_modbus @cb5a241 registers/e_v12.yaml (OB and
+#      evcc take their addresses from it: not independent of OB)
+# Addresses are protocol addresses (DV gives them decimal and hex), read with
+# 0x03, 32 bit values high word first. The steps are those of the Venus E 3.0
+# (marstek_venus_e3.yaml), which DV and OB give for v2 as well.
+#
+# question: is 42000 (RS485 control) or 42010/42020/42021 stored permanently?
+#   No v2 source says; for Venus A/D/E 3.0 a firmware analysis found RAM only.
+# question: No time-out – if SLEMS fails, the last set point stays in force.
+# question: least time between requests? DV names none (RS485 only); OB uses
+#   50 ms, enough through an RS485 gateway (OB #411).
+slems_battery_profile: 1
+id: marstek_venus_e_v2
+name: Marstek Venus E Gen 2
+manufacturer: Marstek
+revision: 1
+notes: v2 register set; RS485 through a Modbus TCP gateway.
+
+connection:
+  port: 502
+  unit_id: 1
+  message_spacing_s: 0.05  # uncertain: OB, not the manufacturer
+
+limits:
+  max_charge_w: 2500     # DV: 42020 0-2.5 kW
+  max_discharge_w: 2500  # DV: 42021 0-2.5 kW; 44003 may limit it to 800 W (a setting, not written)
+
+read:
+  soc_pct:         {address: 32104, type: uint16}  # uncertain: OB/VR/evcc 1 %, DV 0.1 % (example 500 = 50 %); a Venus E 3.0 shows 32104 in whole percent
+  battery_power_w: {address: 32102, type: int32, positive: charge}  # uncertain: sign only from a log in OB #77 (positive while charging), DV gives none
+  ac_power_w:      {address: 32202, type: int32, positive: output}  # DV: "positive value means feeds power into the grid"
+  voltage_v:       {address: 32100, type: uint16, scale: 0.01}
+  charged_kwh:     {address: 33000, type: uint32, scale: 0.01}
+  discharged_kwh:  {address: 33002, type: uint32, scale: 0.01}  # DV u32, OB/VR int32 (same for counter values)
+  temperature_c:   {address: 35000, type: int16, scale: 0.1}  # internal temperature (DV, OB); the cell temperatures 35010/35011 only in DV
+  max_cell_v:      {address: 37007, type: int16, scale: 0.001}  # uncertain: only OB/VR, not in DV
+  min_cell_v:      {address: 37008, type: int16, scale: 0.001}  # uncertain: only OB/VR, not in DV
+  state:
+    address: 35100
+    type: uint16
+    values: {0: sleep, 1: standby, 2: charge, 3: discharge, 4: backup, 5: firmware_update, 6: bypass}  # 6 only OB/VR
+
+device_info:
+  device_name:          {address: 31000, type: char, count: 10}
+  firmware:             {address: 31100, type: uint16}  # DV "soft version"
+  ems_version:          {address: 31101, type: uint16}  # OB/VR, not in DV
+  bms_version:          {address: 31102, type: uint16}  # OB/VR, not in DV
+  comm_module_firmware: {address: 30800, type: char, count: 6}  # OB/VR, not in DV
+
+control:
+  type: split
+  keepalive_s: 60
+  confirm: {delay_s: 0.2, tolerance_w: 100, tolerance_pct: 10}
+  # RS485 control first (DV: 42000-42999 work only while it is enabled), the
+  # set points before the force mode so a new direction starts with valid values.
+  apply:
+    - {address: 42000, type: uint16, value: 0x55AA, at_rest_values: [0x55AA, 0x55BB], confirm: true}  # DV: 0x55AA on, 0x55BB off (read at rest)
+    - {address: 42021, type: uint16, value: "{discharge_w}", at_rest: [0, 2500], confirm: true}
+    - {address: 42020, type: uint16, value: "{charge_w}", at_rest: [0, 2500], confirm: true}
+    - {address: 42010, type: uint16, value: "{mode}", modes: {idle: 0, charge: 1, discharge: 2}, at_rest: [0, 2], confirm: true}
+  release:
+    auto:
+      - {address: 42021, value: 0}
+      - {address: 42020, value: 0}
+      - {address: 42010, value: 0, confirm: true}
+      - {address: 42000, value: 0x55BB, confirm: true}
+    standby:
+      - {address: 42021, value: 0}
+      - {address: 42020, value: 0}
+      - {address: 42010, value: 0, confirm: true}
+
+probe: {address: 32104, type: uint16, range: [0, 100]}

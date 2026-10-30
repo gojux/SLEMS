@@ -176,7 +176,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 |---|---|
 | Marstek Venus E 3.0 via Modbus TCP | ✅ |
 | Battery from existing entities: read-only (e.g. while Omnibattery is in control) or controlled by set point, charge/discharge power or script, entities suggested from the device | ✅ (control experimental) |
-| Battery from a Modbus profile: an own profile made from the manual with an AI prompt, values read and write preview before anything is written, a trial with the self-test before it is controlled, observed after a firmware update | ✅ (experimental) |
+| Battery from a Modbus profile: an own profile made from the manual with an AI prompt, values read and write preview before anything is written, a trial with the self-test before it is controlled, observed after a firmware update; shipped (unverified): Marstek Venus E Gen 2 | ✅ (experimental) |
 | Battery efficiency (battery counters, learned or manual), learned usable capacity | ✅ |
 | Wear costs per battery (from purchase price and cycles) in the planning | ✅ |
 | Battery menu: pause the communication for firmware updates, disable a battery, open its device | ✅ |
@@ -945,7 +945,9 @@ for everybody with the same battery:
 
 **Unverified shipped profiles**: a shipped profile marked **(unverified)**
 was made from the manufacturer's register list and other sources but has not
-passed its trial on a real battery yet. It goes through the same checks and
+passed its trial on a real battery yet (so far the **Marstek Venus E Gen 2**,
+over RS485 through a Modbus TCP gateway, e.g. an Elfin EW11). It goes through
+the same checks and
 the same trial as an own profile, and its write preview asks you to confirm
 **I know that this profile has not been verified on a real battery yet; I
 compared the write registers with the manual, if there is one**. If your
