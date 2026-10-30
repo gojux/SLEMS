@@ -34,8 +34,10 @@ are therefore cleaned up:
   learned time before, the same way) are added to the expected change, so
   their arrival does not end the measurement of the later step early.
 * A grid that moves by half the step before the earliest possible response
-  (``earliest_s``, from the driver or half the learned time) was moved by
-  something else: the measurement is dropped.
+  (``earliest_s``: the dead time of the battery's probe step, see
+  response_probe, else from the driver or half the learned time) was moved
+  by something else: the measurement is dropped. The share dropped this way
+  per battery (``early_share``) asks for a new probe step when it is high.
 * So is one whose grid moves more than ``JUMP_RATIO`` × the expected change
   when it arrives (a foreign load jumped along).
 * The step time is learned from steps only, not from starts or reversals; a
@@ -72,6 +74,8 @@ EARLY_RATIO = 0.5
 JUMP_RATIO = 1.5
 # Commands issued within this multiple of the learned time are still on their way.
 IN_FLIGHT_FACTOR = 1.5
+# Outcomes of the last measurements kept per battery (see BatteryResponses.early_share).
+OUTCOMES_KEPT = 20
 
 DEFAULT_METER_INTERVAL_S = 2.0
 DEFAULT_BATTERY_RESPONSE_S = 3.0
@@ -123,6 +127,7 @@ class StepResponse:
         label: str | None = None,
         jump_ratio: float | None = None,
         track_in_flight: bool = False,
+        on_outcome: Callable[[str], None] | None = None,
     ) -> None:
         self._default_s = default_s
         self._min_step_w = min_step_w
@@ -130,6 +135,8 @@ class StepResponse:
         self._label = label
         self._jump_ratio = jump_ratio
         self._track_in_flight = track_in_flight
+        # Told "learned", "early" or "dropped" for every measurement that ended.
+        self._on_outcome = on_outcome
         self._samples: deque[float] = deque(maxlen=SAMPLES_KEPT)
         self._pending: _PendingStep | None = None
         # Recent commands (time, change) for the ones still on their way.
@@ -157,6 +164,10 @@ class StepResponse:
         if values:
             self._samples.clear()
             self._samples.extend(values)
+
+    def add(self, value: float) -> None:
+        """A measurement taken elsewhere (e.g. a probe step, see response_probe)."""
+        self._samples.append(max(0.1, value))
 
     @property
     def value(self) -> float:
@@ -226,7 +237,7 @@ class StepResponse:
         moved = (value - pending.baseline) / pending.change
         ahead = pending.in_flight / pending.change
         if elapsed < pending.earliest_s and (moved >= ahead + EARLY_RATIO or moved <= -EARLY_RATIO):
-            self._drop(pending, elapsed, f"moved before {pending.earliest_s:.2f} s", value)
+            self._drop(pending, elapsed, f"moved before {pending.earliest_s:.2f} s", value, "early")
             return
         if moved < ahead + ARRIVED_RATIO:
             return
@@ -235,6 +246,8 @@ class StepResponse:
             return
         self._samples.append(max(0.1, elapsed))
         self._pending = None
+        if self._on_outcome is not None:
+            self._on_outcome("learned")
         if self._label is not None:
             _LOGGER.debug(
                 "Response %s: step %+.0f W from %.0f W%s arrived after %.2f s (grid %.0f W), learned %.2f s",
@@ -247,8 +260,10 @@ class StepResponse:
                 self.response_s,
             )
 
-    def _drop(self, pending: _PendingStep, elapsed: float, reason: str, value: float) -> None:
+    def _drop(self, pending: _PendingStep, elapsed: float, reason: str, value: float, outcome: str = "dropped") -> None:
         self._pending = None
+        if self._on_outcome is not None:
+            self._on_outcome(outcome)
         if self._label is not None:
             _LOGGER.debug(
                 "Response %s: step %+.0f W from %.0f W dropped after %.2f s (grid %.0f W): %s",
@@ -287,6 +302,8 @@ class BatteryResponses:
         self.starts: dict[str, StepResponse] = {}
         # Recent own changes (time, W) of each battery.
         self._recent: dict[str, deque[tuple[float, float]]] = {}
+        # Outcomes of the last measurements of each battery (all kinds).
+        self._outcomes: dict[str, deque[str]] = {}
 
     def command(
         self,
@@ -374,10 +391,39 @@ class BatteryResponses:
     def _learner(self, learners: dict[str, StepResponse], kind: str, battery_id: str) -> StepResponse:
         if (learner := learners.get(battery_id)) is None:
             name = self._names(battery_id) if self._names is not None else battery_id
+            outcomes = self._outcomes.setdefault(battery_id, deque(maxlen=OUTCOMES_KEPT))
             learner = learners[battery_id] = StepResponse(
-                DEFAULT_BATTERY_RESPONSE_S, label=f"{kind} {name}", jump_ratio=JUMP_RATIO
+                DEFAULT_BATTERY_RESPONSE_S, label=f"{kind} {name}", jump_ratio=JUMP_RATIO, on_outcome=outcomes.append
             )
         return learner
+
+    def add(self, kind: str, battery_id: str, value: float) -> None:
+        """A measurement of ``kind`` (step, start, reversal) taken elsewhere."""
+        self._learner(self._kinds()[kind], kind, battery_id).add(value)
+
+    def clear(self, battery_id: str) -> None:
+        """Forget everything learned of a battery (e.g. after a firmware update)."""
+        for learners in self._kinds().values():
+            learners.pop(battery_id, None)
+        self._recent.pop(battery_id, None)
+        self._outcomes.pop(battery_id, None)
+
+    def cancel(self) -> None:
+        """End all pending measurements (another command interfered)."""
+        for learner in self._all():
+            learner.cancel()
+
+    def early_share(self, battery_id: str) -> float | None:
+        """Share of the last ``OUTCOMES_KEPT`` measurements of a battery dropped as
+        too early; None until that many ended."""
+        outcomes = self._outcomes.get(battery_id)
+        if outcomes is None or len(outcomes) < OUTCOMES_KEPT:
+            return None
+        return sum(outcome == "early" for outcome in outcomes) / len(outcomes)
+
+    def reset_outcomes(self, battery_id: str) -> None:
+        if (outcomes := self._outcomes.get(battery_id)) is not None:
+            outcomes.clear()
 
     def _all(self) -> list[StepResponse]:
         return [*self.learners.values(), *self.reversals.values(), *self.starts.values()]

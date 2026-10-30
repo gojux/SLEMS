@@ -182,7 +182,8 @@ async def test_the_device_information_is_compared_before_control(monkeypatch: py
     )
     controls = MagicMock(return_value=False)
     coordinator = SimpleNamespace(
-        controls=controls, controller=MagicMock(), _store=MagicMock(), _data_to_store=dict
+        controls=controls, controller=MagicMock(), _store=MagicMock(), _data_to_store=dict,
+        _check_probe_fingerprint=lambda _battery: None,
     )
     await SlemsCoordinator._async_read_device_info(coordinator, battery, 100.0)
     assert battery.device_info_checked and trial.status is TrialStatus.PASSED

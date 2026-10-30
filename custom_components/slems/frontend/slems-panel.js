@@ -132,6 +132,12 @@ const STRINGS = {
     topDeltaMeasured: "Cell delta last measured",
     responseTime: "Response time",
     responseNotLearned: "not learned yet (all batteries: {value})",
+    deadTime: "Dead time",
+    deadTimeValue: "{value} (measured {when})",
+    deadTimeNotMeasured: "not measured yet",
+    deadTimeRunning: "measuring …",
+    deadTimeFailed: { unclear: "last measurement unclear (grid restless)", not_quiet: "last measurement not possible (grid not quiet)", not_running: "last measurement not possible (battery not running)", other: "last measurement stopped" },
+    probeResponse: "Measure response time and phase",
     automatic: "automatic",
     learned: "learned",
     learnedWaiting: "Not enough data to learn yet; this value applies.",
@@ -802,6 +808,12 @@ const STRINGS = {
     topDeltaMeasured: "Zell-Delta zuletzt gemessen",
     responseTime: "Reaktionszeit",
     responseNotLearned: "noch nicht gelernt (alle Batterien: {value})",
+    deadTime: "Totzeit",
+    deadTimeValue: "{value} (gemessen {when})",
+    deadTimeNotMeasured: "noch nicht gemessen",
+    deadTimeRunning: "Messung läuft …",
+    deadTimeFailed: { unclear: "letzte Messung unklar (Netz unruhig)", not_quiet: "letzte Messung nicht möglich (Netz nicht ruhig)", not_running: "letzte Messung nicht möglich (Batterie lief nicht)", other: "letzte Messung abgebrochen" },
+    probeResponse: "Reaktionszeit und Phase messen",
     automatic: "automatisch",
     learned: "gelernt",
     learnedWaiting: "Noch zu wenig Daten zum Lernen; dieser Wert gilt.",
@@ -1998,6 +2010,8 @@ class SlemsPanel extends HTMLElement {
           : item("self-test-on", t.selfTestStart, ` data-entity="${selfTest.entity_id}" data-name="${name}" data-power="${escapeHtml(power)}"${blocked ? ` disabled title="${escapeHtml(blocked)}"` : ""}`)
       );
     }
+    const probe = this._entityId("probe_response", battery.device_id);
+    if (probe) items.push(item("menu-probe", t.probeResponse, ` data-entity="${probe}"`));
     items.push(item("menu-details", t.details, ` data-device="${battery.device_id}"`));
     items.push(item("menu-device", t.deviceView, ` data-device="${battery.device_id}"`));
     return `<div class="menu-wrap">${button}<div class="menu" role="menu">${items.join("")}</div></div>`;
@@ -2104,6 +2118,9 @@ class SlemsPanel extends HTMLElement {
       case "menu-resume":
         this._hass.callService("switch", "turn_off", { entity_id: entityId });
         break;
+      case "menu-probe":
+        this._hass.callService("button", "press", { entity_id: entityId });
+        break;
       case "self-test-on":
         this._confirm(
           t.selfTestTitle.replace("{name}", item.dataset.name),
@@ -2207,6 +2224,7 @@ class SlemsPanel extends HTMLElement {
             : undefined,
         response?.entity_id,
       ],
+      [t.deadTime, this._deadTimeText(response?.attributes?.probes?.[battery?.id], seconds), response?.entity_id],
     ].filter(([, value]) => value !== undefined && value !== null && value !== "");
     this.shadowRoot.getElementById("details-title").textContent = `${t.details}: ${battery?.name ?? ""}`;
     this.shadowRoot.getElementById("details-close").textContent = t.close;
@@ -2218,6 +2236,18 @@ class SlemsPanel extends HTMLElement {
         : `<dd class="muted">${t.noDetails}</dd>`) +
       this._phaseRow(deviceId, battery?.name) +
       this._selfTestDetails(s("self_test_result"));
+  }
+
+  /** Dead time of the battery's last probe step (see response_probe). */
+  _deadTimeText(probe, seconds) {
+    const t = this._t;
+    if (probe?.running) return t.deadTimeRunning;
+    const parts = [];
+    if (probe?.dead_time_s !== undefined && probe?.dead_time_s !== null) {
+      parts.push(t.deadTimeValue.replace("{value}", seconds(probe.dead_time_s)).replace("{when}", this._moment(probe.at * 1000) ?? ""));
+    }
+    if (probe?.failed) parts.push(t.deadTimeFailed[probe.failed] ?? t.deadTimeFailed.other);
+    return parts.length ? parts.join(", ") : t.deadTimeNotMeasured;
   }
 
   /** Result of the last self-test with an explanation per check. */

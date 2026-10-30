@@ -125,6 +125,9 @@ def _battery(coordinator: SlemsCoordinator, battery: BatteryRuntime) -> dict:
         else {**_plain(battery.self_test.as_dict()), "power_w": battery.self_test_power_w},
         "self_test_pending": battery.self_test_pending,
         "self_test_last": battery.self_test_last,
+        # Probe step (see response_probe): the running one and the stored result.
+        "probe": None if battery.probe is None else battery.probe.as_dict(),
+        "probe_record": battery.probe_record.as_dict(),
         "trial": None
         if battery.trial is None
         else {
@@ -247,6 +250,8 @@ def _system(coordinator: SlemsCoordinator) -> dict:
                     "step": round(controller.battery_response_s(battery.subentry_id), 2),
                     "start": round(controller.battery_start_response_s(battery.subentry_id), 2),
                     "reversal": round(controller.battery_reversal_response_s(battery.subentry_id), 2),
+                    # Earlier the grid cannot follow a command (response measurements moving before are dropped).
+                    "earliest_step": round(controller.earliest_response_s(battery.subentry_id, "step"), 2),
                 }
                 for battery in coordinator.batteries
             },

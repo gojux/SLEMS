@@ -47,6 +47,7 @@ Tiere](https://en.wikipedia.org/wiki/Sea_slug)) und *EMS*
   - [Umstieg von einer anderen Batterie-Integration](#umstieg-von-einer-anderen-batterie-integration)
   - [Zell-Delta und aktiver Zellausgleich](#zell-delta-und-aktiver-zellausgleich)
   - [Selbsttest einer Batterie](#selbsttest-einer-batterie)
+  - [Reaktionszeit und Phase messen](#reaktionszeit-und-phase-messen)
   - [Firmware-Updates und Batterie-Menü](#firmware-updates-und-batterie-menü)
   - [Grenzen und Schutz der Batterien](#grenzen-und-schutz-der-batterien)
 - [Verbraucher](#verbraucher)
@@ -187,6 +188,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Erkennung von Batterien, die die vorgegebene Leistung nicht liefern, Bestätigung der Vorgaben | ✅ |
 | Zell-Delta und aktiver Zellausgleich (Marstek Venus E 3.0) | ✅ |
 | Selbsttest einer Batterie: Wirkung am Smart Meter, Vorzeichen und Einheit der Leistung, Energiezähler, Ladezustand, Reaktionszeit, Freigabe am Smart Meter geprüft, sofortiger Abbruch bei falscher Richtung | ✅ |
+| Totzeit und Phase je Batterie mit einem kurzen Probeschritt gemessen (bei einer neuen Batterie, nach Änderungen an Batterie, Firmware, Smart Meter oder Integration, alle 90 Tage, von Hand) | ✅ |
 | Regelmäßige Vollladung zur SoC-Kalibrierung der LFP-Zellen (immer eine Batterie, aus dem Überschuss, beim Entladen geschont) | ✅ |
 
 | Verbraucher | Status |
@@ -275,7 +277,7 @@ Misst dein Smart Meter jede Phase, wähle in den SLEMS-Einstellungen seine
 **Netzleistung L1**, **L2** und **L3** aus (vorgeschlagen aus dem Gerät des
 Smart Meters, mit demselben Vorzeichen wie die Netzleistung). SLEMS lernt dann
 die Phase jedes Verbrauchers hinter dem Smart Meter, und die jeder Batterie in
-ihrem Selbsttest:
+ihrem Selbsttest und ihrem Probeschritt:
 
 - **Verbraucher**: SLEMS vergleicht die Leistung aller Batterien, Verbraucher
   und der PV-Anlage mit den Phasen des Smart Meters, jeweils über zwei Minuten
@@ -289,7 +291,9 @@ ihrem Selbsttest:
 - **Batterien**: Die Regelung bewegt die Batterien gemeinsam und gegen jede
   andere Last, daher lässt sich ihre Phase im normalen Betrieb nicht erkennen.
   Der [Selbsttest](#selbsttest-einer-batterie) zeigt sie: Die anderen
-  Batterien und die Verbraucher werden dabei festgehalten.
+  Batterien und die Verbraucher werden dabei festgehalten. Ebenso der
+  [Probeschritt](#reaktionszeit-und-phase-messen), wenn der Smart Meter seine
+  Phasen so schnell meldet wie die Gesamtleistung.
 
 Der Sensor **Phase** des Geräts zeigt das Ergebnis (**L1**, **L2**, **L3** oder
 **Dreiphasig**), sein Attribut *shares* den gemessenen Anteil je Phase. Bei
@@ -834,7 +838,8 @@ SLEMS funktioniert auch ohne Batterie: einfach nur die Verbraucher anlegen.
   über Omnibattery (Entitäten); Batterien über eine Cloud sind meist noch
   langsamer. Die gelernte Zeit ist der Median der letzten Messungen; eine
   Messung zählt nicht, wenn sich der Smart Meter bewegt hat, bevor die Batterie
-  reagieren konnte, oder viel weiter als der Schritt (ein anderes Gerät hat im
+  reagieren konnte (siehe
+  [Reaktionszeit und Phase messen](#reaktionszeit-und-phase-messen)), oder viel weiter als der Schritt (ein anderes Gerät hat im
   selben Moment geschaltet), und Befehle, die noch unterwegs sind, werden
   eingerechnet, damit die vielen Korrekturen der Regelung hintereinander die
   Zeit nicht zu kurz machen. Ein Start kurz nach einem Stopp zählt nicht als
@@ -1218,6 +1223,65 @@ wird er außerhalb des Betriebsmodus **Aktiv**, bei pausierter Kommunikation,
 wenn der Smart Meter nicht meldet oder die Batterie 30 Sekunden nicht lesbar
 ist; ein Neustart von Home Assistant beendet ihn ebenfalls. Es läuft immer nur
 ein Selbsttest, nicht während eines Zellausgleichs.
+
+### Reaktionszeit und Phase messen
+
+Eine Messung der Reaktionszeit zählt nicht, wenn sich der Smart Meter bewegt
+hat, bevor die Batterie überhaupt reagieren konnte: Dann hat ein anderes Gerät
+das Netz bewegt. Diese früheste Reaktion (die **Totzeit**) misst SLEMS je
+Batterie mit einem kurzen Probeschritt:
+
+1. SLEMS wartet, bis das Netz ruhig ist: Der Hausverbrauch ohne Batterien
+   schwankt 10 Sekunden lang um weniger als 50 W (Standardabweichung), seit 3
+   Sekunden hat sich keine Batterievorgabe geändert und seit einer Minute ging
+   kein Befehl an einen Verbraucher. Die Batterie muss laufen (laden oder
+   entladen).
+2. Die anderen Batterien und die Verbraucher halten ihre Vorgaben (wie beim
+   Selbsttest). Nach einer Sekunde Bezugswert bekommt die Batterie für etwa 3
+   Sekunden 500 W mehr oder weniger (mindestens 300 W, innerhalb ihrer
+   erlaubten Leistung), danach wieder ihre Vorgabe, 3 Sekunden beobachtet.
+   Bei Überschuss lädt sie mehr bzw. entlädt weniger, bei Bezug umgekehrt; ist
+   sie nahe voll oder leer oder an ihrer Leistungsgrenze, geht der Schritt in
+   die andere Richtung. Die Richtung der Batterie wechselt dabei nie, sie läuft
+   mit mindestens 100 W weiter. Am Netz kostet das etwa 0,4 Wh je Versuch.
+3. Drei Versuche mit 10 Sekunden Pause. Hin- und Rückschritt sind je eine
+   Messung; ausgewertet wird jede Meldung des Smart Meters. Die Totzeit einer
+   Messung ist die Zeit der letzten Meldung, die sich noch nicht um 10 % des
+   Schritts bewegt hat (eine Untergrenze, weil der Zähler nur etwa alle halbe
+   Sekunde meldet). Unklar ist eine Messung, wenn das Netz vorher unruhig war,
+   sich in die Gegenrichtung oder weiter als das 1,5-Fache bewegt hat oder 60 %
+   des Schritts nicht erreicht hat.
+
+Die Totzeit ist der Median der klaren Messungen. Bewegt sich der Smart Meter in
+einer späteren Messung früher um die Hälfte des Schritts, zählt diese Messung
+nicht (bei Start und Richtungswechsel kommt die Zusatzzeit des Treibers dazu).
+Die Zeiten bis 60 % gehen als Messungen in die Reaktionszeit der Batterie ein.
+Ohne Probeschritt gilt wie bisher die Vorgabe des Treibers (Marstek Venus
+0,45 s) bzw. die Hälfte der gelernten Reaktionszeit. Meldet der Smart Meter
+seine Phasen so schnell wie die Gesamtleistung, zeigt der Schritt auch die
+[Phase](#phasen-optional) der Batterie.
+
+SLEMS misst von selbst, sobald das Netz ruhig ist:
+
+- bei einer neuen Batterie (auch nach dem Update auf diese Version),
+- nach einer Änderung von Verbindung, Profil, Entitäten oder Ansteuerungsart
+  der Batterie, ihrer Firmware, des Smart Meters (Quelle, Entität,
+  Phasen-Entitäten, Firmware seines Geräts, Version einer benutzerdefinierten
+  Integration) oder bei einer Batterie über Entitäten der steuernden
+  Integration; dann verwirft SLEMS die bisher gelernten Reaktionszeiten der
+  Batterie (Updates von Home Assistant zählen nicht),
+- wenn mehr als die Hälfte der letzten 20 Messungen zu früh war,
+- spätestens 90 Tage nach dem letzten Probeschritt.
+
+Von Hand startet ihn ⋮ → **Reaktionszeit und Phase messen** oder die
+gleichnamige Schaltfläche der Batterie; auch er wartet, bis das Netz ruhig ist.
+Nicht gemessen wird außerhalb des Betriebsmodus **Aktiv**, während eines
+Selbsttests oder Zellausgleichs, bei aktiver Einspeisebegrenzung, wenn das BMS
+die Batterie begrenzt, wenn der Smart Meter nicht meldet und bei Batterien, die
+Vorgaben nur seltener als jede Sekunde annehmen. Ist das Netz 15 Minuten lang
+nicht ruhig oder bleibt eine Messung unklar, versucht SLEMS es nach einer Stunde
+wieder. Das Ergebnis steht unter ⋮ → **Details** (**Totzeit**) und in der
+Diagnose.
 
 ### Firmware-Updates und Batterie-Menü
 

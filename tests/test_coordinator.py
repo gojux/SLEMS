@@ -571,3 +571,130 @@ def test_pv_correction_counts_own_pv_only_with_a_forecast() -> None:
         },
     )
     assert SlemsCoordinator._forecast_pv_power_w(coordinator, snapshot) == 2400
+
+
+def _probe_coordinator(battery):
+    from types import SimpleNamespace
+
+    from custom_components.slems.const import OperatingMode
+    from custom_components.slems.controller import ControlStatus
+    from custom_components.slems.coordinator import SlemsCoordinator
+    from custom_components.slems.response import BatteryResponses
+    from custom_components.slems.response_probe import QuietWatch
+
+    coordinator = SlemsCoordinator.__new__(SlemsCoordinator)
+    coordinator.batteries = [battery]
+    coordinator.settings = SimpleNamespace(operating_mode=OperatingMode.ACTIVE, feed_in_cap=False)
+    coordinator.controller = SimpleNamespace(
+        status=ControlStatus.ACTIVE,
+        battery_responses=BatteryResponses(),
+        latest_command=lambda _id: 800.0,
+        last_battery_change=lambda: None,
+        last_consumer_command=lambda: None,
+        request=lambda: None,
+    )
+    coordinator._probe_quiet = QuietWatch()
+    coordinator._store = SimpleNamespace(async_delay_save=lambda *_args: None)
+    coordinator.phase_model = SimpleNamespace(devices=())
+    return coordinator
+
+
+def _probe_battery():
+    from types import SimpleNamespace
+
+    from custom_components.slems.battery_limits import PowerLimits
+    from custom_components.slems.response_probe import ProbeRecord
+
+    return SimpleNamespace(
+        subentry_id="a",
+        name="Venus",
+        driver=SimpleNamespace(capabilities=SimpleNamespace(controllable=True), min_command_interval_s=0.0),
+        plannable=True,
+        leaving_until=None,
+        self_test=None,
+        balancing_requested=False,
+        delivery=SimpleNamespace(bms_full=False, bms_stop_soc=None),
+        power_limits=PowerLimits(2500.0, 2500.0),
+        probe=None,
+        probe_record=ProbeRecord(),
+    )
+
+
+def test_probe_step_starts_when_due_and_begins_once_the_grid_is_quiet() -> None:
+    from custom_components.slems.response_probe import Stage
+
+    battery = _probe_battery()
+    coordinator = _probe_coordinator(battery)
+    coordinator._update_probes(0.0)
+    assert battery.probe is None
+    battery.probe_record.check({"config": {"key": "a"}})
+    coordinator._update_probes(0.0)
+    assert battery.probe is not None and battery.probe.reason == "new"
+    # Not quiet yet: nothing held.
+    coordinator._advance_probe(battery, 1.0, -900.0)
+    assert battery.probe.stage is Stage.WAIT and not coordinator.measurement_holds
+    for k in range(25):
+        coordinator._probe_quiet.add(k * 0.5, -900.0)
+    coordinator._advance_probe(battery, 12.0, -900.0)
+    # Surplus: 500 W more charging, the others held.
+    assert battery.probe.stage is Stage.SETTLE and battery.probe.offset_w == 500.0
+    assert coordinator.measurement_holds
+    # Switched to simulation meanwhile: stopped, tried again after an hour.
+    from custom_components.slems.const import OperatingMode
+
+    coordinator.settings.operating_mode = OperatingMode.SIMULATION
+    coordinator._advance_probe(battery, 12.5, None)
+    assert battery.probe is None and battery.probe_record.failed == "not_active"
+    assert battery.probe_record.due(battery.probe_record.tried_at + 10) is None
+
+
+def test_finished_probe_step_feeds_the_learner_and_moved_too_early_asks_again() -> None:
+    from custom_components.slems.response import OUTCOMES_KEPT
+    from custom_components.slems.response_probe import ResponseProbe, Stage
+
+    battery = _probe_battery()
+    coordinator = _probe_coordinator(battery)
+    probe = battery.probe = ResponseProbe("manual", 0.0)
+    probe.measurements = [
+        {"change_w": 500, "dead_s": 0.48, "arrived_s": 0.96},
+        {"change_w": -500, "dead_s": 0.5, "arrived_s": 1.0},
+        {"change_w": 500, "reason": "jump"},
+    ]
+    probe.result = "ok"
+    probe.stage = Stage.DONE
+    coordinator._advance_probe(battery, 50.0, None)
+    assert battery.probe is None
+    assert battery.probe_record.dead_time_s == 0.49
+    assert coordinator.probe_dead_time_s("a") == 0.49
+    assert coordinator.controller.battery_responses.learned("a") == 0.98
+    # More than half of the last measurements dropped as too early: due again.
+    responses = coordinator.controller.battery_responses
+    responses._outcomes["a"].extend(["learned"] * (OUTCOMES_KEPT // 2 - 1) + ["early"] * (OUTCOMES_KEPT // 2 + 1))
+    coordinator._update_probes(60.0)
+    assert battery.probe is not None and battery.probe.reason == "early"
+    assert responses.early_share("a") is None
+
+
+def test_changed_firmware_drops_the_learned_response_times() -> None:
+    from types import MethodType, SimpleNamespace
+
+    from custom_components.slems.const import CONF_GRID_POWER_ENTITY
+
+    battery = _probe_battery()
+    battery.config_key = "k"
+    battery.control_entity = None
+    battery.device_info = {"ems_version": "148"}
+    coordinator = _probe_coordinator(battery)
+    coordinator.config_entry = SimpleNamespace(options={CONF_GRID_POWER_ENTITY: "sensor.grid"}, data={})
+    coordinator._entity_versions = MethodType(lambda _self, _entity: {"sw_version": "1.0"}, coordinator)
+    responses = coordinator.controller.battery_responses
+    responses.add("step", "a", 0.9)
+    coordinator._check_probe_fingerprint(battery)
+    # The first fingerprint: a probe step is due, the learned times stay.
+    assert battery.probe_record.requested == "new" and responses.learned("a") == 0.9
+    battery.probe_record.requested = None
+    coordinator._check_probe_fingerprint(battery)
+    assert battery.probe_record.requested is None
+    battery.device_info = {"ems_version": "150"}
+    coordinator._check_probe_fingerprint(battery)
+    assert battery.probe_record.requested == "firmware" and responses.learned("a") is None

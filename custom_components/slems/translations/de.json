@@ -1610,6 +1610,9 @@
     "button": {
       "relearn_phase": {
         "name": "Phase neu lernen"
+      },
+      "probe_response": {
+        "name": "Reaktionszeit und Phase messen"
       }
     }
   },
@@ -1844,6 +1847,18 @@
     },
     "observation_problem_not_delivering": {
       "message": "sie liefert die vorgegebene Leistung nicht"
+    },
+    "probe_not_controllable": {
+      "message": "Diese Batterie wird nur gelesen, nicht gesteuert; ihre Reaktionszeit lässt sich nicht messen."
+    },
+    "probe_slow": {
+      "message": "Diese Batterie nimmt Vorgaben zu selten an für die Messung (Mindestabstand zwischen Vorgaben über 1 s)."
+    },
+    "probe_not_active": {
+      "message": "Die Reaktionszeit kann nur im Betriebsmodus „Aktiv“ gemessen werden."
+    },
+    "probe_not_participating": {
+      "message": "Die Batterie nimmt gerade nicht an der Regelung teil (deaktiviert, Kommunikation pausiert, Selbsttest, Zellausgleich oder liefert nicht)."
     }
   },
   "issues": {

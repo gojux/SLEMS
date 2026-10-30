@@ -47,6 +47,7 @@ system).
   - [Switching from another battery integration](#switching-from-another-battery-integration)
   - [Cell delta and active cell balancing](#cell-delta-and-active-cell-balancing)
   - [Self-test of a battery](#self-test-of-a-battery)
+  - [Measuring response time and phase](#measuring-response-time-and-phase)
   - [Firmware updates and battery menu](#firmware-updates-and-battery-menu)
   - [Battery limits and protection](#battery-limits-and-protection)
 - [Consumers](#consumers)
@@ -184,6 +185,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Detection of batteries that do not deliver the commanded power, confirmation of set points | ✅ |
 | Cell delta and active cell balancing (Marstek Venus E 3.0) | ✅ |
 | Self-test of a battery: effect at the smart meter, sign and unit of the power, energy counters, state of charge, response time, release checked at the smart meter, stops at once on a wrong direction | ✅ |
+| Dead time and phase per battery measured with a short probe step (for a new battery, after changes of battery, firmware, smart meter or integration, every 90 days, by hand) | ✅ |
 | Regular full charge for the SoC calibration of LFP cells (one battery at a time, from the surplus, spared when discharging) | ✅ |
 
 | Consumers | Status |
@@ -269,7 +271,7 @@ Requires Home Assistant 2026.9 or newer.
 If your smart meter measures each phase, select its **Grid power L1**, **L2**
 and **L3** in the SLEMS settings (suggested from the smart meter's device, same
 sign as the grid power). SLEMS then learns the phase of every consumer behind
-the smart meter, and of every battery in its self-test:
+the smart meter, and of every battery in its self-test and its probe step:
 
 - **Consumers**: SLEMS compares the power of all batteries, consumers and the
   PV system with the smart meter's phases, averaged over two minutes each. A
@@ -282,7 +284,9 @@ the smart meter, and of every battery in its self-test:
 - **Batteries**: the control moves the batteries together and against every
   other load, so their phase cannot be told from normal operation. The
   [self-test](#self-test-of-a-battery) shows it: the other batteries and the
-  consumers are held meanwhile.
+  consumers are held meanwhile. So does the
+  [probe step](#measuring-response-time-and-phase) if the smart meter reports
+  its phases as fast as the total power.
 
 The sensor **Phase** of the device shows the result (**L1**, **L2**, **L3** or
 **Three phases**), its attribute *shares* the measured share per phase. For a
@@ -792,7 +796,8 @@ SLEMS also works without any battery: add the consumers only.
   through Omnibattery (entities); batteries behind a cloud are usually
   slower still. The learned time is the median of the last measurements; a
   measurement is dropped when the smart meter moved before the battery could
-  react or much more than the step (another device switched at the same
+  react (see [Measuring response time and phase](#measuring-response-time-and-phase))
+  or much more than the step (another device switched at the same
   moment), and commands still on their way count in, so the many corrections
   of the control in a row do not make the time too short. A start right after
   a stop does not count as a start. A slower
@@ -1147,6 +1152,60 @@ operating mode **Active**, with paused communication, when the smart meter does
 not report or the battery cannot be read for 30 seconds; a restart of Home
 Assistant ends it too. Only one self-test runs at a time, not during a cell
 balancing run.
+
+### Measuring response time and phase
+
+A measurement of the response time does not count when the smart meter moved
+before the battery could react at all: another device moved the grid then.
+SLEMS measures this earliest response (the **dead time**) per battery with a
+short probe step:
+
+1. SLEMS waits until the grid is quiet: the house load without batteries
+   varies by less than 50 W (standard deviation) for 10 seconds, no battery
+   set point changed for 3 seconds and no consumer was commanded for a minute.
+   The battery has to run (charge or discharge).
+2. The other batteries and the consumers keep their set points (as in the
+   self-test). After one second of reference the battery gets 500 W more or
+   less for about 3 seconds (at least 300 W, within its allowed power), then
+   its set point again, watched for 3 seconds. With a surplus it charges more
+   or discharges less, with import the other way round; nearly full or empty
+   or at its power limit, the step goes the other way. The battery never
+   changes its direction, it keeps running with at least 100 W. At the grid
+   this costs about 0.4 Wh per attempt.
+3. Three attempts with a pause of 10 seconds. The step and the step back are
+   one measurement each; every report of the smart meter counts. The dead time
+   of a measurement is the time of the last report that did not move by 10 %
+   of the step yet (a lower bound, as the meter reports only about every half
+   second). A measurement is unclear when the grid was restless before, moved
+   the other way or beyond 1.5 times, or did not reach 60 % of the step.
+
+The dead time is the median of the clear measurements. A later measurement
+whose smart meter moves by half the step earlier does not count (a start or a
+reversal adds the driver's extra time). The times until 60 % count as
+measurements of the battery's response time. Without a probe step the driver's
+value (Marstek Venus 0.45 s) or half the learned response time applies as
+before. If the smart meter reports its phases as fast as the total power, the
+step also shows the battery's [phase](#phases-optional).
+
+SLEMS measures by itself as soon as the grid is quiet:
+
+- for a new battery (also after the update to this version),
+- after a change of the battery's connection, profile, entities or control
+  type, its firmware, the smart meter (source, entity, phase entities,
+  firmware of its device, version of a custom integration) or, for a battery
+  from entities, of the controlling integration; SLEMS drops the response
+  times learned for the battery then (Home Assistant updates do not count),
+- when more than half of the last 20 measurements were too early,
+- at the latest 90 days after the last probe step.
+
+By hand, ⋮ → **Measure response time and phase** or the battery's button of the
+same name starts it; it waits for a quiet grid too. Nothing is measured outside
+operating mode **Active**, during a self-test or cell balancing run, with an
+active feed-in cap, while the BMS limits the battery, when the smart meter does
+not report, or for batteries that accept set points less often than every
+second. If the grid is not quiet for 15 minutes or a measurement stays unclear,
+SLEMS tries again after an hour. The result is under ⋮ → **Details** (**Dead
+time**) and in the diagnostics.
 
 ### Firmware updates and battery menu
 

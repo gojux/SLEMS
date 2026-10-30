@@ -462,7 +462,22 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda _, c: c.controller.battery_response.response_s,
-        attributes_fn=lambda _, c: {"per_battery": c.controller.battery_responses.as_dict()},
+        attributes_fn=lambda _, c: {
+            "per_battery": c.controller.battery_responses.as_dict(),
+            # Last probe step per battery (see response_probe), shown under Details.
+            "probes": {
+                b.subentry_id: {
+                    "at": b.probe_record.at,
+                    "reason": b.probe_record.reason,
+                    "dead_time_s": b.probe_record.dead_time_s,
+                    "phase": b.probe_record.phase,
+                    "failed": b.probe_record.failed,
+                    "running": b.probe is not None,
+                }
+                for b in c.batteries
+                if b.probe_record.at is not None or b.probe_record.failed is not None or b.probe is not None
+            },
+        },
     ),
     SystemSensorDescription(
         key="night_discharge_target_soc",

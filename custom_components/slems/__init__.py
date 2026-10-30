@@ -40,6 +40,7 @@ from .drivers import BatteryDriver, create_driver
 from .efficiency import EfficiencyTracker
 from .panel import async_register_panel, async_unregister_panel
 from .problems import async_remove_issues
+from .response_probe import CONFIG_KEYS, CONTROL_ENTITY_KEYS, digest
 from .simulation import async_register_websocket
 from .price_chart import async_register_websocket as async_register_price_websocket
 from .tariff_comparison import async_register_websocket as async_register_tariff_websocket
@@ -107,6 +108,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
                 own_pv_forecast_entry=subentry.data.get(CONF_OWN_PV_FORECAST_ENTRY)
                 if driver.capabilities.own_pv
                 else None,
+                config_key=digest(subentry.data, CONFIG_KEYS),
+                control_entity=next(
+                    (subentry.data[key] for key in CONTROL_ENTITY_KEYS if subentry.data.get(key)), None
+                ),
             )
         )
     consumers = [

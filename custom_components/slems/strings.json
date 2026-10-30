@@ -1610,6 +1610,9 @@
     "button": {
       "relearn_phase": {
         "name": "Learn phase again"
+      },
+      "probe_response": {
+        "name": "Measure response time and phase"
       }
     }
   },
@@ -1844,6 +1847,18 @@
     },
     "observation_problem_not_delivering": {
       "message": "it does not deliver the commanded power"
+    },
+    "probe_not_controllable": {
+      "message": "This battery is only read, not controlled; its response time cannot be measured."
+    },
+    "probe_slow": {
+      "message": "This battery accepts set points too rarely for the measurement (minimum time between set points above 1 s)."
+    },
+    "probe_not_active": {
+      "message": "The response time can only be measured in operating mode active."
+    },
+    "probe_not_participating": {
+      "message": "The battery does not take part in the control right now (disabled, communication paused, self-test, cell balancing or not delivering)."
     }
   },
   "issues": {

@@ -18,7 +18,7 @@ from homeassistant.components.recorder.history import get_significant_states
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_state_report_event,
@@ -28,6 +28,7 @@ from homeassistant.helpers.event import (
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.sun import get_astral_event_date
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.loader import IntegrationNotLoaded, async_get_loaded_integration
 from homeassistant.const import UnitOfTemperature
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import TemperatureConverter
@@ -134,6 +135,18 @@ from .battery_limits import (
 )
 from .cell_balancing import BMS_END_CELL_V, BMS_END_SOC_PCT, BalancingPhase, CellBalancer, CellMonitor
 from .own_pv import CurtailControl, feasible_command_w
+from .response_probe import (
+    CONSUMER_QUIET_S,
+    EARLY_SHARE,
+    METER_KEYS,
+    SETTLED_S,
+    ProbeRecord,
+    QuietWatch,
+    Report as ProbeReport,
+    ResponseProbe,
+    digest,
+    probe_offset_w,
+)
 from .self_test import Outcome, Phase as SelfTestPhase, Sample, SelfTest, self_test_power_w, step_power_w
 from .trial import TrialState
 from .delivery_monitor import Action, DeliveryMonitor
@@ -320,6 +333,14 @@ class BatteryRuntime:
     self_test_pending: bool = False
     # Trial of a battery from a Modbus profile (see trial.py), None without one.
     trial: TrialState | None = None
+    # Running probe step (see response_probe), None without one, and the last result.
+    probe: ResponseProbe | None = None
+    probe_record: ProbeRecord = field(default_factory=ProbeRecord)
+    # Fingerprint of the configuration that decides how the battery is
+    # controlled (response_probe.CONFIG_KEYS) and the entity SLEMS writes
+    # (batteries from entities), for the probe step.
+    config_key: str = ""
+    control_entity: str | None = None
     # A battery with a trial is controlled only once its device information
     # was compared after the start and after a pause (a firmware update).
     device_info_checked: bool = True
@@ -818,6 +839,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.settings = ControlSettings()
         self._grid_filter = GridPowerFilter(self.settings.surplus_average_window_s)
         self._house_hold = HousePowerHold()
+        # House load of the last seconds, for the probe step.
+        self._probe_quiet = QuietWatch()
         self._runtime = RuntimeTracker()
         self._distributor = BatteryDistributor()
         self._curtail = CurtailControl()
@@ -1023,6 +1046,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     balancer, battery.driver.capabilities.max_charge_power_w
                 )
             battery.self_test_last = data.get("self_test_last")
+            battery.probe_record = ProbeRecord.from_dict(data.get("probe"))
             if data.get("self_test_on_setup_done"):
                 battery.self_test_pending = False
             if battery.driver.trial_spec is not None:
@@ -1230,6 +1254,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._grid_filter.add(time.monotonic(), grid, self._battery_seen_w())
         self._integrate_export(grid, time.monotonic())
         self.controller.observe_grid(grid)
+        self._probe_report(grid)
         self.controller.request()
 
     def _grid_from_entity(self) -> float | None:
@@ -1302,6 +1327,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         grid = self._add_grid_sample(event.data["new_state"])
         if grid is not None:
             self.controller.observe_grid(grid)
+            self._probe_report(grid)
         self.controller.request()
 
     @callback
@@ -1466,6 +1492,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 "self_test_last": b.self_test_last,
                 "self_test_on_setup_done": not b.self_test_pending,
                 "trial": b.trial.as_dict() if b.trial is not None else None,
+                "probe": b.probe_record.as_dict(),
             }
             for b in self.batteries
         }
@@ -1827,6 +1854,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         for battery in self.batteries:
             self._update_cells(battery, snapshot, now)
             self._update_self_test(battery, snapshot, now)
+        self._update_probes(now)
         self._update_full_charge(snapshot, now)
         self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
 
@@ -2372,6 +2400,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             _LOGGER.debug("Battery %s: device information not read: %s", battery.name, err)
             return
         battery.device_info = info or battery.device_info
+        self._check_probe_fingerprint(battery)
         if battery.trial is None:
             return
         controlled = self.controls(battery)
@@ -2390,9 +2419,201 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
 
     @property
-    def self_test_holds(self) -> bool:
-        """A self-test measures: the other batteries and the consumers keep their set points."""
-        return any(b.self_test is not None and b.self_test.holds_others for b in self.batteries)
+    def measurement_holds(self) -> bool:
+        """A self-test or probe step measures: the other batteries and the consumers keep their set points."""
+        return any(
+            (b.self_test is not None and b.self_test.holds_others) or (b.probe is not None and b.probe.holds_others)
+            for b in self.batteries
+        )
+
+    # --- probe step (see response_probe) -----------------------------------------
+
+    def probe_dead_time_s(self, battery_id: str) -> float | None:
+        """Dead time of the battery's last probe step, None if not measured."""
+        battery = next((b for b in self.batteries if b.subentry_id == battery_id), None)
+        return battery.probe_record.dead_time_s if battery is not None else None
+
+    def probe_blocked(self, battery: BatteryRuntime, house_w: float | None = None) -> str | None:
+        """Why a probe step of the battery cannot run now, None if it can (the grid
+        being quiet aside)."""
+        if not battery.driver.capabilities.controllable:
+            return "not_controllable"
+        if battery.driver.min_command_interval_s > 1:
+            return "slow"
+        if self.settings.operating_mode is not OperatingMode.ACTIVE:
+            return "not_active"
+        if not battery.plannable or battery.leaving_until is not None:
+            return "not_participating"
+        if any(b.self_test is not None or b.balancing_requested for b in self.batteries):
+            return "self_test"
+        if self.controller.status is ControlStatus.GRID_STALE:
+            return "grid_stale"
+        if battery.delivery.bms_full or battery.delivery.bms_stop_soc is not None:
+            return "bms"
+        if (
+            house_w is not None
+            and self.settings.feed_in_cap
+            and -house_w > self.settings.feed_in_cap_limit_w - CAP_MARGIN_W
+        ):
+            return "feed_in_cap"
+        return None
+
+    @callback
+    def request_probe(self, battery: BatteryRuntime) -> None:
+        """Probe the battery as soon as the grid is quiet (the button)."""
+        battery.probe_record.request("manual")
+        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+
+    def _probe_report(self, grid: float) -> None:
+        """A grid meter report: the house load for the quiet check and the running probe step."""
+        now = time.monotonic()
+        house = grid - sum(self.controller.seen_battery_power(now).values())
+        self._probe_quiet.add(now, house)
+        for battery in self.batteries:
+            if battery.probe is not None:
+                battery.probe.report(ProbeReport(now, grid, self._fast_grid_phases_w(now)))
+                self._advance_probe(battery, now, house)
+
+    def _fast_grid_phases_w(self, now: float) -> tuple[float, float, float] | None:
+        """The smart meter's phases if each reported as recently as the grid meter's cadence."""
+        if not self.phases_measured:
+            return None
+        phases = self._grid_phases_w()
+        if phases is None or any(w is None for w in phases):
+            return None
+        wall = time.time()
+        limit = max(1.0, 1.5 * self.controller.meter.value)
+        for key in CONF_GRID_PHASE_ENTITIES:
+            state = self.hass.states.get(self._config[key])
+            if state is None or wall - state.last_reported.timestamp() > limit:
+                return None
+        return phases  # type: ignore[return-value]
+
+    def _advance_probe(self, battery: BatteryRuntime, now: float, house_w: float | None) -> None:
+        """One step of a running probe step: stop it when blocked, begin the next attempt when quiet."""
+        probe = battery.probe
+        if probe is None:
+            return
+        probe.advance(now)
+        if probe.result is not None:
+            self.end_probe(battery)
+            return
+        if (blocked := self.probe_blocked(battery, None if probe.holds_others else house_w)) is not None:
+            self.end_probe(battery, blocked)
+            return
+        if not probe.ready(now):
+            return
+        if probe.waited_too_long(now):
+            self.end_probe(battery, f"not_{probe.waiting_for}")
+            return
+        base = self.controller.latest_command(battery.subentry_id)
+        limits = battery.power_limits
+        if house_w is None or limits is None:
+            return
+        offset = None if base is None else probe_offset_w(base, house_w, limits.charge_w, limits.discharge_w)
+        probe.waiting_for = "running" if offset is None else "quiet"
+        if offset is None or base is None or not self._probe_quiet_now(now):
+            return
+        _LOGGER.debug("Probe %s: attempt %d, %+.0f W from %.0f W", battery.name, probe.attempts + 1, offset, base)
+        probe.begin(now, base, offset)
+        self.controller.request()
+
+    def _probe_quiet_now(self, now: float) -> bool:
+        """The house load quiet, no battery command moved and no consumer command lately."""
+        if not self._probe_quiet.quiet(now):
+            return False
+        changed = self.controller.last_battery_change()
+        consumer = self.controller.last_consumer_command()
+        return (changed is None or now - changed >= SETTLED_S) and (
+            consumer is None or now - consumer >= CONSUMER_QUIET_S
+        )
+
+    def _update_probes(self, now: float) -> None:
+        """With every poll: advance a running probe step, or start one that is due."""
+        running = next((b for b in self.batteries if b.probe is not None), None)
+        if running is not None:
+            self._advance_probe(running, now, None)
+            return
+        wall = dt_util.utcnow().timestamp()
+        for battery in self.batteries:
+            responses = self.controller.battery_responses
+            share = responses.early_share(battery.subentry_id)
+            if share is not None and share > EARLY_SHARE:
+                _LOGGER.info(
+                    "Battery %s: %.0f %% of the last response measurements moved too early, probe step due",
+                    battery.name,
+                    100 * share,
+                )
+                battery.probe_record.request("early")
+                responses.reset_outcomes(battery.subentry_id)
+            reason = battery.probe_record.due(wall)
+            if reason is None or self.probe_blocked(battery) is not None:
+                continue
+            _LOGGER.info("Battery %s: probe step (%s)", battery.name, reason)
+            battery.probe = ResponseProbe(reason, now)
+            return
+
+    @callback
+    def end_probe(self, battery: BatteryRuntime, reason: str | None = None) -> None:
+        """End the probe step: early with ``reason``, or after its attempts."""
+        probe = battery.probe
+        if probe is None:
+            return
+        if reason is not None:
+            probe.stop(reason)
+        battery.probe = None
+        battery.probe_record.finished(probe, dt_util.utcnow().timestamp())
+        if probe.result == "ok":
+            responses = self.controller.battery_responses
+            for seconds in probe.arrived_s:
+                responses.add("step", battery.subentry_id, seconds)
+            responses.reset_outcomes(battery.subentry_id)
+            if (phase := probe.phase) is not None and battery.subentry_id in self.phase_model.devices:
+                self.phase_learner(battery.subentry_id).observe(phase)
+                self._phase_changed()
+        _LOGGER.info(
+            "Probe step of %s: %s, dead time %s, measurements %s",
+            battery.name,
+            probe.result,
+            "-" if probe.dead_time_s is None else f"{probe.dead_time_s:.2f} s",
+            probe.measurements,
+        )
+        self.controller.request()
+        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+
+    def _check_probe_fingerprint(self, battery: BatteryRuntime) -> None:
+        """Compare what decides the battery's response times with its last probe step;
+        a change drops the learned times and asks for a probe step."""
+        fingerprint: dict[str, dict[str, str]] = {
+            "config": {"key": battery.config_key},
+            "meter": {"config": digest(self._config, METER_KEYS), **self._entity_versions(self._config[CONF_GRID_POWER_ENTITY])},
+        }
+        if battery.device_info:
+            fingerprint["device"] = dict(battery.device_info)
+        if battery.control_entity is not None:
+            fingerprint["control"] = self._entity_versions(battery.control_entity)
+        if changed := battery.probe_record.check(fingerprint):
+            _LOGGER.info("Battery %s: %s changed, learned response times dropped, probe step due", battery.name, ", ".join(changed))
+            self.controller.battery_responses.clear(battery.subentry_id)
+
+    def _entity_versions(self, entity_id: str) -> dict[str, str]:
+        """Firmware of an entity's device and the version of its integration (custom ones only:
+        a core integration changes with every Home Assistant update)."""
+        entry = er.async_get(self.hass).async_get(entity_id)
+        if entry is None:
+            return {}
+        values: dict[str, str] = {}
+        if entry.device_id is not None and (device := dr.async_get(self.hass).async_get(entry.device_id)) is not None:
+            for key in ("sw_version", "hw_version"):
+                if value := getattr(device, key):
+                    values[key] = str(value)
+        try:
+            integration = async_get_loaded_integration(self.hass, entry.platform)
+        except IntegrationNotLoaded:
+            return values
+        if not integration.is_built_in and integration.version is not None:
+            values["integration"] = str(integration.version)
+        return values
 
     def self_test_blocked(self, battery: BatteryRuntime) -> str | None:
         """Why a self-test of the battery cannot start now (translation key), None if it can."""

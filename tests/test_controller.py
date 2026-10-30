@@ -163,7 +163,7 @@ def test_keepalives_of_several_batteries_are_spread() -> None:
     assert controller._keepalive_due("c", 60.0, 160.0)
 
 
-def test_earliest_response_from_the_driver_or_the_learned_step() -> None:
+def test_earliest_response_from_the_probe_the_driver_or_the_learned_step() -> None:
     from custom_components.slems.controller import RealTimeController
 
     venus = SimpleNamespace(earliest_response_s=0.45, start_extra_s=1.6, reversal_extra_s=0.6)
@@ -172,10 +172,22 @@ def test_earliest_response_from_the_driver_or_the_learned_step() -> None:
         SimpleNamespace(subentry_id="a", name="A", driver=venus, measured_power_w=None),
         SimpleNamespace(subentry_id="b", name="B", driver=plain, measured_power_w=None),
     ]
-    coordinator = SimpleNamespace(hass=None, batteries=batteries, settings=SimpleNamespace(control_gain=0.5), consumers=[])
+    probed: dict[str, float] = {}
+    coordinator = SimpleNamespace(
+        hass=None,
+        batteries=batteries,
+        settings=SimpleNamespace(control_gain=0.5),
+        consumers=[],
+        probe_dead_time_s=probed.get,
+    )
     controller = RealTimeController(coordinator)
     assert controller.earliest_response_s("a", "step") == 0.45
     assert controller.earliest_response_s("a", "start") == pytest.approx(0.45 + 0.75 * 1.6)
     assert controller.earliest_response_s("a", "reversal") == pytest.approx(0.45 + 0.75 * 0.6)
     controller.battery_responses.restore({"b": 2.0})
     assert controller.earliest_response_s("b", "step") == 1.0
+    # The dead time of a probe step replaces both, the extra time of a start stays.
+    probed |= {"a": 0.6, "b": 0.5}
+    assert controller.earliest_response_s("a", "step") == 0.6
+    assert controller.earliest_response_s("a", "start") == pytest.approx(0.6 + 0.75 * 1.6)
+    assert controller.earliest_response_s("b", "step") == 0.5

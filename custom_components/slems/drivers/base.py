@@ -147,7 +147,8 @@ class BatteryDriver(ABC):
     @property
     def earliest_response_s(self) -> float | None:
         """Earliest time the grid meter can show a step of this battery; a
-        response measurement whose grid moved before is dropped. None: half
+        response measurement whose grid moved before is dropped. Used until
+        the battery's probe step measured it (see response_probe); None: half
         the learned step time."""
         return None
 

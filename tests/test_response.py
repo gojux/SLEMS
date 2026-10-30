@@ -229,3 +229,30 @@ def test_learned_value_is_the_median_and_its_samples_are_stored() -> None:
     again = BatteryResponses()
     again.restore_samples(responses.samples_as_dict())
     assert again.learned("a") == pytest.approx(0.8)
+
+
+def test_share_of_measurements_dropped_as_too_early() -> None:
+    from custom_components.slems.response import OUTCOMES_KEPT
+
+    responses = BatteryResponses(earliest=lambda _battery, _kind: 0.45)
+    for k in range(OUTCOMES_KEPT):
+        start = 100.0 * k
+        responses.command(start, 0.0, {"a": 500.0})
+        # Every other measurement moves before the earliest response.
+        responses.sample(start + (0.3 if k % 2 else 0.9), 400.0)
+        if k < OUTCOMES_KEPT - 1:
+            assert responses.early_share("a") is None
+    assert responses.early_share("a") == 0.5
+    responses.reset_outcomes("a")
+    assert responses.early_share("a") is None
+
+
+def test_measurements_from_elsewhere_and_forgetting_a_battery() -> None:
+    responses = BatteryResponses()
+    responses.add("step", "a", 0.9)
+    responses.add("step", "a", 1.1)
+    responses.add("start", "a", 2.5)
+    assert responses.learned("a") == pytest.approx(1.0)
+    assert responses.learned_start("a") == 2.5
+    responses.clear("a")
+    assert responses.learned("a") is None and responses.learned_start("a") is None

@@ -305,9 +305,12 @@ class RealTimeController:
     def earliest_response_s(self, battery_id: str, kind: str) -> float:
         """Earliest time the grid meter can show a command of this battery
         (``kind``: step, start or reversal); a response measurement whose grid
-        moved before is dropped."""
+        moved before is dropped. The dead time of the battery's probe step if
+        measured, else the driver's value or half the learned step time."""
         driver = self._driver(battery_id)
-        earliest = driver.earliest_response_s if driver is not None else None
+        earliest = self._coordinator.probe_dead_time_s(battery_id)
+        if earliest is None and driver is not None:
+            earliest = driver.earliest_response_s
         if earliest is None:
             learned = self.battery_responses.learned(battery_id)
             earliest = EARLIEST_STEP_SHARE * (learned if learned is not None else self.battery_response.value)
@@ -485,6 +488,23 @@ class RealTimeController:
         """Power last sent to a consumer (kept while it is saturated)."""
         return self._device_commands.get(subentry_id)
 
+    def latest_command(self, battery_id: str) -> float | None:
+        """Power last sent to a battery, None before the first command."""
+        return self._latest_command(battery_id)
+
+    def last_battery_change(self) -> float | None:
+        """Monotonic time of the last command that moved a battery beyond the deadband."""
+        latest = None
+        for history in self._battery_history.values():
+            for (_, before), (t, power) in zip(history, history[1:]):
+                if abs(power - before) >= BATTERY_DEADBAND_W and (latest is None or t > latest):
+                    latest = t
+        return latest
+
+    def last_consumer_command(self) -> float | None:
+        """Monotonic time of the last consumer command."""
+        return max((t for _, t in self._consumer_commands.values()), default=None)
+
     def command_state(self, battery_id: str) -> tuple[float, float] | None:
         """Latest command of a battery and since when it has this direction."""
         latest = self._latest_command(battery_id)
@@ -600,9 +620,9 @@ class RealTimeController:
                 latest_total if new_total is None else new_total,
                 self.gain,
             )
-        if new_total is not None and coordinator.settings.auto_gain:
+        if new_total is not None and coordinator.settings.auto_gain and not coordinator.measurement_holds:
             self.gain_adapter.observe(start, new_total - latest_total, coordinator.settings.control_gain)
-        if not coordinator.self_test_holds:
+        if not coordinator.measurement_holds:
             await self._async_apply_consumers(snapshot)
         self.observe_consumers(snapshot)
         coordinator.publish(snapshot)
@@ -733,8 +753,8 @@ class RealTimeController:
         # Starts after a short stop and the time each battery was written.
         restarted_ids: set[str] = set()
         issued: dict[str, float] = {}
-        # A self-test measures the effect of its battery: the others keep their set points.
-        hold = self._coordinator.self_test_holds
+        # A self-test or probe step measures the effect of its battery: the others keep their set points.
+        hold = self._coordinator.measurement_holds
         # Batteries that reduce their power are written first: while power
         # moves between batteries, the short gap between the writes then
         # causes a little import instead of feeding battery energy into the grid.
@@ -743,7 +763,10 @@ class RealTimeController:
                 continue
             target = round(snapshot.distribution.power_w.get(battery.subentry_id, 0.0))
             latest = self._latest_command(battery.subentry_id)
-            if hold and latest is not None:
+            probe = battery.probe if battery.probe is not None and battery.probe.target_w is not None else None
+            if probe is not None:
+                target = round(probe.target_w)  # type: ignore[arg-type]
+            elif hold and latest is not None:
                 target = round(latest)
             refresh = self._keepalive_due(
                 battery.subentry_id, battery.driver.keepalive_s or BATTERY_KEEPALIVE_S, now
@@ -767,6 +790,8 @@ class RealTimeController:
             stopped_at = self._direction_since.get(battery.subentry_id)
             if await self._apply(battery, target, refresh):
                 self._record_command(battery.subentry_id, target, sent_at)
+                if probe is not None:
+                    probe.written(sent_at, target)
                 if refresh:
                     self._battery_refreshed[battery.subentry_id] = sent_at
                 new_total += target
@@ -786,6 +811,12 @@ class RealTimeController:
                     new_total += latest
         if not changes:
             return None
+        if any(b.probe is not None and b.probe.holds_others for b in self._coordinator.batteries):
+            # The probe step measures its own commands (see response_probe).
+            self.battery_response.cancel()
+            self.battery_reversal_response.cancel()
+            self.battery_responses.cancel()
+            return new_total
         # The grid power moves by the change of the battery power; a start or
         # reversal of a battery takes longer than a step.
         if reversed_from or started_ids or restarted_ids:

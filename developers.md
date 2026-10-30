@@ -484,7 +484,8 @@ sends commands.
   least 10 s, `START_MIN_IDLE_S`); starts and reversals do not count as
   steps. A battery measurement is dropped when the meter moved by half the
   step (or half the other way) before the earliest response
-  (`earliest_response_s`: driver value, Venus 0.45 s, else half the learned
+  (`earliest_response_s`: the dead time of the battery's probe step, see
+  Probe step, else the driver value, Venus 0.45 s, else half the learned
   step; a start or reversal 0.75 × the driver's extra time later) or by more
   than 1.5 × the expected change when it arrived (`JUMP_RATIO`, a foreign load
   switched along); dropped measurements are logged at debug level with the
@@ -678,7 +679,7 @@ profiles*).
 
 `self_test.py` (steps and evaluation, no HA dependency), `coordinator.py`
 (`self_test_blocked`, `start_self_test`, `_update_self_test`, `end_self_test`,
-`self_test_holds`), `controller.py` (the set points go the way of a balancing
+`measurement_holds`), `controller.py` (the set points go the way of a balancing
 run, `_async_apply_balancing`; `has_override` / `pop_release_result` for the
 release), `switch.py` (`SelfTestSwitch`), `sensor.py` (`SelfTestSensor`, the
 last result in its attributes), notification in `problems.py`.
@@ -760,6 +761,81 @@ last result in its attributes), notification in `problems.py`.
     `registers_due` asks (`read_control_registers`) and passes them in the
     sample (`Sample.registers`); `register_reads()` shows them in the
     diagnostics.
+
+### Probe step (response time and phase)
+
+`response_probe.py` (steps, evaluation and the stored record, no HA
+dependency), `coordinator.py` (`_update_probes`, `_advance_probe`,
+`_probe_report`, `end_probe`, `probe_blocked`, `request_probe`,
+`_check_probe_fingerprint`, `measurement_holds`), `controller.py` (the probed
+battery's set point, no learning from its commands, `earliest_response_s`),
+`response.py` (`add`, `clear`, `early_share`), `button.py`
+(`BatteryProbeButton`), the attribute `probes` of the sensor
+`battery_response_time` (panel **Details**: dead time) and the diagnostics
+(`probe`, `probe_record`, `battery_times_in_use_s.earliest_step`).
+
+- Purpose: the limit "too early" of the response learners (see Real-time
+  controller) per battery. Its dead time replaces `driver.earliest_response_s`
+  and half the learned step; start and reversal add 0.75 × the driver's
+  extra time as before. Only steps of a running battery are probed (no start,
+  no reversal: their extra time comes from the driver).
+- Flow per attempt (`ResponseProbe`, monotonic time): WAIT until
+  `QuietWatch` (house load = grid − `seen_battery_power`, standard deviation
+  below 50 W over 10 s), no battery command beyond the deadband for 3 s
+  (`last_battery_change`) and no consumer command for 60 s; SETTLE 1 s with
+  at least 2 reports (spread above 50 W: `noisy`); STEP held set point +
+  offset for 3 s from its write; BACK the held set point, watched 3 s from
+  its write; PAUSE 10 s. Three attempts; a write missing for 5 s is
+  `not_written`. Given up after 15 min of WAIT/PAUSE (`not_quiet`, or
+  `not_running` when no offset was possible). `holds_others` in
+  SETTLE/STEP/BACK makes `measurement_holds` true: the controller sends the
+  other batteries their latest command and no consumer commands (the
+  self-test's hold), the probed battery `probe.target_w`; `probe.written`
+  gets the write time (the same `sent_at` the learners use). While a probe
+  holds, the controller feeds no learner and the adaptive gain sees nothing.
+- Offset (`probe_offset_w`): ±500 W, at least 300 W, more charging with a
+  surplus of the house (grid − seen batteries < 0), more discharging with a
+  deficit; the allowed power (`power_limits`: SoC, BMS, temperature, power)
+  decides first, else the other way; a reduction leaves at least 100 W, the
+  direction never changes.
+- Measurement (`measure`, every meter report from `_on_grid_change` /
+  `_on_modbus_grid`): dead time = time of the last report below 10 % of the
+  step (a lower bound; reports come about every 0.48 s), arrival = first
+  report at 60 %; `against` (−50 %), `jump` (> 1.5 ×) and `none` (no 60 %)
+  are unclear. The step back starts from the mean of the last second of the
+  step. Result: median of the dead times of the clear measurements; the
+  arrival times go into the step learner (`BatteryResponses.add`).
+- Phase: the phase entities count only when each reported within
+  max(1 s, 1.5 × meter cadence) at the report (`_fast_grid_phases_w`);
+  phases at rest against the last second of a clear step, `classify`; all
+  attempts showing one have to agree; `phase_learner.observe` as after a
+  self-test.
+- `ProbeRecord` per battery (store: battery data `probe`): the last success
+  (`at`, `reason`, `dead_time_s`, `measurements`, `phase`), `failed`,
+  `requested`, `tried_at` and the `fingerprint`: parts `config` (digest of
+  `CONFIG_KEYS` of the subentry, `BatteryRuntime.config_key`), `device`
+  (`read_device_info`, all drivers), `meter` (digest of `METER_KEYS`, plus
+  `sw_version`/`hw_version` of the grid entity's device and the version of a
+  custom integration) and `control` (the same for the first of
+  `CONTROL_ENTITY_KEYS` of a battery from entities). Checked after every read
+  of the device information (after connecting, then every 6 h); only values
+  present on both sides are compared. A changed part sets `requested`
+  (`config`, `firmware`, `meter`, `integration`), drops `dead_time_s` and the
+  learned response times of the battery (`BatteryResponses.clear`). No stored
+  fingerprint (new battery, update to this version) only asks for a probe
+  (`new`). Core integrations have no own version, so Home Assistant updates
+  do not count.
+- Also due: `early_share` > 0.5 over the last 20 measurements of the battery
+  (all kinds; outcomes `learned`, `early`, `dropped`; in memory, reset by a
+  successful probe), `MAX_AGE_S` (90 days) after the last success, the
+  button (`request("manual")`, runs at once, a reason asked for before
+  stays). Unclear or stopped: retried after `RETRY_S` (1 h), a probe asked
+  for only by hand not.
+- Blocked (`probe_blocked`): not controllable, `min_command_interval_s` > 1 s,
+  not active, not plannable or ramping out, any self-test or balancing run,
+  grid stale, BMS full or stopped, feed-in cap active (surplus of the house
+  above the limit − `CAP_MARGIN_W`, not checked while holding). A running
+  probe that gets blocked stops; one probe at a time.
 
 ### Cell balancing
 
@@ -2443,3 +2519,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-23 | A battery from a Modbus profile has a trial: the self-test with extra phases and checks of the profile (registers unchanged at rest before any write, a small first step, nothing written for up to 90 s after a step showed, the registers after the release), one test with its result in two parts instead of a second test logic. It runs again after a profile change (a firmware update is observed instead, see above): the self-test sees the effect at the meter, but not a write that hit a wrong register, a firmware falling back to its own logic or another system writing the same register. Only a trial without a failed check can be taken as passed by the user. |
 | 2026-10-30 | Keep-alives without blocking the control: the Venus driver checks RS485 control and force mode with the telemetry (every 5 s) instead of reading back after a complete write, a keep-alive skips what the telemetry confirmed and the set points without effect (standby), and the keep-alives of several batteries are spread over the interval. A debug log showed every minute one cycle of 4–5 s that wrote all three batteries completely (4 writes and a read back of 1.3 s each); meanwhile SLEMS did not react to the grid (a stove switching off gave 5 s of 1.3 kW export). A lost RS485 control is now seen within 5 s instead of 60 s. |
 | 2026-10-30 | Battery response times are learned cleaner: the median of the last 9 measurements instead of a moving average, commands still on their way counted in, measurements dropped when the meter moved before the earliest response or by more than 1.5 × the expected change, starts and reversals no longer learned as steps, starts only after a stop of 10 s. The commands of the control answer movements of the grid that often go on or back by themselves, and the damped control follows a step with smaller ones: a debug log with a cycling stove taught a Venus 0.39 s (measured 0.8–1.05 s), and a battery whose reversals counted as steps learned 1.31 s against 0.79 s of an identical one. A replay of three debug logs gave 0.9–1.1 s. |
+| 2026-10-30 | The limit "too early" of the response learners is measured per battery with a probe step (±500 W for about 3 s while the others are held, three attempts, every meter report) instead of a fixed driver value or half the learned step: it has to fit every setup (meter cadence, integration, firmware), and a limit too high drops good measurements without anything else lowering it. Only the step of a running battery and the lower bound of the dead time (the last report not moved yet): small, cheap (0.4 Wh per attempt) and safe against dropping good measurements; start and reversal keep the driver's extra time. Due for a new battery, after changes of configuration, firmware, smart meter or controlling integration (learned times dropped), when more than half of the last 20 measurements were too early, after 90 days and by hand; not on Home Assistant updates. The phase comes along only with phase values as fast as the meter. |
