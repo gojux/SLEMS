@@ -1915,13 +1915,18 @@ In operating mode **active** SLEMS reacts to every new value of the smart meter:
 **Automatic control gain** (switch, on by default): the set **Control gain**
 is the upper limit; SLEMS only lowers it when the control swings:
 
-- If the corrections change direction several times in a row without dying
-  out, the control swings: the gain is lowered at once (× 0.8, down to 0.2).
+- SLEMS watches the smart meter: if the grid power swings from import to
+  export and back around the target three times in a row, each time shortly
+  after the control changed its direction, and the swings do not get
+  smaller, the control swings: the gain is lowered at once (× 0.8, down to
+  0.2).
 - After every 5 minutes without swinging it rises again in small steps
   (+ 0.05) up to the set control gain.
 - After a reduction SLEMS waits 30 seconds to see its effect. Normal load
-  changes (a kettle, a cloud) are not mistaken for swinging. The learned value
-  is kept across restarts.
+  changes (a kettle, a cloud, a cycling stove, the short pulses of a coffee
+  machine) are not mistaken for swinging: there the meter jumps by more than
+  the batteries can change it, or the meter moves first and the control
+  follows. The learned value is kept across restarts.
 
 A higher gain does not make the batteries faster, as their response time is
 already taken into account. It only makes the control react harder to errors,

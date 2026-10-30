@@ -2046,14 +2046,19 @@ Im Betriebsmodus **Aktiv** reagiert SLEMS auf jeden neuen Wert des Smart Meters:
 eingestellte **Regelverstärkung** ist die Obergrenze; SLEMS senkt sie nur, wenn
 die Regelung schwingt:
 
-- Wechseln die Korrekturen mehrmals hintereinander die Richtung, ohne kleiner
-  zu werden, schwingt die Regelung: Die Verstärkung wird sofort verringert (×
-  0,8, bis 0,2).
+- SLEMS beobachtet den Smart Meter: Pendelt die Netzleistung dreimal
+  hintereinander um das Ziel zwischen Bezug und Einspeisung, jeweils kurz
+  nachdem die Regelung ihre Richtung gewechselt hat, und werden die
+  Ausschläge nicht kleiner, schwingt die Regelung: Die Verstärkung wird
+  sofort verringert (× 0,8, bis 0,2).
 - Nach jeweils 5 Minuten ohne Schwingen steigt sie in kleinen Schritten (+
   0,05) wieder bis zur eingestellten Regelverstärkung.
 - Nach einer Verringerung wartet SLEMS 30 Sekunden, um die Wirkung zu sehen.
-  Normale Laständerungen (Wasserkocher, Wolke) werden nicht als Schwingen
-  gewertet. Der gelernte Wert bleibt über Neustarts erhalten.
+  Normale Laständerungen (Wasserkocher, Wolke, ein taktender Herd, die kurzen
+  Pulse einer Kaffeemaschine) werden nicht als Schwingen gewertet: Dort
+  springt der Zähler stärker, als die Batterien ihn ändern können, oder der
+  Zähler bewegt sich zuerst und die Regelung folgt. Der gelernte Wert bleibt
+  über Neustarts erhalten.
 
 Eine höhere Verstärkung macht die Batterien nicht schneller, denn ihre
 Reaktionszeit ist schon eingerechnet. Sie lässt die Regelung nur stärker auf

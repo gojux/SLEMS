@@ -1476,38 +1476,58 @@ new       = limit_discharge_export(new, ...)      # hard export limit
 
 #### Adaptive gain
 
-`adaptive_gain.py`, active while the switch *Automatic control gain* is on.
-Input per control cycle: the correction of the total battery power
-(`new − latest`) whenever set points were sent. Corrections below 50 W carry
-no direction and are ignored; corrections more than 15 s apart belong to
-different movements (history cleared).
+`adaptive_gain.py`, active while the switch *Automatic control gain* is on
+and no self-test or probe step holds the batteries. It only lowers the set
+*Control gain* (the upper limit) and recovers towards it. Inputs:
+
+- every meter report (`observe_grid` → `sample`): the grid power and the
+  grid target of the batteries, the charging or discharging grid target
+  (export, negative) by the sign of the commanded total; none while nothing
+  is commanded.
+- every control cycle (`observe`): the correction of the total battery power
+  (`new − latest`, 0 when nothing was sent) and, per battery commanded, its
+  earliest response (`earliest_response_s` of the kind) and its usual
+  response time (step, start or reversal).
 
 | Rule | Condition | Action |
 |---|---|---|
-| Oscillation | 4 significant corrections alternate in sign, each ≥ 70 % of the previous (not dying out) | gain × 0.8 |
-| Sluggish | 5 significant corrections in a row with the same sign, each smaller than the previous (slow approach to a fixed target) | gain + 0.05 |
-| Cooldown | after every adjustment | history cleared, no change for 30 s |
+| Crossing | the grid moves from one side of target ± 100 W to the other | checked below |
+| Caused by the control | the direction of the corrections (≥ 50 W, rising or falling total) reversed before it, at least max(earliest, 0.7 × response) of the fastest battery and at most the loop time earlier: 4 × the longest response + 2 × the median cycle interval | counts; each reversal explains one crossing |
+| From outside | a crossing without such a reversal, or any grid jump between two reports larger than 1.5 × the largest correction of the loop time (and 100 W) | the series of counted crossings ends |
+| Oscillation | 3 counted crossings in a row within 8 loop times, the largest deviation of each half swing ≥ 70 % of the previous one | gain × 0.8 (not below 0.2) |
+| Cooldown | after a reduction | history cleared, no change for 30 s |
+| Recovery | 5 minutes without a change | gain + 0.05, up to the set gain |
 
-Bounds 0.2–0.9. The asymmetry (fast down, slow up) is deliberate: swinging
-costs grid import/export and battery cycles, a slower approach only a little
-self consumption.
+Why these rules: the target of the controller already contains the learned
+response times, so its corrections are a smoothing filter of the commands
+(they shrink by 1 − gain per cycle after a step of the target, however the
+battery reacts) and alternate whenever the target does, e.g. with a cycling
+stove. Only the meter shows whether the loop overshoots. A load from outside
+crosses the target first and the commands follow; a load pulse shorter than
+the response time (a coffee machine) is followed by an overshoot the control
+caused, but each starts with a jump the batteries cannot make, and a single
+overshoot after a load change dies out. A swinging loop causes every crossing
+itself. The window is generous upwards because a wrongly learned response
+time is the usual cause, and a crossing comes up to half a period after the
+reversal.
 
-Why these patterns: a well damped loop answering a step gives corrections of
-one sign that shrink geometrically (ratio 1 − gain). Alternating signs that do
-not decay can only come from the loop itself; outside load changes produce a
-series of one sign per change. A slowly moving target (PV ramp) produces
-corrections of similar size, which neither rule matches.
+Not seen: swinging around another point than the grid target (feed-in cap,
+peak shaving, batteries at their power limit).
 
-The number *Control gain* is the start value: changing it calls
+The number *Control gain* is the limit: changing it calls
 `AdaptiveGain.reset`. With the switch off it is used directly. The current
 gain is stored with the battery learning data (`.storage`, key `control`) and
 restored at startup; restoring the number entity does not reset it.
 
-Tests: `tests/test_adaptive_gain.py` covers oscillation, decaying
-alternation, external load steps, slow approach, ramps, cooldown, gaps and
-bounds. In the dev environment the loop with learned response time does not
-oscillate even at gain 0.9, so the decrease can only be seen there with an
-artificially wrong response time.
+Tests: `tests/test_adaptive_gain.py` covers a swinging grid, too few and dying
+swings, crossings too early or without a reversal, the series reset, bounds,
+cooldown and recovery, and a small control loop (0.5 s cycles): with a
+response time learned 1 s too short and gain 0.67 it swings by more than
+1 kW without the adaptation and settles with it; a cycling stove, coffee
+machine pulses and a load step are no oscillation with gain 0.5, also with a
+response time one cycle off. A replay of the three debug logs of 13.10. and
+30.10.2026 (coffee machine, stove, microwave) gave no reduction, also with
+step times of 0.4–3 s and other grid targets.
 
 Possible extensions: separate gains for charging and discharging; adapting
 the averaging window; using the scatter of the learned response time to
@@ -2568,4 +2588,5 @@ repository (otherwise its *brands* check fails).
 | 2026-10-30 | Keep-alives without blocking the control: the Venus driver checks RS485 control and force mode with the telemetry (every 5 s) instead of reading back after a complete write, a keep-alive skips what the telemetry confirmed and the set points without effect (standby), and the keep-alives of several batteries are spread over the interval. A debug log showed every minute one cycle of 4–5 s that wrote all three batteries completely (4 writes and a read back of 1.3 s each); meanwhile SLEMS did not react to the grid (a stove switching off gave 5 s of 1.3 kW export). A lost RS485 control is now seen within 5 s instead of 60 s. |
 | 2026-10-30 | Battery response times are learned cleaner: the median of the last 9 measurements instead of a moving average, commands still on their way counted in, measurements dropped when the meter moved before the earliest response or by more than 1.5 × the expected change, starts and reversals no longer learned as steps, starts only after a stop of 10 s. The commands of the control answer movements of the grid that often go on or back by themselves, and the damped control follows a step with smaller ones: a debug log with a cycling stove taught a Venus 0.39 s (measured 0.8–1.05 s), and a battery whose reversals counted as steps learned 1.31 s against 0.79 s of an identical one. A replay of three debug logs gave 0.9–1.1 s. |
 | 2026-10-30 | The limit "too early" of the response learners is measured per battery with a probe step (±500 W for about 3 s while the others are held, three attempts, every meter report) instead of a fixed driver value or half the learned step: it has to fit every setup (meter cadence, integration, firmware), and a limit too high drops good measurements without anything else lowering it. Only the step of a running battery and the lower bound of the dead time (the last report not moved yet): small, cheap (0.4 Wh per attempt) and safe against dropping good measurements; start and reversal keep the driver's extra time. Due for a new battery, after changes of configuration, firmware, smart meter or controlling integration (learned times dropped), when more than half of the last 20 measurements were too early, after 90 days and by hand; not on Home Assistant updates. The phase comes along only with phase values as fast as the meter. |
+| 2026-10-30 | The automatic control gain sees oscillation at the smart meter instead of in the corrections of the commands: a crossing of the grid target (± 100 W) counts when a reversal of the corrections came before it within the loop time (from 0.7 × the response time of the fastest battery to 4 × the longest response time plus 2 cycles), three in a row without a crossing or jump from outside and without dying out lower the gain. The corrections only smooth the commands (they alternate with every cycling load and never with an overshoot alone), so the old rule fired with the target and never with the loop. A first version that counted crossings of the median grid power and only required the reversal before each crossing lowered the gain in replays of coffee machine and stove logs: the median moves with long exports, and a load pulse shorter than the response time is followed by one real overshoot per pulse; a series broken by every load jump from outside and swings that do not die out separate both from a swinging loop. |
 | 2026-10-30 | Minimum power per battery (**Automatic, energetic** / **Automatic, economic** (default) / **Manual** / **Off**): no charging below the power that stores anything, economically also not where the stored energy is worth less than its feed-in, from the losses below 300 W learned per direction (50 W bins from 40 W) and the prices now; the automatic modes start once these losses are learned. A start at the threshold, running down to 25 W below (never below the fixed loss) and for the learned start time; the strategy shows it. Charging a Venus below about 40 W discharges it, below about 65 W the stored energy is worth less than its feed-in. Not done: holding small deficits back for larger loads when the energy runs short (about 3 ct per moved kWh, only if the battery would run empty and larger loads come) and waiting a reversal time before a new direction (a replay of three debug logs: about 4 times the grid exchange it saves). |

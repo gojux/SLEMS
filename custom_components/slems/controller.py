@@ -206,6 +206,8 @@ class RealTimeController:
         self.battery_starts = BatteryStarts()
         self.consumer_response: dict[str, DirectionalResponse] = {}
         self.gain_adapter = AdaptiveGain(coordinator.settings.control_gain)
+        # Earliest and usual response time of each battery commanded in this cycle.
+        self._command_responses: list[tuple[float, float]] = []
         self.status = ControlStatus.INACTIVE
 
     # --- observations ---------------------------------------------------------
@@ -220,6 +222,9 @@ class RealTimeController:
         """A new grid power value arrived."""
         self._last_grid_w = grid_w
         now = time.monotonic()
+        coordinator = self._coordinator
+        if coordinator.settings.auto_gain and not coordinator.measurement_holds:
+            self.gain_adapter.sample(now, grid_w, self._grid_target_w())
         self.battery_response.sample(now, grid_w)
         self.battery_reversal_response.sample(now, grid_w)
         self.battery_responses.sample(now, grid_w)
@@ -262,6 +267,18 @@ class RealTimeController:
                 )
             seen[battery_id] = power
         return seen
+
+    def _grid_target_w(self) -> float | None:
+        """Grid power the batteries control to (export negative); None while
+        none is commanded or all stand still."""
+        total = sum(
+            power
+            for battery_id in self._battery_history
+            if (power := self._latest_command(battery_id)) is not None
+        )
+        if total == 0:
+            return None
+        return -self._coordinator.grid_target_w(self._coordinator.settings, charging=total > 0)
 
     def _battery_name(self, battery_id: str) -> str:
         return next(
@@ -576,6 +593,7 @@ class RealTimeController:
             return
         self.status = ControlStatus.ACTIVE
         start = time.monotonic()
+        self._command_responses = []
         if await self._async_release_ramped_out():
             # Only the handover in this cycle; the meter first has to catch up.
             return
@@ -620,8 +638,13 @@ class RealTimeController:
                 latest_total if new_total is None else new_total,
                 self.gain,
             )
-        if new_total is not None and coordinator.settings.auto_gain and not coordinator.measurement_holds:
-            self.gain_adapter.observe(start, new_total - latest_total, coordinator.settings.control_gain)
+        if coordinator.settings.auto_gain and not coordinator.measurement_holds:
+            self.gain_adapter.observe(
+                start,
+                0.0 if new_total is None else new_total - latest_total,
+                coordinator.settings.control_gain,
+                self._command_responses,
+            )
         if not coordinator.measurement_holds:
             await self._async_apply_consumers(snapshot)
         self.observe_consumers(snapshot)
@@ -811,6 +834,14 @@ class RealTimeController:
                     new_total += latest
         if not changes:
             return None
+        for battery_id in changes:
+            if battery_id in reversed_from:
+                kind, response = "reversal", self.battery_reversal_response_s(battery_id)
+            elif battery_id in started_ids or battery_id in restarted_ids:
+                kind, response = "start", self.battery_start_response_s(battery_id)
+            else:
+                kind, response = "step", self.battery_response_s(battery_id)
+            self._command_responses.append((self.earliest_response_s(battery_id, kind), response))
         if any(b.probe is not None and b.probe.holds_others for b in self._coordinator.batteries):
             # The probe step measures its own commands (see response_probe).
             self.battery_response.cancel()

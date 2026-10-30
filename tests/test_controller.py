@@ -191,3 +191,33 @@ def test_earliest_response_from_the_probe_the_driver_or_the_learned_step() -> No
     assert controller.earliest_response_s("a", "step") == 0.6
     assert controller.earliest_response_s("a", "start") == pytest.approx(0.6 + 0.75 * 1.6)
     assert controller.earliest_response_s("b", "step") == 0.5
+
+
+def test_grid_target_of_the_oscillation_detection() -> None:
+    from custom_components.slems.controller import RealTimeController
+
+    battery = SimpleNamespace(subentry_id="a", driver=SimpleNamespace(start_delay_s=2.7), measured_power_w=None)
+    settings = SimpleNamespace(control_gain=0.5, auto_gain=True)
+    coordinator = SimpleNamespace(
+        hass=None,
+        batteries=[battery],
+        settings=settings,
+        measurement_holds=False,
+        grid_target_w=lambda _settings, *, charging: 100.0 if charging else 50.0,
+    )
+    controller = RealTimeController(coordinator)
+    # Nothing commanded or standing still: no target.
+    assert controller._grid_target_w() is None
+    controller._record_command("a", 0.0, 0.0)
+    assert controller._grid_target_w() is None
+    # Charging keeps the charging target as export, discharging the discharging target.
+    controller._record_command("a", 800.0, 1.0)
+    assert controller._grid_target_w() == -100.0
+    controller._record_command("a", -800.0, 2.0)
+    assert controller._grid_target_w() == -50.0
+    # Each meter report goes to the detection, not while a measurement holds the batteries.
+    controller.observe_grid(-40.0)
+    assert controller.gain_adapter._previous_grid_w == -40.0
+    coordinator.measurement_holds = True
+    controller.observe_grid(300.0)
+    assert controller.gain_adapter._previous_grid_w == -40.0
