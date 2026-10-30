@@ -255,6 +255,24 @@ def test_syntax_and_duplicate_keys() -> None:
     assert error(refusal).code == "not_profile"
 
 
+def test_max_read_registers() -> None:
+    assert parse_profile(MINIMAL).connection.max_read_registers == 125
+    limited = MINIMAL.replace("name: Test battery\n", "name: Test battery\nconnection: {max_read_registers: 32}\n")
+    assert parse_profile(limited).connection.max_read_registers == 32
+    for value in ("0", "126", "32.5", "many"):
+        err = error(limited.replace("max_read_registers: 32", f"max_read_registers: {value}"))
+        assert (err.code, err.path) == ("invalid", "connection.max_read_registers"), value
+    # A value longer than one request can never be read.
+    text = limited.replace("probe:", "device_info:\n  model: {address: 300, type: char, count: 40}\nprobe:")
+    assert (error(text).code, error(text).path) == ("invalid", "device_info.model.count")
+    one = MINIMAL.replace("name: Test battery\n", "name: Test battery\nconnection: {max_read_registers: 1}\n")
+    err = error(one.replace("ac_power_w: {address: 101, type: int16", "ac_power_w: {address: 101, type: int32"))
+    assert (err.code, err.path) == ("invalid", "read.ac_power_w.type")
+    # Write registers are read as well (at rest, read back).
+    err = error(one.replace('{address: 200, type: uint16, value: "{charge_w}"', '{address: 200, type: uint32, value: "{charge_w}"'))
+    assert (err.code, err.path) == ("invalid", "control.apply[0].type")
+
+
 def test_at_rest_is_required_for_every_profile() -> None:
     text = MINIMAL.replace(', at_rest: [0, 2000]', '')
     assert error(text).code == "missing_key"

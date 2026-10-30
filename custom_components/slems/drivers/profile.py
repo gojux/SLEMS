@@ -46,6 +46,7 @@ from homeassistant.exceptions import HomeAssistantError
 from modbus_connection import ModbusError, ModbusExceptionError
 
 from ..battery_profiles import (
+    MAX_READ_REGISTERS,
     PLACEHOLDER_CHARGE,
     PLACEHOLDER_DISCHARGE,
     PLACEHOLDER_POWER,
@@ -75,9 +76,9 @@ from .modbus_client import ModbusTcpLink
 _LOGGER = logging.getLogger(__name__)
 
 # Registers at most this far apart are read in one frame (the Venus answers
-# 30001-30006 in one frame, but refuses ranges over unassigned registers).
+# 30001-30006 in one frame, but refuses ranges over unassigned registers);
+# a frame holds at most the profile's connection.max_read_registers.
 BLOCK_GAP = 5
-MAX_BLOCK = 125
 # Slowly changing values, read at most every SLOW_READ_S (like the Venus driver).
 SLOW_READ_KEYS = frozenset({"voltage_v", "temperature_c", "cycles", "charged_kwh", "discharged_kwh"})
 SLOW_READ_S = 60.0
@@ -266,9 +267,10 @@ async def read_profile(profile: BatteryProfile, transport: ProfileTransport) -> 
             await transport.close()
 
 
-def read_blocks(registers: list[Register]) -> list[tuple[int, int, bool]]:
-    """Blocks (start, count, input registers) of registers close together; only
-    blocks of at least two registers (a single one is read on its own)."""
+def read_blocks(registers: list[Register], max_block: int = MAX_READ_REGISTERS) -> list[tuple[int, int, bool]]:
+    """Blocks (start, count, input registers) of registers close together, at most
+    ``max_block`` long; only blocks of at least two registers (a single one is read
+    on its own)."""
     blocks: list[tuple[int, int, bool]] = []
     for kind in (False, True):
         spans = sorted({(r.address, r.address + r.size) for r in registers if r.input is kind})
@@ -277,7 +279,7 @@ def read_blocks(registers: list[Register]) -> list[tuple[int, int, bool]]:
             group = groups[-1] if groups else None
             if group is not None:
                 group_end = max(e for _, e in group)
-                if start - group_end <= BLOCK_GAP and max(end, group_end) - group[0][0] <= MAX_BLOCK:
+                if start - group_end <= BLOCK_GAP and max(end, group_end) - group[0][0] <= max_block:
                     group.append((start, end))
                     continue
             groups.append([(start, end)])
@@ -500,7 +502,7 @@ class ProfileDriver(BatteryDriver):
         failed: dict[tuple[int, int, bool], list[Register]] = {}
         # The block whose read dropped the connection.
         dropped: tuple[int, int, bool] | None = None
-        for block in read_blocks(registers):
+        for block in read_blocks(registers, self._profile.connection.max_read_registers):
             if block in self._refused_blocks:
                 continue
             start, count, kind = block

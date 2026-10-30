@@ -143,6 +143,8 @@ PLACEHOLDERS = (*POWER_PLACEHOLDERS, PLACEHOLDER_MODE)
 
 DEFAULT_MESSAGE_SPACING_S = 0.0
 DEFAULT_TIMEOUT_S = 3.0
+# The most registers Modbus reads in one request (some devices answer fewer).
+MAX_READ_REGISTERS = 125
 DEFAULT_CONFIRM_DELAY_S = 0.2
 DEFAULT_CONFIRM_TOLERANCE_W = 100.0
 DEFAULT_MAX_CHANGES_PER_DAY = 100
@@ -281,6 +283,8 @@ class Connection:
     unit_id: int = 1
     message_spacing_s: float = DEFAULT_MESSAGE_SPACING_S
     timeout_s: float = DEFAULT_TIMEOUT_S
+    # The most registers read in one request.
+    max_read_registers: int = MAX_READ_REGISTERS
 
 
 @dataclass(frozen=True)
@@ -621,6 +625,7 @@ def bundled_profiles() -> dict[str, BatteryProfile]:
 class _Parser:
     def __init__(self, bundled: bool) -> None:
         self._bundled = bundled
+        self._max_read = MAX_READ_REGISTERS
 
     # --- helpers
 
@@ -718,6 +723,9 @@ class _Parser:
         profile_id = self._text(doc, "id", "")
         if not _ID_PATTERN.fullmatch(profile_id):
             raise self._fail("invalid", "id", doc, "id", "lower case letters, digits and _")
+        connection = self._connection(doc)
+        # Every register must fit into one read request.
+        self._max_read = connection.max_read_registers
         limits = self._limits(doc)
         own_pv = self._own_pv(doc)
         read = self._read(doc, own_pv)
@@ -728,7 +736,7 @@ class _Parser:
             manufacturer=self._text(doc, "manufacturer", "", default=""),
             revision=self._number(doc, "revision", "", default=1, minimum=1, integer=True),
             notes=self._text(doc, "notes", "", default=""),
-            connection=self._connection(doc),
+            connection=connection,
             limits=limits,
             timing=self._timing(doc),
             own_pv=own_pv,
@@ -744,17 +752,25 @@ class _Parser:
     def _connection(self, doc: _LineDict) -> Connection:
         if "connection" not in doc:
             return Connection()
-        keys = ("port", "unit_id", "message_spacing_s", "timeout_s")
+        keys = ("port", "unit_id", "message_spacing_s", "timeout_s", "max_read_registers")
         m = self._mapping(doc["connection"], "connection", keys, doc, "connection")
         port = self._number(m, "port", "connection", default=502, minimum=1, integer=True)
         unit_id = self._number(m, "unit_id", "connection", default=1, integer=True)
         if port > 0xFFFF or unit_id > 255:
             raise self._fail("invalid", "connection", m)
+        max_read = self._number(
+            m, "max_read_registers", "connection", default=MAX_READ_REGISTERS, minimum=1, integer=True
+        )
+        if max_read > MAX_READ_REGISTERS:
+            raise self._fail(
+                "invalid", "connection.max_read_registers", m, "max_read_registers", f"1-{MAX_READ_REGISTERS}"
+            )
         return Connection(
             port=port,
             unit_id=unit_id,
             message_spacing_s=self._number(m, "message_spacing_s", "connection", default=DEFAULT_MESSAGE_SPACING_S),
             timeout_s=self._number(m, "timeout_s", "connection", default=DEFAULT_TIMEOUT_S, exclusive=True),
+            max_read_registers=max_read,
         )
 
     def _limits(self, doc: _LineDict) -> Limits:
@@ -830,7 +846,13 @@ class _Parser:
         )
         if register.address + register.size - 1 > 0xFFFF:
             raise self._fail("invalid", f"{path}.address", m, "address", "beyond 65535")
+        self._check_size(register.size, path, m, "count" if data_type == "char" else "type")
         return register, m
+
+    def _check_size(self, size: int, path: str, where: _LineDict, key: str) -> None:
+        if size > self._max_read:
+            detail = f"{size} registers, connection.max_read_registers {self._max_read}"
+            raise self._fail("invalid", f"{path}.{key}", where, key, detail)
 
     def _read(self, doc: _LineDict, own_pv: OwnPv | None) -> dict[str, ReadValue]:
         m = self._mapping(self._required(doc, "read", ""), "read", (*READ_KEYS, "state"), doc, "read")
@@ -1067,6 +1089,8 @@ class _Parser:
             ),
             confirm=self._flag(m, "confirm", path),
         )
+        # Write registers are read as well (at rest, read back).
+        self._check_size(step.size, path, m, "type")
         fixed = [value] if not placeholder else list(modes.values()) if modes else []
         for raw in fixed:
             self._check_raw(step, raw, path, m, "value" if not modes else "modes")

@@ -1842,9 +1842,11 @@ profile out:
   therefore drops the connection at the first request without an answer,
   fails the rest of the read at once and is used again only after
   `RECONNECT_SETTLE_S` (1 s); reconnecting is left to the backend.
-- Reading: registers at most `BLOCK_GAP` (5) apart are read in one frame
-  (`read_blocks`; for the Venus profile exactly the blocks of the Venus
-  driver), refused blocks are remembered and read one by one, slow values
+- Reading: registers at most `BLOCK_GAP` (5) apart are read in one frame of
+  at most `connection.max_read_registers` registers (`read_blocks`; optional,
+  default and highest value 125, the Modbus maximum; a Venus D does not
+  answer more than 32; the loader refuses a value or write register longer
+  than it; for the Venus profile exactly the blocks of the Venus driver), refused blocks are remembered and read one by one, slow values
   every 60 s. A block whose failure dropped the connection is read one by one
   the next time and, if its registers answer, asked once more; only failing
   again makes it refused: over Home Assistant's backend an exception frame of

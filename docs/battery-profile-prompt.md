@@ -81,6 +81,7 @@ connection:                                   # optional, defaults as shown
   unit_id: 1
   message_spacing_s: 0.0                      # least time between two requests in s
   timeout_s: 3.0
+  max_read_registers: 125                     # most registers in one read request (reading only)
 limits:
   max_charge_w: <highest charge power in W, integer>
   max_discharge_w: <highest discharge power in W, integer>
@@ -369,6 +370,9 @@ Rules:
   between requests or a response time for Modbus TCP; values given only
   for RS485 (Modbus RTU) do not count. If it says nothing, add
   "# question: least time between requests?" at the top.
+- max_read_registers only if the manual names the most registers one read
+  request may hold (e.g. "at most 32 registers per read"); it limits only
+  reading, not writing. Otherwise leave it out.
 - timing: leave it out (SLEMS learns the response times) unless the manual
   names a delay of the set points or a least time between them.
 - device_info: the firmware versions and the serial number, if given:

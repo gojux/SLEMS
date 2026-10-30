@@ -26,7 +26,7 @@ PROMPTS = ("battery-profile-prompt.md", "battery-profile-prompt.de.md")
 KEYS = (
     FORMAT_KEY, "id", "name", "manufacturer", "revision", "notes", "connection", "limits", "timing", "own_pv",
     "read", "device_info", "control", "probe",
-    "port", "unit_id", "message_spacing_s", "timeout_s",
+    "port", "unit_id", "message_spacing_s", "timeout_s", "max_read_registers",
     "max_charge_w", "max_discharge_w", "min_power_w",
     "start_delay_s", "start_extra_s", "reversal_extra_s", "min_command_interval_s",
     "max_output_w", "ac_charge", "passes_pv_through",

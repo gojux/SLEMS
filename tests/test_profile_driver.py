@@ -4,12 +4,13 @@ compared with the direct Venus driver, and with own PV, flash registers and
 
 import importlib.util
 from pathlib import Path
+import re
 from unittest.mock import patch
 
 from modbus_connection import IllegalDataAddressError, ModbusTimeoutError
 import pytest
 
-from custom_components.slems.battery_profiles import bundled_profiles, parse_profile
+from custom_components.slems.battery_profiles import Register, bundled_profile_text, bundled_profiles, parse_profile
 from custom_components.slems.const import ReleaseState
 from custom_components.slems.drivers import marstek_venus_e3 as venus
 from custom_components.slems.drivers import profile as profile_driver
@@ -127,6 +128,28 @@ def venus_driver(link, release_state=ReleaseState.AUTO) -> MarstekVenusE3Driver:
 
 
 # --- compared with the Venus driver --------------------------------------------
+
+
+def test_blocks_are_at_most_max_read_registers_long() -> None:
+    registers = [Register(30001, "int16"), Register(30006, "int16"), Register(33000, "uint32"), Register(33002, "int32")]
+    assert [(start, count) for start, count, _ in read_blocks(registers)] == [(30001, 6), (33000, 4)]
+    # Registers that do not fit into one block together are read on their own.
+    assert read_blocks(registers, 4) == [(33000, 4, False)]
+    assert read_blocks(registers, 3) == []
+
+
+async def test_reads_at_most_max_read_registers_per_request() -> None:
+    # Without the device information (its texts are longer than 3 registers).
+    text = re.sub(r"device_info:\n(  .*\n)+\n", "", bundled_profile_text("marstek_venus_e3"))
+    text = text.replace("  timeout_s: 3\n", "  timeout_s: 3\n  max_read_registers: 3\n")
+    link = SimLink(SIM.VenusModel(5120, 63.0))
+    reading = await read_profile(parse_profile(text, bundled=True), link)
+    assert reading.values["soc_pct"] == 63.0
+    assert max(count for _, count in link.reads()) <= 3
+    # Without the limit the Venus profile reads 30001-30006 in one request.
+    link = SimLink(SIM.VenusModel(5120, 63.0))
+    await read_profile(bundled_profiles()["marstek_venus_e3"], link)
+    assert (30001, 6) in link.reads()
 
 
 def test_blocks_of_the_venus_profile_are_the_drivers() -> None:

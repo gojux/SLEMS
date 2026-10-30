@@ -86,6 +86,7 @@ connection:                                   # optional, Standardwerte wie geze
   unit_id: 1
   message_spacing_s: 0.0                      # kleinster Abstand zwischen zwei Anfragen in s
   timeout_s: 3.0
+  max_read_registers: 125                     # höchstens so viele Register je Leseanfrage (nur Lesen)
 limits:
   max_charge_w: <höchste Ladeleistung in W, ganze Zahl>
   max_discharge_w: <höchste Entladeleistung in W, ganze Zahl>
@@ -383,6 +384,9 @@ Regeln:
   Abstand zwischen Anfragen oder eine Antwortzeit für Modbus TCP nennt;
   Angaben nur für RS485 (Modbus RTU) gelten nicht. Sagt es nichts,
   schreib oben "# Frage: kleinster Abstand zwischen Anfragen?".
+- max_read_registers nur, wenn das Handbuch nennt, wie viele Register eine
+  Leseanfrage höchstens enthalten darf (z. B. „höchstens 32 Register je
+  Lesen“); es begrenzt nur das Lesen, nicht das Schreiben. Sonst weglassen.
 - timing: weglassen (SLEMS lernt die Reaktionszeiten), außer das Handbuch
   nennt eine Verzögerung der Vorgaben oder einen kleinsten Abstand zwischen
   ihnen.
