@@ -1812,20 +1812,26 @@ In operating mode **active** SLEMS reacts to every new value of the smart meter:
    deviation is corrected per cycle. A high gain reacts faster, a too high
    gain overshoots and makes the grid power swing back and forth.
 
-**Automatic control gain** (switch, on by default): SLEMS watches its own
-corrections and adjusts the gain between 0.2 and 0.9:
+**Automatic control gain** (switch, on by default): the set **Control gain**
+is the upper limit; SLEMS only lowers it when the control swings:
 
 - If the corrections change direction several times in a row without dying
-  out, the control swings: the gain is lowered at once (× 0.8).
-- If the grid power approaches the target only slowly over many cycles without
-  ever overshooting, the gain is raised in small steps (+ 0.05).
-- After each change SLEMS waits 30 seconds to see its effect. Normal load
+  out, the control swings: the gain is lowered at once (× 0.8, down to 0.2).
+- After every 5 minutes without swinging it rises again in small steps
+  (+ 0.05) up to the set control gain.
+- After a reduction SLEMS waits 30 seconds to see its effect. Normal load
   changes (a kettle, a cloud) are not mistaken for swinging. The learned value
   is kept across restarts.
 
-While the automatic adjustment is on, the settings show the learned gain.
-Switched off, **Control gain** is used as a fixed value; switched on again,
-the adjustment goes on from the gain it learned last. **Control interval**
+A higher gain does not make the batteries faster, as their response time is
+already taken into account. It only makes the control react harder to errors,
+e.g. to a wrongly learned response time. With a fast smart meter (e.g. over
+Modbus every 0.5 s) 0.5 is a good value; if it reports only every few seconds,
+it may be higher (e.g. 0.7).
+
+The sensor **Current control gain** shows the gain used right now. Switched
+off, **Control gain** is used as a fixed value; switched on again, the
+adjustment goes on from the gain it learned last, at most the set one. **Control interval**
 (default 1 s) limits how often SLEMS sends commands.
 
 Diagnostic sensors show what SLEMS has learned:

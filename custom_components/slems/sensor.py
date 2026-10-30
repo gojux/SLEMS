@@ -295,7 +295,7 @@ def _learned_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
         "grid_target_samples": [len(c.grid_targets.charge), len(c.grid_targets.discharge)],
         "control_interval_s": timing[0] if timing else None,
         "surplus_average_window_s": timing[1] if timing else None,
-        "control_gain": round(c.controller.gain_adapter.gain, 2),
+        "control_gain": round(c.controller.gain, 2),
         "night_reserve_pct": c.morning_gap.reserve_pct(c.settings.night_reserve_coverage_pct),
         "morning_days": len(c.morning_gap.days),
         # Data per basis of the learned values: [recorded, needed].

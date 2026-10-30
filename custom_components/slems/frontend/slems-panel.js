@@ -455,9 +455,9 @@ const STRINGS = {
       vacation:
         "For absences, by hand or by an automation (e.g. with the presence). While it is on, the consumption forecast assumes at most the consumption at night. Days on which it was on are left out of the learned consumption, so the forecast is not too low after the return.",
       auto_gain:
-        "SLEMS watches its own corrections and adjusts the control gain between 0.2 and 0.9: if the grid power swings back and forth, it drops at once; if it approaches the target only slowly, it rises in small steps. Normal load changes (kettle, cloud) do not count as swinging. Off: the set control gain applies.",
+        "The set **Control gain** is the upper limit; SLEMS only lowers it: if the grid power swings back and forth, it drops at once (down to 0.2), after 5 minutes without swinging it rises again step by step up to the set value. Normal load changes (kettle, cloud) do not count as swinging. Off: the set control gain applies.",
       control_gain:
-        "Share of the remaining deviation SLEMS corrects per control cycle: 0.5 = half of it. Higher reacts faster, too high makes the grid power swing back and forth. Only without **Automatic control gain**.",
+        "Share of the remaining deviation SLEMS corrects per control cycle: 0.5 = half of it. Higher reacts faster, too high makes the grid power swing back and forth. With **Automatic control gain** the upper limit.",
       control_interval:
         "Minimum time between two control cycles: SLEMS controls at every report of the smart meter, but at most this often. Best just below the report interval of the smart meter; **Automatic control timing** sets it by itself (0.8 × report interval).",
       surplus_average_window:
@@ -1125,9 +1125,9 @@ const STRINGS = {
       vacation:
         "Für Abwesenheiten, von Hand oder per Automation (z. B. mit der Anwesenheit). Solange er an ist, rechnet die Verbrauchsprognose höchstens mit dem Verbrauch in der Nacht. Tage, an denen er an war, lässt SLEMS aus dem gelernten Verbrauch heraus, damit die Prognose nach der Rückkehr nicht zu tief liegt.",
       auto_gain:
-        "SLEMS beobachtet seine eigenen Korrekturen und passt die Regelverstärkung zwischen 0,2 und 0,9 an: Schwingt die Netzleistung hin und her, sinkt sie sofort; nähert sie sich dem Ziel nur langsam, steigt sie in kleinen Schritten. Normale Laständerungen (Wasserkocher, Wolke) zählen nicht als Schwingen. Aus: Es gilt die eingestellte Regelverstärkung.",
+        "Die eingestellte **Regelverstärkung** ist die Obergrenze; SLEMS senkt sie nur: Schwingt die Netzleistung hin und her, sinkt sie sofort (bis 0,2), nach 5 Minuten ohne Schwingen steigt sie schrittweise wieder bis zum eingestellten Wert. Normale Laständerungen (Wasserkocher, Wolke) zählen nicht als Schwingen. Aus: Es gilt die eingestellte Regelverstärkung.",
       control_gain:
-        "Anteil der verbleibenden Abweichung, den SLEMS pro Regelzyklus korrigiert: 0,5 = die Hälfte. Höher reagiert schneller, zu hoch lässt die Netzleistung hin und her schwingen. Gilt nur ohne **Automatische Regelverstärkung**.",
+        "Anteil der verbleibenden Abweichung, den SLEMS pro Regelzyklus korrigiert: 0,5 = die Hälfte. Höher reagiert schneller, zu hoch lässt die Netzleistung hin und her schwingen. Mit **Automatische Regelverstärkung** die Obergrenze.",
       control_interval:
         "Mindestabstand zwischen zwei Regelzyklen: SLEMS regelt bei jeder Meldung des Smart Meters, aber höchstens so oft. Sinnvoll knapp unter dem Meldeintervall des Smart Meters; das stellt **Regelzeiten automatisch** selbst ein (0,8 × Meldeintervall).",
       surplus_average_window:
@@ -1397,7 +1397,6 @@ const LEARNED_SETTINGS = {
   charge_secured_buffer: ["charge_secured_buffer_auto", "charge_secured_buffer_kwh", ["pv", "consumption"]],
   charge_grid_target: ["grid_targets_auto", "charge_grid_target_w", ["grid_target_charge"]],
   discharge_grid_target: ["grid_targets_auto", "discharge_grid_target_w", ["grid_target_discharge"]],
-  control_gain: ["auto_gain", "control_gain", []],
   control_interval: ["timing_auto", "control_interval_s", []],
   surplus_average_window: ["timing_auto", "surplus_average_window_s", []],
   night_reserve: ["night_reserve_auto", "night_reserve_pct", ["morning"]],

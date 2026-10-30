@@ -295,7 +295,7 @@ class RealTimeController:
     def gain(self) -> float:
         """Gain used for the next control cycle."""
         settings = self._coordinator.settings
-        return self.gain_adapter.gain if settings.auto_gain else settings.control_gain
+        return self.gain_adapter.current(settings.control_gain) if settings.auto_gain else settings.control_gain
 
     def consumer_command_since(self, subentry_id: str) -> float | None:
         """Monotonic time the current command of a consumer was sent (None: none)."""
@@ -549,7 +549,7 @@ class RealTimeController:
                 self.gain,
             )
         if new_total is not None and coordinator.settings.auto_gain:
-            self.gain_adapter.observe(start, new_total - latest_total)
+            self.gain_adapter.observe(start, new_total - latest_total, coordinator.settings.control_gain)
         if not coordinator.self_test_holds:
             await self._async_apply_consumers(snapshot)
         self.observe_consumers(snapshot)

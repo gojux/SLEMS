@@ -1933,23 +1933,30 @@ Im Betriebsmodus **Aktiv** reagiert SLEMS auf jeden neuen Wert des Smart Meters:
    reagiert schneller, eine zu hohe schießt über und lässt die Netzleistung
    hin- und herschwingen.
 
-**Automatische Regelverstärkung** (Schalter, standardmäßig an): SLEMS
-beobachtet seine eigenen Korrekturen und passt die Verstärkung zwischen 0,2
-und 0,9 an:
+**Automatische Regelverstärkung** (Schalter, standardmäßig an): Die
+eingestellte **Regelverstärkung** ist die Obergrenze; SLEMS senkt sie nur, wenn
+die Regelung schwingt:
 
 - Wechseln die Korrekturen mehrmals hintereinander die Richtung, ohne kleiner
   zu werden, schwingt die Regelung: Die Verstärkung wird sofort verringert (×
-  0,8).
-- Nähert sich die Netzleistung über viele Zyklen nur langsam dem Ziel, ohne je
-  überzuschwingen, wird die Verstärkung in kleinen Schritten erhöht (+ 0,05).
-- Nach jeder Änderung wartet SLEMS 30 Sekunden, um die Wirkung zu sehen.
+  0,8, bis 0,2).
+- Nach jeweils 5 Minuten ohne Schwingen steigt sie in kleinen Schritten (+
+  0,05) wieder bis zur eingestellten Regelverstärkung.
+- Nach einer Verringerung wartet SLEMS 30 Sekunden, um die Wirkung zu sehen.
   Normale Laständerungen (Wasserkocher, Wolke) werden nicht als Schwingen
   gewertet. Der gelernte Wert bleibt über Neustarts erhalten.
 
-Solange die Automatik an ist, zeigen die Einstellungen die gelernte
-Verstärkung. Ist sie ausgeschaltet, gilt die **Regelverstärkung** als fester
-Wert; wird sie wieder eingeschaltet, macht die Anpassung mit der zuletzt
-gelernten Verstärkung weiter. Das
+Eine höhere Verstärkung macht die Batterien nicht schneller, denn ihre
+Reaktionszeit ist schon eingerechnet. Sie lässt die Regelung nur stärker auf
+Fehler reagieren, z. B. auf eine falsch gelernte Reaktionszeit. Meldet der
+Smart Meter schnell (z. B. über Modbus alle 0,5 s), ist 0,5 ein guter Wert;
+meldet er nur alle paar Sekunden, darf sie höher sein (z. B. 0,7).
+
+Die gerade verwendete Verstärkung zeigt der Sensor **Aktuelle
+Regelverstärkung**. Ist die Automatik ausgeschaltet, gilt die
+**Regelverstärkung** als fester Wert; wird sie wieder eingeschaltet, macht die
+Anpassung mit der zuletzt gelernten Verstärkung weiter, höchstens mit der
+eingestellten. Das
 **Regelintervall** (Standard 1 s) begrenzt, wie oft SLEMS Befehle sendet.
 
 Diagnose-Sensoren zeigen, was SLEMS gelernt hat:
