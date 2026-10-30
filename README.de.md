@@ -1865,6 +1865,16 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
   Quelle und Aktualisierungsintervall des Smart Meters, bei Modbus mit
   Antwortzeit, Fehlern und der Zeit über die Entität heute, und die
   Reaktionszeiten der Batterien).
+  Mit einer Batterie mit eigener PV (Hybrid-Wechselrichter, Balkonkraftwerk
+  mit Batterie) kannst du oben rechts zwischen **Summiert** und **Nach
+  Geräten** wählen; die Wahl merkt sich der Browser. **Summiert** zeigt alle
+  PV in einer Box, die Batterie mit der Leistung, die ihr Wechselrichter
+  einschließlich ihrer PV aufnimmt. **Nach Geräten** zeigt jede PV-Anlage
+  einzeln und eine solche Batterie so, wie die Energie fließt: ihren
+  Wechselrichter mit der Leistung an seinem Anschluss (**Abgabe** ins Haus
+  oder **Aufnahme** aus dem Haus), darunter ihre PV und die Batterie mit
+  ihrer Leistung auf der DC-Seite. Was dabei fehlt, sind die Verluste des
+  Wechselrichters.
 - **Kennzahlen**: Status (zuerst Probleme – Smart Meter ohne Werte, Batterie
   nicht lesbar oder reagiert nicht –, sonst der Betriebsmodus), Strategie
   (ein Wechsel erscheint erst, wenn er 30 Sekunden besteht; die Regelung

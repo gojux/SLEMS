@@ -10,9 +10,10 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
-from .const import DOMAIN
+from .const import CONF_PV_POWER_ENTITY, DOMAIN
 from .coordinator import SlemsConfigEntry
 from .self_test import self_test_power_w
+from .util import entity_ids
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,6 +66,8 @@ def _panel_config(hass: HomeAssistant, entry: SlemsConfigEntry) -> dict:
     return {
         "entry_id": entry.entry_id,
         "system_device_id": coordinator.system_device_id,
+        # Shown one by one in the energy flow by device.
+        "pv_entities": list(entity_ids((entry.options or entry.data).get(CONF_PV_POWER_ENTITY))),
         "batteries": [
             {
                 "id": battery.subentry_id,

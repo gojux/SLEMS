@@ -61,6 +61,11 @@ const STRINGS = {
     batteryFull: "Full",
     batteryEmpty: "Empty",
     energyFlow: "Energy flow",
+    flowView: "View of the energy flow",
+    flowSum: "Summed",
+    flowDevices: "By device",
+    deviceOutput: "Output",
+    deviceInput: "Input",
     today: "Today",
     dayChart: "Today: forecast and plan",
     dayChartTomorrow: "Tomorrow: forecast and plan",
@@ -740,6 +745,11 @@ const STRINGS = {
     batteryFull: "Voll",
     batteryEmpty: "Leer",
     energyFlow: "Energiefluss",
+    flowView: "Ansicht des Energieflusses",
+    flowSum: "Summiert",
+    flowDevices: "Nach Geräten",
+    deviceOutput: "Abgabe",
+    deviceInput: "Aufnahme",
     today: "Heute",
     dayChart: "Heute: Prognose und Plan",
     dayChartTomorrow: "Morgen: Prognose und Plan",
@@ -1574,6 +1584,8 @@ const SHOWN_SERIES_KEY = "slems-shown-series";
 const HIDDEN_TARIFFS_KEY = "slems-hidden-tariffs";
 // localStorage key: "1" shows import costs and feed-in credit of a tariff summed.
 const TARIFF_SUM_KEY = "slems-tariff-sum";
+// localStorage key: "devices" shows the energy flow by device (see _flowNodes).
+const FLOW_VIEW_KEY = "slems-flow-view";
 // Series hidden until switched on in the legend.
 const DEFAULT_HIDDEN_SERIES = ["capExcess"];
 
@@ -1670,6 +1682,12 @@ class SlemsPanel extends HTMLElement {
       this._expandedConsumers = new Set(JSON.parse(localStorage.getItem(EXPANDED_CONSUMERS_KEY) || "[]"));
     } catch (err) {
       // Storage not available: all cards collapsed.
+    }
+    this._flowView = "sum";
+    try {
+      if (localStorage.getItem(FLOW_VIEW_KEY) === "devices") this._flowView = "devices";
+    } catch (err) {
+      // Storage not available: the summed view.
     }
     this._chartDay = "today";
     // Settings whose explanation is shown (translation keys).
@@ -2758,7 +2776,7 @@ class SlemsPanel extends HTMLElement {
       return `
         <div id="banner"></div>
         <div class="grid two">
-          <section class="card"><h2>${this._t.energyFlow}</h2><div id="flow"></div></section>
+          <section class="card"><div class="chart-head"><h2>${this._t.energyFlow}</h2><div id="flow-view"></div></div><div id="flow"></div></section>
           <section class="card"><div id="tiles" class="tiles"></div></section>
         </div>
         <section class="card"><div id="daychart"></div></section>
@@ -2922,13 +2940,31 @@ class SlemsPanel extends HTMLElement {
   // adapts to any number of batteries and to the screen width. The DOM is
   // built once per set of batteries/consumers; afterwards only texts, classes
   // and animation speeds are updated so the animation keeps running smoothly.
+  //
+  // By device (only offered with batteries that have own PV modules): one box
+  // per PV system on top, and such a battery as a group below the hub: its
+  // inverter with the power at its connection, under it its PV and the DC
+  // side of its battery. Summed, their PV is part of the PV box and the
+  // battery shows the power its inverter stage takes including that PV.
 
-  _flowNodes() {
+  /** Batteries that report own PV modules. */
+  _ownPvBatteries() {
+    return (this._config.batteries || []).filter((b) => this._entityId("own_pv_power", b.device_id));
+  }
+
+  _flowNodes(byDevice) {
     const t = this._t;
     const num = (key, device) => this._number(this._state(key, device));
     const grid = num("grid_power");
+    const pvIcon = "mdi:solar-power-variant";
+    const pvs = byDevice
+      ? (this._config.pv_entities || []).map((entityId, i) => {
+          const stateObj = this._hass.states[entityId];
+          return { id: `pv-${i}`, role: "pv", icon: pvIcon, title: stateObj?.attributes?.friendly_name || entityId, power: this._powerW(stateObj), entity: entityId };
+        })
+      : [{ id: "pv", role: "pv", icon: pvIcon, title: t.pv, power: num("pv_power"), entity: this._entityId("pv_power") }];
     const nodes = [
-      { id: "pv", role: "pv", icon: "mdi:solar-power-variant", title: t.pv, power: num("pv_power"), entity: this._entityId("pv_power") },
+      ...pvs,
       {
         id: "grid",
         role: "grid",
@@ -2941,8 +2977,28 @@ class SlemsPanel extends HTMLElement {
       { id: "house", role: "house", icon: "mdi:home-lightning-bolt", title: t.house, power: num("house_power"), entity: this._entityId("house_power") },
     ];
     for (const battery of this._config.batteries || []) {
-      // Grid side (AC) power if the driver reports it, +charge / -discharge.
-      const power = this._batteryPower(battery.device_id);
+      const ownPv = byDevice ? this._entityId("own_pv_power", battery.device_id) : undefined;
+      if (ownPv) {
+        // Power at the connection, +input / -output.
+        const output = num("output_power", battery.device_id);
+        const connection = output === null ? null : (num("input_power", battery.device_id) ?? 0) - output;
+        nodes.push(
+          {
+            id: `inverter-${battery.id}`,
+            role: "inverter",
+            group: battery.id,
+            icon: "mdi:sine-wave",
+            title: battery.name,
+            power: connection,
+            detail: connection === null ? "" : connection > 10 ? t.deviceInput : connection < -10 ? t.deviceOutput : "",
+            entity: this._entityId("output_power", battery.device_id),
+          },
+          { id: `ownpv-${battery.id}`, role: "pv", group: battery.id, icon: pvIcon, title: t.pv, power: num("own_pv_power", battery.device_id), entity: ownPv }
+        );
+      }
+      // Own PV by device: the DC side; otherwise grid side (AC) power if the
+      // driver reports it. +charge / -discharge.
+      const power = ownPv ? num("battery_power", battery.device_id) : this._batteryPower(battery.device_id);
       const enabled = this._state("battery_enabled", battery.device_id)?.state !== "off";
       const balancing = this._state("cell_balancing", battery.device_id)?.state === "on";
       const notResponding = this._state("not_responding", battery.device_id)?.state === "on";
@@ -2953,11 +3009,12 @@ class SlemsPanel extends HTMLElement {
       nodes.push({
         id: `battery-${battery.id}`,
         role: "battery",
+        group: ownPv ? battery.id : undefined,
         icon: "mdi:home-battery",
-        title: battery.name,
+        title: ownPv ? t.battery : battery.name,
         power,
         soc: num("battery_soc", battery.device_id),
-        entity: this._entityId("ac_power", battery.device_id) || this._entityId("battery_power", battery.device_id),
+        entity: (!ownPv && this._entityId("ac_power", battery.device_id)) || this._entityId("battery_power", battery.device_id),
         disabled: !enabled || balancing || notResponding || unreadable || paused || inTrial,
         // Controlled, but watched closely after a firmware update (see trial.py).
         note: trialState === "observing" ? t.observedAfterUpdate : "",
@@ -3004,11 +3061,22 @@ class SlemsPanel extends HTMLElement {
   _renderFlow() {
     const container = this.shadowRoot.getElementById("flow");
     if (!container) return;
-    const nodes = this._flowNodes();
-    const key = nodes.map((n) => `${n.id}:${n.title}:${n.entity}`).join("|") + this._t.pv;
+    const t = this._t;
+    const offered = this._ownPvBatteries().length > 0;
+    const byDevice = offered && this._flowView === "devices";
+    const view = this.shadowRoot.getElementById("flow-view");
+    const toggle = offered
+      ? `<div class="segmented" role="group" aria-label="${escapeHtml(t.flowView)}">
+          <button data-action="flow-sum" class="${byDevice ? "" : "active"}" aria-pressed="${!byDevice}">${t.flowSum}</button>
+          <button data-action="flow-devices" class="${byDevice ? "active" : ""}" aria-pressed="${byDevice}">${t.flowDevices}</button>
+        </div>`
+      : "";
+    if (view && view.innerHTML !== toggle) view.innerHTML = toggle;
+    const nodes = this._flowNodes(byDevice);
+    const key = nodes.map((n) => `${n.id}:${n.title}:${n.entity}`).join("|") + t.pv;
     if (container.dataset.key !== key) {
       container.dataset.key = key;
-      container.innerHTML = this._flowSkeleton(nodes);
+      container.innerHTML = this._flowSkeleton(nodes, byDevice);
       this._flowRoot = container.querySelector(".flow-root");
       this._flowObserver?.disconnect();
       this._flowObserver = new ResizeObserver(() => this._layoutFlow());
@@ -3048,7 +3116,7 @@ class SlemsPanel extends HTMLElement {
     if (slot.innerHTML !== html) slot.innerHTML = html;
   }
 
-  _flowSkeleton(nodes) {
+  _flowSkeleton(nodes, byDevice) {
     const moreInfo = (entityId) => (entityId ? ` data-more-info="${entityId}"` : "");
     const box = (n) => `
       <div class="fbox ${n.role}" data-node="${n.id}"${moreInfo(n.entity)}>
@@ -3066,12 +3134,23 @@ class SlemsPanel extends HTMLElement {
         }
         ${n.role === "battery" ? `<div class="fbox-note" data-field="note" hidden><ha-icon icon="mdi:eye-outline"></ha-icon><span data-field="notetext"></span></div>` : ""}
       </div>`;
-    const byRole = (role) => nodes.filter((n) => n.role === role).map(box).join("");
+    const byRole = (role) => nodes.filter((n) => n.role === role && !n.group).map(box).join("");
+    const node = (id) => nodes.find((n) => n.id === id);
+    const batteries = nodes
+      .filter((n) => n.role === "battery")
+      .map((n) =>
+        n.group
+          ? `<div class="fgroup" data-group="${n.group}">${box(node(`inverter-${n.group}`))}
+              <div class="fgroup-parts">${box(node(`ownpv-${n.group}`))}${box(n)}</div></div>`
+          : box(n)
+      )
+      .join("");
     const hasConsumers = nodes.some((n) => n.role === "consumer");
+    const pvs = byRole("pv");
     return `
-      <div class="flow-root ${hasConsumers ? "" : "no-consumers"}">
+      <div class="flow-root ${hasConsumers ? "" : "no-consumers"} ${byDevice ? "by-device" : ""} ${pvs ? "" : "no-pv"}">
         <svg class="flow-lines" aria-hidden="true"></svg>
-        <div class="fcell top">${byRole("pv")}</div>
+        ${pvs ? `<div class="fcell top">${pvs}</div>` : ""}
         <div class="fcell left">${byRole("grid")}</div>
         <div class="fcell center"><div class="menu-wrap hub-wrap">
           <button class="hub-button" data-action="battery-menu" data-device="hub" aria-expanded="false">
@@ -3079,7 +3158,7 @@ class SlemsPanel extends HTMLElement {
             <span class="hub-badge" hidden><ha-icon icon="mdi:weather-pouring"></ha-icon></span>
           </button><div class="hub-menu"></div></div></div>
         <div class="fcell right">${byRole("house")}</div>
-        <div class="fcell batteries">${byRole("battery")}</div>
+        <div class="fcell batteries">${batteries}</div>
         ${hasConsumers ? `<div class="fcell consumers">${byRole("consumer")}</div>` : ""}
       </div>`;
   }
@@ -3091,7 +3170,7 @@ class SlemsPanel extends HTMLElement {
       const target = element.querySelector(`[data-field="${field}"]`);
       if (target && target.textContent !== text) target.textContent = text;
     };
-    const shown = n.role === "grid" || n.role === "battery" ? Math.abs(n.power ?? 0) : n.power;
+    const shown = ["grid", "battery", "inverter"].includes(n.role) ? Math.abs(n.power ?? 0) : n.power;
     set("value", n.power === null ? "–" : this._watts(shown));
     set("detail", n.detail || "");
     const detailIcon = element.querySelector('[data-field="detailicon"]');
@@ -3120,21 +3199,23 @@ class SlemsPanel extends HTMLElement {
     if (!root || !root.isConnected) return;
     // Batteries side by side only if every box keeps a readable width,
     // otherwise one below the other (phones, many batteries).
+    // A device group (inverter above its PV and battery) takes two boxes.
     const batteryCell = root.querySelector(".fcell.batteries");
+    const items = batteryCell ? [...batteryCell.children] : [];
     if (batteryCell) {
-      const count = batteryCell.querySelectorAll("[data-node]").length;
+      const units = items.reduce((sum, item) => sum + (item.dataset.group ? 2 : 1), 0);
       const gap = parseFloat(getComputedStyle(batteryCell).columnGap) || 0;
-      const fits = count * MIN_FLOW_BOX_W + (count - 1) * gap <= batteryCell.clientWidth;
+      const fits = units * MIN_FLOW_BOX_W + (units - 1) * gap <= batteryCell.clientWidth;
       batteryCell.classList.toggle("stacked", !fits);
     }
     const base = root.getBoundingClientRect();
     if (!base.width) return;
-    const rect = (id) => {
-      const element = root.querySelector(`[data-node="${id}"]`);
+    const rectOf = (element) => {
       if (!element) return null;
       const r = element.getBoundingClientRect();
       return { x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height };
     };
+    const rect = (id) => rectOf(root.querySelector(`[data-node="${id}"]`));
     const hub = rect("hub");
     if (!hub) return;
     const hx = hub.x + hub.w / 2;
@@ -3142,8 +3223,17 @@ class SlemsPanel extends HTMLElement {
     const c = this._colors;
     const connectors = [];
     // Each connector is defined in the direction of positive power.
-    const pv = rect("pv");
-    if (pv) connectors.push({ id: "pv", color: c.pv, points: [[pv.x + pv.w / 2, pv.y + pv.h], [hx, hy]] });
+    const pvs = [...root.querySelectorAll(".fcell.top [data-node]")].map((e) => e.dataset.node);
+    if (pvs.length) {
+      // Several PV systems (by device) join on a bus above the hub.
+      const pvRects = pvs.map(rect);
+      const busY = (Math.max(...pvRects.map((r) => r.y + r.h)) + hub.y) / 2;
+      pvs.forEach((id, i) => {
+        const r = pvRects[i];
+        const x = r.x + r.w / 2;
+        connectors.push({ id, color: c.pv, points: [[x, r.y + r.h], [x, busY], [hx, busY], [hx, hy]] });
+      });
+    }
     // Horizontal connectors run at the height of the hub (inside both boxes
     // even if they differ in height), so they stay straight.
     const level = (r) => Math.min(Math.max(hy, r.y + 12), r.y + r.h - 12);
@@ -3151,15 +3241,16 @@ class SlemsPanel extends HTMLElement {
     if (grid) connectors.push({ id: "grid", color: c.grid, points: [[grid.x + grid.w, level(grid)], [hx, hy]] });
     const house = rect("house");
     if (house) connectors.push({ id: "house", color: c.house, points: [[hx, hy], [house.x, level(house)]] });
-    const batteries = [...root.querySelectorAll(".fcell.batteries [data-node]")].map((e) => e.dataset.node);
-    const batteryRects = batteries.map(rect);
-    if (batteryRects.length && batteryCell?.classList.contains("stacked")) {
+    // The hub connects to a battery box or to the inverter of a group.
+    const heads = items.map((item) => (item.dataset.group ? `inverter-${item.dataset.group}` : item.dataset.node));
+    const headRects = heads.map(rect);
+    if (items.length && batteryCell?.classList.contains("stacked")) {
       // Stacked: a trunk runs down left of the boxes (the consumers' trunk
       // is on the right) and branches into the left edge of every box.
-      const trunkX = Math.min(...batteryRects.map((r) => r.x)) - 10;
-      const bendY = (hub.y + hub.h + batteryRects[0].y) / 2;
-      batteries.forEach((id, i) => {
-        const r = batteryRects[i];
+      const trunkX = Math.min(...items.map((item) => rectOf(item).x)) - 10;
+      const bendY = (hub.y + hub.h + headRects[0].y) / 2;
+      heads.forEach((id, i) => {
+        const r = headRects[i];
         const y = r.y + r.h / 2;
         connectors.push({
           id,
@@ -3167,12 +3258,27 @@ class SlemsPanel extends HTMLElement {
           points: [[hx, hy], [hx, bendY], [trunkX, bendY], [trunkX, y], [r.x, y]],
         });
       });
-    } else if (batteryRects.length) {
-      const busY = (hy + Math.min(...batteryRects.map((r) => r.y))) / 2;
-      batteries.forEach((id, i) => {
-        const r = batteryRects[i];
+    } else if (items.length) {
+      const busY = (hy + Math.min(...headRects.map((r) => r.y))) / 2;
+      heads.forEach((id, i) => {
+        const r = headRects[i];
         connectors.push({ id, color: c.battery, points: [[hx, hy], [hx, busY], [r.x + r.w / 2, busY], [r.x + r.w / 2, r.y]] });
       });
+    }
+    for (const item of items) {
+      const group = item.dataset.group;
+      if (!group) continue;
+      // PV up into the inverter, the inverter down into the battery.
+      const inverter = rect(`inverter-${group}`);
+      const ix = inverter.x + inverter.w / 2;
+      const bottom = inverter.y + inverter.h;
+      const pv = rect(`ownpv-${group}`);
+      const battery = rect(`battery-${group}`);
+      const midY = (bottom + Math.min(pv.y, battery.y)) / 2;
+      const px = pv.x + pv.w / 2;
+      const bx = battery.x + battery.w / 2;
+      connectors.push({ id: `ownpv-${group}`, color: c.pv, points: [[px, pv.y], [px, midY], [ix, midY], [ix, bottom]] });
+      connectors.push({ id: `battery-${group}`, color: c.battery, points: [[ix, bottom], [ix, midY], [bx, midY], [bx, battery.y]] });
     }
     const consumers = [...root.querySelectorAll(".fcell.consumers [data-node]")].map((e) => e.dataset.node);
     if (house && consumers.length) {
@@ -5030,6 +5136,17 @@ class SlemsPanel extends HTMLElement {
       this._render();
       return;
     }
+    const flowView = event.target.closest("[data-action='flow-sum'], [data-action='flow-devices']");
+    if (flowView) {
+      this._flowView = flowView.dataset.action === "flow-devices" ? "devices" : "sum";
+      try {
+        localStorage.setItem(FLOW_VIEW_KEY, this._flowView);
+      } catch (err) {
+        // Not stored: the choice lasts until the page is reloaded.
+      }
+      this._renderFlow();
+      return;
+    }
     if (event.target.closest("[data-action='toggle-tariff-sum']")) {
       this._tariffSum = !this._tariffSum;
       try {
@@ -5248,6 +5365,14 @@ const STYLE = `
     grid-template-areas: ". top ." "left center right" "batteries batteries consumers";
     row-gap: 44px; column-gap: 16px; align-items: center; padding: 4px 0 8px; }
   .flow-root.no-consumers { grid-template-areas: ". top ." "left center right" "batteries batteries batteries"; }
+  .flow-root.by-device { grid-template-areas: "top top top" "left center right" "batteries batteries consumers"; }
+  .flow-root.by-device.no-consumers { grid-template-areas: "top top top" "left center right" "batteries batteries batteries"; }
+  .flow-root.no-pv { grid-template-areas: "left center right" "batteries batteries consumers"; }
+  .flow-root.no-pv.no-consumers { grid-template-areas: "left center right" "batteries batteries batteries"; }
+  .fgroup { display: flex; flex-direction: column; align-items: center; row-gap: 40px; flex: 2 1 0; min-width: 0; max-width: 352px; }
+  .fgroup > .fbox { flex: none; }
+  .fgroup-parts { display: flex; justify-content: center; gap: 12px; width: 100%; }
+  .fcell.batteries.stacked .fgroup { width: 100%; flex: none; }
   .fcell { display: flex; justify-content: center; gap: 12px; position: relative; z-index: 1; }
   .fcell.consumers, .fcell.batteries.stacked { flex-direction: column; align-items: center; }
   .fcell.top { grid-area: top; } .fcell.left { grid-area: left; } .fcell.center { grid-area: center; }
@@ -5276,7 +5401,7 @@ const STYLE = `
     flex: 1 1 0; box-sizing: border-box; box-shadow: inset 0 3px 0 var(--accent); transition: opacity 0.2s;
     display: flex; flex-direction: column; }
   .fbox.pv { --accent: var(--c-pv); } .fbox.grid { --accent: var(--c-grid); } .fbox.house { --accent: var(--c-house); }
-  .fbox.battery { --accent: var(--c-battery); } .fbox.consumer { --accent: var(--c-consumer); }
+  .fbox.battery, .fbox.inverter { --accent: var(--c-battery); } .fbox.consumer { --accent: var(--c-consumer); }
   .fbox.disabled { opacity: 0.55; }
   .fbox-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .fbox-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0;

@@ -1749,6 +1749,15 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar.
   window, source and update interval of the smart meter, with Modbus its
   round trip, errors and the time on the entity today, and the battery
   response times).
+  With a battery that has its own PV (hybrid inverter, balcony solar with a
+  battery) you can choose **Summed** or **By device** at the top right; the
+  browser remembers the choice. **Summed** shows all PV in one box and the
+  battery with the power its inverter takes including its PV. **By device**
+  shows every PV system on its own and such a battery the way the energy
+  flows: its inverter with the power at its connection (**Output** into the
+  house or **Input** from the house), below it its PV and the battery with
+  its power on the DC side. What is missing between them are the losses of
+  the inverter.
 - **Key figures**: status (problems first – smart meter without values,
   battery unreadable or not responding – otherwise the operating mode),
   strategy (a change shows once it lasted 30 seconds; the control switches
