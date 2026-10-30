@@ -1295,6 +1295,36 @@ Every controllable battery has these settings (dashboard: **Settings**):
   consumption forecast do not contain power that does not flow.
 - **Charge power limit** and **Discharge power limit** (default: the maximum of
   the battery), e.g. 800 W for a plug-in system.
+- **Minimum power**: no charging or discharging with so little power that it
+  does not pay off. Below the fixed loss of the inverter (Venus about
+  35–48 W) charging even discharges the battery.
+  - **Automatic, energetic**: charging only where it stores anything;
+    discharging without a threshold (it always delivers, only with a worse
+    efficiency).
+  - **Automatic, economic** (default): charging with P pays off when the
+    stored energy is worth more than its feed-in: efficiency of charging with
+    P × import price × typical discharge efficiency > feed-in credit (Venus
+    with 19.8 / 7 ct: about 60–70 W). With the charge secured (the battery
+    gets full anyway) small charge powers pay off only from the typical
+    efficiency: charging later with more power is better. Discharging with P
+    pays off when import price × efficiency of discharging with P > feed-in
+    credit / typical charge efficiency (Venus: from about 25 W, practically no
+    limit). Without a tariff or with a credit of 0 or less: like energetic.
+  - **Manual**: the **Minimum power** in W for both directions.
+  - **Off**.
+
+  Both automatic modes need the losses below 300 W, which SLEMS learns per
+  direction in 50 W steps from 40 W (diagnostics, `min_power`); until then
+  there is no threshold. With **No negative grid surplus target** there is no
+  discharge threshold. A battery starts only at the threshold, runs on down to
+  25 W below it (never below the fixed loss; with the threshold there it
+  starts 25 W above) and at least its learned start time. The gap saves
+  starts when the surplus moves around the threshold (16 % in a debug log, a
+  wider one hardly more). While the minimum power holds the batteries back,
+  the **Strategy** shows **Below minimum power**; the small surplus is fed in,
+  a small deficit drawn. Not held back with the feed-in cap, grid charging,
+  price hold, battery export, night discharge, peak shaving, full charge,
+  forced charging, self-test and probe step.
 
 **Temperature charge limit** (off by default, after Omnibattery) limits the
 charge power by the battery temperature: above **Charge derating temperature**

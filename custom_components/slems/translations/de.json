@@ -1044,6 +1044,15 @@
           "first": "Fühler 1",
           "second": "Fühler 2"
         }
+      },
+      "min_power_mode": {
+        "name": "Mindestleistung",
+        "state": {
+          "auto_energy": "Automatisch, energetisch",
+          "auto_economic": "Automatisch, wirtschaftlich",
+          "manual": "Manuell",
+          "off": "Aus"
+        }
       }
     },
     "sensor": {
@@ -1143,7 +1152,8 @@
           "price_hold": "Für teure Stunden halten",
           "grid_charge": "Netzladen",
           "battery_export": "Einspeisen aus den Batterien",
-          "price_room": "Platz für günstigere Stunden"
+          "price_room": "Platz für günstigere Stunden",
+          "below_min_power": "Unter Mindestleistung"
         }
       },
       "expected_surplus_energy": {
@@ -1571,6 +1581,9 @@
       },
       "hot_water_target_max_temperature": {
         "name": "Warmwasser-Zieltemperatur"
+      },
+      "min_power": {
+        "name": "Mindestleistung"
       }
     },
     "binary_sensor": {

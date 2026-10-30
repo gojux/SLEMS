@@ -128,6 +128,14 @@ def _battery(coordinator: SlemsCoordinator, battery: BatteryRuntime) -> dict:
         # Probe step (see response_probe): the running one and the stored result.
         "probe": None if battery.probe is None else battery.probe.as_dict(),
         "probe_record": battery.probe_record.as_dict(),
+        # Minimum power (see min_power): setting, learned small-power losses,
+        # thresholds (charge, discharge) of the last controller cycle that used them.
+        "min_power": {
+            "mode": str(battery.limits.min_power_mode),
+            "manual_w": battery.limits.min_power_w,
+            "low_loss": battery.low_loss.as_dict(),
+            "thresholds_w": coordinator.min_power_thresholds.get(battery.subentry_id),
+        },
         "trial": None
         if battery.trial is None
         else {

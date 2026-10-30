@@ -156,6 +156,16 @@ from .full_charge import REST_S as FULL_CHARGE_REST_S, FullChargeCandidate, due_
 from .feed_in_cap import CAP_MARGIN_W, CapConsumer, CapPlan, CapSettings, auto_buffer, plan_cap
 from .problems import ProblemReporter
 from .efficiency import EfficiencyTracker, EnergyIntegrator, LossCurveLearner
+from .min_power import (
+    GateResult,
+    LowLossTable,
+    MinPowerGate,
+    MinPowerMode,
+    Prices,
+    charge_floor_w,
+    charge_threshold_w,
+    discharge_threshold_w,
+)
 from .forecast import (
     ConsumptionForecast,
     ConsumptionForecaster,
@@ -254,6 +264,18 @@ from .util import entity_ids, state_as_float, state_as_kwh, state_as_watts, watt
 _LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 1
+# Strategies where the minimum power of the batteries applies; the others set
+# their power themselves (feed-in cap, grid charging, price hold, battery
+# export, night discharge, peak shaving).
+MIN_POWER_STRATEGIES = frozenset(
+    {
+        Strategy.SELF_CONSUMPTION,
+        Strategy.BATTERY_PRIORITY,
+        Strategy.SHARED,
+        Strategy.GRID_FRIENDLY,
+        Strategy.PRICE_ROOM,
+    }
+)
 STORAGE_SAVE_DELAY_S = 600
 # Start, phase changes and end of a balancing run are saved sooner.
 BALANCING_SAVE_DELAY_S = 5
@@ -308,6 +330,8 @@ class BatteryRuntime:
     driver: BatteryDriver
     efficiency: EfficiencyTracker
     loss_curve: LossCurveLearner = field(default_factory=LossCurveLearner)
+    # Conversion loss of small powers per direction, for the minimum power.
+    low_loss: LowLossTable = field(default_factory=LowLossTable)
     # Temporarily disabled batteries are still measured (their power is part of
     # the energy balance) but neither planned with nor controlled.
     enabled: bool = True
@@ -962,6 +986,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # Battery due for its regular full charge (see full_charge), batteries
         # resting after it (monotonic end) and the last full charge seen.
         self.full_charge_battery: str | None = None
+        self._min_power_gate = MinPowerGate()
+        # battery id -> (charge, discharge) threshold of the minimum power in the last controller cycle.
+        self.min_power_thresholds: dict[str, tuple[float | None, float | None]] = {}
+        self._prices_now_cache: tuple[int, Prices | None] | None = None
         self._full_charge_rest: dict[str, float] = {}
         self._last_full_seen: dict[str, float | None] = {}
 
@@ -1040,6 +1068,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 battery.efficiency.integrator = EnergyIntegrator.from_dict(integrator)
             if loss_curve := data.get("loss_curve"):
                 battery.loss_curve = LossCurveLearner.from_dict(loss_curve)
+            battery.low_loss = LowLossTable.from_dict(data.get("low_loss"))
             battery.cell_monitor.restore(data.get("cell_monitor"))
             battery.capacity_learner = CapacityLearner.from_dict(data.get("capacity_learner"))
             battery.paused_until = data.get("paused_until")
@@ -1487,6 +1516,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             b.subentry_id: {
                 "integrator": b.efficiency.integrator.as_dict(),
                 "loss_curve": b.loss_curve.as_dict(),
+                "low_loss": b.low_loss.as_dict(),
                 "cell_monitor": b.cell_monitor.as_dict(),
                 "balancer": b.balancer.as_dict() if b.balancer else None,
                 "paused_until": b.paused_until,
@@ -1828,6 +1858,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self._update_efficiency(battery, telemetry, now)
             if telemetry.ac_power_w is not None:
                 battery.loss_curve.add(telemetry.ac_power_w, telemetry.power_w)
+                battery.low_loss.add(telemetry.ac_power_w, telemetry.power_w)
             battery.soc_window.update(telemetry.soc_pct, battery.limits)
             battery.delivery.update_stop(telemetry.soc_pct, telemetry.grid_side_power_w)
             battery.delivery.update_full(
@@ -3138,10 +3169,21 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 -snapshot.grid_without_batteries_filtered_w,
                 self.grid_target_w(settings, charging=True),
             )
+        units = self._battery_units(snapshot)
+        gate = (
+            self._apply_min_power(allocation, units, previous_total_w, settings, wall_now, now)
+            if previous_total_w is not None
+            else None
+        )
         if previous_total_w is not None:
             allocation.battery_power_w = previous_total_w + gain * (
                 allocation.battery_power_w - previous_total_w
             )
+        if gate is not None:
+            if gate.stop:
+                allocation.battery_power_w = 0.0
+            elif gate.start_w is not None and abs(allocation.battery_power_w) < gate.start_w:
+                allocation.battery_power_w = math.copysign(gate.start_w, gate.target_w)
         max_export_w = max_discharge_export_w(settings.allocation_settings(), cap_control)
         if snapshot.grid_power_w is not None:
             allocation.battery_power_w = limit_discharge_export(
@@ -3162,7 +3204,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
         snapshot.distribution = self._distributor.distribute(
             allocation.battery_power_w,
-            self._battery_units(snapshot),
+            units,
             RotationSettings(
                 soc_threshold_pct=settings.rotation_soc_threshold_pct,
                 min_interval_s=settings.rotation_min_interval_min * 60,
@@ -3173,6 +3215,99 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             full_charge=self.full_charge_battery,
         )
         self._own_pv_control(snapshot, allocation, cap_control, controller_cycle=previous_total_w is not None)
+
+    def _apply_min_power(
+        self,
+        allocation: Allocation,
+        units: list[BatteryUnit],
+        previous_w: float,
+        settings: ControlSettings,
+        wall_now: datetime,
+        now: float,
+    ) -> GateResult | None:
+        """The minimum power (see min_power) on the unsmoothed target of a
+        controller cycle; None where it does not apply."""
+        target = allocation.battery_power_w
+        charging = target > 0
+        if (
+            target == 0
+            or allocation.strategy not in MIN_POWER_STRATEGIES
+            or self.measurement_holds
+            or (charging and self.full_charge_battery is not None)
+            or any(unit.min_charge_w > 0 for unit in units)
+        ):
+            return None
+        battery_id = self._distributor.small_power_battery(units, charging)
+        battery = next((b for b in self.batteries if b.subentry_id == battery_id), None)
+        if battery is None:
+            return None
+        charge_w, discharge_w = self._min_power_thresholds(battery, allocation.charge_secured, settings, wall_now)
+        floor = (charge_floor_w(battery.low_loss) or 0.0) if charging else 0.0
+        result = self._min_power_gate.apply(
+            target,
+            previous_w,
+            charge_w if charging else discharge_w,
+            floor,
+            self.controller.battery_start_response_s(battery.subentry_id),
+            now,
+        )
+        allocation.battery_power_w = result.target_w
+        if result.suppressed:
+            allocation.strategy = Strategy.BELOW_MIN_POWER
+        return result
+
+    def _min_power_thresholds(
+        self, battery: BatteryRuntime, secured: bool, settings: ControlSettings, wall_now: datetime
+    ) -> tuple[float | None, float | None]:
+        """Charge and discharge threshold of the battery's minimum power now."""
+        limits = battery.limits
+        mode = MinPowerMode(limits.min_power_mode)
+        prices = self._prices_now(wall_now)
+        efficiency = battery.efficiency.one_way
+        thresholds = (
+            charge_threshold_w(
+                battery.low_loss,
+                mode,
+                limits.min_power_w,
+                secured=secured,
+                prices=prices,
+                charge_efficiency=efficiency,
+                discharge_efficiency=efficiency,
+            ),
+            discharge_threshold_w(
+                battery.low_loss,
+                mode,
+                limits.min_power_w,
+                no_import=settings.grid_targets_no_import,
+                prices=prices,
+                charge_efficiency=efficiency,
+            ),
+        )
+        self.min_power_thresholds[battery.subentry_id] = thresholds
+        return thresholds
+
+    def _prices_now(self, wall_now: datetime) -> Prices | None:
+        """Import price and feed-in credit of the current quarter hour; None without both."""
+        stamp = int(wall_now.timestamp())
+        quarter = stamp - stamp % 900
+        if self._prices_now_cache is not None and self._prices_now_cache[0] == quarter:
+            return self._prices_now_cache[1]
+        tariffs = configured_tariffs(self.config_entry)
+        prices = None
+        if tariffs:
+            tariff = next(iter(tariffs.values()))
+            until = datetime.fromtimestamp(quarter + 900, tz=wall_now.tzinfo)
+            values = [
+                next(iter(series.values()), None) if series else None
+                for series in (
+                    period_import_prices(tariff, self.market_prices, wall_now, until, side)
+                    for side in (Side.IMPORT, Side.EXPORT)
+                )
+            ]
+            if None not in values:
+                prices = Prices(import_price=values[0], export_price=values[1])
+        self._prices_now_cache = (quarter, prices)
+        return prices
 
     def _own_pv_control(
         self,

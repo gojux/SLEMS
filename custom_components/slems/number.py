@@ -328,6 +328,19 @@ BATTERY_NUMBERS: tuple[BatteryNumberDescription, ...] = (
     ),
     _battery_power("max_charge_limit", "max_charge_power_w"),
     _battery_power("max_discharge_limit", "max_discharge_power_w"),
+    # Value of the minimum power mode "manual" (see min_power).
+    BatteryNumberDescription(
+        key="min_power",
+        translation_key="min_power",
+        attribute="min_power_w",
+        device_class=NumberDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        native_min_value=0,
+        native_max_value=300,
+        native_step=5,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+    ),
 )
 
 

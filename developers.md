@@ -845,6 +845,46 @@ battery's set point, no learning from its commands, `earliest_response_s`),
   excluded the battery twice within a day (`not_delivered`, from
   `_check_delivery`). Checked with every poll in `_update_probes`.
 
+### Minimum power
+
+`min_power.py` (loss table, thresholds, hysteresis, no HA dependency),
+`coordinator.py` (`_apply_min_power`, `_min_power_thresholds`, `_prices_now`,
+`MIN_POWER_STRATEGIES`, `BatteryRuntime.low_loss` fed with every poll, store
+key `low_loss` of the battery data), `battery_distribution.py`
+(`small_power_battery`), `allocation.Strategy.BELOW_MIN_POWER`, the select
+`min_power_mode` and the number `min_power` per battery
+(`BatteryLimitSettings.min_power_mode` / `min_power_w`) and the diagnostics
+(`min_power`).
+
+- `LowLossTable`: loss = AC − DC (+charge) per 50 W bin from 40 W to 300 W,
+  charging and discharging apart, steady readings only (5 %); also below the
+  fixed loss, where charging discharges (DC < 0). Learned with 3 bins of 20
+  samples, one below 100 W. The loss curve of the distribution
+  (`LossCurveLearner`, from 100 W in 250 W bins, both directions) stays as it
+  was.
+- Thresholds (`charge_threshold_w`, `discharge_threshold_w`; searched in 5 W
+  steps from 40 W, at most 300 W, loss linear between the learned bins): see
+  the module docstring. The typical efficiencies are
+  `EfficiencyTracker.one_way` of the battery, the prices those of the current
+  quarter hour (`_prices_now`, cached per quarter hour), "charge secured" is
+  `Allocation.charge_secured`, "no import" `grid_targets_no_import`.
+- `_apply_min_power` runs only in controller cycles, on the unsmoothed
+  `allocation.battery_power_w` after `limit_charge_to_surplus`, before the
+  gain. The threshold is the one of `small_power_battery` (the battery
+  running in the direction, else the one a new direction starts with): small
+  totals run on one battery. Not for strategies outside
+  `MIN_POWER_STRATEGIES`, while `measurement_holds`, with a full charge
+  battery when charging or a forced charge (`min_charge_w`).
+- `MinPowerGate`: off = max(threshold − 25 W, charge floor), on =
+  max(threshold, off + 25 W); a running direction keeps running for the
+  learned start time (`battery_start_response_s`) after a start under the
+  gate. `stop` sets the total to 0 W after the smoothing (the control's dead
+  band would keep a small power), `start_w` gives a start at least the on
+  power; a battery running the other way stops through the smoothing as
+  before. A suppressed target sets the strategy `below_min_power`.
+- Replay (`diagnose`, 2026-10-30, charging only): band 0 / 25 / 50 W gave
+  50 / 42 / 41 simulated starts in 44 min.
+
 ### Cell balancing
 
 `cell_balancing.py` (monitor and state machine, no HA dependency),
@@ -2528,3 +2568,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-30 | Keep-alives without blocking the control: the Venus driver checks RS485 control and force mode with the telemetry (every 5 s) instead of reading back after a complete write, a keep-alive skips what the telemetry confirmed and the set points without effect (standby), and the keep-alives of several batteries are spread over the interval. A debug log showed every minute one cycle of 4–5 s that wrote all three batteries completely (4 writes and a read back of 1.3 s each); meanwhile SLEMS did not react to the grid (a stove switching off gave 5 s of 1.3 kW export). A lost RS485 control is now seen within 5 s instead of 60 s. |
 | 2026-10-30 | Battery response times are learned cleaner: the median of the last 9 measurements instead of a moving average, commands still on their way counted in, measurements dropped when the meter moved before the earliest response or by more than 1.5 × the expected change, starts and reversals no longer learned as steps, starts only after a stop of 10 s. The commands of the control answer movements of the grid that often go on or back by themselves, and the damped control follows a step with smaller ones: a debug log with a cycling stove taught a Venus 0.39 s (measured 0.8–1.05 s), and a battery whose reversals counted as steps learned 1.31 s against 0.79 s of an identical one. A replay of three debug logs gave 0.9–1.1 s. |
 | 2026-10-30 | The limit "too early" of the response learners is measured per battery with a probe step (±500 W for about 3 s while the others are held, three attempts, every meter report) instead of a fixed driver value or half the learned step: it has to fit every setup (meter cadence, integration, firmware), and a limit too high drops good measurements without anything else lowering it. Only the step of a running battery and the lower bound of the dead time (the last report not moved yet): small, cheap (0.4 Wh per attempt) and safe against dropping good measurements; start and reversal keep the driver's extra time. Due for a new battery, after changes of configuration, firmware, smart meter or controlling integration (learned times dropped), when more than half of the last 20 measurements were too early, after 90 days and by hand; not on Home Assistant updates. The phase comes along only with phase values as fast as the meter. |
+| 2026-10-30 | Minimum power per battery (**Automatic, energetic** / **Automatic, economic** (default) / **Manual** / **Off**): no charging below the power that stores anything, economically also not where the stored energy is worth less than its feed-in, from the losses below 300 W learned per direction (50 W bins from 40 W) and the prices now; the automatic modes start once these losses are learned. A start at the threshold, running down to 25 W below (never below the fixed loss) and for the learned start time; the strategy shows it. Charging a Venus below about 40 W discharges it, below about 65 W the stored energy is worth less than its feed-in. Not done: holding small deficits back for larger loads when the energy runs short (about 3 ct per moved kWh, only if the battery would run empty and larger loads come) and waiting a reversal time before a new direction (a replay of three debug logs: about 4 times the grid exchange it saves). |

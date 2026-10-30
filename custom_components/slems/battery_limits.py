@@ -32,6 +32,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .min_power import MinPowerMode
+
 SOC_REENTRY_MARGIN_PCT = 2.0
 TOP_TAPER_ON_V = 3.48
 TOP_TAPER_OFF_V = 3.44
@@ -48,6 +50,9 @@ class BatteryLimitSettings:
     # None: the maximum power of the battery.
     charge_limit_w: float | None = None
     discharge_limit_w: float | None = None
+    # Minimum power (see min_power): mode and the value of MinPowerMode.MANUAL.
+    min_power_mode: MinPowerMode = MinPowerMode.AUTO_ECONOMIC
+    min_power_w: float = 60.0
 
 
 @dataclass(frozen=True)

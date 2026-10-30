@@ -514,6 +514,9 @@ const STRINGS = {
         "Highest AC charge power SLEMS commands to the battery, e.g. to spare it or because of a weak supply line; never above what the battery can do.",
       max_discharge_limit:
         "Highest AC discharge power SLEMS commands to the battery, e.g. 800 W for a plug-in solar system; never above what the battery can do.",
+      min_power_mode:
+        "No charging or discharging with so little power that it does not pay off. **Automatic, energetic**: charging only where it stores anything (below the fixed loss of the inverter charging even discharges the battery). **Automatic, economic**: in addition only where the stored energy is worth more than its feed-in, from the learned losses and the prices. Both automatic modes start once the losses below 300 W are learned. **Manual**: the value below for both directions. With **No negative grid surplus target** there is no discharge threshold. The strategy shows **Below minimum power** while it holds the batteries back.",
+      min_power: "Minimum power with **Manual**, for charging and discharging. 0: none.",
       communication_pause:
         "How long **Pause communication (firmware update)** in the menu of a battery card disconnects, and how much **Extend pause** adds. Afterwards SLEMS reconnects by itself. Applies to all batteries.",
       price_control:
@@ -1190,6 +1193,9 @@ const STRINGS = {
         "Höchste AC-Ladeleistung, die SLEMS der Batterie vorgibt, z. B. zur Schonung oder wegen einer schwachen Zuleitung; nie über dem, was die Batterie kann.",
       max_discharge_limit:
         "Höchste AC-Entladeleistung, die SLEMS der Batterie vorgibt, z. B. 800 W für ein Steckersolar-System; nie über dem, was die Batterie kann.",
+      min_power_mode:
+        "Kein Laden oder Entladen mit so kleiner Leistung, dass es sich nicht lohnt. **Automatisch, energetisch**: Laden erst, wenn dabei überhaupt etwas gespeichert wird (unter dem festen Verlust des Wechselrichters entlädt das Laden die Batterie sogar). **Automatisch, wirtschaftlich**: zusätzlich nur, wenn die gespeicherte Energie mehr wert ist als ihre Einspeisung, aus den gelernten Verlusten und den Preisen. Beide Automatiken wirken, sobald die Verluste unter 300 W gelernt sind. **Manuell**: der Wert darunter für beide Richtungen. Mit **Kein negativer Ziel-Netzüberschuss** gibt es keine Entladeschwelle. Die Strategie zeigt **Unter Mindestleistung**, solange sie die Batterien zurückhält.",
+      min_power: "Mindestleistung bei **Manuell**, für Laden und Entladen. 0: keine.",
       communication_pause:
         "Wie lange **Kommunikation pausieren (Firmware-Update)** im Menü einer Batteriekarte die Verbindung trennt und wie viel **Pause verlängern** anhängt. Danach verbindet sich SLEMS von selbst wieder. Gilt für alle Batterien.",
       price_control:
@@ -1399,7 +1405,16 @@ const STRINGS = {
 };
 
 // Settings tab: limits of every battery (translation keys of its entities).
-const BATTERY_SETTINGS = ["min_soc", "max_soc", "max_charge_limit", "max_discharge_limit", "learn_capacity", "learned_capacity"];
+const BATTERY_SETTINGS = [
+  "min_soc",
+  "max_soc",
+  "max_charge_limit",
+  "max_discharge_limit",
+  "min_power_mode",
+  "min_power",
+  "learn_capacity",
+  "learned_capacity",
+];
 
 // Settings with a learned value: number key -> [switch key, attribute of the
 // sensor "learned_values" (see learning.py)].

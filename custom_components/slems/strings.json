@@ -1044,6 +1044,15 @@
           "first": "Sensor 1",
           "second": "Sensor 2"
         }
+      },
+      "min_power_mode": {
+        "name": "Minimum power",
+        "state": {
+          "auto_energy": "Automatic, energetic",
+          "auto_economic": "Automatic, economic",
+          "manual": "Manual",
+          "off": "Off"
+        }
       }
     },
     "sensor": {
@@ -1143,7 +1152,8 @@
           "price_hold": "Price hold",
           "grid_charge": "Grid charging",
           "battery_export": "Feed-in from batteries",
-          "price_room": "Room for cheaper hours"
+          "price_room": "Room for cheaper hours",
+          "below_min_power": "Below minimum power"
         }
       },
       "expected_surplus_energy": {
@@ -1571,6 +1581,9 @@
       },
       "hot_water_target_max_temperature": {
         "name": "Hot water target temperature"
+      },
+      "min_power": {
+        "name": "Minimum power"
       }
     },
     "binary_sensor": {

@@ -20,9 +20,10 @@ from .const import (
     TargetType,
 )
 from .consumers import ConsumerConfig
-from .coordinator import SlemsConfigEntry, SlemsCoordinator
-from .entity import SlemsConsumerEntity, SlemsSystemEntity
+from .coordinator import BatteryRuntime, SlemsConfigEntry, SlemsCoordinator
+from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 from .market_prices import PriceSource
+from .min_power import MinPowerMode
 
 
 async def async_setup_entry(
@@ -33,6 +34,11 @@ async def async_setup_entry(
     """Set up the operating mode and the options of the consumers."""
     coordinator = entry.runtime_data
     async_add_entities([OperatingModeSelect(coordinator), PriceSourceSelect(coordinator)])
+    for battery in coordinator.batteries:
+        if battery.driver.capabilities.controllable:
+            async_add_entities(
+                [BatteryMinPowerModeSelect(coordinator, battery)], config_subentry_id=battery.subentry_id
+            )
     for consumer in coordinator.consumers:
         # The batteries can only cover consumers behind the smart meter.
         if consumer.included_in_meter:
@@ -113,6 +119,30 @@ class PriceSourceSelect(SlemsSystemEntity, SelectEntity, RestoreEntity):
 
     async def async_select_option(self, option: str) -> None:
         self.coordinator.market_prices.set_source(PriceSource(option))
+        self.async_write_ha_state()
+
+
+class BatteryMinPowerModeSelect(SlemsBatteryEntity, SelectEntity, RestoreEntity):
+    """How the minimum power of the battery is set (see min_power)."""
+
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_options = [mode.value for mode in MinPowerMode]
+
+    def __init__(self, coordinator: SlemsCoordinator, battery: BatteryRuntime) -> None:
+        super().__init__(coordinator, battery, "min_power_mode")
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in self._attr_options:
+            self.battery.limits.min_power_mode = MinPowerMode(last_state.state)
+
+    @property
+    def current_option(self) -> str:
+        return MinPowerMode(self.battery.limits.min_power_mode).value
+
+    async def async_select_option(self, option: str) -> None:
+        self.battery.limits.min_power_mode = MinPowerMode(option)
         self.async_write_ha_state()
 
 

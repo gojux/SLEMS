@@ -116,6 +116,8 @@ class Strategy(StrEnum):
     GRID_FRIENDLY = "grid_friendly"
     FEED_IN_CAP = "feed_in_cap"
     IDLE = "idle"
+    # The minimum power of the battery (see min_power) holds it back.
+    BELOW_MIN_POWER = "below_min_power"
 
 
 @dataclass(frozen=True)

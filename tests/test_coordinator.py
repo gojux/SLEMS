@@ -701,3 +701,53 @@ def test_changed_firmware_drops_the_learned_response_times() -> None:
     battery.device_info = {"ems_version": "150"}
     coordinator._check_probe_fingerprint(battery)
     assert battery.probe_record.requested == "firmware" and responses.learned("a") is None
+
+
+def test_minimum_power_holds_back_a_small_charge_and_shows_it() -> None:
+    from datetime import datetime, timezone
+    from types import MethodType, SimpleNamespace
+
+    from custom_components.slems.allocation import Allocation, Strategy
+    from custom_components.slems.battery_distribution import BatteryDistributor, BatteryUnit
+    from custom_components.slems.battery_limits import BatteryLimitSettings
+    from custom_components.slems.coordinator import SlemsCoordinator
+    from custom_components.slems.min_power import LOW_MIN_SAMPLES, LowLossTable, MinPowerGate, Prices
+
+    table = LowLossTable()
+    for power, loss in {45: 38.0, 75: 40.0, 125: 42.0, 175: 44.0}.items():
+        for _ in range(LOW_MIN_SAMPLES + 1):
+            table.add(power, power - loss)
+    battery = SimpleNamespace(
+        subentry_id="a",
+        self_test=None,
+        probe=None,
+        low_loss=table,
+        limits=BatteryLimitSettings(),
+        efficiency=SimpleNamespace(one_way=0.93),
+    )
+    coordinator = SlemsCoordinator.__new__(SlemsCoordinator)
+    coordinator.batteries = [battery]
+    coordinator.full_charge_battery = None
+    coordinator._distributor = BatteryDistributor()
+    coordinator._min_power_gate = MinPowerGate()
+    coordinator.min_power_thresholds = {}
+    coordinator.controller = SimpleNamespace(battery_start_response_s=lambda _id: 2.7)
+    coordinator._prices_now = MethodType(lambda _self, _now: Prices(19.8, 7.0), coordinator)
+    units = [BatteryUnit(battery_id="a", soc_pct=50.0, max_charge_w=2500.0, max_discharge_w=2500.0)]
+    settings = SimpleNamespace(grid_targets_no_import=True)
+    now = datetime(2026, 10, 30, 12, tzinfo=timezone.utc)
+
+    allocation = Allocation(strategy=Strategy.BATTERY_PRIORITY, battery_power_w=50.0)
+    gate = coordinator._apply_min_power(allocation, units, 0.0, settings, now, 0.0)
+    assert gate.suppressed and allocation.battery_power_w == 0
+    assert allocation.strategy is Strategy.BELOW_MIN_POWER
+    charge_w, discharge_w = coordinator.min_power_thresholds["a"]
+    assert 55 <= charge_w <= 75 and discharge_w is None  # no import wanted
+    # Strategies that set their power themselves are not held back.
+    allocation = Allocation(strategy=Strategy.FEED_IN_CAP, battery_power_w=50.0)
+    assert coordinator._apply_min_power(allocation, units, 0.0, settings, now, 0.0) is None
+    assert allocation.battery_power_w == 50
+    # Mode off: no threshold.
+    battery.limits.min_power_mode = "off"
+    allocation = Allocation(strategy=Strategy.BATTERY_PRIORITY, battery_power_w=50.0)
+    assert not coordinator._apply_min_power(allocation, units, 0.0, settings, now, 0.0).suppressed

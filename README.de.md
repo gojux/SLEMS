@@ -1381,6 +1381,38 @@ Jede steuerbare Batterie hat diese Einstellungen (Dashboard: **Einstellungen**):
   Verbrauchsprognose keine Leistung enthalten, die nicht fließt.
 - **Grenze Ladeleistung** und **Grenze Entladeleistung** (Standard: das Maximum
   der Batterie), z. B. 800 W für ein Steckergerät.
+- **Mindestleistung**: kein Laden oder Entladen mit so kleiner Leistung, dass
+  es sich nicht lohnt. Unter dem festen Verlust des Wechselrichters (Venus
+  etwa 35–48 W) entlädt das Laden die Batterie sogar.
+  - **Automatisch, energetisch**: Laden erst, wenn dabei etwas gespeichert
+    wird; Entladen ohne Schwelle (es liefert immer, nur mit schlechterem
+    Wirkungsgrad).
+  - **Automatisch, wirtschaftlich** (Standard): Laden mit P lohnt, wenn die
+    gespeicherte Energie mehr wert ist als ihre Einspeisung: Wirkungsgrad
+    beim Laden mit P × Bezugspreis × typischer Wirkungsgrad beim Entladen >
+    Einspeisevergütung (Venus mit 19,8 / 7 ct: etwa 60–70 W). Ist die Ladung
+    gesichert (die Batterie wird ohnehin voll), lohnt kleine Ladeleistung erst
+    ab dem typischen Wirkungsgrad: später mit mehr Leistung zu laden ist
+    besser. Entladen mit P lohnt, wenn Bezugspreis × Wirkungsgrad beim
+    Entladen mit P > Einspeisevergütung / typischer Wirkungsgrad beim Laden
+    (Venus: schon ab etwa 25 W, praktisch keine Grenze). Ohne Tarif oder mit
+    einer Vergütung von 0 oder weniger: wie energetisch.
+  - **Manuell**: die **Mindestleistung** in W für beide Richtungen.
+  - **Aus**.
+
+  Beide Automatiken brauchen die Verluste unter 300 W, die SLEMS je Richtung
+  in Stufen von 50 W ab 40 W lernt (in der Diagnose unter `min_power`); bis
+  dahin gilt keine Schwelle. Mit **Kein negativer Ziel-Netzüberschuss** gibt
+  es keine Entladeschwelle. Eine Batterie startet erst ab der Schwelle, läuft
+  bis 25 W darunter weiter (nie unter dem festen Verlust; liegt die Schwelle
+  dort, beginnt sie 25 W darüber) und mindestens ihre gelernte Startzeit. Die
+  Lücke spart Starts, wenn der Überschuss um die Schwelle schwankt (in einem
+  Debug-Log 16 %, eine breitere kaum mehr). Solange die Mindestleistung die
+  Batterien zurückhält, zeigt die **Strategie** **Unter Mindestleistung**; der
+  kleine Überschuss wird eingespeist, ein kleines Defizit bezogen. Nicht
+  zurückgehalten wird bei Einspeisebegrenzung, Netzladen, Preis halten,
+  Einspeisen aus den Batterien, Nachtentladung, Spitzenabfang, Vollladung,
+  Pflichtladung, Selbsttest und Probeschritt.
 
 Die **Ladebegrenzung nach Temperatur** (standardmäßig aus, nach Omnibattery)
 begrenzt die Ladeleistung nach der Batterietemperatur: Über der **Temperatur

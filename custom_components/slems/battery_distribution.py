@@ -178,6 +178,19 @@ class BatteryDistributor:
         _shift_to_fast(result, total_w - settled, fast, units, total_w)
         return result
 
+    def small_power_battery(self, units: Sequence[BatteryUnit], charging: bool) -> str | None:
+        """The battery that takes a small power in this direction (one battery
+        runs then): the one running in it, else the one a new direction starts with."""
+        candidates = [u for u in units if u.can(charging) and not u.leaving]
+        if not candidates:
+            return None
+        if self._charging == charging:
+            ids = {u.battery_id for u in candidates}
+            running = next((b for b in self._selected if b in ids), None)
+            if running is not None:
+                return running
+        return _ordered(candidates, charging)[0].battery_id
+
     def _distribute_all(
         self,
         total_w: float,
