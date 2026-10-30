@@ -30,9 +30,10 @@
 # Addresses: ST gives them in hex, which is the protocol address. 32 bit values
 # low word first (WC, EE, NM; ST says nothing).
 #
-# question: No own_pv: the PV and AC power (SunSpec 40083, 40100) have a
-#   variable scale factor the format does not know. How is the PV of this
-#   inverter entered in SLEMS?
+# question: add the PV of this inverter in SLEMS as a PV system (production
+#   of the modules, not the AC power of the inverter). No own_pv: the PV and
+#   AC power (SunSpec 40083, 40100) have a variable scale factor the format
+#   does not know.
 # question: is 0xE004 stored permanently? No source says.
 # question: least time between requests? ST names none; only one Modbus TCP
 #   connection at a time (EE).

@@ -10,7 +10,7 @@ prompt.
 
 | File | Battery | Open points |
 |---|---|---|
-| [sungrow_sh10rt.yaml](sungrow_sh10rt.yaml) | Sungrow SH10RT with SBR128 | set point in the External EMS mode, heartbeat, sign of the battery power |
+| [sungrow_sh10rt.yaml](sungrow_sh10rt.yaml) | Sungrow SH10RT with SBR128 | set point in the External EMS mode, heartbeat, sign of the battery power, AC power |
 | [solaredge_storedge.yaml](solaredge_storedge.yaml) | SolarEdge StorEdge with a 48 V battery (SE10K-RWB48) | remote control falling back, sign of the battery power |
 
 **Using a candidate**

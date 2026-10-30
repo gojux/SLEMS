@@ -10,7 +10,7 @@ dem KI-Prompt zu erstellen.
 
 | Datei | Batterie | Offene Punkte |
 |---|---|---|
-| [sungrow_sh10rt.yaml](sungrow_sh10rt.yaml) | Sungrow SH10RT mit SBR128 | Vorgabe im External-EMS-Modus, Heartbeat, Vorzeichen der Batterieleistung |
+| [sungrow_sh10rt.yaml](sungrow_sh10rt.yaml) | Sungrow SH10RT mit SBR128 | Vorgabe im External-EMS-Modus, Heartbeat, Vorzeichen der Batterieleistung, AC-Leistung |
 | [solaredge_storedge.yaml](solaredge_storedge.yaml) | SolarEdge StorEdge mit 48-V-Batterie (SE10K-RWB48) | Rückfall der Fernsteuerung, Vorzeichen der Batterieleistung |
 
 **Einen Kandidaten nutzen**

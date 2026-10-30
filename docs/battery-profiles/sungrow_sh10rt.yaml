@@ -11,6 +11,9 @@
 # 4. Is the EMS mode 13050 stored permanently (still 3 after a restart of the
 #    inverter while SLEMS controls it)?
 # 5. Through a WiNet-S: errors from writing every 10 s (manual 1.2 no. 6)?
+# 6. The AC power 13034-13035: positive when the inverter feeds the house,
+#    and does it include the backup output (5726-5727)? Compare it with the
+#    app while the battery discharges, with and without PV.
 #
 # Sources (retrieved 2026-10-26 to 2026-10-30):
 # [SM] Sungrow "Communication Protocol of Residential Hybrid Inverter" V1.1.11
@@ -23,9 +26,6 @@
 # MK and ES write the same protocol addresses. Running information is read
 # with 0x04 (input), 32 bit values low word first (SM 1.2).
 #
-# question: No own_pv yet: how is the PV of this inverter entered in SLEMS?
-#   Total PV power is 5017-5018 (SM no. 21); the inverter's AC power 13034-13035
-#   "Total active power" has no sign and may include the backup output.
 # question: is 13050 (EMS mode) stored permanently? No source says.
 # question: does charging from the grid need a setting?
 # question: least time between requests? SM names 1000 ms for RS485 only;
@@ -46,8 +46,13 @@ limits:
   max_charge_w: 7680     # DB; 5628 "BDC rated power" (0.1 kW) is readable
   max_discharge_w: 7680  # DB
 
+# Hybrid inverter: the PV modules are connected to it, so its PV is own PV.
+own_pv: {max_output_w: 10000, passes_pv_through: true}  # SH10RT AC rated power 10 kW
+
 read:
   soc_pct:         {address: 13022, type: uint16, input: true, scale: 0.1}  # SM no. 89 (13023)
+  pv_power_w:      {address: 5016, type: uint32, word_order: little, input: true}  # SM no. 21 (5017-5018) "Total PV power"
+  ac_power_w:      {address: 13033, type: int32, word_order: little, input: true, positive: output}  # uncertain: SM no. 99 (13034-13035) "Total active power" gives no sign and does not say whether the backup output is in it
   battery_power_w: {address: 5213, type: int32, word_order: little, input: true, positive: discharge}  # uncertain: sign; SM no. 31 (5214-5215) gives none, MK "positive: Battery discharging"
   voltage_v:       {address: 13019, type: uint16, input: true, scale: 0.1}  # SM no. 86 (13020)
   temperature_c:   {address: 13024, type: int16, input: true, scale: 0.1}  # SM no. 91 (13025)
@@ -60,6 +65,7 @@ device_info:
 
 control:
   type: magnitude
+  setpoint: battery
   keepalive_s: 10  # SM 3.5: with a heartbeat of 20 s write it every 10 s
   # The mode first: a heartbeat written before mode 3 is ignored (MK #377).
   apply:
