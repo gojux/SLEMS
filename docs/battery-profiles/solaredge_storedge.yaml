@@ -1,0 +1,87 @@
+# CANDIDATE, not shipped: SolarEdge StorEdge / Home Hub inverter with a 48 V
+# battery (written for an SE10K-RWB48), Modbus TCP. Paste it as an own profile.
+#
+# Before: in SetApp or the inverter's web page enable Modbus TCP and set once
+# Storage Control Mode 0xE004 = 4 (Remote Control); for charging from the grid
+# AC Charge Policy 0xE005 = 1; Default Mode 0xE00A = 7 (Maximize self
+# consumption, what applies after the command time-out). SLEMS does not write
+# these settings.
+#
+# What a tester should check (and report in an issue, with the firmware):
+# 1. Does the remote control hold while SLEMS writes every 30 s, or does the
+#    inverter fall back to its own mode after 1-30 min (WC #1105)?
+# 2. The sign of the battery power 0xE174: in Values read, with the battery
+#    charging (its own logic), is the power positive?
+# 3. Charging (command mode 3) and discharging (4) with the limit as set
+#    point: does the battery follow the limit, also with PV?
+# 4. After a restart of the inverter (or its control board), is the probe
+#    reading still possible (registers back at their defaults)?
+#
+# Sources (retrieved 2026-10-23 to 2026-10-30):
+# [ST] SolarEdge "Technical Note - Power Control Protocol for SolarEdge
+#      Inverters" V1.3 (2017), pages 16-20 and 26, copy in nmakel/solaredge_modbus
+#      @fd3ce7a documents/application_note_power_control_configuration-v1.3.pdf
+# [WC] WillCodeForCats/solaredge-modbus-multi @70aa159 components.py, const.py;
+#      issues #872, #1105, #1141
+# [EE] evcc @943b17f templates/definition/meter/solaredge-hybrid.yaml
+# [NM] nmakel/solaredge_modbus @fd3ce7a src/solaredge_modbus/__init__.py
+# [DB] datasheet SolarEdge Home Hub three phase SE5K-RWB48 to SE10K-RWB48:
+#      maximum charge/discharge power 5000 W
+# Addresses: ST gives them in hex, which is the protocol address. 32 bit values
+# low word first (WC, EE, NM; ST says nothing).
+#
+# question: No own_pv: the PV and AC power (SunSpec 40083, 40100) have a
+#   variable scale factor the format does not know. How is the PV of this
+#   inverter entered in SLEMS?
+# question: is 0xE004 stored permanently? No source says.
+# question: least time between requests? ST names none; only one Modbus TCP
+#   connection at a time (EE).
+# question: are 0xF142 = 1, 0xF104 = 4, 0xF100 = 1 (ST page 16, settings) still
+#   needed with current firmware?
+slems_battery_profile: 1
+id: solaredge_storedge
+name: SolarEdge StorEdge (48 V battery)
+manufacturer: SolarEdge
+revision: 1
+notes: Candidate; remote control with command time-out, battery 1.
+
+connection:
+  port: 1502  # uncertain: WC and EE, ST names no port
+  unit_id: 1
+
+limits:
+  max_charge_w: 5000     # DB
+  max_discharge_w: 5000  # DB
+
+read:
+  soc_pct:         {address: 0xE184, type: float32, word_order: little}  # ST p. 20 battery 1 state of energy, %
+  battery_power_w: {address: 0xE174, type: float32, word_order: little, positive: charge}  # uncertain: sign from WC and EE (ST gives none)
+  voltage_v:       {address: 0xE170, type: float32, word_order: little}  # ST p. 20
+  temperature_c:   {address: 0xE16C, type: float32, word_order: little}  # ST p. 20 average temperature
+  state:
+    address: 0xE186
+    type: uint32
+    word_order: little
+    values: {1: standby, 3: charge, 4: discharge}  # ST p. 19: 0 off, 1 standby, 2 init, 3 charge, 4 discharge, 5 fault, 7 idle; WC also 6, 10
+
+device_info:
+  battery_firmware: {address: 0xE120, type: char, count: 16}  # ST p. 20
+
+control:
+  type: split
+  keepalive_s: 30  # a third of the command time-out
+  apply:
+    - {address: 0xE00B, type: uint32, word_order: little, value: 90, at_rest: [0, 86400], confirm: true}  # ST p. 18 command time-out in s; after it the default mode 0xE00A applies; not stored (WC #1141)
+    - {address: 0xE010, type: float32, word_order: little, value: "{discharge_w}", at_rest: [0, 5000], confirm: true}  # ST p. 18 discharge limit, W; default the battery maximum
+    - {address: 0xE00E, type: float32, word_order: little, value: "{charge_w}", at_rest: [0, 5000], confirm: true}  # ST p. 18 charge limit, W; default the battery maximum
+    - {address: 0xE00D, type: uint16, value: "{mode}", modes: {idle: 0, charge: 3, discharge: 4}, at_rest: [0, 7], confirm: true}  # ST p. 17: 0 off, 3 charge from PV and AC, 4 maximize export, 7 maximize self consumption
+  release:
+    # As EE "normal": maximize self consumption with both limits at the maximum
+    # (holds until the time-out, then the default mode 0xE00A); no standby,
+    # since 0 W holds only until the time-out as well.
+    auto:
+      - {address: 0xE010, value: 5000}
+      - {address: 0xE00E, value: 5000}
+      - {address: 0xE00D, value: 7, confirm: true}
+
+probe: {address: 0xE184, type: float32, word_order: little, range: [0, 100]}

@@ -1001,6 +1001,11 @@ andere Adresse beginnt den Probebetrieb erneut.
 mitgeliefertes Profil für alle mit derselben Batterie werden:
 [so schlägst du es vor](docs/battery-profile-prompt.de.md#profil-als-mitgeliefertes-profil-vorschlagen).
 
+**Kandidaten**: Für einige Batterien gibt es
+[Kandidaten für Profile](docs/battery-profiles/README.de.md), die der Dialog
+nicht anbietet, weil sie noch niemand getestet hat; füge einen als eigenes
+Profil ein und prüfe die Punkte, die oben darin stehen.
+
 **Ungeprüfte mitgelieferte Profile**: Ein mitgeliefertes Profil mit dem
 Zusatz **(ungeprüft)** ist aus der Registerliste des Herstellers und anderen
 Quellen erstellt, hat seinen Probebetrieb aber noch an keiner echten Batterie

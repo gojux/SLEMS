@@ -1,0 +1,76 @@
+# CANDIDATE, not shipped: Sungrow SH10RT(-V112) hybrid inverter with an SBR128
+# battery, Modbus TCP (LAN port or WiNet-S). Paste it as an own profile.
+#
+# What a tester should check (and report in an issue, with the firmware):
+# 1. Do 13051/13052 (doc numbers) charge and discharge in the External EMS
+#    mode 3? The manual describes them only for the forced mode 2.
+# 2. Without SLEMS (e.g. Home Assistant stopped), does the inverter return to
+#    self-consumption about 20 s after the last heartbeat?
+# 3. The sign of the battery power (5214-5215): in Values read, with the
+#    battery charging (its own logic), is the power positive?
+# 4. Is the EMS mode 13050 stored permanently (still 3 after a restart of the
+#    inverter while SLEMS controls it)?
+# 5. Through a WiNet-S: errors from writing every 10 s (manual 1.2 no. 6)?
+#
+# Sources (retrieved 2026-10-26 to 2026-10-30):
+# [SM] Sungrow "Communication Protocol of Residential Hybrid Inverter" V1.1.11
+#      (2025-11-17); for the SH10RT the same as V1.1.9 (change list)
+# [MK] mkaiser/Sungrow-SHx-Inverter-Modbus-Home-Assistant @310635c modbus_sungrow.yaml
+# [ES] evcc @943b17f templates/definition/meter/sungrow-hybrid.yaml
+# [DB] Sungrow SBR datasheet V5 (09/2024): SBR128 256 V x 30 A = 7.68 kW
+# Addresses: the manual numbers registers from 1 ("Visit all registers by
+# subtracting 1", SM 1.2 no. 4.1), so every address below is the number - 1;
+# MK and ES write the same protocol addresses. Running information is read
+# with 0x04 (input), 32 bit values low word first (SM 1.2).
+#
+# question: No own_pv yet: how is the PV of this inverter entered in SLEMS?
+#   Total PV power is 5017-5018 (SM no. 21); the inverter's AC power 13034-13035
+#   "Total active power" has no sign and may include the backup output.
+# question: is 13050 (EMS mode) stored permanently? No source says.
+# question: does charging from the grid need a setting?
+# question: least time between requests? SM names 1000 ms for RS485 only;
+#   MK: 5 ms over LAN, at least 20 ms over WiNet-S.
+slems_battery_profile: 1
+id: sungrow_sh10rt
+name: Sungrow SH10RT with SBR128
+manufacturer: Sungrow
+revision: 1
+notes: Candidate; External EMS mode with heartbeat.
+
+connection:
+  port: 502
+  unit_id: 1
+  message_spacing_s: 0.02  # uncertain: MK for WiNet-S, not the manufacturer
+
+limits:
+  max_charge_w: 7680     # DB; 5628 "BDC rated power" (0.1 kW) is readable
+  max_discharge_w: 7680  # DB
+
+read:
+  soc_pct:         {address: 13022, type: uint16, input: true, scale: 0.1}  # SM no. 89 (13023)
+  battery_power_w: {address: 5213, type: int32, word_order: little, input: true, positive: discharge}  # uncertain: sign; SM no. 31 (5214-5215) gives none, MK "positive: Battery discharging"
+  voltage_v:       {address: 13019, type: uint16, input: true, scale: 0.1}  # SM no. 86 (13020)
+  temperature_c:   {address: 13024, type: int16, input: true, scale: 0.1}  # SM no. 91 (13025)
+  discharged_kwh:  {address: 13026, type: uint32, word_order: little, input: true, scale: 0.1}  # SM no. 93 (13027-13028)
+  charged_kwh:     {address: 13040, type: uint32, word_order: little, input: true, scale: 0.1}  # SM no. 104 (13041-13042)
+
+device_info:
+  inverter_firmware: {address: 13249, type: char, count: 15, input: true}  # SM no. 129 (13250-13264), since V1.1.7
+  battery_firmware:  {address: 13279, type: char, count: 15, input: true}  # SM no. 131 (13280-13294)
+
+control:
+  type: magnitude
+  keepalive_s: 10  # SM 3.5: with a heartbeat of 20 s write it every 10 s
+  # The mode first: a heartbeat written before mode 3 is ignored (MK #377).
+  apply:
+    - {address: 13049, type: uint16, value: 3, at_rest_values: [0, 3], persistent: true, confirm: true}  # SM 13050 EMS mode: 0 self-consumption (default), 2 forced, 3 External EMS, 4 VPP
+    - {address: 13079, type: uint16, value: 20, at_rest: [0, 1000]}  # SM 13080 heartbeat in s (default 20); counts down (MK #377), so not read back
+    - {address: 13051, type: uint16, value: "{power_w}", at_rest: [0, 10600]}  # SM 13052, W, 0-100 % of the BDC rated power; uncertain: range at rest
+    - {address: 13050, type: uint16, value: "{mode}", modes: {idle: 0xCC, charge: 0xAA, discharge: 0xBB}, at_rest_values: [0xAA, 0xBB, 0xCC], confirm: true}  # SM 13051, 0xCC stop is the default
+  release:
+    # Stop in mode 3 holds only until the heartbeat ends: no standby.
+    auto:
+      - {address: 13050, value: 0xCC, confirm: true}
+      - {address: 13049, value: 0, confirm: true}
+
+probe: {address: 13022, type: uint16, input: true, range: [0, 1000]}

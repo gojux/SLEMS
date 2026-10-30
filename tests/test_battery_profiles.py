@@ -308,6 +308,18 @@ def test_invalid_verified_entries(verified: str, code: str, path: str) -> None:
     assert (err.code, err.path) == (code, path)
 
 
+CANDIDATES = Path(__file__).parents[1] / "docs" / "battery-profiles"
+
+
+def test_every_candidate_loads_as_an_own_profile() -> None:
+    # Candidates are pasted as own profiles; their ids must not be taken by a shipped one.
+    paths = sorted(CANDIDATES.glob("*.yaml"))
+    assert paths
+    for path in paths:
+        profile = parse_profile(path.read_text(encoding="utf-8"))
+        assert profile.id == path.stem and profile.id not in bundled_profiles(), path.name
+
+
 def test_every_shipped_profile_loads_with_the_rules() -> None:
     for path in sorted(BUNDLED_DIR.glob("*.yaml")):
         text = path.read_text(encoding="utf-8")

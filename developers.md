@@ -1882,6 +1882,13 @@ profile out:
   working on real hardware with a named firmware. The range at rest and
   whether a register is stored in flash still need a second source, else
   the line is marked `# uncertain`. It is shipped without `verified`.
+- Candidates: profiles nobody has tested yet are kept in
+  `docs/battery-profiles/` (README EN/DE there), outside `templates/`, so the
+  dialog does not offer them; users paste one as an own profile. Each names
+  its sources, the settings to make before, `# uncertain`/`# question` lines
+  and what a tester should check; `test_every_candidate_loads_as_an_own_profile`
+  loads each one (file name = id, no id of a shipped profile). After a
+  reported passed trial a candidate moves to `templates/battery_profiles/`.
 - `verified` gets an entry when a user reports a passed trial on a real
   battery with the section `trial` of the diagnostics: `trial.status`
   `passed` (`confirmed`, accepted by the user in the repair, does not

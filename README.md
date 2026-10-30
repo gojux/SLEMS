@@ -943,6 +943,11 @@ with a profile of the same id. Another address begins the trial again.
 for everybody with the same battery:
 [how to suggest it](docs/battery-profile-prompt.md#suggest-a-profile-as-a-shipped-profile).
 
+**Candidates**: for some batteries there are
+[candidate profiles](docs/battery-profiles/README.md), not offered in the
+dialog because nobody has tested them yet; paste one as an own profile and
+check the points listed at its top.
+
 **Unverified shipped profiles**: a shipped profile marked **(unverified)**
 was made from the manufacturer's register list and other sources but has not
 passed its trial on a real battery yet (so far the **Marstek Venus E Gen 2**,
