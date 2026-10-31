@@ -24,8 +24,16 @@ system).
 > how it is connected (Modbus, local API, Home Assistant integration), and
 > whether you could test it.
 
+> **Status: beta.** SLEMS runs every day on a real installation, but it is
+> still under active development. In the operating mode **Active** it sends
+> commands to batteries and switches consumers. Use it at your own risk: check
+> the limits of your batteries and the fuses of your circuits. Please report
+> faults as an [issue](https://github.com/gojux/SLEMS/issues) with the
+> diagnostics (see [Quick start](#quick-start)).
+
 ## Contents
 
+- [Quick start](#quick-start)
 - [Why SLEMS?](#why-slems)
 - [Features](#features)
 - [Installation](#installation)
@@ -77,6 +85,42 @@ system).
 - [Roadmap](#roadmap)
 - [Development](#development)
 - [License](#license)
+
+## Quick start
+
+What you need:
+
+- Home Assistant 2026.9 or later and HACS.
+- A smart meter in Home Assistant that reports the grid power (import and
+  export) continuously, e.g. a Shelly Pro 3EM. The more often it reports, the
+  more precisely SLEMS controls (e.g. every second).
+- Optional: a PV forecast (e.g. Forecast.Solar), batteries and consumers that
+  SLEMS should control.
+
+In five steps:
+
+1. Install SLEMS through HACS and restart Home Assistant
+   ([Installation](#installation)).
+2. Add the integration, select the smart meter and the PV systems and check
+   the sign of the grid power ([Setup](#setup)).
+3. Add batteries and consumers ([Batteries](#batteries),
+   [Consumers](#consumers)). Disconnect a Venus from other integrations first:
+   it allows only one Modbus connection.
+4. Let SLEMS run for a while (e.g. a day) in the operating mode **Observe
+   only**, which is the default. The dashboard shows the forecast and the
+   plan; nothing is controlled yet.
+5. Turn off other controls of the same batteries and consumers (automations,
+   other integrations) and set the [operating mode](#operating-mode) to
+   **Active**. New batteries first run their
+   [self-test](#self-test-of-a-battery) (about 5–10 minutes), then SLEMS
+   takes over.
+
+The defaults are fine to start with; SLEMS learns losses, response times and
+forecast buffers by itself (see [Learned values](#learned-values)). Hints on
+problems are under [Problems and notifications](#problems-and-notifications).
+For a fault report, attach the diagnostics: **Settings → Devices & services →
+SLEMS → ⋮ → Download diagnostics**. Addresses and serial numbers of the
+batteries are redacted in them.
 
 ## Why SLEMS?
 
@@ -2431,9 +2475,10 @@ wallbox on the [evcc guide](docs/wallbox-evcc.md).
   sign turned by an update of the integration) a repair issue suggests the
   self-test. First only counted in the diagnostics to set the limits with real
   data.
-- Shipped Modbus profiles for further battery models, from own profiles
-  that passed their trial with users of these batteries.
-- Further battery models via the driver interface.
+- Further battery models: shipped Modbus profiles from own profiles and
+  [candidates](docs/battery-profiles/README.md) that passed their trial with
+  users of these batteries; a driver of its own only for models that do not
+  fit a profile.
 
 ## Development
 

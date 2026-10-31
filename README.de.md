@@ -24,8 +24,16 @@ Tiere](https://en.wikipedia.org/wiki/Sea_slug)) und *EMS*
 > Modell, der Anbindung (Modbus, lokale API, Home-Assistant-Integration) und
 > ob du testen könntest.
 
+> **Status: Beta.** SLEMS läuft täglich an einer echten Anlage, wird aber noch
+> laufend weiterentwickelt. Im Betriebsmodus **Aktiv** sendet es Vorgaben an
+> Batterien und schaltet Verbraucher. Die Nutzung erfolgt auf eigene
+> Verantwortung: Prüfe die Grenzen deiner Batterien und die Absicherung deiner
+> Stromkreise. Fehler bitte als [Issue](https://github.com/gojux/SLEMS/issues)
+> mit den Diagnosedaten melden (siehe [Schnellstart](#schnellstart)).
+
 ## Inhalt
 
+- [Schnellstart](#schnellstart)
 - [Warum SLEMS?](#warum-slems)
 - [Funktionen](#funktionen)
 - [Installation](#installation)
@@ -77,6 +85,43 @@ Tiere](https://en.wikipedia.org/wiki/Sea_slug)) und *EMS*
 - [Roadmap](#roadmap)
 - [Entwicklung](#entwicklung)
 - [Lizenz](#lizenz)
+
+## Schnellstart
+
+Was du brauchst:
+
+- Home Assistant 2026.9 oder neuer und HACS.
+- Einen Smart Meter in Home Assistant, der die Netzleistung (Bezug und
+  Einspeisung) laufend meldet, z. B. ein Shelly Pro 3EM. Je öfter er meldet,
+  desto genauer regelt SLEMS (z. B. jede Sekunde).
+- Optional: eine PV-Prognose (z. B. Forecast.Solar), Batterien und
+  Verbraucher, die SLEMS steuern soll.
+
+In fünf Schritten:
+
+1. SLEMS über HACS installieren und Home Assistant neu starten
+   ([Installation](#installation)).
+2. Die Integration hinzufügen, Smart Meter und PV-Anlagen auswählen und das
+   Vorzeichen der Netzleistung prüfen ([Einrichtung](#einrichtung)).
+3. Batterien und Verbraucher hinzufügen ([Batterien](#batterien),
+   [Verbraucher](#verbraucher)). Eine Venus vorher von anderen Integrationen
+   trennen: Sie erlaubt nur eine Modbus-Verbindung.
+4. SLEMS eine Weile (z. B. einen Tag) im Betriebsmodus **Nur beobachten**
+   laufen lassen, das ist die Voreinstellung. Im Dashboard siehst du Prognose
+   und Plan; gesteuert wird noch nichts.
+5. Andere Steuerungen derselben Batterien und Verbraucher (Automationen,
+   andere Integrationen) abschalten und den [Betriebsmodus](#betriebsmodus)
+   auf **Aktiv** stellen. Neue Batterien machen zuerst ihren
+   [Selbsttest](#selbsttest-einer-batterie) (etwa 5–10 Minuten), danach regelt
+   SLEMS.
+
+Die Voreinstellungen passen für den Anfang; Verluste, Reaktionszeiten und
+Prognose-Puffer lernt SLEMS selbst (siehe [Gelernte Werte](#gelernte-werte)).
+Hinweise zu Problemen stehen unter
+[Probleme und Benachrichtigungen](#probleme-und-benachrichtigungen). Für eine
+Fehlermeldung die Diagnosedaten anhängen: **Einstellungen → Geräte & Dienste →
+SLEMS → ⋮ → Diagnosedaten herunterladen**. Adressen und Seriennummern der
+Batterien sind darin geschwärzt.
 
 ## Warum SLEMS?
 
@@ -2593,10 +2638,10 @@ Nutzern mit einer echten Wallbox zur [evcc-Anleitung](docs/wallbox-evcc.de.md).
   übereinstimmenden Abweichungen (z. B. ein durch ein Update der Integration
   gedrehtes Vorzeichen) rät eine Reparaturmeldung zum Selbsttest. Zuerst nur in
   den Diagnosedaten gezählt, um die Grenzen mit echten Daten festzulegen.
-- Mitgelieferte Modbus-Profile für weitere Batteriemodelle, aus eigenen
-  Profilen, die bei Nutzern dieser Batterien ihren Probebetrieb bestanden
-  haben.
-- Weitere Batteriemodelle über die Treiber-Schnittstelle.
+- Weitere Batteriemodelle: mitgelieferte Modbus-Profile aus eigenen Profilen
+  und [Kandidaten](docs/battery-profiles/README.de.md), die bei Nutzern dieser
+  Batterien ihren Probebetrieb bestanden haben; ein eigener Treiber nur für
+  Modelle, die nicht in ein Profil passen.
 
 ## Entwicklung
 
