@@ -198,13 +198,15 @@ def onboard() -> str:
 
 def fill(step: dict, values: dict[str, Any]) -> dict[str, Any]:
     """Input for a form step as the frontend sends it: the given values, else
-    the defaults and suggested values; every required field needs one."""
+    the defaults and suggested values; every required field needs one. A
+    value None leaves the field out, like a field cleared in the frontend."""
     data = {}
     for field in step.get("data_schema", []):
         name = field["name"]
         suggested = (field.get("description") or {}).get("suggested_value")
         if name in values:
-            data[name] = values[name]
+            if values[name] is not None:
+                data[name] = values[name]
         elif "default" in field:
             data[name] = field["default"]
         elif suggested is not None:
@@ -316,6 +318,44 @@ def forecast_entry(token: str, name: str) -> str:
 def forecasts(token: str) -> None:
     for name, peak in FORECASTS.items():
         run_flow(token, FLOW, {"handler": "sim_solar_forecast"}, {"user": {"name": name, "peak_w": peak}}, f"Forecast {name}")
+
+
+def cleared(step: dict, **values: Any) -> dict[str, Any]:
+    """The given values, every other field without a default cleared."""
+    return {field["name"]: None for field in step.get("data_schema", []) if "default" not in field} | values
+
+
+def setup_minimal(token: str) -> None:
+    """Only a smart meter: no PV, forecast, weather, batteries, consumers or
+    tariffs. Loaded, a clean log and answering dashboard commands; removed
+    again for the full setup."""
+    run_flow(
+        token,
+        FLOW,
+        {"handler": "slems"},
+        {
+            "user": cleared,
+            "system": lambda step: cleared(step, grid_power_entity="sensor.smart_meter_power"),
+        },
+        "minimal system",
+    )
+    check(token, "minimal system")
+    socket_api = WebSocket(token)
+    try:
+        socket_api.call({"type": "slems/simulate"})
+        socket_api.call({"type": "slems/tariff_comparison"})
+        for day in ("today", "tomorrow"):
+            socket_api.call({"type": "slems/price_chart", "day": day})
+    finally:
+        socket_api.close()
+    states = request("GET", "/api/states", token=token)
+    slems = [s for s in states if s["entity_id"].split(".", 1)[1].startswith("slems")]
+    if not slems:
+        raise Failure("minimal system: no SLEMS entities")
+    unavailable = [s["entity_id"] for s in slems if s["state"] == "unavailable"]
+    print(f"  {len(slems)} SLEMS entities, unavailable: {unavailable or 'none'}")
+    check(token, "minimal system")
+    remove_entries(token)
 
 
 def setup_system(token: str) -> None:
@@ -786,6 +826,7 @@ def dashboard(token: str) -> None:
 
 
 SCENARIOS = [
+    ("Minimal setup", setup_minimal),
     ("Setup", setup_system),
     ("Batteries", battery_modbus),
     ("Battery from an own profile", battery_own_profile),

@@ -2458,7 +2458,9 @@ The end-to-end test (`dev/e2e`, a Compose project of its own, so a running
 development instance is not touched) starts a fresh Home Assistant with its
 configuration in memory, the development `configuration.yaml` and its own
 simulators, onboards it and runs the config flows through the REST and
-websocket API of the frontend (`run.py`, standard library only): setup,
+websocket API of the frontend (`run.py`, standard library only): a minimal
+setup first (only the smart meter, every suggested field cleared; removed
+again), then the setup,
 batteries (Modbus simulator, Venus profile, entities; an own profile on
 `venus-sim-5`, which only the end-to-end project has: an error shown with its
 line, a shifted write register blocking, the trial begun again by a changed
