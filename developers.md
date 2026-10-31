@@ -476,7 +476,8 @@ sends commands.
   times the median of the last 9 measurements, stored with them; a learner
   with a single stored value is dropped when loading, `drop_single_values`:
   a value of a version before the measurements were kept stayed as one
-  measurement while a battery measured nothing, e.g. 15 s for a paused Venus):
+  measurement while a battery measured nothing, e.g. 15 s for a paused Venus;
+  the diagnostics show the kept measurements, `battery_response_samples_s`):
   meter cadence from every report of the grid meter (also unchanged values,
   `EVENT_STATE_REPORTED`); battery response time from commands with ≥ 300 W
   change until the meter moved 60 % of it beyond the commands still on their

@@ -842,3 +842,19 @@ def test_minimum_power_holds_back_a_small_charge_and_shows_it() -> None:
     battery.limits.min_power_mode = "off"
     allocation = Allocation(strategy=Strategy.BATTERY_PRIORITY, battery_power_w=50.0)
     assert not coordinator._apply_min_power(allocation, units, 0.0, settings, now, 0.0).suppressed
+
+
+def test_the_diagnostics_show_the_response_measurements() -> None:
+    from custom_components.slems.diagnostics import _response_samples
+    from custom_components.slems.response import BatteryResponses
+
+    responses = BatteryResponses()
+    responses.restore_samples({"step": {"v3": [14.97, 15.123, 14.8]}, "reversal": {"v1": [1.76]}})
+    coordinator = SimpleNamespace(
+        batteries=[SimpleNamespace(subentry_id="v1", name="Venus 1"), SimpleNamespace(subentry_id="v3", name="Venus 3")],
+        controller=SimpleNamespace(battery_responses=responses),
+    )
+    assert _response_samples(coordinator) == {
+        "Venus 3": {"step": [14.97, 15.12, 14.8]},
+        "Venus 1": {"reversal": [1.76]},
+    }

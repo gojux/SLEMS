@@ -151,6 +151,16 @@ def _battery(coordinator: SlemsCoordinator, battery: BatteryRuntime) -> dict:
     }
 
 
+def _response_samples(coordinator: SlemsCoordinator) -> dict[str, dict[str, list[float]]]:
+    """Kept response measurements per battery name and kind (step, reversal, start)."""
+    names = {battery.subentry_id: battery.name for battery in coordinator.batteries}
+    samples: dict[str, dict[str, list[float]]] = {}
+    for kind, by_battery in coordinator.controller.battery_responses.samples_as_dict().items():
+        for battery_id, values in by_battery.items():
+            samples.setdefault(names.get(battery_id, battery_id), {})[kind] = [round(v, 2) for v in values]
+    return samples
+
+
 def _trial(battery: BatteryRuntime) -> dict | None:
     """The trial of a battery from a profile; posted in an issue to verify a shipped
     profile, so its device (host, port and unit), MAC address and serial numbers are redacted as well."""
@@ -272,6 +282,8 @@ def _system(coordinator: SlemsCoordinator) -> dict:
                 battery.name: controller.battery_starts.days.get(battery.subentry_id, {})
                 for battery in coordinator.batteries
             },
+            # The measurements behind the learned times (their medians above), by battery and kind.
+            "battery_response_samples_s": _response_samples(coordinator),
             # Times the control expects (learned, else the driver's or the general value).
             "battery_times_in_use_s": {
                 battery.name: {
