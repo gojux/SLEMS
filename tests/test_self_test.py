@@ -130,6 +130,15 @@ def test_power_of_the_steps() -> None:
     assert step_power_w(625, 80) == 0.0
 
 
+def test_the_plan_of_a_test_without_trial() -> None:
+    test = SelfTest(600, 600, 0.0)
+    assert [phase.value for phase in test.plan()] == ["prepare", "idle", "charge", "rest", "discharge", "release"]
+    assert test.current_step == 1
+    assert [phase.value for phase in SelfTest(0, 600, 0.0).plan()] == ["prepare", "idle", "discharge", "release"]
+    run(test)
+    assert test.current_step == 6
+
+
 def test_a_correct_battery_passes() -> None:
     test = run(SelfTest(600, 600, 0.0))
     assert test.result == "ok", outcomes(test)

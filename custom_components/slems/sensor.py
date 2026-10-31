@@ -1023,6 +1023,9 @@ class SelfTestSensor(SlemsBatteryEntity, SensorEntity):
                 None if test is None or test.phase_start is None
                 else dt_util.utcnow().timestamp() - (time.monotonic() - test.phase_start)
             ),
+            # Progress of a running test: the current phase as step of all.
+            "step": None if test is None else test.current_step,
+            "steps": None if test is None else len(test.plan()),
             "power_w": battery.self_test_power_w,
             "charge_w": data.get("charge_w"),
             "discharge_w": data.get("discharge_w"),

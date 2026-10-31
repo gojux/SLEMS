@@ -246,6 +246,29 @@ async def run_trial(model, release_state: ReleaseState = ReleaseState.AUTO, max_
     return test, link
 
 
+async def test_the_steps_of_a_trial_follow_its_plan(monkeypatch) -> None:
+    seen: list[tuple[str, int]] = []
+    step = SelfTest.step
+
+    def recording(self, *args, **kwargs):
+        result = step(self, *args, **kwargs)
+        if not seen or seen[-1] != (self.phase.value, self.current_step):
+            seen.append((self.phase.value, self.current_step))
+        return result
+
+    monkeypatch.setattr(SelfTest, "step", recording)
+    test, _ = await run_trial(SIM.VenusModel(5120, 50.0))
+    plan = [phase.value for phase in test.plan()]
+    assert plan == [
+        "prepare", "quiet", "idle", "small_charge", "settle", "charge", "rest",
+        "small_discharge", "settle", "discharge", "release", "release_late",
+    ]
+    # Every phase in its order, the settling once per direction, ending at the last step.
+    assert [phase for phase, _ in seen if phase != "done"] == plan[1:]
+    assert [number for phase, number in seen if phase != "done"] == list(range(2, len(plan) + 1))
+    assert seen[-1] == ("done", len(plan))
+
+
 def outcomes(test: SelfTest) -> dict[str, str]:
     return {check.key: check.outcome.value for check in test.checks + test.trial_checks}
 

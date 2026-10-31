@@ -638,6 +638,31 @@ class SelfTest:
             "release": reads(self._release_reads, self._released.start if self._released else None),
         }
 
+    def plan(self) -> list[Phase]:
+        """The phases of this test in their order (in a trial a settling after each small step)."""
+        steps = [Phase.PREPARE, *([Phase.QUIET] if self.trial is not None else []), Phase.IDLE]
+        for full, small, power in (
+            (Phase.CHARGE, Phase.SMALL_CHARGE, self.charge_w), (Phase.DISCHARGE, Phase.SMALL_DISCHARGE, self.discharge_w)
+        ):
+            if not power:
+                continue
+            if full is Phase.DISCHARGE and self.charge_w:
+                steps.append(Phase.REST)
+            steps += [small, Phase.SETTLE, full] if self.trial is not None else [full]
+        return [*steps, Phase.RELEASE, *([Phase.RELEASE_LATE] if self.trial is not None else [])]
+
+    @property
+    def current_step(self) -> int:
+        """Position of the current phase in ``plan`` (1 = the first); a test ending
+        early jumps to the release."""
+        plan = self.plan()
+        if self.phase is Phase.DONE:
+            return len(plan)
+        if self.phase is Phase.SETTLE:
+            small = Phase.SMALL_DISCHARGE if self._after_settle is Phase.DISCHARGE else Phase.SMALL_CHARGE
+            return plan.index(small) + 2
+        return plan.index(self.phase) + 1 if self.phase in plan else 1
+
     # --- steps -----------------------------------------------------------------
 
     def _enter(self, phase: Phase, now: float, target_w: float) -> None:

@@ -641,8 +641,13 @@ const STRINGS = {
     selfTestOtherRunning: "The self-test of another battery is running.",
     selfTestRunningChip: "Self-test",
     selfTestPendingChip: "Self-test scheduled",
-    selfTestRunning: "Self-test running: {phase}. The other batteries and the consumers keep their set points meanwhile.",
-    selfTestPhases: { prepare: "taking over", idle: "resting", charge: "charging", rest: "resting", discharge: "discharging", release: "handing back" },
+    selfTestRunning: "Self-test running. The other batteries and the consumers keep their set points meanwhile.",
+    selfTestProgress: "{phase} (step {step} of {steps}), for {minutes} min, usually {typical} min",
+    selfTestPhases: {
+      prepare: "taking over", quiet: "reading the registers at rest", idle: "resting", small_charge: "small charge step",
+      settle: "waiting", charge: "charging", rest: "resting", small_discharge: "small discharge step",
+      discharge: "discharging", release: "handing back", release_late: "reading again",
+    },
     selfTestProblem: { warning: "Self-test conspicuous", failed: "Self-test found errors" },
     selfTestUnclear: "Self-test partly unclear",
     selfTestUnclearText: "nothing wrong found, but not everything checkable; repeat it with a battery neither full nor empty",
@@ -1325,8 +1330,13 @@ const STRINGS = {
     selfTestOtherRunning: "Der Selbsttest einer anderen Batterie läuft.",
     selfTestRunningChip: "Selbsttest",
     selfTestPendingChip: "Selbsttest geplant",
-    selfTestRunning: "Selbsttest läuft: {phase}. So lange halten die anderen Batterien und die Verbraucher ihre Vorgaben.",
-    selfTestPhases: { prepare: "Übernahme", idle: "Ruhe", charge: "Laden", rest: "Ruhe", discharge: "Entladen", release: "Rückgabe" },
+    selfTestRunning: "Selbsttest läuft. So lange halten die anderen Batterien und die Verbraucher ihre Vorgaben.",
+    selfTestProgress: "{phase} (Schritt {step} von {steps}), seit {minutes} min, meist {typical} min",
+    selfTestPhases: {
+      prepare: "Übernahme", quiet: "Register in Ruhe lesen", idle: "Standby", small_charge: "kleiner Ladeschritt",
+      settle: "Abwarten", charge: "Laden", rest: "Standby", small_discharge: "kleiner Entladeschritt",
+      discharge: "Entladen", release: "Rückgabe", release_late: "Nachlesen",
+    },
     selfTestProblem: { warning: "Selbsttest auffällig", failed: "Selbsttest hat Fehler gefunden" },
     selfTestUnclear: "Selbsttest teilweise unklar",
     selfTestUnclearText: "nichts Falsches gefunden, aber nicht alles prüfbar; wiederhole ihn mit einer Batterie, die weder voll noch leer ist",
@@ -4526,6 +4536,11 @@ class SlemsPanel extends HTMLElement {
             [t.temperature, s("internal_temperature"), s("internal_temperature")?.entity_id],
           ].filter(([, st]) => st);
           let problem = "";
+          const selfTest = s("self_test_result");
+          const testRunning = selfTest?.state === "running";
+          const trialState = s("profile_trial")?.state;
+          const progress = testRunning ? this._selfTestProgress(selfTest, trialState === "running") : "";
+          const cancelTest = `<button class="link" data-action="self-test-off" data-entity="${s("self_test")?.entity_id}">${t.selfTestCancel}</button>`;
           const pause = s("communication_paused");
           if (pause?.state === "on") {
             const until = pause.attributes.paused_until
@@ -4537,11 +4552,13 @@ class SlemsPanel extends HTMLElement {
               <button class="link" data-action="menu-extend" data-entity="${pause.entity_id}">${escapeHtml(this._extendLabel())}</button></div>`;
           } else if (s("battery_soc")?.state === "unavailable") {
             problem = `<div class="problem"><ha-icon icon="mdi:alert-circle"></ha-icon><span><b>${t.unreadable}</b> – ${t.unreadableText}</span></div>`;
-          } else if ([...TRIAL_STATES, "observing"].includes(s("profile_trial")?.state)) {
-            const state = s("profile_trial").state;
-            const box = state === "failed" ? "problem" : "info-box";
-            const icon = state === "failed" ? "mdi:alert-circle" : "mdi:clipboard-check-outline";
-            problem = `<div class="${box}"><ha-icon icon="${icon}"></ha-icon><span>${escapeHtml(t.trialText[state])}</span></div>`;
+          } else if ([...TRIAL_STATES, "observing"].includes(trialState)) {
+            const box = trialState === "failed" ? "problem" : "info-box";
+            const icon = trialState === "failed" ? "mdi:alert-circle" : "mdi:clipboard-check-outline";
+            const running = trialState === "running" && testRunning;
+            problem = `<div class="${box}"><ha-icon icon="${icon}"></ha-icon><span>${escapeHtml(t.trialText[trialState])}${
+              running ? progress : ""
+            }</span>${running ? cancelTest : ""}</div>`;
           } else if (notResponding?.state === "on") {
             const attrs = notResponding.attributes;
             const retry = attrs.retry_at ? new Date(attrs.retry_at).toLocaleTimeString(this._hass.locale?.language, { hour: "2-digit", minute: "2-digit" }) : "–";
@@ -4556,12 +4573,10 @@ class SlemsPanel extends HTMLElement {
             const text = t.bmsEmptyText.replace("{soc}", Math.round(notResponding.attributes.bms_empty_soc));
             problem = `<div class="info-box"><ha-icon icon="mdi:battery-outline"></ha-icon><span>${escapeHtml(text)}</span></div>`;
           }
-          const selfTest = s("self_test_result");
-          if (!problem && selfTest?.state === "running") {
-            const phase = t.selfTestPhases[selfTest.attributes.phase] || selfTest.attributes.phase || "–";
+          if (!problem && testRunning) {
             problem = `<div class="info-box"><ha-icon icon="mdi:battery-check-outline"></ha-icon><span>${escapeHtml(
-              t.selfTestRunning.replace("{phase}", phase)
-            )}</span><button class="link" data-action="self-test-off" data-entity="${s("self_test")?.entity_id}">${t.selfTestCancel}</button></div>`;
+              t.selfTestRunning
+            )}${progress}</span>${cancelTest}</div>`;
           } else if (!problem && selfTest?.state === "unclear") {
             problem = `<div class="info-box"><ha-icon icon="mdi:battery-check-outline"></ha-icon><span><b>${t.selfTestUnclear}</b> – ${escapeHtml(
               t.selfTestUnclearText
@@ -4591,6 +4606,22 @@ class SlemsPanel extends HTMLElement {
         })
         .join("")
     );
+  }
+
+  /** Progress of a running self-test: step of all, the time so far and the usual
+   * duration (the steps end once the battery delivers, so no remaining time). */
+  _selfTestProgress(selfTest, trial) {
+    const t = this._t;
+    const { phase, step, steps, started_at: startedAt } = selfTest.attributes;
+    if (!step || !steps) return "";
+    const minutes = startedAt ? Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 60000)) : 0;
+    const text = t.selfTestProgress
+      .replace("{phase}", t.selfTestPhases[phase] || phase || "–")
+      .replace("{step}", step)
+      .replace("{steps}", steps)
+      .replace("{minutes}", minutes)
+      .replace("{typical}", trial ? "8–9" : "5–10");
+    return `<br>${escapeHtml(text)}<span class="test-bar"><span style="width:${Math.round((step / steps) * 100)}%"></span></span>`;
   }
 
   _cellSection(battery) {
@@ -5473,6 +5504,8 @@ const STYLE = `
   .soc { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
   .soc-bar { flex: 1; height: 8px; border-radius: 4px; background: var(--divider-color); overflow: hidden; }
   .soc-bar div { height: 100%; background: var(--c-battery); border-radius: 4px; }
+  .test-bar { display: block; height: 4px; margin-top: 6px; border-radius: 2px; background: var(--divider-color); overflow: hidden; }
+  .test-bar span { display: block; height: 100%; background: var(--primary-color); }
   .chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .chip { font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--divider-color);
     color: var(--secondary-text-color); margin-left: 4px; }

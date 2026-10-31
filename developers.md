@@ -694,7 +694,9 @@ pause of the other.
 `measurement_holds`), `controller.py` (the set points go the way of a balancing
 run, `_async_apply_balancing`; `has_override` / `pop_release_result` for the
 release), `switch.py` (`SelfTestSwitch`), `sensor.py` (`SelfTestSensor`, the
-last result in its attributes), notification in `problems.py`.
+last result in its attributes; while it runs `step` of `steps`, the position
+of the phase in `SelfTest.plan()`, shown on the battery card with the time
+so far, also inside the trial hint), notification in `problems.py`.
 
 - The tested battery leaves the planning like a balancing one
   (`self_test_requested` in `participating`/`plannable`), ramping out first.
