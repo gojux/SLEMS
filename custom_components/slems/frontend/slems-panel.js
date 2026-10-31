@@ -2618,7 +2618,8 @@ class SlemsPanel extends HTMLElement {
   _setSection(name, html) {
     const element = this.shadowRoot.getElementById(name);
     if (!element || this._sections[name] === html) return;
-    // The focused control and a value being typed survive the new drawing.
+    // The focused control and a value being typed survive the new drawing
+    // (focused without scrolling, otherwise the page jumps back to the control on each update).
     const active = this.shadowRoot.activeElement;
     const key = active && element.contains(active) ? focusSelector(active) : null;
     const typed =
@@ -2630,7 +2631,7 @@ class SlemsPanel extends HTMLElement {
     const again = key ? element.querySelector(key) : null;
     if (again) {
       if (typed !== null && active.tagName === "INPUT") again.value = typed;
-      again.focus();
+      again.focus({ preventScroll: true });
     }
   }
 
