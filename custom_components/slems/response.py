@@ -477,6 +477,23 @@ class BatteryResponses:
                 if samples:
                     self._learner(learners, kind, battery_id).restore_samples(samples)
 
+    def drop_single_values(self) -> list[tuple[str, str]]:
+        """Forget the learners holding a single value only, (kind, battery id) of each.
+
+        A value stored by a version before the measurements were kept is carried
+        on as one measurement until new ones arrive; a battery that measured
+        nothing since (e.g. paused) kept a long outdated time (12-15 s for a
+        Venus of about 1 s). Real learning soon keeps several, a probe step
+        adds one per attempt and direction.
+        """
+        dropped = []
+        for kind, learners in self._kinds().items():
+            for battery_id, learner in learners.items():
+                if len(learner.samples) == 1:
+                    learner.response_s = None
+                    dropped.append((kind, battery_id))
+        return dropped
+
     def _kinds(self) -> dict[str, dict[str, StepResponse]]:
         return {"step": self.learners, "reversal": self.reversals, "start": self.starts}
 

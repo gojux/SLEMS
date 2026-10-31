@@ -87,6 +87,21 @@ def test_battery_responses_learn_from_own_steps() -> None:
     assert restored.learned("a") == pytest.approx(1.2)
 
 
+def test_a_single_stored_response_time_is_dropped() -> None:
+    # Stored by an older version as one value and kept since as one measurement: a
+    # Venus of about 1 s still had 15 s while it was paused.
+    restored = BatteryResponses()
+    restored.restore({"old": 14.97, "learned": 0.9, "new": 1.0})
+    restored.restore_samples({"step": {"old": [14.97], "learned": [0.9, 1.1, 0.8], "new": [1.0]}})
+    restored.restore_reversals({"old": 15.57})
+    assert sorted(restored.drop_single_values()) == [("reversal", "old"), ("step", "new"), ("step", "old")]
+    assert restored.learned("old") is None and restored.learned("new") is None
+    assert restored.learned("learned") == 0.9
+    assert restored.learned_reversal("old") is None
+    # Nothing is stored for them any more.
+    assert "old" not in restored.as_dict() and "old" not in restored.samples_as_dict().get("step", {})
+
+
 def test_battery_responses_log_each_measurement(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level("DEBUG", logger="custom_components.slems.response")
     responses = BatteryResponses({"a": "Venus 1"}.get)

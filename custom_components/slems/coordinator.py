@@ -1073,6 +1073,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self.controller.battery_response.restore_samples(samples.get("all") or [])
             self.controller.battery_reversal_response.restore_samples(samples.get("reversal_all") or [])
             self.controller.battery_responses.restore_samples(samples)
+            names = {battery.subentry_id: battery.name for battery in self.batteries}
+            for kind, battery_id in self.controller.battery_responses.drop_single_values():
+                _LOGGER.info(
+                    "Battery %s: a single stored %s response time dropped, measured again",
+                    names.get(battery_id, battery_id), kind,
+                )
         self.controller.battery_starts.restore(control.get("battery_starts") or {})
         for battery in self.batteries:
             data = stored.get(battery.subentry_id) or {}

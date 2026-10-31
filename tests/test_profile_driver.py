@@ -270,6 +270,33 @@ async def test_register_outside_its_range_at_rest_is_not_written() -> None:
     assert link.reads() == []
 
 
+async def test_a_keep_alive_reads_back_only_now_and_then() -> None:
+    # Reading back with every keep-alive held the control cycle up for about 2 s.
+    link = SimLink(SIM.VenusModel(5120, 50.0))
+    driver = venus_profile_driver(link)
+    await driver.connect()
+    now = [1000.0]
+    with patch.object(profile_driver.time, "monotonic", lambda: now[0]):
+        assert await driver.apply_power(800)
+        # The first keep-alive after the take-over reads back.
+        now[0] += 60
+        link.frames.clear()
+        assert await driver.apply_power(800, refresh=True)
+        assert link.reads()
+        # The next ones write every step, but do not read back ...
+        for _ in range(4):
+            now[0] += 60
+            link.frames.clear()
+            assert await driver.apply_power(800, refresh=True)
+            assert [address for address, _ in link.writes()] == [42000, 42021, 42020, 42010]
+            assert link.reads() == []
+        # ... until CONFIRM_INTERVAL_S passed.
+        now[0] += 60
+        link.frames.clear()
+        assert await driver.apply_power(800, refresh=True)
+        assert link.reads()
+
+
 async def test_unconfirmed_set_point_is_checked_again() -> None:
     link = SimLink(SIM.VenusModel(5120, 50.0))
     driver = venus_profile_driver(link)

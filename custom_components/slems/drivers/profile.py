@@ -21,7 +21,11 @@ Checks before writing (see the profile concept, section 6):
   written and the repair ``profile_outside_rest`` is shown. Every read-back
   checks the range as well.
 * Read-back: after a complete write (keep-alive) the steps with ``confirm``
-  are read back; a set point within the tolerance of the profile.
+  are read back, a set point within the tolerance of the profile: at the
+  first keep-alive after a take-over, then at most every
+  ``CONFIRM_INTERVAL_S``. The keep-alive writes every step (a heartbeat or a
+  time-out register may need it); reading back each time held the control
+  cycle up for about 2 s every minute (a Venus with 0.15 s between requests).
 * Persistent registers (flash): written only when they change, never by a
   keep-alive; a change within a minute of the previous one is written with
   a warning (repair ``profile_persistent_frequent`` for an hour), more than
@@ -79,6 +83,8 @@ _LOGGER = logging.getLogger(__name__)
 # 30001-30006 in one frame, but refuses ranges over unassigned registers);
 # a frame holds at most the profile's connection.max_read_registers.
 BLOCK_GAP = 5
+# A keep-alive reads the confirmed steps back at most this often (see the module docstring).
+CONFIRM_INTERVAL_S = 300.0
 # Slowly changing values, read at most every SLOW_READ_S (like the Venus driver).
 SLOW_READ_KEYS = frozenset({"voltage_v", "temperature_c", "cycles", "charged_kwh", "discharged_kwh"})
 SLOW_READ_S = 60.0
@@ -331,6 +337,8 @@ class ProfileDriver(BatteryDriver):
         self._write_count = 0
         # The write registers are checked against their range at rest before the next write.
         self._take_over = True
+        # Monotonic time of the last read-back (None: due at the next keep-alive).
+        self._confirmed_at: float | None = None
         self._guard = PersistentGuard(profile.control.apply)
         self._last: BatteryTelemetry | None = None
         self._slow: dict[str, Any] = {}
@@ -473,6 +481,7 @@ class ProfileDriver(BatteryDriver):
     async def connect(self) -> None:
         self._written.clear()
         self._take_over = True
+        self._confirmed_at = None
         self._guard.forget()
         if not await self._transport.connect():
             raise BatteryDriverError(f"Cannot connect to {self._profile.name}")
@@ -706,12 +715,17 @@ class ProfileDriver(BatteryDriver):
         if not ok:
             _LOGGER.warning("Setting battery power to %d W failed", net_power_w)
             self._take_over = True
+            self._confirmed_at = None
             return False
-        if refresh and self._profile.control.confirmed and not await self._confirm(steps, charge, discharge):
-            # Written again completely (and checked first) with the next command.
-            self._written.clear()
-            self._take_over = True
-            return False
+        due = self._confirmed_at is None or now - self._confirmed_at >= CONFIRM_INTERVAL_S
+        if refresh and self._profile.control.confirmed and due:
+            if not await self._confirm(steps, charge, discharge):
+                # Written again completely (and checked first) with the next command.
+                self._written.clear()
+                self._take_over = True
+                self._confirmed_at = None
+                return False
+            self._confirmed_at = now
         return True
 
     def _persistent_allows(self, step: WriteStep, raw: float, now: float) -> bool:
@@ -785,6 +799,7 @@ class ProfileDriver(BatteryDriver):
     async def release_control(self) -> None:
         self._written.clear()
         self._take_over = True
+        self._confirmed_at = None
         await self._ensure_connected()
         steps = release_values(self._profile, self._release_state)
         now = time.monotonic()

@@ -473,7 +473,10 @@ sends commands.
   learned battery response time, proportional correction with an adaptive
   gain.
 - **Learned timing** (`response.py`; meter cadence a moving average, response
-  times the median of the last 9 measurements, stored with them):
+  times the median of the last 9 measurements, stored with them; a learner
+  with a single stored value is dropped when loading, `drop_single_values`:
+  a value of a version before the measurements were kept stayed as one
+  measurement while a battery measured nothing, e.g. 15 s for a paused Venus):
   meter cadence from every report of the grid meter (also unchanged values,
   `EVENT_STATE_REPORTED`); battery response time from commands with ≥ 300 W
   change until the meter moved 60 % of it beyond the commands still on their
@@ -1880,6 +1883,10 @@ profile out:
 - Range at rest: checked on every take-over (first write after connecting,
   after a release, after a failed write or read-back) and on every read-back,
   not before every write (that would cost the Venus about 0.45 s per step).
+- Keep-alive: every step is written (a heartbeat or time-out register may
+  need it), read back only at the first keep-alive after a take-over and then
+  at most every `CONFIRM_INTERVAL_S` (5 min): reading back each time held the
+  control cycle up for about 2 s every minute with the Venus profile.
   While a register is outside, nothing is written (repair
   `profile_outside_rest`).
 - Persistent registers through `PersistentGuard`; frequent changes and the
