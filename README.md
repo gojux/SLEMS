@@ -193,7 +193,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Consumers with own power/energy sensors, inside or outside the smart meter | ✅ |
 | Consumer setup from its device: devices ranked by fit (e.g. Hoval, my-PV, evcc), entities, control and its range suggested | ✅ |
 | Phase of consumers learned from the smart meter's phases (starting with the history), of batteries in the self-test, change reported, learn again; energy counters that do not net the phases detected | ✅ (control per phase not yet) |
-| Heat pump as consumer type (weather dependent forecast), optionally a release of its hot water charge (operating mode, learned hot water power) | ✅ |
+| Heat pump as consumer type (weather dependent forecast), optionally a release of its hot water charge (operating mode, learned hot water power, [guide](docs/heat-pump-hot-water.md)) | ✅ |
 | Control of consumers: on/off, power set point or release for an automation of your own (with latest start), priority, minimum runtime/pause, avoid short runs, external blocking, control switchable per consumer | ✅ |
 | Consumers with their own thermostat: pauses recognised, their power goes to the batteries meanwhile | ✅ |
 | Temperature sensors of a storage: learned energy per degree, remaining capacity, learned cooling per hour | ✅ |
@@ -1489,7 +1489,9 @@ the energy flow.
   **Hot water control active**); the consumer card shows the control switch as
   **Hot water control** instead of next to the name. A
   daily target **Energy** does not fit here, as the energy counter includes
-  the heating. Example automation:
+  the heating. The [guide to the hot water of a heat pump](docs/heat-pump-hot-water.md)
+  shows a detailed automation that waits for a good moment for the
+  compressor. Short example:
 
   ```yaml
   triggers:

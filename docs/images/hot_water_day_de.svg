@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 432" width="760" height="432" font-family="Helvetica, Arial, sans-serif" font-size="12">
+<rect width="760" height="432" fill="#ffffff"/>
+<text x="56.0" y="22.0" text-anchor="start" fill="#3d3d3a" font-size="16" font-weight="bold">Warmwasser an einem Tag in der Übergangszeit</text>
+<line x1="56" x2="80" y1="40" y2="40" stroke="#eda100" stroke-width="2"/>
+<text x="86.0" y="44.0" text-anchor="start" fill="#3d3d3a">PV</text>
+<line x1="122.4" x2="146.4" y1="40" y2="40" stroke="#898781" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="152.4" y="44.0" text-anchor="start" fill="#3d3d3a">Außentemperatur</text>
+<rect x="282.4" y="34" width="24" height="12" fill="#4a3aa7" rx="2"/>
+<text x="312.4" y="44.0" text-anchor="start" fill="#3d3d3a">Heizen</text>
+<rect x="377.59999999999997" y="34" width="24" height="12" fill="#2a78d6" rx="2"/>
+<text x="407.6" y="44.0" text-anchor="start" fill="#3d3d3a">Warmwasser</text>
+<rect x="501.59999999999997" y="34" width="24" height="12" fill="#1baf7a" fill-opacity="0.18" stroke="#1baf7a"/>
+<text x="531.6" y="44.0" text-anchor="start" fill="#3d3d3a">Warmwasser-Freigabe</text>
+<line x1="56" x2="688" y1="170.0" y2="170.0" stroke="#c3c2b7"/>
+<text x="50.0" y="174.0" text-anchor="end" fill="#6f6e69">0 kW</text>
+<line x1="56" x2="688" y1="150.0" y2="150.0" stroke="#e1e0d9"/>
+<text x="50.0" y="154.0" text-anchor="end" fill="#6f6e69">1 kW</text>
+<line x1="56" x2="688" y1="130.0" y2="130.0" stroke="#e1e0d9"/>
+<text x="50.0" y="134.0" text-anchor="end" fill="#6f6e69">2 kW</text>
+<line x1="56" x2="688" y1="110.0" y2="110.0" stroke="#e1e0d9"/>
+<text x="50.0" y="114.0" text-anchor="end" fill="#6f6e69">3 kW</text>
+<line x1="56" x2="688" y1="90.0" y2="90.0" stroke="#e1e0d9"/>
+<text x="50.0" y="94.0" text-anchor="end" fill="#6f6e69">4 kW</text>
+<line x1="56" x2="688" y1="70.0" y2="70.0" stroke="#e1e0d9"/>
+<text x="50.0" y="74.0" text-anchor="end" fill="#6f6e69">5 kW</text>
+<text x="694.0" y="174.0" text-anchor="start" fill="#6f6e69">0 °C</text>
+<text x="694.0" y="140.7" text-anchor="start" fill="#6f6e69">5 °C</text>
+<text x="694.0" y="107.3" text-anchor="start" fill="#6f6e69">10 °C</text>
+<text x="694.0" y="74.0" text-anchor="start" fill="#6f6e69">15 °C</text>
+<polygon points="56.0,170 56.0,170.0 104.6,166.0 153.2,154.0 201.8,134.0 250.5,112.0 299.1,94.0 347.7,82.0 396.3,80.0 444.9,88.0 493.5,104.0 542.2,126.0 590.8,148.0 639.4,164.0 688.0,170.0 688.0,170" fill="#eda100" fill-opacity="0.18"/>
+<polyline points="56.0,170.0 104.6,166.0 153.2,154.0 201.8,134.0 250.5,112.0 299.1,94.0 347.7,82.0 396.3,80.0 444.9,88.0 493.5,104.0 542.2,126.0 590.8,148.0 639.4,164.0 688.0,170.0" fill="none" stroke="#eda100" stroke-width="2" stroke-linejoin="round"/>
+<polyline points="56.0,156.7 104.6,156.7 153.2,150.0 201.8,136.7 250.5,123.3 299.1,110.0 347.7,96.7 396.3,90.0 444.9,90.0 493.5,96.7 542.2,103.3 590.8,116.7 639.4,123.3 688.0,130.0" fill="none" stroke="#898781" stroke-width="2" stroke-dasharray="6 4" stroke-linejoin="round"/>
+<text x="56.0" y="196.0" text-anchor="start" fill="#3d3d3a" font-weight="bold">Wärmepumpe allein</text>
+<rect x="56.0" y="214" width="72.9" height="22" fill="#4a3aa7" rx="2"/>
+<rect x="226.2" y="214" width="48.6" height="22" fill="#4a3aa7" rx="2"/>
+<rect x="372.0" y="214" width="32.6" height="22" fill="#4a3aa7" rx="2"/>
+<rect x="493.5" y="214" width="48.6" height="22" fill="#4a3aa7" rx="2"/>
+<rect x="615.1" y="214" width="72.9" height="22" fill="#4a3aa7" rx="2"/>
+<rect x="153.2" y="214" width="40.4" height="22" fill="#2a78d6" rx="2"/>
+<polygon points="56.0,242 51.0,250 61.0,250" fill="#3d3d3a"/>
+<polygon points="153.2,242 148.2,250 158.2,250" fill="#3d3d3a"/>
+<polygon points="226.2,242 221.2,250 231.2,250" fill="#3d3d3a"/>
+<polygon points="372.0,242 367.0,250 377.0,250" fill="#3d3d3a"/>
+<polygon points="493.5,242 488.5,250 498.5,250" fill="#3d3d3a"/>
+<polygon points="615.1,242 610.1,250 620.1,250" fill="#3d3d3a"/>
+<text x="694.0" y="229.0" text-anchor="start" fill="#6f6e69">6 Starts</text>
+<text x="199.6" y="264.0" text-anchor="start" fill="#6f6e69">Warmwasser bei 3 °C nach dem Duschen, eigener Start</text>
+<text x="56.0" y="292.0" text-anchor="start" fill="#3d3d3a" font-weight="bold">Mit der Freigabe von SLEMS</text>
+<rect x="335.5" y="302" width="105.5" height="38" fill="#1baf7a" fill-opacity="0.18" stroke="#1baf7a"/>
+<line x1="489.6" x2="489.6" y1="302" y2="340" stroke="#d03b3b" stroke-width="2" stroke-dasharray="4 3"/>
+<text x="495.6" y="308.0" text-anchor="start" fill="#d03b3b">erzwungen ab 14:55</text>
+<rect x="56.0" y="310" width="72.9" height="22" fill="#4a3aa7" rx="2"/>
+<rect x="226.2" y="310" width="48.6" height="22" fill="#4a3aa7" rx="2"/>
+<rect x="372.0" y="310" width="32.6" height="22" fill="#4a3aa7" rx="2"/>
+<rect x="493.5" y="310" width="48.6" height="22" fill="#4a3aa7" rx="2"/>
+<rect x="615.1" y="310" width="72.9" height="22" fill="#4a3aa7" rx="2"/>
+<rect x="404.6" y="310" width="36.5" height="22" fill="#2a78d6" rx="2"/>
+<polygon points="56.0,338 51.0,346 61.0,346" fill="#3d3d3a"/>
+<polygon points="226.2,338 221.2,346 231.2,346" fill="#3d3d3a"/>
+<polygon points="372.0,338 367.0,346 377.0,346" fill="#3d3d3a"/>
+<polygon points="493.5,338 488.5,346 498.5,346" fill="#3d3d3a"/>
+<polygon points="615.1,338 610.1,346 620.1,346" fill="#3d3d3a"/>
+<text x="694.0" y="325.0" text-anchor="start" fill="#6f6e69">5 Starts</text>
+<text x="447.0" y="360.0" text-anchor="start" fill="#6f6e69">Puffer voll: Warmwasser angehängt, kein eigener Start</text>
+<line x1="56" x2="688" y1="380" y2="380" stroke="#c3c2b7"/>
+<line x1="56.0" x2="56.0" y1="380" y2="384" stroke="#c3c2b7"/>
+<text x="56.0" y="398.0" text-anchor="middle" fill="#6f6e69">6:00</text>
+<line x1="104.6" x2="104.6" y1="380" y2="384" stroke="#c3c2b7"/>
+<line x1="153.2" x2="153.2" y1="380" y2="384" stroke="#c3c2b7"/>
+<text x="153.2" y="398.0" text-anchor="middle" fill="#6f6e69">8:00</text>
+<line x1="201.8" x2="201.8" y1="380" y2="384" stroke="#c3c2b7"/>
+<line x1="250.5" x2="250.5" y1="380" y2="384" stroke="#c3c2b7"/>
+<text x="250.5" y="398.0" text-anchor="middle" fill="#6f6e69">10:00</text>
+<line x1="299.1" x2="299.1" y1="380" y2="384" stroke="#c3c2b7"/>
+<line x1="347.7" x2="347.7" y1="380" y2="384" stroke="#c3c2b7"/>
+<text x="347.7" y="398.0" text-anchor="middle" fill="#6f6e69">12:00</text>
+<line x1="396.3" x2="396.3" y1="380" y2="384" stroke="#c3c2b7"/>
+<line x1="444.9" x2="444.9" y1="380" y2="384" stroke="#c3c2b7"/>
+<text x="444.9" y="398.0" text-anchor="middle" fill="#6f6e69">14:00</text>
+<line x1="493.5" x2="493.5" y1="380" y2="384" stroke="#c3c2b7"/>
+<line x1="542.2" x2="542.2" y1="380" y2="384" stroke="#c3c2b7"/>
+<text x="542.2" y="398.0" text-anchor="middle" fill="#6f6e69">16:00</text>
+<line x1="590.8" x2="590.8" y1="380" y2="384" stroke="#c3c2b7"/>
+<line x1="639.4" x2="639.4" y1="380" y2="384" stroke="#c3c2b7"/>
+<text x="639.4" y="398.0" text-anchor="middle" fill="#6f6e69">18:00</text>
+<line x1="688.0" x2="688.0" y1="380" y2="384" stroke="#c3c2b7"/>
+<text x="56.0" y="420.0" text-anchor="start" fill="#6f6e69">Beispiel; ▲ Start des Kompressors</text>
+</svg>

@@ -43,6 +43,14 @@ input_number:
     step: 50
     unit_of_measurement: W
     initial: 800
+  # Hot water storage of the simulated heat pump (consumer with a release).
+  sim_boiler_temperature:
+    name: Simulated boiler temperature
+    min: 10
+    max: 70
+    step: 0.1
+    unit_of_measurement: °C
+    initial: 42
   # Power set point of the heating rod, controlled by SLEMS.
   sim_heating_rod_setpoint:
     name: Heating rod set point
@@ -113,6 +121,12 @@ input_select:
     name: Plug-in battery AC mode
     options: [Input, Output]
     initial: Output
+  # Operating mode of the simulated heat pump: only hot_water counts as its
+  # controlled hot water charge.
+  sim_heat_pump_status:
+    name: Simulated heat pump status
+    options: [standby, heating, hot_water, defrost]
+    initial: heating
 
 input_boolean:
   sim_plug_in_passes_through:
@@ -280,6 +294,15 @@ template:
         device_class: power
         state_class: measurement
         state: "{{ states('input_number.sim_heat_pump_power') | float(0) }}"
+      - name: Heat pump status
+        unique_id: sim_heat_pump_status
+        state: "{{ states('input_select.sim_heat_pump_status') }}"
+      - name: Boiler temperature
+        unique_id: sim_boiler_temperature
+        unit_of_measurement: °C
+        device_class: temperature
+        state_class: measurement
+        state: "{{ states('input_number.sim_boiler_temperature') | float(0) }}"
       - name: Heating rod power
         unique_id: sim_heating_rod_power
         unit_of_measurement: W

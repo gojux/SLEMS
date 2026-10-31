@@ -70,7 +70,9 @@ docker compose down
 pump + heating rod + wallbox − PV − AC power of the simulated batteries, updated every
 second. The AC power is read by the HA Modbus integration from a read-only
 port of the simulators (5020) every second, so the loop behaves like a real
-installation with a fast meter. Further: PV, a heat pump (power + energy) and a
+installation with a fast meter. Further: PV, a heat pump (power + energy;
+`input_select.sim_heat_pump_status` and `input_number.sim_boiler_temperature`
+for a consumer with a hot water release) and a
 heating rod controlled via `input_number.sim_heating_rod_setpoint` that can be
 blocked via `input_boolean.sim_heating_rod_blocked`, and a wallbox
 (`sensor.wallbox_power` = `input_number.sim_wallbox_current` × 230 V ×
@@ -2439,6 +2441,10 @@ when?* (`docs/images/<scenario>_<language>.svg`) from the SLEMS state of charge
 projection with example data; after changes to the planning run it again
 (two steps: simulate in the tests container, render on the host; see its
 docstring).
+
+`dev/hot_water_chart.py` draws the illustrative day of the heat pump hot
+water guide (`docs/images/hot_water_day_<language>.svg`, standard library
+only, run on the host).
 
 ## Continuous integration
 

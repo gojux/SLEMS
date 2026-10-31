@@ -196,7 +196,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Verbraucher mit eigenen Leistungs-/Energiesensoren, im oder außerhalb des Smart Meters | ✅ |
 | Verbraucher aus seinem Gerät einrichten: Geräte nach Eignung sortiert (z. B. Hoval, my-PV, evcc), Entitäten, Steuerung und ihr Bereich vorgeschlagen | ✅ |
 | Phase von Verbrauchern aus den Phasen des Smart Meters gelernt (beginnend mit dem Verlauf), von Batterien im Selbsttest, Wechsel gemeldet, neu lernen; Energiezähler, die nicht über die Phasen saldieren, erkannt | ✅ (Regelung je Phase noch nicht) |
-| Wärmepumpe als Verbrauchertyp (wetterabhängige Prognose), optional Freigabe ihrer Warmwasserladung (Betriebsmodus, gelernte Warmwasserleistung) | ✅ |
+| Wärmepumpe als Verbrauchertyp (wetterabhängige Prognose), optional Freigabe ihrer Warmwasserladung (Betriebsmodus, gelernte Warmwasserleistung, [Anleitung](docs/heat-pump-hot-water.de.md)) | ✅ |
 | Steuerung von Verbrauchern: Ein/Aus, Leistungsvorgabe oder Freigabe für eine eigene Automation (mit spätestem Start), Priorität, Mindestlaufzeit/-pause, Takten vermeiden, externe Sperre, Steuerung je Verbraucher abschaltbar | ✅ |
 | Verbraucher mit eigenem Thermostat: Pausen erkannt, ihre Leistung geht solange an die Batterien | ✅ |
 | Temperaturfühler eines Speichers: gelernte Energie pro Grad, noch aufnehmbare Energie, gelernte Abkühlung je Stunde | ✅ |
@@ -1589,7 +1589,9 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
   **Warmwasser-Steuerung aktiv**); die Verbraucherkarte zeigt den Schalter der
   Steuerung als **Warmwasser-Steuerung** statt neben dem Namen. Ein Tagesziel
   **Energie** passt hier nicht, weil der Energiezähler das Heizen enthält.
-  Beispiel einer Automation:
+  Die [Anleitung zum Warmwasser einer Wärmepumpe](docs/heat-pump-hot-water.de.md)
+  zeigt eine ausführliche Automation, die auf einen guten Moment für den
+  Kompressor wartet. Kurzes Beispiel:
 
   ```yaml
   triggers:

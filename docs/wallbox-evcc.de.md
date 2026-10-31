@@ -7,7 +7,7 @@ wird, mit SLEMS. evcc kennt die Wallbox und das Fahrzeug, SLEMS entscheidet, wie
 viel Leistung das Auto bekommt und woher sie kommt: aus dem PV-Überschuss, aus den
 Batterien (nur so weit sie es sich leisten können) oder aus dem Netz.
 
-## Was bringt die Verbindung?
+## Vorteile
 
 evcc allein lädt das Auto gut mit PV-Überschuss, kennt aber die Pläne von SLEMS
 nicht. Zusammen:

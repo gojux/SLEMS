@@ -7,7 +7,7 @@ evcc knows the wallbox and the vehicle; SLEMS decides how much power the car get
 and where it comes from: the PV surplus, the batteries (only as far as they can
 spare it) or the grid.
 
-## What does the connection bring?
+## Benefits
 
 evcc on its own charges the car well from the PV surplus, but it does not know
 the plans of SLEMS. Together:
