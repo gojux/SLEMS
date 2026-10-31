@@ -463,6 +463,7 @@
         "input_needs_sensor": "Eine Vorgabe des Eingangs braucht den **Eingang aus dem Netz** im vorigen Schritt.",
         "own_pv_counted_twice": "Diese Entitäten sind auch als PV-Anlagen eingetragen: {pv_systems}. Ihre Erzeugung würde doppelt zählen. Wähle **Bei den PV-Anlagen entfernen** aus oder andere Entitäten.",
         "power_required": "SLEMS braucht die Batterieleistung, um die Batterie zu steuern.",
+        "address_shared": "Diese Adresse nutzt die pausierte Batterie {battery} (für einen Vergleich erlaubt, solange das Debug-Log aktiv ist). SLEMS hält eine der beiden pausiert, solange die andere kommuniziert: {battery} bleibt pausiert, solange diese Batterie läuft. Wähl erneut **OK** aus, um weiterzumachen.",
         "address_in_use": "Diese Adresse nutzt schon die Batterie {battery}. Eine Batterie nimmt nur eine Verbindung an: Entferne zuerst {battery} oder wähle eine andere Adresse.",
         "not_checked": "Vergleiche zuerst die Schreibregister mit dem Handbuch.",
         "not_checked_unverified": "Bestätige zuerst den Hinweis zum ungeprüften Profil.",
@@ -1659,6 +1660,9 @@
     },
     "balancing_reason_telemetry": {
       "message": "die Batterie konnte nicht gelesen werden"
+    },
+    "communication_address_in_use": {
+      "message": "Die Batterie {battery} an derselben Adresse kommuniziert; eine Batterie nimmt nur eine Verbindung an. Pausiere zuerst {battery}."
     },
     "balancing_communication_paused": {
       "message": "Der Zellausgleich kann nicht gestartet werden, solange die Kommunikation mit der Batterie pausiert ist."

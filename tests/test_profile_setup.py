@@ -3,6 +3,7 @@ reading and write preview (against the Venus simulator's register model), the
 loading of unusable profiles and the steps of the config flow."""
 
 import json
+import logging
 from pathlib import Path
 import re
 from types import SimpleNamespace
@@ -575,6 +576,35 @@ async def test_no_answer_and_address_in_use(sim, dev_profiles) -> None:
     sim.model.read = lambda *_: None
     result = await flow.async_step_profile_connection({**ADDRESS, "host": "other"})
     assert result["errors"] == {"base": "cannot_connect"}
+
+
+@pytest.mark.parametrize(
+    ("debug", "paused", "model", "shared"),
+    [
+        (True, True, "marstek_venus_e3", True),
+        (False, True, "marstek_venus_e3", False),
+        (True, False, "marstek_venus_e3", False),
+        (True, True, "modbus_profile", False),
+    ],
+)
+async def test_address_of_a_paused_battery_shared_with_the_debug_log(
+    sim, dev_profiles, caplog, debug, paused, model, shared
+) -> None:
+    # Only for a comparison of drivers: the debug log on, the other battery paused, another model.
+    if debug:
+        caplog.set_level(logging.DEBUG, logger="custom_components.slems")
+    venus = subentry("v1", "Venus 1", model=model, host="venus", port=502, unit_id=1)
+    flow = make_flow([venus], batteries=[SimpleNamespace(subentry_id="v1", communication_paused=paused)])
+    await flow.async_step_profile({"profile": "marstek_venus_e3"})
+    result = await flow.async_step_profile_connection(dict(ADDRESS))
+    assert result["errors"] == {"base": "address_shared" if shared else "address_in_use"}
+    assert result["description_placeholders"]["battery"] == "Venus 1"
+    # Told once, the same address again goes on.
+    result = await flow.async_step_profile_connection(dict(ADDRESS))
+    if shared:
+        assert result["type"] is FlowResultType.MENU and result["step_id"] == "profile_read"
+    else:
+        assert result["errors"] == {"base": "address_in_use"}
 
 
 async def test_copy_of_another_battery_s_profile(sim) -> None:

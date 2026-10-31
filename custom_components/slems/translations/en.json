@@ -463,6 +463,7 @@
         "input_needs_sensor": "An input set point needs the **Input from the grid** in the previous step.",
         "own_pv_counted_twice": "These entities are also entered as PV systems: {pv_systems}. Their production would count twice. Select **Remove them from the PV systems** or choose other entities.",
         "power_required": "SLEMS needs the battery power to control the battery.",
+        "address_shared": "The paused battery {battery} uses this address (allowed for a comparison while the debug log is on). SLEMS keeps one of the two paused while the other one communicates: {battery} stays paused as long as this battery runs. Select **OK** again to go on.",
         "address_in_use": "This address is already used by the battery {battery}. A battery takes only one connection: remove {battery} first, or choose another address.",
         "not_checked": "Compare the write registers with the manual first.",
         "not_checked_unverified": "Confirm the note on the unverified profile first.",
@@ -1659,6 +1660,9 @@
     },
     "balancing_reason_telemetry": {
       "message": "the battery could not be read"
+    },
+    "communication_address_in_use": {
+      "message": "The battery {battery} at the same address communicates; a battery takes only one connection. Pause {battery} first."
     },
     "balancing_communication_paused": {
       "message": "Cell balancing cannot be started while the communication with the battery is paused."

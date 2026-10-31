@@ -106,6 +106,7 @@ def _unread_battery(
         measured_pv_w=None,
         leaving_until=None,
         release_pending_since=None,
+        communication_paused=False,
     )
 
 
@@ -114,6 +115,7 @@ def _unread_coordinator(*batteries: SimpleNamespace) -> SimpleNamespace:
 
     coordinator = SimpleNamespace(batteries=list(batteries), controls=lambda _battery: False)
     coordinator.disabled_and_released = lambda b: SlemsCoordinator.disabled_and_released(coordinator, b)
+    coordinator.communicating_twin = lambda _battery: None
     return coordinator
 
 
@@ -146,6 +148,95 @@ def test_unread_battery_keeps_its_last_power_then_house_power_unknown() -> None:
     # Never read since the start: unknown at once.
     coordinator.batteries[1].measured_at = None
     assert unread(coordinator, snapshot, 100) is None
+
+
+def _twin_coordinator(*batteries: SimpleNamespace):
+    """Batteries by (name, host, paused) in a coordinator with their subentries."""
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    coordinator = SlemsCoordinator.__new__(SlemsCoordinator)
+    coordinator.batteries = list(batteries)
+    coordinator.config_entry = SimpleNamespace(
+        subentries={
+            b.subentry_id: SimpleNamespace(data={"host": b.host, "port": 502, "unit_id": 1} if b.host else {})
+            for b in batteries
+        }
+    )
+    coordinator.settings = SimpleNamespace(communication_pause_min=30)
+    coordinator._store = SimpleNamespace(async_delay_save=lambda *_: None)
+    coordinator._data_to_store = None
+    now = dt_util.utcnow().timestamp()
+    for b in batteries:
+        b.name = b.subentry_id
+        b.paused_until = now + 60 if b.paused else None
+        b.communication_paused = b.paused
+    return coordinator
+
+
+def test_a_paused_battery_has_a_twin_while_another_at_its_address_communicates() -> None:
+    venus = SimpleNamespace(subentry_id="venus", host="192.168.0.104", paused=True)
+    profile = SimpleNamespace(subentry_id="profile", host="192.168.0.104", paused=False)
+    other = SimpleNamespace(subentry_id="other", host="192.168.0.105", paused=False)
+    entities = SimpleNamespace(subentry_id="entities", host=None, paused=False)
+    coordinator = _twin_coordinator(venus, profile, other, entities)
+    assert coordinator.communicating_twin(venus) is profile
+    # The communicating one has no twin while the other is paused.
+    assert coordinator.communicating_twin(profile) is None
+    assert coordinator.communicating_twin(other) is None and coordinator.communicating_twin(entities) is None
+    profile.communication_paused = True
+    assert coordinator.communicating_twin(venus) is None
+
+
+async def test_a_pause_goes_on_while_the_twin_communicates() -> None:
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    venus = SimpleNamespace(subentry_id="venus", host="192.168.0.104", paused=True)
+    profile = SimpleNamespace(subentry_id="profile", host="192.168.0.104", paused=False)
+    coordinator = _twin_coordinator(venus, profile)
+    # The pause ran out by the clock.
+    now = dt_util.utcnow().timestamp()
+    venus.paused_until = now - 1
+    venus.communication_paused = False
+    assert await SlemsCoordinator._async_read_battery(coordinator, venus, 0.0) is None
+    assert venus.paused_until >= now + 30 * 60 - 1
+
+
+def test_a_paused_battery_read_by_its_twin_counts_zero() -> None:
+    from custom_components.slems.coordinator import UNREAD_BATTERY_HOLD_S, SlemsCoordinator
+
+    paused = _unread_battery("venus")
+    paused.communication_paused = True
+    coordinator = _unread_coordinator(paused)
+    snapshot = SystemSnapshot(grid_power_w=200, pv_power_w=0, batteries={})
+    unread = SlemsCoordinator._unread_battery_power_w
+    # Without a twin a paused battery is unknown once its last power is too old.
+    assert unread(coordinator, snapshot, 101 + UNREAD_BATTERY_HOLD_S) is None
+    coordinator.communicating_twin = lambda _battery: SimpleNamespace(name="profile")
+    assert unread(coordinator, snapshot, 101 + UNREAD_BATTERY_HOLD_S) == 0.0
+    assert unread(coordinator, snapshot, 100) == 0.0
+
+
+async def test_a_pause_is_not_lifted_by_hand_while_the_twin_communicates() -> None:
+    from homeassistant.exceptions import ServiceValidationError
+
+    from custom_components.slems.switch import CommunicationPauseSwitch
+
+    switch = CommunicationPauseSwitch.__new__(CommunicationPauseSwitch)
+    resumed = []
+    switch.coordinator = SimpleNamespace(
+        communicating_twin=lambda _battery: SimpleNamespace(name="Venus E 3.0 Profil"),
+        resume_communication=resumed.append,
+    )
+    switch.battery = SimpleNamespace(name="Venus E 3.0 Nr 3")
+    with pytest.raises(ServiceValidationError) as err:
+        await switch.async_turn_off()
+    assert err.value.translation_key == "communication_address_in_use"
+    assert err.value.translation_placeholders == {"battery": "Venus E 3.0 Profil"}
+    assert not resumed
 
 
 def test_unread_disabled_battery_in_standby_counts_zero() -> None:

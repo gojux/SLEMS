@@ -206,7 +206,8 @@ class CommunicationPauseSwitch(SlemsBatteryEntity, SwitchEntity):
     """Pause all communication with the battery, e.g. for a firmware update.
 
     On: the battery is handed back to its own logic and the connection is
-    closed for the configured time, then SLEMS reconnects by itself. Also
+    closed for the configured time, then SLEMS reconnects by itself (not while
+    another battery at the same address communicates). Also
     switched on automatically when the battery reports a firmware update.
     Switching it on again while paused extends the pause by the configured time.
     """
@@ -236,6 +237,13 @@ class CommunicationPauseSwitch(SlemsBatteryEntity, SwitchEntity):
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        if (twin := self.coordinator.communicating_twin(self.battery)) is not None:
+            # The device takes only one connection.
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="communication_address_in_use",
+                translation_placeholders={"battery": twin.name},
+            )
         self.coordinator.resume_communication(self.battery)
         await self.coordinator.async_request_refresh()
         self.async_write_ha_state()

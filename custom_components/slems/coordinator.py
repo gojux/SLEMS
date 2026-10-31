@@ -64,10 +64,13 @@ from .const import (
     CONF_GRID_PHASE_ENTITIES,
     CONF_GRID_POWER_ENTITY,
     CONF_GRID_POWER_INVERTED,
+    CONF_HOST,
     CONF_HOUSE_HISTORY_ENTITY,
     CONF_OUTDOOR_TEMPERATURE_ENTITY,
+    CONF_PORT,
     CONF_PV_FORECAST_ENTRIES,
     CONF_PV_POWER_ENTITY,
+    CONF_UNIT_ID,
     CONF_WEATHER_ENTITY,
     DEFAULT_BATTERY_PRIORITY_SOC_PCT,
     DEFAULT_BATTERY_SHARE_WHEN_SECURED_PCT,
@@ -2258,6 +2261,34 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
         self.async_update_listeners()
 
+    def communicating_twin(self, battery: BatteryRuntime) -> BatteryRuntime | None:
+        """Another battery at the same address (host, port and unit) that is not
+        paused: the same device under another driver, added for a comparison
+        while this one is paused (see the battery flow)."""
+        address = self._address(battery)
+        if address is None:
+            return None
+        return next(
+            (
+                other
+                for other in self.batteries
+                if other is not battery and not other.communication_paused and self._address(other) == address
+            ),
+            None,
+        )
+
+    def _address(self, battery: BatteryRuntime) -> tuple[Any, ...] | None:
+        subentry = self.config_entry.subentries.get(battery.subentry_id)
+        if subentry is None or not subentry.data.get(CONF_HOST):
+            return None
+        return tuple(subentry.data.get(key) for key in (CONF_HOST, CONF_PORT, CONF_UNIT_ID))
+
+    def _keep_paused(self, battery: BatteryRuntime, twin: BatteryRuntime) -> None:
+        """A device takes only one connection: the pause goes on while the twin communicates."""
+        battery.paused_until = dt_util.utcnow().timestamp() + self.settings.communication_pause_min * 60
+        _LOGGER.info("Battery %s stays paused: %s at the same address communicates", battery.name, twin.name)
+        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+
     @callback
     def resume_communication(self, battery: BatteryRuntime) -> None:
         """Communicate again (reconnects with the next poll)."""
@@ -2282,6 +2313,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         total = 0.0
         for battery in self.batteries:
             if battery.subentry_id in snapshot.batteries or not battery.driver.capabilities.controllable:
+                continue
+            if battery.communication_paused and self.communicating_twin(battery) is not None:
+                # Its power is read by the twin at the same address.
                 continue
             held = battery.measured_at is not None and now - battery.measured_at <= UNREAD_BATTERY_HOLD_S
             if battery.enabled:
@@ -2317,6 +2351,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         """Read one battery (an outstanding release first); None if not read."""
         if battery.paused_until is not None:
             if battery.communication_paused:
+                return None
+            if (twin := self.communicating_twin(battery)) is not None:
+                self._keep_paused(battery, twin)
                 return None
             self.resume_communication(battery)
         if battery.release_pending_since is not None and not self.controls(battery):

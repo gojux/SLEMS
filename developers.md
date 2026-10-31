@@ -675,6 +675,18 @@ begins: the pause ends by the clock, before the next poll resumes it): a
 changed value is a firmware update and begins its observation (see *Battery
 profiles*).
 
+Two drivers on one device (a comparison, e.g. the Venus driver against the
+Venus profile): the battery flow refuses an address another battery uses
+(`address_in_use`), except while the debug log of SLEMS is on, the other
+battery is paused and of another model (`_may_share`; `address_shared` is
+shown once, the same address again goes on). A device takes only one
+connection, so `communicating_twin` (another battery at the same host, port
+and unit that is not paused) keeps the other one paused: its pause is
+extended when it runs out (`_keep_paused`, logged at info), the switch
+refuses to lift it (`communication_address_in_use`), and its power counts 0 W
+in the balance (read by the twin). To switch back, pause the one and lift the
+pause of the other.
+
 ### Self-test
 
 `self_test.py` (steps and evaluation, no HA dependency), `coordinator.py`

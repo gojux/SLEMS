@@ -767,6 +767,8 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         self._limits: dict[str, Any] = {}
         # Reconfigured: only name and limits change (nothing read, the trial stays).
         self._limits_only = False
+        # The address shared with a paused battery the user was told about.
+        self._shared_address: tuple[Any, ...] | None = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -990,9 +992,17 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             user_input[CONF_PORT] = int(user_input[CONF_PORT])
             user_input[CONF_UNIT_ID] = int(user_input[CONF_UNIT_ID])
             self._connection = user_input
-            if (other := self._battery_at(user_input)) is not None:
-                errors["base"] = "address_in_use"
-                placeholders["battery"] = other
+            address = tuple(user_input[key] for key in (CONF_HOST, CONF_PORT, CONF_UNIT_ID))
+            if (other := self._battery_at(user_input)) is not None and not (
+                self._may_share(other) and self._shared_address == address
+            ):
+                placeholders["battery"] = other.title
+                if self._may_share(other):
+                    # Shown once; the same address again goes on.
+                    errors["base"] = "address_shared"
+                    self._shared_address = address
+                else:
+                    errors["base"] = "address_in_use"
             elif await self._async_read_profile():
                 return await self.async_step_profile_read()
             else:
@@ -1262,15 +1272,27 @@ class BatterySubentryFlow(ConfigSubentryFlow):
                 others[subentry.subentry_id] = (subentry, profile.key == old.key)
         return others
 
-    def _battery_at(self, connection: dict[str, Any]) -> str | None:
-        """Name of another battery at the same address (host, port, unit)."""
+    def _battery_at(self, connection: dict[str, Any]) -> ConfigSubentry | None:
+        """Another battery at the same address (host, port, unit)."""
         own = self._get_reconfigure_subentry().subentry_id if self.source == SOURCE_RECONFIGURE else None
         for subentry in self._get_entry().subentries.values():
             if subentry.subentry_type != SUBENTRY_TYPE_BATTERY or subentry.subentry_id == own:
                 continue
             if all(subentry.data.get(key) == connection[key] for key in (CONF_HOST, CONF_PORT, CONF_UNIT_ID)):
-                return subentry.title
+                return subentry
         return None
+
+    def _may_share(self, other: ConfigSubentry) -> bool:
+        """For a comparison of drivers: with the debug log of SLEMS on, a battery from
+        a profile may use the address of a paused battery of another model; the
+        coordinator keeps one of the two paused while the other communicates."""
+        if not _LOGGER.isEnabledFor(logging.DEBUG) or other.data.get(CONF_MODEL) == self._model:
+            return False
+        coordinator = getattr(self._get_entry(), "runtime_data", None)
+        return any(
+            battery.subentry_id == other.subentry_id and battery.communication_paused
+            for battery in getattr(coordinator, "batteries", ())
+        )
 
     def _running_transport(self, subentry_id: str) -> ProfileTransport | None:
         """The transport of a running battery from a profile (it holds the connection)."""
