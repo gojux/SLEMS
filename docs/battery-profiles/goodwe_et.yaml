@@ -1,0 +1,118 @@
+# CANDIDATE, not shipped: GoodWe ET hybrid inverter with a battery (written
+# for a GW10K-ET, ARM platform 745), Modbus TCP. Paste it as an own profile.
+# The same EMS registers serve EH, ETG2/ET Plus+, ESA and other series (GT
+# section 9); limits and the AC rated power differ.
+#
+# Before: enable Modbus TCP in SEMS+ (GT section 10); over WLAN this needs the
+# LAN/WiFi dongle V2.0 (LIB). Set the EMS fall-back mode 47505 to 3 if your
+# model supports it (GT: only EH/EHB/AES/ETG1): then the inverter goes back
+# to self-use 30 s after the last command. With the default 10 it keeps the
+# last mode. SLEMS does not write this setting.
+#
+# What a tester should check (and report in an issue, with the firmware):
+# 1. The signs: with the battery charging (its own logic), is the battery
+#    power shown as charging? With the inverter feeding in, is the AC power
+#    shown as output?
+# 2. Does the battery follow a changing set point in Charge-BAT (11) and
+#    Discharge-BAT (12)? No field report shows it yet.
+# 3. At 0 W (Discharge-BAT with 0 W) with the sun shining: does the PV keep
+#    feeding the house, or does the inverter limit it? (GT: in Discharge-BAT
+#    a large PV power limits the MPPT; Battery standby 8 brought the PV down
+#    to 0 W in MLT #460, so the profile does not use it.)
+# 4. At night: does the state of charge read 0xFFFF (evcc #30924)? Then the
+#    probe fails and the values read jump.
+# 5. The limits: set max_charge_w and max_discharge_w to your battery (BMS
+#    current limits 37004/37005 in A), own_pv max_output_w to the AC rated
+#    power of your inverter, not to the peak power of the PV.
+#
+# Sources (retrieved 2026-10-31 to 2026-11-01):
+# [GT]  GoodWe "Third-Party EMS Protocol MODBUS V1.1.1, Simplified Version"
+#       (en.goodwe.com GW_Third-Party-EMS-Protocol_MODBUS-EN.pdf): sections
+#       2, 5, 6, 8, 9, 10, table 1-4
+# [GW]  GoodWe "ARM.745.ESG2.ET30 MODBUS Protocol Map" V1.0 (2022-12-31),
+#       copy attached to marcelblijleven/goodwe issue (files/13464476)
+# [LIB] marcelblijleven/goodwe v0.4.10 (66dfcdd) goodwe/et.py, inverter.py
+# [EH]  evcc @dfb4849 templates/definition/meter/goodwe-hybrid.yaml;
+#       issues #24128, #30924, PR #31087
+# [MLT] mletenay/home-assistant-goodwe-inverter 0.9.9.30; issues #458, #460,
+#       PR #501
+# Addresses: GT and GW list the protocol address (GW frame example: register
+# 0001H is sent as 00H 01H); LIB and EH send the same numbers. Nothing
+# subtracted. 32 bit values high word first (GT section 2).
+#
+# question: GT names only function code 10H for writing; SLEMS writes one
+#   register with 06, as LIB and EH do (works in practice).
+# question: GT writes the mode before the power ("write 11, then 47512");
+#   SLEMS writes the power first, then the mode.
+# question: with 47505 at its default 10 there is no time-out - if SLEMS
+#   fails, the last set point stays in force. GT 47117/47118 "API time out"
+#   (GW) is not explained anywhere.
+# question: least time between requests? GT names a read and write cycle of
+#   1000 ms, a response time-out of 1000 ms and no least time; reports of
+#   time-outs over TCP (evcc #24128, PR #31087), so timeout_s stays at 3 s.
+# question: GT and GW give no sign for 35182 and 35137 and do not say
+#   whether 35137 holds the backup output (that is 35169 on its own).
+slems_battery_profile: 1
+id: goodwe_et
+name: "GoodWe ET"
+manufacturer: "GoodWe"
+revision: 1
+notes: "Candidate; EMS power mode 47511/47512, Modbus TCP over the LAN dongle."
+
+connection:
+  port: 502                # GT section 10
+  unit_id: 247             # GT sections 5 and 10, default
+  max_read_registers: 100  # GT section 10 "Max Read Length 100"
+
+limits:
+  max_charge_w: 10000     # uncertain: GW 47512 range [0, 10000]; the BMS current limits it further (GT table 1-4)
+  max_discharge_w: 10000  # uncertain: as max_charge_w
+
+own_pv: {max_output_w: 10000, passes_pv_through: true}  # GW10K-ET: AC rated power 10 kW
+
+read:
+  soc_pct:         {address: 37007, type: uint16}  # GT 8 no. 125 "BMS1 SOC", %
+  battery_power_w: {address: 35182, type: int32, positive: discharge}  # uncertain: sign; GT 8 no. 91 "Battery1 Power", S32 W, no sign (GW: U32); positive = discharging derived from LIB (load = PV + battery - inverter)
+  pv_power_w:      {address: 35301, type: uint32}  # GT 8 no. 100, GW "PV Total Power", W
+  ac_power_w:      {address: 35137, type: int32, positive: output}  # uncertain: sign; GT 8 no. 84 "Total Inverter Power", S32 W, no sign; not 35139 (the meter if connected)
+  charged_kwh:     {address: 35206, type: uint32, scale: 0.1}  # GW "E-BatteryCharge", 0.1 kWh
+  discharged_kwh:  {address: 35209, type: uint32, scale: 0.1}  # GW "E-BatteryDischarge", 0.1 kWh
+  voltage_v:       {address: 35180, type: uint16, scale: 0.1}  # GW "Vbattery1", 0.1 V
+  temperature_c:   {address: 37003, type: uint16, scale: 0.1}  # GW "BMS Pack Temperature", U16 0.1 °C (LIB reads it as int16)
+  max_cell_v:      {address: 37022, type: uint16, scale: 0.001}  # GW "Maximum cell voltage", mV
+  min_cell_v:      {address: 37023, type: uint16, scale: 0.001}  # GW "Minimum cell voltage", mV
+  state:                                             # GT 8 no. 92 "Battery1 Mode"
+    address: 35184
+    type: uint16
+    values: {1: standby, 2: discharge, 3: charge}  # 0 no battery or disconnected
+
+device_info:
+  arm_firmware:        {address: 35019, type: uint16}        # GW "FMVersion_ARM"
+  dsp_master_firmware: {address: 35016, type: uint16}        # GW "FMVersion_DSP_M"
+  dsp_slave_firmware:  {address: 35017, type: uint16}        # GW "FMVersion_DSP_S"
+  battery_firmware:    {address: 37014, type: uint16}        # GW "BMS Software Version"
+  serial:              {address: 35003, type: char, count: 8}  # GT 8 no. 5 "Inverter SN"
+
+control:
+  type: magnitude
+  setpoint: battery
+  keepalive_s: 15  # half of the 30 s of the fall-back mode 47505 (GT 9 no. 18); GT: write cycle 1000 ms
+  apply:
+    # GT 9 no. 22 47512 "EMS Power Set", W, RW, not stored (Flash Save N);
+    # table 1-4: in Charge-BAT and Discharge-BAT the power of the battery
+    # (Xset, the actual power must reach it). GW range [0, 10000].
+    - {address: 47512, type: uint16, value: "{power_w}", at_rest: [0, 10000], confirm: true}
+    # GT 9 no. 21 47511 "EMS Power Mode", RW, not stored (Flash Save N);
+    # table 1-4: 1 Auto (self-use), 11 Charge-BAT, 12 Discharge-BAT ("if
+    # write 0, this means no charge or discharge", GT section 10). At rest 1,
+    # or 0 before anything set it (MLT PR #501).
+    - {address: 47511, type: uint16, value: "{mode}", modes: {idle: 12, charge: 11, discharge: 12}, at_rest_values: [0, 1, 11, 12], confirm: true}
+  release:
+    # GT section 10 "Self consumption" (required): 47511 = 1; LIB and EH write
+    # 47512 = 0 with it. Holds with 47505 = 10 (keep the last mode). No
+    # standby: Battery standby (8) brought the PV down to 0 W (MLT #460).
+    auto:
+      - {address: 47512, value: 0}
+      - {address: 47511, value: 1, confirm: true}
+
+probe: {address: 37007, type: uint16, range: [0, 100]}  # GT 8 no. 125 "BMS1 SOC", %

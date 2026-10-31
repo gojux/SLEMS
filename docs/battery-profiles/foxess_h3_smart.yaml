@@ -1,0 +1,125 @@
+# CANDIDATE, not shipped: Fox ESS H3 Smart or H3 Pro hybrid inverter with a
+# battery (written for an H3-10.0-Smart), new register set from 46001, Modbus
+# TCP over the LAN port. Paste it as an own profile. Not for the older set
+# (H3-E, AC3, KH, H1 with 44000-44003): the type of 44002 is disputed and
+# current H3 firmware refuses it (evcc #35621).
+#
+# Before: in the inverter set the protocol so Modbus TCP answers (FMI #1097:
+# "Prot-F" worked, "Prot-S" did not). Switch off strategy periods and
+# schedules in the FoxESS app or cloud: they use the same remote control
+# registers (FM, SF), and a schedule makes the inverter ignore other writes
+# (FMI PR #1245). SLEMS does not change these settings.
+#
+# The profile uses the controlled target "battery" (46001 = 5), as Fox ESS
+# documents it (FD); all integrations for the H3 use the target "AC" (1),
+# where 0 W curtails the PV completely (EV, SF on hardware).
+#
+# What a tester should check (and report in an issue, with the firmware
+# master/slave/manager):
+# 1. Does the battery follow the set point with 46001 = 5, in both
+#    directions, also with a negative power (charging)? Does the PV keep
+#    feeding the house at 0 W? Not yet confirmed on an H3.
+# 2. After a release (46001 = 0): does the work mode of the user apply again
+#    at once? And if SLEMS stops writing: what does the inverter do when the
+#    60 s run out (FMW: back to the work mode; OA #141: stayed on with 0 W)?
+# 3. The signs: with the battery charging (its own logic), is the battery
+#    power shown as charging? With the inverter feeding in, is the AC power
+#    shown as output, and is it in W (FMI #1231: 1000 times too small on an
+#    H3 Smart 12/15)?
+# 4. Does the read back of the set point show the written values after 5 s
+#    (FM: up to 5 s late), or does the write preview report "not confirmed"?
+# 5. The limits: set max_charge_w and max_discharge_w to your battery (the
+#    read-out 46020/46018 in W), own_pv max_output_w to the AC rated power of
+#    your inverter, not to the peak power of the PV.
+#
+# Sources (retrieved 2026-10-31 to 2026-11-01):
+# [FD]  FoxESS "FOX commercial inverter Modbus interface definition"
+#       V1.05.04.00 (2025-12-15), copy in
+#       wimb0/home-assistant-nextenergy-battery-modbus @6aa62dd; table 1-1
+#       (supported models) is empty
+# [FM]  nathanmarlor/foxess_modbus @90046fe remote_control_manager.py,
+#       modbus_controller.py, entity_descriptions.py; [FMW] its wiki;
+#       [FMI] issues #983, #1097, #1113, #1231, PR #1245
+# [EV]  evcc @dfb4849 templates/definition/meter/fox-ess-h3-smart.yaml,
+#       fox-ess-avocado.yaml; issues #33977, #35621
+# [SF]  srcfl/device-drivers @46b28a1 drivers/lua/foxess_h3_smart.lua
+#       (checked on an 1K5-HI-10-V1)
+# [OA]  Gr33ndev/OpenAmpere @1873ef3 drivers/foxess/registers.py; issues
+#       #141, #311, #509 (addresses from FM)
+# [SO]  solakon-de/solakon-one-homeassistant @fe6ad33 remote_control.py
+# Addresses: FD lists the protocol address; FM, EV, SF and SO send the same
+# numbers (SF checked on hardware). Nothing subtracted. 32 bit values high
+# word first (FM, SF, OA; FD says nothing).
+#
+# question: FD does not say what happens when the remote time-out 46002
+#   runs out, nor whether 46001-46003 are stored permanently.
+# question: least time between requests? FD names none (FM: 30 ms). FM waits
+#   1 s after connecting before the first request over LAN; the format has
+#   no pause after connecting.
+# question: the inverter has very few Modbus TCP connections and closes a
+#   new one at once when they are taken (OA #311); no other integration
+#   should poll it.
+# question: some ranges answer only one register at a time (37609-37620,
+#   37632-37636: FM, SF), and unknown addresses get no answer instead of an
+#   exception (SF); so the profile reads nothing from 37609-37620 but the
+#   state of charge 37612.
+# question: FD gives no sign for 39237 and 39134.
+slems_battery_profile: 1
+id: foxess_h3_smart
+name: "Fox ESS H3 Smart / H3 Pro"
+manufacturer: "Fox ESS"
+revision: 1
+notes: "Candidate; remote control 46001-46003 with the target battery, Modbus TCP."
+
+connection:
+  port: 502      # FD 5.2.2.3
+  unit_id: 247   # uncertain: FD names none; FM, FMI #983/#1097/#1201, EV
+
+limits:
+  max_charge_w: 10000     # uncertain: H3-10.0-Smart; the battery limits it further (46020)
+  max_discharge_w: 10000  # uncertain: as max_charge_w (46018)
+
+own_pv: {max_output_w: 10000, passes_pv_through: true}  # H3-10.0-Smart: AC rated power 10 kW
+
+read:
+  soc_pct:         {address: 37612, type: uint16, fallback: {address: 39423, type: uint16}}  # FD "BMS1 SoC", %; 39423 "System SoC", % (FD from V1.05.03)
+  battery_power_w: {address: 39237, type: int32, positive: discharge}  # uncertain: sign; FD "Battery Combined Power", I32 W, no sign; FD 39230 (battery 1) ">0 discharge"; SF on hardware: positive = discharge
+  pv_power_w:      {address: 39118, type: int32}  # FD "Total PV input power", I32 kW gain 1000 = W
+  ac_power_w:      {address: 39134, type: int32, positive: output}  # uncertain: sign and scale; FD "Active power", I32 kW gain 1000 = W, no sign; FMI #1231
+  charged_kwh:     {address: 39605, type: uint32, scale: 0.01}  # FD total charging energy, kWh gain 100 (H3 Pro before manager 1.22: 0.1 kWh, FM)
+  discharged_kwh:  {address: 39609, type: uint32, scale: 0.01}  # FD total discharge energy, kWh gain 100
+  voltage_v:       {address: 39227, type: int16, scale: 0.1}  # FD "Battery1 Voltage", V gain 10
+
+device_info:
+  master_firmware:  {address: 36001, type: uint16}           # FD, FM: master
+  slave_firmware:   {address: 36002, type: uint16}           # FD, FM: slave
+  manager_firmware: {address: 36003, type: uint16}           # FD, FM: manager
+  serial:           {address: 30016, type: char, count: 16}  # FD "SN"
+
+control:
+  type: signed
+  positive: discharge
+  setpoint: battery
+  keepalive_s: 20  # a third of the remote time-out written to 46002
+  confirm: {delay_s: 5.0}  # FM: written values read back up to 5 s late
+  apply:
+    # FD 46002 "Remote Timeout_Set", U16 s; 60 s as SF (15 s ran out before
+    # the inverter acted). FD gives no range.
+    - {address: 46002, type: uint16, value: 60, at_rest: [0, 65535], confirm: true}
+    # FD 46001 "Remote Control", bitfield: bit 0 enable, bit 1 positive
+    # direction (0 power generation: positive = discharge), bits 3:2 target
+    # (01 battery). 5 = on, battery, positive discharging. At rest 0; 1 left
+    # after the time-out (OA #141), 5 left by SLEMS or another controller.
+    - {address: 46001, type: uint16, value: 5, at_rest_values: [0, 1, 5], confirm: true}
+    # FD 46003-46004 "Remote Control Active Power Command", I32 W (sign as
+    # bit 1 of 46001). At rest 0 or the last command (FM, OA).
+    - {address: 46003, type: int32, value: "{power_w}", at_rest: [-15000, 15000], confirm: true}
+  release:
+    # Remote control off: the work mode set by the user (49203) applies again
+    # (FMW, FM); SLEMS does not write the work mode. No standby: 0 W holds
+    # only until the time-out.
+    auto:
+      - {address: 46003, value: 0}
+      - {address: 46001, value: 0, confirm: true}
+
+probe: {address: 37612, type: uint16, range: [0, 100]}  # FD "BMS1 SoC", %

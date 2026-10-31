@@ -10,6 +10,8 @@ prompt.
 
 | File | Battery | Open points |
 |---|---|---|
+| [foxess_h3_smart.yaml](foxess_h3_smart.yaml) | Fox ESS H3 Smart / H3 Pro (registers from 46001) | target battery not confirmed on an H3, fall-back after the remote time-out, read back up to 5 s late, few Modbus TCP connections |
+| [goodwe_et.yaml](goodwe_et.yaml) | GoodWe ET (GW10K-ET) and series with the EMS mode 47511 | Charge-BAT/Discharge-BAT with a changing power, PV at 0 W, no fall-back with the default 47505, signs |
 | [kostal_plenticore.yaml](kostal_plenticore.yaml) | KOSTAL PLENTICORE plus G2/G3 with a battery | hand-back only after the inverter's time-out, signs of the battery and AC power, set point without effect on some G2 |
 | [marstek_venus_a.yaml](marstek_venus_a.yaml) | Marstek Venus A | set point with own PV, 32 registers per read, RS485 control ending by itself |
 | [marstek_venus_d.yaml](marstek_venus_d.yaml) | Marstek Venus D | set point with own PV, highest powers reading 0 after a restart |

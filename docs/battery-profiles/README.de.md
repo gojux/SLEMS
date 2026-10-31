@@ -10,6 +10,8 @@ dem KI-Prompt zu erstellen.
 
 | Datei | Batterie | Offene Punkte |
 |---|---|---|
+| [foxess_h3_smart.yaml](foxess_h3_smart.yaml) | Fox ESS H3 Smart / H3 Pro (Register ab 46001) | Ziel Batterie an einer H3 nicht bestätigt, Rückfall nach dem Timeout der Fernsteuerung, Rücklesen bis 5 s verzögert, wenige Modbus-TCP-Verbindungen |
+| [goodwe_et.yaml](goodwe_et.yaml) | GoodWe ET (GW10K-ET) und Serien mit dem EMS-Modus 47511 | Charge-BAT/Discharge-BAT mit wechselnder Leistung, PV bei 0 W, kein Rückfall mit dem Standard von 47505, Vorzeichen |
 | [kostal_plenticore.yaml](kostal_plenticore.yaml) | KOSTAL PLENTICORE plus G2/G3 mit Batterie | Rückgabe erst nach dem Timeout des Wechselrichters, Vorzeichen der Batterie- und AC-Leistung, Vorgabe bei manchen G2 ohne Wirkung |
 | [marstek_venus_a.yaml](marstek_venus_a.yaml) | Marstek Venus A | Vorgabe bei eigener PV, 32 Register je Lesen, RS485-Steuerung endet von selbst |
 | [marstek_venus_d.yaml](marstek_venus_d.yaml) | Marstek Venus D | Vorgabe bei eigener PV, Höchstleistungen lesen nach einem Neustart 0 |
