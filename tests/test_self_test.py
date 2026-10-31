@@ -170,6 +170,25 @@ def test_a_nearly_empty_battery_is_charged_before_it_discharges() -> None:
     assert room.values["direction"] == "charge" and room.values["to_pct"] >= 20.0
 
 
+def test_room_is_made_with_more_power_than_the_test() -> None:
+    test = SelfTest(600, 600, 0.0, soc_range=(20.0, 90.0), room_w=(800.0, 800.0))
+    powers: list[float] = []
+    step = test.step
+
+    def recording(*args, **kw):
+        result = step(*args, **kw)
+        if test.phase is Phase.CHARGE_TO and result is not None:
+            powers.append(result)
+        return result
+
+    test.step = recording  # type: ignore[method-assign]
+    run(test, soc=17.0)
+    assert powers and set(powers) == {800.0}
+    assert test.result == "ok", outcomes(test)
+    # Never below the test power.
+    assert SelfTest(600, 600, 0.0, room_w=(300.0, 0.0)).room_w == (600, 600)
+
+
 def test_a_nearly_full_battery_discharges_first() -> None:
     test = SelfTest(600, 600, 0.0, soc_range=(20.0, 90.0))
     seen = phases_run(test, soc=93.0)

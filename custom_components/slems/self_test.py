@@ -21,7 +21,8 @@ near full to charge: with both directions to test and the state of charge
 outside ``soc_range`` (``SOC_ROOM_PCT``, at least ``SOC_ROOM_MARGIN_PCT``
 inside the battery's state of charge window), the test makes room itself.
 Above the range it discharges first. After the first full step it goes on in
-that direction (CHARGE_TO / DISCHARGE_TO, nothing measured, the others run
+that direction (CHARGE_TO / DISCHARGE_TO with ``room_w``, at least the test
+power and at most ``SOC_ROOM_POWER_W``, nothing measured, the others run
 normally) until the state of charge is inside the range, at most
 ``SOC_ROOM_MAX_S``; then REST and the other direction. Not reached in time,
 it ends after a REST without the other direction, the check ``soc_room``
@@ -159,6 +160,9 @@ RELEASE_LATE_S = 90.0
 SOC_ROOM_PCT = (20.0, 90.0)
 SOC_ROOM_MARGIN_PCT = 5.0
 SOC_ROOM_MAX_S = 1800.0
+# Power while making room (nothing measured), within what the battery may now;
+# the limit of a plug-in PV system, so it stays modest.
+SOC_ROOM_POWER_W = 800.0
 
 
 class Phase(StrEnum):
@@ -356,11 +360,14 @@ class SelfTest:
         release_state: str = "auto",
         trial: TrialSpec | None = None,
         soc_range: tuple[float, float] | None = None,
+        room_w: tuple[float, float] | None = None,
     ) -> None:
         self.charge_w = charge_w
         self.discharge_w = discharge_w
-        # The state of charge both directions have room in (see ``soc_room``).
+        # The state of charge both directions have room in (see ``soc_room``) and
+        # the power (charge, discharge) to make room with, never below the test power.
         self.soc_range = soc_range
+        self.room_w = (max(charge_w, room_w[0]), max(discharge_w, room_w[1])) if room_w else (charge_w, discharge_w)
         # State the battery is released to ("auto" or "standby", see ReleaseState).
         self.release_state = release_state
         # The trial of a profile (None: a plain self-test).
@@ -771,7 +778,7 @@ class SelfTest:
                 # Nothing measured: the other batteries and the consumers run normally.
                 charging = phase is Phase.CHARGE
                 room = Phase.CHARGE_TO if charging else Phase.DISCHARGE_TO
-                self._enter(room, now, self.charge_w if charging else -self.discharge_w)
+                self._enter(room, now, self.room_w[0] if charging else -self.room_w[1])
             else:
                 if self.room_target_pct is not None:
                     self._room_reached, self._room_to_pct = True, soc

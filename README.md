@@ -1132,7 +1132,7 @@ that step is left out. Below 20 % or above 90 % (at least 5 percentage points
 inside the battery's state of charge window) a battery may hold back on its own
 (e.g. a discharge limit in its app). Then the test makes room: below 20 % it
 charges on after the charging step until 20 %, above 90 % it discharges first
-and on until 90 %, then the other direction follows. Meanwhile nothing is
+and on until 90 % (with up to 800 W, at least the test power), then the other direction follows. Meanwhile nothing is
 measured and the other batteries and the consumers run normally (the other
 batteries may cover the charging). Not reached within 30 minutes, the other
 direction is left out and the check **Room for both directions** is unclear. While measuring, the other batteries and the consumers

@@ -152,7 +152,16 @@ from .response_probe import (
     digest,
     probe_offset_w,
 )
-from .self_test import Outcome, Phase as SelfTestPhase, Sample, SelfTest, self_test_power_w, soc_room, step_power_w
+from .self_test import (
+    SOC_ROOM_POWER_W,
+    Outcome,
+    Phase as SelfTestPhase,
+    Sample,
+    SelfTest,
+    self_test_power_w,
+    soc_room,
+    step_power_w,
+)
 from .trial import TrialState
 from .delivery_monitor import Action, DeliveryMonitor
 from .full_charge import REST_S as FULL_CHARGE_REST_S, FullChargeCandidate, due_battery
@@ -2749,6 +2758,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             battery.driver.release_state.value,
             battery.driver.trial_spec if battery.trial is not None and battery.trial.in_trial else None,
             soc_room(battery.limits.min_soc_pct, battery.limits.max_soc_pct),
+            (
+                min(SOC_ROOM_POWER_W, limits.charge_w if limits else 0.0),
+                min(SOC_ROOM_POWER_W, limits.discharge_w if limits else 0.0),
+            ),
         )
         battery.self_test_power_w = None
         battery.self_test_pending = False

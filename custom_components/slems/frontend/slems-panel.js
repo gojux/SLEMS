@@ -4558,7 +4558,7 @@ class SlemsPanel extends HTMLElement {
           const selfTest = s("self_test_result");
           const testRunning = selfTest?.state === "running";
           const trialState = s("profile_trial")?.state;
-          const progress = testRunning ? this._selfTestProgress(selfTest, trialState === "running") : "";
+          const progress = testRunning ? this._selfTestProgress(selfTest, TRIAL_STATES.includes(trialState)) : "";
           const cancelTest = `<button class="link" data-action="self-test-off" data-entity="${s("self_test")?.entity_id}">${t.selfTestCancel}</button>`;
           const pause = s("communication_paused");
           if (pause?.state === "on") {
@@ -4574,7 +4574,8 @@ class SlemsPanel extends HTMLElement {
           } else if ([...TRIAL_STATES, "observing"].includes(trialState)) {
             const box = trialState === "failed" ? "problem" : "info-box";
             const icon = trialState === "failed" ? "mdi:alert-circle" : "mdi:clipboard-check-outline";
-            const running = trialState === "running" && testRunning;
+            // A test started again after a failed or unclear trial shows its progress as well.
+            const running = testRunning && trialState !== "observing";
             problem = `<div class="${box}"><ha-icon icon="${icon}"></ha-icon><span>${escapeHtml(t.trialText[trialState])}${
               running ? progress : ""
             }</span>${running ? cancelTest : ""}</div>`;

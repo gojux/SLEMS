@@ -1200,7 +1200,8 @@ fällt dieser Schritt aus. Unter 20 % oder über 90 % (mindestens 5
 Prozentpunkte innerhalb des Ladezustandsfensters der Batterie) hält sich eine
 Batterie womöglich selbst zurück (z. B. eine Entladegrenze in ihrer App). Dann
 schafft der Test Platz: Unter 20 % lädt er nach dem Ladeschritt weiter bis
-20 %, über 90 % entlädt er zuerst und weiter bis 90 %, danach folgt die andere
+20 %, über 90 % entlädt er zuerst und weiter bis 90 % (mit bis zu 800 W,
+mindestens der Testleistung), danach folgt die andere
 Richtung. Dabei wird nichts gemessen, und die anderen Batterien und die
 Verbraucher laufen normal (die anderen Batterien decken das Laden womöglich
 ab). Ist das Ziel nach 30 Minuten nicht erreicht, fällt die andere Richtung aus

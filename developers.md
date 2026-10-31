@@ -702,7 +702,8 @@ so far, also inside the trial hint), notification in `problems.py`.
   points inside the window): with both directions and the state of charge
   outside at the end of IDLE, the test runs the direction that makes room
   first (discharge above the range) and goes on in it after the full step
-  (`CHARGE_TO` / `DISCHARGE_TO`: `commanding` but not `holds_others`, no
+  (`CHARGE_TO` / `DISCHARGE_TO` with `room_w`, up to `SOC_ROOM_POWER_W` = 800 W
+  within the battery's limits, at least the test power: `commanding` but not `holds_others`, no
   measurement, at most `SOC_ROOM_MAX_S` = 30 min), then REST and the other
   direction; `_reference` is IDLE for the first and REST for the second
   direction. Not reached: REST, release without the other direction, check
