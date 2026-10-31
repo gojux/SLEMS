@@ -371,7 +371,7 @@ def battery_modbus(token: str) -> None:
             "profile_connection": {"host": "venus-sim-4"},
             "profile_read": "profile_limits",
             "profile_limits": {"name": "Venus 4"},
-            "profile_preview": {},
+            "profile_preview": {"checked_unverified": True},
         },
         "Venus E 3.0 from the Modbus profile (simulator)",
     )
@@ -774,7 +774,7 @@ def dashboard(token: str) -> None:
     unavailable = [s["entity_id"] for s in slems if s["state"] == "unavailable"]
     print(f"  {len(slems)} SLEMS entities, unavailable: {unavailable or 'none'}")
     # Phase entities of the batteries and consumers (the setup has the power per phase).
-    relearn = [s["entity_id"] for s in states if s["entity_id"].startswith("button.") and "phase" in s["entity_id"]]
+    relearn = [s["entity_id"] for s in states if s["entity_id"].startswith("button.") and s["entity_id"].endswith("_learn_phase_again")]
     phase = [
         s["entity_id"] for s in states
         if s["entity_id"].startswith("sensor.") and s["entity_id"].endswith("_phase") and "balancing" not in s["entity_id"]
