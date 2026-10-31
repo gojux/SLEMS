@@ -10,6 +10,7 @@ dem KI-Prompt zu erstellen.
 
 | Datei | Batterie | Offene Punkte |
 |---|---|---|
+| [kostal_plenticore.yaml](kostal_plenticore.yaml) | KOSTAL PLENTICORE plus G2/G3 mit Batterie | Rückgabe erst nach dem Timeout des Wechselrichters, Vorzeichen der Batterie- und AC-Leistung, Vorgabe bei manchen G2 ohne Wirkung |
 | [marstek_venus_a.yaml](marstek_venus_a.yaml) | Marstek Venus A | Vorgabe bei eigener PV, 32 Register je Lesen, RS485-Steuerung endet von selbst |
 | [marstek_venus_d.yaml](marstek_venus_d.yaml) | Marstek Venus D | Vorgabe bei eigener PV, Höchstleistungen lesen nach einem Neustart 0 |
 | [sungrow_sh10rt.yaml](sungrow_sh10rt.yaml) | Sungrow SH10RT mit SBR128 | Vorgabe im External-EMS-Modus, Heartbeat, Vorzeichen der Batterieleistung, AC-Leistung |

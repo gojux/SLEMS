@@ -1,0 +1,114 @@
+# CANDIDATE, not shipped: KOSTAL PLENTICORE plus G2 or G3 with a battery
+# (written for a PLENTICORE plus 10 G2 with a BYD HVS), Modbus TCP. Paste it as
+# an own profile. Not for a G1: some do not fall back to their own logic after
+# external control (evcc #16300, MB #8), and register 58 is missing there.
+#
+# Before: in the installer menu (service code) set Battery management to
+# "External via protocol (Modbus TCP)": register 1080 then reads 2, otherwise
+# the inverter ignores the set point without an error (MB). Leave the Modbus
+# byte order (register 5) at its default "little-endian (CDAB)"; with
+# "big-endian (ABCD)" change every word_order: little to big. Set the
+# time-out of the external battery control in the battery menu to 30 s or
+# more. SLEMS does not write these settings.
+#
+# What a tester should check (and report in an issue, with the firmware):
+# 1. Values read: does the state of charge (210, float) match 514 (integer)?
+#    If not, the byte order is not CDAB.
+# 2. The signs: with the battery charging (its own logic), is the battery
+#    power shown as charging? With the inverter feeding in, is the AC power
+#    shown as output?
+# 3. Does the battery follow the set point 1034, in both directions and with
+#    PV? On a G2 with IOC 02.20.1123 it was accepted without effect (evcc
+#    #31828).
+# 4. After a release: how long until the inverter's own logic takes over
+#    (its time-out), and does it?
+# 5. The limits: set max_charge_w and max_discharge_w to the read-out limits
+#    1076 and 1078 (W, float) of your battery.
+# 6. own_pv max_output_w: set it to the AC rated power of your inverter
+#    (here 10000 W for a PLENTICORE plus 10), not to the peak power of the PV.
+#
+# Sources (retrieved 2026-10-31 to 2026-11-01):
+# [K]  KOSTAL "Interface description MODBUS (TCP) & SunSpec with control
+#      information" Rev. 2.7 (2025-11-20), copy at taphome.com
+#      (kostal-modbus-interface.pdf): 1.6, 2.1.2-2.1.4, 3.1, 3.2, 3.4
+# [MB] mbuhansen/kostal_plenticore_battery_control @3260b3b const.py,
+#      modbus_handler.py, switch.py, README; issues #6, #7, #8
+# [OE] OpenEMS @05ec381 io.openems.edge.kostal/.../KostalManagedEssImpl.java
+# [EV] evcc @dfb4849 templates/definition/meter/kostal-plenticore-gen2.yaml;
+#      issues #16300, #26168, #31828
+# [CR] CrunkA3/ha_kostal_plenticore_modbus @eb2f29b register_info.py
+# Addresses: K gives each address in hex and decimal, both the protocol
+# address (2.1.4: registers numbered 1-16 are addressed as 0-15, the tables
+# list the address); MB, OE, EV and CR write the same numbers. Nothing
+# subtracted. Floats and 32 bit values low word first in the default byte
+# order (K 2.1.2, note 7; MB, OE, CR).
+#
+# question: is 1034 stored permanently? K 3.4 says nothing; 3.3 says only
+#   the active power registers are not stored. No source reports flash.
+# question: the time-out of the external battery control is a setting in
+#   the inverter (K names none; 30 s in MB and OE, 60 s in EV and the
+#   Node-RED flow). keepalive_s 15 assumes 30 s or more.
+# question: K note 7: in Austria (gradient case, 10 minutes) and in Denmark
+#   the inverter does not accept 1034 permanently. What happens then?
+# question: least time between requests? K names none.
+# question: K gives no sign for 582 and 172 and does not say whether 172
+#   holds the emergency power output (ESB).
+slems_battery_profile: 1
+id: kostal_plenticore
+name: "KOSTAL PLENTICORE plus G2/G3"
+manufacturer: "KOSTAL"
+revision: 1
+notes: "Candidate; G2 from SW 02.15, G3 from SW 3.06 (K), external battery management via Modbus TCP."
+
+connection:
+  port: 1502   # K 3.1
+  unit_id: 71  # K 3.1, modifiable
+
+limits:
+  max_charge_w: 5300     # uncertain: 13 A (MB for G1/G2) at 409.6 V (BYD HVS 10.2); the inverter limits larger set points itself (MB)
+  max_discharge_w: 5300  # uncertain: as max_charge_w
+
+own_pv: {max_output_w: 10000, passes_pv_through: true}  # PLENTICORE plus 10: AC rated power 10 kW
+
+read:
+  soc_pct:         {address: 210, type: float32, word_order: little, fallback: {address: 514, type: uint16}}  # K 3.2 "Act. state of charge", %; 514 "Battery actual SOC", U16 %
+  battery_power_w: {address: 582, type: int16, positive: discharge}  # uncertain: sign; K 3.2 "Actual battery charge/discharge power", S16 W, no sign; MB negative = charging, like the current 200 in K ("charge (-) / discharge (+)")
+  pv_power_w:      {address: 1066, type: float32, word_order: little}  # K 3.2 "Total DC power (sum of all PV inputs)", W; not 260/270/280, one DC input may be the battery
+  ac_power_w:      {address: 172, type: float32, word_order: little, positive: output}  # uncertain: sign; K 3.2 "Total AC active power", W, no sign
+  charged_kwh:     {address: 1046, type: float32, word_order: little, scale: 0.001}  # K 3.2 "Total DC charge energy (DC-side to battery)", Wh
+  discharged_kwh:  {address: 1048, type: float32, word_order: little, scale: 0.001}  # K 3.2 "Total DC discharge energy (DC-side from battery)", Wh
+  voltage_v:       {address: 216, type: float32, word_order: little}  # K 3.2 "Battery voltage", V
+  temperature_c:   {address: 214, type: float32, word_order: little}  # K 3.2 "Battery temperature", °C
+  cycles:          {address: 194, type: float32, word_order: little}  # K 3.2 "Number of battery cycles"
+  state:                                             # K 3.2 "Inverter state" (note 2), a state of the inverter, not of the battery
+    address: 56
+    type: uint32
+    word_order: little  # uncertain: K note 7 names the byte order only for floats; OE reads it low word first
+    values: {9: firmware_update, 17: backup}  # 9 Update, 17 ESB (emergency power); the others say nothing about the battery
+
+device_info:
+  inverter_firmware: {address: 58, type: char, count: 13}  # K 3.2 "Overall software version (UI / SW)"
+  mc_firmware:       {address: 38, type: char, count: 8}   # K 3.2 "Software-Version Maincontroller (MC)"
+  ioc_firmware:      {address: 46, type: char, count: 8}   # K 3.2 "Software-Version IO-Controller (IOC)"
+  battery_firmware:  {address: 586, type: uint32}          # K 3.2 "Battery Firmware", U32; high word first, MB: always, whatever register 5 says
+  serial:            {address: 14, type: char, count: 8}   # K 3.2 "Inverter serial number"
+
+control:
+  type: signed
+  positive: discharge
+  setpoint: battery
+  keepalive_s: 15  # half of the time-out set in the inverter (30 s or more, see the question)
+  apply:
+    # K 3.4 1034 "Battery charge power (DC) setpoint, absolute", W, float, RW
+    # (03/10), note 1: negative values charge, positive discharge. At rest it
+    # holds the last set point, also after the fall-back (MB), so any earlier
+    # one of SLEMS or another controller (up to 20 kW for a G3).
+    - {address: 1034, type: float32, word_order: little, value: "{power_w}", at_rest: [-20000, 20000], confirm: true}
+  release:
+    # K has no register that hands the battery back: the inverter takes over
+    # when no set point comes for its time-out (MB, EV). 0 W holds until then
+    # (EV #26168); no standby, since 0 W does not hold longer either.
+    auto:
+      - {address: 1034, value: 0, confirm: true}
+
+probe: {address: 514, type: uint16, range: [0, 100]}  # K 3.2 "Battery actual SOC", U16, independent of the byte order
