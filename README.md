@@ -914,7 +914,9 @@ other.
    except an unverified one (see below).
 7. **Trial**: SLEMS saves the battery but does not control it yet; it runs on
    its own logic. In the operating mode **Active** its self-test with the
-   checks of the profile starts by itself and takes about 8–9 minutes, while
+   checks of the profile starts by itself and takes about 8–9 minutes (longer
+   when it first makes room in the state of charge, see
+   [Self-test](#self-test-of-a-battery)), while
    the other batteries and the consumers are held: the write registers are
    read at rest for a minute before anything is written (a state of charge
    or probe register jumping meanwhile is marked as a likely shifted
@@ -1126,7 +1128,14 @@ Steps, about 5–10 minutes together:
    others keep holding; then normal planning.
 
 If the battery may not charge right now (e.g. full) or not discharge (empty),
-that step is left out. While measuring, the other batteries and the consumers
+that step is left out. Below 20 % or above 90 % (at least 5 percentage points
+inside the battery's state of charge window) a battery may hold back on its own
+(e.g. a discharge limit in its app). Then the test makes room: below 20 % it
+charges on after the charging step until 20 %, above 90 % it discharges first
+and on until 90 %, then the other direction follows. Meanwhile nothing is
+measured and the other batteries and the consumers run normally (the other
+batteries may cover the charging). Not reached within 30 minutes, the other
+direction is left out and the check **Room for both directions** is unclear. While measuring, the other batteries and the consumers
 keep their last set points, so the smart meter shows the effect of the tested
 battery alone; a little energy may come from the grid or go into it meanwhile.
 SLEMS also takes the measured power of the other batteries out.

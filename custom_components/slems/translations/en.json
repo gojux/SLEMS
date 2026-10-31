@@ -1793,6 +1793,9 @@
     "self_test_check_soc": {
       "message": "State of charge"
     },
+    "self_test_check_soc_room": {
+      "message": "Room for both directions"
+    },
     "self_test_check_release": {
       "message": "Hand-back to its own logic"
     },

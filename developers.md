@@ -698,6 +698,16 @@ last result in its attributes; while it runs `step` of `steps`, the position
 of the phase in `SelfTest.plan()`, shown on the battery card with the time
 so far, also inside the trial hint), notification in `problems.py`.
 
+- Room in the state of charge (`soc_room`, `SOC_ROOM_PCT` 20/90 % at least 5
+  points inside the window): with both directions and the state of charge
+  outside at the end of IDLE, the test runs the direction that makes room
+  first (discharge above the range) and goes on in it after the full step
+  (`CHARGE_TO` / `DISCHARGE_TO`: `commanding` but not `holds_others`, no
+  measurement, at most `SOC_ROOM_MAX_S` = 30 min), then REST and the other
+  direction; `_reference` is IDLE for the first and REST for the second
+  direction. Not reached: REST, release without the other direction, check
+  `soc_room` unclear. `_soc` takes the records in the order they ran,
+  including the room made.
 - The tested battery leaves the planning like a balancing one
   (`self_test_requested` in `participating`/`plannable`), ramping out first.
   From the first rest on (`SelfTest.holds_others`) the controller sends the

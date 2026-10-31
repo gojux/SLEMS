@@ -204,13 +204,15 @@ async def test_the_device_information_is_compared_before_control(monkeypatch: py
 # --- the whole trial against the simulator ----------------------------------------
 
 
-async def run_trial(model, release_state: ReleaseState = ReleaseState.AUTO, max_s: float = 1800.0):
+async def run_trial(
+    model, release_state: ReleaseState = ReleaseState.AUTO, max_s: float = 1800.0, test: SelfTest | None = None
+):
     """A trial of the Venus profile against the simulator's register model, written
     the way the controller does (keep-alive, complete write before the late read
     back, nothing while it runs); the meter is the house plus the battery."""
     link = SimLink(model)
     driver = venus_profile_driver(link, release_state)
-    test = SelfTest(625, 625, 0.0, release_state.value, driver.trial_spec)
+    test = test or SelfTest(625, 625, 0.0, release_state.value, driver.trial_spec)
     await driver.connect()
     now = 0.0
     previous: tuple[float, float] | None = None
@@ -267,6 +269,18 @@ async def test_the_steps_of_a_trial_follow_its_plan(monkeypatch) -> None:
     assert [phase for phase, _ in seen if phase != "done"] == plan[1:]
     assert [number for phase, number in seen if phase != "done"] == list(range(2, len(plan) + 1))
     assert seen[-1] == ("done", len(plan))
+
+
+async def test_a_trial_of_a_nearly_empty_battery_charges_it_first() -> None:
+    model = SIM.VenusModel(5120, 18.0)
+    link = SimLink(model)
+    driver = venus_profile_driver(link)
+    test = SelfTest(625, 625, 0.0, "auto", driver.trial_spec, soc_range=(20.0, 90.0))
+    test, _ = await run_trial(model, max_s=3600.0, test=test)
+    assert test.phase is Phase.DONE
+    assert outcomes(test)["soc_room"] == "ok" and outcomes(test)["effect_discharge"] == "ok"
+    assert outcomes(test)["trial_small_discharge"] == "ok"
+    assert [phase.value for phase in test.plan()][5:9] == ["charge", "charge_to", "rest", "small_discharge"]
 
 
 def outcomes(test: SelfTest) -> dict[str, str]:

@@ -21,6 +21,7 @@ from custom_components.slems.self_test import (
     TrialRegister,
     TrialSpec,
     self_test_power_w,
+    soc_room,
     step_power_w,
 )
 
@@ -137,6 +138,62 @@ def test_the_plan_of_a_test_without_trial() -> None:
     assert [phase.value for phase in SelfTest(0, 600, 0.0).plan()] == ["prepare", "idle", "discharge", "release"]
     run(test)
     assert test.current_step == 6
+
+
+def phases_run(test: SelfTest, **kwargs) -> list[str]:
+    """The phases a test went through, in order."""
+    seen: list[str] = []
+    step = test.step
+
+    def recording(*args, **kw):
+        result = step(*args, **kw)
+        if not seen or seen[-1] != test.phase.value:
+            seen.append(test.phase.value)
+        return result
+
+    test.step = recording  # type: ignore[method-assign]
+    run(test, **kwargs)
+    return seen
+
+
+def test_a_nearly_empty_battery_is_charged_before_it_discharges() -> None:
+    # At 17 % a battery may refuse to discharge below a limit of its own.
+    test = SelfTest(600, 600, 0.0, soc_range=soc_room(10.0, 100.0))
+    assert test.soc_range == (20.0, 90.0)
+    seen = phases_run(test, soc=17.0)
+    assert seen == ["idle", "charge", "charge_to", "rest", "discharge", "release", "done"]
+    assert [phase.value for phase in test.plan()] == [
+        "prepare", "idle", "charge", "charge_to", "rest", "discharge", "release",
+    ]
+    assert test.result == "ok", outcomes(test)
+    room = next(c for c in test.checks if c.key == "soc_room")
+    assert room.values["direction"] == "charge" and room.values["to_pct"] >= 20.0
+
+
+def test_a_nearly_full_battery_discharges_first() -> None:
+    test = SelfTest(600, 600, 0.0, soc_range=(20.0, 90.0))
+    seen = phases_run(test, soc=93.0)
+    assert seen == ["idle", "discharge", "discharge_to", "rest", "charge", "release", "done"]
+    # The charge is judged against the rest before it.
+    assert test.result == "ok", outcomes(test)
+    assert outcomes(test)["soc_room"] == "ok"
+
+
+def test_room_not_made_in_time_leaves_the_other_direction_out() -> None:
+    # The state of charge does not rise (e.g. the battery holds back on its own).
+    test = SelfTest(600, 600, 0.0, soc_range=(20.0, 90.0))
+    seen = phases_run(test, soc=14.0, soc_read=lambda _now, _soc: 14.0)
+    assert seen == ["idle", "charge", "charge_to", "rest", "release", "done"]
+    assert outcomes(test)["soc_room"] == "unclear" and "effect_discharge" not in outcomes(test)
+    assert test.result == "unclear"
+
+
+def test_no_room_needed_inside_the_range() -> None:
+    test = SelfTest(600, 600, 0.0, soc_range=(20.0, 90.0))
+    assert phases_run(test, soc=50.0) == ["idle", "charge", "rest", "discharge", "release", "done"]
+    assert "soc_room" not in outcomes(test)
+    # A window too narrow for the margin: no room at all.
+    assert soc_room(15.0, 25.0) is None
 
 
 def test_a_correct_battery_passes() -> None:

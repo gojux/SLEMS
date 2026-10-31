@@ -1793,6 +1793,9 @@
     "self_test_check_soc": {
       "message": "Ladezustand"
     },
+    "self_test_check_soc_room": {
+      "message": "Platz für beide Richtungen"
+    },
     "self_test_check_release": {
       "message": "Rückgabe an die eigene Logik"
     },

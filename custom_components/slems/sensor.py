@@ -1026,6 +1026,8 @@ class SelfTestSensor(SlemsBatteryEntity, SensorEntity):
             # Progress of a running test: the current phase as step of all.
             "step": None if test is None else test.current_step,
             "steps": None if test is None else len(test.plan()),
+            # The state of charge the test makes room to before the other direction.
+            "room_target_pct": None if test is None else test.room_target_pct,
             "power_w": battery.self_test_power_w,
             "charge_w": data.get("charge_w"),
             "discharge_w": data.get("discharge_w"),

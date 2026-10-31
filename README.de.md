@@ -970,8 +970,9 @@ zwei Regelkreise arbeiteten gegeneinander.
 7. **Probebetrieb**: SLEMS speichert die Batterie, regelt sie aber noch
    nicht; sie läuft mit ihrer eigenen Logik. Im Betriebsmodus **Aktiv**
    startet ihr Selbsttest mit den Prüfungen des Profils von selbst und dauert
-   etwa 8–9 Minuten, in denen die anderen Batterien und die Verbraucher
-   gehalten werden: Die Schreibregister werden eine Minute in Ruhe gelesen,
+   etwa 8–9 Minuten (länger, wenn er zuerst Platz im Ladezustand schafft,
+   siehe [Selbsttest](#selbsttest-einer-batterie)), in denen die anderen
+   Batterien und die Verbraucher gehalten werden: Die Schreibregister werden eine Minute in Ruhe gelesen,
    bevor etwas geschrieben wird (springen Ladezustand oder Probe-Register
    dabei, markiert SLEMS eine vermutlich verschobene Adresse), jede Richtung beginnt mit 100 W, danach
    folgt die Leistung des Selbsttests, wobei die Register bis zu 90 s ohne
@@ -1195,7 +1196,15 @@ Ablauf, zusammen etwa 5–10 Minuten:
    anderen weiter halten; danach normale Planung.
 
 Darf die Batterie gerade nicht laden (z. B. voll) oder nicht entladen (leer),
-fällt dieser Schritt aus. Während der Messung halten die anderen Batterien und
+fällt dieser Schritt aus. Unter 20 % oder über 90 % (mindestens 5
+Prozentpunkte innerhalb des Ladezustandsfensters der Batterie) hält sich eine
+Batterie womöglich selbst zurück (z. B. eine Entladegrenze in ihrer App). Dann
+schafft der Test Platz: Unter 20 % lädt er nach dem Ladeschritt weiter bis
+20 %, über 90 % entlädt er zuerst und weiter bis 90 %, danach folgt die andere
+Richtung. Dabei wird nichts gemessen, und die anderen Batterien und die
+Verbraucher laufen normal (die anderen Batterien decken das Laden womöglich
+ab). Ist das Ziel nach 30 Minuten nicht erreicht, fällt die andere Richtung aus
+und die Prüfung **Platz für beide Richtungen** ist unklar. Während der Messung halten die anderen Batterien und
 die Verbraucher ihre letzten Vorgaben, damit der Smart Meter nur die Wirkung der
 getesteten Batterie zeigt; es kann also etwas Energie aus dem Netz kommen oder
 eingespeist werden. SLEMS rechnet die gemessene Leistung der anderen Batterien

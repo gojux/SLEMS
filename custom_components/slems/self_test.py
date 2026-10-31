@@ -16,6 +16,18 @@ battery alone:
    shows whether it really left the test power (up to ``RELEASE_OBSERVE_S``,
    the others still held). The result is final then.
 
+A battery near empty may refuse to discharge below a limit of its own, one
+near full to charge: with both directions to test and the state of charge
+outside ``soc_range`` (``SOC_ROOM_PCT``, at least ``SOC_ROOM_MARGIN_PCT``
+inside the battery's state of charge window), the test makes room itself.
+Above the range it discharges first. After the first full step it goes on in
+that direction (CHARGE_TO / DISCHARGE_TO, nothing measured, the others run
+normally) until the state of charge is inside the range, at most
+``SOC_ROOM_MAX_S``; then REST and the other direction. Not reached in time,
+it ends after a REST without the other direction, the check ``soc_room``
+unclear. So nothing is written with the full power before the first steps
+passed.
+
 A step whose meter runs the wrong way, or by more than ``TOO_LARGE_FACTOR``
 times the test power, for ``ABORT_S`` ends the whole test at once: the
 battery is released instead of running on with a wrong set point.
@@ -143,6 +155,11 @@ LATE_S = 90.0
 LATE_MARGIN_S = 5.0
 RELEASE_LATE_S = 90.0
 
+# Room in the state of charge for both directions (see the module docstring).
+SOC_ROOM_PCT = (20.0, 90.0)
+SOC_ROOM_MARGIN_PCT = 5.0
+SOC_ROOM_MAX_S = 1800.0
+
 
 class Phase(StrEnum):
     PREPARE = "prepare"
@@ -154,6 +171,9 @@ class Phase(StrEnum):
     REST = "rest"
     SMALL_DISCHARGE = "small_discharge"
     DISCHARGE = "discharge"
+    # Making room in the state of charge after the first step (nothing measured).
+    CHARGE_TO = "charge_to"
+    DISCHARGE_TO = "discharge_to"
     RELEASE = "release"
     RELEASE_LATE = "release_late"
     DONE = "done"
@@ -171,6 +191,7 @@ _MEASURING = (
     Phase.IDLE, Phase.SMALL_CHARGE, Phase.SETTLE, Phase.CHARGE, Phase.REST, Phase.SMALL_DISCHARGE, Phase.DISCHARGE,
 )
 _SMALL = (Phase.SMALL_CHARGE, Phase.SMALL_DISCHARGE)
+_ROOM = (Phase.CHARGE_TO, Phase.DISCHARGE_TO)
 _SEVERITY = {Outcome.FAILED: 3, Outcome.WARNING: 2, Outcome.UNCLEAR: 1, Outcome.OK: 0, Outcome.SKIPPED: -1}
 
 # Raw values of the write registers by address (None: not read).
@@ -303,10 +324,25 @@ def self_test_power_w(max_charge_w: float, max_discharge_w: float) -> float:
     return min(limit, max(MIN_POWER_W, min(MAX_POWER_W, POWER_SHARE * limit)))
 
 
+def soc_room(min_soc_pct: float, max_soc_pct: float) -> tuple[float, float] | None:
+    """The state of charge a self-test makes room to (``SOC_ROOM_PCT``, at least
+    ``SOC_ROOM_MARGIN_PCT`` inside the window); None if the window is too narrow."""
+    low = max(SOC_ROOM_PCT[0], min_soc_pct + SOC_ROOM_MARGIN_PCT)
+    high = min(SOC_ROOM_PCT[1], max_soc_pct - SOC_ROOM_MARGIN_PCT)
+    return (low, high) if low < high else None
+
+
 def step_power_w(power_w: float, allowed_w: float) -> float:
     """Power of one direction: the test power within what is allowed now, 0 to skip it."""
     power = min(power_w, max(0.0, allowed_w))
     return power if power >= MIN_STEP_POWER_W else 0.0
+
+
+def _last_soc(record: _Record | None) -> float | None:
+    """The last state of charge read in a phase."""
+    if record is None:
+        return None
+    return next((sample.soc_pct for sample in reversed(record.samples) if sample.soc_pct is not None), None)
 
 
 class SelfTest:
@@ -319,9 +355,12 @@ class SelfTest:
         started_at: float,
         release_state: str = "auto",
         trial: TrialSpec | None = None,
+        soc_range: tuple[float, float] | None = None,
     ) -> None:
         self.charge_w = charge_w
         self.discharge_w = discharge_w
+        # The state of charge both directions have room in (see ``soc_room``).
+        self.soc_range = soc_range
         # State the battery is released to ("auto" or "standby", see ReleaseState).
         self.release_state = release_state
         # The trial of a profile (None: a plain self-test).
@@ -348,11 +387,19 @@ class SelfTest:
         self._release_reads: list[tuple[float, Registers]] = []
         self._read_at: float | None = None
         self._release_failed = False
+        # The direction tested first (decided at the end of IDLE) and the state of
+        # charge it makes room to before the other one (None: no room needed).
+        self._first: Phase | None = None
+        self.room_target_pct: float | None = None
+        # The state of charge at the start and the end of making room, and whether it got there.
+        self._room_from_pct: float | None = None
+        self._room_to_pct: float | None = None
+        self._room_reached: bool | None = None
 
     @property
     def commanding(self) -> bool:
         """Whether SLEMS sends the test powers (the battery is out of normal operation)."""
-        return self.phase in _MEASURING
+        return self.phase in _MEASURING or self.phase in _ROOM
 
     @property
     def holds_others(self) -> bool:
@@ -445,7 +492,7 @@ class SelfTest:
             if sample.registers is not None and record.late_start is not None and sample.t >= record.late_start:
                 if sample.t <= record.late_start + self.trial.late_s:  # type: ignore[union-attr]
                     record.late_reads.append((sample.t, sample.registers))
-            if record.target_w:
+            if record.target_w and record.phase not in _ROOM:
                 self._update_reached(record, sample)
                 wrong = (
                     self._small_runs_wrong(record, sample)
@@ -464,6 +511,12 @@ class SelfTest:
             shown = [t for t in (record.reached_meter, record.reached_power) if t is not None]
             if (shown and now - min(shown) >= SMALL_HOLD_S) or elapsed >= SMALL_MAX_S:
                 self._next(now)
+        elif record.phase in _ROOM:
+            soc = _last_soc(record)
+            self._room_to_pct = soc
+            if self._has_room(soc) or elapsed >= SOC_ROOM_MAX_S:
+                self._room_reached = self._has_room(soc)
+                self._enter(Phase.REST, now, 0.0)
         elif not self._late_running(now):
             reached = (record.reached_meter, record.reached_power)
             late_done = self.trial is None or self.trial.late_s < REGISTER_READ_S or record.late_start is not None
@@ -639,17 +692,45 @@ class SelfTest:
         }
 
     def plan(self) -> list[Phase]:
-        """The phases of this test in their order (in a trial a settling after each small step)."""
+        """The phases of this test in their order (in a trial a settling after each small
+        step; making room once it is known to be needed)."""
         steps = [Phase.PREPARE, *([Phase.QUIET] if self.trial is not None else []), Phase.IDLE]
-        for full, small, power in (
-            (Phase.CHARGE, Phase.SMALL_CHARGE, self.charge_w), (Phase.DISCHARGE, Phase.SMALL_DISCHARGE, self.discharge_w)
-        ):
-            if not power:
-                continue
-            if full is Phase.DISCHARGE and self.charge_w:
+        for index, full in enumerate(self._directions()):
+            if index:
+                if self.room_target_pct is not None:
+                    steps.append(Phase.CHARGE_TO if self._directions()[0] is Phase.CHARGE else Phase.DISCHARGE_TO)
                 steps.append(Phase.REST)
+            small = Phase.SMALL_CHARGE if full is Phase.CHARGE else Phase.SMALL_DISCHARGE
             steps += [small, Phase.SETTLE, full] if self.trial is not None else [full]
         return [*steps, Phase.RELEASE, *([Phase.RELEASE_LATE] if self.trial is not None else [])]
+
+    def _directions(self) -> list[Phase]:
+        """The full steps in their order: charging first unless the test makes room
+        by discharging."""
+        directions = [full for full, power in ((Phase.CHARGE, self.charge_w), (Phase.DISCHARGE, self.discharge_w)) if power]
+        return directions[::-1] if self._first is Phase.DISCHARGE and len(directions) == 2 else directions
+
+    def _decide_order(self, soc: float | None) -> None:
+        """At the end of IDLE: near full the discharge goes first, and with both
+        directions outside ``soc_range`` the first one makes room for the other."""
+        both = bool(self.charge_w and self.discharge_w)
+        if self.soc_range is not None and both and soc is not None and not self._has_room(soc, either=True):
+            low, high = self.soc_range
+            self._first = Phase.DISCHARGE if soc > high else Phase.CHARGE
+            self.room_target_pct = high if soc > high else low
+            self._room_from_pct = soc
+        directions = self._directions()
+        self._first = directions[0] if directions else None
+
+    def _has_room(self, soc: float | None, either: bool = False) -> bool:
+        """Whether the state of charge is inside ``soc_range`` (for the room being made,
+        or ``either`` way)."""
+        if soc is None or self.soc_range is None:
+            return False
+        low, high = self.soc_range
+        if either or self.room_target_pct is None:
+            return low <= soc <= high
+        return soc >= low if self._first is Phase.CHARGE else soc <= high
 
     @property
     def current_step(self) -> int:
@@ -660,7 +741,7 @@ class SelfTest:
             return len(plan)
         if self.phase is Phase.SETTLE:
             small = Phase.SMALL_DISCHARGE if self._after_settle is Phase.DISCHARGE else Phase.SMALL_CHARGE
-            return plan.index(small) + 2
+            return plan.index(small) + 2 if small in plan else 1
         return plan.index(self.phase) + 1 if self.phase in plan else 1
 
     # --- steps -----------------------------------------------------------------
@@ -673,20 +754,30 @@ class SelfTest:
 
     def _next(self, now: float) -> None:
         phase = self.phase
-        if phase is Phase.IDLE and self.charge_w:
-            self._start_step(now, Phase.CHARGE)
-        elif phase is Phase.IDLE and self.discharge_w:
-            self._start_step(now, Phase.DISCHARGE)
+        if phase is Phase.IDLE:
+            self._decide_order(_last_soc(self._current))
+        directions = self._directions()
+        if phase is Phase.IDLE and directions:
+            self._start_step(now, directions[0])
         elif phase in _SMALL:
             self._after_settle = Phase.CHARGE if phase is Phase.SMALL_CHARGE else Phase.DISCHARGE
             self._enter(Phase.SETTLE, now, 0.0)
         elif phase is Phase.SETTLE:
             full = self._after_settle or Phase.CHARGE
             self._enter(full, now, self.charge_w if full is Phase.CHARGE else -self.discharge_w)
-        elif phase is Phase.CHARGE and self.discharge_w:
-            self._enter(Phase.REST, now, 0.0)
-        elif phase is Phase.REST:
-            self._start_step(now, Phase.DISCHARGE)
+        elif len(directions) == 2 and phase is directions[0]:
+            soc = _last_soc(self._current)
+            if self.room_target_pct is not None and not self._has_room(soc):
+                # Nothing measured: the other batteries and the consumers run normally.
+                charging = phase is Phase.CHARGE
+                room = Phase.CHARGE_TO if charging else Phase.DISCHARGE_TO
+                self._enter(room, now, self.charge_w if charging else -self.discharge_w)
+            else:
+                if self.room_target_pct is not None:
+                    self._room_reached, self._room_to_pct = True, soc
+                self._enter(Phase.REST, now, 0.0)
+        elif phase is Phase.REST and self._room_reached is not False:
+            self._start_step(now, directions[1])
         else:
             self._release(now)
 
@@ -956,8 +1047,12 @@ class SelfTest:
         return change is not None and change != 0
 
     def _reference(self, phase: Phase) -> _Record | None:
-        if phase in (Phase.DISCHARGE, Phase.SMALL_DISCHARGE) and Phase.REST in self._records:
-            return self._records[Phase.REST]
+        """The rest before the step: REST for the second direction, else IDLE."""
+        directions = self._directions()
+        if len(directions) == 2 and Phase.REST in self._records:
+            second = directions[1]
+            if phase in (second, Phase.SMALL_CHARGE if second is Phase.CHARGE else Phase.SMALL_DISCHARGE):
+                return self._records[Phase.REST]
         return self._records.get(Phase.IDLE)
 
     def _update_reached(self, record: _Record, sample: Sample) -> None:
@@ -992,7 +1087,24 @@ class SelfTest:
         checks.append(self._response(steps))
         checks.append(self._counters(steps))
         checks.append(self._soc())
+        if self.room_target_pct is not None:
+            checks.append(self._soc_room())
         return checks
+
+    def _soc_room(self) -> Check:
+        """Whether making room for the other direction got there in time."""
+        values: dict[str, Any] = {
+            "direction": "charge" if self._first is Phase.CHARGE else "discharge",
+            "target_pct": self.room_target_pct,
+            "from_pct": self._room_from_pct,
+            "to_pct": self._room_to_pct,
+        }
+        if self._room_reached:
+            return Check("soc_room", Outcome.OK, values)
+        if self._room_reached is None:
+            # The test ended before (e.g. the first step ran the wrong way).
+            return Check("soc_room", Outcome.SKIPPED, values)
+        return Check("soc_room", Outcome.UNCLEAR, {**values, "reason": "not_reached"})
 
     @staticmethod
     def _deltas(record: _Record, reference: _Record) -> tuple[float | None, float | None, float | None]:
@@ -1120,7 +1232,10 @@ class SelfTest:
         return Check("counters", _worst(outcomes), values)
 
     def _soc(self) -> Check:
-        records = [r for phase in _MEASURING if (r := self._records.get(phase)) is not None]
+        # In the order they ran, with the room made in between (it moves the state of charge).
+        records = sorted(
+            (r for r in self._records.values() if r.phase in _MEASURING or r.phase in _ROOM), key=lambda r: r.start
+        )
         socs = [s.soc_pct for r in records for s in r.samples if s.soc_pct is not None]
         if not socs:
             return Check("soc", Outcome.UNCLEAR)

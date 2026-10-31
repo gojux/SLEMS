@@ -647,6 +647,7 @@ const STRINGS = {
       prepare: "taking over", quiet: "reading the registers at rest", idle: "resting", small_charge: "small charge step",
       settle: "waiting", charge: "charging", rest: "resting", small_discharge: "small discharge step",
       discharge: "discharging", release: "handing back", release_late: "reading again",
+      charge_to: "charging to {soc}", discharge_to: "discharging to {soc}",
     },
     selfTestProblem: { warning: "Self-test conspicuous", failed: "Self-test found errors" },
     selfTestUnclear: "Self-test partly unclear",
@@ -664,6 +665,7 @@ const STRINGS = {
       response: "Response time",
       counters: "Energy counters",
       soc: "State of charge",
+      soc_room: "Room for both directions",
       release: "Hand-back to its own logic",
     },
     selfTestExplain: {
@@ -697,6 +699,10 @@ const STRINGS = {
       soc_range: "The state of charge was outside 0–100 % ({min}–{max}): wrong register or factor.",
       soc_jump: "The state of charge jumped by {jump} percentage points.",
       soc_against: "The state of charge moved against the direction of the power.",
+      soc_room_ok_charge: "The battery was nearly empty ({from}): SLEMS charged it to {target} first, so it can discharge in the test.",
+      soc_room_ok_discharge: "The battery was nearly full ({from}): SLEMS discharged it to {target} first, so it can charge in the test.",
+      soc_room_not_reached_charge: "The battery did not reach {target} within 30 minutes (only {to}); discharging was not tested. Repeat the test once it has more charge.",
+      soc_room_not_reached_discharge: "The battery did not get down to {target} within 30 minutes (only {to}); charging was not tested. Repeat the test once it is less full.",
       release_ok: "Released: the smart meter shows that the battery left the test power ({change}).",
       release_readback: "The battery could not be handed back to its own logic; SLEMS keeps trying.",
       release_held: "Released to “Standby”, the battery stayed at the test power ({change}) although it confirmed the release: it is still remote controlled. Check how the battery is released (e.g. its remote control entity or the release script).",
@@ -1336,6 +1342,7 @@ const STRINGS = {
       prepare: "Übernahme", quiet: "Register in Ruhe lesen", idle: "Standby", small_charge: "kleiner Ladeschritt",
       settle: "Abwarten", charge: "Laden", rest: "Standby", small_discharge: "kleiner Entladeschritt",
       discharge: "Entladen", release: "Rückgabe", release_late: "Nachlesen",
+      charge_to: "Laden auf {soc}", discharge_to: "Entladen auf {soc}",
     },
     selfTestProblem: { warning: "Selbsttest auffällig", failed: "Selbsttest hat Fehler gefunden" },
     selfTestUnclear: "Selbsttest teilweise unklar",
@@ -1353,6 +1360,7 @@ const STRINGS = {
       response: "Reaktionszeit",
       counters: "Energiezähler",
       soc: "Ladezustand",
+      soc_room: "Platz für beide Richtungen",
       release: "Rückgabe an die eigene Logik",
     },
     selfTestExplain: {
@@ -1386,6 +1394,10 @@ const STRINGS = {
       soc_range: "Der Ladezustand lag außerhalb von 0–100 % ({min}–{max}): falsches Register oder falscher Faktor.",
       soc_jump: "Der Ladezustand sprang um {jump} Prozentpunkte.",
       soc_against: "Der Ladezustand bewegte sich gegen die Richtung der Leistung.",
+      soc_room_ok_charge: "Die Batterie war fast leer ({from}): SLEMS hat sie zuerst auf {target} geladen, damit sie im Test entladen kann.",
+      soc_room_ok_discharge: "Die Batterie war fast voll ({from}): SLEMS hat sie zuerst auf {target} entladen, damit sie im Test laden kann.",
+      soc_room_not_reached_charge: "Die Batterie hat {target} in 30 Minuten nicht erreicht (nur {to}); das Entladen wurde nicht geprüft. Wiederhole den Test, wenn sie mehr geladen ist.",
+      soc_room_not_reached_discharge: "Die Batterie ist in 30 Minuten nicht auf {target} gesunken (nur {to}); das Laden wurde nicht geprüft. Wiederhole den Test, wenn sie weniger voll ist.",
       release_ok: "Freigegeben: Der Smart Meter zeigt, dass die Batterie die Testleistung verlassen hat ({change}).",
       release_readback: "Die Batterie konnte nicht an ihre eigene Logik zurückgegeben werden; SLEMS versucht es weiter.",
       release_held: "Bei Freigabe „Standby“ blieb die Batterie bei der Testleistung ({change}), obwohl sie die Freigabe bestätigt hat: Sie wird noch ferngesteuert. Prüfe, wie die Batterie freigegeben wird (z. B. die Fernsteuerungs-Entität oder das Freigabe-Skript).",
@@ -2333,7 +2345,10 @@ class SlemsPanel extends HTMLElement {
         .replace("{max}", percent(check.max_pct))
         .replace("{jump}", check.jump_pct ?? "–")
         .replace("{change}", signed(check.change_w))
-        .replace("{step}", signed(check.step_w));
+        .replace("{step}", signed(check.step_w))
+        .replace("{from}", percent(check.from_pct))
+        .replace("{to}", percent(check.to_pct))
+        .replace("{target}", percent(check.target_pct));
     const outcome = check.outcome;
     if (check.key.startsWith("effect_")) {
       if (outcome === "ok") return fill("effect_ok");
@@ -2354,6 +2369,10 @@ class SlemsPanel extends HTMLElement {
       return fill(`counters_${check.reason}`);
     }
     if (check.key === "soc") return outcome === "ok" ? fill("soc_ok") : check.reason ? fill(`soc_${check.reason}`) : "";
+    if (check.key === "soc_room") {
+      if (outcome === "ok") return fill(`soc_room_ok_${check.direction}`);
+      return outcome === "unclear" ? fill(`soc_room_not_reached_${check.direction}`) : "";
+    }
     if (check.key === "release") return fill(`release_${check.reason ?? (outcome === "failed" ? "readback" : "ok")}`);
     return "";
   }
@@ -4616,7 +4635,7 @@ class SlemsPanel extends HTMLElement {
     if (!step || !steps) return "";
     const minutes = startedAt ? Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 60000)) : 0;
     const text = t.selfTestProgress
-      .replace("{phase}", t.selfTestPhases[phase] || phase || "–")
+      .replace("{phase}", (t.selfTestPhases[phase] || phase || "–").replace("{soc}", `${selfTest.attributes.room_target_pct} %`))
       .replace("{step}", step)
       .replace("{steps}", steps)
       .replace("{minutes}", minutes)
