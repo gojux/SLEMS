@@ -2205,6 +2205,19 @@ coordinator store (key `pv_accuracy`). Sensors `consumption_forecast_accuracy`
 and `pv_forecast_accuracy` (100 % − mean daily error; details as attributes,
 the day list is not recorded); dashboard card below the day chart.
 
+`PvForecastLog` (`pv_forecast_log.py`) records, at the first forecast poll of
+every local hour, the raw forecast of the rest of today per hour (`"HH"` → Wh,
+hours with forecast PV only) and `_pv_today_wh` (the actual value of the PV
+correction, None while not known since midnight), under date → `"HH:MM"`; no
+record once nothing is forecast for the rest of the day. It is only recorded,
+nothing reads it: it is the data to replay `pv_correction` /
+`correction_weight` against the produced energy per hour (difference of two
+records) and so check `CORRECTION_START_SHARE`, `CORRECTION_FULL_SHARE`,
+`NEAR_WEIGHT`, `NEAR_HOURS` and `CORRECTION_LIMITS`, which are estimates. About
+2–3 kB per day, kept 400 days in its own store (`slems.<entry>.pv_forecast_log`,
+saved 10 minutes after a record and at shutdown) and included in full in the
+diagnostics (`pv_forecast_log`).
+
 ## Marstek Venus E 3.0
 
 Source: Omnibattery `const/registers_v3.py`, `drivers/marstek.py`,

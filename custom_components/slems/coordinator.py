@@ -272,6 +272,7 @@ from .pv_forecast import (
     mean_power,
     power_lookup,
 )
+from .pv_forecast_log import PvForecastLog
 from .soc_projection import OwnPvBattery, ProjectionSettings, SocProjection, own_charge_limit, project_soc
 from .util import entity_ids, state_as_float, state_as_kwh, state_as_watts, watts_factor
 
@@ -942,6 +943,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # Consumers whose power the batteries do not cover right now.
         self.unsupported: frozenset[str] = frozenset()
         self.pv_accuracy = PvAccuracyTracker()
+        # Hourly PV forecasts as they were (see pv_forecast_log), own store.
+        self.pv_forecast_log = PvForecastLog()
+        self._pv_forecast_log_store: Store[dict] = Store(
+            hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.pv_forecast_log"
+        )
         # Monotonic time since the export is above the feed-in cap.
         self.cap_exceeded_since: float | None = None
         self.grid_targets = GridTargetLearner()
@@ -1024,6 +1030,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._wanted_references()
         self.grid_quarters = GridQuarters.from_dict(await self._quarters_store.async_load())
         self.pv_accuracy.restore(stored.get(PV_ACCURACY_STORE_KEY))
+        self.pv_forecast_log = PvForecastLog.from_dict(await self._pv_forecast_log_store.async_load())
         self.morning_gap = MorningGapLearner.from_dict(stored.get(MORNING_GAP_STORE_KEY))
         self.price_savings = PriceSavings.from_dict(stored.get(PRICE_SAVINGS_STORE_KEY))
         self.plan_changes = PlanChanges.from_dict(stored.get(PLAN_CHANGES_STORE_KEY))
@@ -1859,6 +1866,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 self.pv_accuracy.record_forecast(
                     wall_now.date(), energy_on_day(snapshot.pv_forecast, wall_now.date()), wall_now
                 )
+                if self.pv_forecast_log.record(snapshot.pv_forecast, wall_now, self._pv_today_wh):
+                    self._pv_forecast_log_store.async_delay_save(
+                        self.pv_forecast_log.as_dict, STORAGE_SAVE_DELAY_S
+                    )
         snapshot.consumption_forecast = self.forecaster.forecast
         if weather := config.get(CONF_WEATHER_ENTITY):
             snapshot.outdoor_temperature_c = _weather_temperature(self.hass.states.get(weather))
@@ -5267,6 +5278,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         await super().async_shutdown()
         await self.market_prices.async_stop()
         await self._quarters_store.async_save(self._quarters_to_store())
+        await self._pv_forecast_log_store.async_save(self.pv_forecast_log.as_dict())
         await self._store.async_save(self._data_to_store())
         if self.settings.operating_mode is OperatingMode.ACTIVE:
             await self.controller.async_release(self.batteries)

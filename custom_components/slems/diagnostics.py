@@ -302,6 +302,8 @@ def _system(coordinator: SlemsCoordinator) -> dict:
         if forecast is None
         else {"created": _plain(forecast.created), "hours": len(forecast.total), "nowcast_w": forecast.nowcast_w},
         "pv_accuracy_days": _plain(coordinator.pv_accuracy.days),
+        # Hourly forecasts and production (see pv_forecast_log), about 3 kB per day.
+        "pv_forecast_log": coordinator.pv_forecast_log.as_dict(),
         "consumers": [_plain(consumer) for consumer in coordinator.consumers],
         "consumer_learning": {
             consumer.subentry_id: {
