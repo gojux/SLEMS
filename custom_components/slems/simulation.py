@@ -227,6 +227,9 @@ def simulate(coordinator: SlemsCoordinator, request: dict[str, Any]) -> dict[str
         "day_plan": plan.day_plan,
         "day_plan_tomorrow": plan.day_plan_tomorrow,
         "cap_limit_w": settings.feed_in_cap_limit_w if settings.feed_in_cap else None,
+        # Limit lines of the day chart with the simulated settings.
+        "feed_in_limit_w": plan.feed_in_limit_w,
+        "peak_limit_w": plan.peak_limit_w if settings.peak_shaving else None,
         "metrics": _day_metrics(
             plan.day_plan, plan.day_plan_tomorrow, now, settings, _prices(coordinator, tariff, now)
         ),

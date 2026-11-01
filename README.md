@@ -1882,11 +1882,21 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar.
   - **Today** shows PV and consumption forecast (dashed), the measured values so
     far (solid), the expected and the measured feed-in into the grid (blue;
     the expected one from the plan, including night discharge, at most the
-    feed-in cap), the planned battery charging (light bars) and the measured
+    feed-in cap), the expected and the measured grid import (blue, below the
+    zero line; only where there is any), the planned battery charging (light
+    bars) and the measured
     charging (solid bars), the planned load of the consumers' daily targets
     (pink, dashed; part of the consumption forecast), plus the projected total
     state of charge (dashed) and the measured one (solid) with their scale in %
     on the right.
+  - **Limit lines**, each in the colour of the series it limits, greyed and
+    with its own dash: the **PV limit of the feed-in cap** (orange grey), the
+    **Limit of grid friendly charging** (green grey, today from now on while
+    PV is forecast: the batteries charge above it) and the **Peak shaving
+    limit** (blue grey, below the zero line). While more than one of them is
+    active they are all hidden until switched on in the legend; a single one
+    is shown. The browser keeps the choice made in the legend. The simulation
+    draws the limits with its own settings.
   - Charging from the grid is blue: in the planned charging the part from the
     grid on top of the part from PV. The measured charging is green when it
     came almost only from PV, blue when it came almost only from the grid
@@ -2257,8 +2267,8 @@ house consumption).
   feeding in.
 - **Overview**: the tile **Feed-in cap** shows the next peak, the energy the
   batteries have to absorb and, if needed, the energy to feed in before it and
-  by when. The day chart shows the **PV limit of the feed-in cap** as a grey
-  dashed line: expected consumption + limit, the PV power above which the
+  by when. The day chart shows the **PV limit of the feed-in cap** as an orange
+  grey dashed line: expected consumption + limit, the PV power above which the
   export would exceed the limit (the limit applies after the house
   consumption, so the line follows the consumption forecast). The energy above
   it is shown as a bar on that line; in red the part that is still lost

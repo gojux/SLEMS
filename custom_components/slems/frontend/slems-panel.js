@@ -83,6 +83,10 @@ const STRINGS = {
     actualMixedCharge: "Charging measured from PV and grid",
     exportForecast: "Feed-in forecast",
     exportActual: "Feed-in measured",
+    importForecast: "Grid import forecast",
+    importActual: "Grid import measured",
+    gridFriendlyLine: "Limit of grid friendly charging",
+    peakLine: "Peak shaving limit",
     socForecast: "State of charge forecast",
     socActual: "State of charge measured",
     showTable: "Show table",
@@ -782,6 +786,10 @@ const STRINGS = {
     actualMixedCharge: "Laden gemessen aus PV und Netz",
     exportForecast: "Einspeisung (Prognose)",
     exportActual: "Einspeisung gemessen",
+    importForecast: "Netzbezug (Prognose)",
+    importActual: "Netzbezug gemessen",
+    gridFriendlyLine: "Grenze netzdienliches Laden",
+    peakLine: "Grenze Bezugsspitzen",
     socForecast: "Ladezustand-Prognose",
     socActual: "Ladezustand gemessen",
     showTable: "Tabelle anzeigen",
@@ -1602,6 +1610,22 @@ function polylines(pointRuns, color, dash) {
 // Comparison series of the simulation (plan with the current settings): dotted.
 const COMPARE_DASH = "1 4";
 
+// Limit lines of the day chart, each in the colour of the series it limits
+// greyed and with its own dash: the PV level of the feed-in cap, the grid
+// export of grid friendly charging, the grid import of peak shaving (below 0).
+// While more than one is drawn they are hidden until switched on.
+const LIMIT_SERIES = ["capLine", "gridFriendlyLine", "peakLine"];
+const LIMIT_DASH = { capLine: "5 4", gridFriendlyLine: "9 3 2 3", peakLine: "12 4" };
+// Series drawn below the zero line (grid import and its limit).
+const NEGATIVE_SERIES = ["importForecast", "importActual", "peakLine"];
+
+/** ``color`` mixed half with ``grey``: a limit line in the hue of its series. */
+function greyed(color, grey) {
+  const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const [a, b] = [rgb(color), rgb(grey)];
+  return `#${a.map((v, i) => Math.round((v + b[i]) / 2).toString(16).padStart(2, "0")).join("")}`;
+}
+
 // localStorage keys of the day chart series hidden via the legend and of the
 // series hidden by default that were switched on.
 // Top cell delta below which balancing is hardly needed (green status limit).
@@ -1610,6 +1634,8 @@ const HIDDEN_SERIES_KEY = "slems-hidden-series";
 // localStorage key of the consumer cards shown with all their settings.
 const EXPANDED_CONSUMERS_KEY = "slems-expanded-consumers";
 const SHOWN_SERIES_KEY = "slems-shown-series";
+// localStorage key of the limit lines switched on or off in the legend (key -> shown).
+const LIMIT_CHOICE_KEY = "slems-limit-series";
 // localStorage key of the comparison tariffs hidden in the tariff comparison.
 const HIDDEN_TARIFFS_KEY = "slems-hidden-tariffs";
 // localStorage key: "1" shows import costs and feed-in credit of a tariff summed.
@@ -1706,6 +1732,15 @@ class SlemsPanel extends HTMLElement {
     } catch (err) {
       // Storage not available: the default series shown.
     }
+    // Limit lines switched on or off in the legend; the others follow LIMIT_SERIES.
+    this._limitChoice = {};
+    try {
+      this._limitChoice = JSON.parse(localStorage.getItem(LIMIT_CHOICE_KEY) || "{}");
+      // A limit line hidden before the choice was kept on its own stays hidden.
+      for (const key of LIMIT_SERIES) if (!(key in this._limitChoice) && this._hiddenSeries.has(key)) this._limitChoice[key] = false;
+    } catch (err) {
+      // Not stored: the default applies.
+    }
     // Consumer cards shown with all their settings (kept in the browser).
     this._expandedConsumers = new Set();
     try {
@@ -1722,7 +1757,7 @@ class SlemsPanel extends HTMLElement {
     this._chartDay = "today";
     // Settings whose explanation is shown (translation keys).
     this._openHints = new Set();
-    this._stats = { pv: {}, house: {}, soc: {}, charge: {}, gridCharge: {}, export: {} };
+    this._stats = { pv: {}, house: {}, soc: {}, charge: {}, gridCharge: {}, export: {}, import: {} };
     this._statsFetched = 0;
     this._sections = {};
     this._renderQueued = false;
@@ -3430,8 +3465,9 @@ class SlemsPanel extends HTMLElement {
         // Battery power is +charge / -discharge; only the charging part.
         charge: bySlot(result[batteryId], (v) => Math.max(0, v)),
         gridCharge: bySlot(gridCharge),
-        // Grid power is +import / -export; only the export.
+        // Grid power is +import / -export, each side on its own.
         export: bySlot(result[gridId], (v) => Math.max(0, -v)),
+        import: bySlot(result[gridId], (v) => Math.max(0, v)),
       };
       this._sections.daychart = undefined;
       this._queueRender();
@@ -3451,7 +3487,7 @@ class SlemsPanel extends HTMLElement {
    * Chart rows of ``plans`` for the selected day; ``compare`` (other plans)
    * adds their state of charge and feed-in as comparison series.
    */
-  _chartRows(plans = this._realPlans(), compare = null) {
+  _chartRows(plans = this._realPlans(), compare = null, limits = this._liveLimits()) {
     const today = this._chartDay === "today";
     const plan = (today ? plans.today : plans.tomorrow) || [];
     const comparePlan = compare ? (today ? compare.today : compare.tomorrow) || [] : [];
@@ -3459,6 +3495,11 @@ class SlemsPanel extends HTMLElement {
     // Half hours; all values are mean powers (W). The plan rows are hourly
     // (Wh per hour = mean W); PV and the feed-in cap also come per half hour.
     const perHalf = (wh) => (wh === null || wh === undefined ? null : wh * 2);
+    // Limit lines: grid friendly charging today from now while PV is forecast, peak shaving all day.
+    const now = new Date();
+    const nowSlot = now.getHours() * 2 + Math.floor(now.getMinutes() / 30);
+    const gridFriendlyW = today ? limits.gridFriendlyW ?? null : null;
+    const peakW = limits.peakW ?? null;
     return plan.flatMap((row, hour) =>
       [0, 1].map((half) => {
         const slot = hour * 2 + half;
@@ -3475,6 +3516,9 @@ class SlemsPanel extends HTMLElement {
           plannedGridCharge: row.planned_grid_charge_w ?? null,
           // With the feed-in cap the inverter curtails the export above the limit.
           exportForecast: exportOf(row),
+          importForecast: row.grid_w === null || row.grid_w === undefined ? null : Math.max(0, row.grid_w),
+          gridFriendlyLine: gridFriendlyW !== null && slot >= nowSlot && (row.pv_wh || 0) > 0 ? gridFriendlyW : null,
+          peakLine: peakW,
           socCompare: !compare
             ? null
             : half
@@ -3515,9 +3559,28 @@ class SlemsPanel extends HTMLElement {
             };
           })(),
           exportActual: today ? this._stats.export[slot] ?? null : null,
+          importActual: today ? this._stats.import[slot] ?? null : null,
         };
       })
     );
+  }
+
+  /** Limits of the live control for the day chart (W, null without). */
+  _liveLimits() {
+    return {
+      gridFriendlyW: this._powerW(this._state("feed_in_limit")),
+      peakW: this._powerW(this._state("peak_shaving_limit")),
+    };
+  }
+
+  /** Limit lines: the choice in the legend, else hidden while more than one is drawn. */
+  _applyLimitDefaults(rows) {
+    const drawn = LIMIT_SERIES.filter((key) => rows.some((r) => r[key] !== null && r[key] !== undefined));
+    for (const key of LIMIT_SERIES) {
+      const hidden = key in this._limitChoice ? !this._limitChoice[key] : drawn.length > 1;
+      if (hidden) this._hiddenSeries.add(key);
+      else this._hiddenSeries.delete(key);
+    }
   }
 
   /** Where the projected state of charge line starts: [hour of day, %]. */
@@ -3538,6 +3601,7 @@ class SlemsPanel extends HTMLElement {
   _renderDayChart(options = {}) {
     const t = this._t;
     const rows = options.rows || this._chartRows();
+    this._applyLimitDefaults(rows);
     this._socStartPlan = options.todayPlan || this._realPlans().today;
     const day = this._chartDay;
     const titles = options.titles || [t.dayChart, t.dayChartTomorrow];
@@ -3583,7 +3647,13 @@ class SlemsPanel extends HTMLElement {
           : style === "stripes"
           ? `${stripes(`legend-${key}`, ...color)}<rect x="4" y="0" width="14" height="10" rx="2" fill="url(#legend-${key})"/>`
           : `<line x1="1" y1="5" x2="21" y2="5" stroke="${color}" stroke-width="2" stroke-linecap="round" ${
-              style === "dash" ? 'stroke-dasharray="4 3"' : style === "dot" ? `stroke-dasharray="${COMPARE_DASH}"` : ""
+              style === "dash"
+                ? 'stroke-dasharray="4 3"'
+                : style === "dot"
+                  ? `stroke-dasharray="${COMPARE_DASH}"`
+                  : style !== "solid"
+                    ? `stroke-dasharray="${style}"`
+                    : ""
             }/>`
       }</svg>${label}</button>`;
     };
@@ -3593,12 +3663,15 @@ class SlemsPanel extends HTMLElement {
       ${item("consumptionForecast", c.house, t.consumptionForecast, "dash")}${item("consumptionActual", c.house, t.consumptionActual, "solid")}
       ${item("consumerForecast", c.consumer, t.consumerForecast, "dash")}
       ${item("exportForecast", c.grid, t.exportForecast, "dash")}${item("exportActual", c.grid, t.exportActual, "solid")}
+      ${item("importForecast", c.grid, t.importForecast, "dash")}${item("importActual", c.grid, t.importActual, "solid")}
       ${item("plannedCharge", `${c.battery}66`, t.plannedCharge, "bar")}${item("plannedGridCharge", `${c.grid}66`, t.plannedGridCharge, "bar")}
       ${item("actualCharge", c.battery, t.actualCharge, "bar")}${item("actualGridCharge", c.grid, t.actualGridCharge, "bar")}
       ${item("actualMixedCharge", [c.battery, c.grid], t.actualMixedCharge, "stripes")}
       ${item("socForecast", c.battery, t.socForecast, "dash")}${item("socActual", c.battery, t.socActual, "solid")}
       ${item("exportCompare", c.muted, t.exportCompare, "dot")}${item("socCompare", c.muted, t.socCompare, "dot")}
-      ${item("capLine", c.muted, t.capLine, "dash")}${item("capExcess", `${c.pv}73`, t.capExcess, "bar")}
+      ${item("capLine", greyed(c.pv, c.muted), t.capLine, LIMIT_DASH.capLine)}${item("capExcess", `${c.pv}73`, t.capExcess, "bar")}
+      ${item("gridFriendlyLine", greyed(c.battery, c.muted), t.gridFriendlyLine, LIMIT_DASH.gridFriendlyLine)}
+      ${item("peakLine", greyed(c.grid, c.muted), t.peakLine, LIMIT_DASH.peakLine)}
       ${item("capCurtailed", CURTAILED_COLOR, t.capCurtailed, "bar")}</div>`;
   }
 
@@ -3615,7 +3688,8 @@ class SlemsPanel extends HTMLElement {
     const pad = { left: 52, right: hasSoc ? 46 : 22, top: 10, bottom: 26 };
     const plotW = width - pad.left - pad.right;
     const plotH = height - pad.top - pad.bottom;
-    const ys = (value) => pad.top + plotH - (Math.max(0, Math.min(100, value)) / 100) * plotH;
+    // 0 % on the 0 W line (grid import is drawn below it).
+    const ys = (value) => zeroY - (Math.max(0, Math.min(100, value)) / 100) * (zeroY - pad.top);
     const plotBottom = pad.top + plotH;
     const shown = (key) => !this._hiddenSeries.has(key);
     // The scale follows the series shown.
@@ -3630,11 +3704,20 @@ class SlemsPanel extends HTMLElement {
     if (shown("capExcess") || shown("capCurtailed")) {
       for (const r of rows) if (r.capExcess > 0) values.push(r.capLine + r.capExcess);
     }
+    if (shown("gridFriendlyLine")) for (const r of rows) if (r.gridFriendlyLine !== null) values.push(r.gridFriendlyLine);
     const max = Math.max(100, ...values.filter((v) => v !== null && v !== undefined));
-    const step = niceStep(max / 4);
+    // Grid import and its limit below the zero line, only where there is any.
+    const below = NEGATIVE_SERIES.filter(shown)
+      .filter((key) => key === "peakLine" || rows.some((r) => r[key] > 0))
+      .flatMap((key) => rows.map((r) => r[key]))
+      .filter((v) => v !== null && v !== undefined);
+    const low = below.length ? Math.max(0, ...below) : 0;
+    const step = niceStep((max + low) / 4);
     const top = Math.ceil(max / step) * step;
+    const bottom = low > 0 ? -Math.ceil(low / step) * step : 0;
     const x = (hour) => pad.left + (hour / 24) * plotW;
-    const y = (value) => pad.top + plotH - (value / top) * plotH;
+    const y = (value) => pad.top + plotH - ((value - bottom) / (top - bottom)) * plotH;
+    const zeroY = y(0);
     this._chartGeometry = { pad, plotW, width };
     const socLines = [];
     if (hasSoc) {
@@ -3657,9 +3740,9 @@ class SlemsPanel extends HTMLElement {
     }
 
     const gridLines = [];
-    for (let v = 0; v <= top; v += step) {
+    for (let v = bottom; v <= top; v += step) {
       gridLines.push(`<line x1="${pad.left}" x2="${width - pad.right}" y1="${y(v)}" y2="${y(v)}" stroke="${v === 0 ? c.axis : c.grid_line}" stroke-width="1"/>
-        <text x="${pad.left - 6}" y="${y(v) + 4}" text-anchor="end" class="tick">${escapeHtml(this._watts(v))}</text>`);
+        <text x="${pad.left - 6}" y="${y(v) + 4}" text-anchor="end" class="tick">${escapeHtml(this._watts(Math.abs(v)))}</text>`);
     }
     const labelled = width < 500 ? [0, 6, 12, 18, 24] : [0, 3, 6, 9, 12, 15, 18, 21, 24];
     const hourTicks = labelled
@@ -3677,7 +3760,7 @@ class SlemsPanel extends HTMLElement {
     const gap = slot > 8 ? 1 : 0.5;
     const barW = Math.max(1, slot / 2 - gap);
     const bar = (r, key, offset, color) => {
-      const h = Math.max(1, plotH - (y(r[key]) - pad.top));
+      const h = Math.max(1, zeroY - y(r[key]));
       return `<path d="${roundedTopBar(x(r.hour) + offset, y(r[key]), barW, h)}" fill="${color}"/>`;
     };
     // The planned charging from the grid on top of the part from PV.
@@ -3686,8 +3769,8 @@ class SlemsPanel extends HTMLElement {
       if (!fromGrid) return bar(r, "plannedCharge", gap / 2, `${c.battery}66`);
       const left = x(r.hour) + gap / 2;
       const split = y(r.plannedCharge - fromGrid);
-      return `${fromGrid < r.plannedCharge ? `<rect x="${left}" y="${split}" width="${barW}" height="${Math.max(0, plotBottom - split)}" fill="${c.battery}66"/>` : ""}<path d="${roundedTopBar(
-        left, y(r.plannedCharge), barW, Math.max(1, (fromGrid < r.plannedCharge ? split : plotBottom) - y(r.plannedCharge))
+      return `${fromGrid < r.plannedCharge ? `<rect x="${left}" y="${split}" width="${barW}" height="${Math.max(0, zeroY - split)}" fill="${c.battery}66"/>` : ""}<path d="${roundedTopBar(
+        left, y(r.plannedCharge), barW, Math.max(1, (fromGrid < r.plannedCharge ? split : zeroY) - y(r.plannedCharge))
       )}" fill="${c.grid}66"/>`;
     };
     // The measured charging in the colour of its source, striped when both charged.
@@ -3707,17 +3790,39 @@ class SlemsPanel extends HTMLElement {
       capLine: () => true,
       exportForecast: () => true,
       exportCompare: () => true,
+      importForecast: () => true,
       pvForecast: (r) => r.pvHourly,
     };
     const path = (key, color, dash) => {
       if (!shown(key)) return "";
+      if (NEGATIVE_SERIES.includes(key) && !rows.some((r) => r[key] > 0)) return "";
+      const sign = NEGATIVE_SERIES.includes(key) ? -1 : 1;
       const hourly = hourlyKeys[key] || (() => false);
       const points = rows.filter((r) => !hourly(r) || r.slot % 2 === 0);
       return polylines(
-        runs(points, key).map((run) => run.map((r) => [x(r.hour + (hourly(r) ? 0.5 : 0.25)), y(r[key])])),
+        runs(points, key).map((run) => run.map((r) => [x(r.hour + (hourly(r) ? 0.5 : 0.25)), y(sign * r[key])])),
         color,
         dash
       );
+    };
+    // A limit as a level over the half hours it applies to.
+    const level = (key, color) => {
+      if (!shown(key)) return "";
+      const sign = NEGATIVE_SERIES.includes(key) ? -1 : 1;
+      return runs(rows, key)
+        .map((run) => {
+          const segments = [];
+          let start = run[0];
+          for (let i = 1; i <= run.length; i++) {
+            if (i < run.length && run[i][key] === start[key]) continue;
+            const end = run[i - 1];
+            segments.push(`<line x1="${x(start.hour)}" x2="${x(end.hour + 0.5)}" y1="${y(sign * start[key])}" y2="${y(sign * start[key])}"
+              stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-dasharray="${LIMIT_DASH[key]}"/>`);
+            start = run[i];
+          }
+          return segments.join("");
+        })
+        .join("");
     };
     // Energy above the feed-in limit as a bar on the limit line, the curtailed part on top.
     const capBars = rows
@@ -3737,8 +3842,8 @@ class SlemsPanel extends HTMLElement {
         rows.filter((r) => r.slot % 2 === 0),
         "capLine"
       ).map((run) => run.map((r) => [x(r.hour + 0.5), y(r.capLine)])),
-      c.muted,
-      true
+      greyed(c.pv, c.muted),
+      LIMIT_DASH.capLine
     );
     const now = new Date();
     const nowHour = now.getHours() + now.getMinutes() / 60;
@@ -3750,6 +3855,8 @@ class SlemsPanel extends HTMLElement {
         ${path("consumptionForecast", c.house, true)}${path("consumptionActual", c.house, false)}
         ${path("consumerForecast", c.consumer, true)}
         ${path("exportCompare", c.muted, COMPARE_DASH)}${path("exportForecast", c.grid, true)}${path("exportActual", c.grid, false)}
+        ${path("importForecast", c.grid, true)}${path("importActual", c.grid, false)}
+        ${level("gridFriendlyLine", greyed(c.battery, c.muted))}${level("peakLine", greyed(c.grid, c.muted))}
         ${socLines.join("")}
         ${showNow ? `<line x1="${x(nowHour)}" x2="${x(nowHour)}" y1="${pad.top}" y2="${plotBottom}" stroke="${c.muted}" stroke-dasharray="2 3"/>
         <text x="${x(nowHour) + 4}" y="${pad.top + 10}" class="tick">${this._t.now}</text>` : ""}
@@ -3838,17 +3945,20 @@ class SlemsPanel extends HTMLElement {
     const cell = (v) => (v === null || v === undefined ? "–" : escapeHtml(this._watts(v)));
     const percent = (v) => (v === null || v === undefined ? "–" : escapeHtml(this._percent(v)));
     const cap = rows.some((r) => r.capLine !== null && r.capLine !== undefined);
+    const has = (key) => rows.some((r) => r[key] !== null && r[key] !== undefined && r[key] !== 0);
+    // Grid import and the limits only where there are any.
+    const extra = ["importForecast", "importActual", "gridFriendlyLine", "peakLine"].filter(has);
     return `<div class="table-wrap"><table>
       <thead><tr><th>${t.hour}</th><th>${t.pvForecast}</th><th>${t.pvActual}</th><th>${t.consumptionForecast}</th>
       <th>${t.consumptionActual}</th><th>${t.consumerForecast}</th><th>${t.exportForecast}</th><th>${t.exportActual}</th><th>${t.plannedCharge}</th><th>${t.plannedGridCharge}</th><th>${t.actualCharge}</th><th>${t.socForecast}</th><th>${t.socActual}</th>
-      ${cap ? `<th>${t.capLine}</th><th>${t.capExcess}</th><th>${t.capCurtailed}</th>` : ""}</tr></thead>
+      ${cap ? `<th>${t.capLine}</th><th>${t.capExcess}</th><th>${t.capCurtailed}</th>` : ""}${extra.map((key) => `<th>${t[key]}</th>`).join("")}</tr></thead>
       <tbody>${rows
         .map(
           (r) => `<tr><td>${slotTime(r.slot)}</td><td>${cell(r.pvForecast)}</td><td>${cell(r.pvActual)}</td>
           <td>${cell(r.consumptionForecast)}</td><td>${cell(r.consumptionActual)}</td><td>${cell(r.consumerForecast)}</td><td>${cell(r.exportForecast)}</td><td>${cell(r.exportActual)}</td><td>${cell(r.plannedCharge)}</td><td>${cell(r.plannedGridCharge)}</td><td>${cell(r.actualCharge)}</td>
           <td>${percent(r.socForecast)}</td><td>${percent(r.socActual)}</td>${
             cap ? `<td>${cell(r.capLine)}</td><td>${cell(r.capExcess)}</td><td>${cell(r.capCurtailed)}</td>` : ""
-          }</tr>`
+          }${extra.map((key) => `<td>${cell(r[key])}</td>`).join("")}</tr>`
         )
         .join("")}</tbody></table></div>`;
   }
@@ -3915,6 +4025,8 @@ class SlemsPanel extends HTMLElement {
       ${entry(c.house, t.consumptionForecast, v("consumptionForecast"))}${entry(c.house, t.consumptionActual, v("consumptionActual"))}
       ${entry(c.consumer, t.consumerForecast, v("consumerForecast"))}
       ${entry(c.grid, t.exportForecast, v("exportForecast"))}${entry(c.grid, t.exportActual, v("exportActual"))}
+      ${v("importForecast") > 0 ? entry(c.grid, t.importForecast, v("importForecast")) : ""}${v("importActual") > 0 ? entry(c.grid, t.importActual, v("importActual")) : ""}
+      ${entry(greyed(c.pv, c.muted), t.capLine, v("capLine"))}${entry(greyed(c.battery, c.muted), t.gridFriendlyLine, v("gridFriendlyLine"))}${entry(greyed(c.grid, c.muted), t.peakLine, v("peakLine"))}
       ${entry(c.battery, t.plannedCharge, v("plannedCharge"))}${v("plannedGridCharge") > 0 ? entry(c.grid, t.plannedGridCharge, v("plannedGridCharge")) : ""}${actual}
       ${percentEntry(c.battery, t.socForecast, v("socForecast"))}${percentEntry(c.battery, t.socActual, v("socActual"))}
       ${entry(c.muted, t.exportCompare, v("exportCompare"))}${percentEntry(c.muted, t.socCompare, v("socCompare"))}
@@ -4260,7 +4372,10 @@ class SlemsPanel extends HTMLElement {
     const plans = { today: sim.result.day_plan, tomorrow: sim.result.day_plan_tomorrow };
     this._fetchStats(false);
     this._renderDayChart({
-      rows: this._chartRows(plans, this._realPlans()),
+      rows: this._chartRows(plans, this._realPlans(), {
+        gridFriendlyW: sim.result.feed_in_limit_w,
+        peakW: sim.result.peak_limit_w,
+      }),
       titles: [t.simToday, t.simTomorrow],
       todayPlan: plans.today,
     });
@@ -5264,9 +5379,18 @@ class SlemsPanel extends HTMLElement {
     if (seriesButton) {
       const key = seriesButton.dataset.series;
       if (!this._hiddenSeries.delete(key)) this._hiddenSeries.add(key);
+      if (LIMIT_SERIES.includes(key)) {
+        this._limitChoice[key] = !this._hiddenSeries.has(key);
+        try {
+          localStorage.setItem(LIMIT_CHOICE_KEY, JSON.stringify(this._limitChoice));
+        } catch (err) {
+          // Not stored: the choice lasts until the page is reloaded.
+        }
+      }
       const hidden = [...this._hiddenSeries];
       try {
-        localStorage.setItem(HIDDEN_SERIES_KEY, JSON.stringify(hidden));
+        // The limit lines are kept in LIMIT_CHOICE_KEY, their defaults depend on the chart.
+        localStorage.setItem(HIDDEN_SERIES_KEY, JSON.stringify(hidden.filter((k) => !LIMIT_SERIES.includes(k))));
         localStorage.setItem(
           SHOWN_SERIES_KEY,
           JSON.stringify(DEFAULT_HIDDEN_SERIES.filter((k) => !hidden.includes(k)))

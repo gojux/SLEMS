@@ -2004,12 +2004,23 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
   - **Heute** zeigt PV- und Verbrauchsprognose (gestrichelt), die bisher
     gemessenen Werte (durchgezogen), die erwartete und die gemessene
     Einspeisung ins Netz (blau; die erwartete aus dem Plan, einschließlich
-    Nachtentladung, höchstens bis zur Einspeisebegrenzung), das geplante Laden
+    Nachtentladung, höchstens bis zur Einspeisebegrenzung), den erwarteten und
+    den gemessenen Netzbezug (blau, unter der Nulllinie; nur wenn es welchen
+    gibt), das geplante Laden
     der Batterien (helle Balken) und das gemessene Laden (kräftige Balken), die
     geplante Last der Tagesziele der Verbraucher (rosa, gestrichelt; Teil der
     Verbrauchsprognose), dazu den prognostizierten Gesamt-Ladezustand
     (gestrichelt) und den gemessenen (durchgezogen) mit ihrer Skala in %
     rechts.
+  - **Grenzlinien**, je in der Farbe der Kurve, die sie begrenzen, gedämpft
+    und mit eigener Strichart: die **PV-Grenze der Einspeisebegrenzung**
+    (orange-grau), die **Grenze netzdienliches Laden** (grün-grau, heute ab
+    jetzt, solange PV erwartet wird: Darüber laden die Batterien) und die
+    **Grenze Bezugsspitzen** (blau-grau, unter der Nulllinie). Sind mehrere
+    davon aktiv, sind alle ausgeblendet, bis man sie in der Legende einschaltet;
+    eine einzelne ist sichtbar. Die Auswahl in der Legende merkt sich der
+    Browser. Die Simulation zeichnet die Grenzen mit ihren eigenen
+    Einstellungen.
   - Laden aus dem Netz ist blau: beim geplanten Laden der Teil aus dem Netz
     oben auf dem Teil aus PV. Das gemessene Laden ist grün, wenn es fast nur
     aus PV kam, blau, wenn es fast nur aus dem Netz kam (geladen bei
@@ -2406,7 +2417,7 @@ gemessen am Netzanschlusspunkt (Einspeisung, nach dem Hausverbrauch).
 - **Übersicht**: Die Kachel **Einspeisebegrenzung** zeigt die nächste Spitze,
   die Energie, die die Batterien aufnehmen müssen, und falls nötig die
   Energie, die davor einzuspeisen ist, und bis wann. Das Tagesdiagramm zeigt
-  die **PV-Grenze der Einspeisebegrenzung** als grau gestrichelte Linie:
+  die **PV-Grenze der Einspeisebegrenzung** als orange-grau gestrichelte Linie:
   erwarteter Verbrauch + Grenze, also die PV-Leistung, ab der die Einspeisung
   über der Grenze läge (die Grenze gilt nach dem Hausverbrauch, deshalb folgt
   die Linie der Verbrauchsprognose). Die Energie darüber steht als Balken auf
