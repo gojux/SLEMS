@@ -460,7 +460,7 @@ const STRINGS = {
     exportDetail: "{so_far} so far · {rest} kWh to come",
     tileHints: {
       feed_in_limit:
-        "With grid friendly charging the batteries only charge with the surplus above this grid export. SLEMS recalculates it continuously from the PV and consumption forecasts so that the batteries are still full by the evening (buffer included): they absorb the midday peak instead of being full in the morning. \"off\": grid friendly charging is switched off. \"none – charge at once\": the expected surplus is not enough, the batteries charge at once.",
+        "With grid friendly charging the batteries only charge with the surplus above this grid export. SLEMS recalculates it continuously from the PV and consumption forecasts so that the batteries are still full by the evening (buffer included): they absorb the midday peak instead of being full in the morning. The tile is hidden while grid friendly charging is switched off. \"none – charge at once\": the expected surplus is not enough, the batteries charge at once.",
     },
     peakShavingNote:
       "Below the threshold only {usable} above the minimum state of charge ({min}) are left for peaks, about {kwh} kWh.",
@@ -1159,7 +1159,7 @@ const STRINGS = {
     exportDetail: "bisher {so_far} · noch {rest} kWh",
     tileHints: {
       feed_in_limit:
-        "Beim netzdienlichen Laden laden die Batterien nur mit dem Überschuss oberhalb dieser Einspeisung. SLEMS berechnet sie laufend aus PV- und Verbrauchsprognose so, dass die Batterien bis zum Abend trotzdem voll werden (Puffer eingerechnet): Sie fangen die Mittagsspitze ab, statt schon am Vormittag voll zu sein. „aus“: netzdienliches Laden ist ausgeschaltet. „keine – sofort laden“: Der erwartete Überschuss reicht nicht, die Batterien laden sofort.",
+        "Beim netzdienlichen Laden laden die Batterien nur mit dem Überschuss oberhalb dieser Einspeisung. SLEMS berechnet sie laufend aus PV- und Verbrauchsprognose so, dass die Batterien bis zum Abend trotzdem voll werden (Puffer eingerechnet): Sie fangen die Mittagsspitze ab, statt schon am Vormittag voll zu sein. Bei ausgeschaltetem netzdienlichem Laden ist die Kachel ausgeblendet. „keine – sofort laden“: Der erwartete Überschuss reicht nicht, die Batterien laden sofort.",
     },
     peakShavingNote:
       "Unter der Schwelle bleiben nur {usable} über dem minimalen Ladezustand ({min}) für Spitzen, etwa {kwh} kWh.",
@@ -2852,7 +2852,8 @@ class SlemsPanel extends HTMLElement {
       this._statusTile() +
       this._capTile() +
       OVERVIEW_TILES.map((key) => [key, this._state(key)])
-        .filter(([key, s]) => s || key === "expected_export")
+        // The feed-in limit is hidden while grid friendly charging is switched off.
+        .filter(([key, s]) => (s || key === "expected_export") && !(key === "feed_in_limit" && s.attributes?.reason === "disabled"))
         .map(([key, s]) => {
           if (key === "expected_export") return this._exportTile();
           const hint = t.tileHints[key];
