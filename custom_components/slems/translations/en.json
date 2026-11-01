@@ -1104,6 +1104,14 @@
           "manual": "Manual",
           "off": "Off"
         }
+      },
+      "peak_shaving_mode": {
+        "name": "Peak shaving mode",
+        "state": {
+          "auto_threshold": "Automatic threshold (set limit)",
+          "auto_limit": "Automatic limit (set threshold)",
+          "manual": "Manual"
+        }
       }
     },
     "sensor": {
@@ -1307,6 +1315,9 @@
       "peak_shaving_limit": {
         "name": "Peak shaving import limit in effect"
       },
+      "power_peak": {
+        "name": "Peak power this month"
+      },
       "firmware": {
         "name": "Firmware"
       },
@@ -1420,9 +1431,6 @@
       },
       "consumer_control": {
         "name": "Control active"
-      },
-      "peak_shaving_auto": {
-        "name": "Automatic peak shaving limit"
       },
       "communication_paused": {
         "name": "Communication paused"

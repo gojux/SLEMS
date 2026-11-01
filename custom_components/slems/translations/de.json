@@ -1104,6 +1104,14 @@
           "manual": "Manuell",
           "off": "Aus"
         }
+      },
+      "peak_shaving_mode": {
+        "name": "Modus Spitzenabfang",
+        "state": {
+          "auto_threshold": "Automatische Schwelle (Grenze einstellen)",
+          "auto_limit": "Automatische Grenze (Schwelle einstellen)",
+          "manual": "Manuell"
+        }
       }
     },
     "sensor": {
@@ -1307,6 +1315,9 @@
       "peak_shaving_limit": {
         "name": "Wirksame Bezugsgrenze Spitzenabfang"
       },
+      "power_peak": {
+        "name": "Leistungsspitze diesen Monat"
+      },
       "firmware": {
         "name": "Firmware"
       },
@@ -1420,9 +1431,6 @@
       },
       "consumer_control": {
         "name": "Steuerung aktiv"
-      },
-      "peak_shaving_auto": {
-        "name": "Automatische Bezugsgrenze"
       },
       "communication_paused": {
         "name": "Kommunikation pausiert"

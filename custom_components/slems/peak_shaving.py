@@ -1,9 +1,11 @@
-"""Automatic import limit for peak shaving (pure computations).
+"""Automatic import limit or threshold for peak shaving (pure computations).
 
 Below the state of charge threshold the batteries only cover the consumption
 above the import limit. The automatic limit is the lowest one for which the
 energy above it, expected until the batteries are refilled, still fits into
 the usable energy (above the minimum state of charge, minus a safety reserve).
+The automatic threshold is the other way round: for a set limit, the lowest
+threshold that keeps that energy (plus the reserve) above the minimum.
 
 The hourly consumption forecast averages short peaks (oven, kettle) away, so
 the expected energy above a limit comes from the 5 minute statistics of the
@@ -35,6 +37,8 @@ SAMPLE_HOURS = 5 / 60
 RESOLUTION_W = 50.0
 # Days of 5 minute statistics used (Home Assistant keeps them about 10 days).
 PROFILE_DAYS = 10
+# Rounds of threshold and refill horizon (see auto_threshold).
+THRESHOLD_ROUNDS = 3
 
 
 @dataclass
@@ -136,7 +140,7 @@ def auto_limit(
     budget = max(0.0, usable_wh) * (1 - reserve)
 
     def needed(limit: float) -> float:
-        return sum(share * profile.energy_above(hour, limit) for hour, share in hours)
+        return needed_wh(profile, hours, limit)
 
     if needed(0.0) <= budget:
         return 0.0
@@ -148,3 +152,36 @@ def auto_limit(
         else:
             low = middle
     return high
+
+
+def needed_wh(profile: PeakProfile, hours: list[tuple[int, float]], limit_w: float) -> float:
+    """Expected energy above ``limit_w`` in ``hours``."""
+    return sum(share * profile.energy_above(hour, limit_w) for hour, share in hours)
+
+
+def auto_threshold(
+    profile: PeakProfile,
+    hours_for: Callable[[float], list[tuple[int, float]]],
+    limit_w: float,
+    min_soc_pct: float,
+    max_soc_pct: float,
+    capacity_wh: float,
+    efficiency: float,
+    reserve: float,
+    start_pct: float,
+) -> tuple[float, bool]:
+    """Lowest threshold whose energy above the minimum covers the peaks above
+    ``limit_w`` until the refill, and whether it reached ``max_soc_pct``.
+
+    ``hours_for``: the hours until the refill for a threshold (the refill
+    depends on how much has to be charged back, see hours_until_refill);
+    ``efficiency``: of charging and discharging, ``start_pct``: the threshold
+    to start from (a few rounds settle it).
+    """
+    threshold = max(min_soc_pct, min(start_pct, max_soc_pct))
+    if capacity_wh <= 0:
+        return threshold, False
+    for _ in range(THRESHOLD_ROUNDS):
+        energy = needed_wh(profile, hours_for(threshold), limit_w) / max(1e-6, 1 - reserve) / efficiency
+        threshold = min(max_soc_pct, min_soc_pct + energy / capacity_wh * 100)
+    return threshold, threshold >= max_soc_pct - 0.5

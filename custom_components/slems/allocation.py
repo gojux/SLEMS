@@ -305,6 +305,11 @@ def allocate(
         elif consumer.must_stay_on:
             consumer_power[consumer.subentry_id] = consumer.minimum_running_power_w
     remaining = available_w - sum(drawn_power_w(c, consumer_power[c.subentry_id]) for c in ordered)
+    # Import above the peak shaving limit that the batteries cannot cover: the
+    # forced consumers give way.
+    over_w = _peak_excess_w(remaining, settings) - (battery.max_discharge_w if battery is not None else 0.0)
+    if over_w > 0:
+        remaining += _yield_to_peak(over_w, ordered, consumer_power)
     unsupported_w = unsupported_measured_w + sum(
         drawn_power_w(c, consumer_power[c.subentry_id]) for c in ordered if c.subentry_id in unsupported
     )
@@ -463,6 +468,37 @@ def _peak_excess_w(remaining_w: float, settings: AllocationSettings) -> float:
     if not settings.peak_shaving:
         return 0.0
     return max(0.0, -remaining_w - settings.peak_shaving_grid_limit_w)
+
+
+def _yield_to_peak(over_w: float, consumers: Sequence[ConsumerRequest], consumer_power: dict[str, float]) -> float:
+    """Reduce forced consumers by up to ``over_w``, the lowest priority first;
+    return the power they give up.
+
+    Power controlled ones first go down to their minimum power, then
+    consumers outside their minimum runtime switch off.
+    """
+    freed = 0.0
+    forced = [c for c in reversed(consumers) if c.forced]
+    for switch_off in (False, True):
+        for consumer in forced:
+            power = consumer_power[consumer.subentry_id]
+            if freed >= over_w or power <= 0:
+                continue
+            drawn = drawn_power_w(consumer, power)
+            if switch_off:
+                if consumer.must_stay_on:
+                    continue
+                target = 0.0
+            elif consumer.control_mode.on_off:
+                continue
+            else:
+                # Only as far down as needed.
+                target = max(consumer.min_power_w, drawn - (over_w - freed))
+            if target >= drawn:
+                continue
+            consumer_power[consumer.subentry_id] = target
+            freed += drawn - drawn_power_w(consumer, target)
+    return freed
 
 
 def _cover_deficit(

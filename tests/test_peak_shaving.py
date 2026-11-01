@@ -9,6 +9,7 @@ from homeassistant.util import dt as dt_util
 from custom_components.slems.peak_shaving import (
     PeakProfile,
     auto_limit,
+    auto_threshold,
     hours_until_refill,
 )
 
@@ -94,3 +95,17 @@ def test_refill_with_own_pv_counts_only_what_the_batteries_can_take() -> None:
     assert hours[-1] == (7, 1.0)
     limited = hours_until_refill(at(1, 20, 30), pv, consumption, 3000, lambda hour: 300.0)
     assert limited[: len(hours)] == hours and (17, 1.0) in limited[len(hours):]
+
+
+def test_auto_threshold_keeps_the_energy_for_the_peaks_above_the_limit() -> None:
+    profile = profile_with_peak()
+    # One evening until the refill: 2500 W for 10 minutes above 500 W.
+    hours = [(19, 1.0)]
+    threshold, full = auto_threshold(profile, lambda _: hours, 500, 10, 100, 10000, 1.0, 0.0, 20)
+    assert threshold == pytest.approx(10 + 2500 * 10 / 60 / 10000 * 100)
+    assert not full
+    # With a reserve and losses the threshold rises; at the highest SoC it says so.
+    higher, _ = auto_threshold(profile, lambda _: hours, 500, 10, 100, 10000, 0.9, 0.2, 20)
+    assert higher > threshold
+    capped, full = auto_threshold(profile, lambda _: hours * 100, 500, 10, 50, 10000, 1.0, 0.0, 20)
+    assert capped == 50 and full

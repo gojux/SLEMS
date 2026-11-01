@@ -14,6 +14,7 @@ from .const import (
     CapMode,
     ControlMode,
     OperatingMode,
+    PeakShavingMode,
     SurplusWindow,
     TargetSensor,
     TargetSource,
@@ -33,7 +34,9 @@ async def async_setup_entry(
 ) -> None:
     """Set up the operating mode and the options of the consumers."""
     coordinator = entry.runtime_data
-    async_add_entities([OperatingModeSelect(coordinator), PriceSourceSelect(coordinator)])
+    async_add_entities(
+        [OperatingModeSelect(coordinator), PriceSourceSelect(coordinator), PeakShavingModeSelect(coordinator)]
+    )
     for battery in coordinator.batteries:
         if battery.driver.capabilities.controllable:
             async_add_entities(
@@ -119,6 +122,37 @@ class PriceSourceSelect(SlemsSystemEntity, SelectEntity, RestoreEntity):
 
     async def async_select_option(self, option: str) -> None:
         self.coordinator.market_prices.set_source(PriceSource(option))
+        self.async_write_ha_state()
+
+
+class PeakShavingModeSelect(SlemsSystemEntity, SelectEntity, RestoreEntity):
+    """What peak shaving calculates: the threshold, the limit or nothing (see peak_shaving)."""
+
+    _attr_options = [mode.value for mode in PeakShavingMode]
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:chart-bell-curve-cumulative"
+
+    def __init__(self, coordinator: SlemsCoordinator) -> None:
+        super().__init__(coordinator, "peak_shaving_mode")
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        settings = self.coordinator.settings
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in self._attr_options:
+            settings.peak_shaving_mode = PeakShavingMode(last_state.state)
+        elif self.coordinator.legacy_peak_shaving_auto is not None:
+            # The removed switch: on was the automatic limit, off the fixed one.
+            settings.peak_shaving_mode = (
+                PeakShavingMode.AUTO_LIMIT if self.coordinator.legacy_peak_shaving_auto else PeakShavingMode.MANUAL
+            )
+
+    @property
+    def current_option(self) -> str:
+        return self.coordinator.settings.peak_shaving_mode.value
+
+    async def async_select_option(self, option: str) -> None:
+        self.coordinator.settings.peak_shaving_mode = PeakShavingMode(option)
         self.async_write_ha_state()
 
 

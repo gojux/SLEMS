@@ -346,6 +346,16 @@ class SurplusWindow(StrEnum):
     RELEASE = "release"
 
 
+class PeakShavingMode(StrEnum):
+    """How peak shaving sets its import limit and state of charge threshold (see peak_shaving)."""
+
+    # The threshold from the set limit: energy for the peaks above it until PV refills.
+    AUTO_THRESHOLD = "auto_threshold"
+    # The limit from the set threshold: the lowest one the energy below it lasts for.
+    AUTO_LIMIT = "auto_limit"
+    MANUAL = "manual"
+
+
 class TargetSource(StrEnum):
     """What may cover a daily target the surplus does not reach in time."""
 

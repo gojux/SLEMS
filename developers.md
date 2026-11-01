@@ -335,6 +335,29 @@ quarter hours, else hours); an hour standing in for quarter hours sets
 for `kw_month`, so stored lines of the other units stay unchanged (template
 updates compare them). Percent lines apply to the power price of their month.
 
+`power_peak.py` (pure): with a power price in the current tariff
+(`power_price`, the lines in effect today; the lowest tier defines the
+measurement) the month part of `PeakState` (billed power, highest interval,
+`free_kw`: the highest mean of a new interval that leaves the billed power
+unchanged, found by bisection so that minimum, step and the mean of several
+peaks need no cases, cost and extra cost with levies and VAT) from the
+finished intervals in `grid_quarters`. The coordinator keeps it per interval
+(`peak_state`, about 15 ms at the end of a month) and adds the running
+interval each cycle (`running`, µs). The plan floors the peak shaving limit at
+`limit_w` (`free_kw` − `BUFFER_W`) in every mode; the control passes
+`allowed_w(limit)` to the allocation instead of the limit (budget left over
+the time left, at least `MIN_REST_S`, never below 0). `allocate` lets forced
+consumers give way (`_yield_to_peak`) when the import above that limit
+exceeds the discharge power of the batteries. Sensor `power_peak` (kW,
+attributes every 10 s) feeds the overview tile.
+
+Peak shaving mode (select `peak_shaving_mode`, replaces the switch
+`peak_shaving_auto`, whose last state chooses the mode once: on → automatic
+limit, off → manual; read from the restore state in `_remove_old_settings`
+before the entity is removed): `auto_limit` (`peak_shaving.auto_limit`),
+`auto_threshold` (`peak_shaving.auto_threshold`: a few rounds of threshold
+and refill horizon, as the refill depends on the threshold) or `manual`.
+
 ### Market prices
 
 `market_prices.py`: day-ahead prices (€/MWh per quarter hour, hourly prices
@@ -2715,3 +2738,4 @@ repository (otherwise its *brands* check fails).
 | 2026-11-01 | Public holidays of the consumption forecast from the `holidays` package (country of Home Assistant plus a region setting), not from a calendar of the Home Assistant integration *Holiday* or the *Workday* sensor: past days are needed for the training data, which a calendar only gives through event queries and a sensor only within the recorder's purge period, and the package needs no setup. The region is suggested from a Nominatim reverse lookup, which returns the ISO 3166-2 code of the state or canton; the vector map of Home Assistant 2026.10 (OSM Shortbread tiles) was checked and cannot give it, as its `boundaries` layer has only lines with `admin_level` and the names are separate label points. Bundled boundary data was not needed then. `ZoneHolidays` of the price estimates became `PublicHolidays` with an optional region. In Austria a region adds no day off (the state patrons are no general holidays), in Germany and Switzerland it matters. |
 | 2026-11-01 | Car at the wallbox: optional state of charge sensor, battery capacity and *car plugged in* entity (binary sensor, or a sensor / select with the states that mean plugged in) per wallbox, instead of recognising the car in SLEMS: evcc already knows which car is at a loadpoint, otherwise the car's integration gives its state of charge. Without a car the wallbox is not controllable and adds no forced load or surplus demand (its target is still shown); the unplugged time is counted per period and named when a target is missed. The daily target *state of charge* converts the missing state of charge with the configured capacity and fixed charging losses (`VEHICLE_CHARGE_EFFICIENCY` 0.9) into the energy of an energy target; the capacity is configured, not learned. Once reached, the wallbox stays off until the deadline like a met energy or temperature target. Bidirectional charging is left for later. |
 | 2026-11-01 | Power prices of the grid (Austria from 2027, SNE-G-V BGBl. II Nr. 299/2026: highest quarter hour of the month, at least 2 kW on network level 7, the part above 10 kW at its own price, power rounded commercially to two decimals) as tariff unit `kw_month` with the measurement on the line (`peak`: `interval_min`, `count`, `kw_step`; `min_kw`; tier `kw_from` / `kw_to`), not as a live query: grid operators publish them in ordinances and price sheets, not through an interface. Only monthly prices (yearly ones ÷ 12) and no `period` field, as all known tariffs bill per calendar month. The peak comes from the quarter hours SLEMS records (`grid_quarters`, 400 days), no store of its own. |
+| 2026-11-01 | Peak shaving with a power price works on the energy of the running interval instead of the momentary import: the import allowed for the rest of the interval is its budget left over the time left, so a short peak a battery at its power limit lets through is made up for, and import may rise above the limit while budget is left. Feed-in does not offset import (the smart meter counts both apart), so the allowed import is never below 0. The limit never lies below what the month's peak already costs, in every mode. Forced consumers give way (power controlled ones to their minimum first, then off outside their minimum runtime) when the batteries cannot cover the import above the limit, as the limit then costs money for the whole month while the daily target can catch up. The modes replace the switch: automatic limit, automatic threshold for a set limit, manual; the economic mode follows. |

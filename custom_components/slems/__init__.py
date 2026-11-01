@@ -7,10 +7,11 @@ import json
 import logging
 from typing import Any
 
-from homeassistant.const import Platform
+from homeassistant.const import STATE_ON, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.event import async_track_time_change
+from homeassistant.helpers.restore_state import async_get as async_get_restore_state
 
 from .battery_profiles import ProfileError, bundled_profiles, profile_of
 from .battery_wear import wear_cost
@@ -149,6 +150,13 @@ def _remove_old_settings(hass: HomeAssistant, entry: SlemsConfigEntry) -> None:
     for key in REMOVED_SETTINGS:
         if entity_id := registry.async_get_entity_id(Platform.NUMBER, DOMAIN, f"{entry.entry_id}_{key}"):
             registry.async_remove(entity_id)
+    # The switch "automatic import limit" became the peak shaving mode: its
+    # last state chooses the mode once (see PeakShavingModeSelect).
+    if entity_id := registry.async_get_entity_id(Platform.SWITCH, DOMAIN, f"{entry.entry_id}_peak_shaving_auto"):
+        last = async_get_restore_state(hass).last_states.get(entity_id)
+        if last is not None:
+            entry.runtime_data.legacy_peak_shaving_auto = last.state.state == STATE_ON
+        registry.async_remove(entity_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> bool:

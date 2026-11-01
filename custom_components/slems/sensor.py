@@ -50,6 +50,8 @@ from .trial import TrialStatus
 
 
 ATTRIBUTES_INTERVAL_S = 60.0
+# The running interval of the peak power: often enough to follow it on the overview.
+POWER_PEAK_ATTRIBUTES_S = 10.0
 
 
 def rounded_state(value, precision: int | None):
@@ -96,6 +98,26 @@ def _power(key: str, **kwargs) -> dict:
         "native_unit_of_measurement": UnitOfPower.WATT,
         "suggested_display_precision": 0,
         **kwargs,
+    }
+
+
+def _power_peak_attributes(snapshot: SystemSnapshot, coordinator: SlemsCoordinator) -> dict:
+    """The month's peak with a power price (see power_peak) for the overview."""
+    peak = coordinator.peak_state()
+    if peak is None:
+        return {}
+    return {
+        "measured_kw": round(peak.measured_kw, 2),
+        "peak_start": peak.peak_start.isoformat() if peak.peak_start else None,
+        "min_kw": peak.min_kw,
+        "free_kw": round(peak.free_kw, 2),
+        "cost": round(peak.cost, 2),
+        "extra_cost": round(peak.extra_cost, 2),
+        "interval_start": peak.interval_start.isoformat(),
+        "interval_min": peak.interval_s // 60,
+        "interval_mean_kw": round(peak.mean_kw, 2),
+        # Import allowed for the rest of the interval while peak shaving is on.
+        "allowed_w": None if snapshot.peak_shaving_allowed_w is None else round(snapshot.peak_shaving_allowed_w),
     }
 
 
@@ -556,13 +578,27 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         **_power("peak_shaving_limit"),
         value_fn=lambda s, _: s.peak_shaving_limit_w,
         attributes_fn=lambda s, c: {
-            "automatic": c.settings.peak_shaving_auto,
+            "mode": c.settings.peak_shaving_mode.value,
+            # The threshold in effect (automatic with the mode auto_threshold).
+            "threshold_pct": None if s.peak_threshold_pct is None else round(s.peak_threshold_pct, 1),
+            "threshold_full": s.peak_threshold_full,
             # For the note on the energy left above the minimum SoC.
             "min_soc_pct": round(c.min_soc_pct, 1),
             "capacity_kwh": round(
                 sum(b.capacity_wh for b in c.batteries if b.plannable) / 1000, 2
             ),
         },
+    ),
+    SystemSensorDescription(
+        key="power_peak",
+        translation_key="power_peak",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        suggested_display_precision=2,
+        value_fn=lambda s, c: None if (peak := c.peak_state()) is None else round(peak.billed_kw, 2),
+        attributes_fn=_power_peak_attributes,
+        attributes_interval_s=POWER_PEAK_ATTRIBUTES_S,
     ),
     SystemSensorDescription(
         key="feed_in_cap_energy",

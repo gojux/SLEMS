@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timedelta
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
@@ -52,7 +53,7 @@ SETTINGS = (
     "peak_shaving",
     "peak_shaving_grid_limit_w",
     "peak_shaving_soc_threshold_pct",
-    "peak_shaving_auto",
+    "peak_shaving_mode",
     "peak_shaving_reserve_pct",
     "feed_in_cap",
     "pv_peak_power_kwp",
@@ -179,7 +180,15 @@ def simulate(coordinator: SlemsCoordinator, request: dict[str, Any]) -> dict[str
     for key, value in request.get("settings", {}).items():
         if key in SETTINGS:
             current = getattr(real, key)
-            changes[key] = bool(value) if isinstance(current, bool) else float(value)
+            if isinstance(current, bool):
+                changes[key] = bool(value)
+            elif isinstance(current, StrEnum):
+                try:
+                    changes[key] = type(current)(value)
+                except ValueError:
+                    continue
+            else:
+                changes[key] = float(value)
     settings = replace(real, **changes)
     values = base["battery"] | {
         key: float(value) for key, value in request.get("battery", {}).items() if key in BATTERY_KEYS
@@ -230,6 +239,7 @@ def simulate(coordinator: SlemsCoordinator, request: dict[str, Any]) -> dict[str
         # Limit lines of the day chart with the simulated settings.
         "feed_in_limit_w": plan.feed_in_limit_w,
         "peak_limit_w": plan.peak_limit_w if settings.peak_shaving else None,
+        "peak_threshold_pct": round(plan.peak_threshold_pct, 1) if settings.peak_shaving else None,
         "metrics": _day_metrics(
             plan.day_plan, plan.day_plan_tomorrow, now, settings, _prices(coordinator, tariff, now)
         ),

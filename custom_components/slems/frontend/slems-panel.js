@@ -464,11 +464,24 @@ const STRINGS = {
     expectedExport: "Expected export today",
     exportDetail: "{so_far} so far · {rest} kWh to come",
     tileHints: {
+      power_peak:
+        "Only with a power price in the current tariff: the power billed for this month if it ended now (the highest quarter hour or hour as the tariff measures it, at least the minimum power), the extra cost of the peaks above the minimum power and the running interval. Up to \"No extra cost up to\" a quarter hour adds nothing this month; peak shaving keeps the import below its limit on average over the interval.",
       feed_in_limit:
         "With grid friendly charging the batteries only charge with the surplus above this grid export. SLEMS recalculates it continuously from the PV and consumption forecasts so that the batteries are still full by the evening (buffer included): they absorb the midday peak instead of being full in the morning. The tile is hidden while grid friendly charging is switched off. \"none – charge at once\": the expected surplus is not enough, the batteries charge at once.",
     },
     peakShavingNote:
       "Below the threshold only {usable} above the minimum state of charge ({min}) are left for peaks, about {kwh} kWh.",
+    peakRaisedNote:
+      "This month at least {limit} applies: the peak of the month is already that high (power price), a lower import saves nothing until the month ends.",
+    peakThresholdFullNote:
+      "The automatic threshold reached the highest state of charge: the batteries probably cannot hold the limit until PV refills them. A higher limit needs less energy.",
+    peakMinimum: "Minimum power, not exceeded yet",
+    peakHighest: "Peak {kw} kW on {time}",
+    peakFree: "No extra cost up to {kw} kW",
+    peakCost: "Extra this month: {extra} (power price {cost})",
+    peakQuarter: "Running quarter hour: ⌀ {mean} kW",
+    peakHour: "Running hour: ⌀ {mean} kW",
+    peakAllowed: "rest at most ⌀ {kw} kW",
     settingHints: {
       operating_mode:
         "**Off**: SLEMS plans and controls nothing. **Observe only**: forecasts and plans are calculated and shown, but nothing is sent to batteries or consumers, e.g. to try SLEMS next to an existing battery integration. **Active**: SLEMS controls batteries and consumers according to the plan. When switching away from **Active**, the batteries follow their own logic again.",
@@ -501,7 +514,7 @@ const STRINGS = {
       peak_shaving_soc_threshold:
         "From this state of charge (of all batteries together) down, the batteries only cover peaks above the import limit; the energy between the minimum state of charge and the threshold is reserved for peaks. Not below the minimum state of charge of the batteries. The battery support **Automatic** of the consumers does not discharge below it either.",
       peak_shaving_reserve:
-        "Only with **Automatic peak shaving limit**: share of the usable energy between the minimum state of charge and the threshold that the calculation of the limit does not plan with, against more consumption than in the last days. Larger: a higher import limit, the batteries last more reliably until PV refills them, but absorb less.",
+        "Only with an automatic limit or threshold: share of the energy for peaks that the calculation keeps in reserve, against more consumption than in the last days. Larger: with the automatic limit a higher limit, with the automatic threshold a higher threshold; the batteries last more reliably until PV refills them.",
       temperature_limit:
         "Limits the charge power of every battery by its reported temperature: gradually less when hot, none at all when cold. Spares the cells; the BMS keeps its own protection. The Venus reports its internal temperature, not the cell temperature. Batteries without a temperature are not limited, discharging never.",
       temperature_high:
@@ -600,9 +613,9 @@ const STRINGS = {
       feed_in_cap_auto_buffer:
         "Uses the recorded PV forecast errors instead of the fixed buffer: of the days with more PV than forecast, the underestimation not exceeded on 80 % of them raises the PV forecast. Needs 14 recorded days; until then the fixed buffer applies.",
       peak_shaving_grid_limit:
-        "Below the state of charge threshold, consumption up to this power comes from the grid; the batteries only cover what exceeds it.",
-      peak_shaving_auto:
-        "Calculates the import limit so that the usable energy (above the minimum state of charge, minus the safety reserve) lasts until PV refills the batteries. Based on the consumption peaks of the last days; the fixed limit is then not used.",
+        "Below the state of charge threshold, consumption up to this power comes from the grid; the batteries only cover what exceeds it. With a power price in the tariff the limit holds on average over the quarter hour (or hour) as the tariff measures it: a short peak, e.g. while the batteries are at their power limit, is made up for in the rest of the quarter hour, and forced consumers (daily target) give way when the batteries cannot cover the import above it. It never lies below what this month's peak already costs.",
+      peak_shaving_mode:
+        "**Automatic limit**: the limit is calculated so that the energy between the minimum state of charge and the set threshold (minus the reserve) lasts until PV refills the batteries.\n**Automatic threshold**: you set the limit (e.g. the power that costs nothing more with a power price), the threshold is calculated so that the energy for the peaks above it (plus the reserve) is kept until PV refills the batteries.\n**Manual**: limit and threshold as set.\nBoth calculations use the consumption peaks of the last days.",
       battery_share_when_secured:
         "Until the charge is secured the batteries get the whole surplus. Secured: the state of charge is at least **Battery priority below state of charge** and the PV surplus expected for the rest of the day covers filling the batteries plus the **Charge secured safety buffer**. From then on the batteries get this share of the surplus, the consumers the rest in the order of their priority; what one side cannot take goes to the other. 100 %: the consumers only get what the batteries cannot take; 0 %: the consumers first. Applies only without grid friendly charging (with it, its feed-in limit decides the split); a daily target short on time and the feed-in cap take precedence.",
       charge_grid_target:
@@ -1168,11 +1181,24 @@ const STRINGS = {
     expectedExport: "Erwartete Einspeisung heute",
     exportDetail: "bisher {so_far} · noch {rest} kWh",
     tileHints: {
+      power_peak:
+        "Nur mit Leistungspreis im aktuellen Tarif: die Leistung, die für diesen Monat verrechnet würde, wenn er jetzt endete (die höchste Viertelstunde oder Stunde, wie der Tarif misst, mindestens die Mindestleistung), die Mehrkosten der Spitzen über der Mindestleistung und das laufende Intervall. Bis „Ohne Mehrkosten bis“ kostet eine Viertelstunde diesen Monat nichts mehr; Spitzenabfang hält den Bezug im Mittel über das Intervall unter seiner Grenze.",
       feed_in_limit:
         "Beim netzdienlichen Laden laden die Batterien nur mit dem Überschuss oberhalb dieser Einspeisung. SLEMS berechnet sie laufend aus PV- und Verbrauchsprognose so, dass die Batterien bis zum Abend trotzdem voll werden (Puffer eingerechnet): Sie fangen die Mittagsspitze ab, statt schon am Vormittag voll zu sein. Bei ausgeschaltetem netzdienlichem Laden ist die Kachel ausgeblendet. „keine – sofort laden“: Der erwartete Überschuss reicht nicht, die Batterien laden sofort.",
     },
     peakShavingNote:
       "Unter der Schwelle bleiben nur {usable} über dem minimalen Ladezustand ({min}) für Spitzen, etwa {kwh} kWh.",
+    peakRaisedNote:
+      "Diesen Monat gilt mindestens {limit}: Die Monatsspitze ist schon so hoch (Leistungspreis), weniger Bezug spart bis Monatsende nichts.",
+    peakThresholdFullNote:
+      "Die automatische Schwelle hat den höchsten Ladezustand erreicht: Die Batterien halten die Grenze voraussichtlich nicht, bis PV sie wieder füllt. Eine höhere Grenze braucht weniger Energie.",
+    peakMinimum: "Mindestleistung, noch nicht überschritten",
+    peakHighest: "Spitze {kw} kW am {time}",
+    peakFree: "Ohne Mehrkosten bis {kw} kW",
+    peakCost: "Mehrkosten diesen Monat: {extra} (Leistungspreis {cost})",
+    peakQuarter: "Laufende Viertelstunde: ⌀ {mean} kW",
+    peakHour: "Laufende Stunde: ⌀ {mean} kW",
+    peakAllowed: "Rest höchstens ⌀ {kw} kW",
     settingHints: {
       operating_mode:
         "**Aus**: SLEMS plant und steuert nichts. **Nur beobachten**: Prognosen und Pläne werden berechnet und angezeigt, aber nichts wird an Batterien oder Verbraucher gesendet, z. B. zum Ausprobieren neben einer bestehenden Batterie-Integration. **Aktiv**: SLEMS steuert Batterien und Verbraucher nach dem Plan. Beim Wechsel weg von **Aktiv** folgen die Batterien wieder ihrer eigenen Logik.",
@@ -1205,7 +1231,7 @@ const STRINGS = {
       peak_shaving_soc_threshold:
         "Ab diesem Ladezustand (aller Batterien zusammen) abwärts decken die Batterien nur noch Spitzen über der Bezugsgrenze; die Energie zwischen dem minimalen Ladezustand und der Schwelle ist damit für Spitzen reserviert. Nicht unter dem minimalen Ladezustand der Batterien. Auch die Batterie-Unterstützung **Automatisch** der Verbraucher entlädt nicht darunter.",
       peak_shaving_reserve:
-        "Nur mit **Automatische Bezugsgrenze**: Anteil der nutzbaren Energie zwischen minimalem Ladezustand und Schwelle, den die Berechnung der Grenze nicht verplant, gegen mehr Verbrauch als in den letzten Tagen. Größer: höhere Bezugsgrenze, die Batterien reichen sicherer bis zum Nachladen durch PV, fangen dafür weniger ab.",
+        "Nur mit automatischer Grenze oder Schwelle: Anteil der Energie für Spitzen, den die Berechnung in Reserve hält, gegen mehr Verbrauch als in den letzten Tagen. Größer: mit automatischer Grenze eine höhere Grenze, mit automatischer Schwelle eine höhere Schwelle; die Batterien reichen sicherer bis zum Nachladen durch PV.",
       temperature_limit:
         "Begrenzt die Ladeleistung jeder Batterie nach ihrer gemeldeten Temperatur: bei Hitze schrittweise weniger, bei Kälte gar nicht. Schont die Zellen; das BMS behält seinen eigenen Schutz. Die Venus meldet ihre Innentemperatur, nicht die Zelltemperatur. Batterien ohne Temperatur werden nicht begrenzt, das Entladen nie.",
       temperature_high:
@@ -1304,9 +1330,9 @@ const STRINGS = {
       feed_in_cap_auto_buffer:
         "Verwendet statt des festen Puffers die aufgezeichneten Abweichungen der PV-Prognose: Von den Tagen mit mehr PV als prognostiziert hebt die Unterschätzung, die an 80 % davon nicht überschritten wurde, die PV-Prognose an. Braucht 14 aufgezeichnete Tage; bis dahin gilt der feste Puffer.",
       peak_shaving_grid_limit:
-        "Unterhalb der Ladezustand-Schwelle kommt Verbrauch bis zu dieser Leistung aus dem Netz; die Batterien decken nur, was darüber hinausgeht.",
-      peak_shaving_auto:
-        "Berechnet die Bezugsgrenze so, dass die nutzbare Energie (über dem minimalen Ladezustand, abzüglich Sicherheitsreserve) reicht, bis PV die Batterien wieder füllt. Grundlage sind die Verbrauchsspitzen der letzten Tage; die feste Grenze wird dann nicht verwendet.",
+        "Unterhalb der Ladezustand-Schwelle kommt Verbrauch bis zu dieser Leistung aus dem Netz; die Batterien decken nur, was darüber hinausgeht. Mit einem Leistungspreis im Tarif gilt die Grenze im Mittel über die Viertelstunde (oder Stunde), wie der Tarif misst: Eine kurze Spitze, z. B. während die Batterien an ihrer Leistungsgrenze sind, wird im Rest der Viertelstunde ausgeglichen, und erzwungene Verbraucher (Tagesziel) treten zurück, wenn die Batterien den Bezug darüber nicht decken können. Sie liegt nie unter dem, was die Monatsspitze schon kostet.",
+      peak_shaving_mode:
+        "**Automatische Grenze**: Die Grenze wird so berechnet, dass die Energie zwischen minimalem Ladezustand und eingestellter Schwelle (abzüglich Reserve) reicht, bis PV die Batterien wieder füllt.\n**Automatische Schwelle**: Du stellst die Grenze ein (z. B. die Leistung, die mit Leistungspreis nichts mehr kostet), die Schwelle wird so berechnet, dass die Energie für die Spitzen darüber (plus Reserve) zurückbleibt, bis PV die Batterien wieder füllt.\n**Manuell**: Grenze und Schwelle wie eingestellt.\nBeide Berechnungen verwenden die Verbrauchsspitzen der letzten Tage.",
       battery_share_when_secured:
         "Bis die Ladung gesichert ist, bekommen die Batterien den gesamten Überschuss. Gesichert: Der Ladezustand liegt mindestens bei **Batterievorrang unter Ladezustand** und der erwartete PV-Überschuss des restlichen Tages deckt das Füllen der Batterien plus den **Sicherheitspuffer gesicherte Ladung**. Ab dann bekommen die Batterien diesen Anteil des Überschusses, die Verbraucher den Rest nach ihrer Priorität; was eine Seite nicht aufnehmen kann, bekommt die andere. 100 %: Die Verbraucher bekommen nur, was die Batterien nicht aufnehmen können; 0 %: zuerst die Verbraucher. Gilt nur ohne netzdienliches Laden (mit ihm entscheidet seine Einspeisegrenze die Aufteilung); ein knappes Tagesziel und die Einspeisebegrenzung haben Vorrang.",
       charge_grid_target:
@@ -1490,6 +1516,10 @@ const SETTING_SHOWN_WITH = {
 const SETTING_HIDDEN_WITH = {
   battery_share_when_secured: "grid_friendly_charging",
 };
+// Settings hidden while a select has one of these options.
+const SETTING_HIDDEN_IN = {
+  peak_shaving_reserve: ["peak_shaving_mode", ["manual"]],
+};
 
 // SoC from which a battery counts as full (FULL_SOC_PCT in delivery_monitor.py).
 const FULL_SOC_PCT = 99;
@@ -1558,10 +1588,10 @@ const SETTING_GROUPS = [
     "peak",
     [
       "peak_shaving",
-      "peak_shaving_soc_threshold",
-      "peak_shaving_auto",
-      // Read only with the automatic limit (shows the calculated value).
+      "peak_shaving_mode",
+      // Read only while calculated (shows the value in effect).
       "peak_shaving_grid_limit",
+      "peak_shaving_soc_threshold",
       "peak_shaving_reserve",
     ],
   ],
@@ -1983,6 +2013,35 @@ class SlemsPanel extends HTMLElement {
     }
     return `<div class="tile wide" data-more-info="${energy.entity_id}"><span class="label">${escapeHtml(label)}</span>
       <span class="value">${escapeHtml(value)}</span></div>`;
+  }
+
+  /** Peak power of the month with a power price: what counts, its extra cost and the running interval. */
+  _peakTile() {
+    const s = this._state("power_peak");
+    const billed = this._number(s);
+    if (!s || billed === null) return "";
+    const t = this._t;
+    const a = s.attributes || {};
+    const language = this._hass?.locale?.language || "en";
+    const kw = (value) => new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(value);
+    const money = new Intl.NumberFormat(language, { style: "currency", currency: this._currency() });
+    const day = (iso) => new Date(iso).toLocaleDateString(language, { day: "numeric", month: "numeric" });
+    const running = (a.interval_min === 60 ? t.peakHour : t.peakQuarter).replace("{mean}", kw(a.interval_mean_kw ?? 0));
+    const lines = [
+      a.peak_start && a.measured_kw > (a.min_kw ?? 0)
+        ? t.peakHighest.replace("{kw}", kw(a.measured_kw)).replace("{time}", `${day(a.peak_start)} ${this._time(a.peak_start)}`)
+        : t.peakMinimum,
+      t.peakFree.replace("{kw}", kw(a.free_kw ?? billed)),
+      t.peakCost.replace("{extra}", money.format(a.extra_cost ?? 0)).replace("{cost}", money.format(a.cost ?? 0)),
+      a.allowed_w === null || a.allowed_w === undefined
+        ? running
+        : `${running} · ${t.peakAllowed.replace("{kw}", kw(a.allowed_w / 1000))}`,
+    ];
+    const hint = t.tileHints.power_peak;
+    const info = `<button class="info" data-action="toggle-hint" data-key="power_peak" title="${escapeHtml(hintPlain(hint))}" aria-label="${escapeHtml(hintPlain(hint))}"><ha-icon icon="mdi:information-outline"></ha-icon></button>`;
+    const open = this._openHints.has("power_peak") ? `<span class="setting-hint">${hintHtml(hint)}</span>` : "";
+    return `<div class="tile" data-more-info="${s.entity_id}"><span class="label">${escapeHtml(this._name(s))}${info}</span>
+      <span class="value">${escapeHtml(kw(billed))} kW</span>${lines.map((line) => `<span class="sub">${escapeHtml(line)}</span>`).join("")}${open}</div>`;
   }
 
   /** Batteries not full for longer than FULL_CHARGE_NOTE_DAYS (a note, not a problem). */
@@ -2888,6 +2947,7 @@ class SlemsPanel extends HTMLElement {
       "tiles",
       this._statusTile() +
       this._capTile() +
+      this._peakTile() +
       OVERVIEW_TILES.map((key) => [key, this._state(key)])
         // The feed-in limit is hidden while grid friendly charging is switched off.
         .filter(([key, s]) => (s || key === "expected_export") && !(key === "feed_in_limit" && s.attributes?.reason === "disabled"))
@@ -4594,6 +4654,19 @@ class SlemsPanel extends HTMLElement {
         min="${min ?? a.min ?? ""}" max="${max ?? a.max ?? ""}" step="${stepValue}"${disabled ? " disabled" : ""}><span class="unit">${escapeHtml(unit ?? a.unit_of_measurement ?? "")}</span></span></div>`;
   }
 
+  /** Select of a simulation setting with the options and their names of the real select entity. */
+  _simSelect(path, entity) {
+    const [group, key] = path.split(".");
+    const value = this._sim.form?.[group]?.[key];
+    const stateObj = this._state(entity);
+    if (!stateObj) return "";
+    const name = this._name(stateObj);
+    const label = (option) => (this._hass.formatEntityState ? this._hass.formatEntityState(stateObj, option) : option);
+    return `<div class="setting"><span>${escapeHtml(name)}</span><select data-sim="${path}" data-kind="sim-select" aria-label="${escapeHtml(name)}">
+      ${(stateObj.attributes.options || []).map((o) => `<option value="${escapeHtml(o)}" ${o === value ? "selected" : ""}>${escapeHtml(label(o))}</option>`).join("")}
+      </select></div>`;
+  }
+
   // A comparison tariff whose import or feed-in side the price aware control
   // plans with (empty: the current tariff); only with comparison tariffs for that side.
   _simTariff(key, side, label) {
@@ -4649,10 +4722,10 @@ class SlemsPanel extends HTMLElement {
             : "") +
           setting("battery_export", "battery_export"))}
       ${option(t.groups.peak, "peak_shaving", "peak_shaving",
-        setting("peak_shaving_auto", "peak_shaving_auto") +
-          setting("peak_shaving_grid_limit_w", "peak_shaving_grid_limit", { disabled: s.peak_shaving_auto }) +
-          setting("peak_shaving_soc_threshold_pct", "peak_shaving_soc_threshold", { min: 0 }) +
-          (s.peak_shaving_auto ? setting("peak_shaving_reserve_pct", "peak_shaving_reserve") : ""))}
+        this._simSelect("settings.peak_shaving_mode", "peak_shaving_mode") +
+          setting("peak_shaving_grid_limit_w", "peak_shaving_grid_limit", { disabled: s.peak_shaving_mode === "auto_limit" }) +
+          setting("peak_shaving_soc_threshold_pct", "peak_shaving_soc_threshold", { min: 0, disabled: s.peak_shaving_mode === "auto_threshold" }) +
+          (s.peak_shaving_mode !== "manual" ? setting("peak_shaving_reserve_pct", "peak_shaving_reserve") : ""))}
       ${option(t.groups.feedInCap, "feed_in_cap", "feed_in_cap",
         setting("pv_peak_power_kwp", "pv_peak_power") +
           setting("feed_in_cap_limit_pct", "feed_in_cap_limit") +
@@ -5118,6 +5191,7 @@ class SlemsPanel extends HTMLElement {
         const rows = keys
           .filter((key) => !SETTING_SHOWN_WITH[key] || this._state(SETTING_SHOWN_WITH[key])?.state === "on")
           .filter((key) => !SETTING_HIDDEN_WITH[key] || this._state(SETTING_HIDDEN_WITH[key])?.state !== "on")
+          .filter((key) => !SETTING_HIDDEN_IN[key] || !SETTING_HIDDEN_IN[key][1].includes(this._state(SETTING_HIDDEN_IN[key][0])?.state))
           .map((key) => this._state(key))
           .filter(Boolean);
         if (!rows.length) return "";
@@ -5145,8 +5219,28 @@ class SlemsPanel extends HTMLElement {
 
   /** Warning when little energy is left above the minimum SoC for peak shaving. */
   _peakNote() {
-    const threshold = this._number(this._state("peak_shaving_soc_threshold"));
+    return this._peakLimitNote() + this._peakThresholdNote();
+  }
+
+  /** Notes on the limit in effect: raised by this month's peak, or too low for the batteries. */
+  _peakLimitNote() {
     const limit = this._state("peak_shaving_limit");
+    const effective = this._number(limit);
+    const set = this._number(this._state("peak_shaving_grid_limit"));
+    const notes = [];
+    if (limit?.attributes?.mode !== "auto_limit" && effective !== null && set !== null && effective > set + 1) {
+      notes.push(this._t.peakRaisedNote.replace("{limit}", this._watts(effective)));
+    }
+    if (limit?.attributes?.threshold_full) notes.push(this._t.peakThresholdFullNote);
+    return notes.map((text) => `<p class="setting-note"><ha-icon icon="mdi:information-outline"></ha-icon>${escapeHtml(text)}</p>`).join("");
+  }
+
+  /** Warning when little energy is left above the minimum SoC for peak shaving. */
+  _peakThresholdNote() {
+    const limit = this._state("peak_shaving_limit");
+    // The automatic threshold sets the energy for the peaks itself.
+    if (limit?.attributes?.mode === "auto_threshold") return "";
+    const threshold = limit?.attributes?.threshold_pct ?? this._number(this._state("peak_shaving_soc_threshold"));
     const minSoc = limit?.attributes?.min_soc_pct;
     const capacity = limit?.attributes?.capacity_kwh;
     if (threshold === null || minSoc === undefined || threshold >= PEAK_SHAVING_NOTE_PCT) return "";
@@ -5221,10 +5315,17 @@ class SlemsPanel extends HTMLElement {
             : this._t.learnedWaiting;
       name += `<span class="setting-hint">${hintHtml(hint)}</span>`;
     }
-    if (key === "peak_shaving_grid_limit" && this._state("peak_shaving_auto")?.state === "on") {
+    const peakMode = this._state("peak_shaving_mode")?.state;
+    if (key === "peak_shaving_grid_limit" && peakMode === "auto_limit") {
       const effective = this._state("peak_shaving_limit");
       return `<div class="setting"><span>${name}</span><span class="readonly">${escapeHtml(
         effective ? this._format(effective) : "–"
+      )} (${this._t.automatic})</span></div>`;
+    }
+    if (key === "peak_shaving_soc_threshold" && peakMode === "auto_threshold") {
+      const threshold = this._state("peak_shaving_limit")?.attributes?.threshold_pct;
+      return `<div class="setting"><span>${name}</span><span class="readonly">${escapeHtml(
+        threshold === null || threshold === undefined ? "–" : this._percent(threshold)
       )} (${this._t.automatic})</span></div>`;
     }
     if (domain === "time") {

@@ -274,7 +274,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Netzdienliches Laden: PV-Einspeisespitzen abfangen | ✅ |
 | Einspeisebegrenzung: PV-Energie über einer Einspeisegrenze speichern, rechtzeitig Platz schaffen | ✅ |
 | Nachtentladung bis zu einer prognosebasierten Reserve | ✅ |
-| Bezugsspitzen abfangen: eine Bezugsgrenze (fest oder automatisch aus der Verbrauchsstatistik), unter einer Ladezustand-Schwelle halten die Batterien ihre Energie für die Spitzen zurück (manuell aktivierbar) | ✅ |
+| Bezugsspitzen abfangen: eine Bezugsgrenze und eine Ladezustand-Schwelle, unter der die Batterien ihre Energie für die Spitzen zurückhalten (eine davon aus der Verbrauchsstatistik berechnet oder beide eingestellt; manuell aktivierbar); mit Leistungspreis im Tarif gilt die Grenze im Mittel über die Viertelstunde, erzwungene Verbraucher treten zurück, und die Übersicht zeigt die Monatsspitze und ihre Mehrkosten | ✅ |
 
 | Dashboard | Status |
 |---|---|
@@ -2543,7 +2543,8 @@ Verwendung** enthält alle gelernten Werte als Attribute.
   zurückhält, Netzladen geplant ist oder ein Verbraucher ohne
   Batterieunterstützung läuft. Die Schwelle ist ein absoluter Ladezustand, lässt sich aber nicht unter den minimalen Ladezustand
   der Batterien setzen; unter 20 % zeigen die Einstellungen, wie viel über dem
-  Minimum noch übrig ist. Mit **Automatische Bezugsgrenze** berechnet SLEMS die
+  Minimum noch übrig ist. **Modus Spitzenabfang** wählt, was SLEMS berechnet.
+  Mit **Automatische Grenze** (Standard) berechnet SLEMS die
   Grenze selbst: die niedrigste, bei der die erwartete Energie oberhalb davon
   bis zum Nachladen durch PV (der prognostizierte Überschuss reicht in Summe,
   um die Batterien wieder bis zur Schwelle zu füllen; etwas Überschuss an
@@ -2556,7 +2557,32 @@ Verwendung** enthält alle gelernten Werte als Attribute.
   wäre die Schwelle erreicht, und tagsüber für den kommenden Abend und die
   Nacht; sie zeigt damit die Grenze, die dann gilt. In den Einstellungen zeigt
   die Bezugsgrenze dann den berechneten Wert (nur Anzeige); der Sensor
-  **Wirksame Bezugsgrenze Spitzenabfang** zeigt die verwendete Grenze.
+  **Wirksame Bezugsgrenze Spitzenabfang** zeigt die verwendete Grenze. Mit
+  **Automatische Schwelle** stellst du die Grenze ein, und SLEMS berechnet
+  umgekehrt die Schwelle: die niedrigste, deren Energie über dem minimalen
+  Ladezustand die erwartete Energie über der Grenze bis zum Nachladen durch
+  PV deckt, plus Reserve; erreicht sie den maximalen Ladezustand, weisen die
+  Einstellungen darauf hin, dass die Grenze voraussichtlich nicht zu halten
+  ist. Mit **Manuell** gelten Grenze und Schwelle wie eingestellt.
+
+  Mit einem **Leistungspreis** im aktuellen Tarif (siehe
+  [Tarife](#tarife-optional)) gilt die Grenze im Mittel über die
+  Viertelstunde (oder Stunde), die der Tarif misst, nach der Uhr wie beim
+  Smart Meter: Eine kurze Spitze, z. B. während die Batterien an ihrer
+  Leistungsgrenze sind (eine Balkonbatterie bei 800 W), gleicht SLEMS mit
+  weniger Bezug im Rest der Viertelstunde aus, und solange Budget übrig ist,
+  darf eine kurze Spitze über die Grenze gehen. Einspeisung zählt nicht gegen
+  den Bezug, SLEMS speist also nie zum Ausgleich ein. Können die Batterien den
+  Bezug über der Grenze nicht decken, treten Verbraucher zurück, die für ein
+  Tagesziel laufen, die niedrigste Priorität zuerst: leistungsgeregelte bis
+  auf ihre Mindestleistung, danach schalten die außerhalb ihrer
+  Mindestlaufzeit ab. Die Grenze liegt nie unter dem, was die Monatsspitze
+  schon kostet (die verrechnete Leistung minus 200 W): Weniger Bezug spart bis
+  Monatsende nichts. Die Kachel **Leistungsspitze diesen Monat** in der
+  Übersicht zeigt die bisher verrechnete Leistung, wann die höchste
+  Viertelstunde war, bis zu welcher Leistung eine Viertelstunde nichts mehr
+  kostet, die Mehrkosten des Monats über der Mindestleistung und die laufende
+  Viertelstunde.
 
 ### Probleme und Benachrichtigungen
 

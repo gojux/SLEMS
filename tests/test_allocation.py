@@ -183,6 +183,27 @@ def test_deficit_is_covered_by_battery() -> None:
     assert result.battery_power_w == -1500
 
 
+def test_forced_consumers_give_way_to_the_peak_limit() -> None:
+    settings = AllocationSettings(**{**SETTINGS.__dict__, "peak_shaving": True, "peak_shaving_grid_limit_w": 2000})
+    small = replace(battery(50), max_discharge_w=800)
+    rod = replace(ROD, forced=True)
+    # 1000 W house + 3000 W rod; the battery covers 800 W of the 2000 W above the limit.
+    result = allocate(-1000, small, [rod], settings, expected_surplus_wh=None)
+    assert result.consumer_power_w["rod"] == pytest.approx(1800)
+    assert result.battery_power_w == pytest.approx(-800)
+    # Not enough at its minimum power: an on/off consumer outside its minimum runtime switches off first.
+    pump = replace(PUMP, forced=True, running=True, drawing_w=500)
+    result = allocate(-2500, small, [rod, pump], settings, expected_surplus_wh=None)
+    assert result.consumer_power_w["pump"] == 0
+    assert result.consumer_power_w["rod"] == pytest.approx(300)
+    # Within its minimum runtime it stays on.
+    result = allocate(-2500, small, [rod, replace(pump, must_stay_on=True)], settings, expected_surplus_wh=None)
+    assert result.consumer_power_w["pump"] == 500
+    # Without peak shaving nothing gives way.
+    result = allocate(-1000, small, [rod], SETTINGS, expected_surplus_wh=None)
+    assert result.consumer_power_w["rod"] == 3000
+
+
 def test_peak_shaving_only_covers_import_above_limit() -> None:
     settings = AllocationSettings(**{**SETTINGS.__dict__, "peak_shaving": True})
     low = allocate(-4000, battery(15), [], settings, expected_surplus_wh=None)
