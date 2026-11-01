@@ -116,8 +116,14 @@ def _power_peak_attributes(snapshot: SystemSnapshot, coordinator: SlemsCoordinat
         "interval_start": peak.interval_start.isoformat(),
         "interval_min": peak.interval_s // 60,
         "interval_mean_kw": round(peak.mean_kw, 2),
+        # Outside the time window of the power price the interval does not count.
+        "interval_counted": peak.counted,
         # Import allowed for the rest of the interval while peak shaving is on.
-        "allowed_w": None if snapshot.peak_shaving_allowed_w is None else round(snapshot.peak_shaving_allowed_w),
+        "allowed_w": (
+            None
+            if snapshot.peak_shaving_allowed_w is None or math.isinf(snapshot.peak_shaving_allowed_w)
+            else round(snapshot.peak_shaving_allowed_w)
+        ),
     }
 
 

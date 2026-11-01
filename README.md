@@ -2424,7 +2424,9 @@ attributes.
   plug-in battery at 800 W), is made up for by importing less in the rest of
   the quarter hour, and while budget is left a short peak may go above the
   limit. Feed-in does not count against import, so SLEMS never feeds in to
-  make up. When the batteries cannot cover the import above the limit,
+  make up. If the power price has a time window, quarter hours outside it do
+  not count and have no budget, so the batteries keep their energy for it.
+  When the batteries cannot cover the import above the limit,
   consumers running for a daily target give way, the lowest priority first:
   power controlled ones down to their minimum power, then those outside their
   minimum runtime switch off. The limit never lies below what this month's

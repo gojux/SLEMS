@@ -96,3 +96,18 @@ def test_budget_of_the_running_quarter_hour() -> None:
     # At the end the time left counts as at least MIN_REST_S.
     late = state.running(recorded((ts(10, 12), 400)), ts(10, 12, 14, 30))
     assert late.allowed_w(2000) == pytest.approx(100 * 3600 / MIN_REST_S)
+
+
+def test_only_the_time_window_of_the_power_price_counts() -> None:
+    from datetime import time
+
+    evening = power_price(tariff(time_from=time(17), time_to=time(20)), datetime(2026, 11, 10).date())
+    # A 4 kW quarter hour at noon does not count, 3 kW in the evening does.
+    grid = recorded((ts(3, 12), 1000), (ts(3, 18), 750))
+    state = peak_state(evening, grid, ts(10, 12, 5))
+    assert state.billed_kw == pytest.approx(3.0)
+    assert state.peak_start == dt_util.utc_from_timestamp(ts(3, 18))
+    # Now (noon) outside the window: no budget.
+    assert not state.counted
+    assert state.allowed_w(2000) == float("inf")
+    assert state.free_kw == pytest.approx(3.0, abs=0.01)

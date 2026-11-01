@@ -2584,7 +2584,9 @@ Verwendung** enthält alle gelernten Werte als Attribute.
   Leistungsgrenze sind (eine Balkonbatterie bei 800 W), gleicht SLEMS mit
   weniger Bezug im Rest der Viertelstunde aus, und solange Budget übrig ist,
   darf eine kurze Spitze über die Grenze gehen. Einspeisung zählt nicht gegen
-  den Bezug, SLEMS speist also nie zum Ausgleich ein. Können die Batterien den
+  den Bezug, SLEMS speist also nie zum Ausgleich ein. Hat der Leistungspreis
+  ein Zeitfenster, zählen Viertelstunden außerhalb nicht und haben kein
+  Budget; die Batterien heben ihre Energie für das Fenster auf. Können die Batterien den
   Bezug über der Grenze nicht decken, treten Verbraucher zurück, die für ein
   Tagesziel laufen, die niedrigste Priorität zuerst: leistungsgeregelte bis
   auf ihre Mindestleistung, danach schalten die außerhalb ihrer

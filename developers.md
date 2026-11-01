@@ -346,7 +346,8 @@ finished intervals in `grid_quarters`. The coordinator keeps it per interval
 interval each cycle (`running`, µs). The plan floors the peak shaving limit at
 `limit_w` (`free_kw` − `BUFFER_W`) in every mode; the control passes
 `allowed_w(limit)` to the allocation instead of the limit (budget left over
-the time left, at least `MIN_REST_S`, never below 0). `allocate` lets forced
+the time left, at least `MIN_REST_S`, never below 0; infinite outside the
+time window of the power price, `PeakState.counted`). `allocate` lets forced
 consumers give way (`_yield_to_peak`) when the import above that limit
 exceeds the discharge power of the batteries. Sensor `power_peak` (kW,
 attributes every 10 s) feeds the overview tile.

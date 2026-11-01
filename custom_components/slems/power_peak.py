@@ -14,18 +14,20 @@ peak (a battery at its power limit, a kettle) is made up for in the rest of
 the interval, and the import may rise above the limit while budget is left.
 Feed-in does not count against import, so the allowed import is never below
 0. ``MIN_REST_S`` keeps the allowed import from jumping at the end of an
-interval, where the batteries could not follow anyway.
+interval, where the batteries could not follow anyway. An interval outside
+the time window of the power price does not count: it has no budget.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import date, datetime
+import math
 
 from homeassistant.util import dt as dt_util
 
 from .grid_quarters import SLOT_S, GridQuarters
-from .tariff import Side, Tariff, TariffItem, Unit, peak_kw
+from .tariff import Side, Tariff, TariffItem, Unit
 
 BUFFER_W = 200.0
 MIN_REST_S = 120.0
@@ -51,8 +53,14 @@ class PowerPrice:
     def interval_s(self) -> int:
         return self.base.peak_minutes * 60
 
+    def counts(self, start: datetime) -> bool:
+        """Whether the interval starting at ``start`` counts (the time window of the power price)."""
+        return self.base.in_window(dt_util.as_local(start))
+
     def billed_kw(self, powers: dict[datetime, float]) -> float:
-        return self.base.billed_kw(peak_kw(self.base, powers))
+        """Billed power for the interval powers (kW) that count."""
+        values = sorted(powers.values(), reverse=True)[: max(1, self.base.peak_count)]
+        return self.base.billed_kw(sum(values) / len(values) if values else 0.0)
 
     def cost(self, billed_kw: float) -> float:
         """Power price of a month for ``billed_kw``, with levies and VAT."""
@@ -96,6 +104,8 @@ class PeakState:
     extra_cost: float
     interval_start: datetime
     interval_s: int
+    # The running interval counts (inside the time window of the power price).
+    counted: bool = True
     elapsed_s: float = 0.0
     imported_wh: float = 0.0
 
@@ -106,6 +116,8 @@ class PeakState:
 
     def allowed_w(self, limit_w: float) -> float:
         """Import allowed for the rest of the running interval to stay within ``limit_w`` on average."""
+        if not self.counted:
+            return math.inf
         budget_wh = limit_w * self.interval_s / 3600
         rest_s = max(self.interval_s - self.elapsed_s, MIN_REST_S)
         return max(0.0, (budget_wh - self.imported_wh) * 3600 / rest_s)
@@ -159,7 +171,7 @@ def free_kw(price: PowerPrice, powers: dict[datetime, float], at: datetime) -> f
 def peak_state(price: PowerPrice, quarters: GridQuarters, now: float) -> PeakState:
     """The month part for the interval of ``now``, with the running interval until ``now``."""
     interval_s = price.interval_s
-    powers = month_powers(quarters, now, interval_s)
+    powers = {start: power for start, power in month_powers(quarters, now, interval_s).items() if price.counts(start)}
     start = int(now - now % interval_s)
     interval_start = dt_util.utc_from_timestamp(start)
     billed = price.billed_kw(powers)
@@ -176,4 +188,5 @@ def peak_state(price: PowerPrice, quarters: GridQuarters, now: float) -> PeakSta
         extra_cost=max(0.0, cost - price.cost(minimum)),
         interval_start=interval_start,
         interval_s=interval_s,
+        counted=price.counts(interval_start),
     ).running(quarters, now)

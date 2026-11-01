@@ -485,6 +485,7 @@ const STRINGS = {
     peakCost: "Extra this month: {extra} (power price {cost})",
     peakQuarter: "Running quarter hour: ⌀ {mean} kW",
     peakHour: "Running hour: ⌀ {mean} kW",
+    peakNotCounted: "Now outside the time window of the power price: does not count",
     peakAllowed: "rest at most ⌀ {kw} kW",
     settingHints: {
       operating_mode:
@@ -1206,6 +1207,7 @@ const STRINGS = {
     peakCost: "Mehrkosten diesen Monat: {extra} (Leistungspreis {cost})",
     peakQuarter: "Laufende Viertelstunde: ⌀ {mean} kW",
     peakHour: "Laufende Stunde: ⌀ {mean} kW",
+    peakNotCounted: "Jetzt außerhalb des Zeitfensters des Leistungspreises: zählt nicht",
     peakAllowed: "Rest höchstens ⌀ {kw} kW",
     settingHints: {
       operating_mode:
@@ -2034,7 +2036,10 @@ class SlemsPanel extends HTMLElement {
     const kw = (value) => new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(value);
     const money = new Intl.NumberFormat(language, { style: "currency", currency: this._currency() });
     const day = (iso) => new Date(iso).toLocaleDateString(language, { day: "numeric", month: "numeric" });
-    const running = (a.interval_min === 60 ? t.peakHour : t.peakQuarter).replace("{mean}", kw(a.interval_mean_kw ?? 0));
+    const running =
+      a.interval_counted === false
+        ? t.peakNotCounted
+        : (a.interval_min === 60 ? t.peakHour : t.peakQuarter).replace("{mean}", kw(a.interval_mean_kw ?? 0));
     const lines = [
       a.peak_start && a.measured_kw > (a.min_kw ?? 0)
         ? t.peakHighest.replace("{kw}", kw(a.measured_kw)).replace("{time}", `${day(a.peak_start)} ${this._time(a.peak_start)}`)
