@@ -231,6 +231,7 @@ from .consumer_targets import (
     START_MARGIN,
     NoPowerWatch,
     SurplusDemand,
+    energy_to_soc_wh,
     energy_to_target,
     evaluate,
     daily_demands,
@@ -241,6 +242,7 @@ from .consumer_targets import (
     no_power_threshold_s,
     plan_surplus_window,
     remaining,
+    run_load,
     surplus_demand,
     target_temperature,
     window_opens,
@@ -907,6 +909,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.consumers = consumers
         # Consumers whose control the user switched off (restored by their switch).
         self.consumer_control_disabled: set[str] = set()
+        # Wallboxes charging now at full power (restored by their switch), and
+        # those of them that had a car plugged in since: unplugging it ends it.
+        self.charge_now: set[str] = set()
+        self._charge_now_plugged: set[str] = set()
         # Part of each consumer in the feed-in cap (restored by its select).
         self.consumer_cap_modes: dict[str, CapMode] = {}
         # Device registry id of the central SLEMS device (parent of the batteries).
@@ -1889,6 +1895,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     heating=state.power_w is not None and state.power_w >= RUNNING_W,
                 )
             self._count_target(consumer, state, now, command is not None and command > 0)
+            self._update_charge_now(consumer, state)
 
         forecast_entries = list(config.get(CONF_PV_FORECAST_ENTRIES) or [])
         # The forecasts of own PV modules are part of the installation's PV.
@@ -4528,8 +4535,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         """Allocation request of a consumer, with its daily target; ``drawing_w``
         is its power in the energy balance."""
         mode = self.target_states.get(consumer.subentry_id, TargetState(TargetMode.NONE)).mode
-        keep_on, keep_off = self._cycling_holds(consumer, now, mode, available_w, run_surplus)
+        # Charging now: full power regardless of the surplus and its daily target.
+        charge_now = consumer.subentry_id in self.charge_now
+        keep_on, keep_off = (
+            (False, False) if charge_now else self._cycling_holds(consumer, now, mode, available_w, run_surplus)
+        )
         must_stay_on = self._runtime.must_stay_on(consumer, now) or keep_on or self._window_holds(consumer, now, mode)
+        forced = charge_now or mode in (TargetMode.FORCED, TargetMode.WINDOW, TargetMode.PLANNED)
         return ConsumerRequest(
             subentry_id=consumer.subentry_id,
             priority=consumer.priority,
@@ -4544,13 +4556,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             # (after its minimum runtime).
             must_stay_off=self._runtime.must_stay_off(consumer, now)
             or keep_off
-            or (mode in (TargetMode.DONE, TargetMode.WAITING) and not must_stay_on),
+            or (mode in (TargetMode.DONE, TargetMode.WAITING) and not must_stay_on and not charge_now),
             cap_mode=self.cap_mode(consumer.subentry_id),
             boost=mode is TargetMode.BOOST,
-            forced=mode in (TargetMode.FORCED, TargetMode.WINDOW, TargetMode.PLANNED),
+            forced=forced,
             forced_max_w=(
                 battery.max_discharge_w
-                if mode in (TargetMode.FORCED, TargetMode.WINDOW, TargetMode.PLANNED)
+                if forced
+                and not charge_now
                 and battery is not None
                 and self.consumer_targets[consumer.subentry_id].source is TargetSource.BATTERY
                 else None
@@ -4634,6 +4647,22 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             return False
         on_for = self._runtime.on_for(consumer.subentry_id, now)
         return on_for is not None and on_for < window_s
+
+    def _update_charge_now(self, consumer: ConsumerConfig, state: ConsumerState) -> None:
+        """Charging now ends when the car that was plugged in is unplugged, or
+        at its state of charge for it; switched on without a car it waits for one."""
+        subentry_id = consumer.subentry_id
+        if subentry_id not in self.charge_now:
+            self._charge_now_plugged.discard(subentry_id)
+            return
+        if state.plugged:
+            self._charge_now_plugged.add(subentry_id)
+        limit = self.consumer_targets[subentry_id].charge_now_soc_pct
+        if (state.unplugged and subentry_id in self._charge_now_plugged) or (
+            state.vehicle_soc_pct is not None and state.vehicle_soc_pct >= limit
+        ):
+            self.charge_now.discard(subentry_id)
+            self._charge_now_plugged.discard(subentry_id)
 
     def _end_needless_saturation(self, now: float) -> None:
         """A saturated consumer keeps its command (see controller), a release its
@@ -4779,6 +4808,19 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             state = snapshot.consumers.get(consumer.subentry_id)
             # No car at the wallbox: it takes nothing until one is plugged in.
             unplugged = state is not None and state.unplugged
+            # Charging now: from now at full power up to its state of charge
+            # (nothing planned while that energy is not known); its daily
+            # target is shown but plans nothing meanwhile.
+            charging_now = consumer.subentry_id in self.charge_now and not unplugged
+            if charging_now:
+                energy = energy_to_soc_wh(
+                    settings.charge_now_soc_pct,
+                    state.vehicle_soc_pct if state else None,
+                    consumer.vehicle_capacity_kwh * 1000 if consumer.vehicle_capacity_kwh else None,
+                )
+                if energy:
+                    for hour, wh in run_load(local_now, None, energy_wh=energy, power_w=self._full_power_w(consumer)).items():
+                        self.target_load[hour] = self.target_load.get(hour, 0.0) + wh
             if settings.type is TargetType.NONE:
                 if estimate is not None and _plans_daily_energy(consumer) and not supporting(consumer):
                     self.target_demands += daily_demands(
@@ -4881,7 +4923,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 power_w=power,
             )
             # A heat pump's consumption is already in its own forecast model.
-            if consumer.consumer_type is ConsumerType.HEAT_PUMP or unplugged:
+            if consumer.consumer_type is ConsumerType.HEAT_PUMP or unplugged or charging_now:
                 continue
             forced_w = power
             if settings.source is TargetSource.BATTERY:

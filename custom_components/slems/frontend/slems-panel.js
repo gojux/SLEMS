@@ -280,6 +280,10 @@ const STRINGS = {
     priceHoldText: "Batteries cover the times from {price}; grid for {duration} at cheaper times until {until}",
     priorityConsumers: "Before the batteries: {names}",
     targetForcedChip: "forced",
+    chargeNow: "Charge now",
+    chargeNowUntil: "Up to",
+    chargeNowChip: "charging now",
+    vehicle: "Car",
     storageCapacity: "Storage left",
     storageLearning: "learning ({runs}/3 heating runs, {marks}/2 thermostat cycles)",
     storageUntilCycling: "{energy} until it cycles",
@@ -1011,6 +1015,10 @@ const STRINGS = {
     priceHoldText: "Batterien decken die Zeiten ab {price}; Netz für {duration} zu günstigeren Zeiten bis {until}",
     priorityConsumers: "Vorrang vor den Batterien: {names}",
     targetForcedChip: "erzwungen",
+    chargeNow: "Sofort laden",
+    chargeNowUntil: "Bis",
+    chargeNowChip: "lädt sofort",
+    vehicle: "Auto",
     storageCapacity: "Speicherreserve",
     storageLearning: "lernt noch ({runs}/3 Heizläufe, {marks}/2 Taktbeginne)",
     storageUntilCycling: "{energy} bis zum Takten",
@@ -3023,6 +3031,7 @@ class SlemsPanel extends HTMLElement {
   _consumerBadge(consumer, gridW) {
     const t = this._t;
     if (this._state("planned_power", consumer.device_id)?.attributes?.no_power_days) return t.noPowerBadge;
+    if (this._state("planned_power", consumer.device_id)?.attributes?.charge_now) return t.chargeNowChip;
     const priority = { boost: t.targetBoostChip, forced: t.targetForcedChip }[this._priorityMode(consumer)];
     if (priority) return priority;
     const support = this._state("battery_support", consumer.device_id);
@@ -5024,6 +5033,7 @@ class SlemsPanel extends HTMLElement {
             attrs.saturated ? t.saturated : "",
             attrs.resting ? t.resting : "",
             attrs.running_on_its_own ? t.runningOnItsOwn : "",
+            attrs.charge_now ? t.chargeNowChip : "",
             attrs.target_mode === "boost" ? t.targetBoostChip : "",
             attrs.target_mode === "forced" ? t.targetForcedChip : "",
           ]
@@ -5063,6 +5073,16 @@ class SlemsPanel extends HTMLElement {
           const planRow = planText
             ? this._row(hotWater ? t.hotWaterTargetPlan : t.targetPlan, escapeHtml(planText), planned?.entity_id)
             : "";
+          // The car at a wallbox, and charging it now (on the collapsed card too).
+          const vehicle = this._vehicleDetail(c);
+          const vehicleRow = vehicle ? this._row(t.vehicle, escapeHtml(vehicle.text), planned?.entity_id) : "";
+          const chargeNow = control?.state !== "off" ? this._state("charge_now", c.device_id) : null;
+          const chargeNowSoc = chargeNow?.state === "on" ? this._state("charge_now_soc", c.device_id) : null;
+          const chargeNowSection = chargeNow
+            ? `<div class="settings card-setting">${this._control(chargeNow, { label: t.chargeNow })}${
+                chargeNowSoc ? this._control(chargeNowSoc, { label: t.chargeNowUntil }) : ""
+              }</div>`
+            : "";
           const details = expanded
             ? `<dl>
               ${c.controllable ? this._row(t.consumerResponseTime, response, planned?.entity_id) : ""}
@@ -5089,13 +5109,14 @@ class SlemsPanel extends HTMLElement {
               ${this._phaseRow(c.device_id, c.name)}
               ${this._releaseRow(c)}
               ${planned ? this._row(t.planned, escapeHtml(this._plannedText(planned, control?.state === "off")), planned.entity_id) : ""}
+              ${vehicleRow}
               ${progress}
               ${planRow}
               ${supportRow}
             </dl>${
               // A heat pump: the switch controls only its hot water, not the heat pump.
               control && hotWater ? `<div class="settings card-setting">${this._control(control, { label: t.hotWaterControl })}</div>` : ""
-            }${details}${toggle}</section>`;
+            }${chargeNowSection}${details}${toggle}</section>`;
         })
         .join("")
     );

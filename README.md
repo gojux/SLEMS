@@ -261,7 +261,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Daily targets: runtime, enabled time, energy, temperature or the car's state of charge, with earliest start, deadline and source (surplus, batteries, grid) | ✅ |
 | Battery support per consumer (always, automatic with the energy the batteries can spare, never) | ✅ |
 | Wallbox / evcc loadpoint: current set point in A with phases, start/stop ([guide](docs/wallbox-evcc.md)) | ✅ (not yet tested with a real wallbox) |
-| Car at the wallbox: state of charge in the energy flow, without a plugged in car no control and no planning | ✅ (not yet tested with a real wallbox) |
+| Car at the wallbox: state of charge in the energy flow, without a plugged in car no control and no planning, **Charge now** at full power | ✅ (not yet tested with a real wallbox) |
 
 | Planning and control | Status |
 |---|---|
@@ -1688,7 +1688,17 @@ With evcc or a go-e SLEMS suggests the entities of the device.
   applies as before.
 - The wallbox's box in the energy flow shows the state of charge with a car
   icon, **plugged in** without a state of charge sensor; without a car it is
-  greyed out and shows **not plugged in**.
+  greyed out and shows **not plugged in**. The wallbox's card shows both in
+  the row **Car**.
+- **Charge now** (switch on the card of every controlled wallbox): charges at
+  full power, regardless of the surplus and the daily target. The batteries
+  help according to the wallbox's [battery support](#battery-support), the
+  grid delivers the rest. The switch turns off by itself when the car is
+  unplugged or reaches the state of charge **Charge now up to** (default
+  100 %, only with a state of charge sensor); switched on before a car is
+  plugged in, it waits for one. The planning counts the charge up to that
+  state of charge when the state of charge and the battery capacity are
+  known. The box in the energy flow then shows **charging now**.
 
 ### Temperature sensors of the storage
 
@@ -2587,9 +2597,7 @@ wallbox on the [evcc guide](docs/wallbox-evcc.md).
 
 **Electric car**
 
-- Wallbox with evcc (mode A) as comfortable as evcc itself: a switch to
-  charge right away with full power (until unplugged or up to a state of
-  charge) and targets that apply from plugging in ("80 % in 3 hours").
+- Targets that apply from plugging in the car ("80 % in 3 hours").
 - Batteries with an availability (e.g. "car plugged in") and a reserve until
   a time of day: the basis for a car supplying the house (V2H).
 - Learned presence of the car for the planning.

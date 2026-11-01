@@ -1204,6 +1204,7 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             # (None without the entity or while it is unknown).
             "vehicle_soc_pct": None if state is None or state.vehicle_soc_pct is None else round(state.vehicle_soc_pct, 1),
             "plugged": state.plugged if state else None,
+            "charge_now": self.consumer.subentry_id in self.coordinator.charge_now,
             "saturated": self.consumer.subentry_id in data.saturated,
             "resting": self.consumer.subentry_id in data.resting,
             "running_on_its_own": self.consumer.subentry_id in data.running_on_its_own,

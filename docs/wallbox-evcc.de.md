@@ -80,8 +80,8 @@ Es gibt zwei Betriebsarten:
   dieselbe Netzleistung reagieren.
 
 Auch Betriebsart A kennt ein Tagesziel nach Ladestand („80 % bis 7:00“, mit
-dem Ladestand des Autos aus evcc). Sofortiges Laden und Ziele ab dem
-Anstecken stehen für Betriebsart A auf der [Roadmap](../README.de.md#roadmap).
+dem Ladestand des Autos aus evcc) und **Sofort laden** mit voller Leistung.
+Ziele ab dem Anstecken stehen auf der [Roadmap](../README.de.md#roadmap).
 
 ## Voraussetzungen
 
@@ -233,6 +233,9 @@ Phasen)**.
   oder **Energie** 10 kWh bis 07:00 mit Quelle **Netz**. SLEMS lädt zuerst mit
   Überschuss und rechtzeitig aus dem Netz, was noch fehlt. Siehe
   [Tagesziel](../README.de.md#tagesziel).
+- **Sofort laden** statt evcc-Modus **Schnell** (Betriebsart A): lädt mit voller
+  Leistung, bis das Auto abgesteckt wird oder den Ladestand **Sofort laden
+  bis** erreicht. Siehe [Auto an der Wallbox](../README.de.md#auto-an-der-wallbox).
 - **Einspeisebegrenzung**: Mit der Rolle **Unterstützend** nimmt die Wallbox
   Mittagsspitzen auf, wenn ein Auto angesteckt ist.
 

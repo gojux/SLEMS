@@ -12,7 +12,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, ControlMode, OperatingMode
+from .const import DOMAIN, ConsumerType, ControlMode, OperatingMode
 from .consumers import ConsumerConfig
 from .coordinator import BatteryRuntime, SlemsConfigEntry, SlemsCoordinator
 from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
@@ -79,6 +79,11 @@ async def async_setup_entry(
         if consumer.control_mode is ControlMode.RELEASE:
             async_add_entities(
                 [WindowBeforeForcedSwitch(coordinator, consumer)],
+                config_subentry_id=consumer.subentry_id,
+            )
+        if consumer.controllable and consumer.consumer_type is ConsumerType.WALLBOX:
+            async_add_entities(
+                [ChargeNowSwitch(coordinator, consumer)],
                 config_subentry_id=consumer.subentry_id,
             )
 
@@ -442,6 +447,36 @@ class ConsumerTargetPrioritySwitch(SlemsConsumerEntity, SwitchEntity, RestoreEnt
         self._settings.priority = False
         self.async_write_ha_state()
         self.coordinator.async_update_listeners()
+
+
+class ChargeNowSwitch(SlemsConsumerEntity, SwitchEntity, RestoreEntity):
+    """Charge the car now at full power, regardless of the surplus; ends by
+    itself when the car is unplugged or reaches the state of charge for it
+    (see the coordinator)."""
+
+    def __init__(self, coordinator: SlemsCoordinator, consumer: ConsumerConfig) -> None:
+        super().__init__(coordinator, consumer, "charge_now")
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if (last_state := await self.async_get_last_state()) is not None and last_state.state == STATE_ON:
+            self.coordinator.charge_now.add(self.consumer.subentry_id)
+
+    @property
+    def is_on(self) -> bool:
+        return self.consumer.subentry_id in self.coordinator.charge_now
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self.coordinator.charge_now.add(self.consumer.subentry_id)
+        self.coordinator.controller.request()
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self.coordinator.charge_now.discard(self.consumer.subentry_id)
+        self.coordinator.controller.request()
+        self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
 
 
 class ConsumerTargetEarliestSwitch(SlemsConsumerEntity, SwitchEntity, RestoreEntity):

@@ -264,7 +264,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Tagesziele: Laufzeit, Freigabezeit, Energie, Temperatur oder Ladestand des Autos, mit frühestem Start, Frist und Quelle (Überschuss, Batterie, Netz) | ✅ |
 | Batterie-Unterstützung je Verbraucher (immer, automatisch mit der Energie, die die Batterien übrig haben, nie) | ✅ |
 | Wallbox / evcc-Ladepunkt: Stromvorgabe in A mit Phasen, Start/Stopp ([Anleitung](docs/wallbox-evcc.de.md)) | ✅ (noch nicht mit einer echten Wallbox getestet) |
-| Auto an der Wallbox: Ladestand im Energiefluss, ohne angestecktes Auto keine Regelung und keine Planung | ✅ (noch nicht mit einer echten Wallbox getestet) |
+| Auto an der Wallbox: Ladestand im Energiefluss, ohne angestecktes Auto keine Regelung und keine Planung, **Sofort laden** mit voller Leistung | ✅ (noch nicht mit einer echten Wallbox getestet) |
 
 | Planung und Regelung | Status |
 |---|---|
@@ -1799,7 +1799,17 @@ evcc oder einer go-e schlägt SLEMS die Entitäten des Geräts vor.
   vorher.
 - Die Box der Wallbox im Energiefluss zeigt mit einem Auto-Symbol den
   Ladestand, ohne Ladestand-Sensor **angesteckt**; ohne Auto ist sie
-  ausgegraut und zeigt **nicht angesteckt**.
+  ausgegraut und zeigt **nicht angesteckt**. Die Karte der Wallbox zeigt
+  beides in der Zeile **Auto**.
+- **Sofort laden** (Schalter auf der Karte jeder gesteuerten Wallbox): lädt
+  mit voller Leistung, unabhängig vom Überschuss und vom Tagesziel. Die
+  Batterien helfen nach der [Batterie-Unterstützung](#batterie-unterstützung)
+  der Wallbox mit, den Rest liefert das Netz. Der Schalter geht von selbst
+  aus, wenn das Auto abgesteckt wird oder den Ladestand **Sofort laden bis**
+  erreicht (Standard 100 %, nur mit Ladestand-Sensor); eingeschaltet, bevor
+  ein Auto angesteckt ist, wartet er darauf. Die Planung rechnet mit der
+  Ladung bis zu diesem Ladestand, wenn Ladestand und Akkukapazität bekannt
+  sind. Die Box im Energiefluss zeigt dann **lädt sofort**.
 
 ### Temperaturfühler des Speichers
 
@@ -2758,10 +2768,7 @@ Nutzern mit einer echten Wallbox zur [evcc-Anleitung](docs/wallbox-evcc.de.md).
 
 **Elektroauto**
 
-- Wallbox mit evcc (Betriebsart A) so bequem wie evcc selbst: ein Schalter
-  zum sofortigen Laden mit voller Leistung (bis zum Abstecken oder bis zu
-  einem Ladestand) und Ziele, die ab dem Anstecken gelten („in 3 Stunden
-  80 %“).
+- Ziele, die ab dem Anstecken des Autos gelten („in 3 Stunden 80 %“).
 - Batterien mit Verfügbarkeit (z. B. „Auto angesteckt“) und einer Reserve bis
   zu einer Uhrzeit: Grundlage für ein Auto, das das Haus versorgt (V2H).
 - Gelernte Anwesenheit des Autos für die Planung.

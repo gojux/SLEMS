@@ -1,6 +1,8 @@
 """Tests for consumer state and the resting of consumers with a cycling thermostat."""
 
 import time
+
+import pytest
 from dataclasses import replace
 from types import SimpleNamespace
 
@@ -639,6 +641,7 @@ def test_nothing_is_planned_for_a_wallbox_without_a_car() -> None:
             target_progress={"wallbox": TargetProgress()},
             target_energy_estimate={"wallbox": 8000.0},
             consumer_control_disabled=set(),
+            charge_now=set(),
             settings=SimpleNamespace(feed_in_cap=False),
             thermal_learners={},
             cooling_learners={},
@@ -659,3 +662,86 @@ def test_nothing_is_planned_for_a_wallbox_without_a_car() -> None:
     # The target is still shown, but nothing is planned for it.
     assert "wallbox" in unplugged.target_states
     assert unplugged.target_load == {} and unplugged.target_demands == []
+
+
+def test_charging_now_ends_when_the_car_is_unplugged_or_charged() -> None:
+    from custom_components.slems.consumer_targets import TargetSettings
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    config = wallbox()
+    coordinator = SimpleNamespace(
+        charge_now={"wallbox"},
+        _charge_now_plugged=set(),
+        consumer_targets={"wallbox": TargetSettings(charge_now_soc_pct=90.0)},
+    )
+    update = SlemsCoordinator._update_charge_now
+    # Switched on before the car arrives: it waits for one.
+    update(coordinator, config, ConsumerState(plugged=False))
+    assert coordinator.charge_now == {"wallbox"}
+    update(coordinator, config, ConsumerState(plugged=True, vehicle_soc_pct=60.0))
+    assert coordinator.charge_now == {"wallbox"}
+    # The car that was plugged in is unplugged.
+    update(coordinator, config, ConsumerState(plugged=False))
+    assert coordinator.charge_now == set() and coordinator._charge_now_plugged == set()
+    # At the state of charge for it.
+    coordinator.charge_now.add("wallbox")
+    update(coordinator, config, ConsumerState(plugged=True, vehicle_soc_pct=90.0))
+    assert coordinator.charge_now == set()
+
+
+def test_charging_now_runs_at_full_power_also_with_a_met_target() -> None:
+    from custom_components.slems.consumer_targets import TargetMode, TargetSettings, TargetState
+    from custom_components.slems.consumers import RuntimeTracker
+    from custom_components.slems.coordinator import SlemsCoordinator
+    from custom_components.slems.const import CapMode
+
+    config = wallbox(avoid_cycling=True)
+    coordinator = SimpleNamespace(
+        charge_now=set(),
+        consumer_targets={"wallbox": TargetSettings()},
+        target_states={"wallbox": TargetState(TargetMode.DONE)},
+        _runtime=RuntimeTracker(),
+        _cycling_holds=lambda *args: (False, False),
+        _window_holds=lambda *args: False,
+        cap_mode=lambda subentry_id: CapMode.NORMAL,
+    )
+    request = SlemsCoordinator._request
+    assert request(coordinator, config, 0.0, None).must_stay_off
+    coordinator.charge_now.add("wallbox")
+    charging = request(coordinator, config, 0.0, SimpleNamespace(max_discharge_w=2000.0))
+    assert charging.forced and not charging.must_stay_off and charging.forced_max_w is None
+
+
+def test_charging_now_is_planned_up_to_its_state_of_charge() -> None:
+    from datetime import datetime
+
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.slems.consumer_targets import TargetSettings
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    dt_util.set_default_time_zone(dt_util.get_time_zone("Europe/Vienna"))
+    now = datetime(2026, 10, 4, 18, 0, tzinfo=dt_util.get_default_time_zone())
+    config = wallbox(vehicle_soc_entity_id="sensor.car_soc", vehicle_capacity_kwh=60.0)
+    coordinator = SimpleNamespace(
+        consumers=[config],
+        effective_consumer=lambda c: c,
+        consumer_targets={"wallbox": TargetSettings(charge_now_soc_pct=80.0)},
+        target_energy_estimate={},
+        consumer_control_disabled=set(),
+        charge_now={"wallbox"},
+        settings=SimpleNamespace(feed_in_cap=False),
+        _full_power_w=lambda c: 11000.0,
+    )
+    snapshot = SimpleNamespace(
+        consumption_forecast=None,
+        consumers={"wallbox": ConsumerState(power_w=0.0, plugged=True, vehicle_soc_pct=50.0)},
+    )
+    SlemsCoordinator._target_states(coordinator, snapshot, None, None, None, now)
+    # 30 % of 60 kWh with the charging losses: 20 kWh at 11 kW from 18:00.
+    assert sum(coordinator.target_load.values()) == pytest.approx(20000.0)
+    assert coordinator.target_load[now] == pytest.approx(11000.0)
+    # Without a car nothing is planned.
+    snapshot.consumers["wallbox"] = ConsumerState(power_w=0.0, plugged=False, vehicle_soc_pct=50.0)
+    SlemsCoordinator._target_states(coordinator, snapshot, None, None, None, now)
+    assert coordinator.target_load == {}

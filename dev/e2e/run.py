@@ -650,7 +650,8 @@ def consumers(token: str) -> None:
 
 def car_at_the_wallbox(token: str) -> None:
     """The go-e's car: its state of charge read, not plugged in (the simulated
-    car is unplugged at the start), and the daily target by state of charge offered."""
+    car is unplugged at the start), the daily target by state of charge
+    offered, and charge now for both wallboxes."""
     states = request("GET", "/api/states", token=token)
     planned = [s for s in states if s["attributes"].get("vehicle_soc_pct") is not None]
     if len(planned) != 1 or planned[0]["attributes"].get("plugged") is not False:
@@ -658,6 +659,10 @@ def car_at_the_wallbox(token: str) -> None:
     kinds = [s for s in states if s["entity_id"].startswith("select.") and "soc" in (s["attributes"].get("options") or [])]
     if len(kinds) != 1:
         raise Failure(f"daily target by state of charge offered by {[s['entity_id'] for s in kinds]}")
+    # Charge now: a switch per controlled wallbox (the Wallbox and the go-e), off.
+    switches = [s for s in states if s["entity_id"].startswith("switch.") and s["entity_id"].endswith(("_charge_now", "_sofort_laden"))]
+    if len(switches) != 2 or any(s["state"] != "off" for s in switches):
+        raise Failure(f"charge now: {[(s['entity_id'], s['state']) for s in switches]}")
     print(f"  car: {planned[0]['attributes']['vehicle_soc_pct']} %, not plugged in, target {kinds[0]['entity_id']}")
 
 

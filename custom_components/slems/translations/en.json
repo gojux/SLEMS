@@ -1505,6 +1505,9 @@
       },
       "hot_water_consumer_control": {
         "name": "Hot water control active"
+      },
+      "charge_now": {
+        "name": "Charge now"
       }
     },
     "number": {
@@ -1651,6 +1654,9 @@
       },
       "min_power": {
         "name": "Minimum power"
+      },
+      "charge_now_soc": {
+        "name": "Charge now up to"
       }
     },
     "binary_sensor": {

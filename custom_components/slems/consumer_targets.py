@@ -111,6 +111,9 @@ class TargetSettings:
     release_window_min: float = 0.0
     window_before_forced: bool = False
     surplus_window: SurplusWindow = SurplusWindow.OFF
+    # Wallbox: charging now ends at this state of charge of the car (not a
+    # daily target; kept here with the other settings of its card).
+    charge_now_soc_pct: float = 100.0
 
 
 def window_start(settings: TargetSettings, end: datetime) -> datetime | None:
@@ -353,9 +356,15 @@ class TargetProgress:
 def soc_energy_wh(settings: TargetSettings, soc_pct: float | None, capacity_wh: float | None) -> float | None:
     """Energy (Wh) from the grid that brings the car to its target state of
     charge, None without its state of charge or capacity."""
+    return energy_to_soc_wh(settings.target_soc_pct, soc_pct, capacity_wh)
+
+
+def energy_to_soc_wh(target_pct: float, soc_pct: float | None, capacity_wh: float | None) -> float | None:
+    """Energy (Wh) from the grid that brings the car from ``soc_pct`` to
+    ``target_pct``, None without its state of charge or capacity."""
     if soc_pct is None or not capacity_wh:
         return None
-    return max(0.0, settings.target_soc_pct - soc_pct) / 100 * capacity_wh / VEHICLE_CHARGE_EFFICIENCY
+    return max(0.0, target_pct - soc_pct) / 100 * capacity_wh / VEHICLE_CHARGE_EFFICIENCY
 
 
 def remaining(settings: TargetSettings, progress: TargetProgress) -> float:
@@ -699,14 +708,20 @@ def forced_load(
         energy = state.missing
     else:
         energy = state.missing / 3600 * power_w
+    return run_load(max(state.latest_start, local_now), state.end, energy_wh=energy, power_w=power_w)
+
+
+def run_load(start: datetime, end: datetime | None, *, energy_wh: float, power_w: float) -> dict[datetime, float]:
+    """Energy (Wh) per local hour of a run at ``power_w`` from ``start`` until
+    ``energy_wh`` is covered, at most until ``end`` (None: no end)."""
     result: dict[datetime, float] = {}
-    moment = max(state.latest_start, local_now)
-    while energy > 0 and moment < state.end:
+    moment = start
+    while energy_wh > 0 and power_w > 0 and (end is None or moment < end):
         hour = moment.replace(minute=0, second=0, microsecond=0)
-        until = min(hour + timedelta(hours=1), state.end)
-        wh = min(energy, power_w * (until - moment) / timedelta(hours=1))
+        until = hour + timedelta(hours=1) if end is None else min(hour + timedelta(hours=1), end)
+        wh = min(energy_wh, power_w * (until - moment) / timedelta(hours=1))
         result[hour] = result.get(hour, 0.0) + wh
-        energy -= wh
+        energy_wh -= wh
         moment = until
     return result
 

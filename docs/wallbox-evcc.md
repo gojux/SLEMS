@@ -80,8 +80,8 @@ There are two ways to run it:
   turns on the surplus, as both controllers react to the same grid power.
 
 Mode A also has a daily target by state of charge ("80 % by 7:00", with the
-car's state of charge from evcc). Charging right away and targets from
-plugging in are on the [roadmap](../README.md#roadmap) for mode A.
+car's state of charge from evcc) and **Charge now** at full power. Targets
+from plugging in are on the [roadmap](../README.md#roadmap).
 
 ## Prerequisites
 
@@ -229,6 +229,9 @@ the planned power with current and phases, e.g. **10,440 W (15 A, 3 phases)**.
   charge** 80 % or **energy** 10 kWh until 07:00 with the source **grid**. SLEMS
   charges with surplus first and in time from the grid what is still missing.
   See [daily target](../README.md#daily-target).
+- **Charge now** instead of evcc's mode **Fast** (mode A): charges at full power
+  until the car is unplugged or reaches the state of charge **Charge now up
+  to**. See [car at the wallbox](../README.md#car-at-the-wallbox).
 - **Feed-in cap**: with the role **supporting** the wallbox absorbs midday peaks
   while a car is plugged in.
 

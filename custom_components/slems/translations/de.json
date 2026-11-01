@@ -1505,6 +1505,9 @@
       },
       "hot_water_consumer_control": {
         "name": "Warmwasser-Steuerung aktiv"
+      },
+      "charge_now": {
+        "name": "Sofort laden"
       }
     },
     "number": {
@@ -1651,6 +1654,9 @@
       },
       "min_power": {
         "name": "Mindestleistung"
+      },
+      "charge_now_soc": {
+        "name": "Sofort laden bis"
       }
     },
     "binary_sensor": {

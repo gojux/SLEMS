@@ -529,6 +529,17 @@ TARGET_NUMBERS: tuple[TargetNumberDescription, ...] = (
         entity_category=EntityCategory.CONFIG,
     ),
     TargetNumberDescription(
+        key="charge_now_soc",
+        translation_key="charge_now_soc",
+        attribute="charge_now_soc_pct",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=10,
+        native_max_value=100,
+        native_step=5,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    TargetNumberDescription(
         key="target_soc",
         translation_key="target_soc",
         attribute="target_soc_pct",
@@ -543,10 +554,10 @@ TARGET_NUMBERS: tuple[TargetNumberDescription, ...] = (
 
 
 def _has_target_number(consumer: ConsumerConfig, description: TargetNumberDescription) -> bool:
-    """Temperatures only with temperature sensors, the state of charge only with the car's sensor."""
+    """Temperatures only with temperature sensors, the states of charge only with the car's sensor."""
     if description.native_unit_of_measurement == UnitOfTemperature.CELSIUS:
         return bool(consumer.temperature_entity_ids)
-    if description.attribute == "target_soc_pct":
+    if description.attribute in ("target_soc_pct", "charge_now_soc_pct"):
         return consumer.vehicle_soc_entity_id is not None
     return True
 
