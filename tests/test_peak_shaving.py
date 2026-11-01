@@ -136,3 +136,20 @@ def test_economic_limit_weighs_power_price_against_energy_held_back() -> None:
 def test_economic_limit_only_what_the_batteries_can_hold() -> None:
     # 1000 W discharge power: a 3000 W peak needs a limit of at least 2000 W.
     assert economic(0.2, max_discharge_w=1000).limit_w == pytest.approx(2000)
+
+
+def test_quantile_plans_for_a_bad_day() -> None:
+    """Nine days 500 W, one day a 3000 W peak for 10 minutes at 19:00."""
+    means = {}
+    for day in range(1, 11):
+        for minute in range(0, 60, 5):
+            means[at(day, 19, minute)] = 3000.0 if day == 10 and minute < 10 else 500.0
+    profile = PeakProfile.from_means(means)
+    # Mean: a tenth of the peak day; the 90 % quantile: the second worst day (no peak).
+    assert profile.energy_above(19, 500) == pytest.approx(2500 * 10 / 60 / 10)
+    assert profile.with_quantile().energy_above(19, 500) == 0
+    # Two peak days: the second worst has one.
+    means[at(9, 19, 0)] = means[at(9, 19, 5)] = 3000.0
+    bad = PeakProfile.from_means(means).with_quantile()
+    assert bad.energy_above(19, 500) == pytest.approx(2500 * 10 / 60)
+    assert bad.energy_above(19, 3000) == 0

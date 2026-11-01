@@ -2564,7 +2564,9 @@ Verwendung** enthält alle gelernten Werte als Attribute.
   Ladezustand abzüglich **Sicherheitsreserve Spitzenabfang** (Standard 20 %)
   passt. Die erwartete Energie stammt aus der 5-Minuten-Statistik des
   Hausverbrauchs der letzten Tage, kurze Spitzen wie ein Backofen sind also
-  enthalten; die Grenze wird laufend neu berechnet und steigt, wenn mehr
+  enthalten (mit Leistungspreis je Stunde des Tages der zweitschlechteste von
+  etwa 10 Tagen statt des Mittelwerts, weil eine einzige verfehlte
+  Viertelstunde den ganzen Monat kostet); die Grenze wird laufend neu berechnet und steigt, wenn mehr
   verbraucht wird als erwartet. Über der Schwelle wird sie so berechnet, als
   wäre die Schwelle erreicht, und tagsüber für den kommenden Abend und die
   Nacht; sie zeigt damit die Grenze, die dann gilt. In den Einstellungen zeigt

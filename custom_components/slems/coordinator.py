@@ -5052,6 +5052,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             return threshold, max(limit, floor), False, fallback
         threshold = max(threshold, battery.min_soc_pct)
         profile = self.forecaster.peak_profile
+        if profile is not None and peak is not None:
+            # A missed interval costs the whole month: plan for a bad day.
+            profile = profile.with_quantile()
         full = False
         if (
             mode is not PeakShavingMode.MANUAL

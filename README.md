@@ -2404,7 +2404,9 @@ attributes.
   surplus on a rainy day does not count), fits into the usable energy above
   the minimum state of charge minus **Peak shaving safety reserve** (default 20
   %). The expected energy comes from the 5 minute statistics of the house
-  consumption of the last days, so short peaks such as an oven are included;
+  consumption of the last days, so short peaks such as an oven are included
+  (with a power price per hour of the day the second worst of about 10 days
+  instead of the mean, as a single missed quarter hour costs the whole month);
   the limit is recalculated continuously and rises when more is used than
   expected. Above the threshold it is calculated as if the threshold were
   reached, and during the day for the coming evening and night, so it shows
