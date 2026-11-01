@@ -648,6 +648,9 @@ def _block(heating_rod: bool) -> Callable[[EntityInfo], float]:
             return 2 if heating_rod else 0
         if info.domain not in ("binary_sensor", "input_boolean", "switch"):
             return 0
+        # A lock of the home battery (e.g. evcc's discharge lock) does not block the consumer.
+        if info.has("battery", "batterie", "akku", "discharg", "entlad"):
+            return 0
         return 2 if info.has("evu", "sperr", "utility_lock", "utility lock", "blocked", "blockiert", "lockout") else 0
 
     return score

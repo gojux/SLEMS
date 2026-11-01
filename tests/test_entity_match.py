@@ -272,6 +272,8 @@ EVCC = [
     evcc("sensor.evcc_garage_vehicle_soc", "Vehicle SoC", unit="%", state="62"),
     evcc("binary_sensor.evcc_garage_vehicle_detection_active", "Vehicle detection active"),
     evcc("binary_sensor.evcc_garage_connected", "Connected"),
+    # On the same device in ha-evcc; a lock of the home battery, not of the wallbox.
+    evcc("switch.evcc_battery_discharge_control", "Hausbatterie: Entladesperre"),
 ]
 
 
