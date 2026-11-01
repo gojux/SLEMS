@@ -341,3 +341,93 @@ def test_market_price_cap_applies_before_the_markups() -> None:
     assert item.ct_per_kwh(80.0) == pytest.approx(60.0 + 1.8 + 1.8)
     assert item.ct_per_kwh(10.0) == pytest.approx(10.0 + 0.3 + 1.8)
     assert TariffItem.from_dict(item.as_dict()) == item
+
+
+def power_tariff(**fields) -> Tariff:
+    """A made-up power price: 3 € per kW and month up to 10 kW, 6 € above, at least 2 kW."""
+    items = (
+        TariffItem("Power", Side.IMPORT, Group.GRID, Unit.KW_MONTH, 3.0, min_kw=2.0, kw_to=10.0, **fields),
+        TariffItem("Power above 10 kW", Side.IMPORT, Group.GRID, Unit.KW_MONTH, 6.0, min_kw=2.0, kw_from=10.0, **fields),
+    )
+    return Tariff("Power", Role.CURRENT, items, {})
+
+
+def quarters(day: date, hour: int, *wh: float) -> dict[datetime, float]:
+    start = local(day, hour)
+    return {start + timedelta(minutes=15 * index): value for index, value in enumerate(wh)}
+
+
+def test_power_price_charges_the_highest_quarter_hour_of_the_month() -> None:
+    day = date(2026, 3, 10)
+    # 3.5 kW in the highest quarter hour (875 Wh), the hourly mean is lower.
+    imported = quarters(day, 18, 200, 875, 300, 100)
+    bill = compute_bill(power_tariff(), date(2026, 3, 1), date(2026, 3, 31), imported, {})
+    assert bill.lines[(Side.IMPORT, "Power")] == pytest.approx(3.5 * 3.0)
+    assert bill.lines[(Side.IMPORT, "Power above 10 kW")] == 0
+    assert bill.billed_kw[(Side.IMPORT, "Power")] == pytest.approx(3.5)
+    assert not bill.peak_from_hours
+
+
+def test_power_price_minimum_rounding_and_tiers() -> None:
+    day = date(2026, 3, 10)
+    month = (date(2026, 3, 1), date(2026, 3, 31))
+    # Below the minimum: 2 kW are billed.
+    bill = compute_bill(power_tariff(), *month, quarters(day, 3, 100, 100, 100, 100), {})
+    assert bill.lines[(Side.IMPORT, "Power")] == pytest.approx(2 * 3.0)
+    # Rounded up to whole kW: 3.5 kW count as 4.
+    bill = compute_bill(power_tariff(kw_step=1.0), *month, quarters(day, 18, 875, 0, 0, 0), {})
+    assert bill.lines[(Side.IMPORT, "Power")] == pytest.approx(4 * 3.0)
+    # 12 kW: 10 kW at the first price, 2 kW at the second.
+    bill = compute_bill(power_tariff(), *month, quarters(day, 18, 3000, 0, 0, 0), {})
+    assert bill.lines[(Side.IMPORT, "Power")] == pytest.approx(10 * 3.0)
+    assert bill.lines[(Side.IMPORT, "Power above 10 kW")] == pytest.approx(2 * 6.0)
+    assert bill.groups[(Side.IMPORT, Group.GRID)] == pytest.approx(42.0)
+
+
+def test_power_price_per_month_mean_of_peaks_window_and_share() -> None:
+    first, second = date(2026, 3, 10), date(2026, 4, 2)
+    imported = {
+        **quarters(first, 18, 1000, 0, 0, 0),  # 4 kW
+        **quarters(first, 20, 500, 0, 0, 0),  # 2 kW
+        **quarters(second, 12, 750, 0, 0, 0),  # 3 kW
+    }
+    # Mean of the two highest quarter hours per month: (4 + 2) / 2 in March, (3 + 0) / 2 → 2 kW minimum in April.
+    tariff = power_tariff(peak_count=2)
+    bill = compute_bill(tariff, date(2026, 3, 1), date(2026, 4, 30), imported, {})
+    assert bill.lines[(Side.IMPORT, "Power")] == pytest.approx(3 * 3.0 + 2 * 3.0)
+    # Part of April: that share of the month.
+    bill = compute_bill(power_tariff(), date(2026, 4, 1), date(2026, 4, 15), imported, {})
+    assert bill.lines[(Side.IMPORT, "Power")] == pytest.approx(3 * 3.0 * 15 / 30)
+    # Only the peak in the window of the item counts (here the evening).
+    evening = power_tariff(time_from=time(19), time_to=time(22))
+    bill = compute_bill(evening, date(2026, 3, 1), date(2026, 3, 31), imported, {})
+    assert bill.lines[(Side.IMPORT, "Power")] == pytest.approx(2 * 3.0)
+
+
+def test_power_price_from_hours_and_over_hours() -> None:
+    day = date(2026, 3, 10)
+    month = (date(2026, 3, 1), date(2026, 3, 31))
+    # Only an hourly value: its mean stands in for the quarter hours and is marked.
+    bill = compute_bill(power_tariff(), *month, {local(day, 18): 3000}, {})
+    assert bill.lines[(Side.IMPORT, "Power")] == pytest.approx(3 * 3.0)
+    assert bill.peak_from_hours
+    # Measured over hours: the quarter hours are added up.
+    hourly = power_tariff(peak_minutes=60)
+    bill = compute_bill(hourly, *month, quarters(day, 18, 1000, 1000, 500, 500), {})
+    assert bill.lines[(Side.IMPORT, "Power")] == pytest.approx(3 * 3.0)
+    assert not bill.peak_from_hours
+
+
+def test_percent_items_apply_to_the_power_price() -> None:
+    tariff = Tariff("Power", Role.CURRENT, (
+        TariffItem("Power", Side.IMPORT, Group.GRID, Unit.KW_MONTH, 3.0),
+        TariffItem("Levy", Side.IMPORT, Group.GRID, Unit.PERCENT, 10.0),
+    ), {})
+    bill = compute_bill(tariff, date(2026, 3, 1), date(2026, 3, 31), quarters(date(2026, 3, 10), 18, 1000, 0, 0, 0), {})
+    assert bill.lines[(Side.IMPORT, "Levy")] == pytest.approx(4 * 3.0 * 0.1)
+
+
+def test_power_fields_only_stored_with_their_unit() -> None:
+    item = TariffItem("Power", Side.IMPORT, Group.GRID, Unit.KW_MONTH, 3.0, peak_count=2, kw_step=0.5, min_kw=2.0, kw_from=1.0, kw_to=10.0)
+    assert TariffItem.from_dict(item.as_dict()) == item
+    assert "peak_minutes" not in TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.KWH, 10.0).as_dict()

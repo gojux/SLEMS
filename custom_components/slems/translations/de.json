@@ -738,6 +738,12 @@
             "market": "Monatswert",
             "max_market_ct": "Börsenpreis höchstens",
             "zero_when_negative": "Null bei negativen Börsenpreisen",
+            "peak_minutes": "Leistung gemessen über",
+            "peak_count": "Gemittelte höchste Intervalle",
+            "min_kw": "Mindestens verrechnete Leistung",
+            "kw_step": "Aufgerundet auf",
+            "kw_from": "Verrechnet ab",
+            "kw_to": "Verrechnet bis",
             "valid_from": "Gültig ab",
             "valid_to": "Gültig bis",
             "months": "Nur in Monaten",
@@ -748,12 +754,18 @@
           },
           "data_description": {
             "unit": "Börsenpreis und Monatsmarktpreis nutzen die Börsenpreise der **Preisquelle** in den SLEMS-Einstellungen (Gruppe **Preise**); **Börsenpreise abrufen** muss an sein.",
-            "price": "Netto (ohne USt.) in {minor}/kWh oder {major} pro Jahr, wie auf der Rechnung; ein Rabatt ist negativ. Auf der Einspeiseseite ist der Energiepreis die Vergütung, die du bekommst. Bei Börsenpreis und Monatsmarktpreis: der feste Aufschlag in {minor}/kWh (negativ: Abzug). Prozent der Gruppe: z. B. 7 für eine Abgabe von 7 % auf die anderen Posten derselben Seite und Gruppe.",
+            "price": "Netto (ohne USt.) in {minor}/kWh, {major} pro Jahr oder {major} pro kW und Monat, wie auf der Rechnung; ein Rabatt ist negativ. Auf der Einspeiseseite ist der Energiepreis die Vergütung, die du bekommst. Bei Börsenpreis und Monatsmarktpreis: der feste Aufschlag in {minor}/kWh (negativ: Abzug). Prozent der Gruppe: z. B. 7 für eine Abgabe von 7 % auf die anderen Posten derselben Seite und Gruppe.",
             "factor_pct": "Nur bei Börsenpreis und Monatsmarktpreis: Preis = Börsenpreis + Prozent seines Betrags + Preis; ein Aufschlag bleibt auch bei negativem Börsenpreis ein Aufschlag. Z. B. −10 % für eine Vergütung von 90 % des Marktpreises.",
             "month_prices": "Optional, nur beim Monatsmarktpreis: veröffentlichte Werte in {minor}/kWh, z. B. „2026-01: 8,5; 2026-02: 7,9“. Monate ohne Wert: Mittel der Börsenpreise, gewichtet mit deiner Einspeisung.",
             "market": "Nur beim Monatsmarktpreis: der offizielle Monatswert, dem der Preis folgt. Er wird mit den Börsenpreisen abgerufen; bis ein Monat veröffentlicht ist, gilt das Mittel der Börsenpreise, gewichtet mit deiner Einspeisung.",
             "max_market_ct": "Optional, nur bei Börsenpreis und Monatsmarktpreis: Der Marktpreis zählt höchstens mit diesem Wert in {minor}/kWh netto, vor den Aufschlägen, z. B. 60 für eine Preisobergrenze im Vertrag. Leer: keine Grenze.",
             "zero_when_negative": "Ein: Der Posten ist 0 in Stunden oder Viertelstunden mit negativem Day-Ahead-Preis, z. B. die deutsche EEG-Einspeisevergütung von Anlagen seit 25. Februar 2025. Braucht **Börsenpreise abrufen**.",
+            "peak_minutes": "Nur bei Preis pro kW und Monat: die Länge der Intervalle, deren mittlere Leistung zählt, z. B. 15 min für die höchste Viertelstunde im Monat (österreichische Netztarife ab 2027).",
+            "peak_count": "Nur bei Preis pro kW und Monat: 1 für das höchste Intervall im Monat, mehr für den Mittelwert entsprechend vieler höchster.",
+            "min_kw": "Optional, nur bei Preis pro kW und Monat: Eine niedrigere Spitze wird mit dieser Leistung verrechnet, z. B. 2 kW in Österreich.",
+            "kw_step": "Optional, nur bei Preis pro kW und Monat: Die verrechnete Leistung wird auf ein Vielfaches davon aufgerundet, z. B. 1 für ganze kW. Leer: wie gemessen.",
+            "kw_from": "Optional, nur bei Preis pro kW und Monat: Der Posten verrechnet nur den Teil der Leistung ab hier bis **Verrechnet bis**, z. B. ein zweiter Posten mit höherem Preis ab 10 kW. Leer: ab 0.",
+            "kw_to": "Optional, nur bei Preis pro kW und Monat: z. B. 10 für den Posten des Anteils bis 10 kW. Leer: ohne Obergrenze.",
             "valid_from": "Optional. Bei einer Preisänderung: den Posten mit dem neuen Preis und diesem Datum noch einmal anlegen.",
             "valid_to": "Optional: der letzte Tag des Postens, z. B. wenn ein Preisstand endet.",
             "months": "Optional, z. B. für einen günstigeren Sommerpreis.",
@@ -797,6 +809,7 @@
         "time_window_incomplete": "Beide Zeiten des Fensters angeben oder keine.",
         "period_invalid": "Das Ende darf nicht vor dem Beginn liegen.",
         "month_prices_invalid": "Monatsmarktpreise im Format „2026-01: 8,5; 2026-02: 7,9“ angeben.",
+        "kw_to_invalid": "„Verrechnet bis“ muss über „Verrechnet ab“ liegen.",
         "yaml_syntax": "Der Text ist kein gültiges YAML (Zeile {detail}).",
         "yaml_not_tariff": "Das ist kein SLEMS-Tarif: Die Zeile „format: slems-tariff“ fehlt.",
         "yaml_version_missing": "Die Zeile „version: …“ mit der Formatversion fehlt.",
@@ -908,7 +921,14 @@
         "year": "{major}/Jahr",
         "spot": "Börsenpreis (viertelstündlich)",
         "market_month": "Monatsmarktpreis",
-        "percent": "Prozent der Gruppe (%)"
+        "percent": "Prozent der Gruppe (%)",
+        "kw_month": "{major} pro kW und Monat (Spitzenleistung)"
+      }
+    },
+    "tariff_peak_minutes": {
+      "options": {
+        "15": "15 Minuten (Viertelstunde)",
+        "60": "60 Minuten (Stunde)"
       }
     },
     "tariff_months": {

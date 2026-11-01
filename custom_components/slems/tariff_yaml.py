@@ -5,7 +5,11 @@ The format carries its name and version (``format: slems-tariff``,
 (``_MIGRATIONS``), a newer one is refused, so a file is never read wrongly.
 Prices are net (without VAT), ``kwh`` items in ct/kWh, ``year`` items in
 €/year, dynamic items (``spot``, ``market_month``) the markup in ct/kWh,
-``percent`` items % of the other items of their side and group.
+``percent`` items % of the other items of their side and group, ``kw_month``
+items € per kW and month of the billed peak power (see tariff): how it is
+measured in ``peak`` (``interval_min`` 15 or 60, ``count`` of the highest
+intervals averaged, ``kw_step`` to round up to), ``min_kw`` the power billed
+at least, ``kw_from`` / ``kw_to`` the tier the item charges.
 
 A template may cover only some parts of a bill (``parts``): the energy of a
 supplier, the grid fees of a grid operator in a grid area (``grid_area``,
@@ -51,7 +55,7 @@ from typing import Any
 import yaml
 
 from .reference_values import MARKETS
-from .tariff import Group, Role, Side, TariffItem, Unit
+from .tariff import PEAK_MINUTES, Group, Role, Side, TariffItem, Unit
 
 FORMAT = "slems-tariff"
 VERSION = 1
@@ -74,8 +78,9 @@ _TOP_KEYS = {"format", "version", "name", "vat_pct", "items", *META_KEYS}
 _ITEM_KEYS = {
     "name", "side", "group", "unit", "price", "factor_pct", "valid_from", "valid_to",
     "months", "weekdays", "time_from", "time_to", "month_prices", "optional", "market", "suffix",
-    "zero_when_negative", "max_market_ct",
+    "zero_when_negative", "max_market_ct", "peak", "min_kw", "kw_from", "kw_to",
 }
+_PEAK_KEYS = {"interval_min", "count", "kw_step"}
 # Version -> function that turns a file of that version into the next one.
 _MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {}
 
@@ -137,6 +142,14 @@ def _item_document(item: TariffItem) -> dict[str, Any]:
         document["zero_when_negative"] = True
     if item.max_market_ct is not None:
         document["max_market_ct"] = item.max_market_ct
+    if item.unit is Unit.KW_MONTH:
+        peak: dict[str, Any] = {"interval_min": item.peak_minutes, "count": item.peak_count}
+        if item.kw_step is not None:
+            peak["kw_step"] = item.kw_step
+        document["peak"] = peak
+        for key in ("min_kw", "kw_from", "kw_to"):
+            if getattr(item, key) is not None:
+                document[key] = getattr(item, key)
     return document
 
 
@@ -328,6 +341,7 @@ def _parse_item(item: Any, index: int) -> TariffItem:
         not isinstance(max_market_ct, int | float) or isinstance(max_market_ct, bool) or not choice("unit", Unit).dynamic
     ):
         raise invalid("max_market_ct")
+    power = _parse_power(item, choice("unit", Unit) is Unit.KW_MONTH, invalid)
     return TariffItem(
         name=name.strip(),
         side=choice("side", Side),
@@ -345,7 +359,45 @@ def _parse_item(item: Any, index: int) -> TariffItem:
         market=market,
         zero_when_negative=zero_when_negative,
         max_market_ct=None if max_market_ct is None else float(max_market_ct),
+        **power,
     )
+
+
+def _parse_power(item: Mapping[str, Any], power_unit: bool, invalid: Callable[[str], TariffYamlError]) -> dict[str, Any]:
+    """The fields of a ``kw_month`` item; other units must not have them."""
+
+    def number(value: Any) -> bool:
+        return isinstance(value, int | float) and not isinstance(value, bool) and value >= 0
+
+    if not power_unit:
+        for key in ("peak", "min_kw", "kw_from", "kw_to"):
+            if item.get(key) is not None:
+                raise invalid(key)
+        return {}
+    peak = item.get("peak") or {}
+    if not isinstance(peak, dict) or set(peak) - _PEAK_KEYS:
+        raise invalid("peak")
+    minutes = peak.get("interval_min", 15)
+    if minutes not in PEAK_MINUTES or isinstance(minutes, bool):
+        raise invalid("peak.interval_min")
+    count = peak.get("count", 1)
+    if not isinstance(count, int) or isinstance(count, bool) or count < 1:
+        raise invalid("peak.count")
+    step = peak.get("kw_step")
+    if step is not None and (not number(step) or step == 0):
+        raise invalid("peak.kw_step")
+    values = {key: item.get(key) for key in ("min_kw", "kw_from", "kw_to")}
+    for key, value in values.items():
+        if value is not None and not number(value):
+            raise invalid(key)
+    if values["kw_to"] is not None and values["kw_to"] <= (values["kw_from"] or 0):
+        raise invalid("kw_to")
+    return {
+        "peak_minutes": minutes,
+        "peak_count": count,
+        "kw_step": None if step is None else float(step),
+        **{key: None if value is None else float(value) for key, value in values.items()},
+    }
 
 
 def _date(value: Any, field: str) -> date:

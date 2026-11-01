@@ -50,7 +50,7 @@ items:
   - name: <Bezeichnung wie auf der Rechnung>
     side: import            # import = Bezug, export = Einspeisung
     group: energy           # energy = Energie (Lieferant), grid = Netz (Netzbetreiber), levies = Steuern und Abgaben
-    unit: kwh               # kwh = ct/kWh, year = €/Jahr, spot = Börsenpreis (stündlich), market_month = Monatsmarktpreis, percent = % der Gruppe
+    unit: kwh               # kwh = ct/kWh, year = €/Jahr, spot = Börsenpreis (stündlich), market_month = Monatsmarktpreis, percent = % der Gruppe, kw_month = €/kW und Monat der Spitzenleistung
     price: 12.34
 
 Optionale Felder je Posten:
@@ -63,6 +63,10 @@ Optionale Felder je Posten:
   time_to: "16:00"
   month_prices: {"2026-01": 8.5}      # veröffentlichte Monatsmarktpreise in ct/kWh
   zero_when_negative: true  # 0, solange der Day-Ahead-Preis negativ ist (z. B. EEG-Einspeisung seit 25.02.2025)
+  peak: {interval_min: 15, count: 1, kw_step: 1}  # nur kw_month: höchster 15-min-Mittelwert im Monat, Mittel der `count` höchsten, auf ganze kW aufgerundet (kw_step weglassen, wenn nicht gerundet wird)
+  min_kw: 2                 # nur kw_month: mindestens verrechnete Leistung
+  kw_from: 10               # nur kw_month: der Posten verrechnet den Teil der Leistung ab 10 kW …
+  kw_to: 10                 # nur kw_month: … oder bis 10 kW (Stufen)
 
 Regeln:
 - Alle Preise ohne Umsatzsteuer (netto). Stehen auf der Rechnung nur
@@ -70,6 +74,17 @@ Regeln:
 - Arbeitspreise in ct/kWh (unit kwh), Grund- und Pauschalpreise in €/Jahr
   (unit year). Monatliche Beträge × 12, Tagespreise × 365. Bei Franken:
   Rappen/kWh und CHF/Jahr (dieselben Felder).
+- Leistungspreise (ein Preis pro kW der höchsten Viertelstunde oder Stunde im
+  Monat, z. B. die österreichischen Netztarife ab 2027): unit kw_month in
+  €/kW und Monat (Jahrespreise ÷ 12, ct/kW ÷ 100), mit peak, min_kw und der
+  Stufe. Eine Stufe mit eigenem Preis (z. B. ein höherer Preis über 10 kW)
+  ist ein eigener Posten mit kw_from, der Posten darunter bekommt kw_to;
+  beide wiederholen peak und min_kw. kw_step nur angeben, wenn die Rechnung
+  die Leistung auf Stufen aufrundet (z. B. 1 für ganze kW). Ein Pauschalbetrag
+  statt eines Leistungspreises (z. B. ohne Viertelstundenwerte) ist unit year.
+  Beispiel:
+    - {name: Leistungspreis, side: import, group: grid, unit: kw_month, price: 2.46, peak: {interval_min: 15}, min_kw: 2, kw_to: 10}
+    - {name: Leistungspreis über 10 kW, side: import, group: grid, unit: kw_month, price: 3.69, peak: {interval_min: 15}, min_kw: 2, kw_from: 10}
 - Einspeisevergütungen sind positive Preise auf der Seite export; Abzüge davon
   (z. B. ein Messentgelt für die Einspeisung) sind eigene Posten.
 - Bei dynamischen Tarifen: unit spot oder market_month, price ist der

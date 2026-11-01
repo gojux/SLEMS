@@ -225,6 +225,7 @@ from .entity_match import (
 from .energy_dashboard import EnergyDashboard, async_energy_dashboard
 from .energy_history import async_grid_energy
 from .tariff import (
+    PEAK_MINUTES,
     Group,
     Role,
     Side,
@@ -3445,6 +3446,8 @@ class TariffSubentryFlow(ConfigSubentryFlow):
                 pass
             elif (item.time_from is None) != (item.time_to is None):
                 errors["base"] = "time_window_incomplete"
+            elif item.kw_to is not None and item.kw_to <= (item.kw_from or 0.0):
+                errors["kw_to"] = "kw_to_invalid"
             else:
                 if self._edit_index is None:
                     self._items.append(item.as_dict())
@@ -3491,6 +3494,18 @@ class TariffSubentryFlow(ConfigSubentryFlow):
                 )
             ),
             vol.Optional("zero_when_negative", default=bool(current.get("zero_when_negative"))): selector.BooleanSelector(),
+            vol.Optional("peak_minutes", default=str(current.get("peak_minutes") or 15)): _tariff_select(
+                [str(minutes) for minutes in PEAK_MINUTES], "tariff_peak_minutes"
+            ),
+            vol.Optional("peak_count", default=int(current.get("peak_count") or 1)): selector.NumberSelector(
+                selector.NumberSelectorConfig(min=1, max=31, step=1, mode=selector.NumberSelectorMode.BOX)
+            ),
+            **{
+                _optional(key, current): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=0, step="any", unit_of_measurement="kW", mode=selector.NumberSelectorMode.BOX)
+                )
+                for key in ("min_kw", "kw_step", "kw_from", "kw_to")
+            },
             _optional("valid_from", current): selector.DateSelector(),
             _optional("valid_to", current): selector.DateSelector(),
             vol.Optional("months", default=[str(m) for m in current.get("months") or []]): _tariff_select(
@@ -3579,13 +3594,17 @@ class TariffSubentryFlow(ConfigSubentryFlow):
         if tariff.dynamic and coordinator is not None:
             market = coordinator.market_prices.period_means(energy.lengths)
         references = coordinator.market_prices.references if coordinator is not None else None
-        bill = compute_bill(tariff, start, end, energy.imported, energy.exported, market, references)
+        bill = compute_bill(tariff, start, end, energy.imported, energy.exported, market, references, energy.lengths)
         money = symbols(currency_code(self.hass))[0]
         lines = [
             _check_line(language, Side.IMPORT, bill.import_kwh, bill.side_gross(tariff, Side.IMPORT), import_amount, money),
             _check_line(language, Side.EXPORT, bill.export_kwh, -bill.side_gross(tariff, Side.EXPORT), export_amount, money),
         ]
         text = "\n\n".join(lines) + "\n\n" + _check_groups(language, bill.groups, money)
+        if bill.billed_kw:
+            text += "\n\n" + words["billed_kw"].format(kw=_number(language, max(bill.billed_kw.values()), 2))
+            if bill.peak_from_hours:
+                text += " " + words["peak_from_hours"]
         if bill.unpriced_kwh > 0:
             text += "\n\n" + words["unpriced"].format(kwh=_number(language, bill.unpriced_kwh, 1))
         return {"text": text}
@@ -3626,7 +3645,27 @@ def _item_from_input(user_input: dict[str, Any]) -> TariffItem:
             if user_input.get("max_market_ct") is not None and Unit(user_input["unit"]).dynamic
             else None
         ),
+        **_power_from_input(user_input),
     )
+
+
+def _power_from_input(user_input: dict[str, Any]) -> dict[str, Any]:
+    """The fields of a ``kw_month`` line (a step of 0 is none); other units have none."""
+    if user_input["unit"] != Unit.KW_MONTH:
+        return {}
+
+    def number(key: str) -> float | None:
+        value = user_input.get(key)
+        return None if value is None else float(value)
+
+    return {
+        "peak_minutes": int(user_input.get("peak_minutes") or 15),
+        "peak_count": max(1, int(user_input.get("peak_count") or 1)),
+        "kw_step": number("kw_step") or None,
+        "min_kw": number("min_kw"),
+        "kw_from": number("kw_from"),
+        "kw_to": number("kw_to"),
+    }
 
 
 def _describe_changes(changes: UpdateChanges, language: str, currency: str = "EUR") -> str:
@@ -3635,7 +3674,7 @@ def _describe_changes(changes: UpdateChanges, language: str, currency: str = "EU
 
     def price(value: float, unit: str) -> str:
         major, minor = symbols(currency)
-        suffix = {"year": f"{major}/a", "percent": "%"}.get(unit, f"{minor}/kWh")
+        suffix = {"year": f"{major}/a", "percent": "%", "kw_month": f"{major}/kW/{words['month']}"}.get(unit, f"{minor}/kWh")
         return f"{_number(language, value, 4).rstrip('0').rstrip(',.')} {suffix}"
 
     lines = []
@@ -3682,8 +3721,11 @@ def _describe_item(item: TariffItem, language: str, currency: str = "EUR") -> st
             price += " · " + words["max_market_ct"].format(price=f"{short(item.max_market_ct)} {symbols(currency)[1]}/kWh")
     else:
         major, minor = symbols(currency)
-        price = f"{short(item.price)} {({Unit.KWH: f'{minor}/kWh', Unit.PERCENT: '%'}).get(item.unit, f'{major}/a')}"
+        per_kw = f"{major}/kW/{words['month']}"
+        price = f"{short(item.price)} {({Unit.KWH: f'{minor}/kWh', Unit.PERCENT: '%', Unit.KW_MONTH: per_kw}).get(item.unit, f'{major}/a')}"
     parts = [f"{item.name}: {price} ({words[item.side]}, {words[item.group]})"]
+    if item.unit is Unit.KW_MONTH:
+        parts.append(_describe_power(item, words, short))
     if item.months:
         parts.append(f"{words['months']} {_ranges(item.months, 1)}")
     if item.weekdays:
@@ -3699,6 +3741,20 @@ def _describe_item(item: TariffItem, language: str, currency: str = "EUR") -> st
     return " · ".join(parts)
 
 
+def _describe_power(item: TariffItem, words: Mapping[Any, str], short: Callable[[float], str]) -> str:
+    """'highest 15 min of the month, at least 2 kW, 0–10 kW'."""
+    measured = words["peak_one"] if item.peak_count == 1 else words["peak_many"].format(count=item.peak_count)
+    parts = [measured.format(minutes=item.peak_minutes)]
+    if item.min_kw:
+        parts.append(words["min_kw"].format(kw=short(item.min_kw)))
+    if item.kw_step:
+        parts.append(words["kw_step"].format(kw=short(item.kw_step)))
+    if item.kw_from or item.kw_to is not None:
+        upper = "…" if item.kw_to is None else short(item.kw_to)
+        parts.append(f"{short(item.kw_from or 0.0)}–{upper} kW")
+    return ", ".join(parts)
+
+
 _CHECK_WORDS = {
     "de": {
         Side.IMPORT: "Bezug", Side.EXPORT: "Einspeisung", "computed": "berechnet", "bill": "Rechnung",
@@ -3712,6 +3768,10 @@ _CHECK_WORDS = {
         "own_kept": "Von dir geändert, bleibt: {names}",
         "none_of_them": "Keiner davon (nicht mehr anbieten)",
         Unit.SPOT: "Börsenpreis", Unit.MARKET_MONTH: "Monatsmarktpreis",
+        "month": "Monat", "peak_one": "höchste {minutes} min im Monat", "peak_many": "Mittel der {count} höchsten {{minutes}} min im Monat",
+        "min_kw": "mindestens {kw} kW", "kw_step": "aufgerundet auf {kw} kW",
+        "billed_kw": "Verrechnete Leistung: {kw} kW (höchster Monat).",
+        "peak_from_hours": "Teils aus Stunden ohne aufgezeichnete Viertelstunden, deren Stundenmittel niedriger ist als ihre höchste Viertelstunde: Die tatsächliche Leistung kann höher sein.",
         "unpriced": "{kwh} kWh ohne Börsenpreis nicht berechnet (Börsenpreise abrufen einschalten oder warten, bis sie geladen sind).",
         "foreign_currency": "SLEMS unterstützt zum aktuellen Zeitpunkt nur Börsenpreise in Euro. Dieser Tarif hängt vom Börsenpreis ab und wird deshalb nicht berechnet.",
     },
@@ -3727,6 +3787,10 @@ _CHECK_WORDS = {
         "own_kept": "Changed by you, kept: {names}",
         "none_of_them": "None of them (do not offer again)",
         Unit.SPOT: "spot price", Unit.MARKET_MONTH: "monthly market price",
+        "month": "month", "peak_one": "highest {minutes} min of the month", "peak_many": "mean of the {count} highest {{minutes}} min of the month",
+        "min_kw": "at least {kw} kW", "kw_step": "rounded up to {kw} kW",
+        "billed_kw": "Billed power: {kw} kW (highest month).",
+        "peak_from_hours": "Partly from hours without recorded quarter hours, whose hourly mean is lower than their highest quarter hour: the actual power may be higher.",
         "unpriced": "{kwh} kWh without a market price not computed (switch on fetching the market prices or wait until they are loaded).",
         "foreign_currency": "At the moment SLEMS only supports market prices in euro. This tariff follows the market price and is therefore not computed.",
     },

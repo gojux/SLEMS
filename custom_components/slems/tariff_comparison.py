@@ -65,11 +65,13 @@ def compare(
     exported: Mapping[datetime, float],
     market: Mapping[datetime, float],
     references: Mapping[str, Mapping[str, float]] | None = None,
+    lengths: Mapping[datetime, int] | None = None,
 ) -> list[dict[str, Any]]:
     """Per month from ``first`` to ``last`` (both included): energy and the costs per tariff.
 
     A cost is the amount due with VAT: import minus the feed-in credit. Months
-    without recorded energy are left out.
+    without recorded energy are left out. ``lengths``: the length (s) of each
+    period (see tariff.compute_bill), for a power price.
     """
     by_month = [_split_by_month(series) for series in (imported, exported, market)]
     rows = []
@@ -81,7 +83,7 @@ def compare(
             costs = {}
             energy = None
             for key, tariff in tariffs.items():
-                bill = compute_bill(tariff, start, end, month_import, month_export, month_market, references)
+                bill = compute_bill(tariff, start, end, month_import, month_export, month_market, references, lengths)
                 energy = (bill.import_kwh, bill.export_kwh)
                 costs[key] = {
                     "import": round(bill.side_gross(tariff, Side.IMPORT), 2),
@@ -89,6 +91,9 @@ def compare(
                     "total": round(bill.side_gross(tariff, Side.IMPORT) + bill.side_gross(tariff, Side.EXPORT), 2),
                     "unpriced_kwh": round(bill.unpriced_kwh, 1),
                 }
+                if bill.billed_kw:
+                    costs[key]["billed_kw"] = round(max(bill.billed_kw.values()), 2)
+                    costs[key]["peak_from_hours"] = bill.peak_from_hours
             rows.append(
                 {
                     "month": f"{start:%Y-%m}",
@@ -232,7 +237,7 @@ async def async_tariff_comparison(hass: HomeAssistant, entry: SlemsConfigEntry) 
         prices = coordinator.market_prices
         market = prices.period_means(energy.lengths) if any(t.dynamic for t in tariffs.values()) else {}
         result["months"] = await hass.async_add_executor_job(
-            compare, tariffs, first, today, energy.imported, energy.exported, market, prices.references
+            compare, tariffs, first, today, energy.imported, energy.exported, market, prices.references, energy.lengths
         )
         # Hours only known from the hourly mean of the grid power (less exact).
         result["power_hours"] = energy.hours_from_power

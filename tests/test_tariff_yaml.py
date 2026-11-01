@@ -186,3 +186,41 @@ def test_currency_is_kept_and_exported() -> None:
     assert "currency: EUR" in export_yaml("Plain", plain, "EUR")
     with pytest.raises(TariffYamlError):
         parse_yaml("format: slems-tariff\nversion: 1\nname: X\ncurrency: euro\nitems:\n  - {name: E, side: import, group: energy, unit: kwh, price: 1}\n")
+
+
+POWER = """
+format: slems-tariff
+version: 1
+name: Grid 2027
+items:
+  - {name: Power, side: import, group: grid, unit: kw_month, price: 2.46, peak: {interval_min: 15}, min_kw: 2, kw_to: 10}
+  - {name: Power above 10 kW, side: import, group: grid, unit: kw_month, price: 3.69, peak: {interval_min: 15, count: 2, kw_step: 1}, min_kw: 2, kw_from: 10}
+"""
+
+
+def test_power_price_items() -> None:
+    name, data = parse_yaml(POWER)
+    first, second = data["items"]
+    assert (first["unit"], first["peak_minutes"], first["peak_count"], first["kw_step"]) == ("kw_month", 15, 1, None)
+    assert (first["min_kw"], first["kw_from"], first["kw_to"]) == (2.0, None, 10.0)
+    assert (second["peak_count"], second["kw_step"], second["kw_from"]) == (2, 1.0, 10.0)
+    assert parse_yaml(export_yaml(name, data)) == (name, data)
+
+
+@pytest.mark.parametrize(
+    ("item", "detail"),
+    [
+        ("{name: P, side: import, group: grid, unit: kw_month, price: 1, peak: {interval_min: 30}}", "1: peak.interval_min"),
+        ("{name: P, side: import, group: grid, unit: kw_month, price: 1, peak: {count: 0}}", "1: peak.count"),
+        ("{name: P, side: import, group: grid, unit: kw_month, price: 1, peak: {period: year}}", "1: peak"),
+        ("{name: P, side: import, group: grid, unit: kw_month, price: 1, peak: {kw_step: 0}}", "1: peak.kw_step"),
+        ("{name: P, side: import, group: grid, unit: kw_month, price: 1, kw_from: 10, kw_to: 5}", "1: kw_to"),
+        ("{name: P, side: import, group: grid, unit: kw_month, price: 1, min_kw: -1}", "1: min_kw"),
+        # Only for power prices.
+        ("{name: E, side: import, group: grid, unit: kwh, price: 1, min_kw: 2}", "1: min_kw"),
+    ],
+)
+def test_invalid_power_items(item: str, detail: str) -> None:
+    with pytest.raises(TariffYamlError) as err:
+        parse_yaml(f"format: slems-tariff\nversion: 1\nname: X\nitems:\n  - {item}\n")
+    assert (err.value.key, err.value.detail) == ("yaml_item_invalid", detail)

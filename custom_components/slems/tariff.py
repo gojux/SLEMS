@@ -14,8 +14,9 @@ A tariff is a list of items, each as a line of a bill:
   ct/kWh (the percentage of the amount, as suppliers bill it: a markup stays
   a markup at a negative price; ``max_market_ct`` caps the market price
   before, e.g. Salzburg AG FlexSpot at 60 ct/kWh net),
-  or ``percent`` (``price`` % of the net amount of the other items of its
-  side and group, e.g. a municipal levy of 7 % on the energy),
+  ``percent`` (``price`` % of the net amount of the other items of its
+  side and group, e.g. a municipal levy of 7 % on the energy) or
+  ``kw_month`` (€ per kW and month of the billed peak power, see below),
 * optional time window (months, weekdays, hours ``from`` – ``to`` local time,
   e.g. a reduced grid price at noon in summer), ``valid_from`` (a later
   version of the same item replaces it from that date) and ``valid_to`` (the
@@ -23,6 +24,14 @@ A tariff is a list of items, each as a line of a bill:
 * ``zero_when_negative``: the item is 0 in periods with a negative day-ahead
   price (e.g. no feed-in credit then, German EEG § 51 for plants since
   25 February 2025); it needs the market prices, without one it counts.
+
+A ``kw_month`` item charges the peak power of each calendar month: the mean
+of the ``peak_count`` highest interval values (``peak_minutes``, 15 or 60;
+in its time window, if it has one) of the energy of its side, at least
+``min_kw``, rounded up to ``kw_step`` if given. Of that power it charges the
+part from ``kw_from`` to ``kw_to`` (tiers, e.g. a higher price above 10 kW
+as the Austrian grid tariffs from 2027 have). A period of only part of a
+month pays that share of the month.
 
 Items with the same name and side are one price: in an hour the most specific
 matching item counts (a time window before months before weekdays before none),
@@ -35,15 +44,20 @@ on a feed-in credit note.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from calendar import monthrange
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
+import math
 from typing import Any
 
 from homeassistant.util import dt as dt_util
 
 DAYS_PER_YEAR = 365
+QUARTER_S = 900
+# Interval lengths a peak power can be measured over (minutes).
+PEAK_MINUTES = (15, 60)
 
 
 class Side(StrEnum):
@@ -63,6 +77,7 @@ class Unit(StrEnum):
     SPOT = "spot"
     MARKET_MONTH = "market_month"
     PERCENT = "percent"
+    KW_MONTH = "kw_month"
 
     @property
     def per_kwh(self) -> bool:
@@ -105,6 +120,13 @@ class TariffItem:
     zero_when_negative: bool = False
     # Dynamic units: the market price counts at most this much (ct/kWh net).
     max_market_ct: float | None = None
+    # ``kw_month``: how the billed power is measured and which part of it is charged.
+    peak_minutes: int = 15
+    peak_count: int = 1
+    kw_step: float | None = None
+    min_kw: float | None = None
+    kw_from: float | None = None
+    kw_to: float | None = None
 
     @property
     def specificity(self) -> int:
@@ -128,6 +150,20 @@ class TariffItem:
         return True
 
     def as_dict(self) -> dict[str, Any]:
+        # The power fields only with their unit: stored items of other units
+        # stay as they were (updates compare them).
+        power = (
+            {
+                "peak_minutes": self.peak_minutes,
+                "peak_count": self.peak_count,
+                "kw_step": self.kw_step,
+                "min_kw": self.min_kw,
+                "kw_from": self.kw_from,
+                "kw_to": self.kw_to,
+            }
+            if self.unit is Unit.KW_MONTH
+            else {}
+        )
         return {
             "name": self.name,
             "side": self.side.value,
@@ -145,7 +181,21 @@ class TariffItem:
             "market": self.market,
             "zero_when_negative": self.zero_when_negative,
             "max_market_ct": self.max_market_ct,
+            **power,
         }
+
+    def billed_kw(self, peak_kw: float) -> float:
+        """Power billed for a measured peak: at least ``min_kw``, rounded up to ``kw_step``."""
+        power = max(peak_kw, self.min_kw or 0.0)
+        if self.kw_step:
+            # A tolerance keeps a value that is a step already (e.g. 4.0000000001) there.
+            power = math.ceil(power / self.kw_step - 1e-9) * self.kw_step
+        return power
+
+    def charged_kw(self, billed_kw: float) -> float:
+        """The part of the billed power within the tier of the item."""
+        upper = billed_kw if self.kw_to is None else min(billed_kw, self.kw_to)
+        return max(0.0, upper - (self.kw_from or 0.0))
 
     def ct_per_kwh(self, market_ct: float | None, spot_ct: float | None = None) -> float | None:
         """Price of a kWh; for dynamic units from the market price (None: unknown)."""
@@ -181,7 +231,17 @@ class TariffItem:
             market=data.get("market") or None,
             zero_when_negative=bool(data.get("zero_when_negative")),
             max_market_ct=None if data.get("max_market_ct") is None else float(data["max_market_ct"]),
+            peak_minutes=int(data.get("peak_minutes") or 15),
+            peak_count=int(data.get("peak_count") or 1),
+            kw_step=_optional_float(data.get("kw_step")),
+            min_kw=_optional_float(data.get("min_kw")),
+            kw_from=_optional_float(data.get("kw_from")),
+            kw_to=_optional_float(data.get("kw_to")),
         )
+
+
+def _optional_float(value: Any) -> float | None:
+    return None if value is None else float(value)
 
 
 @dataclass(frozen=True)
@@ -223,6 +283,11 @@ class Tariff:
         """Whether amounts follow the market price (0 at negative prices needs only its sign)."""
         return any(item.unit.dynamic for item in self.items)
 
+    @property
+    def power_priced(self) -> bool:
+        """Whether it charges the peak import power (``kw_month``)."""
+        return any(item.unit is Unit.KW_MONTH and item.side is Side.IMPORT for item in self.items)
+
 
 @dataclass
 class Bill:
@@ -237,6 +302,11 @@ class Bill:
     export_kwh: float = 0.0
     # Energy whose dynamic price was unknown (no market price for its hour).
     unpriced_kwh: float = 0.0
+    # Highest power billed per ``kw_month`` item over the months (kW).
+    billed_kw: dict[tuple[Side, str], float] = field(default_factory=dict)
+    # A peak power measured over quarter hours came from hourly values only
+    # (the mean of an hour is lower than its highest quarter hour).
+    peak_from_hours: bool = False
 
     @property
     def net(self) -> float:
@@ -263,13 +333,16 @@ def compute_bill(
     export_wh: Mapping[datetime, float],
     market_prices: Mapping[datetime, float] | None = None,
     references: Mapping[str, Mapping[str, float]] | None = None,
+    lengths: Mapping[datetime, int] | None = None,
 ) -> Bill:
     """Bill for the days ``start`` to ``end`` (both included).
 
     ``import_wh`` / ``export_wh`` map period starts (hours or quarter hours,
     any time zone) to the energy of that period, ``market_prices`` the same
     starts to the day-ahead price in €/MWh; ``references``: the official
-    monthly market values (market -> month -> ct/kWh).
+    monthly market values (market -> month -> ct/kWh); ``lengths``: the
+    length (s) of each period, for the peak power (without: hours, except
+    starts off the full hour and the hours split into quarters).
     """
     market_prices = market_prices or {}
     monthly = monthly_market_prices(export_wh, market_prices)
@@ -333,10 +406,106 @@ def compute_bill(
             if unpriced:
                 bill.unpriced_kwh += kwh
 
+    for series, side in ((import_wh, Side.IMPORT), (export_wh, Side.EXPORT)):
+        if any(item.unit is Unit.KW_MONTH and item.side is side for item in tariff.items):
+            _add_power_items(tariff, side, start, end, series, lengths, bill, add, add_percent)
+
     bill.vat = sum(
         amount * tariff.vat(side, group) / 100 for (side, group), amount in bill.groups.items()
     )
     return bill
+
+
+def _period_lengths(series: Mapping[datetime, float], lengths: Mapping[datetime, int] | None) -> dict[datetime, int]:
+    if lengths is not None:
+        return {start: lengths.get(start, 3600) for start in series}
+    quarter = timedelta(seconds=QUARTER_S)
+    return {
+        start: QUARTER_S if start.minute % 60 or start + quarter in series else 3600
+        for start in series
+    }
+
+
+def interval_powers(
+    series: Mapping[datetime, float], lengths: Mapping[datetime, int], minutes: int
+) -> tuple[dict[datetime, float], bool]:
+    """Mean power (kW) per interval of ``minutes`` and whether hours stood in
+    for quarter hours. Quarter hours are added up to hours for ``minutes`` 60."""
+    powers: dict[datetime, float] = {}
+    from_hours = False
+    hours: dict[datetime, float] = {}
+    for start, wh in series.items():
+        length = lengths.get(start, 3600)
+        if minutes == 60:
+            hour = start.replace(minute=0, second=0, microsecond=0)
+            hours[hour] = hours.get(hour, 0.0) + max(0.0, wh)
+            continue
+        if length > QUARTER_S:
+            from_hours = True
+        powers[start] = max(0.0, wh) / 1000 * 3600 / length
+    for hour, wh in hours.items():
+        powers[hour] = wh / 1000
+    return powers, from_hours
+
+
+def peak_kw(item: TariffItem, powers: Mapping[datetime, float]) -> float:
+    """Measured peak of an item: the mean of its ``peak_count`` highest
+    interval powers in its time window (local), 0 without any."""
+    values = sorted(
+        (power for start, power in powers.items() if item.in_window(dt_util.as_local(start))),
+        reverse=True,
+    )[: max(1, item.peak_count)]
+    return sum(values) / len(values) if values else 0.0
+
+
+def _add_power_items(
+    tariff: Tariff,
+    side: Side,
+    start: date,
+    end: date,
+    series: Mapping[datetime, float],
+    lengths: Mapping[datetime, int] | None,
+    bill: Bill,
+    add: Callable[[TariffItem, float], None],
+    add_percent: Callable[[list[TariffItem], Side, Mapping[Group, float]], None],
+) -> None:
+    """The ``kw_month`` items of a side, per calendar month of the period."""
+    period_lengths = _period_lengths(series, lengths)
+    months: dict[tuple[int, int], dict[datetime, float]] = {}
+    for moment, wh in series.items():
+        day = dt_util.as_local(moment).date()
+        if start <= day <= end:
+            months.setdefault((day.year, day.month), {})[moment] = wh
+    first = date(start.year, start.month, 1)
+    while first <= end:
+        days = monthrange(first.year, first.month)[1]
+        last = first + timedelta(days=days - 1)
+        share = ((min(end, last) - max(start, first)).days + 1) / days
+        month_series = months.get((first.year, first.month), {})
+        items = [
+            item
+            for item in tariff.active_items(min(end, last))
+            if item.unit is Unit.KW_MONTH and item.side is side and (not item.months or first.month in item.months)
+        ]
+        base: dict[Group, float] = {}
+        powers_by_minutes: dict[int, tuple[dict[datetime, float], bool]] = {}
+        for item in items:
+            if item.peak_minutes not in powers_by_minutes:
+                powers_by_minutes[item.peak_minutes] = interval_powers(month_series, period_lengths, item.peak_minutes)
+            powers, from_hours = powers_by_minutes[item.peak_minutes]
+            if from_hours and month_series:
+                bill.peak_from_hours = True
+            billed = item.billed_kw(peak_kw(item, powers))
+            key = (item.side, item.name)
+            bill.billed_kw[key] = max(bill.billed_kw.get(key, 0.0), billed)
+            amount = item.charged_kw(billed) * item.price * share
+            add(item, amount)
+            base[item.group] = base.get(item.group, 0.0) + amount
+        # Percent items of the month apply to the power price as to the other items.
+        add_percent(
+            [i for i in tariff.active_items(min(end, last)) if not i.months or first.month in i.months], side, base
+        )
+        first = last + timedelta(days=1)
 
 
 def _chosen_items(tariff: Tariff, side: Side, local: datetime) -> list[TariffItem]:

@@ -507,6 +507,18 @@ Energiezähler des Smart Meters wählen (**Netzbezug (Zähler)** /
 den Zähler jeder Stunde skaliert. Stunden vor der Aufzeichnung nutzen die
 Zähler, ohne Zähler das Stundenmittel der Netzleistung (ungenauer).
 
+**Leistungspreis.** Ein Posten mit **€ pro kW und Monat
+(Spitzenleistung)** verrechnet den höchsten Bezug jedes Kalendermonats, wie
+die österreichischen Netztarife ab 2027: die mittlere Leistung der höchsten
+Viertelstunde (oder Stunde) im Monat oder den Mittelwert mehrerer höchster,
+mindestens **Mindestens verrechnete Leistung** (z. B. 2 kW) und aufgerundet
+auf **Aufgerundet auf**, wenn der Tarif das tut. **Verrechnet ab** /
+**Verrechnet bis** teilen sie in Stufen mit eigenem Preis, z. B. ein zweiter
+Posten mit dem höheren Preis über 10 kW. Die Spitze kommt aus den
+aufgezeichneten Viertelstunden; Stunden vor der Aufzeichnung haben nur ihr
+Stundenmittel, das niedriger ist als ihre höchste Viertelstunde, deshalb
+markiert der Vergleich solche Monate.
+
 **Dynamische Tarife und Börsenpreise.** Ein Posten kann auch dem
 Day-Ahead-Markt folgen: **Börsenpreis (stündlich)** oder **Monatsmarktpreis**,
 jeweils als Marktpreis + Aufschlag in % seines Betrags + Preis in ct/kWh, z. B.

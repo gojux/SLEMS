@@ -48,7 +48,7 @@ items:
   - name: <label as on the bill>
     side: import            # import = consumption, export = feed-in
     group: energy           # energy = supplier, grid = grid operator, levies = taxes and levies
-    unit: kwh               # kwh = ct/kWh, year = €/year, spot = market price (hourly), market_month = monthly market price, percent = % of the group
+    unit: kwh               # kwh = ct/kWh, year = €/year, spot = market price (hourly), market_month = monthly market price, percent = % of the group, kw_month = €/kW and month of the peak power
     price: 12.34
 
 Optional fields per item:
@@ -61,6 +61,10 @@ Optional fields per item:
   time_to: "16:00"
   month_prices: {"2026-01": 8.5}      # published monthly market prices in ct/kWh
   zero_when_negative: true  # 0 while the day-ahead price is negative (e.g. EEG feed-in since 25 Feb 2025)
+  peak: {interval_min: 15, count: 1, kw_step: 1}  # kw_month only: highest 15 min mean of the month, mean of the `count` highest, rounded up to whole kW (leave out kw_step if not rounded)
+  min_kw: 2                 # kw_month only: power billed at least
+  kw_from: 10               # kw_month only: the item charges the part of the power from 10 kW …
+  kw_to: 10                 # kw_month only: … or up to 10 kW (tiers)
 
 Rules:
 - All prices without VAT (net). If the bill only shows gross prices, convert
@@ -69,6 +73,16 @@ Rules:
   €/year (unit year). Monthly amounts × 12, daily prices × 365. For other
   currencies the same in hundredths/kWh and whole units/year (e.g. Rappen
   and CHF).
+- Power prices (a price per kW of the highest quarter hour or hour of the
+  month, e.g. the Austrian grid tariffs from 2027): unit kw_month in €/kW
+  and month (yearly prices ÷ 12, ct/kW ÷ 100), with peak, min_kw and the
+  tier. A tier with its own price (e.g. a higher price above 10 kW) is an
+  item of its own with kw_from, the item below it gets kw_to; both repeat
+  peak and min_kw. Only give kw_step if the bill rounds the power up to
+  steps (e.g. 1 for whole kW). A flat amount instead of a power price
+  (e.g. without quarter hour values) is unit year. Example:
+    - {name: Power price, side: import, group: grid, unit: kw_month, price: 2.46, peak: {interval_min: 15}, min_kw: 2, kw_to: 10}
+    - {name: Power price above 10 kW, side: import, group: grid, unit: kw_month, price: 3.69, peak: {interval_min: 15}, min_kw: 2, kw_from: 10}
 - Feed-in credits are positive prices on the export side; deductions from
   them (e.g. a metering fee for the feed-in) are items of their own.
 - Dynamic tariffs: unit spot or market_month, price is the markup in ct/kWh

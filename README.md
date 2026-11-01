@@ -491,6 +491,17 @@ options: the recorded quarter hours are then scaled to the counter of each
 hour. Hours before the recording use the counters, without counters the
 hourly mean of the grid power (less exact).
 
+**Power price.** A line with **€ per kW and month (peak power)**
+charges the peak import of each calendar month, as the Austrian grid tariffs
+do from 2027: the mean power of the highest quarter hour (or hour) of the
+month, or the mean of several highest ones, at least **Power billed at
+least** (e.g. 2 kW) and rounded up to **Rounded up to** if the tariff does
+so. **Charged from** / **Charged up to** split it into tiers with their own
+price, e.g. a second line with the higher price above 10 kW. The peak comes
+from the recorded quarter hours; hours before the recording only have their
+hourly mean, which is lower than their highest quarter hour, so the
+comparison marks such months.
+
 **Dynamic tariffs and market prices.** A line can also follow the day-ahead
 market: **spot price (hourly)** or **monthly market price**, each as market price
 + share in % of its amount + price in ct/kWh, e.g. "spot + 5 % + 1.2 ct" or

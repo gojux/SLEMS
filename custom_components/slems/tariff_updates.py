@@ -96,16 +96,26 @@ def _identity(item: Mapping[str, Any]) -> tuple:
     )
 
 
+# Values of a ``kw_month`` item (see tariff.TariffItem.as_dict).
+_POWER_KEYS = ("peak_minutes", "peak_count", "kw_step", "min_kw", "kw_from", "kw_to")
+
+
 def _values(item: Mapping[str, Any]) -> tuple:
     return (
         item["unit"], float(item["price"]), float(item.get("factor_pct") or 0.0),
         tuple(sorted((item.get("month_prices") or {}).items())), item.get("max_market_ct"),
+        *(item.get(key) for key in _POWER_KEYS),
     )
 
 
 def _set_values(item: dict[str, Any], source: Mapping[str, Any]) -> None:
     for key in ("unit", "price", "factor_pct", "month_prices", "max_market_ct"):
         item[key] = source.get(key)
+    for key in _POWER_KEYS:
+        if key in source:
+            item[key] = source[key]
+        else:
+            item.pop(key, None)
 
 
 def _fingerprint(items: list[dict[str, Any]], valid_to: str | None) -> str:
