@@ -620,11 +620,45 @@ def consumers(token: str) -> None:
         token,
         "consumer",
         {
+            **measured("go-e", "wallbox", "sensor.go_e_flex_power", "sensor.go_e_flex_energy", "current"),
+            "control": {
+                "control_entity": "number.go_e_flex_requested_current",
+                "max_current_a": 32,
+                "phases_entity": "sensor.go_e_flex_active_phases",
+                "start_entity": "select.go_e_flex_force_state",
+                "vehicle_soc_entity": "input_number.sim_goe_car_soc",
+                "vehicle_capacity_kwh": 77,
+                "plugged_entity": "sensor.go_e_flex_car_state",
+            },
+            "start_options": {"start_on": "On", "start_off": "Off"},
+            # The car state has no list of options: the states are typed in.
+            "plugged_states": {"plugged_states": ["Charging", "Complete"]},
+        },
+        "Wallbox with the car (go-e)",
+    )
+    car_at_the_wallbox(token)
+    subentry(
+        token,
+        "consumer",
+        {
             **measured("Pump", "other", "sensor.heat_pump_power", "sensor.heat_pump_energy", "switch"),
             "control": {"control_entity": "input_boolean.sim_car_connected", "nominal_power_w": 400},
         },
         "Pump (switched)",
     )
+
+
+def car_at_the_wallbox(token: str) -> None:
+    """The go-e's car: its state of charge read, not plugged in (the simulated
+    car is unplugged at the start), and the daily target by state of charge offered."""
+    states = request("GET", "/api/states", token=token)
+    planned = [s for s in states if s["attributes"].get("vehicle_soc_pct") is not None]
+    if len(planned) != 1 or planned[0]["attributes"].get("plugged") is not False:
+        raise Failure(f"car at the wallbox: {[(s['entity_id'], s['attributes'].get('plugged')) for s in planned]}")
+    kinds = [s for s in states if s["entity_id"].startswith("select.") and "soc" in (s["attributes"].get("options") or [])]
+    if len(kinds) != 1:
+        raise Failure(f"daily target by state of charge offered by {[s['entity_id'] for s in kinds]}")
+    print(f"  car: {planned[0]['attributes']['vehicle_soc_pct']} %, not plugged in, target {kinds[0]['entity_id']}")
 
 
 def option(step: dict, field: str, *words: str) -> str:
@@ -786,7 +820,7 @@ def reconfigure(token: str) -> None:
                 "ha_options": {},
                 "ha_limits": {},
             },
-            "consumer": {"user": {}, "consumer": {}, "control": {}},
+            "consumer": {"user": {}, "consumer": {}, "control": {}, "start_options": {}, "plugged_states": {}},
             "tariff": {"items": "finish", "details": {}},
         }[kind]
         result = run_flow(token, SUBENTRY_FLOW, {"handler": [entry_id, kind], "subentry_id": item["subentry_id"]}, steps, label)
