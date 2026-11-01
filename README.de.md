@@ -16,14 +16,6 @@ Tiere](https://en.wikipedia.org/wiki/Sea_slug)) und *EMS*
 
 ![SLEMS-Übersicht: Energiefluss, Kennzahlen und das Diagramm mit Prognose und Plan des Tages](docs/images/dashboard_overview_de.png)
 
-> **Unterstützte Batterien:** SLEMS steuert derzeit die **Marstek Venus E
-> 3.0** (Modbus TCP) direkt. Andere Batterien lassen sich über die Entitäten
-> ihrer Home-Assistant-Integration einbinden, nur lesend oder gesteuert
-> (experimentell). Wenn du SLEMS mit einer anderen Batterie nutzen möchtest,
-> erstelle bitte ein [Issue](https://github.com/gojux/SLEMS/issues) mit dem
-> Modell, der Anbindung (Modbus, lokale API, Home-Assistant-Integration) und
-> ob du testen könntest.
-
 > **Status: Beta.** SLEMS läuft täglich an einer echten Anlage, wird aber noch
 > laufend weiterentwickelt. Im Betriebsmodus **Aktiv** sendet es Vorgaben an
 > Batterien und schaltet Verbraucher. Die Nutzung erfolgt auf eigene
@@ -31,8 +23,29 @@ Tiere](https://en.wikipedia.org/wiki/Sea_slug)) und *EMS*
 > Stromkreise. Fehler bitte als [Issue](https://github.com/gojux/SLEMS/issues)
 > mit den Diagnosedaten melden (siehe [Schnellstart](#schnellstart)).
 
+## Passt SLEMS zu deiner Anlage?
+
+| Batterie | Unterstützung |
+|---|---|
+| AC-Batterie (eigener Wechselrichter, an der Steckdose oder im Verteiler) | Marstek Venus E 3.0 direkt über Modbus TCP; andere Modelle über ein [Modbus-Profil](#batterie-aus-einem-modbus-profil-experimentell) oder die Entitäten ihrer Home-Assistant-Integration (Steuerung experimentell) |
+| Balkonspeicher mit PV-Modulen (z. B. Marstek B2500, Zendure SolarFlow, Anker Solarbank) | über die Entitäten seiner Integration mit **Eigene PV-Module an der Batterie** (experimentell, Tester und Feedback willkommen) |
+| Hybrid-Wechselrichter (PV und Batterie an einem Wechselrichter) | seine Batterie über die Entitäten seiner Integration (experimentell, Tester und Feedback willkommen) |
+| Keine Batterie | PV-Überschuss nur in Verbraucher ([ohne Batterien](#ohne-batterien)) |
+
+Wenn du SLEMS mit einer anderen Batterie nutzen möchtest, erstelle bitte ein
+[Issue](https://github.com/gojux/SLEMS/issues) mit dem Modell, der Anbindung
+(Modbus, lokale API, Home-Assistant-Integration) und ob du testen könntest.
+
+| Tarif-Vorlagen | |
+|---|---|
+| Österreich | 23 Stromtarife und 2 PV-Einspeisetarife von 11 Lieferanten (Burgenland Energie, Energie AG Oberösterreich, Energie Steiermark, EVN, IKB, illwerke vkw, Kelag, LINZ AG, Salzburg AG, TIWAG, Wien Energie), ein allgemeiner dynamischer Tarif, die Netzentgelte aller 14 Netzbereiche, die Bundesabgaben |
+| Deutschland | ein allgemeiner dynamischer Tarif, die EEG-Einspeisevergütung (bis 10 kWp, 8 Inbetriebnahme-Zeiträume), die Netzentgelte von 19 Netzbetreibern, die bundesweiten Abgaben |
+| Schweiz | der Tarif deiner Gemeinde aus den offenen Daten der ElCom |
+| Andere Länder | dein Tarif wie auf der Rechnung oder als YAML-Datei (siehe [Tarife](#tarife-optional)) |
+
 ## Inhalt
 
+- [Passt SLEMS zu deiner Anlage?](#passt-slems-zu-deiner-anlage)
 - [Schnellstart](#schnellstart)
 - [Warum SLEMS?](#warum-slems)
 - [Funktionen](#funktionen)

@@ -16,14 +16,6 @@ system).
 
 ![SLEMS overview: energy flow, key figures and the forecast and plan chart of the day](docs/images/dashboard_overview_en.png)
 
-> **Supported batteries:** SLEMS currently controls the **Marstek Venus E
-> 3.0** (Modbus TCP) directly. Other batteries can be added through the
-> entities of their Home Assistant integration, read-only or controlled
-> (experimental). If you would like to use SLEMS with another battery, please
-> [open an issue](https://github.com/gojux/SLEMS/issues) with the model and
-> how it is connected (Modbus, local API, Home Assistant integration), and
-> whether you could test it.
-
 > **Status: beta.** SLEMS runs every day on a real installation, but it is
 > still under active development. In the operating mode **Active** it sends
 > commands to batteries and switches consumers. Use it at your own risk: check
@@ -31,8 +23,30 @@ system).
 > faults as an [issue](https://github.com/gojux/SLEMS/issues) with the
 > diagnostics (see [Quick start](#quick-start)).
 
+## Does SLEMS fit your installation?
+
+| Battery | Support |
+|---|---|
+| AC battery (its own inverter, at a socket or in the distribution board) | Marstek Venus E 3.0 directly over Modbus TCP; other models through a [Modbus profile](#battery-from-a-modbus-profile-experimental) or the entities of their Home Assistant integration (control experimental) |
+| Plug-in battery with PV modules (balcony solar with a battery, e.g. Marstek B2500, Zendure SolarFlow, Anker Solarbank) | through the entities of its integration with **Own PV modules at the battery** (experimental, testers and feedback welcome) |
+| Hybrid inverter (PV and battery at one inverter) | its battery through the entities of its integration (experimental, testers and feedback welcome) |
+| No battery | PV surplus into consumers only ([without batteries](#without-batteries)) |
+
+If you would like to use SLEMS with another battery, please
+[open an issue](https://github.com/gojux/SLEMS/issues) with the model and how
+it is connected (Modbus, local API, Home Assistant integration), and whether
+you could test it.
+
+| Tariff templates | |
+|---|---|
+| Austria | 23 supply tariffs and 2 PV feed-in tariffs of 11 suppliers (Burgenland Energie, Energie AG Oberösterreich, Energie Steiermark, EVN, IKB, illwerke vkw, Kelag, LINZ AG, Salzburg AG, TIWAG, Wien Energie), a general dynamic tariff, the grid fees of all 14 grid areas, the federal levies |
+| Germany | a general dynamic tariff, the EEG feed-in credit (up to 10 kWp, 8 commissioning periods), the grid fees of 19 grid operators, the federal levies |
+| Switzerland | the tariff of your municipality from the ElCom open data |
+| Other countries | your tariff as on the bill, or as a YAML file (see [tariffs](#tariffs-optional)) |
+
 ## Contents
 
+- [Does SLEMS fit your installation?](#does-slems-fit-your-installation)
 - [Quick start](#quick-start)
 - [Why SLEMS?](#why-slems)
 - [Features](#features)
