@@ -76,8 +76,8 @@ def test_tariff_choices_and_chosen_tariff() -> None:
         }
     )
     assert tariff_choices(entry) == {
-        "import": [{"id": "b", "name": "Dynamic"}],
-        "export": [{"id": "c", "name": "Spot feed-in"}],
+        "import": [{"id": "b", "name": "Dynamic", "power_price": False}],
+        "export": [{"id": "c", "name": "Spot feed-in", "power_price": False}],
     }
     assert chosen_tariff(entry, "", "").name == "Fixed"
     tariff = chosen_tariff(entry, "b", "c")

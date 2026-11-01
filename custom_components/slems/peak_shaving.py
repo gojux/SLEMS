@@ -262,6 +262,8 @@ class EconomicLimit:
     threshold_pct: float
     # Expected costs for the rest of the month (power price, energy held back).
     cost: float
+    # The limits tried: (limit, threshold, cost) for the diagnostics.
+    candidates: tuple[tuple[float, float, float], ...] = ()
 
 
 def economic_limit(
@@ -291,6 +293,7 @@ def economic_limit(
     hours = hours_for(start_pct)
     highest = max((profile.powers[hour][-1] for hour, _ in hours if profile.powers.get(hour)), default=0.0)
     best = EconomicLimit(max(limit, highest), min_soc_pct, power_cost(max(limit, highest)))
+    candidates = [(best.limit_w, best.threshold_pct, best.cost)]
     while limit < highest:
         if highest - limit <= max_discharge_w:
             threshold, full = auto_threshold(
@@ -301,7 +304,8 @@ def economic_limit(
                 used_wh = needed_wh(profile, hours_for(threshold), limit)
                 left_wh = max(0.0, held_wh - used_wh)
                 cost = power_cost(limit) + days_left * (left_wh * spread + used_wh * cycle_cost) / 1000
+                candidates.append((limit, threshold, cost))
                 if cost < best.cost - 1e-9:
                     best = EconomicLimit(limit, threshold, cost)
         limit += ECONOMIC_STEP_W
-    return best
+    return replace(best, candidates=tuple(sorted(candidates)))

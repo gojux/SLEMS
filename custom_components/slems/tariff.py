@@ -304,8 +304,9 @@ class Bill:
     unpriced_kwh: float = 0.0
     # Highest power billed per ``kw_month`` item over the months (kW).
     billed_kw: dict[tuple[Side, str], float] = field(default_factory=dict)
-    # A peak power measured over quarter hours came from hourly values only
-    # (the mean of an hour is lower than its highest quarter hour).
+    # A peak power measured over quarter hours may be too low: an hour without
+    # its quarter hours could hide a higher one (its mean × 4 is above the
+    # billed power; the mean of an hour is lower than its highest quarter hour).
     peak_from_hours: bool = False
 
     @property
@@ -428,11 +429,13 @@ def _period_lengths(series: Mapping[datetime, float], lengths: Mapping[datetime,
 
 def interval_powers(
     series: Mapping[datetime, float], lengths: Mapping[datetime, int], minutes: int
-) -> tuple[dict[datetime, float], bool]:
-    """Mean power (kW) per interval of ``minutes`` and whether hours stood in
-    for quarter hours. Quarter hours are added up to hours for ``minutes`` 60."""
+) -> tuple[dict[datetime, float], float]:
+    """Mean power (kW) per interval of ``minutes`` and the highest power a
+    quarter hour could have had in an hour that stood in for its quarter hours
+    (its mean × 4, 0 without such an hour). Quarter hours are added up to
+    hours for ``minutes`` 60."""
     powers: dict[datetime, float] = {}
-    from_hours = False
+    hidden = 0.0
     hours: dict[datetime, float] = {}
     for start, wh in series.items():
         length = lengths.get(start, 3600)
@@ -440,12 +443,12 @@ def interval_powers(
             hour = start.replace(minute=0, second=0, microsecond=0)
             hours[hour] = hours.get(hour, 0.0) + max(0.0, wh)
             continue
-        if length > QUARTER_S:
-            from_hours = True
         powers[start] = max(0.0, wh) / 1000 * 3600 / length
+        if length > QUARTER_S:
+            hidden = max(hidden, powers[start] * length / QUARTER_S)
     for hour, wh in hours.items():
         powers[hour] = wh / 1000
-    return powers, from_hours
+    return powers, hidden
 
 
 def peak_kw(item: TariffItem, powers: Mapping[datetime, float]) -> float:
@@ -488,14 +491,15 @@ def _add_power_items(
             if item.unit is Unit.KW_MONTH and item.side is side and (not item.months or first.month in item.months)
         ]
         base: dict[Group, float] = {}
-        powers_by_minutes: dict[int, tuple[dict[datetime, float], bool]] = {}
+        powers_by_minutes: dict[int, tuple[dict[datetime, float], float]] = {}
         for item in items:
             if item.peak_minutes not in powers_by_minutes:
                 powers_by_minutes[item.peak_minutes] = interval_powers(month_series, period_lengths, item.peak_minutes)
-            powers, from_hours = powers_by_minutes[item.peak_minutes]
-            if from_hours and month_series:
-                bill.peak_from_hours = True
+            powers, hidden = powers_by_minutes[item.peak_minutes]
             billed = item.billed_kw(peak_kw(item, powers))
+            # An hour whose quarter hours could have been above the billed power.
+            if hidden > billed:
+                bill.peak_from_hours = True
             key = (item.side, item.name)
             bill.billed_kw[key] = max(bill.billed_kw.get(key, 0.0), billed)
             amount = item.charged_kw(billed) * item.price * share

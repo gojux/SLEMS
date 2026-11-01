@@ -331,7 +331,8 @@ in the window of the line) of the import, at least `min_kw`, rounded up to
 `kw_step`; `kw_from` / `kw_to` charge a tier of it. The interval powers come
 from the period lengths `compute_bill` gets (`GridEnergy.lengths`: recorded
 quarter hours, else hours); an hour standing in for quarter hours sets
-`Bill.peak_from_hours`. `TariffItem.as_dict` writes the power fields only
+`Bill.peak_from_hours` only if it could hide a quarter hour above the billed
+power (its mean × 4 is above it). `TariffItem.as_dict` writes the power fields only
 for `kw_month`, so stored lines of the other units stay unchanged (template
 updates compare them). Percent lines apply to the power price of their month.
 
@@ -361,7 +362,22 @@ passes the power of the current quarter hour as `peak_charge_w` to
 limit, not cut to the surplus) and adds it to the projection
 (`_with_peak_charge`). With it the threshold horizon ends with the first
 block of peaks (`peak_shaving.first_block`) and `economic_limit` adds
-`cycle_cost` (import price × both losses + wear) per kWh of peak energy. Sensor `power_peak` (kW,
+`cycle_cost` (import price × both losses + wear) per kWh of peak energy.
+`peak_backtest.py` (pure): per recorded month (`month_powers` from
+`grid_quarters`) the lowest limit from the minimum power up in 0.1 kW steps
+that the discharge power covers in every interval and whose energy above it
+fits into the usable energy each day; saving = power price of the recorded
+peak − of the limit − losses and wear. `tariff_comparison.add_peak_savings`
+adds it per month and power priced tariff (`peak_saving`, `peak_limit_kw`).
+Simulation with a tariff: the chosen tariff reaches everything that uses
+prices (`forecast_plan(tariff=…)` → price plan, `_peak_shaving`,
+`_economic_limit`, `_peak_charge`, `peak_state(tariff=…)`, not cached); the
+daily targets are planned anew with the simulated settings and tariff inside
+`SlemsCoordinator.simulated_targets`, which swaps the target fields for the
+duration of the synchronous simulation in the event loop and restores them
+(the control cannot run in between). Diagnostics: `peak_shaving` (limit, threshold, budget, `PeakState`, the
+economic candidates in `EconomicLimit.candidates`, the charging plan); debug
+log lines on a new economic limit and when charging is planned or not. Sensor `power_peak` (kW,
 attributes every 10 s) feeds the overview tile.
 
 Peak shaving mode (select `peak_shaving_mode`, replaces the switch

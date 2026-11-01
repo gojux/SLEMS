@@ -42,7 +42,7 @@ you could test it.
 | Austria | 23 supply tariffs and 2 PV feed-in tariffs of 11 suppliers (Burgenland Energie, Energie AG Oberösterreich, Energie Steiermark, EVN, IKB, illwerke vkw, Kelag, LINZ AG, Salzburg AG, TIWAG, Wien Energie), a general dynamic tariff, the grid fees of all 14 grid areas, the federal levies |
 | Germany | a general dynamic tariff, the EEG feed-in credit (up to 10 kWp, 8 commissioning periods), the grid fees of 19 grid operators, the federal levies |
 | Switzerland | the tariff of your municipality from the ElCom open data |
-| Other countries | your tariff as on the bill, or as a YAML file (see [tariffs](#tariffs-optional)) |
+| All countries | any tariff without a template (also in Austria, Germany and Switzerland): entered as on the bill, or as a YAML file an AI makes from your bill with the prompt provided (see [tariffs](#tariffs-optional)) |
 
 ## Contents
 
@@ -93,6 +93,7 @@ you could test it.
   - [Which option when?](#which-option-when)
   - [Grid friendly charging](#grid-friendly-charging)
   - [Feed-in cap](#feed-in-cap)
+  - [Import peak shaving and power price](#import-peak-shaving-and-power-price)
   - [Learned values](#learned-values)
   - [Further settings (entities)](#further-settings-entities)
   - [Problems and notifications](#problems-and-notifications)
@@ -271,7 +272,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Grid friendly charging: absorb PV feed-in peaks | ✅ |
 | Feed-in cap: store the PV energy above a feed-in limit, make room in time | ✅ |
 | Night discharge to a forecast based reserve | ✅ |
-| Import peak shaving: an import limit and a state of charge threshold below which the batteries keep their energy for the peaks (the cheapest pair with a power price, one of them calculated from the consumption statistics, or both set; manually enabled); with a power price in the tariff the limit holds on average over the quarter hour, forced consumers give way, and the overview shows the month's peak and its extra cost | ✅ |
+| Import peak shaving: an import limit and a state of charge threshold below which the batteries keep their energy for the peaks (the cheapest pair with a power price, one of them calculated from the consumption statistics, or both set; manually enabled); with a power price in the tariff the limit holds on average over the quarter hour, forced consumers give way, the batteries are topped up from the grid below the limit before the peaks, the overview shows the month's peak and its extra cost, and the tariff comparison estimates what peak shaving would have saved | ✅ |
 
 | Dashboard | Status |
 |---|---|
@@ -500,7 +501,9 @@ so. **Charged from** / **Charged up to** split it into tiers with their own
 price, e.g. a second line with the higher price above 10 kW. The peak comes
 from the recorded quarter hours; hours before the recording only have their
 hourly mean, which is lower than their highest quarter hour, so the
-comparison marks such months.
+comparison marks months in which such an hour could hide a quarter hour
+above the billed power (its mean × 4 is above it). How SLEMS keeps the peak low: see
+[Import peak shaving and power price](#import-peak-shaving-and-power-price).
 
 **Dynamic tariffs and market prices.** A line can also follow the day-ahead
 market: **spot price (hourly)** or **monthly market price**, each as market price
@@ -1970,22 +1973,28 @@ Try other settings without changing anything.
   batteries without the momentary limits of their state of charge), the night
   discharge buffer, the maximum
   grid export while discharging and the PV and consumption forecasts (±%) can
-  be changed too. With comparison [tariffs](#tariffs-optional) the price
-  aware control can plan with another **Tariff for import** and **Tariff for
-  feed-in** (e.g. a dynamic tariff); the price chart then shows their
-  prices.
+  be changed too. With comparison [tariffs](#tariffs-optional) the group
+  **Tariff** at the top chooses another **Tariff for import** and **Tariff
+  for feed-in** (e.g. a dynamic tariff, one with a reduced grid price at noon
+  or one with a power price). Everything that uses prices plans with it: the
+  price aware control, the runs of the daily targets in the cheapest window
+  and import peak shaving with a power price; the price chart then shows
+  their prices.
 - **Result**: SLEMS calculates the day plans like the real ones, from the
   current state of charge and the current forecasts; the plan with the current
   settings is shown grey dotted for comparison, key figures (feed-in, grid
   import, highest import and feed-in, curtailed energy, state of charge at
   midnight; with a tariff also the import costs, the feed-in credit and both
-  together, from the per kWh prices incl. VAT without yearly fees) side by
-  side below.
+  together, from the per kWh prices incl. VAT without yearly fees; with a
+  power price the highest planned hour and an estimate of the billed power
+  and the power price of the month, as the plan works in hours) side by side
+  below.
 - **Nothing is saved** or used for the control; every visit starts with the
   current settings.
 - **Today** is simulated from now on (the values before are measured); in the
   afternoon a note suggests **Tomorrow** for a whole simulated day.
-- The daily targets of the consumers are planned as in the real plan;
+- The daily targets of the consumers are planned anew with the simulated
+  settings and tariff (e.g. a run in the cheaper window of another tariff);
   otherwise consumers controlled by SLEMS and the battery priority (which acts
   in the real-time distribution) are not simulated.
 
@@ -2304,6 +2313,127 @@ Sensors: **Feed-in cap energy to absorb** (on the day of the next peak, with the
 peaks, the space needed, the export plan and the buffer as attributes) and
 **Feed-in cap export before the peak**.
 
+### Import peak shaving and power price
+
+**Import peak shaving** (switch, off by default) keeps energy in the batteries
+for consumption peaks: with a tariff with a power price (e.g. the Austrian
+grid tariffs from 2027, which bill the highest quarter hour of the month) or
+with a weak grid connection.
+
+**Principle.** Two values decide:
+
+- **Peak shaving grid import limit**: import up to this power comes from the
+  grid, the batteries cover what is above.
+- **Peak shaving state of charge threshold**: from this state of charge (of
+  all batteries together) down, the batteries *only* cover the import above
+  the limit. The energy between the minimum state of charge (e.g. 12 % on the
+  Venus) and the threshold is reserved for peaks. Above it the batteries work
+  as usual and cover the import above the limit also when they would not
+  discharge otherwise (price plan, grid charging, consumers without battery
+  support). Grid charging stays below the limit.
+
+**Peak shaving mode** chooses what SLEMS calculates:
+
+| Mode | You set | SLEMS calculates |
+|---|---|---|
+| **Economic** (default, only with a power price) | – | limit and threshold with the lowest expected cost |
+| **Automatic limit** | threshold | the lowest limit the energy below the threshold lasts for |
+| **Automatic threshold** | limit | the threshold whose energy covers the peaks above the limit |
+| **Manual** | limit and threshold | – |
+
+Without a power price in the current tariff **Economic** is greyed out in the
+settings and works as **Automatic limit**. The settings show calculated
+values read only with "(automatic)", the sensor **Peak shaving import limit
+in effect** the limit used.
+
+**Expected peaks.** The hourly forecast averages short peaks (oven, kettle)
+away. SLEMS therefore takes the 5 minute statistics of the house consumption
+of the last about 10 days: per hour of the day, how much energy was above a
+power. Without a power price the mean of the days counts, with one the second
+worst day (a single missed quarter hour costs the whole month). The energy
+has to last until the refill: until the forecast PV surplus fills the
+batteries from the minimum state of charge back to the threshold (a little
+surplus on a rainy day does not count), at most 36 hours, counting only the
+hours without surplus. **Peak shaving safety reserve** (default 20 %) keeps a
+share on top, against more consumption than in the last days. Limit and
+threshold are recalculated continuously; above the threshold as if it were
+reached, during the day for the coming evening and night.
+
+**With a power price** (a tariff line "per kW and month", see
+[Tariffs](#tariffs-optional)) SLEMS works with what the bill counts:
+
+- **Quarter hour budget**: the limit holds on average over the quarter hour
+  (or hour) the tariff measures, on the wall clock as the smart meter counts.
+  A short peak, e.g. while the batteries are at their power limit (a plug-in
+  battery at 800 W), is made up for by importing less in the rest of the
+  quarter hour; while budget is left a short peak may go above the limit.
+  Feed-in does not count against import, so SLEMS never feeds in to make up.
+- **What is paid already**: the limit never lies below what this month's
+  peak already costs (the power billed so far, at least the minimum power,
+  rounded up as in the tariff, minus a 200 W buffer against the difference
+  between your meter and the grid operator's smart meter). A lower import
+  saves nothing until the month ends.
+- **Time window**: if the power price has one, quarter hours outside it do
+  not count; the batteries keep their energy for the window.
+- **Consumers give way**: when the batteries cannot cover the import above
+  the limit, consumers running for a daily target are throttled, the lowest
+  priority first: power controlled ones down to their minimum power, then
+  those outside their minimum runtime switch off. The daily target catches up
+  later.
+
+**Charge from the grid for peak shaving** (switch, on by default, shown only
+with a power price): import below the limit costs no power price. Below the
+threshold the batteries are therefore topped up from the grid before the next
+expected peak, up to the threshold: in the cheapest quarter hours (with a
+dynamic tariff), with a fixed price as late as possible (home storage ages
+mostly with time at a high state of charge), and only as far as the forecast
+import stays below the limit; a PV surplus before counts. The energy for
+peaks then only has to last until the end of the next block of peaks (two
+hours without an expected peak end it) instead of until PV refills the
+batteries. The strategy then shows **Peak shaving: charging from the grid**.
+
+**Economic calculation** (mode **Economic**): SLEMS tries limits in 100 W
+steps, from what the month already costs up to the highest expected peak,
+each with its threshold, and adds up the expected costs until the end of the
+month:
+
+- the **power price** of the month for the limit (with levies and VAT),
+- the **energy held back** that is still there at the refill (reserve,
+  losses): it takes room from the PV surplus, which is then fed in instead of
+  replacing import later, per remaining day at the import price minus the
+  feed-in credit,
+- with charging from the grid, the **conversion losses** and the **wear** of
+  the peak energy charged back every day.
+
+The limit with the lowest cost wins. Limits whose highest expected peak is
+above the discharge power of the batteries, or whose threshold would reach the
+maximum state of charge, are left out. Example: one kW less peak saves at
+2.46 € per kW and month net (2.95 € with 20 % VAT) almost 3 € a month;
+charging back 2 kWh a day for the evening peaks costs at 25 ct/kWh and 90 %
+efficiency each way about 12 ct a day, a little over 3.50 € a month (without
+wear). It pays when the peak drops by more than a little over 1 kW.
+
+**Display**:
+
+- The tile **Peak power this month** in the overview (only with a power
+  price) shows the power billed so far, when the highest quarter hour was,
+  up to which power a quarter hour costs nothing more, the extra cost of the
+  month above the minimum power and the running quarter hour with the import
+  still allowed for its rest.
+- The **tariff comparison** estimates per month for tariffs with a power
+  price what peak shaving would have saved and at which limit, from the
+  recorded quarter hours (the lowest limit the batteries could have held with
+  their discharge power and their usable energy per day, minus losses and
+  wear). With a comparison tariff this shows before a power price applies
+  what it would cost and what peak shaving brings.
+- The settings note when the threshold reaches the maximum state of charge
+  (the limit can probably not be held) or the month's peak raises the set
+  limit.
+- The diagnostics contain the month's peak, the budget of the running
+  quarter hour, the limits the economic calculation tried and the charging
+  plan; the debug log names every new economic limit and every planned
+  charge.
+
 ### Learned values
 
 Each of these values has a switch **… automatic** (or **Use learned …**). SLEMS
@@ -2378,74 +2508,11 @@ attributes.
   once it has lasted twice the response time of the batteries (at most 2 s):
   short load pulses, e.g. of a coffee machine keeping its heater warm, are
   over before a battery could follow them.
-- **Import peak shaving** (switch) – off by default. When enabled and the total
-  state of charge is at or below **Peak shaving state of charge threshold**, the
-  batteries only discharge to keep the grid import below **Peak shaving grid
-  import limit**. Above the threshold they cover the import above the limit
-  also while the price plan keeps their energy, while grid charging is planned
-  or for consumers without battery support. The threshold is an absolute
-  state of charge but cannot be set below the minimum state of charge of the
-  batteries; below 20 % the settings show how much is left above the minimum.
-  **Peak shaving mode** chooses what SLEMS calculates. **Economic** (default)
-  needs a power price in the current tariff and is greyed out without one
-  (peak shaving then works as with the automatic limit): SLEMS tries limits
-  from what the month already costs upwards and takes the one with the lowest
-  expected cost until the end of the month, together with its threshold (as
-  with the automatic threshold below). A lower limit saves power price but
-  needs more energy held back; what of it is still in the batteries when PV
-  refills them (the reserve, the losses) takes room from the PV surplus, which
-  is then fed in instead of replacing import, so it counts per remaining day
-  with the import price minus the feed-in credit. Limits whose highest
-  expected peak is more than the batteries can discharge, or whose threshold
-  would reach the maximum state of charge, are left out. With **Automatic
-  limit** SLEMS calculates the import limit itself: the lowest one for
-  which the expected energy above it, until PV refills the batteries (the
-  forecast surplus adds up to the energy back to the threshold, so a little
-  surplus on a rainy day does not count), fits into the usable energy above
-  the minimum state of charge minus **Peak shaving safety reserve** (default 20
-  %). The expected energy comes from the 5 minute statistics of the house
-  consumption of the last days, so short peaks such as an oven are included
-  (with a power price per hour of the day the second worst of about 10 days
-  instead of the mean, as a single missed quarter hour costs the whole month);
-  the limit is recalculated continuously and rises when more is used than
-  expected. Above the threshold it is calculated as if the threshold were
-  reached, and during the day for the coming evening and night, so it shows
-  the limit that will apply. In the settings the import limit then shows the
-  calculated value (read only); the sensor **Peak shaving import limit in
-  effect** shows the limit used. With **Automatic threshold** you set the
-  limit and SLEMS calculates the threshold the other way round: the lowest
-  one whose energy above the minimum state of charge covers the expected
-  energy above the limit until PV refills the batteries, plus the reserve; if
-  it reaches the maximum state of charge, the settings say that the limit can
-  probably not be held. With **Manual** limit and threshold apply as set.
-
-  With a **power price** in the current tariff (see
-  [Tariffs](#tariffs-optional)) the limit holds on average over the quarter
-  hour (or hour) the tariff measures, on the wall clock as the smart meter
-  counts: a short peak, e.g. while the batteries are at their power limit (a
-  plug-in battery at 800 W), is made up for by importing less in the rest of
-  the quarter hour, and while budget is left a short peak may go above the
-  limit. Feed-in does not count against import, so SLEMS never feeds in to
-  make up. If the power price has a time window, quarter hours outside it do
-  not count and have no budget, so the batteries keep their energy for it.
-  When the batteries cannot cover the import above the limit,
-  consumers running for a daily target give way, the lowest priority first:
-  power controlled ones down to their minimum power, then those outside their
-  minimum runtime switch off. The limit never lies below what this month's
-  peak already costs (the billed power minus 200 W): a lower import saves
-  nothing until the month ends. **Charge from the grid for peak shaving**
-  (switch, on by default, shown only with a power price): below the threshold
-  the batteries are topped up from the grid before the next expected peak, in
-  the cheapest quarter hours (with a fixed price as late as possible, as home
-  storage ages with time at a high state of charge) and only as far as the
-  forecast import stays below the limit, so the charging costs no power
-  price; a PV surplus before counts. The energy for peaks then only has to
-  last until the end of the next block of peaks (two hours without an
-  expected peak end it) instead of until PV refills the batteries, and the
-  economic mode counts the losses and the wear of charging it back. The tile **Peak power this month** in the
-  overview shows the power billed so far, when the highest quarter hour was,
-  up to which power a quarter hour costs nothing more, the extra cost of the
-  month above the minimum power and the running quarter hour.
+- **Import peak shaving** (switch, off by default) with **Peak shaving
+  mode**, **Peak shaving grid import limit**, **Peak shaving state of charge
+  threshold**, **Peak shaving safety reserve** and **Charge from the grid for
+  peak shaving**: see
+  [Import peak shaving and power price](#import-peak-shaving-and-power-price).
 
 ### Problems and notifications
 

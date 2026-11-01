@@ -411,6 +411,9 @@ def test_power_price_from_hours_and_over_hours() -> None:
     bill = compute_bill(power_tariff(), *month, {local(day, 18): 3000}, {})
     assert bill.lines[(Side.IMPORT, "Power")] == pytest.approx(3 * 3.0)
     assert bill.peak_from_hours
+    # A low hour cannot hide a quarter hour above the billed power (its mean × 4 is below it).
+    bill = compute_bill(power_tariff(), *month, {local(day, 3): 400, **quarters(day, 18, 875, 0, 0, 0)}, {})
+    assert not bill.peak_from_hours
     # Measured over hours: the quarter hours are added up.
     hourly = power_tariff(peak_minutes=60)
     bill = compute_bill(hourly, *month, quarters(day, 18, 1000, 1000, 500, 500), {})

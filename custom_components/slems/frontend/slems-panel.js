@@ -405,6 +405,10 @@ const STRINGS = {
     simChargePower: "Charge power",
     simDischargePower: "Discharge power",
     simImportTariff: "Tariff for import",
+    simTariff: "Tariff",
+    mPowerPlanned: "Highest planned hour (today and tomorrow)",
+    mPowerBilled: "Billed power this month (estimate)",
+    mPowerCost: "Power price this month (estimate)",
     simExportTariff: "Tariff for feed-in",
     simCurrentTariff: "current tariff",
     simMetricsToday: "Key figures today (from now on)",
@@ -443,7 +447,10 @@ const STRINGS = {
       "Saving price control: estimate of what keeping the battery energy for the expensive hours and charging from the grid would have saved, from the recorded consumption and PV with a simple battery model and a perfect forecast (an upper bound).",
     tariffSource: "Market prices: {source}",
     tariffUnpriced: "* Part of the energy has no market price yet and is not included.",
-    tariffPeakFromHours: "† The power price of the marked months partly comes from hours without recorded quarter hours: their hourly mean is lower than their highest quarter hour, so the actual power price may be higher.",
+    tariffPeakSaving: "peak shaving ≈ −{amount} ({kw} kW)",
+    tariffPeakSavingHint:
+      "Peak shaving: an estimate from the recorded quarter hours of what peak shaving would have saved of the power price, at the lowest limit the batteries could have held (their discharge power for every quarter hour, each day's energy above it within their usable energy), minus the losses and the wear of that energy. Optimistic for the batteries: at a recorded peak they may have been at their limit or empty.",
+    tariffPeakFromHours: "† In the marked months an hour without recorded quarter hours could hide a quarter hour above the billed power (only its mean is known), so the actual power price may be higher.",
     tariffNoPrices: "Dynamic tariffs need market prices: switch on “Fetch market prices” on the SLEMS device.",
     tariffForeignCurrency: "At the moment SLEMS only supports market prices in euro. Tariffs that follow the market price are therefore not computed: {names}.",
     tariffGridPower: "Hours before SLEMS recorded import and feed-in per quarter hour come from the hourly mean of the grid power (less exact) without energy counters; they can be chosen in the SLEMS options.",
@@ -1127,6 +1134,10 @@ const STRINGS = {
     simMinSoc: "Minimaler Ladezustand",
     simMaxSoc: "Maximaler Ladezustand",
     simImportTariff: "Tarif für Bezug",
+    simTariff: "Tarif",
+    mPowerPlanned: "Höchste geplante Stunde (heute und morgen)",
+    mPowerBilled: "Verrechnete Leistung diesen Monat (Schätzung)",
+    mPowerCost: "Leistungspreis diesen Monat (Schätzung)",
     simExportTariff: "Tarif für Einspeisung",
     simCurrentTariff: "aktueller Tarif",
     simChargePower: "Ladeleistung",
@@ -1167,7 +1178,10 @@ const STRINGS = {
       "Ersparnis Preissteuerung: Schätzung, was das Zurückhalten der Batterieenergie für die teuren Stunden und das Laden aus dem Netz gespart hätten, aus aufgezeichnetem Verbrauch und PV mit einem einfachen Batteriemodell und perfekter Prognose (eine Obergrenze).",
     tariffSource: "Börsenpreise: {source}",
     tariffUnpriced: "* Für einen Teil der Energie gibt es noch keinen Börsenpreis; er ist nicht enthalten.",
-    tariffPeakFromHours: "† Der Leistungspreis der markierten Monate stammt teils aus Stunden ohne aufgezeichnete Viertelstunden: Ihr Stundenmittel ist niedriger als ihre höchste Viertelstunde, der tatsächliche Leistungspreis kann also höher sein.",
+    tariffPeakSaving: "Spitzenabfang ≈ −{amount} ({kw} kW)",
+    tariffPeakSavingHint:
+      "Spitzenabfang: eine Schätzung aus den aufgezeichneten Viertelstunden, was Spitzenabfang am Leistungspreis gespart hätte, bei der niedrigsten Grenze, die die Batterien hätten halten können (ihre Entladeleistung für jede Viertelstunde, die Energie darüber je Tag innerhalb ihrer nutzbaren Energie), abzüglich Verlusten und Verschleiß dieser Energie. Für die Batterien optimistisch: Bei einer aufgezeichneten Spitze können sie an ihrer Grenze oder leer gewesen sein.",
+    tariffPeakFromHours: "† In den markierten Monaten könnte eine Stunde ohne aufgezeichnete Viertelstunden eine Viertelstunde über der verrechneten Leistung verbergen (bekannt ist nur ihr Mittel), der tatsächliche Leistungspreis kann also höher sein.",
     tariffNoPrices: "Dynamische Tarife brauchen Börsenpreise: Am SLEMS-Gerät „Börsenpreise abrufen“ einschalten.",
     tariffForeignCurrency: "SLEMS unterstützt zum aktuellen Zeitpunkt nur Börsenpreise in Euro. Tarife, die vom Börsenpreis abhängen, werden deshalb nicht berechnet: {names}.",
     tariffGridPower: "Stunden, bevor SLEMS Bezug und Einspeisung je Viertelstunde aufgezeichnet hat, stammen ohne Energiezähler aus dem Stundenmittel der Netzleistung (ungenauer); die Zähler lassen sich in den SLEMS-Optionen wählen.",
@@ -4486,6 +4500,25 @@ class SlemsPanel extends HTMLElement {
       [t.mSocEnd, "soc_end_pct", percent],
     ];
     const costs = "import_cost" in simulated && "import_cost" in real;
+    // The power price of the month (with a power price in the tariff).
+    const realPower = this._sim.result.real_metrics?.power;
+    const simPower = this._sim.result.metrics?.power;
+    if (realPower || simPower) {
+      const language = this._hass?.locale?.language || "en";
+      const money = new Intl.NumberFormat(language, { style: "currency", currency: this._currency() });
+      const kw = (v) => (v === null || v === undefined ? "–" : `${new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(v)} kW`);
+      real.power_planned_kw = realPower?.planned_kw;
+      real.power_billed_kw = realPower?.billed_kw;
+      real.power_cost = realPower?.cost;
+      simulated.power_planned_kw = simPower?.planned_kw;
+      simulated.power_billed_kw = simPower?.billed_kw;
+      simulated.power_cost = simPower?.cost;
+      rows.push(
+        [t.mPowerPlanned, "power_planned_kw", kw],
+        [t.mPowerBilled, "power_billed_kw", kw],
+        [t.mPowerCost, "power_cost", (v) => (v === null || v === undefined ? "–" : money.format(v))]
+      );
+    }
     if (costs) {
       const language = this._hass?.locale?.language || "en";
       const money = new Intl.NumberFormat(language, { style: "currency", currency: this._currency() });
@@ -4547,6 +4580,7 @@ class SlemsPanel extends HTMLElement {
     const thisMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
     let unpriced = false;
     let peakFromHours = false;
+    let peakSaving = false;
     const sums = { import_kwh: 0, export_kwh: 0, costs: {}, savings: {} };
     const backtest = result.backtest;
     const monthLabel = (month) => {
@@ -4594,6 +4628,11 @@ class SlemsPanel extends HTMLElement {
           if (index === 0 && withSaving.has(tariff.id) && saving !== undefined) {
             html += `<span class="sub">${escapeHtml(t.tariffSavingShort.replace("{amount}", money.format(saving)))}</span>`;
           }
+          if (index === 0 && cost.peak_saving) {
+            peakSaving = true;
+            const kw = new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(cost.peak_limit_kw);
+            html += `<span class="sub">${escapeHtml(t.tariffPeakSaving.replace("{amount}", money.format(cost.peak_saving)).replace("{kw}", kw))}</span>`;
+          }
           const edge = !sum && index === 0 ? " side-start" : "";
           return `<td class="${tone}${edge}">${html}</td>`;
         })
@@ -4631,6 +4670,7 @@ class SlemsPanel extends HTMLElement {
     const notes = [
       unpriced ? t.tariffUnpriced : "",
       peakFromHours ? t.tariffPeakFromHours : "",
+      peakSaving ? t.tariffPeakSavingHint : "",
       tariffs.some((tariff) => tariff.dynamic && !tariff.foreign_currency) && !result.market_prices ? t.tariffNoPrices : "",
       foreign.length ? t.tariffForeignCurrency.replace("{names}", foreign.map((tariff) => tariff.name).join(", ")) : "",
       result.power_hours > 0 ? t.tariffGridPower : "",
@@ -4676,6 +4716,13 @@ class SlemsPanel extends HTMLElement {
         min="${min ?? a.min ?? ""}" max="${max ?? a.max ?? ""}" step="${stepValue}"${disabled ? " disabled" : ""}><span class="unit">${escapeHtml(unit ?? a.unit_of_measurement ?? "")}</span></span></div>`;
   }
 
+  /** Whether the simulation plans with a power price: the chosen import tariff, else the current one. */
+  _simPowerPriced() {
+    const chosen = this._sim.form?.import_tariff;
+    if (chosen) return Boolean((this._sim.result?.base?.tariffs?.import || []).find((o) => o.id === chosen)?.power_price);
+    return this._number(this._state("power_peak")) !== null;
+  }
+
   /** Select of a simulation setting with the options and their names of the real select entity. */
   _simSelect(path, entity) {
     const [group, key] = path.split(".");
@@ -4711,6 +4758,11 @@ class SlemsPanel extends HTMLElement {
       group(title, setting(switchKey, switchEntity) + (s[switchKey] ? children : ""));
     return `
       <div class="sim-actions"><button class="link" data-action="sim-reset">${escapeHtml(t.simReset)}</button></div>
+      ${(() => {
+        // The tariff of everything that uses prices: price plan, daily targets, power price.
+        const tariffs = this._simTariff("import_tariff", "import", t.simImportTariff) + this._simTariff("export_tariff", "export", t.simExportTariff);
+        return tariffs ? group(t.simTariff, tariffs) : "";
+      })()}
       ${group(
         t.simForecast,
         field("pv_pct", { label: t.simPv, unit: "%", min: -90, max: 100, step: 5 }) +
@@ -4733,9 +4785,7 @@ class SlemsPanel extends HTMLElement {
         setting("grid_friendly_buffer_kwh", "grid_friendly_buffer"))}
       ${option(t.groups.night, "night_discharge", "night_discharge", setting("night_reserve_pct", "night_reserve"))}
       ${option(t.groups.price, "price_control", "price_control",
-        this._simTariff("import_tariff", "import", t.simImportTariff) +
-          this._simTariff("export_tariff", "export", t.simExportTariff) +
-          setting("price_min_gain_ct", "price_min_gain") +
+        setting("price_min_gain_ct", "price_min_gain") +
           setting("grid_charge", "grid_charge") +
           (s.grid_charge
             ? setting("grid_charge_max_soc_pct", "grid_charge_max_soc") +
@@ -4745,7 +4795,7 @@ class SlemsPanel extends HTMLElement {
           setting("battery_export", "battery_export"))}
       ${option(t.groups.peak, "peak_shaving", "peak_shaving",
         this._simSelect("settings.peak_shaving_mode", "peak_shaving_mode") +
-          (this._number(this._state("power_peak")) !== null ? setting("peak_grid_charge", "peak_grid_charge") : "") +
+          (this._simPowerPriced() ? setting("peak_grid_charge", "peak_grid_charge") : "") +
           setting("peak_shaving_grid_limit_w", "peak_shaving_grid_limit", { disabled: ["auto_limit", "economic"].includes(s.peak_shaving_mode) }) +
           setting("peak_shaving_soc_threshold_pct", "peak_shaving_soc_threshold", { min: 0, disabled: ["auto_threshold", "economic"].includes(s.peak_shaving_mode) }) +
           (s.peak_shaving_mode !== "manual" ? setting("peak_shaving_reserve_pct", "peak_shaving_reserve") : ""))}

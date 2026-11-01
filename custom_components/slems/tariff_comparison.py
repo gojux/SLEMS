@@ -5,7 +5,9 @@ priced with each tariff (dynamic items with the stored day-ahead prices).
 
 With batteries and recorded house consumption and PV, an estimate of what the
 price aware control would have saved with each tariff is added per month (see
-price_backtest): both runs of the battery model priced with the tariff.
+price_backtest): both runs of the battery model priced with the tariff. For
+a tariff with a power price, an estimate of what peak shaving would have
+saved (see peak_backtest).
 """
 
 from __future__ import annotations
@@ -32,6 +34,9 @@ from .const import (
 from .currency import market_prices_usable
 from .energy_history import async_grid_energy
 from .forecast import async_statistic_means, sum_series
+from .grid_quarters import GridQuarters
+from .peak_backtest import estimate, month_powers
+from .power_peak import power_price
 from .price_backtest import BacktestBattery, play
 from .tariff import Role, Side, Tariff, combine_tariffs, compute_bill, mixed_tariff, tariff_from_data
 
@@ -134,6 +139,32 @@ def backtest_savings(
     return savings
 
 
+def add_peak_savings(
+    rows: list[dict[str, Any]],
+    tariffs: Mapping[str, Tariff],
+    quarters: GridQuarters,
+    battery: BacktestBattery,
+) -> None:
+    """Per month and tariff with a power price: what peak shaving would have saved
+    (``peak_saving``) at which limit (``peak_limit_kw``), from the recorded quarter hours."""
+    powers: dict[int, dict[date, dict[datetime, float]]] = {}
+    for row in rows:
+        month = date.fromisoformat(f"{row['month']}-01")
+        for key, tariff in tariffs.items():
+            cost = row["costs"].get(key)
+            price = power_price(tariff, month)
+            if cost is None or price is None or not row.get("import_kwh"):
+                continue
+            if price.interval_s not in powers:
+                powers[price.interval_s] = month_powers(quarters, price.interval_s)
+            # Mean import price of the month (with VAT), for the losses.
+            import_ct = cost["import"] / row["import_kwh"] * 100
+            result = estimate(price, powers[price.interval_s].get(month, {}), battery, import_ct)
+            if result is not None and result.saving >= 0.005:
+                cost["peak_saving"] = round(result.saving, 2)
+                cost["peak_limit_kw"] = round(result.limit_kw, 1)
+
+
 def configured_tariffs(entry: SlemsConfigEntry) -> dict[str, Tariff]:
     """The tariffs of the entry (see tariff.combine_tariffs): the current
     contract first (several current tariffs together), then the comparison
@@ -162,7 +193,7 @@ def tariff_choices(entry: SlemsConfigEntry) -> dict[str, list[dict[str, str]]]:
     tariffs = _comparison_tariffs(entry)
     return {
         side.value: [
-            {"id": key, "name": tariff.name}
+            {"id": key, "name": tariff.name, "power_price": tariff.power_priced}
             for key, tariff in tariffs.items()
             if any(item.side is side for item in tariff.items)
         ]
@@ -249,6 +280,11 @@ async def async_tariff_comparison(hass: HomeAssistant, entry: SlemsConfigEntry) 
             "total_eur": round(measured.total_now(dt_util.now()), 2),
             "runs": measured.runs if measured.month == f"{today:%Y-%m}" else 0,
         }
+        peak_battery = coordinator.backtest_battery()
+        if peak_battery is not None and any(tariff.power_priced for tariff in tariffs.values()):
+            await hass.async_add_executor_job(
+                add_peak_savings, result["months"], tariffs, coordinator.grid_quarters, peak_battery
+            )
         savings = await _async_savings(hass, coordinator, tariffs, first, today, start, end)
         if savings is not None:
             for row in result["months"]:

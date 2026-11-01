@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from functools import partial
@@ -685,6 +686,8 @@ class SystemSnapshot:
     peak_threshold_full: bool = False
     peak_threshold_pct: float | None = None
     peak_economic_fallback: str | None = None
+    # Charging from the grid for peak shaving per quarter hour (see ForecastPlan).
+    peak_charge: dict[datetime, float] = field(default_factory=dict)
     # Replacement for a negative house power (last valid value, None: unknown).
     house_power_hold_w: float | None = None
     pv_forecast: PvForecast | None = None
@@ -951,6 +954,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.legacy_peak_shaving_auto: bool | None = None
         self._peak_month: tuple[tuple, PeakState] | None = None
         self._economic_cache: tuple[tuple, EconomicLimit] | None = None
+        # Whether charging for peak shaving was planned last time (logged on a change).
+        self._peak_charge_planned = False
         # Configuration the setup depends on (see __init__._setup_key).
         self.setup_key: str | None = None
         # Price plans of the last inputs (real and simulated) -> (monotonic expiry, plan).
@@ -1989,6 +1994,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 "peak_threshold_full",
                 "peak_threshold_pct",
                 "peak_economic_fallback",
+                "peak_charge",
                 "pv_correction",
                 "pv_elapsed_share",
                 "day_plan",
@@ -3155,6 +3161,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         snapshot.peak_threshold_pct = peak_threshold_pct if settings.peak_shaving else None
         snapshot.peak_threshold_full = forecast_plan.peak_threshold_full and settings.peak_shaving
         snapshot.peak_economic_fallback = forecast_plan.peak_economic_fallback
+        snapshot.peak_charge = forecast_plan.peak_charge if settings.peak_shaving else {}
         snapshot.day_plan = forecast_plan.day_plan
         snapshot.day_plan_tomorrow = forecast_plan.day_plan_tomorrow
         snapshot.price_hold = forecast_plan.price_hold
@@ -3741,7 +3748,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             result.peak_limit_w,
             result.peak_threshold_full,
             result.peak_economic_fallback,
-        ) = self._peak_shaving(battery, wall_now, pv_hourly, consumption_hourly, settings, own)
+        ) = self._peak_shaving(battery, wall_now, pv_hourly, consumption_hourly, settings, own, tariff)
         if pv_forecast is None:
             return result
         if battery is not None:
@@ -3785,7 +3792,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if settings.peak_shaving and settings.peak_grid_charge and consumption_hourly:
                 result.peak_charge = self._peak_charge(
                     battery, wall_now, pv_forecast, consumption_hourly, grid_load,
-                    result.peak_threshold_pct, result.peak_limit_w,
+                    result.peak_threshold_pct, result.peak_limit_w, tariff,
                 )
             if settings.price_control and consumption_hourly:
                 result.grid_charge = self._grid_charge(
@@ -4098,11 +4105,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         grid_load: Mapping[datetime, float],
         threshold_pct: float,
         limit_w: float,
+        tariff: Tariff | None = None,
     ) -> dict[datetime, float]:
         """Charging from the grid up to the peak shaving threshold before the next
-        expected peak (see peak_charge); only with a power price."""
+        expected peak (see peak_charge); only with a power price. ``tariff``:
+        instead of the current one (the simulation)."""
         profile = self.forecaster.peak_profile
-        if self.peak_state() is None or profile is None or profile.is_empty:
+        if self.peak_state(tariff=tariff) is None or profile is None or profile.is_empty:
             return {}
         local_now = dt_util.as_local(wall_now)
         horizon = local_now + MAX_GRID_CHARGE_HORIZON
@@ -4124,9 +4133,18 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         own = self._own_pv_batteries(self.data, wall_now) if self.data is not None else []
         charge_w = max(0.0, battery.max_charge_w - sum(b.max_charge_w for b in own))
         room = {start: limit_w - wh / quarter_h for start, wh in nets.items()}
-        return plan_peak_charge(
-            wall_now, missing, efficiency, charge_w, room, self._import_prices(wall_now, horizon) or {}, deadline
+        plan = plan_peak_charge(
+            wall_now, missing, efficiency, charge_w, room, self._import_prices(wall_now, horizon, tariff=tariff) or {}, deadline
         )
+        planned = bool(plan)
+        if tariff is None and planned != self._peak_charge_planned:
+            _LOGGER.debug(
+                "Peak shaving charge from the grid %s: %.0f Wh missing to %.1f %%, before %s, %s",
+                "planned" if planned else "not needed", missing, threshold_pct, deadline.isoformat(),
+                {start.strftime("%H:%M"): round(power) for start, power in sorted(plan.items())},
+            )
+            self._peak_charge_planned = planned
+        return plan
 
     def _wear_ct(self) -> float:
         """Wear costs per kWh of the enabled batteries (ct, weighted by capacity)."""
@@ -4729,9 +4747,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         pv_forecast: PvForecast | None,
         load: float | None,
         wall_now: datetime,
+        control: ControlSettings | None = None,
+        tariff: Tariff | None = None,
     ) -> None:
         """Mode of every consumer's daily target for this plan, the load of the
-        forced runs they may still need and the part expected from the surplus."""
+        forced runs they may still need and the part expected from the surplus.
+        ``control`` / ``tariff``: instead of the real settings and the current
+        tariff (the simulation, see simulated_targets)."""
+        control = control or self.settings
         consumption = snapshot.consumption_forecast
         local_now = dt_util.as_local(wall_now)
         self.target_states = {}
@@ -4745,7 +4768,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # A supporting consumer only takes the surplus above the feed-in cap's
         # limit; the cap plan counts it there.
         def supporting(consumer: ConsumerConfig) -> bool:
-            return self.settings.feed_in_cap and self.cap_mode(consumer.subentry_id) is CapMode.SUPPORT
+            return control.feed_in_cap and self.cap_mode(consumer.subentry_id) is CapMode.SUPPORT
 
         for consumer in consumers:
             settings = self.consumer_targets[consumer.subentry_id]
@@ -4837,6 +4860,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 power_w=power,
                 pv_forecast=pv_forecast,
                 consumption=consumption,
+                control=control,
+                tariff=tariff,
             )
             self.target_states[consumer.subentry_id] = self._surplus_window(
                 consumer,
@@ -4909,16 +4934,17 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         end: datetime,
         pv_forecast: PvForecast | None,
         consumption: ConsumptionForecast | None,
+        tariff: Tariff | None = None,
     ) -> dict[datetime, float | None] | None:
         """Cost (ct) of a run per kWh of the consumer's power, per quarter hour:
         its power at the forecast outdoor temperature (see OutdoorPowerLearner),
         the part the forecast surplus covers at the feed-in credit, the rest at
         the import price. Without a learned dependency and surplus the import
         price."""
-        prices = self._import_prices(wall_now, end)
+        prices = self._import_prices(wall_now, end, tariff=tariff)
         if prices is None or power_w <= 0:
             return prices
-        credits = self._import_prices(wall_now, end, Side.EXPORT) or {}
+        credits = self._import_prices(wall_now, end, Side.EXPORT, tariff=tariff) or {}
         nets = _quarter_nets(wall_now, end, pv_forecast, consumption.total if consumption else {}, {})
         learner = self.outdoor_power.get(consumer.subentry_id)
         temperatures = self.forecaster.forecast_temperatures
@@ -4937,6 +4963,35 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             result[start] = ((power - covered) * price + covered * (credits.get(start) or 0.0)) / power_w
         return result
 
+    _TARGET_FIELDS = (
+        "target_states", "target_load", "target_load_grid", "target_energy_wh",
+        "target_energy_estimated", "target_forecast_c", "target_demands",
+    )
+
+    @contextmanager
+    def simulated_targets(
+        self,
+        snapshot: SystemSnapshot,
+        battery: BatteryGroup | None,
+        load: float | None,
+        wall_now: datetime,
+        control: ControlSettings,
+        tariff: Tariff | None,
+    ) -> Iterator[None]:
+        """The daily targets planned with the settings and tariff of a simulation
+        while it runs, the real ones again afterwards.
+
+        Only for code that runs at once in the event loop (the simulation): the
+        control cannot run in between.
+        """
+        saved = {name: getattr(self, name) for name in self._TARGET_FIELDS}
+        try:
+            self._target_states(snapshot, battery, snapshot.pv_forecast, load, wall_now, control, tariff)
+            yield
+        finally:
+            for name, value in saved.items():
+                setattr(self, name, value)
+
     def _price_window(
         self,
         consumer: ConsumerConfig,
@@ -4948,12 +5003,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         power_w: float,
         pv_forecast: PvForecast | None,
         consumption: ConsumptionForecast | None,
+        control: ControlSettings | None = None,
+        tariff: Tariff | None = None,
     ) -> TargetState:
         """Move the forced run of a target with the source "grid" into a cheaper
         window if the surplus is short for it anyway (see price_hold); a
         window's cost from ``_run_prices``."""
+        control = control or self.settings
         if (
-            not self.settings.price_control
+            not control.price_control
             or not short
             or settings.source is not TargetSource.GRID
             or state.mode not in (TargetMode.SURPLUS, TargetMode.BOOST, TargetMode.WINDOW)
@@ -4961,7 +5019,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             or state.end is None
         ):
             return state
-        prices = self._run_prices(consumer, power_w, wall_now, state.end, pv_forecast, consumption)
+        prices = self._run_prices(consumer, power_w, wall_now, state.end, pv_forecast, consumption, tariff)
         if prices is None:
             return state
         local_now = dt_util.as_local(wall_now)
@@ -4970,7 +5028,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             local_now,
             state.latest_start,
             state.end - START_MARGIN - state.latest_start,
-            self.settings.price_min_gain_ct,
+            control.price_min_gain_ct,
         )
         if start is None:
             return state
@@ -5088,6 +5146,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         consumption_hourly: dict[datetime, float] | None,
         settings: ControlSettings,
         own: Sequence[OwnPvBattery] = (),
+        tariff: Tariff | None = None,
     ) -> tuple[float, float, bool, str | None]:
         """SoC threshold and import limit of peak shaving in effect, whether
         the automatic threshold reached the highest SoC and why the economic
@@ -5103,10 +5162,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         lowest expected cost of power price and energy held back (see
         peak_shaving.economic_limit). With a power price the limit is never
         below what this month's peak already costs (see power_peak).
+        ``tariff``: instead of the current one (the simulation).
         """
         threshold = settings.peak_shaving_soc_threshold_pct
         limit = settings.peak_shaving_grid_limit_w
-        peak = self.peak_state()
+        peak = self.peak_state(tariff=tariff)
         floor = peak.limit_w if peak is not None else 0.0
         mode = settings.peak_shaving_mode
         fallback = None
@@ -5145,7 +5205,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             reserve = settings.peak_shaving_reserve_pct / 100
             if mode is PeakShavingMode.ECONOMIC and peak is not None:
                 economic = self._economic_limit(
-                    battery, wall_now, peak, profile, hours_for, floor, reserve, threshold, topped_up
+                    battery, wall_now, peak, profile, hours_for, floor, reserve, threshold, topped_up, tariff
                 )
                 limit, threshold = economic.limit_w, economic.threshold_pct
             if mode is PeakShavingMode.AUTO_LIMIT:
@@ -5181,10 +5241,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         reserve: float,
         start_pct: float,
         topped_up: bool = False,
+        tariff: Tariff | None = None,
     ) -> EconomicLimit:
-        """The economic limit (see peak_shaving.economic_limit), kept for a minute;
-        ``topped_up``: the peak energy is charged back from the grid."""
-        price = self._current_power_price(dt_util.as_local(wall_now).date())
+        """The economic limit (see peak_shaving.economic_limit), kept for a minute
+        (with the current tariff); ``topped_up``: the peak energy is charged back
+        from the grid; ``tariff``: instead of the current one (the simulation)."""
+        price = self._current_power_price(dt_util.as_local(wall_now).date(), tariff)
         local = dt_util.as_local(wall_now)
         month_end = dt_util.start_of_local_day((local.replace(day=28) + timedelta(days=4)).replace(day=1))
         days_left = max(0.0, (month_end - local).total_seconds() / 86400)
@@ -5194,8 +5256,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             values = [value for value in (prices or {}).values() if value is not None]
             return sum(values) / len(values) if values else None
 
-        bought = mean(self._import_prices(wall_now, horizon))
-        sold = mean(self._import_prices(wall_now, horizon, Side.EXPORT)) or 0.0
+        bought = mean(self._import_prices(wall_now, horizon, tariff=tariff))
+        sold = mean(self._import_prices(wall_now, horizon, Side.EXPORT, tariff=tariff)) or 0.0
         # Import price minus feed-in credit (€/kWh); unknown: nothing lost.
         spread = max(0.0, (bought - sold) / 100) if bought is not None else 0.0
         efficiency = battery.charge_efficiency or 1.0
@@ -5208,7 +5270,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             round(battery.max_discharge_w), round(floor_w), reserve, round(start_pct, 1), round(spread, 4),
             round(cycle_cost, 4),
         )
-        if self._economic_cache is not None and self._economic_cache[0] == key:
+        if tariff is None and self._economic_cache is not None and self._economic_cache[0] == key:
             return self._economic_cache[1]
 
         def power_cost(limit_w: float) -> float:
@@ -5231,11 +5293,28 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             start_pct,
             cycle_cost,
         )
+        if tariff is not None:
+            return result
+        previous = self._economic_cache[1] if self._economic_cache is not None else None
+        if previous is None or (previous.limit_w, round(previous.threshold_pct)) != (result.limit_w, round(result.threshold_pct)):
+            _LOGGER.debug(
+                "Economic peak shaving: limit %.0f W, threshold %.1f %%, expected cost %.2f (floor %.0f W, "
+                "%.1f days left, spread %.3f, cycle cost %.3f per kWh)",
+                result.limit_w, result.threshold_pct, result.cost, floor_w, days_left, spread, cycle_cost,
+            )
         self._economic_cache = (key, result)
         return result
 
-    def _current_power_price(self, day: date) -> PowerPrice | None:
-        """Power price of the current tariff on ``day`` (see power_peak), kept per day."""
+    @property
+    def economic_peak(self) -> EconomicLimit | None:
+        """The last economic limit (see _economic_limit), for the diagnostics."""
+        return self._economic_cache[1] if self._economic_cache is not None else None
+
+    def _current_power_price(self, day: date, tariff: Tariff | None = None) -> PowerPrice | None:
+        """Power price of the current tariff on ``day`` (see power_peak), kept per
+        day; with ``tariff`` (the simulation) its power price."""
+        if tariff is not None:
+            return power_price(tariff, day)
         cached = self._power_price_cache
         if cached is None or cached[0] != day:
             tariffs = configured_tariffs(self.config_entry)
@@ -5243,15 +5322,18 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             cached = self._power_price_cache = (day, power_price(current, day))
         return cached[1]
 
-    def peak_state(self, now: float | None = None) -> PeakState | None:
+    def peak_state(self, now: float | None = None, tariff: Tariff | None = None) -> PeakState | None:
         """Peak power of this month and the running interval; None without a power price.
 
-        The month part is computed once per interval (it changes only when one ends).
+        The month part is computed once per interval (it changes only when one
+        ends); with ``tariff`` (the simulation) with its power price, not kept.
         """
         now = time.time() if now is None else now
-        price = self._current_power_price(dt_util.as_local(dt_util.utc_from_timestamp(now)).date())
+        price = self._current_power_price(dt_util.as_local(dt_util.utc_from_timestamp(now)).date(), tariff)
         if price is None:
             return None
+        if tariff is not None:
+            return compute_peak_state(price, self.grid_quarters, now)
         key = (now - now % price.interval_s, price)
         cached = self._peak_month
         if cached is None or cached[0] != key:

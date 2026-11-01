@@ -41,7 +41,7 @@ Wenn du SLEMS mit einer anderen Batterie nutzen möchtest, erstelle bitte ein
 | Österreich | 23 Stromtarife und 2 PV-Einspeisetarife von 11 Lieferanten (Burgenland Energie, Energie AG Oberösterreich, Energie Steiermark, EVN, IKB, illwerke vkw, Kelag, LINZ AG, Salzburg AG, TIWAG, Wien Energie), ein allgemeiner dynamischer Tarif, die Netzentgelte aller 14 Netzbereiche, die Bundesabgaben |
 | Deutschland | ein allgemeiner dynamischer Tarif, die EEG-Einspeisevergütung (bis 10 kWp, 8 Inbetriebnahme-Zeiträume), die Netzentgelte von 19 Netzbetreibern, die bundesweiten Abgaben |
 | Schweiz | der Tarif deiner Gemeinde aus den offenen Daten der ElCom |
-| Andere Länder | dein Tarif wie auf der Rechnung oder als YAML-Datei (siehe [Tarife](#tarife-optional)) |
+| Alle Länder | jeder Tarif, für den es keine Vorlage gibt (auch in Österreich, Deutschland und der Schweiz): wie auf der Rechnung eingegeben oder als YAML-Datei, die eine KI mit dem mitgelieferten Prompt aus deiner Rechnung erstellt (siehe [Tarife](#tarife-optional)) |
 
 ## Inhalt
 
@@ -92,6 +92,7 @@ Wenn du SLEMS mit einer anderen Batterie nutzen möchtest, erstelle bitte ein
   - [Welche Option wann?](#welche-option-wann)
   - [Netzdienliches Laden](#netzdienliches-laden)
   - [Einspeisebegrenzung](#einspeisebegrenzung)
+  - [Bezugsspitzen abfangen und Leistungspreis](#bezugsspitzen-abfangen-und-leistungspreis)
   - [Gelernte Werte](#gelernte-werte)
   - [Weitere Einstellungen (Entitäten)](#weitere-einstellungen-entitäten)
   - [Probleme und Benachrichtigungen](#probleme-und-benachrichtigungen)
@@ -274,7 +275,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Netzdienliches Laden: PV-Einspeisespitzen abfangen | ✅ |
 | Einspeisebegrenzung: PV-Energie über einer Einspeisegrenze speichern, rechtzeitig Platz schaffen | ✅ |
 | Nachtentladung bis zu einer prognosebasierten Reserve | ✅ |
-| Bezugsspitzen abfangen: eine Bezugsgrenze und eine Ladezustand-Schwelle, unter der die Batterien ihre Energie für die Spitzen zurückhalten (mit Leistungspreis das günstigste Paar, eine davon aus der Verbrauchsstatistik berechnet oder beide eingestellt; manuell aktivierbar); mit Leistungspreis im Tarif gilt die Grenze im Mittel über die Viertelstunde, erzwungene Verbraucher treten zurück, und die Übersicht zeigt die Monatsspitze und ihre Mehrkosten | ✅ |
+| Bezugsspitzen abfangen: eine Bezugsgrenze und eine Ladezustand-Schwelle, unter der die Batterien ihre Energie für die Spitzen zurückhalten (mit Leistungspreis das günstigste Paar, eine davon aus der Verbrauchsstatistik berechnet oder beide eingestellt; manuell aktivierbar); mit Leistungspreis im Tarif gilt die Grenze im Mittel über die Viertelstunde, erzwungene Verbraucher treten zurück, die Batterien laden vor den Spitzen unter der Grenze aus dem Netz nach, die Übersicht zeigt die Monatsspitze und ihre Mehrkosten, und der Tarifvergleich schätzt, was Spitzenabfang gespart hätte | ✅ |
 
 | Dashboard | Status |
 |---|---|
@@ -517,7 +518,10 @@ auf **Aufgerundet auf**, wenn der Tarif das tut. **Verrechnet ab** /
 Posten mit dem höheren Preis über 10 kW. Die Spitze kommt aus den
 aufgezeichneten Viertelstunden; Stunden vor der Aufzeichnung haben nur ihr
 Stundenmittel, das niedriger ist als ihre höchste Viertelstunde, deshalb
-markiert der Vergleich solche Monate.
+markiert der Vergleich Monate, in denen eine solche Stunde eine Viertelstunde
+über der verrechneten Leistung verbergen könnte (ihr Mittel × 4 liegt
+darüber). Wie SLEMS die Spitze niedrig hält: siehe
+[Bezugsspitzen abfangen und Leistungspreis](#bezugsspitzen-abfangen-und-leistungspreis).
 
 **Dynamische Tarife und Börsenpreise.** Ein Posten kann auch dem
 Day-Ahead-Markt folgen: **Börsenpreis (stündlich)** oder **Monatsmarktpreis**,
@@ -2098,23 +2102,30 @@ Andere Einstellungen ausprobieren, ohne etwas zu ändern.
   den Ladezustand), der
   Sicherheitspuffer der Nachtentladung, die maximale Einspeisung beim Entladen
   und die PV- und Verbrauchsprognose (±%) lassen sich ändern. Mit
-  Vergleichstarifen ([Tarife](#tarife-optional)) kann die preisbewusste
-  Steuerung mit einem anderen **Tarif für Bezug** und **Tarif für
-  Einspeisung** planen (z. B. einem dynamischen Tarif); das Preisdiagramm
-  zeigt dann deren Preise.
+  Vergleichstarifen ([Tarife](#tarife-optional)) wählt die Gruppe **Tarif**
+  ganz oben einen anderen **Tarif für Bezug** und **Tarif für Einspeisung**
+  (z. B. einen dynamischen Tarif, einen mit günstigerem Netzpreis zu Mittag
+  oder einen mit Leistungspreis). Alles, was Preise nutzt, plant damit: die
+  preisbewusste Steuerung, die Läufe der Tagesziele im günstigsten Fenster
+  und Bezugsspitzen abfangen mit Leistungspreis; das Preisdiagramm zeigt dann
+  deren Preise.
 - **Ergebnis**: SLEMS rechnet die Tagespläne wie die echten, ab dem aktuellen
   Ladezustand mit den aktuellen Prognosen; der Plan mit den aktuellen
   Einstellungen ist zum Vergleich grau gepunktet, darunter stehen Kennzahlen
   nebeneinander (Einspeisung, Netzbezug, höchster Bezug und höchste
   Einspeisung, abgeregelte Energie, Ladezustand um Mitternacht; mit einem
   Tarif auch Bezugskosten, Einspeisevergütung und beides zusammen, aus den
-  Preisen je kWh inkl. USt. ohne Jahresgebühren).
+  Preisen je kWh inkl. USt. ohne Jahresgebühren; mit Leistungspreis die
+  höchste geplante Stunde und eine Schätzung der verrechneten Leistung und
+  des Leistungspreises des Monats, weil der Plan in Stunden rechnet).
 - **Nichts davon wird gespeichert** oder für die Regelung verwendet; jeder
   Besuch beginnt mit den aktuellen Einstellungen.
 - **Heute** wird ab jetzt simuliert (die Werte davor sind gemessen); am
   Nachmittag schlägt ein Hinweis **Morgen** für einen ganzen simulierten Tag
   vor.
-- Die Tagesziele der Verbraucher gehen wie in der echten Planung ein; sonst
+- Die Tagesziele der Verbraucher werden mit den simulierten Einstellungen und
+  dem simulierten Tarif neu geplant (z. B. ein Lauf im günstigeren Fenster
+  eines anderen Tarifs); sonst
   werden von SLEMS gesteuerte Verbraucher und der Batterievorrang (er wirkt in
   der Echtzeit-Verteilung) nicht simuliert.
 
@@ -2455,6 +2466,132 @@ Sensoren: **Einspeisebegrenzung: aufzunehmende Energie** (am Tag der nächsten
 Spitze, mit den Spitzen, dem nötigen Platz, dem Einspeiseplan und dem Puffer
 als Attribute) und **Einspeisebegrenzung: vor der Spitze einzuspeisen**.
 
+### Bezugsspitzen abfangen und Leistungspreis
+
+**Bezugsspitzen abfangen** (Schalter, standardmäßig aus) hält Energie in den
+Batterien für Verbrauchsspitzen zurück: bei einem Tarif mit Leistungspreis
+(z. B. die österreichischen Netztarife ab 2027, die die höchste Viertelstunde
+des Monats verrechnen) oder bei einem schwachen Netzanschluss.
+
+**Grundprinzip.** Zwei Werte bestimmen es:
+
+- **Bezugsgrenze für Spitzenabfang**: Bezug bis zu dieser Leistung kommt aus
+  dem Netz, darüber decken die Batterien.
+- **Ladezustand-Schwelle für Spitzenabfang**: Ab diesem Ladezustand (aller
+  Batterien zusammen) abwärts decken die Batterien *nur noch* den Bezug über
+  der Grenze. Die Energie zwischen dem minimalen Ladezustand (z. B. 12 % bei
+  der Venus) und der Schwelle ist damit für Spitzen reserviert. Darüber
+  arbeiten die Batterien wie sonst und decken den Bezug über der Grenze auch,
+  wenn sie sonst nicht entladen würden (Preisplan, Netzladen, Verbraucher
+  ohne Batterie-Unterstützung). Netzladen bleibt unter der Grenze.
+
+**Modus Spitzenabfang** wählt, was SLEMS davon berechnet:
+
+| Modus | Du stellst ein | SLEMS berechnet |
+|---|---|---|
+| **Wirtschaftlich** (Standard, nur mit Leistungspreis) | – | Grenze und Schwelle mit den niedrigsten erwarteten Kosten |
+| **Automatische Grenze** | Schwelle | die niedrigste Grenze, für die die Energie unter der Schwelle reicht |
+| **Automatische Schwelle** | Grenze | die Schwelle, deren Energie die Spitzen über der Grenze deckt |
+| **Manuell** | Grenze und Schwelle | – |
+
+Ohne Leistungspreis im aktuellen Tarif ist **Wirtschaftlich** in den
+Einstellungen ausgegraut und arbeitet wie **Automatische Grenze**. Berechnete
+Werte zeigen die Einstellungen als Anzeige mit „(automatisch)“, der Sensor
+**Wirksame Bezugsgrenze Spitzenabfang** die verwendete Grenze.
+
+**Erwartete Spitzen.** Die Stundenprognose mittelt kurze Spitzen (Backofen,
+Wasserkocher) weg. SLEMS nimmt deshalb die 5-Minuten-Statistik des
+Hausverbrauchs der letzten etwa 10 Tage: je Stunde des Tages, wie viel Energie
+über einer Leistung lag. Ohne Leistungspreis zählt der Mittelwert der Tage,
+mit Leistungspreis der zweitschlechteste Tag (eine einzige verfehlte
+Viertelstunde kostet den ganzen Monat). Die Energie muss bis zum Nachladen
+reichen: bis der prognostizierte PV-Überschuss die Batterien vom minimalen
+Ladezustand wieder bis zur Schwelle füllt (etwas Überschuss an einem
+Regentag zählt nicht), höchstens 36 Stunden, gezählt nur die Stunden ohne
+Überschuss. **Sicherheitsreserve Spitzenabfang** (Standard 20 %) hält
+zusätzlich einen Teil zurück, gegen mehr Verbrauch als in den letzten Tagen.
+Grenze und Schwelle werden laufend neu berechnet; über der Schwelle so, als
+wäre sie erreicht, tagsüber für den kommenden Abend und die Nacht.
+
+**Mit Leistungspreis** (Tarifposten mit „pro kW und Monat“, siehe
+[Tarife](#tarife-optional)) arbeitet SLEMS mit dem, was die Rechnung zählt:
+
+- **Viertelstunden-Budget**: Die Grenze gilt im Mittel über die Viertelstunde
+  (oder Stunde), die der Tarif misst, nach der Uhr wie beim Smart Meter. Eine
+  kurze Spitze, z. B. während die Batterien an ihrer Leistungsgrenze sind
+  (eine Balkonbatterie bei 800 W), gleicht SLEMS mit weniger Bezug im Rest der
+  Viertelstunde aus; solange Budget übrig ist, darf eine kurze Spitze über die
+  Grenze gehen. Einspeisung zählt nicht gegen den Bezug, SLEMS speist also nie
+  zum Ausgleich ein.
+- **Was schon bezahlt ist**: Die Grenze liegt nie unter dem, was die
+  Monatsspitze schon kostet (die bisher verrechnete Leistung, mindestens die
+  Mindestleistung, aufgerundet wie im Tarif, minus 200 W Puffer gegen die
+  Abweichung zwischen deinem Zähler und dem Smart Meter des Netzbetreibers).
+  Weniger Bezug spart bis Monatsende nichts.
+- **Zeitfenster**: Hat der Leistungspreis eines, zählen Viertelstunden
+  außerhalb nicht; die Batterien heben ihre Energie für das Fenster auf.
+- **Verbraucher treten zurück**: Können die Batterien den Bezug über der
+  Grenze nicht decken, werden Verbraucher gedrosselt, die für ein Tagesziel
+  laufen, die niedrigste Priorität zuerst: leistungsgeregelte bis auf ihre
+  Mindestleistung, danach schalten die außerhalb ihrer Mindestlaufzeit ab.
+  Das Tagesziel holt das später nach.
+
+**Für Spitzenabfang aus dem Netz laden** (Schalter, standardmäßig an, nur mit
+Leistungspreis sichtbar): Bezug unter der Grenze kostet keinen
+Leistungspreis. Liegt der Ladezustand unter der Schwelle, laden die Batterien
+deshalb vor der nächsten erwarteten Spitze aus dem Netz nach, bis zur
+Schwelle: in den günstigsten Viertelstunden (mit dynamischem Tarif), mit
+festem Preis möglichst spät (Heimspeicher altern vor allem mit der Zeit bei
+hohem Ladezustand), und nur so weit, dass der prognostizierte Bezug unter der
+Grenze bleibt; ein PV-Überschuss davor zählt mit. Die Energie für Spitzen
+muss dann nur bis zum Ende des nächsten Spitzenblocks reichen (zwei Stunden
+ohne erwartete Spitze beenden ihn) statt bis zum Nachladen durch PV. Die
+Strategie zeigt dann **Spitzenabfang: Netzladen**.
+
+**Wirtschaftlichkeitsrechnung** (Modus **Wirtschaftlich**): SLEMS probiert
+Grenzen in 100-W-Schritten, ab dem, was der Monat schon kostet, bis zur
+höchsten erwarteten Spitze, jede mit ihrer Schwelle, und rechnet die
+erwarteten Kosten bis Monatsende:
+
+- **Leistungspreis** des Monats für die Grenze (mit Abgaben und USt.),
+- **zurückgehaltene Energie**, die beim Nachladen noch übrig ist (Reserve,
+  Verluste): Sie nimmt dem PV-Überschuss Platz, der dann eingespeist wird,
+  statt später Bezug zu ersetzen, je verbleibendem Tag mit Bezugspreis minus
+  Einspeisevergütung,
+- mit Nachladen aus dem Netz die **Lade- und Entladeverluste** und der
+  **Verschleiß** der täglich nachgeladenen Spitzenenergie.
+
+Die Grenze mit den niedrigsten Kosten gewinnt. Grenzen, deren höchste
+erwartete Spitze über der Entladeleistung der Batterien liegt oder deren
+Schwelle den maximalen Ladezustand erreichen würde, scheiden aus. Beispiel:
+Ein kW weniger Spitze spart mit 2,46 € pro kW und Monat netto (mit 20 % USt.
+2,95 €) knapp 3 € im Monat; 2 kWh täglich für die Abendspitzen nachzuladen
+kostet bei 25 ct/kWh und 90 % Wirkungsgrad je Richtung etwa 12 ct am Tag,
+gut 3,50 € im Monat (ohne Verschleiß). Es lohnt sich also, wenn die Spitze
+dadurch um mehr als gut 1 kW sinkt.
+
+**Anzeige**:
+
+- Die Kachel **Leistungsspitze diesen Monat** in der Übersicht (nur mit
+  Leistungspreis) zeigt die bisher verrechnete Leistung, wann die höchste
+  Viertelstunde war, bis zu welcher Leistung eine Viertelstunde nichts mehr
+  kostet, die Mehrkosten des Monats über der Mindestleistung und die laufende
+  Viertelstunde mit dem Bezug, der für ihren Rest noch erlaubt ist.
+- Der **Tarifvergleich** schätzt für Tarife mit Leistungspreis je Monat, was
+  Spitzenabfang gespart hätte und bei welcher Grenze, aus den aufgezeichneten
+  Viertelstunden (die niedrigste Grenze, die die Batterien mit ihrer
+  Entladeleistung und ihrer nutzbaren Energie je Tag hätten halten können,
+  abzüglich Verlusten und Verschleiß). So lässt sich mit einem
+  Vergleichstarif schon vor einem Leistungspreis sehen, was er kosten würde
+  und was Spitzenabfang bringt.
+- Die Einstellungen weisen darauf hin, wenn die Schwelle den maximalen
+  Ladezustand erreicht (die Grenze ist voraussichtlich nicht zu halten) oder
+  die Monatsspitze die eingestellte Grenze anhebt.
+- Die Diagnose enthält die Monatsspitze, das Budget der laufenden
+  Viertelstunde, die geprüften Grenzen der Wirtschaftlichkeitsrechnung und
+  den Nachladeplan; das Debug-Log nennt jede neue wirtschaftliche Grenze und
+  jedes geplante Nachladen.
+
 ### Gelernte Werte
 
 Jeder dieser Werte hat einen Schalter **… automatisch** (bzw. **Gelernte …
@@ -2535,80 +2672,11 @@ Verwendung** enthält alle gelernten Werte als Attribute.
   Batterien (höchstens 2 s): Kurze Lastspitzen, z. B. einer Kaffeemaschine,
   die ihre Heizung warm hält, sind vorbei, bevor eine Batterie ihnen folgen
   könnte.
-- **Bezugsspitzen abfangen** (Schalter): standardmäßig aus. Wenn aktiviert und
-  der Gesamt-Ladezustand auf oder unter der **Ladezustand-Schwelle für
-  Spitzenabfang** liegt, entladen die Batterien nur noch, um den Netzbezug
-  unter der **Bezugsgrenze für Spitzenabfang** zu halten. Über der Schwelle
-  decken sie den Bezug über der Grenze auch, wenn der Preisplan ihre Energie
-  zurückhält, Netzladen geplant ist oder ein Verbraucher ohne
-  Batterieunterstützung läuft. Die Schwelle ist ein absoluter Ladezustand, lässt sich aber nicht unter den minimalen Ladezustand
-  der Batterien setzen; unter 20 % zeigen die Einstellungen, wie viel über dem
-  Minimum noch übrig ist. **Modus Spitzenabfang** wählt, was SLEMS berechnet.
-  **Wirtschaftlich** (Standard) braucht einen Leistungspreis im aktuellen
-  Tarif und ist ohne ihn ausgegraut (Spitzenabfang arbeitet dann wie mit
-  automatischer Grenze): SLEMS probiert Grenzen ab dem, was der Monat schon
-  kostet, aufwärts und nimmt die mit den niedrigsten erwarteten Kosten bis
-  Monatsende, zusammen mit ihrer Schwelle (wie bei der automatischen Schwelle
-  unten). Eine niedrigere Grenze spart Leistungspreis, braucht aber mehr
-  zurückgehaltene Energie; was davon noch in den Batterien ist, wenn PV sie
-  wieder füllt (Reserve, Verluste), nimmt dem PV-Überschuss Platz, der dann
-  eingespeist wird, statt später Bezug zu ersetzen, und zählt deshalb je
-  verbleibendem Tag mit Bezugspreis minus Einspeisevergütung. Grenzen, deren
-  höchste erwartete Spitze über der Entladeleistung der Batterien liegt oder
-  deren Schwelle den maximalen Ladezustand erreichen würde, scheiden aus. Mit
-  **Automatische Grenze** berechnet SLEMS die
-  Grenze selbst: die niedrigste, bei der die erwartete Energie oberhalb davon
-  bis zum Nachladen durch PV (der prognostizierte Überschuss reicht in Summe,
-  um die Batterien wieder bis zur Schwelle zu füllen; etwas Überschuss an
-  einem Regentag zählt nicht) in die nutzbare Energie über dem minimalen
-  Ladezustand abzüglich **Sicherheitsreserve Spitzenabfang** (Standard 20 %)
-  passt. Die erwartete Energie stammt aus der 5-Minuten-Statistik des
-  Hausverbrauchs der letzten Tage, kurze Spitzen wie ein Backofen sind also
-  enthalten (mit Leistungspreis je Stunde des Tages der zweitschlechteste von
-  etwa 10 Tagen statt des Mittelwerts, weil eine einzige verfehlte
-  Viertelstunde den ganzen Monat kostet); die Grenze wird laufend neu berechnet und steigt, wenn mehr
-  verbraucht wird als erwartet. Über der Schwelle wird sie so berechnet, als
-  wäre die Schwelle erreicht, und tagsüber für den kommenden Abend und die
-  Nacht; sie zeigt damit die Grenze, die dann gilt. In den Einstellungen zeigt
-  die Bezugsgrenze dann den berechneten Wert (nur Anzeige); der Sensor
-  **Wirksame Bezugsgrenze Spitzenabfang** zeigt die verwendete Grenze. Mit
-  **Automatische Schwelle** stellst du die Grenze ein, und SLEMS berechnet
-  umgekehrt die Schwelle: die niedrigste, deren Energie über dem minimalen
-  Ladezustand die erwartete Energie über der Grenze bis zum Nachladen durch
-  PV deckt, plus Reserve; erreicht sie den maximalen Ladezustand, weisen die
-  Einstellungen darauf hin, dass die Grenze voraussichtlich nicht zu halten
-  ist. Mit **Manuell** gelten Grenze und Schwelle wie eingestellt.
-
-  Mit einem **Leistungspreis** im aktuellen Tarif (siehe
-  [Tarife](#tarife-optional)) gilt die Grenze im Mittel über die
-  Viertelstunde (oder Stunde), die der Tarif misst, nach der Uhr wie beim
-  Smart Meter: Eine kurze Spitze, z. B. während die Batterien an ihrer
-  Leistungsgrenze sind (eine Balkonbatterie bei 800 W), gleicht SLEMS mit
-  weniger Bezug im Rest der Viertelstunde aus, und solange Budget übrig ist,
-  darf eine kurze Spitze über die Grenze gehen. Einspeisung zählt nicht gegen
-  den Bezug, SLEMS speist also nie zum Ausgleich ein. Hat der Leistungspreis
-  ein Zeitfenster, zählen Viertelstunden außerhalb nicht und haben kein
-  Budget; die Batterien heben ihre Energie für das Fenster auf. Können die Batterien den
-  Bezug über der Grenze nicht decken, treten Verbraucher zurück, die für ein
-  Tagesziel laufen, die niedrigste Priorität zuerst: leistungsgeregelte bis
-  auf ihre Mindestleistung, danach schalten die außerhalb ihrer
-  Mindestlaufzeit ab. Die Grenze liegt nie unter dem, was die Monatsspitze
-  schon kostet (die verrechnete Leistung minus 200 W): Weniger Bezug spart bis
-  Monatsende nichts. **Für Spitzenabfang aus dem Netz laden** (Schalter,
-  standardmäßig an, nur mit Leistungspreis sichtbar): Unter der Schwelle laden
-  die Batterien vor der nächsten erwarteten Spitze aus dem Netz nach, in den
-  günstigsten Viertelstunden (mit festem Preis möglichst spät, weil
-  Heimspeicher vor allem mit der Zeit bei hohem Ladezustand altern) und nur
-  so weit, dass der prognostizierte Bezug unter der Grenze bleibt; das Laden
-  kostet also keinen Leistungspreis, ein PV-Überschuss davor zählt mit. Die
-  Energie für Spitzen muss dann nur bis zum Ende des nächsten Spitzenblocks
-  reichen (zwei Stunden ohne erwartete Spitze beenden ihn) statt bis zum
-  Nachladen durch PV, und der Modus Wirtschaftlich rechnet Verluste und
-  Verschleiß des Nachladens ein. Die Kachel **Leistungsspitze diesen Monat** in der
-  Übersicht zeigt die bisher verrechnete Leistung, wann die höchste
-  Viertelstunde war, bis zu welcher Leistung eine Viertelstunde nichts mehr
-  kostet, die Mehrkosten des Monats über der Mindestleistung und die laufende
-  Viertelstunde.
+- **Bezugsspitzen abfangen** (Schalter, standardmäßig aus) mit **Modus
+  Spitzenabfang**, **Bezugsgrenze für Spitzenabfang**, **Ladezustand-Schwelle
+  für Spitzenabfang**, **Sicherheitsreserve Spitzenabfang** und **Für
+  Spitzenabfang aus dem Netz laden**: siehe
+  [Bezugsspitzen abfangen und Leistungspreis](#bezugsspitzen-abfangen-und-leistungspreis).
 
 ### Probleme und Benachrichtigungen
 

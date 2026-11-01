@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 from enum import Enum
+import math
 import time
 from typing import Any
 
@@ -52,6 +53,29 @@ def _plain(value: Any) -> Any:
     if isinstance(value, float):
         return round(value, 3)
     return value
+
+
+def _peak_shaving(coordinator: SlemsCoordinator) -> dict:
+    """Peak shaving in effect: the month's peak with a power price, the
+    budget of the running interval, the economic choice and the charging plan."""
+    data = coordinator.data
+    peak = coordinator.peak_state()
+    economic = coordinator.economic_peak
+    return {
+        "limit_w": data.peak_shaving_limit_w if data else None,
+        "threshold_pct": data.peak_threshold_pct if data else None,
+        "threshold_full": data.peak_threshold_full if data else None,
+        "economic_fallback": data.peak_economic_fallback if data else None,
+        # Infinite outside the time window of the power price.
+        "allowed_w": (
+            data.peak_shaving_allowed_w
+            if data and data.peak_shaving_allowed_w is not None and math.isfinite(data.peak_shaving_allowed_w)
+            else None
+        ),
+        "peak": None if peak is None else {**_plain(peak), "limit_w": round(peak.limit_w), "mean_kw": round(peak.mean_kw, 3)},
+        "economic": _plain(economic),
+        "charge_w": _plain(data.peak_charge) if data else None,
+    }
 
 
 def _ago(moment: float | None, now: float) -> float | None:
@@ -222,6 +246,7 @@ def _system(coordinator: SlemsCoordinator) -> dict:
     market = coordinator.market_prices
     return {
         "settings": _plain(coordinator.settings),
+        "peak_shaving": _peak_shaving(coordinator),
         "grid_quarters": {
             "recorded": len(quarters.covered),
             "complete": sum(1 for slot in quarters.covered if quarters.complete(slot)),

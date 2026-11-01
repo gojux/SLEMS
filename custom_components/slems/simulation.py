@@ -11,14 +11,18 @@ charge and the current forecasts:
   discharge power (W) of all batteries; the state of charge in % stays,
 * ``pv_pct`` / ``consumption_pct``: change of the forecasts in %,
 * ``import_tariff`` / ``export_tariff``: id of a comparison tariff whose import
-  or feed-in side the price aware control plans with (empty: the current
-  contract's).
+  or feed-in side everything that uses prices plans with (empty: the current
+  contract's): the price aware control, the runs of the daily targets
+  (planned anew with the simulated settings, see
+  SlemsCoordinator.simulated_targets) and peak shaving with a power price.
 
 The reply contains the day plans of today and tomorrow, key figures per day
 for the simulation and for the real plan (with a tariff also the import costs
 and the feed-in credit of the planned grid energy: per kWh items incl. VAT,
-the simulation with its tariff, the real plan with the current one), and the starting values (the real
-settings and batteries, the comparison tariffs per side).
+the simulation with its tariff, the real plan with the current one; with a
+power price the highest planned hourly import and the power price of the
+month it leads to), and the starting values (the real settings and
+batteries, the comparison tariffs per side).
 """
 
 from __future__ import annotations
@@ -35,6 +39,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
+from .power_peak import power_price
 from .price_chart import period_import_prices
 from .tariff import Side, Tariff
 from .tariff_comparison import chosen_tariff, tariff_choices
@@ -222,15 +227,16 @@ def simulate(coordinator: SlemsCoordinator, request: dict[str, Any]) -> dict[str
     current = chosen_tariff(coordinator.config_entry, None, None)
     house = snapshot.house_power_w
     load = None if house is None else house * load_factor
-    plan = coordinator.forecast_plan(
-        sim_snapshot,
-        battery,
-        now,
-        load,
-        settings,
-        power_w=(values["max_charge_w"], values["max_discharge_w"]),
-        tariff=tariff,
-    )
+    with coordinator.simulated_targets(sim_snapshot, battery, load, now, settings, tariff):
+        plan = coordinator.forecast_plan(
+            sim_snapshot,
+            battery,
+            now,
+            load,
+            settings,
+            power_w=(values["max_charge_w"], values["max_discharge_w"]),
+            tariff=tariff,
+        )
     return {
         "available": True,
         "base": base,
@@ -243,10 +249,48 @@ def simulate(coordinator: SlemsCoordinator, request: dict[str, Any]) -> dict[str
         "peak_threshold_pct": round(plan.peak_threshold_pct, 1) if settings.peak_shaving else None,
         "metrics": _day_metrics(
             plan.day_plan, plan.day_plan_tomorrow, now, settings, _prices(coordinator, tariff, now)
-        ),
+        )
+        | _power_metrics(coordinator, tariff, [*plan.day_plan, *plan.day_plan_tomorrow], now),
         "real_metrics": _day_metrics(
             snapshot.day_plan, snapshot.day_plan_tomorrow, now, real, _prices(coordinator, current, now)
+        )
+        | _power_metrics(coordinator, current, [*snapshot.day_plan, *snapshot.day_plan_tomorrow], now),
+    }
+
+
+def _power_metrics(
+    coordinator: SlemsCoordinator, tariff: Tariff | None, rows: list[dict], now: datetime
+) -> dict:
+    """With a power price: the highest planned hourly import from now on (kW)
+    and the billed power and power price of the month with it (an estimate:
+    the plan works in hours, a quarter hour can be higher)."""
+    if tariff is None:
+        return {}
+    price = power_price(tariff, dt_util.as_local(now).date())
+    peak = coordinator.peak_state(tariff=tariff)
+    if price is None or peak is None:
+        return {}
+    hour = dt_util.as_local(now).replace(minute=0, second=0, microsecond=0)
+    month = hour.month
+    planned = max(
+        (
+            max(0.0, row["grid_w"]) / 1000
+            for row in rows
+            if row.get("grid_w") is not None
+            and (start := dt_util.parse_datetime(row["start"])) is not None
+            and start >= hour
+            and dt_util.as_local(start).month == month
+            and price.counts(start)
         ),
+        default=0.0,
+    )
+    billed = max(peak.billed_kw, price.base.billed_kw(planned))
+    return {
+        "power": {
+            "planned_kw": round(planned, 2),
+            "billed_kw": round(billed, 2),
+            "cost": round(price.cost(billed), 2),
+        }
     }
 
 
