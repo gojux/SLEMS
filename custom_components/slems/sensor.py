@@ -1152,6 +1152,10 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             "current_a": current[0] if current else None,
             "phases": current[1] if current else None,
             "blocked": state.blocked if state else None,
+            # Wallbox: the car's state of charge and whether one is plugged in
+            # (None without the entity or while it is unknown).
+            "vehicle_soc_pct": None if state is None or state.vehicle_soc_pct is None else round(state.vehicle_soc_pct, 1),
+            "plugged": state.plugged if state else None,
             "saturated": self.consumer.subentry_id in data.saturated,
             "resting": self.consumer.subentry_id in data.resting,
             "running_on_its_own": self.consumer.subentry_id in data.running_on_its_own,
@@ -1193,7 +1197,7 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
         return {
             "target_type": settings.type.value,
             "target_mode": target.mode.value if target else None,
-            "target_got": round(coordinator.target_got(settings, progress), 2),
+            "target_got": round(coordinator.target_got(settings, progress, state.vehicle_soc_pct if state else None), 2),
             "target_goal": goal,
             "target_unit": unit,
             "target_max_temperature_c": settings.target_temp_c,
@@ -1203,7 +1207,7 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
                 or (temperature := target_temperature(settings, state.temperature_c, state.temperatures_c)) is None
                 else round(temperature, 1)
             ),
-            "target_done": progress.done_for(settings),
+            "target_done": progress.soc_done_for(settings) if settings.type is TargetType.SOC else progress.done_for(settings),
             "target_deadline": progress.end.isoformat() if progress.end else None,
             "target_earliest": (
                 earliest.isoformat()

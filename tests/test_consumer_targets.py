@@ -8,6 +8,7 @@ from homeassistant.util import dt as dt_util
 
 from custom_components.slems.const import TargetSensor, TargetSource, TargetType
 from custom_components.slems.consumer_targets import (
+    VEHICLE_CHARGE_EFFICIENCY,
     TargetMode,
     TargetProgress,
     TargetSettings,
@@ -392,6 +393,60 @@ def test_blocked_time_of_the_period() -> None:
     assert progress.blocked_s == pytest.approx(1800)
     assert progress.update(t, local(22, 1), settings, 0.0, False) == "missed"
     assert progress.last_blocked_s == pytest.approx(1800) and progress.blocked_s == 0
+
+
+def test_unplugged_time_of_the_period() -> None:
+    settings = TargetSettings(type=TargetType.ENERGY, energy_kwh=10.0)
+    progress = TargetProgress()
+    t, moment = 0.0, local(20)
+    # 40 minutes without a car, then plugged in.
+    for step in range(0, 3600, 60):
+        progress.update(t, moment, settings, 0.0, False, unplugged=step < 2400)
+        t += 60
+        moment += timedelta(seconds=60)
+    assert progress.unplugged_s == pytest.approx(2400) and progress.blocked_s == 0
+    assert TargetProgress.from_dict(progress.as_dict()).unplugged_s == pytest.approx(2400)
+    assert progress.update(t, local(22, 1), settings, 0.0, False) == "missed"
+    assert progress.last_unplugged_s == pytest.approx(2400) and progress.unplugged_s == 0
+
+
+def test_state_of_charge_target() -> None:
+    settings = TargetSettings(
+        type=TargetType.SOC, target_soc_pct=80.0, deadline=time(7, 0), source=TargetSource.GRID
+    )
+    progress = TargetProgress(end=local(7, day=2))
+    capacity = 60000.0
+    # 40 % of 60 kWh with the charging losses, at 11 kW.
+    missing = 0.4 * capacity / VEHICLE_CHARGE_EFFICIENCY
+    evening = state(settings, progress, local(20), power_w=11000.0, soc_pct=40.0, capacity_wh=capacity)
+    assert evening.mode is TargetMode.SURPLUS
+    assert evening.missing == pytest.approx(missing)
+    hours = missing / 11000 * 1.2
+    assert evening.latest_start == local(7, day=2) - timedelta(hours=hours) - timedelta(minutes=10)
+    assert state(settings, progress, local(5, day=2), power_w=11000.0, soc_pct=40.0, capacity_wh=capacity).mode is TargetMode.FORCED
+    assert energy_to_target(
+        settings, progress, power_w=11000.0, temperature_c=None, wh_per_k=None, soc_pct=40.0, capacity_wh=capacity
+    ) == pytest.approx(missing)
+    forced = forced_load(settings, evening, local(20), power_w=11000.0, wh_per_k=None)
+    assert sum(forced.values()) == pytest.approx(missing)
+    # Without the state of charge (or the capacity) nothing is known: from the surplus.
+    unknown = state(settings, progress, local(5, day=2), power_w=11000.0, soc_pct=None, capacity_wh=capacity)
+    assert unknown.mode is TargetMode.SURPLUS and unknown.latest_start is None
+    assert state(settings, progress, local(5, day=2), power_w=11000.0, soc_pct=40.0).latest_start is None
+    # Reached: done for the rest of the period, also when the car is used a little.
+    progress.track_soc(settings, 80.5)
+    assert progress.met(settings)
+    assert state(settings, progress, local(6, day=2), power_w=11000.0, soc_pct=78.0, capacity_wh=capacity).mode is TargetMode.DONE
+    assert energy_to_target(
+        settings, progress, power_w=11000.0, temperature_c=None, wh_per_k=None, soc_pct=78.0, capacity_wh=capacity
+    ) == 0.0
+    assert TargetProgress.from_dict(progress.as_dict()).done_soc_pct == 80.0
+    # A higher target set later in the period is open again.
+    settings.target_soc_pct = 90.0
+    assert not progress.met(settings)
+    # A new period starts open.
+    assert progress.update(0.0, local(7, 1, day=2), settings, 0.0, False) == "missed"
+    assert progress.done_soc_pct is None
 
 
 def test_declined_power_is_remembered_for_the_period() -> None:

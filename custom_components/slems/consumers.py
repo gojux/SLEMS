@@ -8,6 +8,10 @@ power is sent as whole amperes, rounded down so the charging stays within
 the power planned for it, to a number entity or a select with ampere
 options (the maximum current of an evcc loadpoint in ha-evcc).
 
+A wallbox may know the car: its state of charge and battery capacity, and
+whether a car is plugged in. Without a car it is not controlled and nothing
+is planned for it, like a blocked consumer.
+
 A heat pump with a hot water release (control mode release with an
 operating mode entity) is controlled only while it heats hot water: its
 power counts for the control only in the hot water states of its mode, the
@@ -22,7 +26,7 @@ from dataclasses import dataclass, replace
 import math
 from typing import Any
 
-from homeassistant.const import STATE_OFF, STATE_ON
+from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State
 
 from .const import (
@@ -43,6 +47,8 @@ from .const import (
     CONF_NOMINAL_POWER_W,
     CONF_PHASES,
     CONF_PHASES_ENTITY,
+    CONF_PLUGGED_ENTITY,
+    CONF_PLUGGED_STATES,
     CONF_POWER_ENTITY,
     CONF_PRIORITY,
     CONF_SHOW_IN_FLOW,
@@ -53,6 +59,8 @@ from .const import (
     CONF_TEMPERATURE_ENTITY,
     CONF_THERMOSTAT_CYCLES,
     CONF_AVOID_CYCLING,
+    CONF_VEHICLE_CAPACITY_KWH,
+    CONF_VEHICLE_SOC_ENTITY,
     CONF_VOLTAGE_V,
     DEFAULT_MAX_CURRENT_A,
     DEFAULT_MIN_CURRENT_A,
@@ -115,6 +123,13 @@ class ConsumerConfig:
     # Heat pump with a hot water release: operating mode and its hot water states.
     mode_entity_id: str | None = None
     hot_water_states: tuple[str, ...] = ()
+    # Wallbox: the car's state of charge (%) and battery capacity, and whether
+    # one is plugged in (a binary sensor, or the states of a sensor / select
+    # that mean plugged in).
+    vehicle_soc_entity_id: str | None = None
+    vehicle_capacity_kwh: float | None = None
+    plugged_entity_id: str | None = None
+    plugged_states: tuple[str, ...] = ()
 
     @property
     def controllable(self) -> bool:
@@ -178,6 +193,10 @@ class ConsumerConfig:
                 data.get(CONF_MODE_ENTITY) if data[CONF_CONTROL_MODE] == ControlMode.RELEASE else None
             ),
             hot_water_states=tuple(data.get(CONF_HOT_WATER_STATES) or ()),
+            vehicle_soc_entity_id=data.get(CONF_VEHICLE_SOC_ENTITY),
+            vehicle_capacity_kwh=data.get(CONF_VEHICLE_CAPACITY_KWH),
+            plugged_entity_id=data.get(CONF_PLUGGED_ENTITY),
+            plugged_states=tuple(data.get(CONF_PLUGGED_STATES) or ()),
         ).with_phases(int(data.get(CONF_PHASES, DEFAULT_PHASES)))
 
 
@@ -227,6 +246,15 @@ class ConsumerState:
     # The whole measured power; differs from ``power_w`` (the power that
     # counts for the control) only for a heat pump with a hot water release.
     total_power_w: float | None = None
+    # Wallbox: the car's state of charge (%), and whether one is plugged in
+    # (None without the entity or while it is unknown).
+    vehicle_soc_pct: float | None = None
+    plugged: bool | None = None
+
+    @property
+    def unplugged(self) -> bool:
+        """No car at the wallbox: not controlled, nothing planned."""
+        return self.plugged is False
 
     def __post_init__(self) -> None:
         if self.total_power_w is None:
@@ -262,7 +290,29 @@ def read_consumer_state(hass: HomeAssistant, consumer: ConsumerConfig) -> Consum
             else None
         ),
         temperatures_c=tuple(temperatures),
+        vehicle_soc_pct=vehicle_soc_pct(hass.states.get(consumer.vehicle_soc_entity_id))
+        if consumer.vehicle_soc_entity_id
+        else None,
+        plugged=plugged_in(hass.states.get(consumer.plugged_entity_id), consumer.plugged_states)
+        if consumer.plugged_entity_id
+        else None,
     )
+
+
+def vehicle_soc_pct(state: State | None) -> float | None:
+    """State of charge of a car (0-100 %); None if unknown or out of range."""
+    value = state_as_float(state)
+    return value if value is not None and 0 <= value <= 100 else None
+
+
+def plugged_in(state: State | None, plugged_states: tuple[str, ...]) -> bool | None:
+    """Whether a car is plugged in: a binary sensor or switch on, or one of
+    ``plugged_states``; None while the entity is unknown."""
+    if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+        return None
+    if plugged_states:
+        return state.state in plugged_states
+    return state.state == STATE_ON
 
 
 def temperature_c_of(state) -> float | None:

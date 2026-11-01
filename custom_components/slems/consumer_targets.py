@@ -3,8 +3,10 @@
 A consumer may have a target per period, from one deadline to the next (also
 across midnight): a runtime (time it draws power), an enabled time (time SLEMS
 has it switched on, for devices with their own control such as a
-dehumidifier with a hygrostat), an energy, or a minimum and a target
-temperature of its storage (temperature sensors).
+dehumidifier with a hygrostat), an energy, a minimum and a target
+temperature of its storage (temperature sensors), or a state of charge of the
+car at a wallbox (its sensor and battery capacity; the energy still missing
+includes the charging losses, ``VEHICLE_CHARGE_EFFICIENCY``).
 
 The target is met from the surplus first. What may cover the rest in time
 (``TargetSource``): only the surplus, also the batteries (as long as they can
@@ -40,7 +42,12 @@ surplus until the deadline is short for the rest of the target plus filling
 the batteries. Below the minimum temperature always. From the target
 temperature on the consumer is off for the rest of the day (*done*), unless
 the temperature falls below the minimum again: then the target is open again.
-The target counts for the sensor chosen when it was reached.
+The target counts for the sensor chosen when it was reached. A state of
+charge target is done once the car reached it, also for the rest of the
+period.
+
+Without a car at the wallbox (*unplugged*) the consumer is not controlled;
+the time is counted (``unplugged_s``) and named when the target is missed.
 """
 
 from __future__ import annotations
@@ -63,6 +70,9 @@ TEMPERATURE_FALLBACK = timedelta(hours=2)
 MAX_GAP_S = 120.0
 # Draws power: at least this much (as the consumer learner).
 RUNNING_W = 50.0
+# Share of the energy from the grid that ends up in the car's battery (AC
+# charging: charger and battery losses).
+VEHICLE_CHARGE_EFFICIENCY = 0.9
 
 
 class TargetMode(StrEnum):
@@ -87,6 +97,7 @@ class TargetSettings:
     energy_kwh: float = 2.0
     min_temp_c: float = 40.0
     target_temp_c: float = 55.0
+    target_soc_pct: float = 80.0
     deadline: time = time(22, 0)
     source: TargetSource = TargetSource.SURPLUS
     priority: bool = False
@@ -150,6 +161,9 @@ class TargetProgress:
     done_target_c: float | None = None
     # Sensor choice (``TargetSensor`` value) the temperature flags apply to.
     temperature_sensor: str | None = None
+    # State of charge target: the highest target reached in this period (a
+    # higher one set later in the period is not reached yet).
+    done_soc_pct: float | None = None
     # "met" / "missed" of the last period.
     last_result: str | None = None
     # SLEMS could not control the consumer at some time of the period
@@ -167,8 +181,11 @@ class TargetProgress:
     # not notified, the device did not need more.
     declined: bool = False
     last_declined: bool = False
+    # Time no car was plugged in at the wallbox in the period, and in the last one.
+    unplugged_s: float = 0.0
+    last_unplugged_s: float = 0.0
     # The previous sample: its state applies until this one.
-    _last: tuple[float, float | None, bool, bool] | None = field(default=None, repr=False)
+    _last: tuple[float, float | None, bool, bool, bool] | None = field(default=None, repr=False)
 
     def update(
         self,
@@ -180,12 +197,14 @@ class TargetProgress:
         controlled: bool = True,
         blocked: bool = False,
         declined: bool = False,
+        unplugged: bool = False,
     ) -> str | None:
         """Count one poll; returns the result when a period ended.
 
         ``controlled``: SLEMS may control the consumer right now (operating
         mode, its control switch), ``blocked``: it is blocked externally,
-        ``declined``: it is saturated or resting.
+        ``declined``: it is saturated or resting, ``unplugged``: no car is
+        plugged in at the wallbox.
         """
         result = None
         end = period_end(local_now, settings.deadline)
@@ -197,6 +216,7 @@ class TargetProgress:
             self.last_controlled = not self.uncontrolled
             self.last_blocked_s = self.blocked_s
             self.last_declined = self.declined
+            self.last_unplugged_s = self.unplugged_s
             self._reset(end)
         if not controlled:
             self.uncontrolled = True
@@ -205,10 +225,10 @@ class TargetProgress:
         elif end != self.end:
             # The deadline was changed: the counters stay.
             self.end = end
-        previous, self._last = self._last, (now, power_w, commanded_on, blocked)
+        previous, self._last = self._last, (now, power_w, commanded_on, blocked, unplugged)
         if previous is None:
             return result
-        last_time, last_power, last_on, last_blocked = previous
+        last_time, last_power, last_on, last_blocked, last_unplugged = previous
         elapsed = now - last_time
         if elapsed > MAX_GAP_S or elapsed <= 0:
             return result
@@ -218,6 +238,8 @@ class TargetProgress:
             self.enabled_s += elapsed
         if last_blocked:
             self.blocked_s += elapsed
+        if last_unplugged:
+            self.unplugged_s += elapsed
         if last_power is not None:
             self.energy_wh += max(0.0, last_power) * elapsed / 3600
         return result
@@ -225,9 +247,10 @@ class TargetProgress:
     def _reset(self, end: datetime) -> None:
         self.end = end
         self.uncontrolled = self.declined = False
-        self.runtime_s = self.enabled_s = self.energy_wh = self.blocked_s = 0.0
+        self.runtime_s = self.enabled_s = self.energy_wh = self.blocked_s = self.unplugged_s = 0.0
         self.min_reached = self.done = False
         self.done_target_c = None
+        self.done_soc_pct = None
 
     def use_sensor(self, sensor: TargetSensor) -> None:
         """Temperature flags of another sensor do not count: a new choice starts open."""
@@ -263,9 +286,20 @@ class TargetProgress:
             and self.temperature_sensor in (None, settings.sensor.value)
         )
 
+    def track_soc(self, settings: TargetSettings, soc_pct: float) -> None:
+        """Note a state of charge of the car: the target reached."""
+        if soc_pct >= settings.target_soc_pct:
+            self.done_soc_pct = max(settings.target_soc_pct, self.done_soc_pct or 0.0)
+
+    def soc_done_for(self, settings: TargetSettings) -> bool:
+        """Reached the state of charge target that is set now."""
+        return self.done_soc_pct is not None and settings.target_soc_pct <= self.done_soc_pct
+
     def met(self, settings: TargetSettings) -> bool:
         if settings.type is TargetType.TEMPERATURE:
             return self.done_for(settings) or self.min_reached
+        if settings.type is TargetType.SOC:
+            return self.soc_done_for(settings)
         return remaining(settings, self) <= 0
 
     def as_dict(self) -> dict:
@@ -278,6 +312,7 @@ class TargetProgress:
             "done": self.done,
             "done_target_c": self.done_target_c,
             "temperature_sensor": self.temperature_sensor,
+            "done_soc_pct": self.done_soc_pct,
             "last_result": self.last_result,
             "uncontrolled": self.uncontrolled,
             "last_controlled": self.last_controlled,
@@ -285,6 +320,8 @@ class TargetProgress:
             "last_blocked_s": self.last_blocked_s,
             "declined": self.declined,
             "last_declined": self.last_declined,
+            "unplugged_s": self.unplugged_s,
+            "last_unplugged_s": self.last_unplugged_s,
         }
 
     @classmethod
@@ -300,6 +337,7 @@ class TargetProgress:
             done=data.get("done", False),
             done_target_c=data.get("done_target_c"),
             temperature_sensor=data.get("temperature_sensor"),
+            done_soc_pct=data.get("done_soc_pct"),
             last_result=data.get("last_result"),
             uncontrolled=data.get("uncontrolled", False),
             last_controlled=data.get("last_controlled", True),
@@ -307,11 +345,22 @@ class TargetProgress:
             last_blocked_s=data.get("last_blocked_s", 0.0),
             declined=data.get("declined", False),
             last_declined=data.get("last_declined", False),
+            unplugged_s=data.get("unplugged_s", 0.0),
+            last_unplugged_s=data.get("last_unplugged_s", 0.0),
         )
 
 
+def soc_energy_wh(settings: TargetSettings, soc_pct: float | None, capacity_wh: float | None) -> float | None:
+    """Energy (Wh) from the grid that brings the car to its target state of
+    charge, None without its state of charge or capacity."""
+    if soc_pct is None or not capacity_wh:
+        return None
+    return max(0.0, settings.target_soc_pct - soc_pct) / 100 * capacity_wh / VEHICLE_CHARGE_EFFICIENCY
+
+
 def remaining(settings: TargetSettings, progress: TargetProgress) -> float:
-    """What is still missing: seconds (runtime, enabled time) or Wh (energy)."""
+    """What is still missing: seconds (runtime, enabled time) or Wh (energy);
+    a state of charge target needs the car's state (``soc_energy_wh``)."""
     if settings.type is TargetType.RUNTIME:
         return settings.hours * 3600 - progress.runtime_s
     if settings.type is TargetType.ENABLED:
@@ -324,7 +373,8 @@ def remaining(settings: TargetSettings, progress: TargetProgress) -> float:
 @dataclass(frozen=True)
 class TargetState:
     mode: TargetMode
-    # Seconds, Wh or K still missing (0 when met or without a target).
+    # Seconds, Wh (energy, state of charge) or K still missing (0 when met
+    # or without a target).
     missing: float = 0.0
     latest_start: datetime | None = None
     end: datetime | None = None
@@ -344,6 +394,8 @@ def evaluate(
     battery_need_wh: float,
     battery_can_supply: bool,
     temperature_at_end_c: float | None = None,
+    soc_pct: float | None = None,
+    capacity_wh: float | None = None,
 ) -> TargetState:
     """Mode of the consumer right now.
 
@@ -351,7 +403,9 @@ def evaluate(
     surplus until the deadline, ``battery_need_wh`` the energy that fills the
     batteries, ``battery_can_supply`` whether the batteries can deliver its
     power now, ``temperature_at_end_c`` the forecast temperature of a storage
-    at the deadline without heating (see learning.CoolingLearner).
+    at the deadline without heating (see learning.CoolingLearner),
+    ``soc_pct`` and ``capacity_wh`` the state of charge and the battery
+    capacity of the car at a wallbox.
     """
     if settings.type is TargetType.NONE:
         return TargetState(TargetMode.NONE)
@@ -393,11 +447,20 @@ def evaluate(
             mode = TargetMode.DONE if reached else TargetMode.SURPLUS
         return TargetState(mode, missing_k, latest, end)
 
-    missing = remaining(settings, progress)
-    if missing <= 0:
-        return TargetState(TargetMode.DONE, end=end)
     earliest = window_start(settings, end)
-    if settings.type is TargetType.ENERGY:
+    if settings.type is TargetType.SOC:
+        if progress.soc_done_for(settings) or (soc_pct is not None and soc_pct >= settings.target_soc_pct):
+            return TargetState(TargetMode.DONE, end=end)
+        soc_missing = soc_energy_wh(settings, soc_pct, capacity_wh)
+        if soc_missing is None:
+            waiting = earliest is not None and local_now < earliest
+            return TargetState(TargetMode.WAITING if waiting else TargetMode.SURPLUS, end=end)
+        missing = soc_missing
+    else:
+        missing = remaining(settings, progress)
+        if missing <= 0:
+            return TargetState(TargetMode.DONE, end=end)
+    if settings.type in (TargetType.ENERGY, TargetType.SOC):
         energy = missing
         seconds = missing / power_w * 3600 if power_w > 0 else None
     else:
@@ -494,16 +557,23 @@ def energy_to_target(
     power_w: float,
     temperature_c: float | None,
     wh_per_k: float | None,
+    soc_pct: float | None = None,
+    capacity_wh: float | None = None,
 ) -> float | None:
     """Energy (Wh) the consumer still needs for its target, None when not known.
 
     Exact for an energy target; for a runtime or enabled time the remaining
     time at ``power_w`` (less if its own thermostat stops it earlier); for a
     temperature target up to the target temperature with the learned energy
-    per kelvin (heat losses left out).
+    per kelvin (heat losses left out); for a state of charge target from the
+    car's state of charge and capacity with the charging losses.
     """
     if settings.type is TargetType.NONE:
         return None
+    if settings.type is TargetType.SOC:
+        if progress.soc_done_for(settings):
+            return 0.0
+        return soc_energy_wh(settings, soc_pct, capacity_wh)
     if settings.type is TargetType.TEMPERATURE:
         # Reached and not below the minimum again (see track_temperature).
         if temperature_c is not None and (
@@ -564,12 +634,12 @@ def next_period_demand(
 ) -> SurplusDemand | None:
     """The target of the period after ``end``, expected from the surplus.
 
-    Energy and runtime as set; a temperature target the daily energy of the
-    last days (``estimate_wh``), None without it.
+    Energy and runtime as set; a temperature or state of charge target the
+    daily energy of the last days (``estimate_wh``), None without it.
     """
     if settings.type is TargetType.NONE or power_w <= 0:
         return None
-    if settings.type is TargetType.TEMPERATURE:
+    if settings.type in (TargetType.TEMPERATURE, TargetType.SOC):
         energy = estimate_wh
     elif settings.type is TargetType.ENERGY:
         energy = settings.energy_kwh * 1000
@@ -625,7 +695,7 @@ def forced_load(
             if wh_per_k
             else power_w * TEMPERATURE_FALLBACK / timedelta(hours=1)
         ) if state.missing > 0 else 0.0
-    elif settings.type is TargetType.ENERGY:
+    elif settings.type in (TargetType.ENERGY, TargetType.SOC):
         energy = state.missing
     else:
         energy = state.missing / 3600 * power_w

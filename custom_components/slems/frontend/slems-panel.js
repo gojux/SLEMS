@@ -183,6 +183,9 @@ const STRINGS = {
     state: "State",
     temperature: "Temperature",
     storageTemperature: "Storage temperature",
+    vehicleSoc: "State of charge of the car",
+    plugged: "plugged in",
+    unplugged: "not plugged in",
     enabled: "Enabled",
     measured: "Measured",
     release: "Release",
@@ -220,6 +223,7 @@ const STRINGS = {
     targetKind: "Kind",
     targetHours: "Hours",
     targetEnergy: "Energy",
+    targetSoc: "Target state of charge",
     targetSensor: "Sensor",
     targetEarliestOn: "Earliest start",
     targetEarliest: "From",
@@ -568,7 +572,7 @@ const STRINGS = {
       target_hours:
         "Hours the daily target needs per period (from one deadline to the next), in half hours. Runtime counts the time the consumer draws power (from 50 W; for a heat pump with hot water release only in hot water mode). Enabled time counts the time SLEMS has it switched on or released, also while it draws nothing (e.g. because its own thermostat or your automation has not started it yet).",
       target_type:
-        "Runtime: time the consumer draws power. Enabled time: time SLEMS has it switched on, for devices with their own control (a dehumidifier with a hygrostat). Energy: kWh. Temperature: minimum and target temperature of its storage (temperature sensors). Counted from one deadline to the next; met from the surplus first. A temperature target applies from midnight (or the earliest start) to the deadline: after the deadline the consumer stays off until then, also with surplus.",
+        "Runtime: time the consumer draws power. Enabled time: time SLEMS has it switched on, for devices with their own control (a dehumidifier with a hygrostat). Energy: kWh. Temperature: minimum and target temperature of its storage (temperature sensors). State of charge: the car's at a wallbox (its sensor and battery capacity); once reached the wallbox stays off until the deadline. Counted from one deadline to the next; met from the surplus first. A temperature target applies from midnight (or the earliest start) to the deadline: after the deadline the consumer stays off until then, also with surplus.",
       release_window:
         "Once released, the release stays open at least this long, also without surplus, until the daily target is met or its deadline has passed (e.g. so your automation can wait for a compressor run of the heat pump). SLEMS plans only the energy the consumer really takes; unlike the minimum runtime the window does not count for **Avoid short runs**. 0: off.",
       surplus_window:
@@ -878,6 +882,9 @@ const STRINGS = {
     state: "Status",
     temperature: "Temperatur",
     storageTemperature: "Speichertemperatur",
+    vehicleSoc: "Ladestand des Fahrzeugs",
+    plugged: "angesteckt",
+    unplugged: "nicht angesteckt",
     enabled: "Aktiviert",
     measured: "Gemessen",
     release: "Freigabe",
@@ -915,6 +922,7 @@ const STRINGS = {
     targetKind: "Art",
     targetHours: "Stunden",
     targetEnergy: "Energie",
+    targetSoc: "Ziel-Ladestand",
     targetSensor: "Fühler",
     targetEarliestOn: "Frühester Beginn",
     targetEarliest: "Ab",
@@ -1263,7 +1271,7 @@ const STRINGS = {
       target_hours:
         "Wie viele Stunden das Tagesziel je Zeitraum braucht (von einer Frist zur nächsten), in halben Stunden. Bei Laufzeit zählt die Zeit, in der der Verbraucher Leistung zieht (ab 50 W; bei einer Wärmepumpe mit Warmwasser-Freigabe nur im Warmwasserbetrieb). Bei Freigabezeit zählt die Zeit, in der SLEMS ihn eingeschaltet bzw. freigegeben hat, auch wenn er dabei nichts zieht (z. B. weil sein eigener Thermostat oder deine Automation ihn noch nicht gestartet hat).",
       target_type:
-        "Laufzeit: Zeit, in der der Verbraucher Leistung zieht. Freigabezeit: Zeit, in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung (Luftentfeuchter mit Hygrostat). Energie: kWh. Temperatur: Mindest- und Zieltemperatur seines Speichers (Temperaturfühler). Gezählt von Frist zu Frist; zuerst aus dem Überschuss. Ein Temperaturziel gilt von Mitternacht (oder dem frühesten Beginn) bis zur Frist: Nach der Frist bleibt der Verbraucher bis dahin aus, auch mit Überschuss.",
+        "Laufzeit: Zeit, in der der Verbraucher Leistung zieht. Freigabezeit: Zeit, in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung (Luftentfeuchter mit Hygrostat). Energie: kWh. Temperatur: Mindest- und Zieltemperatur seines Speichers (Temperaturfühler). Ladestand: der des Autos an einer Wallbox (sein Sensor und die Akkukapazität); erreicht, bleibt die Wallbox bis zur Frist aus. Gezählt von Frist zu Frist; zuerst aus dem Überschuss. Ein Temperaturziel gilt von Mitternacht (oder dem frühesten Beginn) bis zur Frist: Nach der Frist bleibt der Verbraucher bis dahin aus, auch mit Überschuss.",
       release_window:
         "Einmal freigegeben, bleibt die Freigabe mindestens so lange offen, auch ohne Überschuss, bis das Tagesziel erreicht oder seine Frist vorbei ist (z. B. damit deine Automation auf einen Kompressorlauf der Wärmepumpe warten kann). SLEMS plant nur die Energie, die der Verbraucher wirklich aufnimmt; anders als die Mindestlaufzeit zählt das Fenster nicht für **Takten vermeiden**. 0: aus.",
       surplus_window:
@@ -3065,6 +3073,7 @@ class SlemsPanel extends HTMLElement {
     }
     for (const consumer of this._config.consumers || []) {
       if (consumer.show_in_flow === false) continue;
+      const vehicle = this._vehicleDetail(consumer);
       nodes.push({
         id: `consumer-${consumer.id}`,
         role: "consumer",
@@ -3072,12 +3081,30 @@ class SlemsPanel extends HTMLElement {
         title: consumer.name,
         power: this._powerW(this._hass.states[consumer.power_entity]),
         entity: consumer.power_entity,
-        // Temperature of its storage (the sensor chosen for the daily target).
-        detail: this._consumerTemperature(consumer),
+        // The car at a wallbox, else the temperature of its storage (the
+        // sensor chosen for the daily target).
+        detail: vehicle ? vehicle.text : this._consumerTemperature(consumer),
+        detailIcon: vehicle ? vehicle.icon : "mdi:water-boiler",
+        detailTitle: vehicle ? vehicle.title : t.storageTemperature,
+        disabled: Boolean(vehicle?.unplugged),
         badge: this._consumerBadge(consumer, grid),
       });
     }
     return nodes;
+  }
+
+  /** The car at a wallbox: its state of charge, or whether one is plugged in; null without either. */
+  _vehicleDetail(consumer) {
+    const attrs = this._state("planned_power", consumer.device_id)?.attributes || {};
+    const t = this._t;
+    if (attrs.plugged === false) return { text: t.unplugged, icon: "mdi:power-plug-off-outline", title: t.unplugged, unplugged: true };
+    const soc = attrs.vehicle_soc_pct;
+    if (soc !== null && soc !== undefined) {
+      const language = this._hass?.locale?.language || "en";
+      return { text: `${new Intl.NumberFormat(language, { maximumFractionDigits: 0 }).format(soc)} %`, icon: "mdi:car-electric", title: t.vehicleSoc };
+    }
+    if (attrs.plugged === true) return { text: t.plugged, icon: "mdi:car-electric", title: t.plugged };
+    return null;
   }
 
   /** "52 °C" for a consumer with temperature sensors, "" otherwise. */
@@ -3159,7 +3186,7 @@ class SlemsPanel extends HTMLElement {
         ${n.role === "battery" ? `<div class="fbox-soc"><div class="bar"><div data-field="socbar"></div></div><span data-field="soc">–</span></div>` : ""}
         ${
           n.role === "consumer"
-            ? `<div class="fbox-detail" title="${escapeHtml(this._t.storageTemperature)}"><ha-icon icon="mdi:water-boiler" data-field="detailicon" hidden></ha-icon><span data-field="detail"></span></div>`
+            ? `<div class="fbox-detail" data-field="detailbox"><ha-icon data-field="detailicon" hidden></ha-icon><span data-field="detail"></span></div>`
             : `<div class="fbox-detail" data-field="detail"></div>`
         }
         ${n.role === "battery" ? `<div class="fbox-note" data-field="note" hidden><ha-icon icon="mdi:eye-outline"></ha-icon><span data-field="notetext"></span></div>` : ""}
@@ -3204,7 +3231,12 @@ class SlemsPanel extends HTMLElement {
     set("value", n.power === null ? "–" : this._watts(shown));
     set("detail", n.detail || "");
     const detailIcon = element.querySelector('[data-field="detailicon"]');
-    if (detailIcon) detailIcon.hidden = !n.detail;
+    if (detailIcon) {
+      detailIcon.hidden = !n.detail;
+      if (n.detailIcon && detailIcon.icon !== n.detailIcon) detailIcon.icon = n.detailIcon;
+    }
+    const detailBox = element.querySelector('[data-field="detailbox"]');
+    if (detailBox && detailBox.title !== (n.detailTitle || "")) detailBox.title = n.detailTitle || "";
     const badge = element.querySelector('[data-field="badge"]');
     if (badge) {
       set("badge", n.badge || "");
@@ -4859,6 +4891,7 @@ class SlemsPanel extends HTMLElement {
     const controls = [[kind, t.targetKind]];
     if (type === "runtime" || type === "enabled") controls.push([s("target_hours"), t.targetHours]);
     if (type === "energy") controls.push([s("target_energy"), t.targetEnergy]);
+    if (type === "soc") controls.push([s("target_soc"), t.targetSoc]);
     if (type === "temperature") {
       controls.push(
         [s("target_sensor"), t.targetSensor],
@@ -4901,10 +4934,13 @@ class SlemsPanel extends HTMLElement {
       const temperature = attrs.target_temperature_c;
       parts.push(temperature === null || temperature === undefined ? "– °C" : `${number(temperature)} °C`);
       parts.push(`${t.targetMinShort} ${number(attrs.target_goal)} °C`, `${t.targetGoalTemp} ${number(attrs.target_max_temperature_c)} °C`);
+    } else if (attrs.target_type === "soc" && !attrs.target_done && (attrs.vehicle_soc_pct === null || attrs.vehicle_soc_pct === undefined)) {
+      parts.push(`– / ${number(attrs.target_goal)} %`);
     } else {
       parts.push(`${number(attrs.target_got ?? 0)} / ${number(attrs.target_goal)} ${attrs.target_unit}`);
     }
     parts.push(t.targetUntil.replace("{time}", clock(attrs.target_deadline)));
+    if (attrs.plugged === false && mode !== "done") parts.push(t.unplugged);
     const energy = attrs.target_energy_wh;
     if (mode !== "done" && energy > 0) {
       // Waiting for a later day (after the deadline until midnight, or the earliest

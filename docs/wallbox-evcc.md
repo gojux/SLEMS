@@ -79,8 +79,9 @@ There are two ways to run it:
   energy comes from the grid or the home battery. Battery and car may take
   turns on the surplus, as both controllers react to the same grid power.
 
-Targets by state of charge, charging right away and targets from plugging in
-are on the [roadmap](../README.md#roadmap) for mode A.
+Mode A also has a daily target by state of charge ("80 % by 7:00", with the
+car's state of charge from evcc). Charging right away and targets from
+plugging in are on the [roadmap](../README.md#roadmap) for mode A.
 
 ## Prerequisites
 
@@ -197,6 +198,13 @@ current (`select.evcc_garage_max_current`), the mode
      mode B: clear it.
    - **Minimum runtime** / **Minimum pause**: 5 minutes are preset, so the wallbox
      does not start and stop with every cloud.
+   - **State of charge of the car**: the **Vehicle charge** of the loadpoint
+     (suggested). evcc knows it when the car is set up in evcc with its
+     connection (the manufacturer's cloud), and knows which car is plugged in.
+   - **Battery capacity of the car**: for a daily target by state of charge,
+     e.g. 60 kWh.
+   - **Car plugged in**: **Connected** of the loadpoint (suggested). Without a
+     car SLEMS does not control the wallbox and plans nothing for it.
 
    ![SLEMS: current control through ha-evcc](images/slems_wallbox_step2_en.png)
 
@@ -217,9 +225,10 @@ the planned power with current and phases, e.g. **10,440 W (15 A, 3 phases)**.
   PV; the grid delivers the rest. **Never** charges the car without surplus from
   the grid only, **always** also from the batteries. See
   [battery support](../README.md#battery-support).
-- **Daily target** instead of an evcc charging plan (mode A): e.g. **energy**
-  10 kWh until 07:00 with the source **grid**. SLEMS charges with surplus first and
-  in time from the grid what is still missing.
+- **Daily target** instead of an evcc charging plan (mode A): e.g. **state of
+  charge** 80 % or **energy** 10 kWh until 07:00 with the source **grid**. SLEMS
+  charges with surplus first and in time from the grid what is still missing.
+  See [daily target](../README.md#daily-target).
 - **Feed-in cap**: with the role **supporting** the wallbox absorbs midday peaks
   while a car is plugged in.
 
@@ -231,8 +240,10 @@ the planned power with current and phases, e.g. **10,440 W (15 A, 3 phases)**.
   4.1 kW surplus, with 1 phase from 1.4 kW.
 - Below the minimum current it stops: mode A sets the mode to `off`, mode B sets
   the lowest current and evcc decides itself.
-- If the car is full or not plugged in, the wallbox draws nothing; SLEMS
-  recognises this as for other consumers and gives the power to the batteries.
+- If no car is plugged in (**Car plugged in**), SLEMS does not control the
+  wallbox and plans nothing for it. If the car is full, the wallbox draws
+  nothing; SLEMS recognises this as for other consumers and gives the power to
+  the batteries.
 
 ## Troubleshooting
 

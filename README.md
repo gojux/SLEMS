@@ -60,6 +60,7 @@ system).
   - [Battery limits and protection](#battery-limits-and-protection)
 - [Consumers](#consumers)
   - [Current control](#current-control)
+  - [Car at the wallbox](#car-at-the-wallbox)
   - [Temperature sensors of the storage](#temperature-sensors-of-the-storage)
   - [Battery support](#battery-support)
   - [Role in the feed-in cap](#role-in-the-feed-in-cap)
@@ -242,9 +243,10 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Consumers with their own thermostat: pauses recognised, their power goes to the batteries meanwhile | ✅ |
 | Temperature sensors of a storage: learned energy per degree, remaining capacity, learned cooling per hour | ✅ |
 | Role of a consumer in the feed-in cap (supporting, normal, never) | ✅ |
-| Daily targets: runtime, enabled time, energy or temperature, with earliest start, deadline and source (surplus, batteries, grid) | ✅ |
+| Daily targets: runtime, enabled time, energy, temperature or the car's state of charge, with earliest start, deadline and source (surplus, batteries, grid) | ✅ |
 | Battery support per consumer (always, automatic with the energy the batteries can spare, never) | ✅ |
 | Wallbox / evcc loadpoint: current set point in A with phases, start/stop ([guide](docs/wallbox-evcc.md)) | ✅ (not yet tested with a real wallbox) |
+| Car at the wallbox: state of charge in the energy flow, without a plugged in car no control and no planning | ✅ (not yet tested with a real wallbox) |
 
 | Planning and control | Status |
 |---|---|
@@ -1637,6 +1639,29 @@ amperes, rounded down so the charging stays within the planned power.
   its battery support and forecasts decide. The card shows the planned power
   with amperes and phases, e.g. **4,140 W (6 A, 3 phases)**.
 
+### Car at the wallbox
+
+Optional, only for the consumer type **Wallbox**, in the step **Control**.
+With evcc or a go-e SLEMS suggests the entities of the device.
+
+- **State of charge of the car**: sensor with the car's state of charge in %.
+  The wallbox itself does not know it when charging AC; it comes from evcc
+  (the **Vehicle charge** of a loadpoint; evcc knows which car is plugged in) or
+  from the car's integration.
+- **Battery capacity of the car** (kWh): needed for a daily target **State of
+  charge**.
+- **Car plugged in**: a binary sensor (on = plugged in, e.g. **Connected** of an
+  evcc loadpoint) or the car state of the wallbox, e.g. of a go-e. For a car
+  state the next step asks which states mean plugged in, also while the car
+  is not charging (waiting, complete); preselected is what sounds like it,
+  missing states can be typed in. Without a car SLEMS does not control the
+  wallbox and plans nothing for it: no forced run of a daily target, no share
+  of the surplus in the forecast. Once a car is plugged in again, everything
+  applies as before.
+- The wallbox's box in the energy flow shows the state of charge with a car
+  icon, **plugged in** without a state of charge sensor; without a car it is
+  greyed out and shows **not plugged in**.
+
 ### Temperature sensors of the storage
 
 Optional, up to two, e.g. the sensor of a boiler at the heating rod and one
@@ -1714,10 +1739,11 @@ Per controlled consumer, on its card under **Daily target**.
 
 - **Kind**: **runtime** (time it draws power), **enabled time** (time SLEMS has it
   switched on, for devices with their own control such as a dehumidifier with
-  a hygrostat), **energy** (kWh) or **temperature** (with temperature sensors:
+  a hygrostat), **energy** (kWh), **temperature** (with temperature sensors:
   minimum and target temperature of its storage; with two sensors **Sensor**
   chooses the mean, sensor 1 or sensor 2, in the order of the consumer's
-  configuration).
+  configuration) or **state of charge** (a wallbox with the car's state of
+  charge and battery capacity, see [Car at the wallbox](#car-at-the-wallbox)).
 - **Period**: counted from one deadline (**Until**, default 22:00, also across
   midnight) to the next and met from the surplus first.
 - **Earliest start** (optional): before this time SLEMS
@@ -1734,8 +1760,8 @@ Per controlled consumer, on its card under **Daily target**.
     says so – not if SLEMS could not control the consumer at some time of the
     period: operating mode not **Active** or its **Control active** switched off –
     or if it declined power because its own thermostat was satisfied
-    (saturated or resting); if it was blocked externally, the notification
-    names how long),
+    (saturated or resting); if it was blocked externally or no car was plugged
+    in, the notification names how long),
   - **surplus + batteries** (from the latest start on the consumer runs
     regardless of the surplus as long as the batteries can deliver, a power
     controlled one at most with their discharge power),
@@ -1765,6 +1791,16 @@ Per controlled consumer, on its card under **Daily target**.
   run (and a release window before it) is planned for that temperature, also
   while it is still above the minimum and before the earliest start. The row
   **Plan** shows the forecast, e.g. **about 37 °C at 15:30 without heating**.
+- **State of charge**: target state of charge of the car by the deadline
+  (default 80 %). The energy still needed is the missing state of charge ×
+  battery capacity, with 10 % charging losses (e.g. 40 % of 60 kWh: about
+  26.7 kWh from the grid); the latest start follows from it as for an energy
+  target. Without a known state of charge the wallbox charges from the
+  surplus only. Once the target state of charge is reached, the wallbox stays
+  off until the deadline (after its minimum runtime), also if the state of
+  charge drops a little afterwards; a higher target state of charge is open
+  again. The card shows e.g. **62 / 80 % · until 07:00**, without a car also
+  **not plugged in**.
 - **Display**: the card shows the progress, e.g. **1.5 / 4 h · until 22:00 ·
   about 2.3 kWh to go**, in the row **Plan** when SLEMS plans the rest, e.g.
   **window 12:20–14:20 · forced from 14:20 · takes about 1 h 5 min**, and the
@@ -2401,10 +2437,9 @@ wallbox on the [evcc guide](docs/wallbox-evcc.md).
 
 **Electric car**
 
-- Wallbox with evcc (mode A) as comfortable as evcc itself: a daily target by
-  the state of charge of the car ("80 % by 7:00", from evcc via ha-evcc), a
-  switch to charge right away with full power (until unplugged or up to a
-  state of charge) and targets that only apply once the car is plugged in.
+- Wallbox with evcc (mode A) as comfortable as evcc itself: a switch to
+  charge right away with full power (until unplugged or up to a state of
+  charge) and targets that apply from plugging in ("80 % in 3 hours").
 - Batteries with an availability (e.g. "car plugged in") and a reserve until
   a time of day: the basis for a car supplying the house (V2H).
 - Learned presence of the car for the planning.

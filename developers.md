@@ -67,7 +67,7 @@ docker compose down
 
 `dev/config/configuration.yaml` provides simulated measurements driven by
 `input_number` sliders. The smart meter is a closed loop: house load + heat
-pump + heating rod + wallbox − PV − AC power of the simulated batteries, updated every
+pump + heating rod + both wallboxes − PV − AC power of the simulated batteries, updated every
 second. The AC power is read by the HA Modbus integration from a read-only
 port of the simulators (5020) every second, so the loop behaves like a real
 installation with a fast meter. Further: PV, a heat pump (power + energy;
@@ -78,7 +78,20 @@ blocked via `input_boolean.sim_heating_rod_blocked`, and a wallbox
 (`sensor.wallbox_power` = `input_number.sim_wallbox_current` × 230 V ×
 `input_number.sim_wallbox_phases` while `input_boolean.sim_wallbox_enabled`
 and `input_boolean.sim_car_connected` are on) for a consumer with current
-control (start/stop entity: the enable switch). For a PV forecast add the
+control (start/stop entity: the enable switch). A second wallbox simulates a
+go-e Charger Flex 2.0 22 kW with entities like the go-e integration's:
+`number.go_e_flex_requested_current` (6–32 A), `select.go_e_flex_force_state`
+(Neutral / Off / On), `select.go_e_flex_phase_switch_mode` with
+`sensor.go_e_flex_active_phases`, `sensor.go_e_flex_power` and the car state
+`sensor.go_e_flex_car_state` (Idle / Charging / Complete); it draws only while
+`input_boolean.sim_goe_car_connected` is on (off at start), and the car's
+state of charge `input_number.sim_goe_car_soc` (77 kWh, 90 % of the energy
+stored) rises with its power. For the evcc demo charger,
+`input_number.sim_ev_soc` (60 kWh) is the state of charge evcc reads for its
+vehicle "Sim car" (a custom vehicle reading it over the Home Assistant REST
+API); it rises while evcc charges in a mode other than off (the demo charger
+reports 4.14 kW and charging in every mode, so SLEMS sees it running on its
+own and does not control it). For a PV forecast add the
 integration **Simulated solar forecast** (`dev/sim_solar_forecast`, mounted
 in the dev and end-to-end instances): a fixed day curve from 06:00 to 20:00
 with the peak power of the entry, for today and tomorrow, without internet
@@ -1578,7 +1591,14 @@ limit the maximum gain.
   controlled consumers, control entity, power range, block entity and priority.
   Its flow: `user` (type, device, meter device) → `consumer` (name, power,
   energy, control mode; *hot water* for a heat pump) → `control` →
-  `start_options` / `hot_water_states`. The device list is ranked by
+  `start_options` / `hot_water_states` → `plugged_states` (a wallbox whose
+  *car plugged in* entity is a sensor or select: the states that mean plugged
+  in, preselected by `entity_match.plugged_guess`). A wallbox may name the
+  car's state of charge, its battery capacity and the plugged in entity
+  (suggested for evcc and the go-e car state); unplugged it is not
+  controllable now (`SystemSnapshot.is_controllable_now`), its target is
+  still evaluated for the card but adds no forced load or surplus demand,
+  and the time is counted per period like the blocked time. The device list is ranked by
   `entity_match.consumer_device_fit` (best type; known integrations in
   `CONSUMER_PLATFORMS`, matched roles), the meter list by `meter_device_fit`;
   devices with entities used by the system or another subentry are left out.
@@ -2663,3 +2683,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-30 | The automatic control gain sees oscillation at the smart meter instead of in the corrections of the commands: a crossing of the grid target (± 100 W) counts when a reversal of the corrections came before it within the loop time (from 0.7 × the response time of the fastest battery to 4 × the longest response time plus 2 cycles), three in a row without a crossing or jump from outside and without dying out lower the gain. The corrections only smooth the commands (they alternate with every cycling load and never with an overshoot alone), so the old rule fired with the target and never with the loop. A first version that counted crossings of the median grid power and only required the reversal before each crossing lowered the gain in replays of coffee machine and stove logs: the median moves with long exports, and a load pulse shorter than the response time is followed by one real overshoot per pulse; a series broken by every load jump from outside and swings that do not die out separate both from a swinging loop. |
 | 2026-10-30 | Minimum power per battery (**Automatic, energetic** / **Automatic, economic** (default) / **Manual** / **Off**): no charging below the power that stores anything, economically also not where the stored energy is worth less than its feed-in, from the losses below 300 W learned per direction (50 W bins from 40 W) and the prices now; the automatic modes start once these losses are learned. A start at the threshold, running down to 25 W below (never below the fixed loss) and for the learned start time; the strategy shows it. Charging a Venus below about 40 W discharges it, below about 65 W the stored energy is worth less than its feed-in. Not done: holding small deficits back for larger loads when the energy runs short (about 3 ct per moved kWh, only if the battery would run empty and larger loads come) and waiting a reversal time before a new direction (a replay of three debug logs: about 4 times the grid exchange it saves). |
 | 2026-11-01 | Public holidays of the consumption forecast from the `holidays` package (country of Home Assistant plus a region setting), not from a calendar of the Home Assistant integration *Holiday* or the *Workday* sensor: past days are needed for the training data, which a calendar only gives through event queries and a sensor only within the recorder's purge period, and the package needs no setup. The region is suggested from a Nominatim reverse lookup, which returns the ISO 3166-2 code of the state or canton; the vector map of Home Assistant 2026.10 (OSM Shortbread tiles) was checked and cannot give it, as its `boundaries` layer has only lines with `admin_level` and the names are separate label points. Bundled boundary data was not needed then. `ZoneHolidays` of the price estimates became `PublicHolidays` with an optional region. In Austria a region adds no day off (the state patrons are no general holidays), in Germany and Switzerland it matters. |
+| 2026-11-01 | Car at the wallbox: optional state of charge sensor, battery capacity and *car plugged in* entity (binary sensor, or a sensor / select with the states that mean plugged in) per wallbox, instead of recognising the car in SLEMS: evcc already knows which car is at a loadpoint, otherwise the car's integration gives its state of charge. Without a car the wallbox is not controllable and adds no forced load or surplus demand (its target is still shown); the unplugged time is counted per period and named when a target is missed. The daily target *state of charge* converts the missing state of charge with the configured capacity and fixed charging losses (`VEHICLE_CHARGE_EFFICIENCY` 0.9) into the energy of an energy target; the capacity is configured, not learned. Once reached, the wallbox stays off until the deadline like a met energy or temperature target. Bidirectional charging is left for later. |

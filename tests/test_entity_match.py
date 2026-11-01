@@ -140,12 +140,14 @@ from custom_components.slems.const import (  # noqa: E402
     CONF_MIN_POWER_W,
     CONF_MODE_ENTITY,
     CONF_PHASES_ENTITY,
+    CONF_PLUGGED_ENTITY,
     CONF_POWER_ENTITY,
     CONF_START_ENTITY,
     CONF_START_OFF,
     CONF_START_ON,
     CONF_TEMPERATURE_2_ENTITY,
     CONF_TEMPERATURE_ENTITY,
+    CONF_VEHICLE_SOC_ENTITY,
     ConsumerType,
     ControlMode,
 )
@@ -153,6 +155,7 @@ from custom_components.slems.entity_match import (  # noqa: E402
     consumer_device_fit,
     match_consumer_entities,
     meter_device_fit,
+    plugged_guess,
     suggest_consumer_control,
     suggest_control_mode,
     suggest_hot_water,
@@ -265,6 +268,10 @@ EVCC = [
     evcc("sensor.evcc_garage_charge_total_import", "Charge total import", device_class="energy", unit="kWh",
          state_class="total_increasing"),
     evcc("number.evcc_garage_limit_soc", "Limit SoC", unit="%"),
+    evcc("sensor.evcc_garage_vehicle_limit_soc", "Vehicle limit SoC", unit="%"),
+    evcc("sensor.evcc_garage_vehicle_soc", "Vehicle SoC", unit="%", state="62"),
+    evcc("binary_sensor.evcc_garage_vehicle_detection_active", "Vehicle detection active"),
+    evcc("binary_sensor.evcc_garage_connected", "Connected"),
 ]
 
 
@@ -275,12 +282,51 @@ def test_evcc_loadpoint_with_current_control() -> None:
         CONF_CONTROL_ENTITY: "select.evcc_garage_max_current",
         CONF_START_ENTITY: "select.evcc_garage_mode",
         CONF_PHASES_ENTITY: "sensor.evcc_garage_phases_active",
+        CONF_VEHICLE_SOC_ENTITY: "sensor.evcc_garage_vehicle_soc",
+        CONF_PLUGGED_ENTITY: "binary_sensor.evcc_garage_connected",
         CONF_MIN_CURRENT_A: 6,
         CONF_MAX_CURRENT_A: 16,
     }
     matches = match_consumer_entities(EVCC, ConsumerType.WALLBOX, ControlMode.CURRENT)
     assert matches[CONF_POWER_ENTITY] == "sensor.evcc_garage_charge_power"
     assert matches[CONF_ENERGY_ENTITY] == "sensor.evcc_garage_charge_total_import"
+
+
+def goe(entity_id: str, name: str = "", **values) -> EntityInfo:
+    return EntityInfo.create(entity_id, name, platform="goecharger_api2", **values)
+
+
+# A go-e Charger behind the go-e integration (API v2): the car state tells
+# whether a car is plugged in, the state of charge comes from the car.
+GOE = [
+    goe("number.goe_123456_amp", "Requested current", unit="A", minimum=6, maximum=32),
+    goe("select.goe_123456_frc", "Force state", options=("Neutral", "Off", "On")),
+    goe("sensor.goe_123456_car_value", "Car state", state="Idle"),
+    goe("sensor.goe_123456_nrg_11", "Power total", device_class="power", unit="W", state="0"),
+    goe("sensor.goe_123456_eto", "Total energy", device_class="energy", unit="kWh",
+        state_class="total_increasing"),
+]
+
+
+def test_go_e_with_its_car_state() -> None:
+    data = suggest_consumer_control(GOE, ConsumerType.WALLBOX, ControlMode.CURRENT)
+    assert data[CONF_CONTROL_ENTITY] == "number.goe_123456_amp"
+    assert data[CONF_PLUGGED_ENTITY] == "sensor.goe_123456_car_value"
+    assert CONF_VEHICLE_SOC_ENTITY not in data
+    # Not for other consumers, nor for a wallbox that is only measured.
+    assert CONF_PLUGGED_ENTITY not in match_consumer_entities(GOE, ConsumerType.OTHER, ControlMode.POWER)
+    assert CONF_PLUGGED_ENTITY not in match_consumer_entities(GOE, ConsumerType.WALLBOX, ControlMode.NONE)
+
+
+def test_states_of_a_plugged_in_car() -> None:
+    options = [
+        {"value": value, "label": label}
+        for value, label in (
+            ("1", "Idle"), ("2", "Charging"), ("3", "Wait for car"), ("4", "Complete"), ("5", "Error"),
+            ("disconnected", "disconnected"), ("Verbunden", "Verbunden"), ("Kein Fahrzeug", "Kein Fahrzeug"),
+        )
+    ]
+    assert plugged_guess(options) == ["2", "3", "4", "Verbunden"]
 
 
 def test_start_options_run_without_own_logic() -> None:

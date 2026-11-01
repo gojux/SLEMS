@@ -731,6 +731,7 @@ class SystemSnapshot:
             config.controllable
             and config.included_in_meter
             and not state.blocked
+            and not state.unplugged
             and subentry_id not in self.saturated
             and subentry_id not in self.running_on_its_own
             and subentry_id not in self.control_disabled
@@ -4337,9 +4338,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             needed = missing if settings.type is not TargetType.ENERGY else missing / power * 3600
             if needed > 0:
                 run_s = min(run_s, needed)
-        elif settings.type is TargetType.TEMPERATURE and power > 0:
+        elif settings.type in (TargetType.TEMPERATURE, TargetType.SOC) and power > 0:
             # Until the target temperature (the energy per kelvin learned, or
-            # the daily energy of the last days).
+            # the daily energy of the last days) or the target state of charge.
             energy = self.target_energy_wh.get(subentry_id)
             if energy:
                 run_s = min(run_s, energy / power * 3600)
@@ -4512,7 +4513,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
         progress = self.target_progress[consumer.subentry_id]
         goal, unit = self.target_goal(settings)
-        got = self.target_got(settings, progress)
+        got = self.target_got(settings, progress, state.vehicle_soc_pct)
         end = progress.end
         local_now = dt_util.now()
         result = progress.update(
@@ -4526,7 +4527,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             blocked=state.blocked,
             declined=consumer.subentry_id in self.controller.saturated
             or consumer.subentry_id in self.controller.resting,
+            unplugged=state.unplugged,
         )
+        if settings.type is TargetType.SOC and state.vehicle_soc_pct is not None:
+            progress.track_soc(settings, state.vehicle_soc_pct)
         temperature = target_temperature(settings, state.temperature_c, state.temperatures_c)
         start = window_start(settings, progress.end) if progress.end is not None else None
         # Temperatures between the deadline and midnight belong to no day.
@@ -4547,6 +4551,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     consumer.subentry_id, consumer.name, got, goal, unit,
                     dt_util.as_local(end).strftime("%H:%M"),
                     progress.last_blocked_s,
+                    progress.last_unplugged_s,
                 ),
                 "slems target notification",
             )
@@ -4557,9 +4562,19 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             return settings.energy_kwh, "kWh"
         if settings.type is TargetType.TEMPERATURE:
             return settings.min_temp_c, "°C"
+        if settings.type is TargetType.SOC:
+            return settings.target_soc_pct, "%"
         return settings.hours, "h"
 
-    def target_got(self, settings: TargetSettings, progress: TargetProgress) -> float:
+    def target_got(
+        self, settings: TargetSettings, progress: TargetProgress, soc_pct: float | None = None
+    ) -> float:
+        """Progress of the target; of a state of charge target the car's state
+        of charge ``soc_pct`` (the target once reached in the period)."""
+        if settings.type is TargetType.SOC:
+            if progress.soc_done_for(settings) and (soc_pct is None or soc_pct < settings.target_soc_pct):
+                return settings.target_soc_pct
+            return soc_pct or 0.0
         if settings.type is TargetType.ENERGY:
             return progress.energy_wh / 1000
         if settings.type is TargetType.RUNTIME:
@@ -4599,6 +4614,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if not consumer.controllable or consumer.subentry_id in self.consumer_control_disabled:
                 continue
             estimate = self.target_energy_estimate.get(consumer.subentry_id)
+            state = snapshot.consumers.get(consumer.subentry_id)
+            # No car at the wallbox: it takes nothing until one is plugged in.
+            unplugged = state is not None and state.unplugged
             if settings.type is TargetType.NONE:
                 if estimate is not None and _plans_daily_energy(consumer) and not supporting(consumer):
                     self.target_demands += daily_demands(
@@ -4610,7 +4628,6 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 continue
             progress = self.target_progress[consumer.subentry_id]
             power = self._full_power_w(consumer)
-            state = snapshot.consumers.get(consumer.subentry_id)
             end = progress.end
             surplus = 0.0
             if pv_forecast is not None and end is not None:
@@ -4627,8 +4644,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 else None
             )
             wh_per_k = self._target_wh_per_k(settings, thermal)
+            soc = state.vehicle_soc_pct if state else None
+            capacity_wh = consumer.vehicle_capacity_kwh * 1000 if consumer.vehicle_capacity_kwh else None
             energy = energy_to_target(
-                settings, progress, power_w=power, temperature_c=temperature, wh_per_k=wh_per_k
+                settings,
+                progress,
+                power_w=power,
+                temperature_c=temperature,
+                wh_per_k=wh_per_k,
+                soc_pct=soc,
+                capacity_wh=capacity_wh,
             )
             if settings.type is TargetType.TEMPERATURE and estimate is not None and energy != 0:
                 # Water draws and heat losses: at least the daily energy of the
@@ -4665,6 +4690,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     battery_need_wh=battery_need,
                     battery_can_supply=battery is not None and battery.max_discharge_w >= needed,
                     temperature_at_end_c=forecast_c,
+                    soc_pct=soc,
+                    capacity_wh=capacity_wh,
                 ),
                 wall_now,
                 short=energy is not None and surplus < energy + battery_need,
@@ -4690,7 +4717,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 power_w=power,
             )
             # A heat pump's consumption is already in its own forecast model.
-            if consumer.consumer_type is ConsumerType.HEAT_PUMP:
+            if consumer.consumer_type is ConsumerType.HEAT_PUMP or unplugged:
                 continue
             forced_w = power
             if settings.source is TargetSource.BATTERY:

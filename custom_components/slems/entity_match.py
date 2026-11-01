@@ -36,6 +36,7 @@ from .const import (
     CONF_MODE_ENTITY,
     CONF_MODE_STANDBY,
     CONF_PHASES_ENTITY,
+    CONF_PLUGGED_ENTITY,
     CONF_POWER_ENTITY,
     CONF_PV_POWER_ENTITY,
     CONF_REMOTE_ENTITY,
@@ -48,6 +49,7 @@ from .const import (
     CONF_START_ON,
     CONF_TEMPERATURE_2_ENTITY,
     CONF_TEMPERATURE_ENTITY,
+    CONF_VEHICLE_SOC_ENTITY,
     BatteryControl,
     ConsumerType,
     ControlMode,
@@ -555,6 +557,57 @@ def _phases(info: EntityInfo) -> float:
     return 1 if info.has("phase") else 0
 
 
+# Words of a wallbox's car state that mean a car is plugged in, and words that
+# rule a state out (checked first: "disconnected" is no "connected").
+_PLUGGED_WORDS = frozenset(
+    {
+        "charging", "connected", "plugged", "complete", "completed", "finished", "waitcar", "wait", "waiting", "ready",
+        "suspended", "paused", "lädt", "verbunden", "angesteckt", "eingesteckt", "angeschlossen", "fertig",
+        "bereit", "wartet",
+    }
+)
+_NOT_PLUGGED_WORDS = frozenset(
+    {
+        "disconnected", "unplugged", "idle", "not", "no", "kein", "keine", "nicht", "error", "fehler", "available",
+        "none", "unknown", "frei",
+    }
+)
+
+
+def means_plugged(text: str) -> bool:
+    """Whether a state of a wallbox's car state means a car is plugged in."""
+    words = frozenset(re.split(r"[^a-z0-9äöü]+", text.lower()))
+    return not words & _NOT_PLUGGED_WORDS and bool(words & _PLUGGED_WORDS)
+
+
+def plugged_guess(options: Iterable[Mapping[str, str]]) -> list[str]:
+    """Options (value and label) of a car state that probably mean plugged in."""
+    return [option["value"] for option in options if means_plugged(option["value"]) or means_plugged(option["label"])]
+
+
+def _vehicle_soc(info: EntityInfo) -> float:
+    if info.domain not in ("sensor", "number", "input_number") or info.unit != "%":
+        return 0
+    # Limits and plans of a charger (e.g. evcc's limit and minimum state of charge) are no measurement.
+    if info.has("limit", "min_soc", "max_soc", "plan", "target", "ziel", "grenze"):
+        return 0
+    if not info.has("vehicle", "car", "fahrzeug", "auto"):
+        return 0
+    return 3 if info.has("soc", "state_of_charge", "ladestand", "battery", "level") else 0
+
+
+def _plugged(info: EntityInfo) -> float:
+    if info.domain in ("binary_sensor", "input_boolean"):
+        if info.has("disconnected", "unplugged"):
+            return 0
+        return 3 if info.has("connected", "plugged", "angesteckt", "eingesteckt", "verbunden") else 0
+    if info.domain in ("sensor", "select", "input_select"):
+        car_state = info.has("car_state", "car_value", "carstate", "car status", "car_status", "fahrzeugstatus")
+        plugged_options = any(means_plugged(option) for option in info.options)
+        return 2 if car_state and (plugged_options or not info.options) else 0
+    return 0
+
+
 def _hot_water_mode(info: EntityInfo) -> float:
     if info.domain not in ("sensor", "select", "input_select"):
         return 0
@@ -627,6 +680,8 @@ def match_consumer_entities(
         roles.append((CONF_CONTROL_ENTITY, control))
     if control_mode is ControlMode.CURRENT:
         roles += [(CONF_START_ENTITY, _start), (CONF_PHASES_ENTITY, _phases)]
+    if consumer_type is ConsumerType.WALLBOX and control_mode is not ControlMode.NONE:
+        roles += [(CONF_VEHICLE_SOC_ENTITY, _vehicle_soc), (CONF_PLUGGED_ENTITY, _plugged)]
     if heating_rod or (heat_pump and hot_water):
         roles += [
             (CONF_TEMPERATURE_ENTITY, _storage_temperature(heat_pump, second=False)),

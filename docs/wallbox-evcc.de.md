@@ -79,8 +79,9 @@ Es gibt zwei Betriebsarten:
   Auto können sich beim Überschuss gegenseitig ablösen, weil beide Regler auf
   dieselbe Netzleistung reagieren.
 
-Ziele nach Ladestand, sofortiges Laden und Ziele ab dem Anstecken stehen für
-Betriebsart A auf der [Roadmap](../README.de.md#roadmap).
+Auch Betriebsart A kennt ein Tagesziel nach Ladestand („80 % bis 7:00“, mit
+dem Ladestand des Autos aus evcc). Sofortiges Laden und Ziele ab dem
+Anstecken stehen für Betriebsart A auf der [Roadmap](../README.de.md#roadmap).
 
 ## Voraussetzungen
 
@@ -199,6 +200,14 @@ Je Ladepunkt (hier „Garage“) entstehen u. a. **Max. Ladestrom**
      (vorgeschlagen); Betriebsart B: leeren.
    - **Mindestlaufzeit** / **Mindestpause**: 5 Minuten sind vorgegeben, damit die
      Wallbox bei Wolken nicht ständig startet und stoppt.
+   - **Ladestand des Fahrzeugs**: **Fahrzeug Ladestand** des Ladepunkts
+     (vorgeschlagen). evcc kennt ihn, wenn das Auto in evcc mit seiner
+     Anbindung (Cloud des Herstellers) eingerichtet ist, und weiß, welches Auto
+     angesteckt ist.
+   - **Akkukapazität des Fahrzeugs**: für ein Tagesziel nach Ladestand, z. B.
+     60 kWh.
+   - **Auto angesteckt**: **Verbunden** des Ladepunkts (vorgeschlagen). Ohne
+     Auto steuert SLEMS die Wallbox nicht und plant nichts für sie ein.
 
    ![SLEMS: Stromvorgabe über ha-evcc](images/slems_wallbox_step2_de.png)
 
@@ -220,9 +229,10 @@ Phasen)**.
   Ladung aus PV übrig haben; den Rest liefert das Netz. **Nie** lädt das Auto ohne
   Überschuss nur aus dem Netz, **Immer** auch aus den Batterien. Siehe
   [Batterie-Unterstützung](../README.de.md#batterie-unterstützung).
-- **Tagesziel** statt Ladeplan in evcc (Betriebsart A): z. B. **Energie** 10 kWh
-  bis 07:00 mit Quelle **Netz**. SLEMS lädt zuerst mit Überschuss und rechtzeitig
-  aus dem Netz, was noch fehlt.
+- **Tagesziel** statt Ladeplan in evcc (Betriebsart A): z. B. **Ladestand** 80 %
+  oder **Energie** 10 kWh bis 07:00 mit Quelle **Netz**. SLEMS lädt zuerst mit
+  Überschuss und rechtzeitig aus dem Netz, was noch fehlt. Siehe
+  [Tagesziel](../README.de.md#tagesziel).
 - **Einspeisebegrenzung**: Mit der Rolle **Unterstützend** nimmt die Wallbox
   Mittagsspitzen auf, wenn ein Auto angesteckt ist.
 
@@ -234,8 +244,10 @@ Phasen)**.
   bei 1 Phase ab 1,4 kW.
 - Unter dem Mindeststrom stoppt es: Betriebsart A setzt den Modus auf `off`,
   Betriebsart B setzt den kleinsten Strom, und evcc entscheidet selbst.
-- Ist das Auto voll oder nicht angesteckt, nimmt die Wallbox nichts ab; SLEMS
-  erkennt das wie bei anderen Verbrauchern und gibt die Leistung den Batterien.
+- Ist das Auto nicht angesteckt (**Auto angesteckt**), steuert SLEMS die
+  Wallbox nicht und plant nichts für sie ein. Ist das Auto voll, nimmt die
+  Wallbox nichts ab; SLEMS erkennt das wie bei anderen Verbrauchern und gibt
+  die Leistung den Batterien.
 
 ## Fehlersuche
 

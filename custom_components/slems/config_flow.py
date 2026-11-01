@@ -34,7 +34,7 @@ from homeassistant.config_entries import (
     OptionsFlow,
     SubentryFlowResult,
 )
-from homeassistant.const import CONF_NAME
+from homeassistant.const import CONF_NAME, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er, selector
@@ -113,6 +113,10 @@ from .const import (
     CONF_AVOID_CYCLING,
     CONF_TEMPERATURE_2_ENTITY,
     CONF_TEMPERATURE_ENTITY,
+    CONF_PLUGGED_ENTITY,
+    CONF_PLUGGED_STATES,
+    CONF_VEHICLE_CAPACITY_KWH,
+    CONF_VEHICLE_SOC_ENTITY,
     CONF_CAPACITY_WH,
     CONF_PURCHASE_PRICE_EUR,
     CONF_RATED_CYCLES,
@@ -208,6 +212,7 @@ from .entity_match import (
     match_pv_power,
     means_hot_water,
     meter_device_fit,
+    plugged_guess,
     pv_device_fit,
     suggest_consumer_control,
     suggest_control,
@@ -2360,14 +2365,17 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
     Every consumer must provide its own power and energy sensor. Control via a
     switch, a power set point or a release is optional; the release of a heat
     pump that heats hot water is one for its hot water charge (operating mode and
-    its hot water states). The first step picks the consumer's device (and one
-    that measures it, if another); the later steps show the entities suggested
-    from them.
+    its hot water states). A wallbox may name the car's state of charge and
+    capacity and whether one is plugged in (with the states that mean plugged
+    in for a sensor or select). The first step picks the consumer's device
+    (and one that measures it, if another); the later steps show the entities
+    suggested from them.
     """
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
         self._hot_water_labels: list[selector.SelectOptionDict] = []
+        self._plugged_labels: list[selector.SelectOptionDict] = []
         # Entities of the consumer's device and what SLEMS suggests from them.
         self._infos: list[EntityInfo] = []
         self._suggested: dict[str, Any] = {}
@@ -2529,7 +2537,16 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
         """Control entity, power or current range, external block and priority."""
         if user_input is not None:
             # Cleared optional fields must not keep their old value.
-            for key in (CONF_PHASES_ENTITY, CONF_START_ENTITY, CONF_START_ON, CONF_START_OFF):
+            for key in (
+                CONF_PHASES_ENTITY,
+                CONF_START_ENTITY,
+                CONF_START_ON,
+                CONF_START_OFF,
+                CONF_VEHICLE_SOC_ENTITY,
+                CONF_VEHICLE_CAPACITY_KWH,
+                CONF_PLUGGED_ENTITY,
+                CONF_PLUGGED_STATES,
+            ):
                 self._data.pop(key, None)
             self._data.update(user_input)
             # Set in earlier versions by hand, now observed; kept until the pauses are learned again.
@@ -2540,7 +2557,7 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
                 return await self.async_step_start_options()
             if user_input.get(CONF_MODE_ENTITY):
                 return await self.async_step_hot_water_states()
-            return self._async_finish()
+            return await self._async_after_start()
 
         defaults = self._existing()
         # Control entity and power fields are only reused if the mode is unchanged.
@@ -2555,6 +2572,10 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
                 CONF_AVOID_CYCLING,
                 CONF_TEMPERATURE_ENTITY,
                 CONF_TEMPERATURE_2_ENTITY,
+                CONF_VEHICLE_SOC_ENTITY,
+                CONF_VEHICLE_CAPACITY_KWH,
+                CONF_PLUGGED_ENTITY,
+                CONF_PLUGGED_STATES,
             )
             defaults = {k: v for k, v in defaults.items() if k in keep}
         consumer_type = ConsumerType(self._data[CONF_CONSUMER_TYPE])
@@ -2669,6 +2690,21 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
         )
         fields[_optional(CONF_TEMPERATURE_ENTITY, defaults)] = temperature
         fields[_optional(CONF_TEMPERATURE_2_ENTITY, defaults)] = temperature
+        if wallbox:
+            fields[_optional(CONF_VEHICLE_SOC_ENTITY, defaults)] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["sensor", "number", "input_number"])
+            )
+            fields[_optional(CONF_VEHICLE_CAPACITY_KWH, defaults)] = selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1, max=250, step=0.1, unit_of_measurement="kWh",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            )
+            fields[_optional(CONF_PLUGGED_ENTITY, defaults)] = selector.EntitySelector(
+                selector.EntitySelectorConfig(
+                    domain=["binary_sensor", "input_boolean", "switch", "sensor", "select", "input_select"]
+                )
+            )
         fields[
             vol.Required(CONF_PRIORITY, default=defaults.get(CONF_PRIORITY, DEFAULT_PRIORITY))
         ] = selector.NumberSelector(
@@ -2724,7 +2760,7 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
         """Options of a select start entity for on and off (e.g. evcc: fast / off)."""
         if user_input is not None:
             self._data.update(user_input)
-            return self._async_finish()
+            return await self._async_after_start()
         entity_id = self._data[CONF_START_ENTITY]
         state = self.hass.states.get(entity_id)
         options = list(state.attributes.get("options", [])) if state else []
@@ -2748,6 +2784,59 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
             description_placeholders={"entity": f"{state.name} ({entity_id})" if state else entity_id},
         )
 
+    async def _async_after_start(self) -> SubentryFlowResult:
+        """The states that mean a car is plugged in, if a sensor or select tells it."""
+        plugged = self._data.get(CONF_PLUGGED_ENTITY)
+        if plugged and plugged.split(".", 1)[0] in ("sensor", "select", "input_select"):
+            return await self.async_step_plugged_states()
+        return self._async_finish()
+
+    async def async_step_plugged_states(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """States of the wallbox's car state that mean a car is plugged in (preselected by name)."""
+        entity_id = self._data[CONF_PLUGGED_ENTITY]
+        if user_input is not None:
+            if not user_input.get(CONF_PLUGGED_STATES):
+                return self._plugged_form(entity_id, user_input, {CONF_PLUGGED_STATES: "plugged_states_required"})
+            self._data.update(user_input)
+            return self._async_finish()
+        state = self.hass.states.get(entity_id)
+        options = [str(o) for o in (state.attributes.get("options") or [])] if state else []
+        if not options and state is not None and state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            options = [state.state]
+        labels = await _option_labels(self.hass, entity_id, options)
+        existing = self._existing()
+        if existing.get(CONF_PLUGGED_ENTITY) == entity_id and existing.get(CONF_PLUGGED_STATES):
+            chosen = list(existing[CONF_PLUGGED_STATES])
+        else:
+            chosen = plugged_guess(labels)
+        # Stored states that the entity does not offer (typed in) stay selectable.
+        known = {label["value"] for label in labels}
+        labels += [selector.SelectOptionDict(value=value, label=value) for value in chosen if value not in known]
+        self._plugged_labels = labels
+        return self._plugged_form(entity_id, {CONF_PLUGGED_STATES: chosen}, {})
+
+    def _plugged_form(self, entity_id: str, values: dict[str, Any], errors: dict[str, str]) -> SubentryFlowResult:
+        state = self.hass.states.get(entity_id)
+        return self.async_show_form(
+            step_id="plugged_states",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_PLUGGED_STATES, description={"suggested_value": values.get(CONF_PLUGGED_STATES) or []}
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=self._plugged_labels, multiple=True, custom_value=True)
+                    )
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "entity": f"{state.name} ({entity_id})" if state else entity_id,
+                "state": state.state if state else "–",
+            },
+        )
+
     def _async_finish(self) -> SubentryFlowResult:
         data = dict(self._data)
         title = data.pop(CONF_NAME)
@@ -2763,7 +2852,7 @@ class ConsumerSubentryFlow(ConfigSubentryFlow):
         ):
             if key in data:
                 data[key] = int(data[key])
-        for key in (CONF_MIN_CURRENT_A, CONF_MAX_CURRENT_A):
+        for key in (CONF_MIN_CURRENT_A, CONF_MAX_CURRENT_A, CONF_VEHICLE_CAPACITY_KWH):
             if key in data:
                 data[key] = float(data[key])
         if self.source == SOURCE_RECONFIGURE:

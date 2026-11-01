@@ -167,6 +167,45 @@ def test_heat_pump_release_asks_for_its_hot_water_states() -> None:
     assert result == "hot_water_states"
 
 
+def test_wallbox_asks_for_the_states_of_its_car_state() -> None:
+    import asyncio
+
+    from custom_components.slems.config_flow import ConsumerSubentryFlow
+    from custom_components.slems.const import (
+        CONF_CONSUMER_TYPE,
+        CONF_CONTROL_ENTITY,
+        CONF_CONTROL_MODE,
+        CONF_PLUGGED_ENTITY,
+        CONF_PRIORITY,
+        CONF_VEHICLE_CAPACITY_KWH,
+        ControlMode,
+    )
+
+    def run(plugged: str) -> object:
+        flow = ConsumerSubentryFlow()
+        flow._existing = lambda: {}
+        flow._data = {CONF_CONSUMER_TYPE: "wallbox", CONF_CONTROL_MODE: ControlMode.CURRENT.value}
+
+        async def states():
+            return "plugged_states"
+
+        flow.async_step_plugged_states = states
+        flow._async_finish = lambda: flow._data
+        return asyncio.run(
+            flow.async_step_control(
+                {CONF_CONTROL_ENTITY: "number.goe_amp", CONF_PLUGGED_ENTITY: plugged, CONF_PRIORITY: 5}
+            )
+        )
+
+    # The car state of a go-e: which of its states mean plugged in; a binary sensor tells it itself.
+    assert run("sensor.goe_car_value") == "plugged_states"
+    assert run("binary_sensor.evcc_garage_connected")[CONF_PLUGGED_ENTITY] == "binary_sensor.evcc_garage_connected"
+    # The car's fields belong to a wallbox only.
+    wallbox = _control_form({CONF_CONSUMER_TYPE: "wallbox", CONF_CONTROL_MODE: "current"}, [])
+    assert CONF_PLUGGED_ENTITY in wallbox and CONF_VEHICLE_CAPACITY_KWH in wallbox
+    assert CONF_PLUGGED_ENTITY not in _control_form({CONF_CONSUMER_TYPE: "other", CONF_CONTROL_MODE: "power"}, [])
+
+
 def _control_form(data: dict, infos: list, existing: dict | None = None, device_changed: bool = False) -> dict:
     import asyncio
 

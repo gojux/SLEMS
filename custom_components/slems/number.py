@@ -366,7 +366,7 @@ async def async_setup_entry(
                 (
                     ConsumerTargetNumber(coordinator, consumer, d)
                     for d in TARGET_NUMBERS
-                    if consumer.temperature_entity_ids or d.native_unit_of_measurement != UnitOfTemperature.CELSIUS
+                    if _has_target_number(consumer, d)
                 ),
                 config_subentry_id=consumer.subentry_id,
             )
@@ -528,7 +528,27 @@ TARGET_NUMBERS: tuple[TargetNumberDescription, ...] = (
         mode=NumberMode.BOX,
         entity_category=EntityCategory.CONFIG,
     ),
+    TargetNumberDescription(
+        key="target_soc",
+        translation_key="target_soc",
+        attribute="target_soc_pct",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=10,
+        native_max_value=100,
+        native_step=5,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+    ),
 )
+
+
+def _has_target_number(consumer: ConsumerConfig, description: TargetNumberDescription) -> bool:
+    """Temperatures only with temperature sensors, the state of charge only with the car's sensor."""
+    if description.native_unit_of_measurement == UnitOfTemperature.CELSIUS:
+        return bool(consumer.temperature_entity_ids)
+    if description.attribute == "target_soc_pct":
+        return consumer.vehicle_soc_entity_id is not None
+    return True
 
 
 # Release consumers: how long a release stays open at least (0: off).

@@ -548,6 +548,9 @@
             "min_off_minutes": "Minimum pause",
             "temperature_entity": "Temperature sensor of the storage",
             "temperature_2_entity": "Second temperature sensor",
+            "vehicle_soc_entity": "State of charge of the car",
+            "vehicle_capacity_kwh": "Battery capacity of the car",
+            "plugged_entity": "Car plugged in",
             "min_current_a": "Minimum current",
             "max_current_a": "Maximum current",
             "phases": "Phases",
@@ -566,6 +569,9 @@
             "min_off_minutes": "Optional. Once switched off by SLEMS, the consumer stays off at least this long.",
             "temperature_entity": "Optional, e.g. the sensor of the boiler at the heating rod, or a water heater (its current temperature). SLEMS learns from the mean of the sensors how much energy the storage takes per degree and from which temperature the thermostat cycles, and plans the consumer for the feed-in cap only as far as it can still take energy.",
             "temperature_2_entity": "Optional, e.g. a sensor higher up in the boiler; makes the estimate more accurate.",
+            "vehicle_soc_entity": "Optional. Sensor with the car's state of charge in %, e.g. of an evcc loadpoint (it knows which car is plugged in) or of the car's integration. Shown on the wallbox's box in the energy flow; with the battery capacity it allows a daily target by state of charge.",
+            "vehicle_capacity_kwh": "Optional. Usable battery capacity of the car; needed for a daily target by state of charge.",
+            "plugged_entity": "Optional. Tells whether a car is plugged in: a binary sensor (on = plugged in, e.g. **Connected** of an evcc loadpoint), or the car state of the wallbox (e.g. of a go-e; the states that mean plugged in are asked next). Without a car SLEMS does not control the wallbox and plans nothing for it.",
             "min_current_a": "Below this current the consumer is stopped (vehicles: usually 6 A).",
             "max_current_a": "Highest current SLEMS sets.",
             "phases": "Phases the consumer charges with when no entity tells the active ones.",
@@ -588,6 +594,16 @@
             "start_off": "Selected when the consumer should be off, with evcc **Off**."
           }
         },
+        "plugged_states": {
+          "title": "States for a plugged in car",
+          "description": "States of {entity} (now: {state}) in which a car is plugged in, also while it is not charging (waiting, complete). Preselected is what sounds like it; check the selection.",
+          "data": {
+            "plugged_states": "Plugged in states"
+          },
+          "data_description": {
+            "plugged_states": "Several possible; a state that is not in the list can be typed in."
+          }
+        },
         "hot_water_states": {
           "title": "States for hot water",
           "description": "States of {entity} (now: {state}) in which the heat pump heats hot water. Preselected is what sounds like hot water; check the selection. Only in these states its power counts as controlled.",
@@ -603,7 +619,8 @@
         "reconfigure_successful": "Consumer updated."
       },
       "error": {
-        "hot_water_states_required": "Select at least one state for hot water."
+        "hot_water_states_required": "Select at least one state for hot water.",
+        "plugged_states_required": "Select at least one state for a plugged in car."
       }
     },
     "tariff": {
@@ -995,7 +1012,8 @@
           "runtime": "Runtime",
           "enabled": "Enabled time",
           "energy": "Energy",
-          "temperature": "Temperature"
+          "temperature": "Temperature",
+          "soc": "State of charge"
         }
       },
       "target_source": {
@@ -1571,6 +1589,9 @@
       "target_max_temperature": {
         "name": "Target temperature"
       },
+      "target_soc": {
+        "name": "Target state of charge"
+      },
       "price_min_gain": {
         "name": "Minimum gain"
       },
@@ -1729,6 +1750,9 @@
     },
     "target_missed_blocked_message": {
       "message": "{name} got {got} of {goal} by {deadline}; it was blocked externally for {blocked} of the period. If that happens more often, check the block entity on its card (e.g. a lock period of the grid operator or an automation)."
+    },
+    "target_missed_unplugged_message": {
+      "message": "{name} got {got} of {goal} by {deadline}; no car was plugged in for {unplugged} of the period. Plug the car in early enough, or set the deadline to when it is usually plugged in."
     },
     "self_test_not_controllable": {
       "message": "This battery is only read, not controlled; a self-test is not possible."

@@ -10,6 +10,8 @@ logger:
     custom_components.slems: debug
     homeassistant.components.automation.feed_simulated_sunspec_meter: warning
     homeassistant.components.automation.simulate_plug_in_battery_charge: warning
+    homeassistant.components.automation.simulate_car_charge_at_evcc: warning
+    homeassistant.components.automation.simulate_car_charge_at_go_e: warning
     homeassistant.components.automation.feed_simulated_huawei_inverter: warning
 
 # Simulated measurements. Adjust the sliders to play with the values.
@@ -74,6 +76,34 @@ input_number:
     max: 3
     step: 1
     initial: 3
+  # Second simulated wallbox, a go-e Charger Flex 2.0 22 kW (3 x 32 A, phase
+  # switching) with entities like those of the go-e integration
+  # (goecharger_api2): requested current, force state and phase switch mode.
+  sim_goe_current:
+    name: go-e Flex requested current (sim)
+    min: 6
+    max: 32
+    step: 1
+    unit_of_measurement: A
+    initial: 16
+  # State of charge of the car at the go-e (77 kWh), as its integration would
+  # report it; rises with the power of the go-e.
+  sim_goe_car_soc:
+    name: Simulated go-e car state of charge
+    min: 0
+    max: 100
+    step: 0.01
+    unit_of_measurement: "%"
+    initial: 20
+  # State of charge of the car at the evcc demo wallbox (60 kWh), as a car's
+  # cloud would report it; evcc reads it as its vehicle "Sim car".
+  sim_ev_soc:
+    name: Simulated car state of charge
+    min: 0
+    max: 100
+    step: 0.01
+    unit_of_measurement: "%"
+    initial: 35
 
   # Simulated plug-in battery with its own PV modules (2.24 kWh, 800 W
   # output, 1200 W input from the grid), SLEMS battery type "Home Assistant
@@ -127,6 +157,15 @@ input_select:
     name: Simulated heat pump status
     options: [standby, heating, hot_water, defrost]
     initial: heating
+  # go-e: Neutral charges a connected car, Off never, On always.
+  sim_goe_force_state:
+    name: go-e Flex force state (sim)
+    options: [Neutral, "Off", "On"]
+    initial: Neutral
+  sim_goe_phase_mode:
+    name: go-e Flex phase switch mode (sim)
+    options: [Auto, Force single phase, Force three phases]
+    initial: Force three phases
 
 input_boolean:
   sim_plug_in_passes_through:
@@ -140,6 +179,9 @@ input_boolean:
   sim_car_connected:
     name: Car connected
     initial: true
+  sim_goe_car_connected:
+    name: Car connected to go-e Flex
+    initial: false
 
 template:
   # Closed loop: the grid power results from load, PV and the AC power of the
@@ -160,6 +202,7 @@ template:
               + states('sensor.heat_pump_power') | float(0)
               + states('sensor.heating_rod_power') | float(0)
               + states('sensor.wallbox_power') | float(0)
+              + states('sensor.go_e_flex_power') | float(0)
               - states('input_number.sim_pv_power') | float(0)
               - states('sensor.sim_venus_1_ac_power') | float(0)
               - states('sensor.sim_venus_2_ac_power') | float(0)
@@ -271,6 +314,58 @@ template:
               slave: 1
               address: 42010
               value: "{{ ['Stop', 'Charge', 'Discharge'].index(option) }}"
+  # go-e Charger Flex 2.0 22 kW (see sim_goe_current); without a car it draws
+  # nothing whatever it is commanded.
+  - number:
+      - name: go-e Flex requested current
+        unique_id: sim_goe_requested_current
+        unit_of_measurement: A
+        min: 6
+        max: 32
+        step: 1
+        state: "{{ states('input_number.sim_goe_current') | float(0) }}"
+        set_value:
+          - action: input_number.set_value
+            target: {entity_id: input_number.sim_goe_current}
+            data: {value: "{{ value }}"}
+    select:
+      - name: go-e Flex force state
+        unique_id: sim_goe_force_state
+        options: "{{ state_attr('input_select.sim_goe_force_state', 'options') }}"
+        state: "{{ states('input_select.sim_goe_force_state') }}"
+        select_option:
+          - action: input_select.select_option
+            target: {entity_id: input_select.sim_goe_force_state}
+            data: {option: "{{ option }}"}
+      - name: go-e Flex phase switch mode
+        unique_id: sim_goe_phase_mode
+        options: "{{ state_attr('input_select.sim_goe_phase_mode', 'options') }}"
+        state: "{{ states('input_select.sim_goe_phase_mode') }}"
+        select_option:
+          - action: input_select.select_option
+            target: {entity_id: input_select.sim_goe_phase_mode}
+            data: {option: "{{ option }}"}
+    sensor:
+      - name: go-e Flex active phases
+        unique_id: sim_goe_active_phases
+        state_class: measurement
+        state: "{{ 1 if is_state('input_select.sim_goe_phase_mode', 'Force single phase') else 3 }}"
+      - name: go-e Flex power
+        unique_id: sim_goe_power
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        state: >-
+          {{ (states('input_number.sim_goe_current') | float(0) * 230
+              * states('sensor.go_e_flex_active_phases') | float(3))
+             if is_state('input_boolean.sim_goe_car_connected', 'on')
+                and not is_state('input_select.sim_goe_force_state', 'Off') else 0 }}
+      - name: go-e Flex car state
+        unique_id: sim_goe_car_state
+        state: >-
+          {% if is_state('input_boolean.sim_goe_car_connected', 'off') %}Idle
+          {% elif states('sensor.go_e_flex_power') | float(0) > 0 %}Charging
+          {% else %}Complete{% endif %}
   - sensor:
       - name: Wallbox power
         unique_id: sim_wallbox_power
@@ -323,6 +418,12 @@ sensor:
     source: sensor.wallbox_power
     name: Wallbox energy
     unique_id: sim_wallbox_energy
+    unit_prefix: k
+    method: left
+  - platform: integration
+    source: sensor.go_e_flex_power
+    name: go-e Flex energy
+    unique_id: sim_goe_energy
     unit_prefix: k
     method: left
   - platform: integration
@@ -513,6 +614,45 @@ automation sim:
                 + states('sensor.plug_in_battery_input') | float(0)
                 - states('sensor.plug_in_battery_output') | float(0) %}
             {{ [[states('input_number.sim_plug_in_soc') | float(0) + power / 3600 / 2240 * 100, 0] | max, 100] | min | round(4) }}
+  - alias: Simulate car charge at evcc
+    mode: single
+    triggers:
+      - trigger: time_pattern
+        seconds: "/10"
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.evcc_garage_charging
+        state: "on"
+      # The demo charger reports charging also in mode off.
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: select.evcc_garage_mode
+            state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.sim_ev_soc}
+        data:
+          value: >-
+            {% set kw = states('sensor.evcc_garage_charge_power') | float(0) %}
+            {{ [states('input_number.sim_ev_soc') | float(0) + kw * 0.9 * 10 / 3600 / 60 * 100, 100] | min | round(2) }}
+  # 90 % of the energy ends up in the battery (charging losses).
+  - alias: Simulate car charge at go-e
+    mode: single
+    triggers:
+      - trigger: time_pattern
+        seconds: "/10"
+    conditions:
+      - condition: numeric_state
+        entity_id: sensor.go_e_flex_power
+        above: 0
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.sim_goe_car_soc}
+        data:
+          value: >-
+            {% set w = states('sensor.go_e_flex_power') | float(0) %}
+            {{ [states('input_number.sim_goe_car_soc') | float(0) + w * 0.9 * 10 / 3600 / 77000 * 100, 100] | min | round(2) }}
   - alias: Feed simulated SunSpec meter
     mode: queued
     triggers:

@@ -240,18 +240,19 @@ class _TargetSelect(SlemsConsumerEntity, SelectEntity, RestoreEntity):
 
 
 class ConsumerTargetTypeSelect(_TargetSelect):
-    """Kind of daily target; the temperature target needs temperature sensors."""
+    """Kind of daily target; the temperature target needs temperature sensors,
+    the state of charge target the car's sensor and battery capacity."""
 
     _attribute = "type"
     _enum = TargetType
 
     def __init__(self, coordinator: SlemsCoordinator, consumer: ConsumerConfig) -> None:
         super().__init__(coordinator, consumer, "target_type")
-        self._attr_options = [
-            t.value
-            for t in TargetType
-            if t is not TargetType.TEMPERATURE or consumer.temperature_entity_ids
-        ]
+        available = {
+            TargetType.TEMPERATURE: bool(consumer.temperature_entity_ids),
+            TargetType.SOC: bool(consumer.vehicle_soc_entity_id and consumer.vehicle_capacity_kwh),
+        }
+        self._attr_options = [t.value for t in TargetType if available.get(t, True)]
 
 
 class ConsumerTargetSourceSelect(_TargetSelect):

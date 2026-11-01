@@ -60,6 +60,7 @@ Tiere](https://en.wikipedia.org/wiki/Sea_slug)) und *EMS*
   - [Grenzen und Schutz der Batterien](#grenzen-und-schutz-der-batterien)
 - [Verbraucher](#verbraucher)
   - [Stromvorgabe](#stromvorgabe)
+  - [Auto an der Wallbox](#auto-an-der-wallbox)
   - [Temperaturfühler des Speichers](#temperaturfühler-des-speichers)
   - [Batterie-Unterstützung](#batterie-unterstützung)
   - [Einsatz in der Einspeisebegrenzung](#einsatz-in-der-einspeisebegrenzung)
@@ -246,9 +247,10 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Verbraucher mit eigenem Thermostat: Pausen erkannt, ihre Leistung geht solange an die Batterien | ✅ |
 | Temperaturfühler eines Speichers: gelernte Energie pro Grad, noch aufnehmbare Energie, gelernte Abkühlung je Stunde | ✅ |
 | Einsatz eines Verbrauchers in der Einspeisebegrenzung (unterstützend, normal, nie) | ✅ |
-| Tagesziele: Laufzeit, Freigabezeit, Energie oder Temperatur, mit frühestem Start, Frist und Quelle (Überschuss, Batterie, Netz) | ✅ |
+| Tagesziele: Laufzeit, Freigabezeit, Energie, Temperatur oder Ladestand des Autos, mit frühestem Start, Frist und Quelle (Überschuss, Batterie, Netz) | ✅ |
 | Batterie-Unterstützung je Verbraucher (immer, automatisch mit der Energie, die die Batterien übrig haben, nie) | ✅ |
 | Wallbox / evcc-Ladepunkt: Stromvorgabe in A mit Phasen, Start/Stopp ([Anleitung](docs/wallbox-evcc.de.md)) | ✅ (noch nicht mit einer echten Wallbox getestet) |
+| Auto an der Wallbox: Ladestand im Energiefluss, ohne angestecktes Auto keine Regelung und keine Planung | ✅ (noch nicht mit einer echten Wallbox getestet) |
 
 | Planung und Regelung | Status |
 |---|---|
@@ -1746,6 +1748,30 @@ Ampere, abgerundet, damit die Ladung im geplanten Rahmen bleibt.
   seine Batterie-Unterstützung und Prognosen. Die Karte zeigt die geplante
   Leistung mit Ampere und Phasen, z. B. **4.140 W (6 A, 3 Phasen)**.
 
+### Auto an der Wallbox
+
+Optional, nur beim Verbrauchertyp **Wallbox**, im Schritt **Steuerung**. Mit
+evcc oder einer go-e schlägt SLEMS die Entitäten des Geräts vor.
+
+- **Ladestand des Fahrzeugs**: Sensor mit dem Ladestand des Autos in %. Die
+  Wallbox selbst kennt ihn beim AC-Laden nicht; er kommt aus evcc (der
+  **Fahrzeug Ladestand** eines Ladepunkts; evcc weiß, welches Auto
+  angesteckt ist) oder aus der Integration des Autos.
+- **Akkukapazität des Fahrzeugs** (kWh): nötig für ein Tagesziel
+  **Ladestand**.
+- **Auto angesteckt**: ein Binärsensor (an = angesteckt, z. B. **Verbunden**
+  eines evcc-Ladepunkts) oder der Fahrzeugstatus der Wallbox, z. B. einer
+  go-e. Beim Fahrzeugstatus fragt der nächste Schritt, welche Zustände
+  „angesteckt“ bedeuten, auch wenn das Auto gerade nicht lädt (wartet,
+  fertig); vorausgewählt ist, was danach klingt, fehlende Zustände lassen
+  sich eintippen. Ohne Auto steuert SLEMS die Wallbox nicht und plant nichts
+  für sie ein: kein erzwungener Lauf eines Tagesziels, kein Anteil am
+  Überschuss in der Prognose. Ist das Auto wieder angesteckt, gilt alles wie
+  vorher.
+- Die Box der Wallbox im Energiefluss zeigt mit einem Auto-Symbol den
+  Ladestand, ohne Ladestand-Sensor **angesteckt**; ohne Auto ist sie
+  ausgegraut und zeigt **nicht angesteckt**.
+
 ### Temperaturfühler des Speichers
 
 Optional, bis zu zwei, z. B. der Fühler eines Boilers am Heizstab und einer
@@ -1827,10 +1853,12 @@ Je gesteuertem Verbraucher, auf seiner Karte unter **Tagesziel**.
 
 - **Art**: **Laufzeit** (Zeit, in der er Leistung zieht), **Freigabezeit** (Zeit,
   in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung wie
-  einen Luftentfeuchter mit Hygrostat), **Energie** (kWh) oder **Temperatur** (mit
+  einen Luftentfeuchter mit Hygrostat), **Energie** (kWh), **Temperatur** (mit
   Temperaturfühlern: Mindest- und Zieltemperatur seines Speichers; mit zwei
   Fühlern wählt **Fühler** den Mittelwert, Fühler 1 oder Fühler 2, in der
-  Reihenfolge der Konfiguration des Verbrauchers).
+  Reihenfolge der Konfiguration des Verbrauchers) oder **Ladestand** (eine
+  Wallbox mit dem Ladestand und der Akkukapazität des Autos, siehe
+  [Auto an der Wallbox](#auto-an-der-wallbox)).
 - **Zeitraum**: gezählt von Frist (**Bis**, Standard 22:00, auch über
   Mitternacht) zu Frist und zuerst aus dem Überschuss erfüllt.
 - **Frühester Beginn** (optional): Vorher schaltet
@@ -1850,7 +1878,8 @@ Je gesteuertem Verbraucher, auf seiner Karte unter **Tagesziel**.
     zeitweise nicht steuern konnte: Betriebsmodus nicht **Aktiv** oder seine
     **Steuerung aktiv** ausgeschaltet – oder wenn er keine Leistung aufnahm, weil
     sein eigener Thermostat zufrieden war (gesättigt oder ruhend); war er
-    extern gesperrt, nennt die Benachrichtigung, wie lange),
+    extern gesperrt oder kein Auto angesteckt, nennt die Benachrichtigung, wie
+    lange),
   - **Überschuss + Batterie** (ab der spätesten Startzeit läuft der Verbraucher
     unabhängig vom Überschuss, solange die Batterien liefern können, ein
     leistungsgeregelter höchstens mit ihrer Entladeleistung),
@@ -1879,6 +1908,15 @@ Je gesteuertem Verbraucher, auf seiner Karte unter **Tagesziel**.
   erzwungenen Lauf (und ein Freigabefenster davor) für diese Temperatur, auch
   solange er noch darüber liegt und vor dem frühesten Beginn. Die Zeile
   **Plan** zeigt die Vorhersage, z. B. **ohne Heizen um 15:30 ca. 37 °C**.
+- **Ladestand**: Ziel-Ladestand des Autos bis zur Frist (Standard 80 %). Die
+  noch nötige Energie ist der fehlende Ladestand × Akkukapazität, mit 10 %
+  Ladeverlusten (z. B. 40 % von 60 kWh: ca. 26,7 kWh aus dem Netz); daraus
+  folgt die späteste Startzeit wie bei einem Energieziel. Ohne bekannten
+  Ladestand lädt die Wallbox nur mit Überschuss. Ist der Ziel-Ladestand
+  erreicht, bleibt die Wallbox bis zur Frist aus (nach ihrer
+  Mindestlaufzeit), auch wenn der Ladestand danach etwas sinkt; ein höherer
+  Ziel-Ladestand gilt wieder als offen. Die Karte zeigt z. B. **62 / 80 % · bis
+  07:00**, ohne Auto zusätzlich **nicht angesteckt**.
 - **Anzeige**: Die Karte zeigt den Fortschritt, z. B. **1,5 / 4 h · bis 22:00 ·
   noch ca. 2,3 kWh**, in der Zeile **Plan**, wann SLEMS den Rest einplant,
   z. B. **Fenster 12:20–14:20 · erzwungen ab 14:20 · dauert ca. 1 h 5 min**,
@@ -2563,10 +2601,10 @@ Nutzern mit einer echten Wallbox zur [evcc-Anleitung](docs/wallbox-evcc.de.md).
 
 **Elektroauto**
 
-- Wallbox mit evcc (Betriebsart A) so bequem wie evcc selbst: ein Tagesziel
-  nach dem Ladestand des Autos („80 % bis 7:00“, von evcc über ha-evcc), ein
-  Schalter zum sofortigen Laden mit voller Leistung (bis zum Abstecken oder bis
-  zu einem Ladestand) und Ziele, die erst gelten, wenn das Auto angesteckt ist.
+- Wallbox mit evcc (Betriebsart A) so bequem wie evcc selbst: ein Schalter
+  zum sofortigen Laden mit voller Leistung (bis zum Abstecken oder bis zu
+  einem Ladestand) und Ziele, die ab dem Anstecken gelten („in 3 Stunden
+  80 %“).
 - Batterien mit Verfügbarkeit (z. B. „Auto angesteckt“) und einer Reserve bis
   zu einer Uhrzeit: Grundlage für ein Auto, das das Haus versorgt (V2H).
 - Gelernte Anwesenheit des Autos für die Planung.

@@ -28,6 +28,25 @@ def consumer(block_entity: str | None = None, cycles: bool = False) -> ConsumerC
     )
 
 
+def wallbox(**changes) -> ConsumerConfig:
+    config = ConsumerConfig(
+        subentry_id="wallbox",
+        name="Wallbox",
+        consumer_type=ConsumerType.WALLBOX,
+        power_entity_id="sensor.wallbox_power",
+        energy_entity_id="sensor.wallbox_energy",
+        included_in_meter=True,
+        control_mode=ControlMode.CURRENT,
+        control_entity_id="number.wallbox_current",
+        nominal_power_w=None,
+        min_power_w=None,
+        max_power_w=None,
+        block_entity_id=None,
+        priority=5,
+    ).with_phases(3)
+    return replace(config, **changes)
+
+
 def hass_with(states: dict[str, str]):
     return SimpleNamespace(
         states=SimpleNamespace(
@@ -546,3 +565,97 @@ def test_consumer_running_on_its_own_is_not_controllable() -> None:
     snapshot = replace(snapshot, running_on_its_own=frozenset({"rod"}))
     assert not snapshot.is_controllable_now("rod")
     assert snapshot.controlled_consumer_power_w() == 0.0
+
+
+def test_wallbox_reads_the_car() -> None:
+    config = wallbox(vehicle_soc_entity_id="sensor.car_soc", plugged_entity_id="binary_sensor.car_connected")
+    state = read_consumer_state(hass_with({"sensor.car_soc": "62.4", "binary_sensor.car_connected": "on"}), config)
+    assert state.vehicle_soc_pct == 62.4 and state.plugged and not state.unplugged
+    state = read_consumer_state(hass_with({"sensor.car_soc": "unknown", "binary_sensor.car_connected": "off"}), config)
+    assert state.vehicle_soc_pct is None and state.unplugged
+    # Unknown or out of range: neither plugged in nor unplugged.
+    state = read_consumer_state(hass_with({"sensor.car_soc": "180", "binary_sensor.car_connected": "unavailable"}), config)
+    assert state.vehicle_soc_pct is None and state.plugged is None and not state.unplugged
+    # The car state of a wallbox with the states that mean plugged in.
+    car_state = wallbox(plugged_entity_id="sensor.goe_car", plugged_states=("Charging", "WaitCar", "Complete"))
+    assert read_consumer_state(hass_with({"sensor.goe_car": "Complete"}), car_state).plugged
+    assert read_consumer_state(hass_with({"sensor.goe_car": "Idle"}), car_state).unplugged
+    # Without the entities nothing is known.
+    assert read_consumer_state(hass_with({}), wallbox()).plugged is None
+
+
+def test_wallbox_config_from_its_subentry() -> None:
+    config = ConsumerConfig.from_subentry(
+        "wallbox",
+        "Wallbox",
+        {
+            "consumer_type": "wallbox",
+            "power_entity": "sensor.wallbox_power",
+            "energy_entity": "sensor.wallbox_energy",
+            "included_in_meter": True,
+            "control_mode": "current",
+            "control_entity": "number.wallbox_current",
+            "vehicle_soc_entity": "sensor.car_soc",
+            "vehicle_capacity_kwh": 60.0,
+            "plugged_entity": "sensor.goe_car",
+            "plugged_states": ["Charging", "Complete"],
+        },
+    )
+    assert config.vehicle_soc_entity_id == "sensor.car_soc" and config.vehicle_capacity_kwh == 60.0
+    assert config.plugged_entity_id == "sensor.goe_car" and config.plugged_states == ("Charging", "Complete")
+
+
+def test_wallbox_without_a_car_is_not_controllable() -> None:
+    from custom_components.slems.coordinator import SystemSnapshot
+
+    snapshot = SystemSnapshot(
+        consumer_configs={"wallbox": wallbox()},
+        consumers={"wallbox": ConsumerState(power_w=0.0, plugged=False)},
+    )
+    assert not snapshot.is_controllable_now("wallbox")
+    snapshot = replace(snapshot, consumers={"wallbox": ConsumerState(power_w=0.0, plugged=True)})
+    assert snapshot.is_controllable_now("wallbox")
+
+
+def test_nothing_is_planned_for_a_wallbox_without_a_car() -> None:
+    from datetime import datetime, time as clock
+
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.slems.consumer_targets import TargetProgress, TargetSettings, TargetSource, TargetType
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    dt_util.set_default_time_zone(dt_util.get_time_zone("Europe/Vienna"))
+    now = datetime(2026, 10, 4, 5, 0, tzinfo=dt_util.get_default_time_zone())
+    config = wallbox()
+
+    def plan(plugged: bool):
+        coordinator = SimpleNamespace(
+            consumers=[config],
+            effective_consumer=lambda c: c,
+            consumer_targets={
+                "wallbox": TargetSettings(type=TargetType.ENERGY, energy_kwh=20.0, deadline=clock(7, 0), source=TargetSource.GRID)
+            },
+            target_progress={"wallbox": TargetProgress()},
+            target_energy_estimate={"wallbox": 8000.0},
+            consumer_control_disabled=set(),
+            settings=SimpleNamespace(feed_in_cap=False),
+            thermal_learners={},
+            cooling_learners={},
+            _full_power_w=lambda c: 11000.0,
+            _target_wh_per_k=lambda settings, thermal: None,
+            _price_window=lambda consumer, settings, state, wall_now, **kwargs: state,
+            _surplus_window=lambda consumer, settings, state, wall_now, **kwargs: state,
+        )
+        snapshot = SimpleNamespace(
+            consumption_forecast=None, consumers={"wallbox": ConsumerState(power_w=0.0, plugged=plugged)}
+        )
+        SlemsCoordinator._target_states(coordinator, snapshot, None, None, None, now)
+        return coordinator
+
+    plugged = plan(True)
+    assert plugged.target_load and plugged.target_demands
+    unplugged = plan(False)
+    # The target is still shown, but nothing is planned for it.
+    assert "wallbox" in unplugged.target_states
+    assert unplugged.target_load == {} and unplugged.target_demands == []

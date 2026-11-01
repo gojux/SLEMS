@@ -160,6 +160,13 @@ CONF_VOLTAGE_V: Final = "voltage_v"
 CONF_START_ENTITY: Final = "start_entity"
 CONF_START_ON: Final = "start_on"
 CONF_START_OFF: Final = "start_off"
+# Wallbox: optional state of charge (%) and battery capacity of the car, and
+# whether a car is plugged in (a binary sensor, or a sensor / select with the
+# states that mean plugged in).
+CONF_VEHICLE_SOC_ENTITY: Final = "vehicle_soc_entity"
+CONF_VEHICLE_CAPACITY_KWH: Final = "vehicle_capacity_kwh"
+CONF_PLUGGED_ENTITY: Final = "plugged_entity"
+CONF_PLUGGED_STATES: Final = "plugged_states"
 # Heat pump with a hot water release: its operating mode and the states of it
 # that mean hot water.
 CONF_MODE_ENTITY: Final = "mode_entity"
@@ -317,6 +324,8 @@ class TargetType(StrEnum):
     ENERGY = "energy"
     # Minimum and target temperature of its storage (temperature sensors).
     TEMPERATURE = "temperature"
+    # State of charge of the car at a wallbox (its sensor and battery capacity).
+    SOC = "soc"
 
 
 class TargetSensor(StrEnum):

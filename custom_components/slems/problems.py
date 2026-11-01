@@ -483,9 +483,10 @@ class ProblemReporter:
         unit: str,
         deadline: str,
         blocked_s: float = 0.0,
+        unplugged_s: float = 0.0,
     ) -> None:
         """Notification: a consumer did not reach its daily target by the deadline,
-        with the time it was blocked externally in the period."""
+        with the time it was blocked externally or no car was plugged in in the period."""
         text = await self._texts()
         comma = self._hass.config.language.startswith("de")
 
@@ -499,9 +500,15 @@ class ProblemReporter:
             "goal": f"{number(goal)} {unit}",
             "deadline": deadline,
             "blocked": _duration(blocked_s),
+            "unplugged": _duration(unplugged_s),
         }
-        # Blocked for at least a minute: the block is named as the likely reason.
-        key = "target_missed_blocked_message" if blocked_s >= 60 else "target_missed_message"
+        # Unplugged or blocked for at least a minute: named as the likely reason.
+        if unplugged_s >= 60:
+            key = "target_missed_unplugged_message"
+        elif blocked_s >= 60:
+            key = "target_missed_blocked_message"
+        else:
+            key = "target_missed_message"
         persistent_notification.async_create(
             self._hass,
             text(key, **placeholders),
