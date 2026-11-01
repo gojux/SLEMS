@@ -282,7 +282,11 @@ def _learned_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
         "pv_days": pv_days,
         "consumption_underestimate_pct": _pct(consumption_share),
         "consumption_days": consumption_days,
-        "grid_friendly_buffer_kwh": kwh(pv_share * today_pv if pv_share is not None else None),
+        "grid_friendly_buffer_kwh": kwh(
+            pv_share * today_pv + (consumption_share or 0.0) * c._consumption_while_pv_wh(s, now)
+            if pv_share is not None
+            else None
+        ),
         "charge_secured_buffer_kwh": kwh(
             pv_share * today_pv + consumption_share * today_consumption if both else None
         ),

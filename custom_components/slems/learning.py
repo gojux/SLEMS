@@ -5,9 +5,13 @@ the value set by the user applies.
 
 * Buffers against forecast errors (grid friendly charging, charge secured and
   night discharge): from the recorded PV forecasts (``PvAccuracyTracker``) and
-  the backtest of the consumption forecast. The buffer is the energy by which
-  the forecast was too optimistic on ``ERROR_QUANTILE`` of the days it was
-  too optimistic at all: PV forecast too high, consumption forecast too low.
+  the backtest of the consumption forecast. PV: the share by which the
+  forecast was too high, not exceeded for ``ERROR_QUANTILE`` of the forecast
+  energy of all recorded days (a day with less PV than forecast counts with
+  its shortfall, any other with 0; weighted by its forecast energy, so dull
+  days with a small forecast and a large relative error do not set the buffer
+  of a clear day). Consumption: the share by which the forecast was too low
+  on ``ERROR_QUANTILE`` of the days it was too low at all.
 * Usable capacity of a battery (``CapacityLearner``): DC energy of a charge or
   discharge divided by the change of the state of charge.
 * Grid surplus targets (``GridTargetLearner``): the deviation of the grid
@@ -53,7 +57,7 @@ import time
 
 # --- forecast errors ------------------------------------------------------------
 
-ERROR_QUANTILE = 0.8
+ERROR_QUANTILE = 0.85
 PV_MIN_DAYS = 14
 CONSUMPTION_MIN_DAYS = 7
 
@@ -63,11 +67,25 @@ def quantile(values: Iterable[float], q: float) -> float:
     return ordered[max(0, math.ceil(q * len(ordered)) - 1)]
 
 
+def weighted_quantile(values: Iterable[tuple[float, float]], q: float) -> float:
+    """Smallest value whose weight, with that of all smaller values, reaches
+    ``q`` of the total weight; ``values`` are (value, weight)."""
+    ordered = sorted(values)
+    needed = q * sum(weight for _, weight in ordered)
+    reached = 0.0
+    for value, weight in ordered:
+        reached += weight
+        if reached >= needed:
+            return value
+    return ordered[-1][0]
+
+
 def pv_overestimate(days: Mapping[str, Mapping[str, float]]) -> tuple[float | None, int]:
     """Share by which the PV forecast was too high: (share or None, complete days).
 
-    Only days with less production than forecast count; 0 if there were none.
-    None until ``PV_MIN_DAYS`` complete days are recorded.
+    Every complete day counts with its shortfall (0 with at least the
+    forecast production), weighted by its forecast energy. None until
+    ``PV_MIN_DAYS`` complete days are recorded.
     """
     complete = [
         (entry["forecast_wh"], entry["actual_wh"])
@@ -76,8 +94,8 @@ def pv_overestimate(days: Mapping[str, Mapping[str, float]]) -> tuple[float | No
     ]
     if len(complete) < PV_MIN_DAYS:
         return None, len(complete)
-    over = [1 - actual / forecast for forecast, actual in complete if actual < forecast]
-    return (quantile(over, ERROR_QUANTILE) if over else 0.0), len(complete)
+    shortfalls = [(max(0.0, 1 - actual / forecast), forecast) for forecast, actual in complete]
+    return weighted_quantile(shortfalls, ERROR_QUANTILE), len(complete)
 
 
 def consumption_underestimate(

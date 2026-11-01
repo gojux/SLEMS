@@ -1271,9 +1271,16 @@ power; without learned values only the power limits it.
 whether the learned or the set value applies (switch on and learned value
 known):
 
-- `grid_friendly_buffer_wh(settings, pv_remaining_wh)`: `pv_overestimate`
-  share × PV still expected today; used for the feed-in limit and the
-  projection's charge buffer.
+- `grid_friendly_buffer_wh(settings, pv_remaining_wh, consumption_wh)`:
+  `pv_overestimate` share × PV still expected today +
+  `consumption_underestimate` share (0 until learned) × consumption from the
+  current hour until PV ends today (`_consumption_while_pv_wh`); used for the
+  feed-in limit and the projection's charge buffer. `pv_overestimate` is the
+  `ERROR_QUANTILE` (85 %) quantile of `max(0, 1 − actual/forecast)` over all
+  recorded days weighted by their forecast energy (`weighted_quantile`):
+  unweighted over only the days with a shortfall, dull days with small
+  forecasts (often 40–60 % too high) set a buffer that kept clear days from
+  charging grid friendly until late morning.
 - `secured_buffer_wh(settings, pv_wh, consumption_wh)`: PV share × PV +
   `consumption_underestimate` share (from the backtest days of
   `ConsumptionAccuracy`) × consumption; rest of the day for *charge secured*

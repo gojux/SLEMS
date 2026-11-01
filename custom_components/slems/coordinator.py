@@ -49,6 +49,7 @@ from .allocation import (
     limit_charge_to_surplus,
     limit_discharge_export,
     max_discharge_export_w,
+    pv_end_today,
     remaining_pv_wh,
 )
 from .const import (
@@ -3464,11 +3465,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 learner.plan(takeover, consumption.energy_on_day(takeover.date()))
         learner.update(now, local_now, snapshot.pv_power_w, snapshot.total_consumption_w)
 
-    def grid_friendly_buffer_wh(self, settings: ControlSettings, pv_remaining_wh: float) -> float:
-        """Buffer of grid friendly charging: learned PV overestimate of the rest of the day."""
+    def grid_friendly_buffer_wh(
+        self, settings: ControlSettings, pv_remaining_wh: float, consumption_wh: float
+    ) -> float:
+        """Buffer of grid friendly charging: learned PV overestimate of the rest
+        of the day plus the learned consumption underestimate while PV is still
+        produced (0 until learned), both reducing the surplus to charge from."""
         share = self.pv_overestimate[0]
         if settings.grid_friendly_buffer_auto and share is not None:
-            return share * pv_remaining_wh
+            consumption_share = self.consumption_underestimate[0] or 0.0
+            return share * pv_remaining_wh + consumption_share * consumption_wh
         return settings.grid_friendly_buffer_kwh * 1000
 
     def secured_buffer_wh(
@@ -3551,6 +3557,17 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         start = dt_util.as_local(wall_now).replace(minute=0, second=0, microsecond=0)
         end = dt_util.start_of_local_day(dt_util.as_local(wall_now)) + timedelta(days=1)
         return self._forecast_energy(snapshot, start, end)
+
+    def _consumption_while_pv_wh(self, snapshot: SystemSnapshot, wall_now: datetime) -> float:
+        """Consumption forecast from the current hour until PV production ends today (Wh)."""
+        consumption = snapshot.consumption_forecast
+        if consumption is None or not snapshot.pv_forecast:
+            return 0.0
+        end = pv_end_today(self._pv_native(snapshot, wall_now), wall_now)
+        if end is None:
+            return 0.0
+        start = dt_util.as_local(wall_now).replace(minute=0, second=0, microsecond=0)
+        return self._energy(consumption.total, start, end)
 
     def _next_day_energy(self, snapshot: SystemSnapshot, wall_now: datetime) -> tuple[float, float]:
         """(PV, consumption) forecast of the next 24 hours (Wh)."""
@@ -3640,7 +3657,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             result.feed_in_limit_w = feed_in_limit(
                 surplus,
                 battery.energy_to_full_wh
-                + self.grid_friendly_buffer_wh(settings, remaining_pv_wh(pv_forecast, wall_now))
+                + self.grid_friendly_buffer_wh(
+                    settings,
+                    remaining_pv_wh(pv_forecast, wall_now),
+                    self._consumption_while_pv_wh(snapshot, wall_now),
+                )
                 + balancing_wh,
                 battery.max_charge_w,
             )
@@ -3662,7 +3683,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     grid_friendly_charging=settings.grid_friendly_charging,
                     # Like the feed-in limit: only with grid friendly charging.
                     charge_buffer_wh=(
-                        self.grid_friendly_buffer_wh(settings, remaining_pv_wh(pv_forecast, wall_now))
+                        self.grid_friendly_buffer_wh(
+                            settings,
+                            remaining_pv_wh(pv_forecast, wall_now),
+                            self._consumption_while_pv_wh(snapshot, wall_now),
+                        )
                         if settings.grid_friendly_charging
                         else 0.0
                     ),

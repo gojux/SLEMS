@@ -9,6 +9,7 @@ from custom_components.slems.learning import (
     auto_timing,
     consumption_underestimate,
     pv_overestimate,
+    weighted_quantile,
 )
 
 
@@ -19,8 +20,29 @@ def test_pv_overestimate_needs_14_days() -> None:
         days[f"2026-05-{d:02d}"] = {"forecast_wh": 10000, "actual_wh": actual}
     share, count = pv_overestimate(days)
     assert count == 15
-    # 80 % quantile of 5, 10, 20, 30, 40 % too high.
-    assert share == pytest.approx(0.3)
+    # 85 % quantile of 10 days with at least the forecast (0) and 5, 10, 20,
+    # 30, 40 % too high, all with the same forecast: the 13th of 15 days.
+    assert share == pytest.approx(0.2)
+
+
+def test_pv_overestimate_weighted_by_forecast() -> None:
+    # 12 clear days 5 % too high, 2 dull days with a tenth of the forecast 60 % too high.
+    days = {f"2026-05-{d:02d}": {"forecast_wh": 30000, "actual_wh": 28500} for d in range(1, 13)}
+    for d in (13, 14):
+        days[f"2026-05-{d:02d}"] = {"forecast_wh": 3000, "actual_wh": 1200}
+    share, count = pv_overestimate(days)
+    assert count == 14
+    assert share == pytest.approx(0.05)
+    # The same miss on two days with a clear day's forecast sets the buffer.
+    for d in (15, 16):
+        days[f"2026-05-{d:02d}"] = {"forecast_wh": 30000, "actual_wh": 12000}
+    assert pv_overestimate(days)[0] == pytest.approx(0.6)
+
+
+def test_weighted_quantile() -> None:
+    assert weighted_quantile([(0.1, 1), (0.5, 1), (0.2, 2)], 0.5) == 0.2
+    assert weighted_quantile([(0.1, 9), (0.5, 1)], 0.85) == 0.1
+    assert weighted_quantile([(0.1, 9), (0.5, 1)], 0.95) == 0.5
 
 
 def test_consumption_underestimate() -> None:
@@ -362,6 +384,26 @@ def test_secured_buffer_with_one_part_learned() -> None:
     # Off: the set buffer.
     settings.charge_secured_buffer_auto = False
     assert SlemsCoordinator.secured_buffer_wh(coordinator, settings, 20_000, 10_000) == 1000
+
+
+def test_grid_friendly_buffer_with_consumption() -> None:
+    from types import SimpleNamespace
+
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    settings = SimpleNamespace(grid_friendly_buffer_auto=True, grid_friendly_buffer_kwh=2.0)
+    coordinator = SimpleNamespace(pv_overestimate=(None, 8), consumption_underestimate=(0.1, 14))
+    # PV not learned yet: the set buffer.
+    assert SlemsCoordinator.grid_friendly_buffer_wh(coordinator, settings, 20_000, 8000) == 2000
+    # PV learned, consumption not yet: only the PV part.
+    coordinator.pv_overestimate = (0.2, 14)
+    coordinator.consumption_underestimate = (None, 3)
+    assert SlemsCoordinator.grid_friendly_buffer_wh(coordinator, settings, 20_000, 8000) == pytest.approx(4000)
+    # Both: PV part plus consumption part.
+    coordinator.consumption_underestimate = (0.1, 14)
+    assert SlemsCoordinator.grid_friendly_buffer_wh(coordinator, settings, 20_000, 8000) == pytest.approx(4800)
+    settings.grid_friendly_buffer_auto = False
+    assert SlemsCoordinator.grid_friendly_buffer_wh(coordinator, settings, 20_000, 8000) == 2000
 
 
 def test_outdoor_power_of_the_runs() -> None:

@@ -484,7 +484,7 @@ const STRINGS = {
       grid_friendly_charging:
         "Instead of filling the batteries in the morning, they charge in the PV peak: from the PV and consumption forecast SLEMS calculates a feed-in limit at which the surplus above it still fills the batteries by the end of the day. The batteries only charge with the surplus above it, the consumers get the surplus below it. The limit is recalculated continuously and drops by itself when charging falls behind. Only applies once the charge is secured; the bad weather mode and the feed-in cap take precedence. Switch it off if the batteries should be full as early as possible, e.g. for backup power.",
       grid_friendly_buffer:
-        "Energy grid friendly charging plans in addition to filling the batteries, against a too optimistic PV forecast. Larger lowers the feed-in limit: the batteries charge earlier and get full more reliably, but absorb less of the peak.",
+        "Energy grid friendly charging plans in addition to filling the batteries, against a too optimistic PV or consumption forecast. Larger lowers the feed-in limit: the batteries charge earlier and get full more reliably, but absorb less of the peak.",
       night_discharge:
         "Feeds in energy that would still be in the batteries in the morning, evenly over night until PV exceeds the consumption again, so the batteries have room for PV during the day. What stays is the **Morning reserve** and as much as the next day's PV surplus minus the **Charge secured safety buffer** can fill up again. The grid surplus target while discharging does not apply, the **Maximum grid export while discharging** does. Not in bad weather mode.",
       market_prices:
@@ -546,9 +546,9 @@ const STRINGS = {
       night_reserve_coverage:
         "Share of the mornings the learned reserve covers: 90 % = enough on 9 of 10 mornings. Above 100 % the largest measured gap times this value, e.g. 110 % = 10 % more than the worst morning so far. Lower values feed in more at night.",
       grid_friendly_buffer_auto:
-        "Learns the buffer from the recorded PV forecasts: of the days with less PV than forecast, the shortfall not exceeded on 80 % of them, applied to the PV still expected today. Needs 14 recorded days.",
+        "Learns the buffer from the recorded PV forecasts: the share by which the forecast was too high, not exceeded for 85 % of the forecast energy of all days (each day weighted by its forecast, so dull days do not set the buffer of a clear day), applied to the PV still expected today; plus the consumption forecast being too low as for the **Charge secured safety buffer**, applied to the consumption while PV is still produced. Needs 14 recorded days.",
       charge_secured_buffer_auto:
-        "Learns the safety buffer (charge secured and night discharge target) from the PV forecast being too high and the consumption forecast being too low, each the error not exceeded on 80 % of such days, applied to the forecasts of the rest of the day or the next 24 hours.",
+        "Learns the safety buffer (charge secured and night discharge target) from the PV forecast being too high and the consumption forecast being too low, the PV as for the grid friendly charging buffer, the consumption the error not exceeded on 85 % of the days with a too low forecast, applied to the forecasts of the rest of the day or the next 24 hours.",
       grid_targets_auto:
         "Learns both grid surplus targets from how far the grid power swings towards import while the batteries control it: while charging the target keeps the grid on the export side 90 % of the time (20–1000 W), while discharging the grid swings around it, half of the time each side (−100 to 300 W): a short import costs little there, a permanent export gives battery energy away. Needs some controlling in operating mode active first.",
       grid_targets_no_import:
@@ -1183,7 +1183,7 @@ const STRINGS = {
       grid_friendly_charging:
         "Statt die Batterien am Vormittag zu füllen, laden sie in der PV-Spitze: Aus PV- und Verbrauchsprognose berechnet SLEMS eine Einspeisegrenze, bei der der Überschuss darüber die Batterien bis Tagesende noch füllt. Die Batterien laden nur mit dem Überschuss darüber, die Verbraucher bekommen den darunter. Die Grenze wird laufend neu berechnet und sinkt von selbst, wenn das Laden zurückfällt. Gilt erst, wenn die Ladung gesichert ist; der Schlechtwetter-Modus und die Einspeisebegrenzung gehen vor. Ausschalten, wenn die Batterien möglichst früh voll sein sollen, z. B. für Notstrom.",
       grid_friendly_buffer:
-        "Energie, die netzdienliches Laden zusätzlich zum Füllen der Batterien einplant, gegen eine zu optimistische PV-Prognose. Größer senkt die Einspeisegrenze: Die Batterien laden früher und werden zuverlässiger voll, fangen dafür weniger von der Spitze ab.",
+        "Energie, die netzdienliches Laden zusätzlich zum Füllen der Batterien einplant, gegen eine zu optimistische PV- oder Verbrauchsprognose. Größer senkt die Einspeisegrenze: Die Batterien laden früher und werden zuverlässiger voll, fangen dafür weniger von der Spitze ab.",
       night_discharge:
         "Speist Energie, die morgens noch in den Batterien wäre, über Nacht gleichmäßig ein, bis die PV den Verbrauch wieder übersteigt; so haben die Batterien tagsüber Platz für die PV. Es bleiben die **Morgenreserve** und so viel, dass der PV-Überschuss des nächsten Tages abzüglich **Sicherheitspuffer gesicherte Ladung** die Batterien wieder füllt. Der Ziel-Netzüberschuss beim Entladen gilt dabei nicht, die **Maximale Einspeisung beim Entladen** schon. Nicht im Schlechtwetter-Modus.",
       market_prices:
@@ -1245,9 +1245,9 @@ const STRINGS = {
       night_reserve_coverage:
         "Anteil der Morgen, für den die gelernte Reserve reicht: 90 % = an 9 von 10 Morgen. Über 100 % die größte gemessene Lücke mal diesem Wert, z. B. 110 % = 10 % mehr als der bisher schlechteste Morgen. Kleinere Werte speisen nachts mehr ein.",
       grid_friendly_buffer_auto:
-        "Lernt den Puffer aus den aufgezeichneten PV-Prognosen: von den Tagen mit weniger PV als prognostiziert die Abweichung, die an 80 % davon nicht überschritten wurde, angewendet auf die heute noch erwartete PV. Braucht 14 aufgezeichnete Tage.",
+        "Lernt den Puffer aus den aufgezeichneten PV-Prognosen: der Anteil, um den die Prognose zu hoch war, nicht überschritten für 85 % der prognostizierten Energie aller Tage (jeder Tag mit seiner Prognose gewichtet, so bestimmen trübe Tage nicht den Puffer eines klaren Tages), angewendet auf die heute noch erwartete PV; dazu die zu niedrige Verbrauchsprognose wie beim **Sicherheitspuffer gesicherte Ladung**, angewendet auf den Verbrauch, solange noch PV erzeugt wird. Braucht 14 aufgezeichnete Tage.",
       charge_secured_buffer_auto:
-        "Lernt den Sicherheitspuffer (gesicherte Ladung und Ziel der Nachtentladung) aus zu hoher PV- und zu niedriger Verbrauchsprognose, jeweils die Abweichung, die an 80 % solcher Tage nicht überschritten wurde, angewendet auf die Prognosen des restlichen Tages bzw. der nächsten 24 Stunden.",
+        "Lernt den Sicherheitspuffer (gesicherte Ladung und Ziel der Nachtentladung) aus zu hoher PV- und zu niedriger Verbrauchsprognose, die PV wie beim Puffer für netzdienliches Laden, beim Verbrauch die Abweichung, die an 85 % der Tage mit zu niedriger Prognose nicht überschritten wurde, angewendet auf die Prognosen des restlichen Tages bzw. der nächsten 24 Stunden.",
       grid_targets_auto:
         "Lernt beide Ziel-Netzüberschüsse daraus, wie weit die Netzleistung Richtung Bezug schwankt, während die Batterien regeln: Beim Laden hält das Ziel das Netz 90 % der Zeit auf der Einspeiseseite (20–1000 W), beim Entladen schwankt das Netz um das Ziel, je die Hälfte der Zeit auf jeder Seite (−100 bis 300 W): ein kurzer Bezug kostet dort wenig, dauerhaftes Einspeisen verschenkt Batterieenergie. Braucht zuerst etwas Regelbetrieb im Modus Aktiv.",
       grid_targets_no_import:
