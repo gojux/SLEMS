@@ -28,6 +28,7 @@ from homeassistant.util import dt as dt_util
 from .models import (
     BASE_LOOKBACK_DAYS,
     BaseLoadProfile,
+    DayOff,
     HeatPumpModel,
     HourlySeries,
     day_type,
@@ -61,6 +62,8 @@ class Accuracy:
     days: list[DayResult] = field(default_factory=list)
     # Σ|hourly error| / Σ actual; None without hourly comparison.
     hourly_error: float | None = None
+    # Public holidays, counted like weekend days for the day type.
+    day_off: DayOff | None = None
 
     @property
     def daily_error(self) -> float | None:
@@ -76,7 +79,8 @@ class Accuracy:
 
     def expected_error(self, day: date) -> float | None:
         """Typical relative daily error for ``day`` (same day type if possible)."""
-        same = [abs(d.error) for d in self.days if day_type(d.day) == day_type(day)]
+        kind = day_type(day, self.day_off)
+        same = [abs(d.error) for d in self.days if day_type(d.day, self.day_off) == kind]
         values = same if len(same) >= 2 else [abs(d.error) for d in self.days]
         return sum(values) / len(values) if values else None
 
@@ -105,10 +109,13 @@ def backtest_consumption(
     heat_pump_history: HourlySeries | None,
     daily_temperature: dict[date, float],
     now: datetime,
+    day_off: DayOff | None = None,
 ) -> ConsumptionAccuracy:
     """Recalculate the forecast of the last days and compare with the measurement."""
     today = dt_util.start_of_local_day(dt_util.as_local(now))
-    result = ConsumptionAccuracy(history_days=history_days(base_history, now, BASE_LOOKBACK_DAYS))
+    result = ConsumptionAccuracy(
+        day_off=day_off, history_days=history_days(base_history, now, BASE_LOOKBACK_DAYS)
+    )
     abs_error = actual_total = 0.0
     for offset in range(BACKTEST_DAYS, 0, -1):
         day_start = today - timedelta(days=offset)
@@ -120,7 +127,7 @@ def backtest_consumption(
         }
         if len(actual) < MIN_DAY_HOURS:
             continue
-        base_model = BaseLoadProfile.fit(base_history, day_start)
+        base_model = BaseLoadProfile.fit(base_history, day_start, day_off)
         if base_model.is_empty:
             continue
         heat_pump_model = (

@@ -2120,37 +2120,26 @@ last 72 h limited to 0.8…1.25; heat pump half-life 21 days over 365 days,
 heating limit chosen from 10…20 °C, correction from the last 3 days limited to
 ±30 %. Only numpy (bundled with Home Assistant) is used.
 
-#### Holidays (open)
+#### Public holidays
 
-The day type is derived from the weekday only (`models.day_type`): Monday to
-Friday are workdays, Saturday and Sunday weekend. Public holidays are
-therefore forecast with the workday profile, and past holidays are learned as
-workdays.
+`public_holidays.py`. The day type (`models.day_type`) counts a public holiday
+of the home as a weekend day (`day_off`): in the base load profile, in its
+training data, in the backtest and for the expected error of tomorrow. The
+holidays are those of the country of Home Assistant and the region (state,
+canton) stored as `holiday_region` in the system settings, computed by the
+`holidays` package (`PublicHolidays`, loaded in the executor for the years of
+the heat pump lookback up to next year). Without a region, with `national`
+or with a region the country does not have (Home Assistant moved), the
+national holidays count; in Switzerland those kept in at least half of the
+cantons, as for the price estimates.
 
-Impact: on a holiday the forecast follows the workday shape (e.g. lower
-consumption during working hours) although the household behaves like on a
-weekend; the short-term correction (last 72 h) partly compensates on the
-following days. Each holiday also slightly distorts the workday profile it is
-learned into (weighted by age, so the effect fades).
-
-Options, in order of preference:
-
-1. **Workday binary sensor** (HA integration *Workday*, configured for
-   Austria / Vorarlberg): optional setting in the system options. Its state
-   covers today; for tomorrow the integration offers the action
-   `workday.check_date`. History would have to come from the recorder states
-   of that sensor, which are only kept for the recorder's purge period.
-2. **`holidays` Python package** (already a dependency of Home Assistant via
-   the Workday integration): compute holidays for past and future days
-   directly from country and subdivision (derived from the HA location, or a
-   setting). No history problem; covers training and forecast alike.
-3. **Calendar entity** (e.g. a holiday or school holiday calendar): most
-   flexible, also for school holidays, but the most work for the user.
-
-Recommended: option 2 for the training data and the forecast, with the
-country/subdivision taken from the HA configuration and overridable in the
-options; holidays then use the weekend profile. School holidays or other
-special days could later come from a calendar entity (option 3).
+The region is suggested in the system step when none is stored: one reverse
+lookup per flow at Nominatim (`async_suggest_region`, zoom 5, coordinates
+rounded to three decimals, own user agent), the service the Home Assistant
+onboarding uses for the country (`src/data/openstreetmap.ts` of the
+frontend). Its `ISO3166-2-lvl4` code (`AT-8`, `DE-BY`, `CH-ZH`) ends in the
+region code of the `holidays` package; a code of another country is ignored.
+The choices and their names come from the package (`subdivisions_aliases`).
 
 ### Automatic peak shaving limit
 
@@ -2673,3 +2662,4 @@ repository (otherwise its *brands* check fails).
 | 2026-10-30 | The limit "too early" of the response learners is measured per battery with a probe step (±500 W for about 3 s while the others are held, three attempts, every meter report) instead of a fixed driver value or half the learned step: it has to fit every setup (meter cadence, integration, firmware), and a limit too high drops good measurements without anything else lowering it. Only the step of a running battery and the lower bound of the dead time (the last report not moved yet): small, cheap (0.4 Wh per attempt) and safe against dropping good measurements; start and reversal keep the driver's extra time. Due for a new battery, after changes of configuration, firmware, smart meter or controlling integration (learned times dropped), when more than half of the last 20 measurements were too early, after 90 days and by hand; not on Home Assistant updates. The phase comes along only with phase values as fast as the meter. |
 | 2026-10-30 | The automatic control gain sees oscillation at the smart meter instead of in the corrections of the commands: a crossing of the grid target (± 100 W) counts when a reversal of the corrections came before it within the loop time (from 0.7 × the response time of the fastest battery to 4 × the longest response time plus 2 cycles), three in a row without a crossing or jump from outside and without dying out lower the gain. The corrections only smooth the commands (they alternate with every cycling load and never with an overshoot alone), so the old rule fired with the target and never with the loop. A first version that counted crossings of the median grid power and only required the reversal before each crossing lowered the gain in replays of coffee machine and stove logs: the median moves with long exports, and a load pulse shorter than the response time is followed by one real overshoot per pulse; a series broken by every load jump from outside and swings that do not die out separate both from a swinging loop. |
 | 2026-10-30 | Minimum power per battery (**Automatic, energetic** / **Automatic, economic** (default) / **Manual** / **Off**): no charging below the power that stores anything, economically also not where the stored energy is worth less than its feed-in, from the losses below 300 W learned per direction (50 W bins from 40 W) and the prices now; the automatic modes start once these losses are learned. A start at the threshold, running down to 25 W below (never below the fixed loss) and for the learned start time; the strategy shows it. Charging a Venus below about 40 W discharges it, below about 65 W the stored energy is worth less than its feed-in. Not done: holding small deficits back for larger loads when the energy runs short (about 3 ct per moved kWh, only if the battery would run empty and larger loads come) and waiting a reversal time before a new direction (a replay of three debug logs: about 4 times the grid exchange it saves). |
+| 2026-11-01 | Public holidays of the consumption forecast from the `holidays` package (country of Home Assistant plus a region setting), not from a calendar of the Home Assistant integration *Holiday* or the *Workday* sensor: past days are needed for the training data, which a calendar only gives through event queries and a sensor only within the recorder's purge period, and the package needs no setup. The region is suggested from a Nominatim reverse lookup, which returns the ISO 3166-2 code of the state or canton; the vector map of Home Assistant 2026.10 (OSM Shortbread tiles) was checked and cannot give it, as its `boundaries` layer has only lines with `admin_level` and the names are separate label points. Bundled boundary data was not needed then. `ZoneHolidays` of the price estimates became `PublicHolidays` with an optional region. In Austria a region adds no day off (the state patrons are no general holidays), in Germany and Switzerland it matters. |

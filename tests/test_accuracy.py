@@ -67,6 +67,19 @@ def test_expected_error_prefers_the_same_day_type() -> None:
     assert accuracy.bias == pytest.approx(-0.1)
 
 
+def test_expected_error_of_a_holiday_like_a_weekend() -> None:
+    accuracy = Accuracy(
+        days=[
+            DayResult(date(2026, 6, 15), 11000, 10000),
+            DayResult(date(2026, 6, 16), 11000, 10000),
+            DayResult(date(2026, 6, 20), 7000, 10000),
+            DayResult(date(2026, 6, 21), 7000, 10000),
+        ],
+        day_off=lambda day: day == date(2026, 6, 22),
+    )
+    assert accuracy.expected_error(date(2026, 6, 22)) == pytest.approx(0.3)
+
+
 def test_pv_tracker_records_the_forecast_at_the_start_of_the_day() -> None:
     tracker = PvAccuracyTracker()
     day = date(2026, 6, 20)

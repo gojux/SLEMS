@@ -213,7 +213,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Forecasts | Status |
 |---|---|
 | PV forecast from any solar forecast integration (Forecast.Solar, Solcast, …) | ✅ |
-| Consumption forecast today/tomorrow (history + weather, heat pump temperature dependent), raised at once after a sudden rise | ✅ |
+| Consumption forecast today/tomorrow (history + weather, heat pump temperature dependent, public holidays of the own state or canton), raised at once after a sudden rise | ✅ |
 | Correction of the PV forecast during the day and forecast accuracy of PV and consumption | ✅ |
 
 | Batteries | Status |
@@ -641,6 +641,16 @@ optional settings help at the start:
   existing history (e.g. from another battery integration), used for the time
   before SLEMS recorded its own values.
 
+Public holidays count as weekend days, in the learned profile and in the
+forecast: those of the country set in Home Assistant and of the state or
+canton selected as **Public holidays** in the system settings. When the
+system settings are opened and no region is stored yet, SLEMS suggests one
+from the location of Home Assistant: a single request to Nominatim
+(OpenStreetMap) with the coordinates rounded to about 100 m, the service the
+onboarding of Home Assistant uses for the country as well. With **National
+holidays**, or if no region is found, only the holidays of the whole country
+count (in Switzerland those kept in at least half of the cantons).
+
 Recommended setup when switching from another battery integration:
 
 1. Select that integration's house consumption sensor as **House consumption
@@ -651,7 +661,6 @@ Recommended setup when switching from another battery integration:
 2. Select an outdoor temperature sensor with history if one exists. Otherwise
    the heat pump forecast uses the mean of the last days until SLEMS has
    recorded about a week of temperatures.
-3. Holidays are currently treated like workdays.
 
 **Forecast accuracy** (card in the overview, sensors **Consumption forecast
 accuracy** and **PV forecast accuracy**):
@@ -2433,10 +2442,6 @@ wallbox on the [evcc guide](docs/wallbox-evcc.md).
 
 **Forecast**
 
-- Public holidays in the consumption forecast: a holiday at home planned like
-  a weekend day, from a calendar of the Home Assistant integration
-  **Holiday** for the own canton or state (else the national holidays of
-  the country set in Home Assistant).
 - Own forecast for vacations: a base load profile learned from whole vacation
   days (all vacations together) and a factor for the heat pump from the same
   days; until about three vacation days are learned the estimate of today.

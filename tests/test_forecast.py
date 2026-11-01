@@ -46,6 +46,20 @@ def test_base_profile_separates_workdays_and_weekends() -> None:
     assert model.predict(saturday.replace(hour=3)) == pytest.approx(600)
 
 
+def test_holidays_count_as_weekend_days() -> None:
+    # Monday 2026-02-23 is a holiday the household spends like a weekend.
+    holiday = date(2026, 2, 23)
+    history = {
+        start: 600 if start.weekday() >= 5 or start.date() == holiday else 300 for start in hours(28)
+    }
+    model = BaseLoadProfile.fit(history, NOW, day_off=lambda day: day == holiday)
+    # Not learned into the workdays, and planned like a weekend day.
+    assert model.predict(NOW.replace(hour=3)) == pytest.approx(300)
+    assert model.predict(datetime(2026, 2, 23, 3, tzinfo=NOW.tzinfo)) == pytest.approx(600)
+    without = BaseLoadProfile.fit(history, NOW)
+    assert without.raw(NOW.replace(hour=3)) > 300
+
+
 def test_base_profile_follows_recent_change() -> None:
     # Consumption doubled two weeks ago: the profile moves halfway (half-life),
     # the short-term correction lifts the prediction close to the new level.

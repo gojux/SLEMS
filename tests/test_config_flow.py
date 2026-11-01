@@ -1,19 +1,73 @@
 """Tests for the schemas of the config flow."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from custom_components.slems import config_flow
-from custom_components.slems.const import CONF_GRID_POWER_ENTITY, CONF_GRID_POWER_INVERTED
+from custom_components.slems.const import (
+    CONF_GRID_POWER_ENTITY,
+    CONF_GRID_POWER_INVERTED,
+    CONF_HOLIDAY_REGION,
+)
+
+
+def _hass(country: str | None = None, **extra) -> SimpleNamespace:
+    async def executor(func, *args):
+        return func(*args)
+
+    return SimpleNamespace(config=SimpleNamespace(country=country), async_add_executor_job=executor, **extra)
 
 
 async def test_system_schema_builds_for_a_new_setup() -> None:
     with patch.object(
         config_flow, "async_forecast_provider_entries", AsyncMock(return_value=[])
     ):
-        schema = await config_flow._async_system_schema(None, {})
+        schema = await config_flow._async_system_schema(_hass(), {})
     keys = {str(key): key for key in schema.schema}
     assert CONF_GRID_POWER_ENTITY in keys
     assert keys[CONF_GRID_POWER_INVERTED].default() is False
+    # No country in Home Assistant: no regions to choose from.
+    assert CONF_HOLIDAY_REGION not in keys
+
+
+async def test_holiday_region_offers_the_regions_of_the_country() -> None:
+    with patch.object(config_flow, "async_forecast_provider_entries", AsyncMock(return_value=[])):
+        schema = await config_flow._async_system_schema(_hass("AT"), {CONF_HOLIDAY_REGION: "8"})
+        keys = {str(key): key for key in schema.schema}
+        assert keys[CONF_HOLIDAY_REGION].default() == "8"
+        options = schema.schema[keys[CONF_HOLIDAY_REGION]].config["options"]
+        assert options[0]["value"] == "national"
+        assert {"value": "8", "label": "Vorarlberg"} in options
+        # A region of another country (Home Assistant moved): the national holidays.
+        schema = await config_flow._async_system_schema(_hass("AT"), {CONF_HOLIDAY_REGION: "BY"})
+        keys = {str(key): key for key in schema.schema}
+        assert keys[CONF_HOLIDAY_REGION].default() == "national"
+
+
+async def test_holiday_region_suggested_once_when_not_stored() -> None:
+    flow = config_flow.SlemsOptionsFlow.__new__(config_flow.SlemsOptionsFlow)
+    flow.hass = _hass("AT", states=SimpleNamespace(get=lambda entity_id: None))
+    flow._entry = lambda: None
+    flow._suggested = {}
+    flow._devices_changed = False
+    suggest = AsyncMock(return_value="8")
+    with (
+        patch.object(config_flow, "async_forecast_provider_entries", AsyncMock(return_value=[])),
+        patch.object(config_flow, "async_suggest_region", suggest),
+    ):
+        flow._current = {}
+        result = await flow.async_step_system()
+        keys = {str(key): key for key in result["data_schema"].schema}
+        assert keys[CONF_HOLIDAY_REGION].default() == "8"
+        await flow.async_step_system()
+        assert suggest.await_count == 1
+        # A stored choice is kept, without a lookup.
+        flow._region_lookup = None
+        flow._current = {CONF_HOLIDAY_REGION: "national"}
+        result = await flow.async_step_system()
+        keys = {str(key): key for key in result["data_schema"].schema}
+        assert keys[CONF_HOLIDAY_REGION].default() == "national"
+        assert suggest.await_count == 1
 
 
 def test_entity_battery_data_keeps_only_the_chosen_control() -> None:
@@ -127,8 +181,6 @@ def test_output_control_keeps_its_input_and_mode() -> None:
 
 
 async def test_own_pv_of_a_battery_cannot_be_entered_as_pv_system() -> None:
-    from types import SimpleNamespace
-
     battery = SimpleNamespace(
         title="Balcony", data={"own_pv": True, "own_pv_entity": "sensor.modules", "output_entity": "sensor.output"}
     )
@@ -137,7 +189,7 @@ async def test_own_pv_of_a_battery_cannot_be_entered_as_pv_system() -> None:
     assert config_flow._own_pv_owners(None) == {}
 
     flow = config_flow.SlemsOptionsFlow.__new__(config_flow.SlemsOptionsFlow)
-    flow.hass = SimpleNamespace(states=SimpleNamespace(get=lambda entity_id: None))
+    flow.hass = _hass(states=SimpleNamespace(get=lambda entity_id: None))
     flow._entry = lambda: entry
     flow._current = {}
     done = AsyncMock(return_value="done")

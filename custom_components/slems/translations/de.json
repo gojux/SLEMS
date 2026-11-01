@@ -24,6 +24,7 @@
           "pv_forecast_entries": "PV-Prognose",
           "outdoor_temperature_entity": "Außentemperatur",
           "house_history_entity": "Historie Hausverbrauch",
+          "holiday_region": "Feiertage",
           "grid_power_l1_entity": "Netzleistung L1",
           "grid_power_l2_entity": "Netzleistung L2",
           "grid_power_l3_entity": "Netzleistung L3",
@@ -39,6 +40,7 @@
           "pv_forecast_entries": "Integrationen mit Solarprognose (z. B. Forecast.Solar, Solcast). Mehrere Einträge, z. B. einer je Dachfläche, werden addiert.",
           "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entität selbst auf.",
           "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Wird für die Zeit verwendet, bevor SLEMS eigene Werte aufgezeichnet hat.",
+          "holiday_region": "Bundesland oder Kanton, dessen Feiertage die Verbrauchsprognose wie Wochenendtage plant. Vorgeschlagen aus dem Standort von Home Assistant (OpenStreetMap); mit **Landesweite Feiertage** zählen nur die Feiertage des ganzen Landes.",
           "grid_power_l1_entity": "Optional, zusammen mit L2 und L3: die Leistung jeder Phase am Netzanschlusspunkt, mit demselben Vorzeichen wie die Netzleistung. SLEMS lernt dann die Phase jeder Batterie und jedes Verbrauchers hinter dem Smart Meter (Sensor **Phase**) und meldet, wenn sie sich ändert.",
           "grid_power_l2_entity": "Optional, siehe L1.",
           "grid_power_l3_entity": "Optional, siehe L1.",
@@ -108,6 +110,7 @@
           "pv_forecast_entries": "PV-Prognose",
           "outdoor_temperature_entity": "Außentemperatur",
           "house_history_entity": "Historie Hausverbrauch",
+          "holiday_region": "Feiertage",
           "grid_power_l1_entity": "Netzleistung L1",
           "grid_power_l2_entity": "Netzleistung L2",
           "grid_power_l3_entity": "Netzleistung L3",
@@ -123,6 +126,7 @@
           "weather_entity": "Optional. Verbessert die Verbrauchsprognose (z. B. Bedarf der Wärmepumpe).",
           "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entität selbst auf.",
           "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Wird für die Zeit verwendet, bevor SLEMS eigene Werte aufgezeichnet hat.",
+          "holiday_region": "Bundesland oder Kanton, dessen Feiertage die Verbrauchsprognose wie Wochenendtage plant. Vorgeschlagen aus dem Standort von Home Assistant (OpenStreetMap); mit **Landesweite Feiertage** zählen nur die Feiertage des ganzen Landes.",
           "grid_power_l1_entity": "Optional, zusammen mit L2 und L3: die Leistung jeder Phase am Netzanschlusspunkt, mit demselben Vorzeichen wie die Netzleistung. SLEMS lernt dann die Phase jeder Batterie und jedes Verbrauchers hinter dem Smart Meter (Sensor **Phase**) und meldet, wenn sie sich ändert.",
           "grid_power_l2_entity": "Optional, siehe L1.",
           "grid_power_l3_entity": "Optional, siehe L1.",
@@ -942,6 +946,11 @@
     "profile": {
       "options": {
         "own": "Eigenes Profil (YAML) einfügen"
+      }
+    },
+    "holiday_region": {
+      "options": {
+        "national": "Landesweite Feiertage"
       }
     }
   },

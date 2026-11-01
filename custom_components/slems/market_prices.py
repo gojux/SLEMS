@@ -33,7 +33,6 @@ import logging
 from typing import Any
 
 import aiohttp
-import holidays
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -41,6 +40,7 @@ from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
+from .public_holidays import PublicHolidays
 from .reference_values import ReferenceError, async_fetch_at_reference
 from .reference_values import ATTRIBUTION as REFERENCE_ATTRIBUTIONS
 
@@ -93,11 +93,6 @@ ENERGY_CHARTS_ZONE = {
     PriceSource.ENERGY_CHARTS_CH: "CH",
 }
 
-# Countries whose national holidays leave out days off in nearly all regions
-# (in Switzerland Good Friday, Easter and Whit Monday, St Stephen's Day are
-# cantonal): there a day counts if at least half of the regions have it off.
-REGIONAL_HOLIDAY_COUNTRIES = {"CH"}
-
 ATTRIBUTION = {
     PriceSource.APG: "Austrian Power Grid AG (transparency.apg.at)",
     PriceSource.SMARD: "Bundesnetzagentur | SMARD.de (CC BY 4.0)",
@@ -117,46 +112,6 @@ def default_source(country: str | None) -> PriceSource:
     if country == "CH":
         return PriceSource.ENERGY_CHARTS_CH
     return PriceSource.SMARD
-
-
-class ZoneHolidays:
-    """Public holidays of a bidding zone's country (``day in zone_holidays``).
-
-    The years are computed by ``load`` in an executor: the holidays package
-    imports the country's module on its first use, which blocks. A year not
-    loaded yet has no holidays.
-    """
-
-    def __init__(self, country: str) -> None:
-        self.country = country
-        self._days: dict[int, set[date]] = {}
-
-    def __contains__(self, day: object) -> bool:
-        return isinstance(day, date) and day in self._days.get(day.year, ())
-
-    @property
-    def years(self) -> set[int]:
-        return set(self._days)
-
-    def load(self, years: Iterable[int]) -> None:
-        for year in years:
-            if year not in self._days:
-                self._days[year] = self._of_year(year)
-
-    def _of_year(self, year: int) -> set[date]:
-        national = set(holidays.country_holidays(self.country, years=year))
-        if self.country not in REGIONAL_HOLIDAY_COUNTRIES:
-            return national
-        regions = [
-            region
-            for region in holidays.country_holidays(self.country).subdivisions
-            if region.isupper() and len(region) == 2
-        ]
-        counts: dict[date, int] = {}
-        for region in regions:
-            for day in holidays.country_holidays(self.country, subdiv=region, years=year):
-                counts[day] = counts.get(day, 0) + 1
-        return national | {day for day, count in counts.items() if 2 * count >= len(regions)}
 
 
 def quarter_slots(points: Iterable[tuple[int, float | None]]) -> dict[int, float]:
@@ -409,7 +364,7 @@ class MarketPrices:
         self.wanted_references: set[str] = set()
         self.references_update: datetime | None = None
         # Public holidays of the bidding zone for the estimates.
-        self._holidays: ZoneHolidays | None = None
+        self._holidays: PublicHolidays | None = None
         self._holidays_loading: asyncio.Future | None = None
 
     @property
@@ -497,13 +452,13 @@ class MarketPrices:
             self.prices, int(start.timestamp()), int(end.timestamp()), day_off=lambda day: day in public
         )
 
-    def _zone_holidays(self) -> ZoneHolidays:
+    def _zone_holidays(self) -> PublicHolidays:
         country = SOURCE_COUNTRY[self.source]
         if self._holidays is None or self._holidays.country != country:
-            self._holidays = ZoneHolidays(country)
+            self._holidays = PublicHolidays(country)
         return self._holidays
 
-    def _load_holidays(self, public: ZoneHolidays, years: set[int]) -> None:
+    def _load_holidays(self, public: PublicHolidays, years: set[int]) -> None:
         """Load holiday years in the executor (another source's country, a new
         year); until then the estimates go without them."""
         if self._holidays_loading is None or self._holidays_loading.done():

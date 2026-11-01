@@ -3,7 +3,8 @@
 All series are hourly: period start (aware datetime, full hour) -> Wh.
 
 Base load: weighted mean per (day type, local hour) with exponentially
-decaying weights, so recent behaviour dominates. A short-term correction factor
+decaying weights, so recent behaviour dominates. Public holidays (``day_off``)
+count as weekend days, in the history and in the forecast. A short-term correction factor
 from the last days absorbs effects the profile does not know.
 
 Heat pump: daily energy E = a + b * max(0, T_base - T_mean) fitted by weighted
@@ -23,7 +24,7 @@ recent days even if the slope is somewhat off.
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 import math
@@ -33,6 +34,8 @@ import numpy as np
 from homeassistant.util import dt as dt_util
 
 type HourlySeries = Mapping[datetime, float]
+# True for a local day counted like a weekend day (public holiday).
+type DayOff = Callable[[date], bool]
 
 WORKDAY = "workday"
 WEEKEND = "weekend"
@@ -54,8 +57,10 @@ MIN_RECENT_BASE_DAYS = 5
 NIGHT_HOURS = range(1, 5)
 
 
-def day_type(day: date) -> str:
-    return WEEKEND if day.weekday() >= 5 else WORKDAY
+def day_type(day: date, day_off: DayOff | None = None) -> str:
+    if day.weekday() >= 5 or (day_off is not None and day_off(day)):
+        return WEEKEND
+    return WORKDAY
 
 
 def _decay_weight(age_days: float, half_life_days: float) -> float:
@@ -68,9 +73,10 @@ class BaseLoadProfile:
 
     profile: dict[tuple[str, int], float] = field(default_factory=dict)
     correction: float = 1.0
+    day_off: DayOff | None = None
 
     @classmethod
-    def fit(cls, history: HourlySeries, now: datetime) -> BaseLoadProfile:
+    def fit(cls, history: HourlySeries, now: datetime, day_off: DayOff | None = None) -> BaseLoadProfile:
         sums: dict[tuple[str, int], float] = defaultdict(float)
         weights: dict[tuple[str, int], float] = defaultdict(float)
         oldest = now - timedelta(days=BASE_LOOKBACK_DAYS)
@@ -78,11 +84,11 @@ class BaseLoadProfile:
             if not oldest <= start < now or wh < 0:
                 continue
             local = dt_util.as_local(start)
-            key = (day_type(local.date()), local.hour)
+            key = (day_type(local.date(), day_off), local.hour)
             weight = _decay_weight((now - start).total_seconds() / 86400, BASE_HALF_LIFE_DAYS)
             sums[key] += wh * weight
             weights[key] += weight
-        model = cls({key: sums[key] / weights[key] for key in sums})
+        model = cls({key: sums[key] / weights[key] for key in sums}, day_off=day_off)
         model.correction = model._recent_correction(history, now)
         return model
 
@@ -103,7 +109,7 @@ class BaseLoadProfile:
 
     def raw(self, start: datetime) -> float | None:
         local = dt_util.as_local(start)
-        key = (day_type(local.date()), local.hour)
+        key = (day_type(local.date(), self.day_off), local.hour)
         if key in self.profile:
             return self.profile[key]
         # Fall back to the other day type for the same hour.

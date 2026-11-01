@@ -217,7 +217,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Prognosen | Status |
 |---|---|
 | PV-Prognose aus beliebiger Solarprognose-Integration (Forecast.Solar, Solcast, …) | ✅ |
-| Verbrauchsprognose heute/morgen (Historie + Wetter, Wärmepumpe temperaturabhängig), nach einem plötzlichen Anstieg sofort angehoben | ✅ |
+| Verbrauchsprognose heute/morgen (Historie + Wetter, Wärmepumpe temperaturabhängig, Feiertage des eigenen Bundeslands oder Kantons), nach einem plötzlichen Anstieg sofort angehoben | ✅ |
 | Korrektur der PV-Prognose im Tagesverlauf und Prognosegüte von PV und Verbrauch | ✅ |
 
 | Batterien | Status |
@@ -675,6 +675,17 @@ wird so nie. Zwei optionale Einstellungen helfen beim Start:
   vorhandener Historie (z. B. aus einer anderen Batterie-Integration), für die
   Zeit, bevor SLEMS eigene Werte aufgezeichnet hat.
 
+Feiertage zählen wie Wochenendtage, im gelernten Profil und in der Prognose:
+die des in Home Assistant eingestellten Landes und des Bundeslands oder
+Kantons, das in den Systemeinstellungen bei **Feiertage** ausgewählt ist.
+Werden die Systemeinstellungen geöffnet und ist noch keine Region gespeichert,
+schlägt SLEMS eine aus dem Standort von Home Assistant vor: eine einzige
+Anfrage an Nominatim (OpenStreetMap) mit auf etwa 100 m gerundeten
+Koordinaten, den Dienst, den auch das Onboarding von Home Assistant für das
+Land verwendet. Mit **Landesweite Feiertage**, oder wenn keine Region gefunden
+wird, zählen nur die Feiertage des ganzen Landes (in der Schweiz die, die in
+mindestens der Hälfte der Kantone gelten).
+
 Empfohlene Einrichtung beim Umstieg von einer anderen Batterie-Integration:
 
 1. Den Hausverbrauchssensor dieser Integration als **Historie Hausverbrauch**
@@ -685,7 +696,6 @@ Empfohlene Einrichtung beim Umstieg von einer anderen Batterie-Integration:
 2. Falls vorhanden, einen Außentemperatursensor mit Historie wählen. Sonst
    nutzt die Wärmepumpenprognose den Durchschnitt der letzten Tage, bis SLEMS
    etwa eine Woche Temperaturen aufgezeichnet hat.
-3. Feiertage werden derzeit wie Werktage behandelt.
 
 **Prognosegüte** (Karte in der Übersicht, Sensoren **Treffsicherheit
 Verbrauchsprognose** und **Treffsicherheit PV-Prognose**):
@@ -2593,10 +2603,6 @@ Nutzern mit einer echten Wallbox zur [evcc-Anleitung](docs/wallbox-evcc.de.md).
 
 **Prognose**
 
-- Feiertage in der Verbrauchsprognose: ein Feiertag zu Hause wie ein
-  Wochenendtag geplant, aus einem Kalender der Home-Assistant-Integration
-  **Holiday** für den eigenen Kanton oder das eigene Bundesland (sonst die
-  landesweiten Feiertage des in Home Assistant eingestellten Landes).
 - Eigene Prognose für den Urlaub: ein Grundlastprofil, gelernt aus ganzen
   Urlaubstagen (alle Urlaube zusammen), und ein Faktor für die Wärmepumpe aus
   denselben Tagen; bis etwa drei Urlaubstage gelernt sind, die heutige

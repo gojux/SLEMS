@@ -22,6 +22,9 @@ CONF_WEATHER_ENTITY: Final = "weather_entity"
 # Optional history sources for the consumption forecast.
 CONF_HOUSE_HISTORY_ENTITY: Final = "house_history_entity"
 CONF_OUTDOOR_TEMPERATURE_ENTITY: Final = "outdoor_temperature_entity"
+# Region (state, canton) of the public holidays in the country of Home
+# Assistant, a region code of the holidays package or "national".
+CONF_HOLIDAY_REGION: Final = "holiday_region"
 # Energy counters of the smart meter (kWh), for tariffs and bills.
 CONF_GRID_IMPORT_ENERGY_ENTITY: Final = "grid_import_energy_entity"
 CONF_GRID_EXPORT_ENERGY_ENTITY: Final = "grid_export_energy_entity"

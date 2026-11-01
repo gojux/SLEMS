@@ -65,6 +65,7 @@ from .const import (
     CONF_GRID_POWER_ENTITY,
     CONF_GRID_POWER_INVERTED,
     CONF_HOST,
+    CONF_HOLIDAY_REGION,
     CONF_HOUSE_HISTORY_ENTITY,
     CONF_OUTDOOR_TEMPERATURE_ENTITY,
     CONF_PORT,
@@ -895,6 +896,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.efficiency"
         )
         self.forecaster = ConsumptionForecaster(hass, self._forecast_sources())
+        self.forecaster.holiday_place = self._holiday_place()
         self.controller = RealTimeController(self)
         self.problems = ProblemReporter(hass, self)
         # Batteries left out because their profile cannot be used (subentry id -> name, error).
@@ -1154,6 +1156,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     async def async_refresh_forecast(self) -> None:
         """Refit the consumption forecast from the recorder statistics."""
         self.forecaster.sources = self._forecast_sources()
+        self.forecaster.holiday_place = self._holiday_place()
         if self.settings.vacation and self.vacation_days.mark(dt_util.now().date()):
             self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
         excluded = frozenset(self.vacation_days.days)
@@ -1166,6 +1169,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             await self._async_refresh_energy_estimates()
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Daily energy of the consumers failed")
+
+    def _holiday_place(self) -> tuple[str | None, str | None]:
+        """Country of Home Assistant and region of the public holidays."""
+        return self.hass.config.country, self._config.get(CONF_HOLIDAY_REGION)
 
     async def _async_refresh_energy_estimates(self) -> None:
         """Daily energy of the last days and today's energy of the controllable consumers."""

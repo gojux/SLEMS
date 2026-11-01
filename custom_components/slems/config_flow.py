@@ -140,6 +140,7 @@ from .const import (
     DEFAULT_PRIORITY,
     CONF_GRID_POWER_ENTITY,
     CONF_GRID_POWER_INVERTED,
+    CONF_HOLIDAY_REGION,
     CONF_HOUSE_HISTORY_ENTITY,
     CONF_OUTDOOR_TEMPERATURE_ENTITY,
     CONF_HOST,
@@ -270,6 +271,7 @@ from .grid_meter import (
     find_meters,
     read_power,
 )
+from .public_holidays import NATIONAL, async_suggest_region, region_choices
 from .pv_forecast import async_forecast_provider_entries
 from .util import entity_ids, state_as_kwh, state_as_watts
 
@@ -393,6 +395,22 @@ async def _async_system_schema(
     def optional(key: str) -> vol.Optional:
         return _optional(key, defaults)
 
+    region_field: dict = {}
+    if regions := await hass.async_add_executor_job(region_choices, hass.config.country):
+        region = defaults.get(CONF_HOLIDAY_REGION)
+        region_field[
+            vol.Required(CONF_HOLIDAY_REGION, default=region if region in dict(regions) else NATIONAL)
+        ] = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=[
+                    selector.SelectOptionDict(value=NATIONAL, label=NATIONAL),
+                    *(selector.SelectOptionDict(value=code, label=name) for code, name in regions),
+                ],
+                mode=selector.SelectSelectorMode.DROPDOWN,
+                translation_key=CONF_HOLIDAY_REGION,
+            )
+        )
+
     return vol.Schema(
         {
             vol.Required(
@@ -419,6 +437,7 @@ async def _async_system_schema(
                 )
             ),
             optional(CONF_HOUSE_HISTORY_ENTITY): _POWER_SENSOR,
+            **region_field,
             optional(CONF_GRID_IMPORT_ENERGY_ENTITY): _ENERGY_SENSOR,
             optional(CONF_GRID_EXPORT_ENERGY_ENTITY): _ENERGY_SENSOR,
         }
@@ -465,6 +484,8 @@ class _GridModbusSteps:
     _current: dict[str, Any]
     _suggested: dict[str, Any]
     _devices_changed: bool
+    # Region of the public holidays found at Nominatim (looked up once per flow).
+    _region_lookup: tuple[str | None] | None = None
 
     def _async_finish_system(self) -> ConfigFlowResult:
         raise NotImplementedError
@@ -516,6 +537,10 @@ class _GridModbusSteps:
             defaults = {**self._current, **self._suggested}
         else:
             defaults = {**self._suggested, **self._current}
+        if CONF_HOLIDAY_REGION not in defaults:
+            if self._region_lookup is None:
+                self._region_lookup = (await async_suggest_region(self.hass),)
+            defaults = {**defaults, CONF_HOLIDAY_REGION: self._region_lookup[0]}
         return self.async_show_form(
             step_id="system",
             data_schema=await _async_system_schema(self.hass, defaults),

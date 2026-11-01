@@ -16,6 +16,9 @@ Days on which the vacation mode was on (``VacationDays``) are left out of the
 history, whole days: the absence would pull the profiles down for weeks after
 the return. With fewer than ``MIN_KEPT_DAYS`` days left within the base load
 lookback all days count, so a long absence still has a forecast.
+
+Public holidays of the home (country of Home Assistant, region of the system
+settings) count as weekend days in the base load profile.
 """
 
 from __future__ import annotations
@@ -34,6 +37,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 
 from ..peak_shaving import PROFILE_DAYS, PeakProfile
+from ..public_holidays import PublicHolidays
 from .accuracy import ConsumptionAccuracy, backtest_consumption
 from .models import (
     BASE_LOOKBACK_DAYS,
@@ -212,6 +216,10 @@ class ConsumptionForecaster:
         self.excluded_days: frozenset[date] = frozenset()
         # Hourly forecast temperatures of the weather entity (UTC hour start -> °C).
         self.forecast_temperatures: dict[datetime, float] = {}
+        # Country and region of the public holidays (None: no holidays).
+        self.holiday_place: tuple[str | None, str | None] = (None, None)
+        self._holidays: PublicHolidays | None = None
+        self._holidays_place: tuple[str | None, str | None] = (None, None)
 
     async def async_refresh(
         self, vacation: bool, excluded: frozenset[date] = frozenset()
@@ -250,9 +258,10 @@ class ConsumptionForecaster:
         temperatures = means.get(sources.temperature or "", {})
         forecast_temperatures = await self._async_weather_temperatures()
         self.forecast_temperatures = forecast_temperatures
+        day_off = await self._async_day_off(now)
 
         self.forecast = await self._hass.async_add_executor_job(
-            self._compute, now, base, heat_pump, temperatures, forecast_temperatures, vacation
+            self._compute, now, base, heat_pump, temperatures, forecast_temperatures, vacation, day_off
         )
         self.accuracy = await self._hass.async_add_executor_job(
             backtest_consumption,
@@ -260,9 +269,23 @@ class ConsumptionForecaster:
             heat_pump if sources.heat_pumps else None,
             daily_mean_temperature(temperatures),
             now,
+            day_off,
         )
         self.peak_profile = await self._async_peak_profile(excluded)
         return self.forecast
+
+    async def _async_day_off(self, now: datetime) -> Callable[[date], bool] | None:
+        """Public holidays of the history and the forecast days, loaded in the executor."""
+        country, region = self.holiday_place
+        if not country:
+            return None
+        public = self._holidays
+        if public is None or self._holidays_place != (country, region):
+            public = self._holidays = PublicHolidays(country, region)
+            self._holidays_place = (country, region)
+        first = (now - timedelta(days=HEAT_PUMP_LOOKBACK_DAYS)).year
+        await self._hass.async_add_executor_job(public.load, range(first, now.year + 2))
+        return lambda day: day in public
 
     async def _async_peak_profile(self, excluded: frozenset[date]) -> PeakProfile | None:
         """Profile from the 5 minute statistics of the first house source with data."""
@@ -283,8 +306,9 @@ class ConsumptionForecaster:
         temperature_history: HourlySeries,
         forecast_temperatures: HourlySeries,
         vacation: bool,
+        day_off: Callable[[date], bool] | None = None,
     ) -> ConsumptionForecast | None:
-        base_model = BaseLoadProfile.fit(base_history, now)
+        base_model = BaseLoadProfile.fit(base_history, now, day_off)
         if base_model.is_empty:
             return None
         daily_temperature = daily_mean_temperature(temperature_history)
