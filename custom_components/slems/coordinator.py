@@ -264,7 +264,16 @@ from .price_savings import PriceSavings
 from .price_hold import PriceHold, cheapest_start, plan_price_hold
 from .tariff import Role, Side, Tariff, Unit
 from .tariff_comparison import configured_tariffs
-from .peak_shaving import EconomicLimit, PeakProfile, auto_limit, auto_threshold, economic_limit, hours_until_refill
+from .peak_charge import plan_peak_charge
+from .peak_shaving import (
+    EconomicLimit,
+    PeakProfile,
+    auto_limit,
+    auto_threshold,
+    economic_limit,
+    first_block,
+    hours_until_refill,
+)
 from .power_peak import BUFFER_W as POWER_BUFFER_W, PeakState, PowerPrice, peak_state as compute_peak_state, power_price
 from .pv_forecast import (
     PvForecast,
@@ -516,6 +525,9 @@ class ControlSettings:
     peak_shaving_soc_threshold_pct: float = DEFAULT_PEAK_SHAVING_SOC_THRESHOLD_PCT
     # What is calculated from the consumption peaks (see peak_shaving).
     peak_shaving_mode: PeakShavingMode = PeakShavingMode.ECONOMIC
+    # With a power price: top the batteries up to the threshold from the grid
+    # below the limit before the peaks (see peak_charge).
+    peak_grid_charge: bool = True
     peak_shaving_reserve_pct: float = 20.0
     # Averaging window of the grid power; 0 disables averaging.
     surplus_average_window_s: float = DEFAULT_SURPLUS_AVERAGE_WINDOW_S
@@ -814,6 +826,8 @@ class ForecastPlan:
     # Why the economic mode works as the automatic limit: "no_power_price";
     # None otherwise.
     peak_economic_fallback: str | None = None
+    # Charging from the grid for peak shaving: AC power per local quarter hour start.
+    peak_charge: dict[datetime, float] = field(default_factory=dict)
     projection: SocProjection | None = None
     # Energy the batteries can spare for consumers on battery support
     # "automatic" (see battery_support); None without such a consumer.
@@ -3150,6 +3164,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         grid_charge_w = forecast_plan.grid_charge.charge_at(wall_now) if forecast_plan.grid_charge else 0.0
         battery_export_w = forecast_plan.grid_charge.export_at(wall_now) if forecast_plan.grid_charge else 0.0
         charge_cap_w = forecast_plan.grid_charge.charge_cap_at(wall_now) if forecast_plan.grid_charge else None
+        peak_charge_w = forecast_plan.peak_charge.get(slot_start(dt_util.as_local(wall_now)), 0.0) if settings.peak_shaving else 0.0
         if settings.price_control:
             self.plan_changes.add(wall_now, price_decision(price_limit_w, grid_charge_w, battery_export_w, charge_cap_w))
 
@@ -3257,6 +3272,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             battery_export_w=battery_export_w,
             charge_cap_w=charge_cap_w,
             grid_import_limit_w=settings.grid_import_max_w or math.inf,
+            peak_charge_w=peak_charge_w,
         )
         # Resting consumers draw nothing: the batteries take their allocation.
         # Counted at their command (controller cycle), that command is not in
@@ -3276,7 +3292,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             )
         elif unused_w < 0:
             allocation.battery_power_w += unused_w
-        if allocation.strategy is not Strategy.GRID_CHARGE:
+        if allocation.strategy not in (Strategy.GRID_CHARGE, Strategy.PEAK_CHARGE):
             allocation.battery_power_w = limit_charge_to_surplus(
                 allocation.battery_power_w,
                 -snapshot.grid_without_batteries_filtered_w,
@@ -3766,6 +3782,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 if consumption_hourly
                 else None
             )
+            if settings.peak_shaving and settings.peak_grid_charge and consumption_hourly:
+                result.peak_charge = self._peak_charge(
+                    battery, wall_now, pv_forecast, consumption_hourly, grid_load,
+                    result.peak_threshold_pct, result.peak_limit_w,
+                )
             if settings.price_control and consumption_hourly:
                 result.grid_charge = self._grid_charge(
                     battery, wall_now, pv_forecast, pv_hourly, consumption_hourly, grid_load, until, settings,
@@ -3820,7 +3841,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 budget_load=budget_load,
                 budget_wh=result.support_budget_wh,
                 budget_until=until,
-                grid_charge=result.grid_charge.hourly_charge_w if result.grid_charge else None,
+                grid_charge=_with_peak_charge(
+                    result.grid_charge.hourly_charge_w if result.grid_charge else None, result.peak_charge
+                ),
                 battery_export=result.grid_charge.hourly_export_w if result.grid_charge else None,
                 charge_caps=result.grid_charge.hourly_caps_w if result.grid_charge else None,
                 night_keep=_price_keep(result.grid_charge, result.price_hold, battery),
@@ -3982,13 +4005,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             until = None
         nets = _quarter_nets(wall_now, horizon, pv_forecast, consumption_hourly, grid_load)
         capacity = battery.capacity_wh
-        enabled = [b for b in self.batteries if b.enabled]
-        weights = [b.driver.capabilities.capacity_wh or 1.0 for b in enabled]
-        wear = (
-            sum(b.wear.ct_per_kwh * w for b, w in zip(enabled, weights, strict=True)) / sum(weights)
-            if enabled
-            else 0.0
-        )
+        wear = self._wear_ct()
         # Batteries with own PV and without an input do not charge from the grid.
         grid_power = (
             max(0.0, battery.max_charge_w - sum(b.max_charge_w for b in own)) if settings.grid_charge else 0.0
@@ -4071,6 +4088,53 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 self.hass, self._async_grid_charge(key, plan_args, len(nets)), "slems price plan"
             )
         return self._grid_charge_last
+
+    def _peak_charge(
+        self,
+        battery: BatteryGroup,
+        wall_now: datetime,
+        pv_forecast: PvForecast | None,
+        consumption_hourly: Mapping[datetime, float],
+        grid_load: Mapping[datetime, float],
+        threshold_pct: float,
+        limit_w: float,
+    ) -> dict[datetime, float]:
+        """Charging from the grid up to the peak shaving threshold before the next
+        expected peak (see peak_charge); only with a power price."""
+        profile = self.forecaster.peak_profile
+        if self.peak_state() is None or profile is None or profile.is_empty:
+            return {}
+        local_now = dt_util.as_local(wall_now)
+        horizon = local_now + MAX_GRID_CHARGE_HORIZON
+        nets = _quarter_nets(wall_now, horizon, pv_forecast, consumption_hourly, grid_load)
+        quarter_h = QUARTER / timedelta(hours=1)
+        first = slot_start(local_now)
+        profile = profile.with_quantile()
+        # Until the next quarter hour with an expected peak (in one: the current quarter hour).
+        deadline = horizon
+        for start in sorted(nets):
+            if profile.energy_above(start.hour, limit_w) > 0:
+                deadline = max(start, first + QUARTER)
+                break
+        efficiency = battery.charge_efficiency or 1.0
+        missing = (threshold_pct - battery.soc_pct) / 100 * battery.capacity_wh
+        # A PV surplus before charges the batteries anyway.
+        missing -= sum(-wh for start, wh in nets.items() if start < deadline and wh < 0) * efficiency
+        # Batteries with own PV and without an input do not charge from the grid.
+        own = self._own_pv_batteries(self.data, wall_now) if self.data is not None else []
+        charge_w = max(0.0, battery.max_charge_w - sum(b.max_charge_w for b in own))
+        room = {start: limit_w - wh / quarter_h for start, wh in nets.items()}
+        return plan_peak_charge(
+            wall_now, missing, efficiency, charge_w, room, self._import_prices(wall_now, horizon) or {}, deadline
+        )
+
+    def _wear_ct(self) -> float:
+        """Wear costs per kWh of the enabled batteries (ct, weighted by capacity)."""
+        enabled = [b for b in self.batteries if b.enabled]
+        weights = [b.driver.capabilities.capacity_wh or 1.0 for b in enabled]
+        if not enabled:
+            return 0.0
+        return sum(b.wear.ct_per_kwh * w for b, w in zip(enabled, weights, strict=True)) / sum(weights)
 
     async def _async_grid_charge(self, key: tuple, plan_args: partial, periods: int) -> None:
         """Make the price plan in the executor and start a control cycle with it."""
@@ -5073,11 +5137,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     * battery.capacity_wh
                     / battery.charge_efficiency
                 )
-                return hours_until_refill(wall_now, pv_hourly, consumption_hourly, refill_wh, charge_limit)
+                hours = hours_until_refill(wall_now, pv_hourly, consumption_hourly, refill_wh, charge_limit)
+                # Topped up from the grid between the blocks of peaks: only the next one counts.
+                return first_block(profile, hours, floor) if topped_up else hours
 
+            topped_up = settings.peak_grid_charge and peak is not None
             reserve = settings.peak_shaving_reserve_pct / 100
             if mode is PeakShavingMode.ECONOMIC and peak is not None:
-                economic = self._economic_limit(battery, wall_now, peak, profile, hours_for, floor, reserve, threshold)
+                economic = self._economic_limit(
+                    battery, wall_now, peak, profile, hours_for, floor, reserve, threshold, topped_up
+                )
                 limit, threshold = economic.limit_w, economic.threshold_pct
             if mode is PeakShavingMode.AUTO_LIMIT:
                 usable_wh = (
@@ -5111,8 +5180,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         floor_w: float,
         reserve: float,
         start_pct: float,
+        topped_up: bool = False,
     ) -> EconomicLimit:
-        """The economic limit (see peak_shaving.economic_limit), kept for a minute."""
+        """The economic limit (see peak_shaving.economic_limit), kept for a minute;
+        ``topped_up``: the peak energy is charged back from the grid."""
         price = self._current_power_price(dt_util.as_local(wall_now).date())
         local = dt_util.as_local(wall_now)
         month_end = dt_util.start_of_local_day((local.replace(day=28) + timedelta(days=4)).replace(day=1))
@@ -5127,9 +5198,15 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         sold = mean(self._import_prices(wall_now, horizon, Side.EXPORT)) or 0.0
         # Import price minus feed-in credit (€/kWh); unknown: nothing lost.
         spread = max(0.0, (bought - sold) / 100) if bought is not None else 0.0
+        efficiency = battery.charge_efficiency or 1.0
+        # Charged back from the grid: both conversion losses and the wear.
+        cycle_cost = (
+            ((bought or 0.0) * (1 / efficiency**2 - 1) + self._wear_ct()) / 100 if topped_up else 0.0
+        )
         key = (
             int(wall_now.timestamp() // 60), round(battery.soc_pct), round(battery.capacity_wh),
             round(battery.max_discharge_w), round(floor_w), reserve, round(start_pct, 1), round(spread, 4),
+            round(cycle_cost, 4),
         )
         if self._economic_cache is not None and self._economic_cache[0] == key:
             return self._economic_cache[1]
@@ -5152,6 +5229,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             battery.charge_efficiency,
             reserve,
             start_pct,
+            cycle_cost,
         )
         self._economic_cache = (key, result)
         return result
@@ -5501,6 +5579,23 @@ def _price_keep(
         return floor + price_hold.delivered_from(moment) / efficiency
 
     return kept
+
+
+def _with_peak_charge(
+    hourly: Mapping[datetime, float] | None, peak_charge: Mapping[datetime, float]
+) -> Mapping[datetime, float] | None:
+    """The hourly grid charge of the price plan with the charging for peak shaving
+    (per quarter hour) as mean power per hour, the larger of both."""
+    if not peak_charge:
+        return hourly
+    result = dict(hourly or {})
+    sums: dict[datetime, float] = {}
+    for start, power in peak_charge.items():
+        hour = start.replace(minute=0)
+        sums[hour] = sums.get(hour, 0.0) + power * (QUARTER / timedelta(hours=1))
+    for hour, mean in sums.items():
+        result[hour] = max(result.get(hour, 0.0), mean)
+    return result
 
 
 def _quarter_nets(

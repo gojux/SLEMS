@@ -11,6 +11,7 @@ from custom_components.slems.peak_shaving import (
     auto_limit,
     auto_threshold,
     economic_limit,
+    first_block,
     hours_until_refill,
 )
 
@@ -153,3 +154,22 @@ def test_quantile_plans_for_a_bad_day() -> None:
     bad = PeakProfile.from_means(means).with_quantile()
     assert bad.energy_above(19, 500) == pytest.approx(2500 * 10 / 60)
     assert bad.energy_above(19, 3000) == 0
+
+
+def test_first_block_ends_after_two_quiet_hours() -> None:
+    profile = profile_with_peak()
+    hours = [(hour % 24, 1.0) for hour in range(18, 18 + 30)]
+    block = first_block(profile, hours, 500)
+    # 18:00 before the peak, the peak at 19:00, 20:00 quiet; the second quiet hour (21:00) ends it.
+    assert [hour for hour, _ in block] == [18, 19, 20]
+    assert first_block(profile, hours, 3000) == hours
+
+
+def test_economic_limit_counts_the_charge_losses() -> None:
+    # Charging back each day costs more than the power price saves: a higher limit.
+    free = economic(0.2)
+    costly = economic_limit(
+        profile_with_peak(), lambda _: [(19, 1.0)], lambda limit: 3.0 * limit / 1000, 0,
+        10, 0.2, 5000, 10, 100, 10000, 1.0, 0.2, 20, cycle_cost=10.0,
+    )
+    assert costly.limit_w > free.limit_w

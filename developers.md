@@ -351,7 +351,17 @@ time window of the power price, `PeakState.counted`). `allocate` lets forced
 consumers give way (`_yield_to_peak`) when the import above that limit
 exceeds the discharge power of the batteries. With a power price the peak
 profile is `with_quantile()` (per hour the 90 % nearest-rank quantile of the
-days instead of their mean) in every mode. Sensor `power_peak` (kW,
+days instead of their mean) in every mode. `peak_charge.py` (pure, switch
+`peak_grid_charge`): the stored energy missing to the threshold (minus a PV
+surplus before) charged in the cheapest quarter hours (ties: the latest)
+before the next quarter hour with an expected peak, at most the room the
+forecast import leaves below the limit (`_quarter_nets`); the coordinator
+passes the power of the current quarter hour as `peak_charge_w` to
+`allocate` (strategy `PEAK_CHARGE`, like `GRID_CHARGE` within the import
+limit, not cut to the surplus) and adds it to the projection
+(`_with_peak_charge`). With it the threshold horizon ends with the first
+block of peaks (`peak_shaving.first_block`) and `economic_limit` adds
+`cycle_cost` (import price × both losses + wear) per kWh of peak energy. Sensor `power_peak` (kW,
 attributes every 10 s) feeds the overview tile.
 
 Peak shaving mode (select `peak_shaving_mode`, replaces the switch
@@ -2751,3 +2761,4 @@ repository (otherwise its *brands* check fails).
 | 2026-11-01 | Peak shaving with a power price works on the energy of the running interval instead of the momentary import: the import allowed for the rest of the interval is its budget left over the time left, so a short peak a battery at its power limit lets through is made up for, and import may rise above the limit while budget is left. Feed-in does not offset import (the smart meter counts both apart), so the allowed import is never below 0. The limit never lies below what the month's peak already costs, in every mode. Forced consumers give way (power controlled ones to their minimum first, then off outside their minimum runtime) when the batteries cannot cover the import above the limit, as the limit then costs money for the whole month while the daily target can catch up. The modes replace the switch: automatic limit, automatic threshold for a set limit, manual; the economic mode follows. |
 | 2026-11-01 | Economic peak shaving (default mode): the limit with the lowest expected cost until the end of the month, power price against the energy held back that is still there at the refill (it takes room from the PV surplus: import price minus feed-in credit per kWh, per remaining day). Limits are tried from the month's floor up, each with its automatic threshold; limits the batteries cannot hold (peak above their discharge power, threshold at the maximum SoC) are left out, the highest expected peak needs no energy, so there is always a result. Without a power price it works as the automatic limit, so the default changes nothing for installations without one. |
 | 2026-11-01 | With a power price the expected energy above a limit is the 90 % quantile of the days per hour (the second worst of 10) instead of the mean, as one missed interval costs the whole month; without one the mean stays (the reserve covers it). Summed over the hours the quantile is on the safe side. |
+| 2026-11-01 | Charging from the grid for peak shaving (switch, on by default, only with a power price): its own small planner (cheapest quarter hours before the next expected peak, within the room below the limit) instead of a constraint in the price plan's dynamic programming, whose hourly forecasts average the peaks away and which only runs with the price aware control. With it the energy for peaks only has to last until the end of the next block of peaks (two hours without one end it), and the economic mode counts the losses and the wear of charging back. |

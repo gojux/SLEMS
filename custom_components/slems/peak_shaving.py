@@ -18,6 +18,11 @@ it is more than their discharge power, or the threshold would reach the
 highest state of charge) is left out; the highest expected peak itself needs
 no energy, so there is always one.
 
+With charging from the grid for peak shaving (see peak_charge) the batteries
+are topped up below the limit between the peaks, so the energy only has to
+last until the end of the next block of peaks (``first_block``), and each
+day's peak energy costs the losses of that charge (``cycle_cost``).
+
 The hourly consumption forecast averages short peaks (oven, kettle) away, so
 the expected energy above a limit comes from the 5 minute statistics of the
 house consumption of the last days (``PeakProfile``): per local hour of the
@@ -59,6 +64,8 @@ THRESHOLD_ROUNDS = 3
 ECONOMIC_STEP_W = 100.0
 # Share of the days the energy above a limit stays below with a power price (nearest rank).
 PEAK_QUANTILE = 0.9
+# Hours without an expected peak that end a block of peaks (see first_block).
+BLOCK_GAP_H = 2.0
 
 
 @dataclass
@@ -196,6 +203,26 @@ def auto_limit(
     return high
 
 
+def first_block(
+    profile: PeakProfile, hours: list[tuple[int, float]], limit_w: float
+) -> list[tuple[int, float]]:
+    """``hours`` until the end of their first block of peaks above ``limit_w``
+    (``BLOCK_GAP_H`` hours without one end it)."""
+    result: list[tuple[int, float]] = []
+    started = False
+    quiet = 0.0
+    for hour, share in hours:
+        if profile.energy_above(hour, limit_w) > 0:
+            started = True
+            quiet = 0.0
+        elif started:
+            quiet += share
+            if quiet >= BLOCK_GAP_H:
+                break
+        result.append((hour, share))
+    return result
+
+
 def needed_wh(profile: PeakProfile, hours: list[tuple[int, float]], limit_w: float) -> float:
     """Expected energy above ``limit_w`` in ``hours``."""
     return sum(share * profile.energy_above(hour, limit_w) for hour, share in hours)
@@ -251,12 +278,14 @@ def economic_limit(
     efficiency: float,
     reserve: float,
     start_pct: float,
+    cycle_cost: float = 0.0,
 ) -> EconomicLimit:
     """The limit from ``floor_w`` up with the lowest expected cost.
 
     ``power_cost``: power price of the month when the import stays below a
     limit (W); ``spread``: import price minus feed-in credit (per kWh);
-    ``days_left``: days until the end of the month.
+    ``days_left``: days until the end of the month; ``cycle_cost``: cost per
+    kWh of peak energy charged back from the grid (losses, wear).
     """
     limit = max(0.0, floor_w)
     hours = hours_for(start_pct)
@@ -269,8 +298,9 @@ def economic_limit(
             )
             if not full:
                 held_wh = (threshold - min_soc_pct) / 100 * capacity_wh
-                left_wh = max(0.0, held_wh - needed_wh(profile, hours_for(threshold), limit))
-                cost = power_cost(limit) + days_left * left_wh / 1000 * spread
+                used_wh = needed_wh(profile, hours_for(threshold), limit)
+                left_wh = max(0.0, held_wh - used_wh)
+                cost = power_cost(limit) + days_left * (left_wh * spread + used_wh * cycle_cost) / 1000
                 if cost < best.cost - 1e-9:
                     best = EconomicLimit(limit, threshold, cost)
         limit += ECONOMIC_STEP_W

@@ -204,6 +204,14 @@ def test_forced_consumers_give_way_to_the_peak_limit() -> None:
     assert result.consumer_power_w["rod"] == 3000
 
 
+def test_peak_charge_within_the_limit() -> None:
+    settings = AllocationSettings(**{**SETTINGS.__dict__, "peak_shaving": True, "peak_shaving_grid_limit_w": 2000})
+    result = allocate(-500, battery(15), [], settings, expected_surplus_wh=None, peak_charge_w=3000)
+    assert result.strategy is Strategy.PEAK_CHARGE
+    # 500 W house: 1500 W left below the limit.
+    assert result.battery_power_w == pytest.approx(1500)
+
+
 def test_peak_shaving_only_covers_import_above_limit() -> None:
     settings = AllocationSettings(**{**SETTINGS.__dict__, "peak_shaving": True})
     low = allocate(-4000, battery(15), [], settings, expected_surplus_wh=None)

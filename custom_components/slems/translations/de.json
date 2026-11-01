@@ -1211,6 +1211,7 @@
           "feed_in_cap": "Einspeisebegrenzung",
           "price_hold": "Für teure Stunden halten",
           "grid_charge": "Netzladen",
+          "peak_charge": "Spitzenabfang: Netzladen",
           "battery_export": "Einspeisen aus den Batterien",
           "price_room": "Platz für günstigere Stunden",
           "below_min_power": "Unter Mindestleistung"
@@ -1411,6 +1412,9 @@
       },
       "peak_shaving": {
         "name": "Bezugsspitzen abfangen"
+      },
+      "peak_grid_charge": {
+        "name": "Für Spitzenabfang aus dem Netz laden"
       },
       "night_discharge": {
         "name": "Nachtentladung"

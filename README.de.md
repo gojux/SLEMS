@@ -2594,7 +2594,17 @@ Verwendung** enthält alle gelernten Werte als Attribute.
   auf ihre Mindestleistung, danach schalten die außerhalb ihrer
   Mindestlaufzeit ab. Die Grenze liegt nie unter dem, was die Monatsspitze
   schon kostet (die verrechnete Leistung minus 200 W): Weniger Bezug spart bis
-  Monatsende nichts. Die Kachel **Leistungsspitze diesen Monat** in der
+  Monatsende nichts. **Für Spitzenabfang aus dem Netz laden** (Schalter,
+  standardmäßig an, nur mit Leistungspreis sichtbar): Unter der Schwelle laden
+  die Batterien vor der nächsten erwarteten Spitze aus dem Netz nach, in den
+  günstigsten Viertelstunden (mit festem Preis möglichst spät, weil
+  Heimspeicher vor allem mit der Zeit bei hohem Ladezustand altern) und nur
+  so weit, dass der prognostizierte Bezug unter der Grenze bleibt; das Laden
+  kostet also keinen Leistungspreis, ein PV-Überschuss davor zählt mit. Die
+  Energie für Spitzen muss dann nur bis zum Ende des nächsten Spitzenblocks
+  reichen (zwei Stunden ohne erwartete Spitze beenden ihn) statt bis zum
+  Nachladen durch PV, und der Modus Wirtschaftlich rechnet Verluste und
+  Verschleiß des Nachladens ein. Die Kachel **Leistungsspitze diesen Monat** in der
   Übersicht zeigt die bisher verrechnete Leistung, wann die höchste
   Viertelstunde war, bis zu welcher Leistung eine Viertelstunde nichts mehr
   kostet, die Mehrkosten des Monats über der Mindestleistung und die laufende

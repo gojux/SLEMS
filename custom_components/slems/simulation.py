@@ -54,6 +54,7 @@ SETTINGS = (
     "peak_shaving_grid_limit_w",
     "peak_shaving_soc_threshold_pct",
     "peak_shaving_mode",
+    "peak_grid_charge",
     "peak_shaving_reserve_pct",
     "feed_in_cap",
     "pv_peak_power_kwp",

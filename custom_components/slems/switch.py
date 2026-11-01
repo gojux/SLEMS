@@ -21,6 +21,7 @@ from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 SETTING_SWITCHES: dict[str, str] = {
     "vacation": "vacation",
     "peak_shaving": "peak_shaving",
+    "peak_grid_charge": "peak_grid_charge",
     "night_discharge": "night_discharge",
     "auto_gain": "auto_gain",
     "grid_friendly_charging": "grid_friendly_charging",

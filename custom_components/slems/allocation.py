@@ -111,6 +111,8 @@ class Strategy(StrEnum):
     NIGHT_DISCHARGE = "night_discharge"
     PRICE_HOLD = "price_hold"
     GRID_CHARGE = "grid_charge"
+    # Charging from the grid for peak shaving (see peak_charge).
+    PEAK_CHARGE = "peak_charge"
     BATTERY_EXPORT = "battery_export"
     PRICE_ROOM = "price_room"
     GRID_FRIENDLY = "grid_friendly"
@@ -274,6 +276,7 @@ def allocate(
     battery_export_w: float = 0.0,
     charge_cap_w: float | None = None,
     grid_import_limit_w: float = math.inf,
+    peak_charge_w: float = 0.0,
 ) -> Allocation:
     """Distribute ``available_w`` between batteries and consumers.
 
@@ -283,7 +286,8 @@ def allocate(
     ``battery_export_w``: planned feed-in from the batteries beyond the
     deficit, ``charge_cap_w``: the batteries take at most this of a surplus
     (room kept for cheaper hours), ``grid_import_limit_w``: grid import that
-    charging from the grid must not exceed.
+    charging from the grid must not exceed, ``peak_charge_w``: planned
+    charging from the grid for peak shaving (within its limit).
 
     ``unsupported`` are controllable consumers whose planned power the
     batteries must not cover, ``unsupported_measured_w`` the measured power of
@@ -319,21 +323,22 @@ def allocate(
     )
     peak_w = _peak_excess_w(remaining, settings)
 
+    charge_w = max(grid_charge_w, peak_charge_w)
     if (
         battery is not None
-        and grid_charge_w > 0
+        and charge_w > 0
         and peak_w == 0
         and not battery.is_full
-        and grid_charge_w > remaining - settings.charge_grid_target_w
+        and charge_w > remaining - settings.charge_grid_target_w
     ):
-        power = min(grid_charge_w, battery.max_charge_w)
+        power = min(charge_w, battery.max_charge_w)
         limit = grid_import_limit_w
         if settings.peak_shaving:
             limit = min(limit, settings.peak_shaving_grid_limit_w)
         # remaining is the surplus (+) or deficit (−) before charging.
         power = min(power, max(0.0, limit + remaining))
         return Allocation(
-            strategy=Strategy.GRID_CHARGE,
+            strategy=Strategy.GRID_CHARGE if grid_charge_w >= peak_charge_w else Strategy.PEAK_CHARGE,
             battery_power_w=power,
             consumer_power_w=consumer_power,
             charge_secured=charge_secured,

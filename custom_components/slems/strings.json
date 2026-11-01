@@ -1211,6 +1211,7 @@
           "feed_in_cap": "Feed-in cap",
           "price_hold": "Price hold",
           "grid_charge": "Grid charging",
+          "peak_charge": "Peak shaving: charging from the grid",
           "battery_export": "Feed-in from batteries",
           "price_room": "Room for cheaper hours",
           "below_min_power": "Below minimum power"
@@ -1411,6 +1412,9 @@
       },
       "peak_shaving": {
         "name": "Import peak shaving"
+      },
+      "peak_grid_charge": {
+        "name": "Charge from the grid for peak shaving"
       },
       "night_discharge": {
         "name": "Night discharge"

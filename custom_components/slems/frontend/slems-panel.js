@@ -619,6 +619,8 @@ const STRINGS = {
         "Uses the recorded PV forecast errors instead of the fixed buffer: of the days with more PV than forecast, the underestimation not exceeded on 80 % of them raises the PV forecast. Needs 14 recorded days; until then the fixed buffer applies.",
       peak_shaving_grid_limit:
         "Below the state of charge threshold, consumption up to this power comes from the grid; the batteries only cover what exceeds it. With a power price in the tariff the limit holds on average over the quarter hour (or hour) as the tariff measures it: a short peak, e.g. while the batteries are at their power limit, is made up for in the rest of the quarter hour, and forced consumers (daily target) give way when the batteries cannot cover the import above it. It never lies below what this month's peak already costs.",
+      peak_grid_charge:
+        "Only with a power price in the tariff: below the threshold the batteries are topped up from the grid before the next expected peak, in the cheapest quarter hours (with a fixed price as late as possible) and only as far as the import stays below the limit, so the charging costs no power price. The energy for peaks then only has to last until the end of the next block of peaks; the economic mode counts the losses of the charge.",
       peak_shaving_mode:
         "**Economic** (default, needs a power price in the tariff): the limit with the lowest expected cost until the end of the month and its threshold. A lower limit saves power price, but needs more energy held back; what of it is still there when PV refills the batteries takes room from the PV surplus (import price minus feed-in credit per kWh). Limits the batteries cannot hold are left out. Without a power price as with the automatic limit.\n**Automatic limit**: the limit is calculated so that the energy between the minimum state of charge and the set threshold (minus the reserve) lasts until PV refills the batteries.\n**Automatic threshold**: you set the limit (e.g. the power that costs nothing more with a power price), the threshold is calculated so that the energy for the peaks above it (plus the reserve) is kept until PV refills the batteries.\n**Manual**: limit and threshold as set.\nBoth calculations use the consumption peaks of the last days.",
       battery_share_when_secured:
@@ -1341,6 +1343,8 @@ const STRINGS = {
         "Verwendet statt des festen Puffers die aufgezeichneten Abweichungen der PV-Prognose: Von den Tagen mit mehr PV als prognostiziert hebt die Unterschätzung, die an 80 % davon nicht überschritten wurde, die PV-Prognose an. Braucht 14 aufgezeichnete Tage; bis dahin gilt der feste Puffer.",
       peak_shaving_grid_limit:
         "Unterhalb der Ladezustand-Schwelle kommt Verbrauch bis zu dieser Leistung aus dem Netz; die Batterien decken nur, was darüber hinausgeht. Mit einem Leistungspreis im Tarif gilt die Grenze im Mittel über die Viertelstunde (oder Stunde), wie der Tarif misst: Eine kurze Spitze, z. B. während die Batterien an ihrer Leistungsgrenze sind, wird im Rest der Viertelstunde ausgeglichen, und erzwungene Verbraucher (Tagesziel) treten zurück, wenn die Batterien den Bezug darüber nicht decken können. Sie liegt nie unter dem, was die Monatsspitze schon kostet.",
+      peak_grid_charge:
+        "Nur mit Leistungspreis im Tarif: Unter der Schwelle laden die Batterien vor der nächsten erwarteten Spitze aus dem Netz nach, in den günstigsten Viertelstunden (mit festem Preis möglichst spät) und nur so weit, dass der Bezug unter der Grenze bleibt; das Laden kostet also keinen Leistungspreis. Die Energie für Spitzen muss dann nur bis zum Ende des nächsten Spitzenblocks reichen; der Modus Wirtschaftlich rechnet die Ladeverluste ein.",
       peak_shaving_mode:
         "**Wirtschaftlich** (Standard, braucht einen Leistungspreis im Tarif): die Grenze mit den niedrigsten erwarteten Kosten bis Monatsende und ihre Schwelle. Eine niedrigere Grenze spart Leistungspreis, braucht aber mehr zurückgehaltene Energie; was davon noch da ist, wenn PV die Batterien wieder füllt, nimmt dem PV-Überschuss Platz (Bezugspreis minus Einspeisevergütung je kWh). Grenzen, die die Batterien nicht halten können, scheiden aus. Ohne Leistungspreis wie mit automatischer Grenze.\n**Automatische Grenze**: Die Grenze wird so berechnet, dass die Energie zwischen minimalem Ladezustand und eingestellter Schwelle (abzüglich Reserve) reicht, bis PV die Batterien wieder füllt.\n**Automatische Schwelle**: Du stellst die Grenze ein (z. B. die Leistung, die mit Leistungspreis nichts mehr kostet), die Schwelle wird so berechnet, dass die Energie für die Spitzen darüber (plus Reserve) zurückbleibt, bis PV die Batterien wieder füllt.\n**Manuell**: Grenze und Schwelle wie eingestellt.\nBeide Berechnungen verwenden die Verbrauchsspitzen der letzten Tage.",
       battery_share_when_secured:
@@ -1526,6 +1530,10 @@ const SETTING_SHOWN_WITH = {
 const SETTING_HIDDEN_WITH = {
   battery_share_when_secured: "grid_friendly_charging",
 };
+// Settings shown only while a sensor has a value (e.g. a power price in the tariff).
+const SETTING_SHOWN_WITH_VALUE = {
+  peak_grid_charge: "power_peak",
+};
 // Settings hidden while a select has one of these options.
 const SETTING_HIDDEN_IN = {
   peak_shaving_reserve: ["peak_shaving_mode", ["manual"]],
@@ -1599,6 +1607,7 @@ const SETTING_GROUPS = [
     [
       "peak_shaving",
       "peak_shaving_mode",
+      "peak_grid_charge",
       // Read only while calculated (shows the value in effect).
       "peak_shaving_grid_limit",
       "peak_shaving_soc_threshold",
@@ -4736,6 +4745,7 @@ class SlemsPanel extends HTMLElement {
           setting("battery_export", "battery_export"))}
       ${option(t.groups.peak, "peak_shaving", "peak_shaving",
         this._simSelect("settings.peak_shaving_mode", "peak_shaving_mode") +
+          (this._number(this._state("power_peak")) !== null ? setting("peak_grid_charge", "peak_grid_charge") : "") +
           setting("peak_shaving_grid_limit_w", "peak_shaving_grid_limit", { disabled: ["auto_limit", "economic"].includes(s.peak_shaving_mode) }) +
           setting("peak_shaving_soc_threshold_pct", "peak_shaving_soc_threshold", { min: 0, disabled: ["auto_threshold", "economic"].includes(s.peak_shaving_mode) }) +
           (s.peak_shaving_mode !== "manual" ? setting("peak_shaving_reserve_pct", "peak_shaving_reserve") : ""))}
@@ -5205,6 +5215,7 @@ class SlemsPanel extends HTMLElement {
           .filter((key) => !SETTING_SHOWN_WITH[key] || this._state(SETTING_SHOWN_WITH[key])?.state === "on")
           .filter((key) => !SETTING_HIDDEN_WITH[key] || this._state(SETTING_HIDDEN_WITH[key])?.state !== "on")
           .filter((key) => !SETTING_HIDDEN_IN[key] || !SETTING_HIDDEN_IN[key][1].includes(this._state(SETTING_HIDDEN_IN[key][0])?.state))
+          .filter((key) => !SETTING_SHOWN_WITH_VALUE[key] || this._number(this._state(SETTING_SHOWN_WITH_VALUE[key])) !== null)
           .map((key) => this._state(key))
           .filter(Boolean);
         if (!rows.length) return "";

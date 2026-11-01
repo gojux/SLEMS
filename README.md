@@ -2433,7 +2433,16 @@ attributes.
   power controlled ones down to their minimum power, then those outside their
   minimum runtime switch off. The limit never lies below what this month's
   peak already costs (the billed power minus 200 W): a lower import saves
-  nothing until the month ends. The tile **Peak power this month** in the
+  nothing until the month ends. **Charge from the grid for peak shaving**
+  (switch, on by default, shown only with a power price): below the threshold
+  the batteries are topped up from the grid before the next expected peak, in
+  the cheapest quarter hours (with a fixed price as late as possible, as home
+  storage ages with time at a high state of charge) and only as far as the
+  forecast import stays below the limit, so the charging costs no power
+  price; a PV surplus before counts. The energy for peaks then only has to
+  last until the end of the next block of peaks (two hours without an
+  expected peak end it) instead of until PV refills the batteries, and the
+  economic mode counts the losses and the wear of charging it back. The tile **Peak power this month** in the
   overview shows the power billed so far, when the highest quarter hour was,
   up to which power a quarter hour costs nothing more, the extra cost of the
   month above the minimum power and the running quarter hour.
