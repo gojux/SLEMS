@@ -582,6 +582,8 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
             # The threshold in effect (automatic with the mode auto_threshold).
             "threshold_pct": None if s.peak_threshold_pct is None else round(s.peak_threshold_pct, 1),
             "threshold_full": s.peak_threshold_full,
+            # Why the economic mode works as the automatic limit (see ForecastPlan).
+            "economic_fallback": s.peak_economic_fallback,
             # For the note on the energy left above the minimum SoC.
             "min_soc_pct": round(c.min_soc_pct, 1),
             "capacity_kwh": round(

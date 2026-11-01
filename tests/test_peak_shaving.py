@@ -10,6 +10,7 @@ from custom_components.slems.peak_shaving import (
     PeakProfile,
     auto_limit,
     auto_threshold,
+    economic_limit,
     hours_until_refill,
 )
 
@@ -109,3 +110,29 @@ def test_auto_threshold_keeps_the_energy_for_the_peaks_above_the_limit() -> None
     assert higher > threshold
     capped, full = auto_threshold(profile, lambda _: hours * 100, 500, 10, 50, 10000, 1.0, 0.0, 20)
     assert capped == 50 and full
+
+
+def economic(spread: float, max_discharge_w: float = 5000, floor_w: float = 0) -> object:
+    """3 € per kW of the limit, 10 days left, one evening hour until the refill."""
+    return economic_limit(
+        profile_with_peak(), lambda _: [(19, 1.0)], lambda limit: 3.0 * limit / 1000, floor_w,
+        10, spread, max_discharge_w, 10, 100, 10000, 1.0, 0.2, 20,
+    )
+
+
+def test_economic_limit_weighs_power_price_against_energy_held_back() -> None:
+    # Cheap energy held back: the lowest limit (the batteries cover the whole hour).
+    cheap = economic(0.2)
+    assert cheap.limit_w == 0
+    assert cheap.threshold_pct > 10
+    # Energy held back very expensive: the highest peak, nothing held back.
+    dear = economic(50.0)
+    assert dear.limit_w == pytest.approx(3000)
+    assert dear.threshold_pct == 10
+    # Not below what the month already costs.
+    assert economic(0.2, floor_w=1200).limit_w == pytest.approx(1200)
+
+
+def test_economic_limit_only_what_the_batteries_can_hold() -> None:
+    # 1000 W discharge power: a 3000 W peak needs a limit of at least 2000 W.
+    assert economic(0.2, max_discharge_w=1000).limit_w == pytest.approx(2000)

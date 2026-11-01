@@ -349,6 +349,9 @@ class SurplusWindow(StrEnum):
 class PeakShavingMode(StrEnum):
     """How peak shaving sets its import limit and state of charge threshold (see peak_shaving)."""
 
+    # With a power price the limit with the lowest expected cost and its
+    # threshold; without one (or none the batteries can hold) as AUTO_LIMIT.
+    ECONOMIC = "economic"
     # The threshold from the set limit: energy for the peaks above it until PV refills.
     AUTO_THRESHOLD = "auto_threshold"
     # The limit from the set threshold: the lowest one the energy below it lasts for.

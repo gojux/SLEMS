@@ -1108,6 +1108,7 @@
       "peak_shaving_mode": {
         "name": "Modus Spitzenabfang",
         "state": {
+          "economic": "Wirtschaftlich (Leistungspreis)",
           "auto_threshold": "Automatische Schwelle (Grenze einstellen)",
           "auto_limit": "Automatische Grenze (Schwelle einstellen)",
           "manual": "Manuell"

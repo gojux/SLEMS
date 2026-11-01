@@ -7,6 +7,17 @@ the usable energy (above the minimum state of charge, minus a safety reserve).
 The automatic threshold is the other way round: for a set limit, the lowest
 threshold that keeps that energy (plus the reserve) above the minimum.
 
+With a power price the economic limit weighs both: a lower limit saves power
+price for the rest of the month (once, if the month's peak would otherwise
+rise), but needs a higher threshold, and the energy held back that is still
+there when PV refills the batteries (the reserve and the losses) takes room
+from the PV surplus, which is then fed in instead of replacing import later:
+per day until the end of the month that energy × (import price − feed-in
+credit). A limit the batteries cannot hold (the highest expected peak above
+it is more than their discharge power, or the threshold would reach the
+highest state of charge) is left out; the highest expected peak itself needs
+no energy, so there is always one.
+
 The hourly consumption forecast averages short peaks (oven, kettle) away, so
 the expected energy above a limit comes from the 5 minute statistics of the
 house consumption of the last days (``PeakProfile``): per local hour of the
@@ -39,6 +50,8 @@ RESOLUTION_W = 50.0
 PROFILE_DAYS = 10
 # Rounds of threshold and refill horizon (see auto_threshold).
 THRESHOLD_ROUNDS = 3
+# Steps of the economic limit (W).
+ECONOMIC_STEP_W = 100.0
 
 
 @dataclass
@@ -185,3 +198,51 @@ def auto_threshold(
         energy = needed_wh(profile, hours_for(threshold), limit_w) / max(1e-6, 1 - reserve) / efficiency
         threshold = min(max_soc_pct, min_soc_pct + energy / capacity_wh * 100)
     return threshold, threshold >= max_soc_pct - 0.5
+
+
+@dataclass(frozen=True)
+class EconomicLimit:
+    limit_w: float
+    threshold_pct: float
+    # Expected costs for the rest of the month (power price, energy held back).
+    cost: float
+
+
+def economic_limit(
+    profile: PeakProfile,
+    hours_for: Callable[[float], list[tuple[int, float]]],
+    power_cost: Callable[[float], float],
+    floor_w: float,
+    days_left: float,
+    spread: float,
+    max_discharge_w: float,
+    min_soc_pct: float,
+    max_soc_pct: float,
+    capacity_wh: float,
+    efficiency: float,
+    reserve: float,
+    start_pct: float,
+) -> EconomicLimit:
+    """The limit from ``floor_w`` up with the lowest expected cost.
+
+    ``power_cost``: power price of the month when the import stays below a
+    limit (W); ``spread``: import price minus feed-in credit (per kWh);
+    ``days_left``: days until the end of the month.
+    """
+    limit = max(0.0, floor_w)
+    hours = hours_for(start_pct)
+    highest = max((profile.powers[hour][-1] for hour, _ in hours if profile.powers.get(hour)), default=0.0)
+    best = EconomicLimit(max(limit, highest), min_soc_pct, power_cost(max(limit, highest)))
+    while limit < highest:
+        if highest - limit <= max_discharge_w:
+            threshold, full = auto_threshold(
+                profile, hours_for, limit, min_soc_pct, max_soc_pct, capacity_wh, efficiency, reserve, start_pct
+            )
+            if not full:
+                held_wh = (threshold - min_soc_pct) / 100 * capacity_wh
+                left_wh = max(0.0, held_wh - needed_wh(profile, hours_for(threshold), limit))
+                cost = power_cost(limit) + days_left * left_wh / 1000 * spread
+                if cost < best.cost - 1e-9:
+                    best = EconomicLimit(limit, threshold, cost)
+        limit += ECONOMIC_STEP_W
+    return best

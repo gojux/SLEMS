@@ -274,7 +274,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Netzdienliches Laden: PV-Einspeisespitzen abfangen | ✅ |
 | Einspeisebegrenzung: PV-Energie über einer Einspeisegrenze speichern, rechtzeitig Platz schaffen | ✅ |
 | Nachtentladung bis zu einer prognosebasierten Reserve | ✅ |
-| Bezugsspitzen abfangen: eine Bezugsgrenze und eine Ladezustand-Schwelle, unter der die Batterien ihre Energie für die Spitzen zurückhalten (eine davon aus der Verbrauchsstatistik berechnet oder beide eingestellt; manuell aktivierbar); mit Leistungspreis im Tarif gilt die Grenze im Mittel über die Viertelstunde, erzwungene Verbraucher treten zurück, und die Übersicht zeigt die Monatsspitze und ihre Mehrkosten | ✅ |
+| Bezugsspitzen abfangen: eine Bezugsgrenze und eine Ladezustand-Schwelle, unter der die Batterien ihre Energie für die Spitzen zurückhalten (mit Leistungspreis das günstigste Paar, eine davon aus der Verbrauchsstatistik berechnet oder beide eingestellt; manuell aktivierbar); mit Leistungspreis im Tarif gilt die Grenze im Mittel über die Viertelstunde, erzwungene Verbraucher treten zurück, und die Übersicht zeigt die Monatsspitze und ihre Mehrkosten | ✅ |
 
 | Dashboard | Status |
 |---|---|
@@ -2544,7 +2544,19 @@ Verwendung** enthält alle gelernten Werte als Attribute.
   Batterieunterstützung läuft. Die Schwelle ist ein absoluter Ladezustand, lässt sich aber nicht unter den minimalen Ladezustand
   der Batterien setzen; unter 20 % zeigen die Einstellungen, wie viel über dem
   Minimum noch übrig ist. **Modus Spitzenabfang** wählt, was SLEMS berechnet.
-  Mit **Automatische Grenze** (Standard) berechnet SLEMS die
+  **Wirtschaftlich** (Standard) braucht einen Leistungspreis im aktuellen
+  Tarif und ist ohne ihn ausgegraut (Spitzenabfang arbeitet dann wie mit
+  automatischer Grenze): SLEMS probiert Grenzen ab dem, was der Monat schon
+  kostet, aufwärts und nimmt die mit den niedrigsten erwarteten Kosten bis
+  Monatsende, zusammen mit ihrer Schwelle (wie bei der automatischen Schwelle
+  unten). Eine niedrigere Grenze spart Leistungspreis, braucht aber mehr
+  zurückgehaltene Energie; was davon noch in den Batterien ist, wenn PV sie
+  wieder füllt (Reserve, Verluste), nimmt dem PV-Überschuss Platz, der dann
+  eingespeist wird, statt später Bezug zu ersetzen, und zählt deshalb je
+  verbleibendem Tag mit Bezugspreis minus Einspeisevergütung. Grenzen, deren
+  höchste erwartete Spitze über der Entladeleistung der Batterien liegt oder
+  deren Schwelle den maximalen Ladezustand erreichen würde, scheiden aus. Mit
+  **Automatische Grenze** berechnet SLEMS die
   Grenze selbst: die niedrigste, bei der die erwartete Energie oberhalb davon
   bis zum Nachladen durch PV (der prognostizierte Überschuss reicht in Summe,
   um die Batterien wieder bis zur Schwelle zu füllen; etwas Überschuss an

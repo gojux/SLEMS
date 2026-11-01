@@ -475,6 +475,10 @@ const STRINGS = {
       "This month at least {limit} applies: the peak of the month is already that high (power price), a lower import saves nothing until the month ends.",
     peakThresholdFullNote:
       "The automatic threshold reached the highest state of charge: the batteries probably cannot hold the limit until PV refills them. A higher limit needs less energy.",
+    peakEconomicUnavailable: "Needs a power price (€ per kW and month) in the current tariff.",
+    peakEconomicFallback: {
+      no_power_price: "Economic needs a power price (€ per kW and month) in the current tariff; until then peak shaving works as with the automatic limit.",
+    },
     peakMinimum: "Minimum power, not exceeded yet",
     peakHighest: "Peak {kw} kW on {time}",
     peakFree: "No extra cost up to {kw} kW",
@@ -615,7 +619,7 @@ const STRINGS = {
       peak_shaving_grid_limit:
         "Below the state of charge threshold, consumption up to this power comes from the grid; the batteries only cover what exceeds it. With a power price in the tariff the limit holds on average over the quarter hour (or hour) as the tariff measures it: a short peak, e.g. while the batteries are at their power limit, is made up for in the rest of the quarter hour, and forced consumers (daily target) give way when the batteries cannot cover the import above it. It never lies below what this month's peak already costs.",
       peak_shaving_mode:
-        "**Automatic limit**: the limit is calculated so that the energy between the minimum state of charge and the set threshold (minus the reserve) lasts until PV refills the batteries.\n**Automatic threshold**: you set the limit (e.g. the power that costs nothing more with a power price), the threshold is calculated so that the energy for the peaks above it (plus the reserve) is kept until PV refills the batteries.\n**Manual**: limit and threshold as set.\nBoth calculations use the consumption peaks of the last days.",
+        "**Economic** (default, needs a power price in the tariff): the limit with the lowest expected cost until the end of the month and its threshold. A lower limit saves power price, but needs more energy held back; what of it is still there when PV refills the batteries takes room from the PV surplus (import price minus feed-in credit per kWh). Limits the batteries cannot hold are left out. Without a power price as with the automatic limit.\n**Automatic limit**: the limit is calculated so that the energy between the minimum state of charge and the set threshold (minus the reserve) lasts until PV refills the batteries.\n**Automatic threshold**: you set the limit (e.g. the power that costs nothing more with a power price), the threshold is calculated so that the energy for the peaks above it (plus the reserve) is kept until PV refills the batteries.\n**Manual**: limit and threshold as set.\nBoth calculations use the consumption peaks of the last days.",
       battery_share_when_secured:
         "Until the charge is secured the batteries get the whole surplus. Secured: the state of charge is at least **Battery priority below state of charge** and the PV surplus expected for the rest of the day covers filling the batteries plus the **Charge secured safety buffer**. From then on the batteries get this share of the surplus, the consumers the rest in the order of their priority; what one side cannot take goes to the other. 100 %: the consumers only get what the batteries cannot take; 0 %: the consumers first. Applies only without grid friendly charging (with it, its feed-in limit decides the split); a daily target short on time and the feed-in cap take precedence.",
       charge_grid_target:
@@ -1192,6 +1196,10 @@ const STRINGS = {
       "Diesen Monat gilt mindestens {limit}: Die Monatsspitze ist schon so hoch (Leistungspreis), weniger Bezug spart bis Monatsende nichts.",
     peakThresholdFullNote:
       "Die automatische Schwelle hat den höchsten Ladezustand erreicht: Die Batterien halten die Grenze voraussichtlich nicht, bis PV sie wieder füllt. Eine höhere Grenze braucht weniger Energie.",
+    peakEconomicUnavailable: "Braucht einen Leistungspreis (€ pro kW und Monat) im aktuellen Tarif.",
+    peakEconomicFallback: {
+      no_power_price: "Wirtschaftlich braucht einen Leistungspreis (€ pro kW und Monat) im aktuellen Tarif; bis dahin arbeitet Spitzenabfang wie mit automatischer Grenze.",
+    },
     peakMinimum: "Mindestleistung, noch nicht überschritten",
     peakHighest: "Spitze {kw} kW am {time}",
     peakFree: "Ohne Mehrkosten bis {kw} kW",
@@ -1332,7 +1340,7 @@ const STRINGS = {
       peak_shaving_grid_limit:
         "Unterhalb der Ladezustand-Schwelle kommt Verbrauch bis zu dieser Leistung aus dem Netz; die Batterien decken nur, was darüber hinausgeht. Mit einem Leistungspreis im Tarif gilt die Grenze im Mittel über die Viertelstunde (oder Stunde), wie der Tarif misst: Eine kurze Spitze, z. B. während die Batterien an ihrer Leistungsgrenze sind, wird im Rest der Viertelstunde ausgeglichen, und erzwungene Verbraucher (Tagesziel) treten zurück, wenn die Batterien den Bezug darüber nicht decken können. Sie liegt nie unter dem, was die Monatsspitze schon kostet.",
       peak_shaving_mode:
-        "**Automatische Grenze**: Die Grenze wird so berechnet, dass die Energie zwischen minimalem Ladezustand und eingestellter Schwelle (abzüglich Reserve) reicht, bis PV die Batterien wieder füllt.\n**Automatische Schwelle**: Du stellst die Grenze ein (z. B. die Leistung, die mit Leistungspreis nichts mehr kostet), die Schwelle wird so berechnet, dass die Energie für die Spitzen darüber (plus Reserve) zurückbleibt, bis PV die Batterien wieder füllt.\n**Manuell**: Grenze und Schwelle wie eingestellt.\nBeide Berechnungen verwenden die Verbrauchsspitzen der letzten Tage.",
+        "**Wirtschaftlich** (Standard, braucht einen Leistungspreis im Tarif): die Grenze mit den niedrigsten erwarteten Kosten bis Monatsende und ihre Schwelle. Eine niedrigere Grenze spart Leistungspreis, braucht aber mehr zurückgehaltene Energie; was davon noch da ist, wenn PV die Batterien wieder füllt, nimmt dem PV-Überschuss Platz (Bezugspreis minus Einspeisevergütung je kWh). Grenzen, die die Batterien nicht halten können, scheiden aus. Ohne Leistungspreis wie mit automatischer Grenze.\n**Automatische Grenze**: Die Grenze wird so berechnet, dass die Energie zwischen minimalem Ladezustand und eingestellter Schwelle (abzüglich Reserve) reicht, bis PV die Batterien wieder füllt.\n**Automatische Schwelle**: Du stellst die Grenze ein (z. B. die Leistung, die mit Leistungspreis nichts mehr kostet), die Schwelle wird so berechnet, dass die Energie für die Spitzen darüber (plus Reserve) zurückbleibt, bis PV die Batterien wieder füllt.\n**Manuell**: Grenze und Schwelle wie eingestellt.\nBeide Berechnungen verwenden die Verbrauchsspitzen der letzten Tage.",
       battery_share_when_secured:
         "Bis die Ladung gesichert ist, bekommen die Batterien den gesamten Überschuss. Gesichert: Der Ladezustand liegt mindestens bei **Batterievorrang unter Ladezustand** und der erwartete PV-Überschuss des restlichen Tages deckt das Füllen der Batterien plus den **Sicherheitspuffer gesicherte Ladung**. Ab dann bekommen die Batterien diesen Anteil des Überschusses, die Verbraucher den Rest nach ihrer Priorität; was eine Seite nicht aufnehmen kann, bekommt die andere. 100 %: Die Verbraucher bekommen nur, was die Batterien nicht aufnehmen können; 0 %: zuerst die Verbraucher. Gilt nur ohne netzdienliches Laden (mit ihm entscheidet seine Einspeisegrenze die Aufteilung); ein knappes Tagesziel und die Einspeisebegrenzung haben Vorrang.",
       charge_grid_target:
@@ -4723,8 +4731,8 @@ class SlemsPanel extends HTMLElement {
           setting("battery_export", "battery_export"))}
       ${option(t.groups.peak, "peak_shaving", "peak_shaving",
         this._simSelect("settings.peak_shaving_mode", "peak_shaving_mode") +
-          setting("peak_shaving_grid_limit_w", "peak_shaving_grid_limit", { disabled: s.peak_shaving_mode === "auto_limit" }) +
-          setting("peak_shaving_soc_threshold_pct", "peak_shaving_soc_threshold", { min: 0, disabled: s.peak_shaving_mode === "auto_threshold" }) +
+          setting("peak_shaving_grid_limit_w", "peak_shaving_grid_limit", { disabled: ["auto_limit", "economic"].includes(s.peak_shaving_mode) }) +
+          setting("peak_shaving_soc_threshold_pct", "peak_shaving_soc_threshold", { min: 0, disabled: ["auto_threshold", "economic"].includes(s.peak_shaving_mode) }) +
           (s.peak_shaving_mode !== "manual" ? setting("peak_shaving_reserve_pct", "peak_shaving_reserve") : ""))}
       ${option(t.groups.feedInCap, "feed_in_cap", "feed_in_cap",
         setting("pv_peak_power_kwp", "pv_peak_power") +
@@ -5228,9 +5236,12 @@ class SlemsPanel extends HTMLElement {
     const effective = this._number(limit);
     const set = this._number(this._state("peak_shaving_grid_limit"));
     const notes = [];
-    if (limit?.attributes?.mode !== "auto_limit" && effective !== null && set !== null && effective > set + 1) {
+    const mode = limit?.attributes?.mode;
+    if (mode !== "auto_limit" && mode !== "economic" && effective !== null && set !== null && effective > set + 1) {
       notes.push(this._t.peakRaisedNote.replace("{limit}", this._watts(effective)));
     }
+    const fallback = limit?.attributes?.economic_fallback;
+    if (mode === "economic" && fallback) notes.push(this._t.peakEconomicFallback[fallback] || "");
     if (limit?.attributes?.threshold_full) notes.push(this._t.peakThresholdFullNote);
     return notes.map((text) => `<p class="setting-note"><ha-icon icon="mdi:information-outline"></ha-icon>${escapeHtml(text)}</p>`).join("");
   }
@@ -5239,7 +5250,8 @@ class SlemsPanel extends HTMLElement {
   _peakThresholdNote() {
     const limit = this._state("peak_shaving_limit");
     // The automatic threshold sets the energy for the peaks itself.
-    if (limit?.attributes?.mode === "auto_threshold") return "";
+    const mode = limit?.attributes?.mode;
+    if (mode === "auto_threshold" || (mode === "economic" && !limit?.attributes?.economic_fallback)) return "";
     const threshold = limit?.attributes?.threshold_pct ?? this._number(this._state("peak_shaving_soc_threshold"));
     const minSoc = limit?.attributes?.min_soc_pct;
     const capacity = limit?.attributes?.capacity_kwh;
@@ -5316,13 +5328,13 @@ class SlemsPanel extends HTMLElement {
       name += `<span class="setting-hint">${hintHtml(hint)}</span>`;
     }
     const peakMode = this._state("peak_shaving_mode")?.state;
-    if (key === "peak_shaving_grid_limit" && peakMode === "auto_limit") {
+    if (key === "peak_shaving_grid_limit" && (peakMode === "auto_limit" || peakMode === "economic")) {
       const effective = this._state("peak_shaving_limit");
       return `<div class="setting"><span>${name}</span><span class="readonly">${escapeHtml(
         effective ? this._format(effective) : "–"
       )} (${this._t.automatic})</span></div>`;
     }
-    if (key === "peak_shaving_soc_threshold" && peakMode === "auto_threshold") {
+    if (key === "peak_shaving_soc_threshold" && (peakMode === "auto_threshold" || peakMode === "economic")) {
       const threshold = this._state("peak_shaving_limit")?.attributes?.threshold_pct;
       return `<div class="setting"><span>${name}</span><span class="readonly">${escapeHtml(
         threshold === null || threshold === undefined ? "–" : this._percent(threshold)
@@ -5340,8 +5352,10 @@ class SlemsPanel extends HTMLElement {
       const label = (option) =>
         this._hass.formatEntityState ? this._hass.formatEntityState(stateObj, option) : option;
       if (disabledNote) name += `<span class="setting-hint">${escapeHtml(disabledNote)}</span>`;
+      // The economic peak shaving needs a power price in the tariff.
+      const unavailable = (o) => key === "peak_shaving_mode" && o === "economic" && this._number(this._state("power_peak")) === null;
       return `<div class="setting${disabledNote ? " disabled" : ""}"><span>${name}</span><select data-entity="${stateObj.entity_id}" data-kind="select" aria-label="${escapeHtml(title)}"${disabledNote ? " disabled" : ""}>
-        ${options.map((o) => `<option value="${escapeHtml(o)}" ${o === stateObj.state ? "selected" : ""}>${escapeHtml(label(o))}</option>`).join("")}
+        ${options.map((o) => `<option value="${escapeHtml(o)}" ${o === stateObj.state ? "selected" : ""}${unavailable(o) ? ` disabled title="${escapeHtml(this._t.peakEconomicUnavailable)}"` : ""}>${escapeHtml(label(o))}</option>`).join("")}
         </select></div>`;
     }
     const a = stateObj.attributes;

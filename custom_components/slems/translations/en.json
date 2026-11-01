@@ -1108,6 +1108,7 @@
       "peak_shaving_mode": {
         "name": "Peak shaving mode",
         "state": {
+          "economic": "Economic (power price)",
           "auto_threshold": "Automatic threshold (set limit)",
           "auto_limit": "Automatic limit (set threshold)",
           "manual": "Manual"

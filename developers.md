@@ -354,9 +354,16 @@ attributes every 10 s) feeds the overview tile.
 Peak shaving mode (select `peak_shaving_mode`, replaces the switch
 `peak_shaving_auto`, whose last state chooses the mode once: on → automatic
 limit, off → manual; read from the restore state in `_remove_old_settings`
-before the entity is removed): `auto_limit` (`peak_shaving.auto_limit`),
-`auto_threshold` (`peak_shaving.auto_threshold`: a few rounds of threshold
-and refill horizon, as the refill depends on the threshold) or `manual`.
+before the entity is removed): `economic` (default; `peak_shaving.economic_limit`:
+limits in 100 W steps from the month's floor to the highest expected peak,
+each with its automatic threshold, cost = power price of the month for the
+limit + days left × energy left at the refill × (mean import price − mean
+feed-in credit of the next 24 h); kept per minute in `_economic_cache`;
+without a power price it works as `auto_limit`, sensor attribute
+`economic_fallback`, the panel greys the option out), `auto_limit`
+(`peak_shaving.auto_limit`), `auto_threshold` (`peak_shaving.auto_threshold`:
+a few rounds of threshold and refill horizon, as the refill depends on the
+threshold) or `manual`.
 
 ### Market prices
 
@@ -2739,3 +2746,4 @@ repository (otherwise its *brands* check fails).
 | 2026-11-01 | Car at the wallbox: optional state of charge sensor, battery capacity and *car plugged in* entity (binary sensor, or a sensor / select with the states that mean plugged in) per wallbox, instead of recognising the car in SLEMS: evcc already knows which car is at a loadpoint, otherwise the car's integration gives its state of charge. Without a car the wallbox is not controllable and adds no forced load or surplus demand (its target is still shown); the unplugged time is counted per period and named when a target is missed. The daily target *state of charge* converts the missing state of charge with the configured capacity and fixed charging losses (`VEHICLE_CHARGE_EFFICIENCY` 0.9) into the energy of an energy target; the capacity is configured, not learned. Once reached, the wallbox stays off until the deadline like a met energy or temperature target. Bidirectional charging is left for later. |
 | 2026-11-01 | Power prices of the grid (Austria from 2027, SNE-G-V BGBl. II Nr. 299/2026: highest quarter hour of the month, at least 2 kW on network level 7, the part above 10 kW at its own price, power rounded commercially to two decimals) as tariff unit `kw_month` with the measurement on the line (`peak`: `interval_min`, `count`, `kw_step`; `min_kw`; tier `kw_from` / `kw_to`), not as a live query: grid operators publish them in ordinances and price sheets, not through an interface. Only monthly prices (yearly ones ÷ 12) and no `period` field, as all known tariffs bill per calendar month. The peak comes from the quarter hours SLEMS records (`grid_quarters`, 400 days), no store of its own. |
 | 2026-11-01 | Peak shaving with a power price works on the energy of the running interval instead of the momentary import: the import allowed for the rest of the interval is its budget left over the time left, so a short peak a battery at its power limit lets through is made up for, and import may rise above the limit while budget is left. Feed-in does not offset import (the smart meter counts both apart), so the allowed import is never below 0. The limit never lies below what the month's peak already costs, in every mode. Forced consumers give way (power controlled ones to their minimum first, then off outside their minimum runtime) when the batteries cannot cover the import above the limit, as the limit then costs money for the whole month while the daily target can catch up. The modes replace the switch: automatic limit, automatic threshold for a set limit, manual; the economic mode follows. |
+| 2026-11-01 | Economic peak shaving (default mode): the limit with the lowest expected cost until the end of the month, power price against the energy held back that is still there at the refill (it takes room from the PV surplus: import price minus feed-in credit per kWh, per remaining day). Limits are tried from the month's floor up, each with its automatic threshold; limits the batteries cannot hold (peak above their discharge power, threshold at the maximum SoC) are left out, the highest expected peak needs no energy, so there is always a result. Without a power price it works as the automatic limit, so the default changes nothing for installations without one. |

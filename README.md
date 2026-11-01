@@ -271,7 +271,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Grid friendly charging: absorb PV feed-in peaks | ✅ |
 | Feed-in cap: store the PV energy above a feed-in limit, make room in time | ✅ |
 | Night discharge to a forecast based reserve | ✅ |
-| Import peak shaving: an import limit and a state of charge threshold below which the batteries keep their energy for the peaks (either calculated from the consumption statistics, or both set; manually enabled); with a power price in the tariff the limit holds on average over the quarter hour, forced consumers give way, and the overview shows the month's peak and its extra cost | ✅ |
+| Import peak shaving: an import limit and a state of charge threshold below which the batteries keep their energy for the peaks (the cheapest pair with a power price, one of them calculated from the consumption statistics, or both set; manually enabled); with a power price in the tariff the limit holds on average over the quarter hour, forced consumers give way, and the overview shows the month's peak and its extra cost | ✅ |
 
 | Dashboard | Status |
 |---|---|
@@ -2386,8 +2386,19 @@ attributes.
   or for consumers without battery support. The threshold is an absolute
   state of charge but cannot be set below the minimum state of charge of the
   batteries; below 20 % the settings show how much is left above the minimum.
-  **Peak shaving mode** chooses what SLEMS calculates. With **Automatic
-  limit** (default) SLEMS calculates the import limit itself: the lowest one for
+  **Peak shaving mode** chooses what SLEMS calculates. **Economic** (default)
+  needs a power price in the current tariff and is greyed out without one
+  (peak shaving then works as with the automatic limit): SLEMS tries limits
+  from what the month already costs upwards and takes the one with the lowest
+  expected cost until the end of the month, together with its threshold (as
+  with the automatic threshold below). A lower limit saves power price but
+  needs more energy held back; what of it is still in the batteries when PV
+  refills them (the reserve, the losses) takes room from the PV surplus, which
+  is then fed in instead of replacing import, so it counts per remaining day
+  with the import price minus the feed-in credit. Limits whose highest
+  expected peak is more than the batteries can discharge, or whose threshold
+  would reach the maximum state of charge, are left out. With **Automatic
+  limit** SLEMS calculates the import limit itself: the lowest one for
   which the expected energy above it, until PV refills the batteries (the
   forecast surplus adds up to the energy back to the threshold, so a little
   surplus on a rainy day does not count), fits into the usable energy above

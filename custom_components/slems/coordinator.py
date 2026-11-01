@@ -264,8 +264,8 @@ from .price_savings import PriceSavings
 from .price_hold import PriceHold, cheapest_start, plan_price_hold
 from .tariff import Role, Side, Tariff, Unit
 from .tariff_comparison import configured_tariffs
-from .peak_shaving import auto_limit, auto_threshold, hours_until_refill
-from .power_peak import PeakState, PowerPrice, peak_state as compute_peak_state, power_price
+from .peak_shaving import EconomicLimit, PeakProfile, auto_limit, auto_threshold, economic_limit, hours_until_refill
+from .power_peak import BUFFER_W as POWER_BUFFER_W, PeakState, PowerPrice, peak_state as compute_peak_state, power_price
 from .pv_forecast import (
     PvForecast,
     async_get_pv_forecast,
@@ -515,7 +515,7 @@ class ControlSettings:
     peak_shaving_grid_limit_w: float = DEFAULT_PEAK_SHAVING_GRID_LIMIT_W
     peak_shaving_soc_threshold_pct: float = DEFAULT_PEAK_SHAVING_SOC_THRESHOLD_PCT
     # What is calculated from the consumption peaks (see peak_shaving).
-    peak_shaving_mode: PeakShavingMode = PeakShavingMode.AUTO_LIMIT
+    peak_shaving_mode: PeakShavingMode = PeakShavingMode.ECONOMIC
     peak_shaving_reserve_pct: float = 20.0
     # Averaging window of the grid power; 0 disables averaging.
     surplus_average_window_s: float = DEFAULT_SURPLUS_AVERAGE_WINDOW_S
@@ -672,6 +672,7 @@ class SystemSnapshot:
     # The automatic threshold reached the highest SoC (see ForecastPlan).
     peak_threshold_full: bool = False
     peak_threshold_pct: float | None = None
+    peak_economic_fallback: str | None = None
     # Replacement for a negative house power (last valid value, None: unknown).
     house_power_hold_w: float | None = None
     pv_forecast: PvForecast | None = None
@@ -810,6 +811,9 @@ class ForecastPlan:
     # The automatic threshold reached the highest state of charge: the set
     # limit can probably not be held until PV refills the batteries.
     peak_threshold_full: bool = False
+    # Why the economic mode works as the automatic limit: "no_power_price";
+    # None otherwise.
+    peak_economic_fallback: str | None = None
     projection: SocProjection | None = None
     # Energy the batteries can spare for consumers on battery support
     # "automatic" (see battery_support); None without such a consumer.
@@ -932,6 +936,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # State of the removed switch "automatic import limit" (see PeakShavingModeSelect).
         self.legacy_peak_shaving_auto: bool | None = None
         self._peak_month: tuple[tuple, PeakState] | None = None
+        self._economic_cache: tuple[tuple, EconomicLimit] | None = None
         # Configuration the setup depends on (see __init__._setup_key).
         self.setup_key: str | None = None
         # Price plans of the last inputs (real and simulated) -> (monotonic expiry, plan).
@@ -1969,6 +1974,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 "peak_shaving_allowed_w",
                 "peak_threshold_full",
                 "peak_threshold_pct",
+                "peak_economic_fallback",
                 "pv_correction",
                 "pv_elapsed_share",
                 "day_plan",
@@ -3134,6 +3140,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         snapshot.peak_shaving_limit_w = peak_limit_w if settings.peak_shaving else None
         snapshot.peak_threshold_pct = peak_threshold_pct if settings.peak_shaving else None
         snapshot.peak_threshold_full = forecast_plan.peak_threshold_full and settings.peak_shaving
+        snapshot.peak_economic_fallback = forecast_plan.peak_economic_fallback
         snapshot.day_plan = forecast_plan.day_plan
         snapshot.day_plan_tomorrow = forecast_plan.day_plan_tomorrow
         snapshot.price_hold = forecast_plan.price_hold
@@ -3713,9 +3720,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         pv_hourly = hourly(pv_forecast) if pv_forecast is not None else None
         consumption_hourly = self._with_target_load(consumption.total) if consumption else None
         own = self._own_pv_batteries(snapshot, wall_now)
-        result.peak_threshold_pct, result.peak_limit_w, result.peak_threshold_full = self._peak_shaving(
-            battery, wall_now, pv_hourly, consumption_hourly, settings, own
-        )
+        (
+            result.peak_threshold_pct,
+            result.peak_limit_w,
+            result.peak_threshold_full,
+            result.peak_economic_fallback,
+        ) = self._peak_shaving(battery, wall_now, pv_hourly, consumption_hourly, settings, own)
         if pv_forecast is None:
             return result
         if battery is not None:
@@ -5014,9 +5024,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         consumption_hourly: dict[datetime, float] | None,
         settings: ControlSettings,
         own: Sequence[OwnPvBattery] = (),
-    ) -> tuple[float, float, bool]:
-        """SoC threshold and import limit of peak shaving in effect, and whether
-        the automatic threshold reached the highest SoC.
+    ) -> tuple[float, float, bool, str | None]:
+        """SoC threshold and import limit of peak shaving in effect, whether
+        the automatic threshold reached the highest SoC and why the economic
+        mode works as the automatic limit (see ForecastPlan).
 
         The threshold never lies below the minimum SoC of the batteries. With
         the automatic limit (see peak_shaving) the usable energy above the
@@ -5024,18 +5035,23 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         calculated from the SoC capped at the threshold: above it peak shaving
         is not active, and the limit shows what applies once it is reached.
         The automatic threshold keeps the energy for the peaks above the set
-        limit until the refill. With a power price the limit is never below
-        what this month's peak already costs (see power_peak).
+        limit until the refill. The economic mode chooses the limit with the
+        lowest expected cost of power price and energy held back (see
+        peak_shaving.economic_limit). With a power price the limit is never
+        below what this month's peak already costs (see power_peak).
         """
         threshold = settings.peak_shaving_soc_threshold_pct
         limit = settings.peak_shaving_grid_limit_w
         peak = self.peak_state()
         floor = peak.limit_w if peak is not None else 0.0
+        mode = settings.peak_shaving_mode
+        fallback = None
+        if mode is PeakShavingMode.ECONOMIC and peak is None:
+            mode, fallback = PeakShavingMode.AUTO_LIMIT, "no_power_price"
         if battery is None:
-            return threshold, max(limit, floor), False
+            return threshold, max(limit, floor), False, fallback
         threshold = max(threshold, battery.min_soc_pct)
         profile = self.forecaster.peak_profile
-        mode = settings.peak_shaving_mode
         full = False
         if (
             mode is not PeakShavingMode.MANUAL
@@ -5057,6 +5073,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 return hours_until_refill(wall_now, pv_hourly, consumption_hourly, refill_wh, charge_limit)
 
             reserve = settings.peak_shaving_reserve_pct / 100
+            if mode is PeakShavingMode.ECONOMIC and peak is not None:
+                economic = self._economic_limit(battery, wall_now, peak, profile, hours_for, floor, reserve, threshold)
+                limit, threshold = economic.limit_w, economic.threshold_pct
             if mode is PeakShavingMode.AUTO_LIMIT:
                 usable_wh = (
                     max(0.0, min(battery.soc_pct, threshold) - battery.min_soc_pct)
@@ -5065,7 +5084,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     * battery.charge_efficiency
                 )
                 limit = auto_limit(profile, hours_for(threshold), usable_wh, reserve)
-            else:
+            elif mode is PeakShavingMode.AUTO_THRESHOLD:
                 threshold, full = auto_threshold(
                     profile,
                     hours_for,
@@ -5077,7 +5096,62 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     reserve,
                     threshold,
                 )
-        return threshold, max(limit, floor), full
+        return threshold, max(limit, floor), full, fallback
+
+    def _economic_limit(
+        self,
+        battery: BatteryGroup,
+        wall_now: datetime,
+        peak: PeakState,
+        profile: PeakProfile,
+        hours_for: Callable[[float], list[tuple[int, float]]],
+        floor_w: float,
+        reserve: float,
+        start_pct: float,
+    ) -> EconomicLimit:
+        """The economic limit (see peak_shaving.economic_limit), kept for a minute."""
+        price = self._current_power_price(dt_util.as_local(wall_now).date())
+        local = dt_util.as_local(wall_now)
+        month_end = dt_util.start_of_local_day((local.replace(day=28) + timedelta(days=4)).replace(day=1))
+        days_left = max(0.0, (month_end - local).total_seconds() / 86400)
+        horizon = wall_now + timedelta(days=1)
+
+        def mean(prices: dict[datetime, float | None] | None) -> float | None:
+            values = [value for value in (prices or {}).values() if value is not None]
+            return sum(values) / len(values) if values else None
+
+        bought = mean(self._import_prices(wall_now, horizon))
+        sold = mean(self._import_prices(wall_now, horizon, Side.EXPORT)) or 0.0
+        # Import price minus feed-in credit (€/kWh); unknown: nothing lost.
+        spread = max(0.0, (bought - sold) / 100) if bought is not None else 0.0
+        key = (
+            int(wall_now.timestamp() // 60), round(battery.soc_pct), round(battery.capacity_wh),
+            round(battery.max_discharge_w), round(floor_w), reserve, round(start_pct, 1), round(spread, 4),
+        )
+        if self._economic_cache is not None and self._economic_cache[0] == key:
+            return self._economic_cache[1]
+
+        def power_cost(limit_w: float) -> float:
+            # The import held below the limit on average, with the buffer below the billed power.
+            return price.cost(max(peak.billed_kw, price.base.billed_kw((limit_w + POWER_BUFFER_W) / 1000)))
+
+        result = economic_limit(
+            profile,
+            hours_for,
+            power_cost,
+            floor_w,
+            days_left,
+            spread,
+            battery.max_discharge_w,
+            battery.min_soc_pct,
+            battery.full_soc_pct,
+            battery.capacity_wh,
+            battery.charge_efficiency,
+            reserve,
+            start_pct,
+        )
+        self._economic_cache = (key, result)
+        return result
 
     def _current_power_price(self, day: date) -> PowerPrice | None:
         """Power price of the current tariff on ``day`` (see power_peak), kept per day."""
