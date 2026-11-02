@@ -167,12 +167,15 @@ class AdaptiveGain:
         direction = 1 if correction_w > 0 else -1
         responses = list(responses)
         if self._direction and direction != self._direction and responses:
-            self._reversals.append(
-                _Reversal(
-                    timestamp,
-                    min(max(earliest, EARLY_SHARE * response) for earliest, response in responses),
-                    max(response for _, response in responses),
-                )
+            reversal = _Reversal(
+                timestamp,
+                min(max(earliest, EARLY_SHARE * response) for earliest, response in responses),
+                max(response for _, response in responses),
+            )
+            self._reversals.append(reversal)
+            _LOGGER.debug(
+                "Corrections reversed by %.0f W, can cause a crossing %.2f-%.2f s later",
+                correction_w, reversal.earliest_s, self._reversal_loop_s(reversal),
             )
         self._direction = direction
 
@@ -190,6 +193,8 @@ class AdaptiveGain:
             self._reversals.popleft()
         if target_w is None:
             self._side = 0
+            if self._crossings:
+                _LOGGER.debug("Batteries stand still, %d crossings reset", len(self._crossings))
             self._crossings.clear()
             return
         if timestamp < self._cooldown_until:
@@ -202,22 +207,31 @@ class AdaptiveGain:
             peak, self._peak_w = self._peak_w, abs(deviation)
         else:
             self._peak_w = max(self._peak_w, abs(deviation))
-        if previous is not None and self._crossings:
+        step = grid_w - previous if previous is not None else 0.0
+        largest = 0.0
+        if self._crossings or crossed:
             span = loop if loop is not None else KEEP_S
             largest = max((abs(size) for at, size in self._corrections if timestamp - at <= span), default=0.0)
-            if abs(grid_w - previous) > max(BAND_W, JUMP_RATIO * largest):
-                # A load from outside: the series of crossings caused by the control ends.
-                _LOGGER.debug(
-                    "Grid jump of %.0f W from outside (largest correction %.0f W), crossings reset",
-                    grid_w - previous, largest,
-                )
-                self._crossings.clear()
-                return
+        if previous is not None and self._crossings and abs(step) > max(BAND_W, JUMP_RATIO * largest):
+            # A load from outside: the series of crossings caused by the control ends.
+            _LOGGER.debug(
+                "Grid jump of %.0f W from outside (largest correction %.0f W), crossings reset",
+                step, largest,
+            )
+            self._crossings.clear()
+            return
         if not crossed:
             return
         reversal = self._cause(timestamp)
         if reversal is None:
             # From outside: the series of crossings caused by the control ends.
+            _LOGGER.debug(
+                "Grid crossing at %.0f W from outside (target %.0f W, last reversal %s s before, half swing before "
+                "%.0f W, step %.0f W, largest correction %.0f W), %d crossings reset",
+                grid_w, target_w,
+                f"{timestamp - self._reversals[-1].timestamp:.2f}" if self._reversals else "-",
+                peak, step, largest, len(self._crossings),
+            )
             self._crossings.clear()
             return
         # Each reversal explains one crossing.
@@ -228,9 +242,9 @@ class AdaptiveGain:
         peaks = [crossing[2] for crossing in recent[-OSCILLATION_CROSSINGS:]]
         decaying = any(later < NOT_DECAYING_RATIO * earlier for earlier, later in zip(peaks, peaks[1:]))
         _LOGGER.debug(
-            "Grid crossing at %.0f W caused by the control (%.2f s after a reversal, half swing before %.0f W), "
-            "%d in %.1f s",
-            grid_w, timestamp - reversal.timestamp, peak, len(recent), WINDOW_LOOPS * loop,
+            "Grid crossing at %.0f W caused by the control (target %.0f W, %.2f s after a reversal, half swing before "
+            "%.0f W, step %.0f W, largest correction %.0f W), %d in %.1f s",
+            grid_w, target_w, timestamp - reversal.timestamp, peak, step, largest, len(recent), WINDOW_LOOPS * loop,
         )
         if len(recent) >= OSCILLATION_CROSSINGS and not decaying:
             self._clear()
@@ -239,6 +253,8 @@ class AdaptiveGain:
             self._change(
                 min(self.gain, max(MIN_GAIN, self.gain * DECREASE_FACTOR)), GainAdjustment.DECREASED, timestamp
             )
+        elif len(recent) >= OSCILLATION_CROSSINGS:
+            _LOGGER.debug("Crossings die out (half swings %s W), no oscillation", [round(value) for value in peaks])
 
     def _reversal_loop_s(self, reversal: _Reversal) -> float:
         cycle = self.cycle_interval_s or 0.0

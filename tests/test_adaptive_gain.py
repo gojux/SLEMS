@@ -226,3 +226,36 @@ def test_reset_ends_the_cooldown() -> None:
     adapter.reset(0.5)
     swing(adapter, start=t)
     assert adapter.gain == pytest.approx(0.4)
+
+
+def test_debug_log_explains_the_crossings(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level("DEBUG", logger="custom_components.slems.adaptive_gain")
+    adapter = AdaptiveGain(0.5)
+    t = 0.0
+    adapter.observe(t, -300, 0.5, RESPONSES)
+    grid = TARGET_W - 1000
+    adapter.sample(t, grid, TARGET_W)
+    for sign, amplitude in ((1, 400), (-1, 200), (1, 150)):
+        adapter.observe(t, sign * 300, 0.5, RESPONSES)
+        start, end = grid, TARGET_W + sign * amplitude
+        for i in range(1, 6):
+            grid = start + (end - start) * i / 5
+            adapter.sample(t + 0.6 + 0.2 * i, grid, TARGET_W)
+        t += 2.0
+    assert adapter.gain == 0.5
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(message.startswith("Corrections reversed by 300 W, can cause a crossing 0.70-") for message in messages)
+    assert any("caused by the control (target -100 W, " in message for message in messages)
+    assert "Crossings die out (half swings [1000, 400, 200] W), no oscillation" in messages
+
+
+def test_debug_log_explains_crossings_from_outside(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level("DEBUG", logger="custom_components.slems.adaptive_gain")
+    adapter = AdaptiveGain(0.5)
+    adapter.observe(0.0, 300, 0.5, RESPONSES)
+    adapter.sample(0.5, -400, TARGET_W)
+    adapter.sample(1.0, 200, TARGET_W)
+    assert (
+        "Grid crossing at 200 W from outside (target -100 W, last reversal - s before, half swing before 300 W, "
+        "step 600 W, largest correction 300 W), 0 crossings reset"
+    ) in [record.getMessage() for record in caplog.records]

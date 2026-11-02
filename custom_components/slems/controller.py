@@ -629,7 +629,7 @@ class RealTimeController:
         new_total = await self._async_apply_batteries(snapshot, latest_total)
         if _LOGGER.isEnabledFor(logging.DEBUG):
             _LOGGER.debug(
-                "Cycle: grid %s W (filtered %s W), seen %s, commanded %.0f -> %.0f W, gain %.2f",
+                "Cycle: grid %s W (filtered %s W), seen %s, commanded %.0f -> %.0f W, gain %.2f, grid target %s W",
                 "-" if snapshot.grid_power_w is None else f"{snapshot.grid_power_w:.0f}",
                 "-" if snapshot.grid_power_filtered_w is None else f"{snapshot.grid_power_filtered_w:.0f}",
                 ", ".join(f"{self._battery_name(battery_id)} {power:.0f} W" for battery_id, power in seen.items())
@@ -637,6 +637,7 @@ class RealTimeController:
                 latest_total,
                 latest_total if new_total is None else new_total,
                 self.gain,
+                "-" if (target_w := self._grid_target_w()) is None else f"{target_w:.0f}",
             )
         if coordinator.settings.auto_gain and not coordinator.measurement_holds:
             self.gain_adapter.observe(
