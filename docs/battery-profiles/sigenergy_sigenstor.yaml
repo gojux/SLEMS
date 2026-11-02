@@ -1,0 +1,110 @@
+# CANDIDATE, not shipped: Sigenergy plant with a battery (SigenStor, Sigen
+# Hybrid), written for one inverter with 10 kW, Modbus TCP. Paste it as an own
+# profile.
+#
+# Before: enable Modbus TCP on the plant. Set max_charge_w and max_discharge_w
+# to your plant (the read-outs 30068 and 30070 in W), the two values under
+# release to the same powers, and own_pv max_output_w to its AC rated power.
+# Other services that control the plant (a VPP, a cloud service) must stay
+# off: they can turn Remote EMS off (PB).
+#
+# The profile sets the power through the limits 40032/40034 with the modes
+# "command charging (PV first)" and "command discharging (PV first)", as PB
+# does. To hold the battery it uses maximum self-consumption with both limits
+# at 0 W, also as PB does, not Standby: SP does not say what the PV does there.
+#
+# What a tester should check first, with an eye on the battery and ready to
+# take over in the app (and report in an issue, with the firmware):
+# 1. Stop Home Assistant while SLEMS discharges with about 1 kW. SP describes
+#    no time-out or fall-back for Remote EMS: does the plant go on discharging
+#    until the cut-off? Do the mode and the limits stay? This decides whether
+#    the profile can be shipped at all.
+# 2. Restart the inverter while SLEMS controls it: do 40029, 40031, 40032 and
+#    40034 keep their values? If they do, they may be stored in flash, and
+#    SLEMS writes the limits with every change of the power: stop and report.
+# 3. After a release (switch SLEMS off for the battery): are the limits back
+#    at the rated powers, and which work mode applies (30003)? A report says
+#    it is always maximum self-consumption, not the mode before (EN).
+# 4. Does the battery follow the limits in both directions? A user saw command
+#    discharging go to full power and ignore the limit (HC), although SP says
+#    the limits apply in every mode. Is the battery power in mode 5 lower than
+#    the limit while the PV produces? Then try 6 (ESS first) for discharge.
+# 5. Holding: at 0 W, does the battery stay at 0 W, does the PV keep feeding
+#    the house and the grid, and does the grid cover the rest of the house?
+# 6. The AC power 30031: SP gives no sign. With the plant feeding the house,
+#    is it shown as output? Does it contain a DC charger (EVDC) or a backup
+#    output? Does the PV 30035 pass through while the battery charges?
+# 7. Are the limits refused above the rated power, and what do 40032/40034
+#    read before SLEMS wrote them (write preview, range at rest)?
+# 8. Timing: with 1 s between requests a change of the power takes about 2 s
+#    and reading the values some seconds more. Is the control stable? Does the
+#    plant work with a shorter message_spacing_s?
+#
+# Sources (retrieved 2026-11-02):
+# [SP] Sigenergy "Modbus Protocol" V2.9 (2026-05-13), copy in
+#      TypQxQ/Sigenergy-Local-Modbus @16d710d Modbus_reference_documentation
+# [SL] TypQxQ/Sigenergy-Local-Modbus @16d710d
+#      custom_components/sigen/modbusregisterdefinitions.py, number.py
+# [PB] springfall2008/batpred @039e7c5 docs/inverter-setup.md "SigEnergy
+#      Sigenstor" (entities of SL, no registers)
+# [HC] community.home-assistant.io/t/sig-energy-system-integration/760448
+# [EN] integrations.eniris.be/de/Devices/PV-hybrid-and-battery-inverters/Sigenergy
+# Addresses: as SP lists them; SL sends the same. Plant registers answer only
+# at the unit 247 (SP 5.1, 5.2). 30xxx are input registers. Gains: 1000 per kW
+# is 1 W, so no scale for powers.
+#
+# question: must Remote EMS also be switched on in the app, or is 40029 enough
+#   (EN says the app, PB the switch on 40029)?
+# question: charging from the grid: mode 4 fills what the PV lacks from the
+#   grid, up to the grid import limitation (PB, not in this profile)?
+# question: the cut-offs 40047/40048 of the app still apply (PB relies on
+#   them); keep them outside the limits set in SLEMS.
+# question: U64 has no type in the format; charged and discharged read the low
+#   32 bits, assuming the high word first (SP does not say).
+slems_battery_profile: 1
+id: sigenergy_sigenstor
+name: Sigenergy plant with a battery
+manufacturer: Sigenergy
+revision: 1
+notes: Candidate; Remote EMS with the ESS limits, no fall-back documented.
+
+connection:
+  port: 502        # EN
+  unit_id: 247     # SP 5.1 "plant address"
+  message_spacing_s: 1.0  # SP 4.2 "Minimum Request period: 1000 ms"
+  timeout_s: 5     # uncertain: SP regards 1 s as a time-out, SL waits up to 20 s
+
+limits:
+  max_charge_w: 10000     # your plant: 30068
+  max_discharge_w: 10000  # your plant: 30070
+
+# Hybrid inverter: the PV modules are connected to it, so its PV is own PV.
+own_pv: {max_output_w: 10000, passes_pv_through: true}  # your plant: AC rated power (30010)
+
+read:
+  soc_pct:         {address: 30014, type: uint16, input: true, scale: 0.1}  # SP 5.1 no. 10
+  pv_power_w:      {address: 30035, type: int32, input: true}  # SP 5.1 no. 23
+  ac_power_w:      {address: 30031, type: int32, input: true, positive: output}  # uncertain: SP 5.1 no. 21 gives no sign
+  battery_power_w: {address: 30037, type: int32, input: true, positive: charge}  # SP 5.1 no. 24 ">0: charging"
+  charged_kwh:     {address: 30202, type: uint32, input: true, scale: 0.01}  # SP 5.1 no. 101 (30200, U64), low 32 bits
+  discharged_kwh:  {address: 30206, type: uint32, input: true, scale: 0.01}  # SP 5.1 no. 102 (30204, U64), low 32 bits
+
+control:
+  type: split
+  setpoint: battery
+  keepalive_s: 60  # no time-out to feed; the read back finds a Remote EMS others turned off (PB)
+  apply:
+    - {address: 40029, type: uint16, value: 1, at_rest_values: [0, 1], persistent: true, confirm: true}  # SP 5.2 "Remote EMS enable"; uncertain: stored?
+    - {address: 40032, type: uint32, value: "{charge_w}", at_rest: [0, 100000]}  # SP 5.2.1; uncertain: range at rest, SL allows up to 100 kW
+    - {address: 40034, type: uint32, value: "{discharge_w}", at_rest: [0, 100000]}  # SP 5.2.1
+    - {address: 40031, type: uint16, value: "{mode}", modes: {idle: 2, charge: 4, discharge: 5}, at_rest: [0, 8], confirm: true}  # SP appendix 6
+  release:
+    # The limits apply in every EMS mode (SP 5.2.1): they must return to the
+    # rated powers, or the battery stays at 0 W under its own logic.
+    auto:
+      - {address: 40031, value: 2, confirm: true}
+      - {address: 40032, value: 10000, confirm: true}  # your plant: max_charge_w
+      - {address: 40034, value: 10000, confirm: true}  # your plant: max_discharge_w
+      - {address: 40029, value: 0, confirm: true}
+
+probe: {address: 30014, type: uint16, input: true, range: [0, 1000]}
