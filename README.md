@@ -196,7 +196,11 @@ controls precisely:
   consumers (see **Learned values**). Every learned value can be switched back
   to a fixed one.
 - **Transparent and local.** A dashboard with energy flow, forecast chart and
-  all settings; everything runs locally in Home Assistant without a cloud. The
+  all settings. Control, forecasts and learning run locally in Home Assistant,
+  without a cloud account. SLEMS goes to the internet only for market prices
+  and monthly market values (only with your consent), for Swiss tariffs from
+  the open data of ElCom and once to suggest the region for public holidays
+  (Nominatim, see [Consumption forecast](#consumption-forecast)). The
   operating mode **Observe only** shows what SLEMS would do before it
   controls anything, also next to an existing battery integration.
 - **Try before you change.** The simulation in the dashboard calculates the
@@ -207,12 +211,14 @@ controls precisely:
   alone (heating rod, wallbox, dehumidifier, …), with daily targets, tariffs
   and forecasts (see [without batteries](#without-batteries)).
 
-**When another solution fits better (today):** many different battery brands
-(SLEMS talks directly only to the Marstek Venus E 3.0; other batteries are
-controlled through the entities of their integration, which is coarser) or
-electric vehicle charging. Omnibattery covers many battery models, evcc
-specialises in EV charging; evcc complements SLEMS well (see the
-[evcc guide](docs/wallbox-evcc.md)).
+**Other batteries and electric cars:** batteries that SLEMS does not yet
+support directly or through a
+[Modbus profile](#battery-from-a-modbus-profile-experimental) can still be
+controlled if there is an integration for them in Home Assistant: SLEMS then
+controls them through its entities (experimental). SLEMS controls a wallbox
+with the surplus, with **Charge now** and with a daily target by the car's
+state of charge. evcc specialises in EV charging and complements SLEMS well
+(see the [evcc guide](docs/wallbox-evcc.md)).
 
 ## Features
 
@@ -235,7 +241,7 @@ specialises in EV charging; evcc complements SLEMS well (see the
 | Batteries | Status |
 |---|---|
 | Marstek Venus E 3.0 via Modbus TCP | ✅ |
-| Battery from existing entities: read-only (e.g. while Omnibattery is in control) or controlled by set point, charge/discharge power or script, entities suggested from the device | ✅ (control experimental) |
+| Battery from existing entities: read-only or controlled by set point, charge/discharge power or script, entities suggested from the device | ✅ (control experimental) |
 | Battery from a Modbus profile: an own profile made from the manual with an AI prompt, values read and write preview before anything is written, a trial with the self-test before it is controlled, observed after a firmware update; shipped (unverified): Marstek Venus E Gen 2 | ✅ (experimental) |
 | Battery efficiency (battery counters, learned or manual), learned usable capacity | ✅ |
 | Wear costs per battery (from purchase price and cycles) in the planning | ✅ |
@@ -2656,13 +2662,23 @@ wallbox on the [evcc guide](docs/wallbox-evcc.md).
   evening), the minimum is reached again within a set time instead of only
   by the next day's deadline.
 
+**Dashboard**
+
+- A clearer **Settings** tab: grouped by their role in the control (grid
+  connection, charging from PV, reserves, discharging, prices, batteries), the
+  expert settings collapsed, sub-settings hidden while their feature is off,
+  and only the settings that have an effect in your installation (e.g. no
+  battery settings without batteries). Also fewer settings where SLEMS can
+  learn the value itself.
+
 **Batteries and installations**
 
 - Battery groups with a shared fuse: several batteries on one circuit (e.g.
   two Venus behind one circuit breaker) get a highest power together, which
   the active batteries of the group share, instead of a fixed half for each.
 - Batteries with their own PV: the first real devices (Marstek B2500,
-  Zendure SolarFlow) and hybrid inverters through their integrations, a
+  Zendure SolarFlow) and hybrid inverters through their integrations or
+  through Modbus profiles (candidates to test are available), a
   shared highest output for several units at one inverter, and the check
   for PV counted twice also in the system settings.
 - Further kinds of installations: batteries with their own meter or a backup

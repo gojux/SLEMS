@@ -198,8 +198,12 @@ SLEMS plant voraus und regelt genau:
   Verbrauchern (siehe **Gelernte Werte**). Jeder gelernte Wert lässt sich wieder
   auf einen festen umstellen.
 - **Transparent und lokal.** Ein Dashboard mit Energiefluss, Prognose-Diagramm
-  und allen Einstellungen; alles läuft lokal in Home Assistant, ohne Cloud. Im
-  Betriebsmodus **Nur beobachten** siehst du, was SLEMS tun würde, bevor es
+  und allen Einstellungen. Regelung, Prognosen und Lernen laufen lokal in Home
+  Assistant, ohne Cloud-Konto. Ins Internet geht SLEMS nur für Börsenpreise
+  und Monatsmarktwerte (nur mit deiner Zustimmung), für Schweizer Tarife aus
+  den offenen Daten der ElCom und einmal für den Vorschlag der
+  Feiertagsregion (Nominatim, siehe
+  [Verbrauchsprognose](#verbrauchsprognose)). Im Betriebsmodus **Nur beobachten** siehst du, was SLEMS tun würde, bevor es
   etwas steuert, auch neben einer bestehenden Batterie-Integration.
 - **Erst ausprobieren, dann ändern.** Die Simulation im Dashboard berechnet
   den Tagesplan mit anderen Einstellungen (netzdienliches Laden,
@@ -210,11 +214,13 @@ SLEMS plant voraus und regelt genau:
   Verbraucher lenken (Heizstab, Wallbox, Luftentfeuchter, …), mit Tageszielen,
   Tarifen und Prognosen (siehe [Ohne Batterien](#ohne-batterien)).
 
-**Wann (heute) eine andere Lösung besser passt:** viele verschiedene
-Batteriemarken (SLEMS spricht nur die Marstek Venus E 3.0 direkt an; andere
-Batterien steuert es über die Entitäten ihrer Integration, das ist gröber) oder
-das Laden von Elektroautos. Omnibattery deckt viele Batteriemodelle ab, evcc
-ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
+**Andere Batterien und Elektroautos:** Batterien, die SLEMS noch nicht direkt
+oder über ein [Modbus-Profil](#batterie-aus-einem-modbus-profil-experimentell)
+unterstützt, lassen sich trotzdem steuern, wenn es für sie eine Integration in
+Home Assistant gibt: SLEMS steuert sie dann über deren Entitäten
+(experimentell). Eine Wallbox regelt SLEMS mit dem Überschuss, mit **Sofort
+laden** und mit einem Tagesziel nach dem Ladezustand des Autos. evcc ist auf
+das Laden von E-Autos spezialisiert und ergänzt SLEMS gut (siehe
 [evcc-Anleitung](docs/wallbox-evcc.de.md)).
 
 ## Funktionen
@@ -238,7 +244,7 @@ ist auf das Laden von E-Autos spezialisiert; evcc ergänzt SLEMS gut (siehe
 | Batterien | Status |
 |---|---|
 | Marstek Venus E 3.0 über Modbus TCP | ✅ |
-| Batterie aus vorhandenen Entitäten: nur lesend (z. B. solange Omnibattery steuert) oder gesteuert über Sollwert, Lade-/Entladeleistung oder Skript, Entitäten aus dem Gerät vorgeschlagen | ✅ (Steuerung experimentell) |
+| Batterie aus vorhandenen Entitäten: nur lesend oder gesteuert über Sollwert, Lade-/Entladeleistung oder Skript, Entitäten aus dem Gerät vorgeschlagen | ✅ (Steuerung experimentell) |
 | Batterie aus einem Modbus-Profil: ein eigenes Profil mit einem KI-Prompt aus dem Handbuch erstellt, gelesene Werte und Schreibvorschau, bevor etwas geschrieben wird, Probebetrieb mit dem Selbsttest, bevor sie geregelt wird, beobachtet nach einem Firmware-Update; mitgeliefert (ungeprüft): Marstek Venus E Gen 2 | ✅ (experimentell) |
 | Wirkungsgrad der Batterie (Batteriezähler, gelernt oder manuell), gelernte nutzbare Kapazität | ✅ |
 | Verschleißkosten je Batterie (aus Kaufpreis und Zyklen) in der Planung | ✅ |
@@ -2827,6 +2833,16 @@ Nutzern mit einer echten Wallbox zur [evcc-Anleitung](docs/wallbox-evcc.de.md).
   Abend), wird das Minimum innerhalb einer eingestellten Zeit wieder erreicht
   statt erst zur Frist am nächsten Tag.
 
+**Dashboard**
+
+- Ein übersichtlicherer Reiter **Einstellungen**: nach ihrer Rolle in der
+  Regelung gruppiert (Netzanschluss, Laden aus PV, Reserven, Entladen, Preise,
+  Batterien), die Experten-Einstellungen eingeklappt, Unterpunkte
+  ausgeblendet, solange ihre Funktion aus ist, und nur die Einstellungen, die
+  in der eigenen Anlage etwas bewirken (z. B. keine Batterie-Einstellungen
+  ohne Batterien). Dazu weniger Einstellungen, wo SLEMS den Wert selbst
+  lernen kann.
+
 **Batterien und Anlagen**
 
 - Batteriegruppen mit gemeinsamer Absicherung: mehrere Batterien an einem
@@ -2834,7 +2850,8 @@ Nutzern mit einer echten Wallbox zur [evcc-Anleitung](docs/wallbox-evcc.de.md).
   eine gemeinsame Höchstleistung, die sich die aktiven Batterien der Gruppe
   teilen, statt fest der Hälfte für jede.
 - Batterien mit eigener PV: die ersten echten Geräte (Marstek B2500, Zendure
-  SolarFlow) und Hybrid-Wechselrichter über ihre Integrationen, ein
+  SolarFlow) und Hybrid-Wechselrichter über ihre Integrationen oder über
+  Modbus-Profile (Kandidaten zum Testen vorhanden), ein
   gemeinsamer höchster Ausgang für mehrere Einheiten an einem Wechselrichter
   und die Prüfung auf doppelt gezählte PV auch in den Systemeinstellungen.
 - Weitere Anlagenarten: Batterien mit eigenem Zähler oder einem
