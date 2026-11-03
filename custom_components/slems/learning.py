@@ -699,8 +699,10 @@ MORNING_MIN_DAYS = 14
 MORNING_KEEP_DAYS = 60
 # PV covers the consumption for this long: it has taken over.
 TAKEOVER_S = 15 * 60
-# The morning is over at this local hour at the latest.
+# The morning is over at this local hour at the latest; with a takeover planned
+# from then on (short winter days) only at the late hour.
 MORNING_END_HOUR = 12
+MORNING_LATE_END_HOUR = 18
 # Samples further apart are not integrated (missed polls, restart).
 MORNING_MAX_GAP_S = 120.0
 
@@ -733,8 +735,15 @@ class MorningGapLearner:
             return
         key = planned.date().isoformat()
         if key in self.days:
+            # Released, or a later takeover of a measured day would block the next plans.
+            self.planned = None
             return
-        end = planned.replace(hour=MORNING_END_HOUR, minute=0, second=0, microsecond=0)
+        end_hour = MORNING_END_HOUR if planned.hour < MORNING_END_HOUR else MORNING_LATE_END_HOUR
+        end = planned.replace(hour=end_hour, minute=0, second=0, microsecond=0)
+        if planned >= end:
+            # Hardly any PV that day: nothing to measure.
+            self.planned = None
+            return
         deficit = max(0.0, consumption_w - pv_w)
         if self._last is not None and now - self._last <= MORNING_MAX_GAP_S and deficit > 0:
             self._gap_wh += deficit * (now - self._last) / 3600

@@ -155,7 +155,7 @@ const STRINGS = {
     learnedBasis: {
       pv: "PV forecast {have} of {need} days",
       consumption: "consumption forecast {have} of {need} days",
-      morning: "{have} of {need} mornings measured",
+      morning: "{have} of {need} days measured",
       grid_target_charge: "{have} of {need} samples while charging",
       grid_target_discharge: "{have} of {need} samples while discharging",
     },
@@ -600,7 +600,7 @@ const STRINGS = {
       price_min_gain:
         "Keep the energy only in hours that are cheaper by at least this much than the hours it is kept for (forecasts are uncertain).",
       night_reserve_auto:
-        "Learns the reserve from the mornings: every day SLEMS measures how much energy the house needed from battery or grid between the moment PV should have taken over (end of the night discharge as planned) and the moment it really did (PV covering the consumption for 15 minutes), in % of the day's forecast consumption. Needs 14 measured mornings; the measurement also runs while the night discharge is off.",
+        "Learns the reserve needed in the morning: every day SLEMS measures how much energy the house needed from battery or grid between the moment PV should have taken over (end of the night discharge as planned) and the moment it really did (PV covering the consumption for 15 minutes), in % of the day's forecast consumption. Needs 14 measured days; the measurement also runs while the night discharge is off.",
       night_reserve_coverage:
         "Share of the mornings the learned reserve covers: 90 % = enough on 9 of 10 mornings. Above 100 % the largest measured gap times this value, e.g. 110 % = 10 % more than the worst morning so far. Lower values feed in more at night.",
       grid_friendly_buffer_auto:
@@ -914,7 +914,7 @@ const STRINGS = {
     learnedBasis: {
       pv: "PV-Prognose {have} von {need} Tagen",
       consumption: "Verbrauchsprognose {have} von {need} Tagen",
-      morning: "{have} von {need} Morgen gemessen",
+      morning: "{have} von {need} Tagen gemessen",
       grid_target_charge: "{have} von {need} Messwerten beim Laden",
       grid_target_discharge: "{have} von {need} Messwerten beim Entladen",
     },
@@ -1359,7 +1359,7 @@ const STRINGS = {
       price_min_gain:
         "Energie nur in Stunden zurückhalten, die mindestens um so viel günstiger sind als die Stunden, für die sie gehalten wird (Prognosen sind unsicher).",
       night_reserve_auto:
-        "Lernt die Reserve aus den Morgen: Jeden Tag misst SLEMS, wie viel Energie das Haus zwischen dem Zeitpunkt, an dem die PV hätte übernehmen sollen (Ende der Nachtentladung laut Plan), und dem, an dem sie es wirklich tat (PV deckt den Verbrauch 15 Minuten lang), aus Batterie oder Netz brauchte, in % des prognostizierten Tagesverbrauchs. Braucht 14 gemessene Morgen; gemessen wird auch, wenn die Nachtentladung aus ist.",
+        "Lernt die benötigte Reserve am Morgen: Jeden Tag misst SLEMS, wie viel Energie das Haus zwischen dem Zeitpunkt, an dem die PV hätte übernehmen sollen (Ende der Nachtentladung laut Plan), und dem, an dem sie es wirklich tat (PV deckt den Verbrauch 15 Minuten lang), aus Batterie oder Netz brauchte, in % des prognostizierten Tagesverbrauchs. Braucht 14 gemessene Tage; gemessen wird auch, wenn die Nachtentladung aus ist.",
       night_reserve_coverage:
         "Anteil der Morgen, für den die gelernte Reserve reicht: 90 % = an 9 von 10 Morgen. Über 100 % die größte gemessene Lücke mal diesem Wert, z. B. 110 % = 10 % mehr als der bisher schlechteste Morgen. Kleinere Werte speisen nachts mehr ein.",
       grid_friendly_buffer_auto:

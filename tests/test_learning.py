@@ -205,6 +205,63 @@ def test_morning_gap_zero_when_pv_is_early() -> None:
     assert learner.days == {"2026-09-28": 0.0}
 
 
+def test_morning_gap_later_takeover_of_a_measured_day_does_not_block() -> None:
+    from datetime import datetime, timedelta
+
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.slems.learning import MorningGapLearner
+
+    dt_util.set_default_time_zone(dt_util.get_time_zone("Europe/Vienna"))
+    day = datetime(2026, 10, 2, tzinfo=dt_util.get_default_time_zone())
+    # Stored like this by a production system: measured, planned again for that day.
+    learner = MorningGapLearner(days={"2026-10-02": 3.44}, planned=day + timedelta(hours=10), forecast_wh=20000)
+    learner.update(0.0, day + timedelta(hours=10), 2000, 500)
+    assert learner.planned is None
+    next_day = day + timedelta(days=1)
+    learner.plan(next_day + timedelta(hours=8), 20000)
+    for minute in range(0, 20):
+        learner.update(minute * 60.0, next_day + timedelta(hours=8, minutes=minute), 3000, 500)
+    assert learner.days == {"2026-10-02": 3.44, "2026-10-03": 0.0}
+
+
+def test_morning_gap_takeover_after_noon_is_measured() -> None:
+    from datetime import datetime, timedelta
+
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.slems.learning import MorningGapLearner
+
+    dt_util.set_default_time_zone(dt_util.get_time_zone("Europe/Vienna"))
+    day = datetime(2026, 12, 2, tzinfo=dt_util.get_default_time_zone())
+    start = day + timedelta(hours=13)
+    learner = MorningGapLearner()
+    learner.plan(start, 10000)
+    # One hour 1 kW short, then PV covers the consumption.
+    for minute in range(0, 60):
+        learner.update(minute * 60.0, start + timedelta(minutes=minute), 0, 1000)
+    assert learner.days == {}
+    for minute in range(60, 80):
+        learner.update(minute * 60.0, start + timedelta(minutes=minute), 2000, 1000)
+    assert learner.days["2026-12-02"] == pytest.approx(10.0, abs=0.2)
+
+    # PV never takes over: the day ends in the evening.
+    next_day = day + timedelta(days=1)
+    start = next_day + timedelta(hours=13)
+    learner.plan(start, 10000)
+    for minute in range(0, 301):
+        learner.update(minute * 60.0, start + timedelta(minutes=minute), 0, 1000)
+    assert learner.planned is None
+    assert learner.days["2026-12-03"] == pytest.approx(50.0, abs=0.2)
+
+    # Planned after the evening: no measurement.
+    later = next_day + timedelta(days=1)
+    learner.plan(later + timedelta(hours=18), 10000)
+    learner.update(0.0, later + timedelta(hours=18), 0, 1000)
+    assert learner.planned is None
+    assert "2026-12-04" not in learner.days
+
+
 def _heat(learner, t, temp, *, minutes, cutoff, wh_per_k=150.0, power=3400.0, full_command=True):
     """Heating run; from ``cutoff`` on the thermostat cycles 60 s off, 60 s on."""
     cycling_since = None
