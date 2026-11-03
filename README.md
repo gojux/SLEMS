@@ -359,16 +359,15 @@ The sensor **Phase** of the device shows the result (**L1**, **L2**, **L3** or
 **Three phases**), its attribute *shares* the measured share per phase. For a
 wallbox whose active phases come from an entity, only the one phase it uses
 while charging on one phase is learned. The phase appears in **Details** of the
-battery and on the consumer card. It is shown and checked only; the control
+battery or consumer. It is shown and checked only; the control
 does not use it yet.
 
 - **Change**: if a consumer clearly shows up on another phase (e.g. a heater
   moved to another socket; older values fade over a few days), or a self-test
   measures another phase, **Settings → Repairs** asks which phase it is
   connected to; the measured one is preselected.
-- **Learn phase again** (button of the device, or **Learn again** next to the
-  phase in **Details** of the battery and on the consumer card, after a
-  confirmation): forgets the phase and learns it anew from the history; for a
+- **Learn phase again** (button of the device, **Learn again** next to the
+  phase in **Details** or in the menu (⋮) of a consumer, after a confirmation): forgets the phase and learns it anew from the history; for a
   battery run a self-test afterwards. If the same phase comes out again,
   Repairs asks whether it is right or which phase to take instead. A phase you
   chose other than the measured one is kept; a change is still reported.
@@ -1267,7 +1266,7 @@ test that found nothing wrong but could not check everything ends **partly
 unclear**, shown as a hint, not as a problem. The result appears as a
 notification, on the battery card (if something is unclear, conspicuous or
 wrong) and with an explanation per check under ⋮ →
-**Details**; the sensor **Self-test result** keeps it. It stops outside
+**Details** → **Show test results**; the sensor **Self-test result** keeps it. It stops outside
 operating mode **Active**, with paused communication, when the smart meter does
 not report or the battery cannot be read for 30 seconds; a restart of Home
 Assistant ends it too. Only one self-test runs at a time, not during a cell
@@ -1352,7 +1351,8 @@ The same menu enables or disables the battery, starts or cancels the cell
 balancing and opens **Details**: model, device name, firmware versions (EMS,
 VMS, BMS, communication module; sensor **Firmware**), MAC address, capacity,
 charge cycles, the total charged and discharged energy, the last full charge,
-when the cell delta was last measured and the phase (see **Phases**). **Open device in Home Assistant**
+the current cell delta, when the cell delta at top of charge was last measured
+and the phase (see **Phases**). **Open device in Home Assistant**
 leads to the device page of the battery with all its entities.
 
 The last full charge (sensor **Last full charge**) is the moment the battery
@@ -1575,8 +1575,8 @@ the energy flow.
   entities of the daily target, the release and the control carry "hot water"
   in their names (e.g. **Hot water release**, **Hot water forced run**,
   **Hot water latest start**,
-  **Hot water control active**); the consumer card shows the control switch as
-  **Hot water control** instead of next to the name. A
+  **Hot water control active**); the consumer card shows the control switch in its own section
+  **Hot water control** instead of in the menu (⋮). A
   daily target **Energy** does not fit here, as the energy counter includes
   the heating. The [guide to the hot water of a heat pump](docs/heat-pump-hot-water.md)
   shows a detailed automation that waits for a good moment for the
@@ -1639,8 +1639,8 @@ the energy flow.
   at the meter, else at its own sensor, else 10 s) SLEMS plans it like an
   uncontrolled consumer until it draws less again; then SLEMS controls it
   again.
-- **Control active** (switch per controllable consumer, also on its card in
-  the dashboard): off means SLEMS only measures the consumer. Switching it off
+- **Control active** (switch per controllable consumer, in the dashboard
+  ⋮ → **Turn control on** or **Turn control off**): off means SLEMS only measures the consumer. Switching it off
   in operating mode **active** sets it to 0 W (or off) once; afterwards SLEMS
   leaves it alone and plans it like an uncontrolled load: its daily target is
   paused and nothing of it enters the forecast (the card shows **control off**);
@@ -1696,7 +1696,9 @@ With evcc or a go-e SLEMS suggests the entities of the device.
   icon, **plugged in** without a state of charge sensor; without a car it is
   greyed out and shows **not plugged in**. The wallbox's card shows both in
   the row **Car**.
-- **Charge now** (switch on the card of every controlled wallbox): charges at
+- **Charge now** (switch of every controlled wallbox, in the dashboard **Start
+  charge now** in the menu (⋮) of its card or its box in the energy flow; with a
+  state of charge sensor the dialog asks **Up to**): charges at
   full power, regardless of the surplus and the daily target. The batteries
   help according to the wallbox's [battery support](#battery-support), the
   grid delivers the rest. The switch turns off by itself when the car is
@@ -1967,13 +1969,22 @@ of a running one.
 
 ![Consumers tab: heat pump measured only, heating rod with its settings and daily target](docs/images/dashboard_consumers_en.png)
 
-One card per consumer, collapsed to the important values (measured and
-planned power, progress of the daily target) and expanded with **Show
-settings** (the browser keeps the choice). Measured and planned power,
-blocked/saturated/runs on its own state, the learned response times for
-switching on and off (own sensor and at the meter; switching on includes a
-start delay of the device, e.g. a compressor) and the **Control active**
-switch.
+One card per consumer with the important values: current power, temperature,
+**Time window** (the planned window, otherwise the set time), **Energy needed**
+(what is still missing, with a reached target that of the coming period), state
+of the daily target and the release; for a wallbox the car. A heat pump shows
+its **Status** and today's forecast at the top (with controlled hot water
+**Heating today**: without the hot water energy, only with a single heat pump)
+and the values of the hot water in the section **Hot water control**. **Show
+settings** expands the card (the browser keeps the choice).
+
+The menu (⋮) next to the name, which a consumer's box in the energy flow opens
+as well, switches the control, starts or stops **Charge now**, learns the phase
+again and opens the **History** and the device page. Its **Details** show the
+planned power, the phase, the learned response times for switching on and off
+(own sensor and at the meter; switching on includes a start delay of the device,
+e.g. a compressor), the whole state and plan of the daily target and the battery
+support.
 
 ### Simulation
 
@@ -2035,11 +2046,15 @@ the control saves nothing (a fixed price) have no such line.
 
 All settings grouped and editable directly; while a value is learned (switch
 **… automatic**), the learned value is shown instead. The **Control** card also
-shows the smart meter update interval and the battery response time.
+shows the smart meter update interval and the battery response time. Settings
+that have no effect right now (no tariff, no controllable battery, fewer than
+two for the change of batteries) follow at the end under **Currently not
+usable**: greyed out, locked and with what they need.
 
 ### Using the dashboard
 
-Selecting a value (tile, box in the energy flow, row of a card) opens the
+Selecting a value (tile, box in the energy flow except a consumer's, which opens
+its menu, row of a card) opens the
 Home Assistant dialog of its entity with history and settings.
 
 The dashboard follows the language and the light/dark theme of Home Assistant

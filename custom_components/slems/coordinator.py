@@ -233,6 +233,7 @@ from .consumer_targets import (
     SurplusDemand,
     energy_to_soc_wh,
     energy_to_target,
+    next_period_energy,
     evaluate,
     daily_demands,
     daily_energy_estimate,
@@ -1039,6 +1040,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # Energy (Wh) each target still needs, and the parts expected from the
         # surplus in order of priority (see consumer_targets.surplus_demand).
         self.target_energy_wh: dict[str, float | None] = {}
+        # A reached target: energy (Wh) of the coming period and its deadline.
+        self.target_energy_next: dict[str, tuple[float | None, datetime]] = {}
         # Daily energy of the last days per controllable consumer (see
         # consumer_targets.daily_energy_estimate), the consumers whose target
         # energy is that estimate right now, and today's energy until the last
@@ -4790,6 +4793,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.target_load = {}
         self.target_load_grid = {}
         self.target_energy_wh = {}
+        self.target_energy_next = {}
         self.target_energy_estimated = set()
         self.target_forecast_c = {}
         self.target_demands = []
@@ -4880,6 +4884,21 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 else None
             )
             self.target_forecast_c[consumer.subentry_id] = forecast_c
+            if energy == 0 and progress.end is not None:
+                # After a run this period is over for the target: the next one counts.
+                next_end = progress.end + timedelta(days=1) if progress.energy_wh > 0 else progress.end
+                self.target_energy_next[consumer.subentry_id] = (
+                    next_period_energy(
+                        settings,
+                        power_w=power,
+                        forecast_c=cooling.forecast_c(temperature, local_now, next_end)
+                        if settings.type is TargetType.TEMPERATURE and cooling is not None and temperature is not None
+                        else None,
+                        wh_per_k=wh_per_k,
+                        estimate_wh=estimate,
+                    ),
+                    next_end,
+                )
             self.target_states[consumer.subentry_id] = self._price_window(
                 consumer,
                 settings,
@@ -5006,7 +5025,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         return result
 
     _TARGET_FIELDS = (
-        "target_states", "target_load", "target_load_grid", "target_energy_wh",
+        "target_states", "target_load", "target_load_grid", "target_energy_wh", "target_energy_next",
         "target_energy_estimated", "target_forecast_c", "target_demands",
     )
 

@@ -366,7 +366,7 @@ Der Sensor **Phase** des Geräts zeigt das Ergebnis (**L1**, **L2**, **L3** oder
 **Dreiphasig**), sein Attribut *shares* den gemessenen Anteil je Phase. Bei
 einer Wallbox, deren aktive Phasen eine Entität nennt, lernt SLEMS nur die eine
 Phase, mit der sie einphasig lädt. Die Phase steht in den **Details** der
-Batterie und auf der Verbraucherkarte. Sie wird nur angezeigt und geprüft; die
+Batterie und des Verbrauchers. Sie wird nur angezeigt und geprüft; die
 Regelung verwendet sie noch nicht.
 
 - **Wechsel**: Zeigt sich ein Verbraucher deutlich an einer anderen Phase
@@ -374,9 +374,8 @@ Regelung verwendet sie noch nicht.
   über einige Tage), oder misst ein Selbsttest eine andere Phase, fragt
   **Einstellungen → Reparaturen**, an welcher Phase das Gerät hängt; die
   gemessene ist vorausgewählt.
-- **Phase neu lernen** (Button des Geräts, oder **Neu lernen** neben der Phase
-  in den **Details** der Batterie und auf der Verbraucherkarte, nach einer
-  Rückfrage): verwirft die Phase und lernt sie neu aus dem Verlauf; bei einer
+- **Phase neu lernen** (Button des Geräts, **Neu lernen** neben der Phase in
+  den **Details** oder im Menü (⋮) eines Verbrauchers, nach einer Rückfrage): verwirft die Phase und lernt sie neu aus dem Verlauf; bei einer
   Batterie danach einen Selbsttest machen. Kommt wieder dieselbe heraus, fragt
   Reparaturen, ob sie stimmt oder welche Phase stattdessen gelten soll. Eine
   andere als die gemessene Phase, die du gewählt hast, bleibt erhalten; ein
@@ -1343,7 +1342,7 @@ wiederholen. Ein Test, der nichts Falsches gefunden, aber nicht alles geprüft
 hat, endet **teilweise unklar** und erscheint als Hinweis, nicht als Problem.
 Das Ergebnis erscheint als Benachrichtigung, auf der Batteriekarte (bei
 Unklarheiten, Auffälligkeiten oder Fehlern) und mit einer Erklärung je Prüfung unter
-⋮ → **Details**; der Sensor **Selbsttest Ergebnis** hält es fest. Abgebrochen
+⋮ → **Details** → **Prüfergebnisse anzeigen**; der Sensor **Selbsttest Ergebnis** hält es fest. Abgebrochen
 wird er außerhalb des Betriebsmodus **Aktiv**, bei pausierter Kommunikation,
 wenn der Smart Meter nicht meldet oder die Batterie 30 Sekunden nicht lesbar
 ist; ein Neustart von Home Assistant beendet ihn ebenfalls. Es läuft immer nur
@@ -1434,8 +1433,8 @@ Im selben Menü lässt sich die Batterie aktivieren oder deaktivieren, der
 Zellausgleich starten oder abbrechen, und **Details** zeigt Modell, Gerätename,
 Firmware-Versionen (EMS, VMS, BMS, Kommunikationsmodul; Sensor **Firmware**),
 MAC-Adresse, Kapazität, Ladezyklen, die insgesamt geladene und entladene
-Energie, die letzte Vollladung, wann das Zell-Delta zuletzt gemessen wurde und
-die Phase (siehe **Phasen**).
+Energie, die letzte Vollladung, das aktuelle Zell-Delta, wann das Zell-Delta am
+oberen Ladeende zuletzt gemessen wurde und die Phase (siehe **Phasen**).
 **Gerät in Home Assistant öffnen** führt zur Geräteseite der Batterie mit allen
 ihren Entitäten.
 
@@ -1679,7 +1678,7 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
   (z. B. **Warmwasser-Freigabe**, **Erzwungene Warmwasserladung**,
   **Spätester Warmwasser-Start**,
   **Warmwasser-Steuerung aktiv**); die Verbraucherkarte zeigt den Schalter der
-  Steuerung als **Warmwasser-Steuerung** statt neben dem Namen. Ein Tagesziel
+  Steuerung im eigenen Abschnitt **Warmwasser-Steuerung** statt im Menü (⋮). Ein Tagesziel
   **Energie** passt hier nicht, weil der Energiezähler das Heizen enthält.
   Die [Anleitung zum Warmwasser einer Wärmepumpe](docs/heat-pump-hot-water.de.md)
   zeigt eine ausführliche Automation, die auf einen guten Moment für den
@@ -1745,8 +1744,8 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
   Zähler gelernt, sonst am eigenen Sensor, sonst 10 s) plant SLEMS ihn wie
   einen nicht gesteuerten Verbraucher, bis er wieder weniger abnimmt; dann
   steuert SLEMS ihn wieder.
-- **Steuerung aktiv** (Schalter je steuerbarem Verbraucher, auch auf seiner
-  Karte im Dashboard): aus bedeutet, SLEMS misst den Verbraucher nur. Beim
+- **Steuerung aktiv** (Schalter je steuerbarem Verbraucher, im Dashboard über
+  ⋮ → **Steuerung einschalten** oder **Steuerung ausschalten**): aus bedeutet, SLEMS misst den Verbraucher nur. Beim
   Ausschalten im Betriebsmodus **Aktiv** setzt SLEMS ihn einmal auf 0 W (bzw.
   aus); danach lässt SLEMS ihn in Ruhe und plant ihn wie eine ungesteuerte
   Last: Sein Tagesziel pausiert und nichts von ihm geht in die Prognose ein
@@ -1807,7 +1806,9 @@ evcc oder einer go-e schlägt SLEMS die Entitäten des Geräts vor.
   Ladestand, ohne Ladestand-Sensor **angesteckt**; ohne Auto ist sie
   ausgegraut und zeigt **nicht angesteckt**. Die Karte der Wallbox zeigt
   beides in der Zeile **Auto**.
-- **Sofort laden** (Schalter auf der Karte jeder gesteuerten Wallbox): lädt
+- **Sofort laden** (Schalter jeder gesteuerten Wallbox, im Dashboard
+  **Sofort laden starten** im Menü (⋮) ihrer Karte oder ihrer Box im
+  Energiefluss; mit Ladestand-Sensor fragt der Dialog nach **Bis**): lädt
   mit voller Leistung, unabhängig vom Überschuss und vom Tagesziel. Die
   Batterien helfen nach der [Batterie-Unterstützung](#batterie-unterstützung)
   der Wallbox mit, den Rest liefert das Netz. Der Schalter geht von selbst
@@ -2095,13 +2096,23 @@ Zellausgleich und die Phase eines laufenden Ausgleichs.
 
 ![Reiter Verbraucher: Wärmepumpe nur gemessen, Heizstab mit Einstellungen und Tagesziel](docs/images/dashboard_consumers_de.png)
 
-Eine Karte je Verbraucher, zugeklappt mit den wichtigen Werten (gemessene und
-geplante Leistung, Fortschritt des Tagesziels), aufgeklappt über
-**Einstellungen anzeigen** (der Browser merkt sich die Auswahl). Gemessene und
-geplante Leistung, gesperrt/gesättigt/läuft eigenständig, die gelernten
-Reaktionszeiten beim Ein- und Ausschalten (eigener Sensor und am Zähler; das
-Einschalten enthält eine Anlaufverzögerung des Geräts, z. B. eines
-Kompressors) und der Schalter **Steuerung aktiv**.
+Eine Karte je Verbraucher mit den wichtigen Werten: aktuelle Leistung,
+Temperatur, **Zeitfenster** (das geplante Fenster, sonst die eingestellte Zeit),
+**Energiebedarf** (der noch nötige, bei erreichtem Ziel der der nächsten
+Periode), Stand des Tagesziels und die Freigabe; bei einer Wallbox das Auto.
+Eine Wärmepumpe zeigt oben ihren **Status** und die Prognose des Tages (mit
+gesteuertem Warmwasser **Heizen heute**: ohne die Warmwasser-Energie, nur bei
+einer einzigen Wärmepumpe) und die Werte des Warmwassers im Abschnitt
+**Warmwasser-Steuerung**. Über **Einstellungen anzeigen** klappt die Karte auf
+(der Browser merkt sich die Auswahl).
+
+Das Menü (⋮) neben dem Namen, das auch eine Verbraucher-Box im Energiefluss
+öffnet, schaltet die Steuerung, startet oder beendet **Sofort laden**, lernt die
+Phase neu und öffnet den **Verlauf** und die Geräteseite. Seine **Details**
+zeigen die geplante Leistung, die Phase, die gelernten Reaktionszeiten beim Ein-
+und Ausschalten (eigener Sensor und am Zähler; das Einschalten enthält eine
+Anlaufverzögerung des Geräts, z. B. eines Kompressors), den ganzen Stand und
+Plan des Tagesziels und die Batterie-Unterstützung.
 
 ### Simulation
 
@@ -2169,12 +2180,15 @@ Steuerung nichts spart (Fixpreis), haben keine solche Zeile.
 Alle Einstellwerte gruppiert und direkt änderbar; wird ein Wert gelernt
 (Schalter **… automatisch**), steht dort der gelernte Wert. Die Karte
 **Regelung** zeigt auch das Aktualisierungsintervall des Smart Meters und die
-Reaktionszeit der Batterie.
+Reaktionszeit der Batterie. Einstellungen, die gerade nichts bewirken (kein
+Tarif, keine steuerbare Batterie, für den Batteriewechsel weniger als zwei),
+folgen am Ende unter **Aktuell nicht nutzbar**: ausgegraut, gesperrt und mit dem
+Hinweis, was sie brauchen.
 
 ### Bedienung des Dashboards
 
-Das Auswählen eines Werts (Kachel, Kasten im Energiefluss, Zeile einer Karte)
-öffnet den Home-Assistant-Dialog der zugehörigen Entität mit Verlauf und
+Das Auswählen eines Werts (Kachel, Kasten im Energiefluss außer dem eines
+Verbrauchers, der sein Menü öffnet, Zeile einer Karte) öffnet den Home-Assistant-Dialog der zugehörigen Entität mit Verlauf und
 Einstellungen.
 
 Das Dashboard folgt der Sprache und dem hellen/dunklen Design von Home

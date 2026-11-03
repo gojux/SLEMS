@@ -40,12 +40,13 @@ from .entity import SlemsBatteryEntity, SlemsConsumerEntity, SlemsSystemEntity
 from .phases import Phase
 from .forecast.accuracy import Accuracy
 from .full_charge import is_due
-from .consumer_targets import target_fits, target_temperature, window_opens, window_start
+from .consumer_targets import RUNNING_W, target_fits, target_temperature, window_opens, window_start
 from .const import ControlMode, TargetType
 from .grid_friendly import correction_weight
 from .learning import CONSUMPTION_MIN_DAYS, MORNING_MIN_DAYS, PV_MIN_DAYS, TARGET_MIN_SAMPLES
 from .problems import CAP_EXCEEDED_AFTER_S
 from .pv_forecast import energy_on_day
+from .tariff_comparison import configured_tariffs
 from .trial import TrialStatus
 
 
@@ -462,6 +463,7 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
             "timing_auto": c.settings.timing_auto,
             "gain_auto": c.settings.auto_gain,
             "gain_setting": c.settings.control_gain,
+            "has_tariff": bool(configured_tariffs(c.config_entry)),
         },
     ),
     SystemSensorDescription(
@@ -1205,6 +1207,10 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
             "vehicle_soc_pct": None if state is None or state.vehicle_soc_pct is None else round(state.vehicle_soc_pct, 1),
             "plugged": state.plugged if state else None,
             "charge_now": self.consumer.subentry_id in self.coordinator.charge_now,
+            # A heat pump with a hot water release heats hot water right now.
+            "hot_water_active": bool(
+                self.consumer.hot_water_release and state and state.power_w is not None and state.power_w >= RUNNING_W
+            ),
             "saturated": self.consumer.subentry_id in data.saturated,
             "resting": self.consumer.subentry_id in data.resting,
             "running_on_its_own": self.consumer.subentry_id in data.running_on_its_own,
@@ -1290,6 +1296,15 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
                 if (energy := coordinator.target_energy_wh.get(subentry_id)) is None
                 else round(energy)
             ),
+            # Energy of this period so far (Wh), and for a reached target what
+            # the coming period needs with its deadline.
+            "target_period_energy_wh": round(progress.energy_wh),
+            "target_energy_next_wh": (
+                None
+                if (following := coordinator.target_energy_next.get(subentry_id)) is None or following[0] is None
+                else round(following[0])
+            ),
+            "target_energy_next_at": following[1].isoformat() if following else None,
             # Planned surplus window of a release consumer [opens, closes], None without one.
             "target_surplus_window": (
                 [moment.isoformat() for moment in window[:2]]

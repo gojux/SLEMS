@@ -1469,10 +1469,20 @@ field of the consumer subentry, default on). The panel is removed on unload and 
   `hass` updates. When a section is replaced, the focused control is found
   again by its data attributes (`focusSelector`) and focused, with a value
   being typed kept. Events are delegated on the content element.
-- Consumer cards are collapsed to measured / planned power and the target
-  progress; *Show settings* expands the rest (`_expandedConsumers`,
-  localStorage `slems-expanded-consumers`).
-- Keyboard: the battery ⋮ menu moves the focus to its first item when opened,
+- Consumer cards show the current values (`_consumerTargetRows`); *Show
+  settings* expands the settings (`_expandedConsumers`, localStorage
+  `slems-expanded-consumers`), ⋮ → *Details* holds the rest
+  (`_renderConsumerDetails`). A consumer's flow box opens the same menu
+  (`_consumerMenuItems`) in one place of the flow (`.flow-menu`), so a greyed
+  out box does not grey its menu too.
+- *Heating today* of a heat pump is the forecast of the day minus the hot water
+  energy of the current period (done and still needed): an estimate, as the
+  forecast knows only all heat pumps together with their hot water.
+- The settings tab moves settings without effect to its end, greyed out with
+  what they need (`SETTINGS_NEED_*`, `_settingNeeds`); `has_tariff` of the
+  sensor `control_status` is live, the controllable batteries come from the
+  panel config.
+- Keyboard: a ⋮ menu moves the focus to its first item when opened,
   arrows move between the items, Escape closes it and returns to its button.
   Every input, switch and select carries an `aria-label` with its name.
 - Entity names come from the integration's translations in the frontend

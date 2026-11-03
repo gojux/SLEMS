@@ -13,6 +13,7 @@ from custom_components.slems.consumer_targets import (
     TargetProgress,
     TargetSettings,
     energy_to_target,
+    next_period_energy,
     evaluate,
     forced_load,
     period_end,
@@ -329,6 +330,24 @@ def test_earliest_start() -> None:
     # Switched off: no restriction.
     settings.earliest_enabled = False
     assert state(settings, progress, local(9)).mode is TargetMode.SURPLUS
+
+
+def test_next_period_energy() -> None:
+    def next_energy(settings, forecast_c=None, wh_per_k=None, estimate_wh=None):
+        return next_period_energy(settings, power_w=2000, forecast_c=forecast_c, wh_per_k=wh_per_k, estimate_wh=estimate_wh)
+
+    assert next_energy(TargetSettings(type=TargetType.RUNTIME, hours=2.0)) == 4000
+    assert next_energy(TargetSettings(type=TargetType.ENABLED, hours=1.0)) == 2000
+    assert next_energy(TargetSettings(type=TargetType.ENERGY, energy_kwh=3.0)) == 3000
+    assert next_energy(TargetSettings(type=TargetType.SOC)) is None
+    temperature = TargetSettings(type=TargetType.TEMPERATURE, target_temp_c=50.0)
+    # From the forecast at that deadline, at least the daily energy of the last days.
+    assert next_energy(temperature, forecast_c=40.0, wh_per_k=100.0) == 1000
+    assert next_energy(temperature, forecast_c=40.0, wh_per_k=100.0, estimate_wh=1500.0) == 1500
+    assert next_energy(temperature, forecast_c=55.0, wh_per_k=100.0) == 0
+    # Not learned yet.
+    assert next_energy(temperature) is None
+    assert next_energy(temperature, estimate_wh=800.0) == 800
 
 
 def test_energy_to_target() -> None:

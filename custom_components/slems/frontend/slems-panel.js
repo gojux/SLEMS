@@ -191,7 +191,32 @@ const STRINGS = {
     plugged: "plugged in",
     unplugged: "not plugged in",
     enabled: "Enabled",
-    measured: "Measured",
+    currentPower: "Current power",
+    heatPumpState: { heating: "Heating", hotWater: "Hot water", running: "Running", standby: "Standby" },
+    heatingToday: "Heating today",
+    forecastToday: "Forecast today",
+    aboutEnergy: "about {energy}",
+    timeWindow: "Time window",
+    energyNeed: "Energy needed",
+    targetEnergyToday: "today about {energy}",
+    enableControl: "Turn control on",
+    disableControl: "Turn control off",
+    chargeNowStart: "Start charge now",
+    chargeNowStop: "Stop charge now",
+    chargeNowTitle: "Charge {name} now?",
+    chargeNowText: "Charges at full power regardless of the surplus and the daily target. The batteries help according to the battery support, the grid covers the rest. Ends by itself when the car is unplugged or reaches this state of charge.",
+    chargeNowNeedsControl: "Needs the control of this wallbox to be on.",
+    relearnPhaseMenu: "Learn phase again",
+    history: "History",
+    selfTestShow: "Show test results",
+    selfTestHide: "Hide test results",
+    unavailableSettings: "Currently not usable",
+    settingNeeds: {
+      tariff: "Needs a tariff. You can add one on the SLEMS integration page.",
+      battery: "Needs a controllable battery.",
+      anyBattery: "Needs a battery.",
+      batteries: "Needs at least two controllable batteries.",
+    },
     release: "Release",
     hotWaterRelease: "Hot water release",
     releaseOn: "on",
@@ -288,7 +313,6 @@ const STRINGS = {
     storageLearning: "learning ({runs}/3 heating runs, {marks}/2 thermostat cycles)",
     storageUntilCycling: "{energy} until it cycles",
     storageUntilFull: "{cycling} until it cycles, {full} until full",
-    controlActive: "Control active",
     hotWaterControl: "Hot water control",
     consumerResponseTime: "Response time on/off (own sensor)",
     gridResponseTime: "Response time on/off at the meter",
@@ -926,7 +950,32 @@ const STRINGS = {
     plugged: "angesteckt",
     unplugged: "nicht angesteckt",
     enabled: "Aktiviert",
-    measured: "Gemessen",
+    currentPower: "Aktuelle Leistung",
+    heatPumpState: { heating: "Heizen", hotWater: "Warmwasser", running: "Läuft", standby: "Standby" },
+    heatingToday: "Heizen heute",
+    forecastToday: "Prognose heute",
+    aboutEnergy: "ca. {energy}",
+    timeWindow: "Zeitfenster",
+    energyNeed: "Energiebedarf",
+    targetEnergyToday: "heute ca. {energy}",
+    enableControl: "Steuerung einschalten",
+    disableControl: "Steuerung ausschalten",
+    chargeNowStart: "Sofort laden starten",
+    chargeNowStop: "Sofort laden beenden",
+    chargeNowTitle: "{name} sofort laden?",
+    chargeNowText: "Lädt mit voller Leistung, unabhängig vom Überschuss und vom Tagesziel. Die Batterien helfen gemäß der Batterie-Unterstützung, den Rest liefert das Netz. Endet von selbst, wenn das Auto abgesteckt wird oder diesen Ladestand erreicht.",
+    chargeNowNeedsControl: "Dafür muss die Steuerung dieser Wallbox eingeschaltet sein.",
+    relearnPhaseMenu: "Phase neu lernen",
+    history: "Verlauf",
+    selfTestShow: "Prüfergebnisse anzeigen",
+    selfTestHide: "Prüfergebnisse ausblenden",
+    unavailableSettings: "Aktuell nicht nutzbar",
+    settingNeeds: {
+      tariff: "Braucht einen Tarif. Du kannst ihn auf der Integrationsseite von SLEMS hinzufügen.",
+      battery: "Braucht eine steuerbare Batterie.",
+      anyBattery: "Braucht eine Batterie.",
+      batteries: "Braucht mindestens zwei steuerbare Batterien.",
+    },
     release: "Freigabe",
     hotWaterRelease: "Warmwasser-Freigabe",
     releaseOn: "an",
@@ -1023,7 +1072,6 @@ const STRINGS = {
     storageLearning: "lernt noch ({runs}/3 Heizläufe, {marks}/2 Taktbeginne)",
     storageUntilCycling: "{energy} bis zum Takten",
     storageUntilFull: "{cycling} bis zum Takten, {full} bis voll",
-    controlActive: "Steuerung aktiv",
     hotWaterControl: "Warmwasser-Steuerung",
     consumerResponseTime: "Reaktionszeit an/aus (eigener Sensor)",
     gridResponseTime: "Reaktionszeit an/aus am Zähler",
@@ -1561,6 +1609,68 @@ const SETTING_HIDDEN_IN = {
   peak_shaving_reserve: ["peak_shaving_mode", ["manual"]],
 };
 
+// What a setting needs to have an effect (the settings tab moves the others to its end).
+const SETTINGS_NEED_TARIFF = [
+  "price_control",
+  "price_min_gain",
+  "grid_charge",
+  "grid_charge_max_soc",
+  "grid_charge_max_power",
+  "grid_import_max",
+  "battery_export",
+  "peak_grid_charge",
+];
+const SETTINGS_NEED_BATTERY = [
+  "auto_gain",
+  "control_gain",
+  "battery_response_time",
+  "battery_priority_soc",
+  "battery_share_when_secured",
+  "charge_secured_buffer_auto",
+  "charge_secured_buffer",
+  "grid_targets_auto",
+  "grid_targets_no_import",
+  "charge_grid_target",
+  "discharge_grid_target",
+  "discharge_max_grid_export",
+  "feed_in_cap",
+  "pv_peak_power",
+  "feed_in_cap_limit",
+  "feed_in_cap_auto_buffer",
+  "feed_in_cap_buffer",
+  "grid_friendly_charging",
+  "grid_friendly_buffer_auto",
+  "grid_friendly_buffer",
+  "night_reserve_auto",
+  "night_reserve",
+  "night_reserve_coverage",
+  "night_discharge",
+  "price_min_gain",
+  "grid_charge",
+  "grid_charge_max_soc",
+  "grid_charge_max_power",
+  "grid_import_max",
+  "battery_export",
+  "peak_shaving",
+  "peak_shaving_mode",
+  "peak_grid_charge",
+  "peak_shaving_grid_limit",
+  "peak_shaving_soc_threshold",
+  "peak_shaving_reserve",
+  "temperature_limit",
+  "temperature_high",
+  "temperature_band",
+  "temperature_floor",
+  "temperature_low",
+  "regular_full_charge",
+  "full_charge_interval",
+];
+const SETTINGS_NEED_ANY_BATTERY = ["communication_pause"];
+const SETTINGS_NEED_BATTERIES = ["rotation_soc_threshold", "rotation_min_interval", "rotation_ramp_rate", "rotation_ramp_max"];
+
+// Power from which a consumer counts as running (RUNNING_W in consumer_targets.py).
+const CONSUMER_RUNNING_W = 50;
+
 // SoC from which a battery counts as full (FULL_SOC_PCT in delivery_monitor.py).
 const FULL_SOC_PCT = 99;
 // A battery not full for longer than this is named in the overview.
@@ -1715,6 +1825,8 @@ const HIDDEN_TARIFFS_KEY = "slems-hidden-tariffs";
 const TARIFF_SUM_KEY = "slems-tariff-sum";
 // localStorage key: "devices" shows the energy flow by device (see _flowNodes).
 const FLOW_VIEW_KEY = "slems-flow-view";
+// Menu id of a flow box: this prefix and the device of its consumer.
+const FLOW_MENU_PREFIX = "flow-";
 // Series hidden until switched on in the legend.
 const DEFAULT_HIDDEN_SERIES = ["capExcess"];
 
@@ -2220,6 +2332,78 @@ class SlemsPanel extends HTMLElement {
     return `<div class="menu-wrap">${button}<div class="menu" role="menu">${items.join("")}</div></div>`;
   }
 
+  /** Items of the menu of a consumer, on its card and on its flow box. */
+  _consumerMenuItems(c) {
+    const t = this._t;
+    const s = (key) => this._state(key, c.device_id);
+    const name = escapeHtml(c.name);
+    const item = (action, label, attrs = "") => `<button class="menu-item" data-action="${action}"${attrs}>${escapeHtml(label)}</button>`;
+    const items = [];
+    const control = s("consumer_control");
+    // A heat pump: its switch controls only the hot water and stays in that section.
+    if (control && !this._hotWater(c)) {
+      items.push(
+        control.state === "off"
+          ? item("menu-control-on", t.enableControl, ` data-entity="${control.entity_id}"`)
+          : item("menu-control-off", t.disableControl, ` data-entity="${control.entity_id}"`)
+      );
+    }
+    const chargeNow = s("charge_now");
+    if (chargeNow) {
+      const soc = s("charge_now_soc");
+      const blocked = control?.state === "off" ? ` disabled title="${escapeHtml(t.chargeNowNeedsControl)}"` : "";
+      items.push(
+        chargeNow.state === "on"
+          ? item("charge-now-off", t.chargeNowStop, ` data-entity="${chargeNow.entity_id}"`)
+          : item("charge-now-on", t.chargeNowStart, ` data-entity="${chargeNow.entity_id}" data-soc="${soc?.entity_id ?? ""}" data-name="${name}"${blocked}`)
+      );
+    }
+    const relearn = this._entityId("relearn_phase", c.device_id);
+    if (relearn && s("phase")) items.push(item("relearn-phase", t.relearnPhaseMenu, ` data-entity="${relearn}" data-name="${name}"`));
+    items.push(item("menu-details", t.details, ` data-device="${c.device_id}"`));
+    items.push(item("menu-history", t.history, ` data-entity="${c.power_entity}"`));
+    items.push(item("menu-device", t.deviceView, ` data-device="${c.device_id}"`));
+    return items.join("");
+  }
+
+  _consumerMenu(c) {
+    const open = this._openMenu === c.device_id;
+    const button = `<button class="menu-button" data-action="battery-menu" data-device="${c.device_id}" aria-label="${this._t.menu}" aria-expanded="${open}"><ha-icon icon="mdi:dots-vertical"></ha-icon></button>`;
+    return `<div class="menu-wrap">${button}${open ? `<div class="menu" role="menu">${this._consumerMenuItems(c)}</div>` : ""}</div>`;
+  }
+
+  /** Charge now; with the car's state of charge first asks up to which one. */
+  _startChargeNow(entityId, socEntityId, name) {
+    const t = this._t;
+    const start = () => this._hass.callService("switch", "turn_on", { entity_id: entityId });
+    const soc = socEntityId ? this._hass.states[socEntityId] : null;
+    if (!soc) {
+      start();
+      return;
+    }
+    const a = soc.attributes;
+    const field = `<div class="setting"><span>${escapeHtml(t.chargeNowUntil)}</span><span class="number">
+      <input type="number" id="charge-now-soc" aria-label="${escapeHtml(t.chargeNowUntil)}" value="${escapeHtml(String(Math.round(this._number(soc) ?? a.max)))}"
+        min="${a.min}" max="${a.max}" step="${a.step}"><span class="unit">${escapeHtml(a.unit_of_measurement || "")}</span></span></div>`;
+    this._confirm(
+      t.chargeNowTitle.replace("{name}", name),
+      t.chargeNowText,
+      t.chargeNowStart,
+      async () => {
+        const value = parseFloat(this.shadowRoot.getElementById("charge-now-soc")?.value);
+        if (Number.isFinite(value)) {
+          await this._hass.callService("number", "set_value", {
+            entity_id: socEntityId,
+            value: Math.min(a.max, Math.max(a.min, value)),
+          });
+        }
+        start();
+      },
+      false,
+      field
+    );
+  }
+
   /** Why a cell balancing run cannot be started right now (null if it can). */
   _balancingBlocked(deviceId) {
     const t = this._t;
@@ -2249,14 +2433,21 @@ class SlemsPanel extends HTMLElement {
     return power ? this._watts(Math.round(power)) : "–";
   }
 
-  /** Enabled items of the ⋮ menu of a battery. */
+  /** Enabled items of an open menu (the menus of the flow boxes share one place). */
   _menuItems(deviceId) {
     const toggle = this.shadowRoot.querySelector(`[data-action='battery-menu'][data-device="${deviceId}"]`);
-    return [...(toggle?.closest(".menu-wrap")?.querySelectorAll(".menu-item:not([disabled])") || [])];
+    const wrap = deviceId.startsWith(FLOW_MENU_PREFIX) ? this._flowRoot?.querySelector(".flow-menu") : toggle?.closest(".menu-wrap");
+    return [...(wrap?.querySelectorAll(".menu-item:not([disabled])") || [])];
   }
 
   /** Keyboard in the ⋮ menu: arrows move, Escape closes it and returns to its button. */
   _onMenuKey(event) {
+    // A flow box with a menu is no button element.
+    if ((event.key === "Enter" || event.key === " ") && event.target.matches?.(".fbox[data-action='battery-menu']")) {
+      event.preventDefault();
+      event.target.click();
+      return;
+    }
     const deviceId = this._openMenu;
     if (!deviceId) return;
     if (event.key === "Escape") {
@@ -2287,7 +2478,7 @@ class SlemsPanel extends HTMLElement {
       return true;
     }
     const item = event.target.closest(
-      ".menu-item, [data-action='menu-resume'], [data-action='menu-extend'], [data-action='self-test-off'], .problem [data-action='menu-details']"
+      ".menu-item, [data-action='menu-resume'], [data-action='menu-extend'], [data-action='self-test-off'], [data-action='menu-details']"
     );
     const wasOpen = this._openMenu;
     if (wasOpen && !event.target.closest(".menu-wrap")) {
@@ -2353,8 +2544,23 @@ class SlemsPanel extends HTMLElement {
         this._renderDetails();
         this.shadowRoot.getElementById("details").showModal();
         break;
+      case "menu-history":
+        this._moreInfo(entityId);
+        break;
+      case "menu-control-on":
+        this._hass.callService("switch", "turn_on", { entity_id: entityId });
+        break;
+      case "menu-control-off":
+      case "charge-now-off":
+        this._hass.callService("switch", "turn_off", { entity_id: entityId });
+        break;
+      case "charge-now-on":
+        this._startChargeNow(entityId, item.dataset.soc, item.dataset.name);
+        break;
       case "menu-details":
         this._detailsDevice = item.dataset.device;
+        // From the note on a battery card: what it points to is the test result.
+        this._selfTestOpen = !item.classList.contains("menu-item");
         this._renderDetails();
         this.shadowRoot.getElementById("details").showModal();
         break;
@@ -2379,6 +2585,11 @@ class SlemsPanel extends HTMLElement {
     if (!deviceId || !dialog) return;
     if (deviceId === "control") {
       this._renderControlDetails();
+      return;
+    }
+    const consumer = (this._config.consumers || []).find((c) => c.device_id === deviceId);
+    if (consumer) {
+      this._renderConsumerDetails(consumer);
       return;
     }
     const t = this._t;
@@ -2417,6 +2628,7 @@ class SlemsPanel extends HTMLElement {
       [t.totalCharged, s("total_charging_energy") && this._format(s("total_charging_energy")), s("total_charging_energy")?.entity_id],
       [t.totalDischarged, s("total_discharging_energy") && this._format(s("total_discharging_energy")), s("total_discharging_energy")?.entity_id],
       [t.lastFullCharge, this._moment(s("last_full_charge")?.state), s("last_full_charge")?.entity_id],
+      [`${t.cellDelta}<span class="sub">${t.cellDeltaHint}</span>`, s("cell_delta") && this._format(s("cell_delta")), s("cell_delta")?.entity_id],
       [t.topDeltaMeasured, this._moment(s("top_cell_delta")?.attributes?.measured_at), s("top_cell_delta")?.entity_id],
       [
         t.responseTime,
@@ -2439,6 +2651,38 @@ class SlemsPanel extends HTMLElement {
         : `<dd class="muted">${t.noDetails}</dd>`) +
       this._phaseRow(deviceId, battery?.name) +
       this._selfTestDetails(s("self_test_result"));
+  }
+
+  /** Details dialog of a consumer: what its card leaves out. */
+  _renderConsumerDetails(c) {
+    const t = this._t;
+    const s = (key) => this._state(key, c.device_id);
+    const planned = s("planned_power");
+    const attrs = planned?.attributes || {};
+    const control = s("consumer_control");
+    const off = control?.state === "off";
+    const hotWater = this._hotWater(c);
+    const targetType = s("target_type")?.state;
+    const source = s("target_source")?.state;
+    const targeted = c.controllable && !off && targetType && targetType !== "none";
+    const planText = targeted ? this._planText(attrs, source) : "";
+    const support = s("battery_support");
+    const seconds = (v) =>
+      v === null || v === undefined
+        ? "–"
+        : `${new Intl.NumberFormat(this._hass?.locale?.language || "en", { maximumFractionDigits: 1 }).format(v)} s`;
+    const rows = [
+      planned ? this._row(t.planned, escapeHtml(this._plannedText(planned, off)), planned.entity_id) : "",
+      this._phaseRow(c.device_id, c.name),
+      c.controllable ? this._row(t.consumerResponseTime, `${seconds(attrs.response_on_s)} / ${seconds(attrs.response_off_s)}`, planned?.entity_id) : "",
+      c.controllable ? this._row(t.gridResponseTime, `${seconds(attrs.grid_response_on_s)} / ${seconds(attrs.grid_response_off_s)}`, planned?.entity_id) : "",
+      targeted ? this._row(hotWater ? t.hotWaterTargetProgress : t.targetProgress, escapeHtml(this._targetText(attrs, source)), planned?.entity_id) : "",
+      planText ? this._row(hotWater ? t.hotWaterTargetPlan : t.targetPlan, escapeHtml(planText), planned?.entity_id) : "",
+      support ? this._row(t.batterySupport, escapeHtml(this._supportText(support)), support.entity_id) : "",
+    ].join("");
+    this.shadowRoot.getElementById("details-title").textContent = `${t.details}: ${c.name}`;
+    this.shadowRoot.getElementById("details-close").textContent = t.close;
+    this.shadowRoot.getElementById("details-body").innerHTML = rows || `<dd class="muted">${t.noDetails}</dd>`;
   }
 
   /** Dead time of the battery's last probe step (see response_probe). */
@@ -2469,7 +2713,12 @@ class SlemsPanel extends HTMLElement {
         }</li>`;
       })
       .join("");
-    return `<h3 class="card-subheading self-test-heading">${t.selfTestSection}</h3>${head}${lines ? `<ul class="self-test-checks">${lines}</ul>` : ""}`;
+    const open = this._selfTestOpen;
+    const toggle = lines
+      ? `<button class="link card-toggle self-test-toggle" data-action="toggle-self-test" aria-expanded="${open}">
+          <ha-icon icon="${open ? "mdi:chevron-up" : "mdi:chevron-down"}"></ha-icon>${open ? t.selfTestHide : t.selfTestShow}</button>`
+      : "";
+    return `<h3 class="card-subheading self-test-heading">${t.selfTestSection}</h3>${head}${toggle}${open && lines ? `<ul class="self-test-checks">${lines}</ul>` : ""}`;
   }
 
   /** Explanation of one self-test check with its measured values. */
@@ -2808,6 +3057,7 @@ class SlemsPanel extends HTMLElement {
       <dialog id="confirm">
         <h2 id="confirm-title"></h2>
         <p id="confirm-text"></p>
+        <div id="confirm-extra"></div>
         <div class="dialog-buttons">
           <button class="link" data-answer="cancel"></button>
           <button class="danger" data-answer="confirm"></button>
@@ -2837,6 +3087,11 @@ class SlemsPanel extends HTMLElement {
       const relearn = event.target.closest("[data-action='relearn-phase']");
       if (relearn) {
         this._relearnPhase(relearn);
+        return;
+      }
+      if (event.target.closest("[data-action='toggle-self-test']")) {
+        this._selfTestOpen = !this._selfTestOpen;
+        this._renderDetails();
         return;
       }
       const moreInfo = event.target.closest("[data-more-info]");
@@ -3220,6 +3475,7 @@ class SlemsPanel extends HTMLElement {
       nodes.push({
         id: `consumer-${consumer.id}`,
         role: "consumer",
+        menu: `${FLOW_MENU_PREFIX}${consumer.device_id}`,
         icon: CONSUMER_ICONS[consumer.type] || "mdi:power-plug",
         title: consumer.name,
         power: this._powerW(this._hass.states[consumer.power_entity]),
@@ -3284,6 +3540,7 @@ class SlemsPanel extends HTMLElement {
     }
     for (const node of nodes) this._updateFlowNode(node);
     this._updateHub();
+    this._updateFlowMenu();
     this._layoutFlow();
   }
 
@@ -3316,10 +3573,34 @@ class SlemsPanel extends HTMLElement {
     if (slot.innerHTML !== html) slot.innerHTML = html;
   }
 
+  /** The open menu of a consumer's flow box, below that box. */
+  _updateFlowMenu() {
+    const slot = this._flowRoot?.querySelector(".flow-menu");
+    if (!slot) return;
+    const open = this._openMenu?.startsWith(FLOW_MENU_PREFIX) ? this._openMenu : null;
+    const consumer = open && (this._config.consumers || []).find((c) => `${FLOW_MENU_PREFIX}${c.device_id}` === open);
+    for (const box of this._flowRoot.querySelectorAll(".fbox[data-action='battery-menu']")) {
+      box.setAttribute("aria-expanded", String(box.dataset.device === open));
+    }
+    const html = consumer ? `<div class="menu" role="menu">${this._consumerMenuItems(consumer)}</div>` : "";
+    if (slot.innerHTML !== html) slot.innerHTML = html;
+    const box = consumer && this._flowRoot.querySelector(`.fbox[data-device="${open}"]`);
+    if (!box) return;
+    const root = this._flowRoot.getBoundingClientRect();
+    const rect = box.getBoundingClientRect();
+    const width = slot.firstElementChild.offsetWidth;
+    slot.style.left = `${Math.max(0, Math.min(rect.left - root.left, root.width - width))}px`;
+    slot.style.top = `${rect.bottom - root.top + 4}px`;
+  }
+
   _flowSkeleton(nodes, byDevice) {
     const moreInfo = (entityId) => (entityId ? ` data-more-info="${entityId}"` : "");
     const box = (n) => `
-      <div class="fbox ${n.role}" data-node="${n.id}"${moreInfo(n.entity)}>
+      <div class="fbox ${n.role}" data-node="${n.id}"${
+        n.menu
+          ? ` data-action="battery-menu" data-device="${n.menu}" tabindex="0" role="button" aria-haspopup="menu" aria-expanded="false"`
+          : moreInfo(n.entity)
+      }>
         <div class="fbox-head">
           <span class="fbox-icon"><ha-icon icon="${n.icon}"></ha-icon></span>
           <span class="fbox-title">${escapeHtml(n.title)}</span>
@@ -3350,6 +3631,7 @@ class SlemsPanel extends HTMLElement {
     return `
       <div class="flow-root ${hasConsumers ? "" : "no-consumers"} ${byDevice ? "by-device" : ""} ${pvs ? "" : "no-pv"}">
         <svg class="flow-lines" aria-hidden="true"></svg>
+        <div class="menu-wrap flow-menu"></div>
         ${pvs ? `<div class="fcell top">${pvs}</div>` : ""}
         <div class="fcell left">${byRole("grid")}</div>
         <div class="fcell center"><div class="menu-wrap hub-wrap">
@@ -4922,10 +5204,10 @@ class SlemsPanel extends HTMLElement {
                 ? `<span class="chip">${t.selfTestPendingChip}</span>`
                 : "";
           return `<section class="card">
-            <div class="card-head"><h2>${escapeHtml(b.name)}</h2>
-              <div class="chips">${selfTestChip}${enabled?.state === "off" ? `<span class="chip">${t.disabled}</span>` : ""}${
-                s("last_full_charge")?.attributes?.preferred ? `<span class="chip" title="${escapeHtml(t.fullChargeDueHint)}">${t.fullChargeDue}</span>` : ""
-              }${this._batteryMenu(b)}</div></div>
+            <div class="card-head"><h2>${escapeHtml(b.name)}</h2>${this._batteryMenu(b)}</div>
+            ${this._cardChips(`${selfTestChip}${enabled?.state === "off" ? `<span class="chip">${t.disabled}</span>` : ""}${
+              s("last_full_charge")?.attributes?.preferred ? `<span class="chip" title="${escapeHtml(t.fullChargeDueHint)}">${t.fullChargeDue}</span>` : ""
+            }`)}
             ${problem}
             <div class="soc"><div class="soc-bar"><div style="width:${soc ?? 0}%"></div></div>
               <span>${soc === null ? "–" : Math.round(soc) + " %"}</span></div>
@@ -4956,11 +5238,10 @@ class SlemsPanel extends HTMLElement {
   _cellSection(battery) {
     const t = this._t;
     const s = (key) => this._state(key, battery.device_id);
-    const live = s("cell_delta");
     const top = s("top_cell_delta");
     const phase = s("balancing_phase");
     const switchState = s("cell_balancing");
-    if (!live && !top) return "";
+    if (!top) return "";
     const status = top?.attributes?.status;
     const statusLabel = { green: t.statusGreen, yellow: t.statusYellow, orange: t.statusOrange, red: t.statusRed }[status];
     const icon = { green: "mdi:check-circle", yellow: "mdi:alert-circle-outline", orange: "mdi:alert", red: "mdi:alert-octagon" }[status];
@@ -4989,7 +5270,6 @@ class SlemsPanel extends HTMLElement {
     const lastRun = !balancing && result ? `<dt>${t.lastBalancing}</dt><dd>${escapeHtml(result)}</dd>` : "";
     return `<div class="cells">
         <dl>
-          ${this._row(`${t.cellDelta}<span class="sub">${t.cellDeltaHint}</span>`, escapeHtml(this._format(live)), live?.entity_id)}
           ${this._row(t.topCellDelta, topValue, top?.entity_id)}
           ${lastRun}
         </dl>
@@ -5040,54 +5320,19 @@ class SlemsPanel extends HTMLElement {
             .filter(Boolean)
             .map((chip) => `<span class="chip">${chip}</span>`)
             .join("");
-          const seconds = (v) =>
-            v === null || v === undefined
-              ? "–"
-              : `${new Intl.NumberFormat(this._hass?.locale?.language || "en", { maximumFractionDigits: 1 }).format(v)} s`;
-          // Switching on (with the start delay of the device) / off.
-          const response = `${seconds(attrs.response_on_s)} / ${seconds(attrs.response_off_s)}`;
-          const gridResponse = `${seconds(attrs.grid_response_on_s)} / ${seconds(attrs.grid_response_off_s)}`;
           // Collapsed: the important values; expanded: all settings too.
           const expanded = this._expandedConsumers.has(c.id);
-          const targetType = this._state("target_type", c.device_id)?.state;
           const support = this._state("battery_support", c.device_id);
-          const supportRow =
-            support && support.state !== "always"
-              ? this._row(t.batterySupport, escapeHtml(this._supportText(support)), support.entity_id)
-              : "";
-          // Control off: no targets, only the temperature (if there is one).
-          const temperature = this._consumerTemperature(c);
-          const progress =
-            control?.state === "off"
-              ? temperature ? this._row(t.temperature, escapeHtml(temperature), planned?.entity_id) : ""
-              : c.controllable && targetType && targetType !== "none"
-                ? this._row(
-                    this._hotWater(c) ? t.hotWaterTargetProgress : t.targetProgress,
-                    escapeHtml(this._targetText(attrs, this._state("target_source", c.device_id)?.state)),
-                    planned?.entity_id
-                  )
-                : "";
-          const planText = c.controllable && control?.state !== "off" && targetType && targetType !== "none"
-            ? this._planText(attrs, this._state("target_source", c.device_id)?.state)
-            : "";
-          const planRow = planText
-            ? this._row(hotWater ? t.hotWaterTargetPlan : t.targetPlan, escapeHtml(planText), planned?.entity_id)
-            : "";
-          // The car at a wallbox, and charging it now (on the collapsed card too).
+          // The car at a wallbox, and up to where it charges now.
           const vehicle = this._vehicleDetail(c);
           const vehicleRow = vehicle ? this._row(t.vehicle, escapeHtml(vehicle.text), planned?.entity_id) : "";
           const chargeNow = control?.state !== "off" ? this._state("charge_now", c.device_id) : null;
           const chargeNowSoc = chargeNow?.state === "on" ? this._state("charge_now_soc", c.device_id) : null;
-          const chargeNowSection = chargeNow
-            ? `<div class="settings card-setting">${this._control(chargeNow, { label: t.chargeNow })}${
-                chargeNowSoc ? this._control(chargeNowSoc, { label: t.chargeNowUntil }) : ""
-              }</div>`
+          const chargeNowSection = chargeNowSoc
+            ? `<div class="settings card-setting">${this._control(chargeNowSoc, { label: t.chargeNowUntil })}</div>`
             : "";
           const details = expanded
-            ? `<dl>
-              ${c.controllable ? this._row(t.consumerResponseTime, response, planned?.entity_id) : ""}
-              ${c.controllable ? this._row(t.gridResponseTime, gridResponse, planned?.entity_id) : ""}
-            </dl>${
+            ? `${
               settings.length ? `<div class="settings card-setting">${settings.map((st) => this._control(st)).join("")}</div>` : ""
             }${support ? `<div class="settings card-setting">${this._control(support, { label: t.batterySupport })}</div>` : ""}${capSection}${c.controllable ? this._releaseSection(c) + this._targetSection(c) : ""}`
             : "";
@@ -5101,25 +5346,121 @@ class SlemsPanel extends HTMLElement {
                 t.noPowerText.replace("{days}", attrs.no_power_days)
               )}</span></div>`
             : "";
+          const targetRows = this._consumerTargetRows(c);
+          const heatingEnergy = this._heatingForecast(c);
+          const heating = heatingEnergy
+            ? this._row(heatingEnergy.label, escapeHtml(t.aboutEnergy.replace("{energy}", this._kwh(heatingEnergy.wh))), this._entityId("consumption_forecast_today"))
+            : "";
+          const hotWaterStatus = c.type === "heat_pump" ? this._row(t.state, escapeHtml(this._heatPumpState(c, measured)), c.power_entity) : "";
           return `<section class="card">
-            <div class="card-head"><h2>${escapeHtml(c.name)}</h2><div class="chips">${chips}${control && !hotWater ? this._toggle(control, t.controlActive) : ""}</div></div>
+            <div class="card-head"><h2>${escapeHtml(c.name)}</h2>${this._consumerMenu(c)}</div>
+            ${this._cardChips(chips)}
             ${noPower}
             <dl>
-              ${this._row(t.measured, escapeHtml(this._format(measured)), c.power_entity)}
-              ${this._phaseRow(c.device_id, c.name)}
-              ${this._releaseRow(c)}
-              ${planned ? this._row(t.planned, escapeHtml(this._plannedText(planned, control?.state === "off")), planned.entity_id) : ""}
+              ${hotWaterStatus}
+              ${this._row(t.currentPower, escapeHtml(this._format(measured)), c.power_entity)}
+              ${heating}
               ${vehicleRow}
-              ${progress}
-              ${planRow}
-              ${supportRow}
+              ${hotWater ? "" : targetRows}
             </dl>${
               // A heat pump: the switch controls only its hot water, not the heat pump.
-              control && hotWater ? `<div class="settings card-setting">${this._control(control, { label: t.hotWaterControl })}</div>` : ""
+              control && hotWater
+                ? `<div class="settings card-setting">${this._control(control, { label: t.hotWaterControl })}${targetRows ? `<dl class="section-values">${targetRows}</dl>` : ""}</div>`
+                : ""
             }${chargeNowSection}${details}${toggle}</section>`;
         })
         .join("")
     );
+  }
+
+  /** Labels below the name of a card, nothing without any. */
+  _cardChips(chips) {
+    return chips ? `<div class="chips card-chips">${chips}</div>` : "";
+  }
+
+  /** What a heat pump does now; heating and hot water apart only with a hot water release. */
+  _heatPumpState(c, measured) {
+    const states = this._t.heatPumpState;
+    if ((this._powerW(measured) ?? 0) < CONSUMER_RUNNING_W) return states.standby;
+    if (!this._hotWater(c)) return states.running;
+    return this._state("planned_power", c.device_id)?.attributes?.hot_water_active ? states.hotWater : states.heating;
+  }
+
+  /**
+   * Forecast energy of a heat pump today, without its hot water if controlled.
+   * The forecast knows all heat pumps together: only with a single one.
+   */
+  _heatingForecast(c) {
+    if (c.type !== "heat_pump" || (this._config.consumers || []).filter((other) => other.type === "heat_pump").length !== 1) return null;
+    const hourly = this._state("consumption_forecast_today")?.attributes?.hourly;
+    const total = (hourly || []).reduce((sum, hour) => sum + (hour.heat_pump_wh ?? 0), 0);
+    if (total <= 0) return null;
+    const t = this._t;
+    if (!this._hotWater(c)) return { label: t.forecastToday, wh: total };
+    const attrs = this._state("planned_power", c.device_id)?.attributes || {};
+    const hotWater = (attrs.target_period_energy_wh ?? 0) + (attrs.target_energy_wh ?? 0);
+    return { label: t.heatingToday, wh: Math.max(0, total - hotWater) };
+  }
+
+  /** Rows of a consumer's card about its daily target (of a heat pump: its hot water). */
+  _consumerTargetRows(c) {
+    const t = this._t;
+    const planned = this._state("planned_power", c.device_id);
+    const attrs = planned?.attributes || {};
+    const type = this._state("target_type", c.device_id)?.state;
+    const source = this._state("target_source", c.device_id)?.state;
+    const targeted = c.controllable && this._state("consumer_control", c.device_id)?.state !== "off" && type && type !== "none";
+    const temperature = this._consumerTemperature(c);
+    const heater = c.type === "heating_rod" || this._hotWater(c);
+    const windowText = targeted ? this._targetWindowText(attrs, source) : "";
+    const energy = targeted && heater ? this._targetEnergyText(attrs) : "";
+    const state = targeted ? this._targetStateText(attrs) : "";
+    const row = (label, text) => (text ? this._row(label, escapeHtml(text), planned?.entity_id) : "");
+    return (
+      row(t.temperature, temperature) +
+      row(t.timeWindow, windowText) +
+      row(t.energyNeed, energy) +
+      row(t.targetProgress, state) +
+      this._releaseRow(c)
+    );
+  }
+
+  /** Planned window if there is one, else the set time: "12:08–14:38", "bis 15:30". */
+  _targetWindowText(attrs, source) {
+    const range = (from, until) => `${this._clock(from)}–${this._time(until)}`;
+    if (attrs.target_surplus_window) return range(...attrs.target_surplus_window);
+    if (source !== "surplus" && attrs.target_latest_start && attrs.target_window_opens) {
+      return range(attrs.target_window_opens, attrs.target_latest_start);
+    }
+    if (!attrs.target_deadline) return "";
+    // A temperature target applies from midnight without an earliest start.
+    const earliest = attrs.target_earliest ? new Date(attrs.target_earliest) : null;
+    if (earliest && (earliest.getHours() || earliest.getMinutes())) return range(attrs.target_earliest, attrs.target_deadline);
+    return this._t.targetUntil.replace("{time}", this._clock(attrs.target_deadline));
+  }
+
+  /** Energy still needed, once reached that of the coming period: "noch ca. 2,5 kWh", "morgen ca. 3 kWh". */
+  _targetEnergyText(attrs) {
+    const t = this._t;
+    const text = (template, wh) => template.replace("{energy}", this._kwh(wh));
+    const isToday = (iso) => new Date(iso).toDateString() === new Date().toDateString();
+    const energy = attrs.target_energy_wh;
+    if (attrs.target_mode === "done" || energy === 0) {
+      const next = attrs.target_energy_next_wh;
+      if (!next || !attrs.target_energy_next_at) return "";
+      return text(isToday(attrs.target_energy_next_at) ? t.targetEnergyToday : t.targetEnergyTomorrow, next);
+    }
+    if (energy > 0) {
+      const later = attrs.target_mode === "waiting" && attrs.target_earliest && !isToday(attrs.target_earliest);
+      return text(later ? t.targetEnergyTomorrow : t.targetEnergyLeft, energy);
+    }
+    return attrs.target_type === "temperature" ? t.targetEnergyLearning : "";
+  }
+
+  /** "1,5 / 2 h · wartet bis 10:30"; of a temperature target only the state. */
+  _targetStateText(attrs) {
+    const parts = attrs.target_type === "temperature" ? [] : [this._targetProgressText(attrs)];
+    return [...parts, ...this._targetModeTexts(attrs)].join(" · ");
   }
 
   /** Planned power of a consumer; with current control also "(6 A, 3 phases)". */
@@ -5222,10 +5563,8 @@ class SlemsPanel extends HTMLElement {
       const temperature = attrs.target_temperature_c;
       parts.push(temperature === null || temperature === undefined ? "– °C" : `${number(temperature)} °C`);
       parts.push(`${t.targetMinShort} ${number(attrs.target_goal)} °C`, `${t.targetGoalTemp} ${number(attrs.target_max_temperature_c)} °C`);
-    } else if (attrs.target_type === "soc" && !attrs.target_done && (attrs.vehicle_soc_pct === null || attrs.vehicle_soc_pct === undefined)) {
-      parts.push(`– / ${number(attrs.target_goal)} %`);
     } else {
-      parts.push(`${number(attrs.target_got ?? 0)} / ${number(attrs.target_goal)} ${attrs.target_unit}`);
+      parts.push(this._targetProgressText(attrs));
     }
     parts.push(t.targetUntil.replace("{time}", clock(attrs.target_deadline)));
     if (attrs.plugged === false && mode !== "done") parts.push(t.unplugged);
@@ -5243,13 +5582,29 @@ class SlemsPanel extends HTMLElement {
     else if (mode !== "done" && attrs.target_type === "temperature" && (energy === null || energy === undefined)) {
       parts.push(t.targetEnergyLearning);
     }
-    if (mode === "done") parts.push(t.targetDone);
-    else if (mode === "waiting") parts.push(t.targetWaiting.replace("{time}", clock(attrs.target_earliest)));
-    else if (mode === "forced") parts.push(attrs.target_price_window ? t.targetForcedPrice : t.targetForced);
-    else if (mode === "window") parts.push(t.targetWindow);
-    else if (mode === "planned") parts.push(t.targetPlanned);
-    if (mode === "boost") parts.push(t.targetBoost);
-    return parts.join(" · ");
+    return [...parts, ...this._targetModeTexts(attrs)].join(" · ");
+  }
+
+  /** "1,5 / 2 h" of a daily target by runtime, energy or state of charge. */
+  _targetProgressText(attrs) {
+    const number = (v) => new Intl.NumberFormat(this._hass?.locale?.language || "en", { maximumFractionDigits: 1 }).format(v);
+    if (attrs.target_type === "soc" && !attrs.target_done && (attrs.vehicle_soc_pct === null || attrs.vehicle_soc_pct === undefined)) {
+      return `– / ${number(attrs.target_goal)} %`;
+    }
+    return `${number(attrs.target_got ?? 0)} / ${number(attrs.target_goal)} ${attrs.target_unit}`;
+  }
+
+  /** What a daily target does right now, as text. */
+  _targetModeTexts(attrs) {
+    const t = this._t;
+    const mode = attrs.target_mode;
+    if (mode === "done") return [t.targetDone];
+    if (mode === "waiting") return [t.targetWaiting.replace("{time}", this._time(attrs.target_earliest))];
+    if (mode === "forced") return [attrs.target_price_window ? t.targetForcedPrice : t.targetForced];
+    if (mode === "window") return [t.targetWindow];
+    if (mode === "planned") return [t.targetPlanned];
+    if (mode === "boost") return [t.targetBoost];
+    return [];
   }
 
   /** "Fenster 12:20–14:20 · erzwungen ab 14:20 · dauert ca. 1 h 5 min": when SLEMS plans the rest. */
@@ -5277,21 +5632,41 @@ class SlemsPanel extends HTMLElement {
 
   // --- settings ----------------------------------------------------------------
 
+  /** What a setting still needs to have an effect (see SETTINGS_NEED_*). */
+  _settingNeeds(key) {
+    const batteries = this._config.batteries || [];
+    const controllable = batteries.filter((b) => b.controllable).length;
+    const needs = [];
+    if (SETTINGS_NEED_TARIFF.includes(key) && this._state("control_status")?.attributes?.has_tariff === false) needs.push("tariff");
+    if (SETTINGS_NEED_BATTERY.includes(key) && !controllable) needs.push("battery");
+    if (SETTINGS_NEED_ANY_BATTERY.includes(key) && !batteries.length) needs.push("anyBattery");
+    if (SETTINGS_NEED_BATTERIES.includes(key) && controllable < 2) needs.push("batteries");
+    return needs;
+  }
+
   _renderSettings() {
     const t = this._t;
-    this._setSection(
-      "settings-list",
-      SETTING_GROUPS.map(([group, keys]) => {
-        const rows = keys
-          .filter((key) => !SETTING_SHOWN_WITH[key] || this._state(SETTING_SHOWN_WITH[key])?.state === "on")
-          .filter((key) => !SETTING_HIDDEN_WITH[key] || this._state(SETTING_HIDDEN_WITH[key])?.state !== "on")
-          .filter((key) => !SETTING_HIDDEN_IN[key] || !SETTING_HIDDEN_IN[key][1].includes(this._state(SETTING_HIDDEN_IN[key][0])?.state))
-          .filter((key) => !SETTING_SHOWN_WITH_VALUE[key] || this._number(this._state(SETTING_SHOWN_WITH_VALUE[key])) !== null)
-          .map((key) => this._state(key))
-          .filter(Boolean);
-        if (!rows.length) return "";
-        return `<section class="card"><h2>${t.groups[group]}</h2>
-          <div class="settings">${rows.map((s) => this._control(s)).join("")}</div>${
+    const unavailable = [];
+    const groups = SETTING_GROUPS.map(([group, keys]) => {
+      const shown = keys
+        .filter((key) => !SETTING_SHOWN_WITH[key] || this._state(SETTING_SHOWN_WITH[key])?.state === "on")
+        .filter((key) => !SETTING_HIDDEN_WITH[key] || this._state(SETTING_HIDDEN_WITH[key])?.state !== "on")
+        .filter((key) => !SETTING_HIDDEN_IN[key] || !SETTING_HIDDEN_IN[key][1].includes(this._state(SETTING_HIDDEN_IN[key][0])?.state))
+        .filter((key) => !SETTING_SHOWN_WITH_VALUE[key] || this._number(this._state(SETTING_SHOWN_WITH_VALUE[key])) !== null)
+        .filter((key) => this._state(key));
+      const usable = shown.filter((key) => !this._settingNeeds(key).length);
+      const missing = shown.filter((key) => this._settingNeeds(key).length);
+      if (missing.length) {
+        const needs = [...new Set(missing.flatMap((key) => this._settingNeeds(key)))];
+        // Greyed out and locked; their hints stay readable.
+        const controls = missing.map((key) => this._control(this._state(key))).join("").replace(/<(input|select)\b/g, "<$1 disabled");
+        unavailable.push(`<section class="card unavailable"><h2>${t.groups[group]}</h2>
+          <p class="muted unavailable-note">${needs.map((need) => escapeHtml(t.settingNeeds[need])).join(" ")}</p>
+          <div class="settings">${controls}</div></section>`);
+      }
+      if (!usable.length) return "";
+      return `<section class="card"><h2>${t.groups[group]}</h2>
+          <div class="settings">${usable.map((key) => this._control(this._state(key))).join("")}</div>${
             group === "priority"
               ? this._exportNote()
               : group === "peak"
@@ -5300,15 +5675,20 @@ class SlemsPanel extends HTMLElement {
                   ? this._capNote()
                   : ""
           }</section>`;
-      }).join("") +
-        (this._config.batteries || [])
-          .map((b) => {
-            const rows = BATTERY_SETTINGS.map((key) => this._state(key, b.device_id)).filter(Boolean);
-            if (!rows.length) return "";
-            return `<section class="card"><h2>${escapeHtml(t.batteryLimits.replace("{name}", b.name))}</h2>
+    }).join("");
+    const batteryLimits = (this._config.batteries || [])
+      .map((b) => {
+        const rows = BATTERY_SETTINGS.map((key) => this._state(key, b.device_id)).filter(Boolean);
+        if (!rows.length) return "";
+        return `<section class="card"><h2>${escapeHtml(t.batteryLimits.replace("{name}", b.name))}</h2>
               <div class="settings">${rows.map((s) => this._control(s)).join("")}</div></section>`;
-          })
-          .join("")
+      })
+      .join("");
+    this._setSection(
+      "settings-list",
+      groups +
+        batteryLimits +
+        (unavailable.length ? `<h2 class="unavailable-heading">${t.unavailableSettings}</h2>${unavailable.join("")}` : "")
     );
   }
 
@@ -5457,10 +5837,11 @@ class SlemsPanel extends HTMLElement {
 
   // --- events ------------------------------------------------------------------
 
-  _confirm(title, text, confirmLabel, action, danger = true) {
+  _confirm(title, text, confirmLabel, action, danger = true, extraHtml = "") {
     const dialog = this.shadowRoot.getElementById("confirm");
     this.shadowRoot.getElementById("confirm-title").textContent = title;
     this.shadowRoot.getElementById("confirm-text").textContent = text;
+    this.shadowRoot.getElementById("confirm-extra").innerHTML = extraHtml;
     dialog.querySelector('[data-answer="cancel"]').textContent = this._t.cancel;
     const confirmButton = dialog.querySelector('[data-answer="confirm"]');
     confirmButton.textContent = confirmLabel;
@@ -5773,7 +6154,10 @@ const STYLE = `
   #details dl { margin: 0 0 16px; min-width: 300px; }
   [data-more-info] { cursor: pointer; }
   .tile[data-more-info]:hover .value, dd[data-more-info]:hover, dt[data-more-info]:hover + dd { color: var(--slems-accent); }
-  .fbox[data-more-info]:hover { border-color: var(--accent); }
+  .fbox[data-more-info], .fbox[data-action="battery-menu"] { cursor: pointer; }
+  .fbox[data-more-info]:hover, .fbox[data-action="battery-menu"]:hover, .fbox[aria-expanded="true"] { border-color: var(--accent); }
+  .flow-menu { position: absolute; z-index: 5; width: 240px; }
+  .flow-menu .menu { top: 0; left: 0; right: 0; }
   .accuracy { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 32px; margin-top: 12px; }
   .accuracy h3 { margin: 0 0 4px; font-size: 14px; font-weight: 500; }
   .tile .problem-value { display: flex; align-items: center; gap: 6px; color: var(--error-color, #d03b3b); }
@@ -5896,6 +6280,15 @@ const STYLE = `
   .test-bar { display: block; height: 4px; margin-top: 6px; border-radius: 2px; background: var(--divider-color); overflow: hidden; }
   .test-bar span { display: block; height: 100%; background: var(--primary-color); }
   .chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .card-chips { justify-content: flex-start; margin-top: 6px; }
+  .card-chips .chip { margin-left: 0; }
+  dl.section-values { margin-top: 2px; }
+  #confirm-extra:not(:empty) { margin-bottom: 20px; }
+  dl .self-test-toggle { grid-column: 1 / -1; margin: 2px 0 0 auto; }
+  .card.unavailable { opacity: 0.7; }
+  .card.unavailable .switch span { cursor: not-allowed; }
+  .unavailable-note { margin: 0 0 10px; font-size: 13px; }
+  .unavailable-heading { grid-column: 1 / -1; margin: 12px 0 0; font-size: 16px; font-weight: 500; color: var(--secondary-text-color); }
   .chip { font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--divider-color);
     color: var(--secondary-text-color); margin-left: 4px; }
   .settings { display: flex; flex-direction: column; gap: 10px; }
@@ -5947,7 +6340,7 @@ const STYLE = `
   button.primary { background: var(--primary-color); }
   .cells { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--divider-color); }
   .cells dl { margin-top: 0; }
-  .cells dt .sub { display: block; font-size: 11px; }
+  .cells dt .sub, #details dt .sub { display: block; font-size: 11px; }
   .muted { color: var(--secondary-text-color); }
   .status { display: inline-flex; align-items: center; gap: 2px; font-size: 12px; margin-left: 6px; }
   .status ha-icon { --mdc-icon-size: 16px; }

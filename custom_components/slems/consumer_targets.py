@@ -599,6 +599,31 @@ def energy_to_target(
     return missing / 3600 * power_w if power_w > 0 else None
 
 
+def next_period_energy(
+    settings: TargetSettings,
+    *,
+    power_w: float,
+    forecast_c: float | None,
+    wh_per_k: float | None,
+    estimate_wh: float | None,
+) -> float | None:
+    """Energy (Wh) the coming period is expected to need, None when not known.
+
+    For a temperature target up to the target temperature from its forecast at
+    that deadline, at least the daily energy of the last days; a state of
+    charge target depends on the car then.
+    """
+    if settings.type is TargetType.TEMPERATURE:
+        learned = None if forecast_c is None or not wh_per_k else max(0.0, (settings.target_temp_c - forecast_c) * wh_per_k)
+        known = [energy for energy in (learned, estimate_wh) if energy is not None]
+        return max(known) if known else None
+    if settings.type is TargetType.ENERGY:
+        return settings.energy_kwh * 1000
+    if settings.type in (TargetType.RUNTIME, TargetType.ENABLED):
+        return settings.hours * power_w
+    return None
+
+
 @dataclass(frozen=True)
 class SurplusDemand:
     """Energy a daily target takes from the surplus between ``start`` and ``end``."""

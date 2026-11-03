@@ -73,6 +73,7 @@ def _panel_config(hass: HomeAssistant, entry: SlemsConfigEntry) -> dict:
                 "id": battery.subentry_id,
                 "name": battery.name,
                 "device_id": device_id(battery.subentry_id),
+                "controllable": battery.driver.capabilities.controllable,
                 "test_power_w": self_test_power_w(
                     battery.driver.capabilities.max_charge_power_w,
                     battery.driver.capabilities.max_discharge_power_w,
