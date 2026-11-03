@@ -996,17 +996,17 @@
       "surplus_window": {
         "name": "Überschuss-Fenster",
         "state": {
-          "off": "Aus",
-          "show": "Nur anzeigen",
-          "release": "Freigeben"
+          "off": "Nach Überschuss",
+          "show": "Prognose anzeigen",
+          "release": "Nach Prognose"
         }
       },
       "hot_water_surplus_window": {
         "name": "Warmwasser-Überschuss-Fenster",
         "state": {
-          "off": "Aus",
-          "show": "Nur anzeigen",
-          "release": "Freigeben"
+          "off": "Nach Überschuss",
+          "show": "Prognose anzeigen",
+          "release": "Nach Prognose"
         }
       },
       "operating_mode": {

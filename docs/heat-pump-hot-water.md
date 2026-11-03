@@ -104,9 +104,9 @@ surplus window 10:30–13:00 · window 12:25–14:55 · forced from 14:55".
 
 - **Window**: e.g. 150 minutes. The release stays open at least this long, so
   the automation can wait for a good moment.
-- **Surplus window**: **Release**. From the PV and consumption forecast SLEMS
+- **Surplus window**: **By forecast**. From the PV and consumption forecast SLEMS
   places the window in the time the surplus covers the charge best, and
-  releases during that time, also while the surplus dips. With **Off** SLEMS
+  releases during that time, also while the surplus dips. With **By surplus** SLEMS
   releases only while there is enough surplus.
 - **Before the forced run**: on. The window then also lies before the latest
   start: if the automation has not found a good moment by then, it gets
@@ -302,6 +302,6 @@ actions:
   certain operating mode that was lost after a power cut?
 - **The charge is forced almost every day**: the window is too short for your
   conditions, or the earliest start is too late. A longer **Window** or
-  **Surplus window** **Release** gives the automation more time.
+  **Surplus window** **By forecast** gives the automation more time.
 - **Right after the end a second charge starts**: the offset is still set; it
   has to go back to 0 after the charge.

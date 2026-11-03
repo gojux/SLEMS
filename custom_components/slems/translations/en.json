@@ -996,17 +996,17 @@
       "surplus_window": {
         "name": "Surplus window",
         "state": {
-          "off": "Off",
-          "show": "Show only",
-          "release": "Release"
+          "off": "By surplus",
+          "show": "Show forecast",
+          "release": "By forecast"
         }
       },
       "hot_water_surplus_window": {
         "name": "Hot water surplus window",
         "state": {
-          "off": "Off",
-          "show": "Show only",
-          "release": "Release"
+          "off": "By surplus",
+          "show": "Show forecast",
+          "release": "By forecast"
         }
       },
       "operating_mode": {

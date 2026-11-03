@@ -1652,9 +1652,10 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
   - **Überschuss-Fenster** (mit Tagesziel): Aus PV- und Verbrauchsprognose
     plant SLEMS, wann der Überschuss den Lauf am besten deckt (vom frühesten
     Beginn bis zum erzwungenen Lauf, die noch nötige Energie mit der
-    gelernten Leistung), mit dem Fenster darum. **Aus**: freigegeben nur mit
-    Überschuss. **Nur anzeigen**: Karte (Zeile **Plan**) und Tagesdiagramm
-    zeigen es. **Freigeben**: für das geplante Fenster freigegeben, auch wenn
+    gelernten Leistung), mit dem Fenster darum. **Nach Überschuss**: freigegeben
+    nur mit Überschuss, ohne geplantes Fenster. **Prognose anzeigen**: Karte (Zeile
+    **Zeitfenster**) und Tagesdiagramm zeigen es, freigegeben nur mit Überschuss.
+    **Nach Prognose**: zusätzlich für das geplante Fenster freigegeben, auch wenn
     der Überschuss kurz fehlt, damit die Automation auf ihren Moment warten
     kann; dann kann ein Teil aus Batterien oder Netz kommen. Einmal offen,
     bleibt das Fenster wie geplant, bis es schließt.
@@ -1963,8 +1964,9 @@ Je gesteuertem Verbraucher, auf seiner Karte unter **Tagesziel**.
   Mindestlaufzeit), auch wenn der Ladestand danach etwas sinkt; ein höherer
   Ziel-Ladestand gilt wieder als offen. Die Karte zeigt z. B. **62 / 80 % · bis
   07:00**, ohne Auto zusätzlich **nicht angesteckt**.
-- **Anzeige**: Die Karte zeigt den Fortschritt, z. B. **1,5 / 4 h · bis 22:00 ·
-  noch ca. 2,3 kWh**, in der Zeile **Plan**, wann SLEMS den Rest einplant,
+- **Anzeige**: Die Karte zeigt den Fortschritt, z. B. **1,5 / 4 h**, die **Details**
+  ausführlich, z. B. **1,5 / 4 h · bis 22:00 · noch ca. 2,3 kWh**, in der Zeile
+  **Plan**, wann SLEMS den Rest einplant,
   z. B. **Fenster 12:20–14:20 · erzwungen ab 14:20 · dauert ca. 1 h 5 min**,
   und die Chips **Vorrang** oder
   **erzwungen**, solange sie gelten; die Box des Verbrauchers im Energiefluss

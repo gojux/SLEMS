@@ -106,10 +106,10 @@ fallen würde. Die Zeile **Warmwasser-Plan** zeigt das, z. B. „ohne Heizen um 
 
 - **Fenster**: z. B. 150 Minuten. So lange bleibt die Freigabe mindestens
   offen, damit die Automation auf einen guten Moment warten kann.
-- **Überschuss-Fenster**: **Freigeben**. SLEMS legt das Fenster aus PV- und
+- **Überschuss-Fenster**: **Nach Prognose**. SLEMS legt das Fenster aus PV- und
   Verbrauchsprognose in die Zeit, in der der Überschuss die Ladung am besten
   deckt, und gibt in dieser Zeit frei, auch wenn der Überschuss kurz fehlt.
-  Mit **Aus** gibt SLEMS nur frei, solange genug Überschuss da ist.
+  Mit **Nach Überschuss** gibt SLEMS nur frei, solange genug Überschuss da ist.
 - **Vor dem erzwungenen Start**: an. Das Fenster liegt dann zusätzlich vor dem
   spätesten Start: Hat die Automation bis dahin keinen guten Moment gefunden,
   bekommt sie vor dem erzwungenen Lauf noch einmal die Chance dazu.
@@ -304,7 +304,7 @@ actions:
   Betriebsart, die nach einem Stromausfall verloren ging?
 - **Die Ladung wird fast jeden Tag erzwungen**: Das Fenster ist zu kurz für
   deine Bedingungen, oder der früheste Beginn liegt zu spät. Ein längeres
-  **Fenster** oder **Überschuss-Fenster** **Freigeben** gibt der Automation
+  **Fenster** oder **Überschuss-Fenster** **Nach Prognose** gibt der Automation
   mehr Zeit.
 - **Nach dem Ende startet gleich eine zweite Ladung**: Der Offset steht noch;
   er muss nach der Ladung wieder auf 0.
