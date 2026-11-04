@@ -1862,7 +1862,8 @@ Per controlled consumer, on its card under **Daily target**.
   charge drops a little afterwards; a higher target state of charge is open
   again. The card shows e.g. **62 / 80 % · until 07:00**, without a car also
   **not plugged in**.
-- **Display**: the card shows the progress, e.g. **1.5 / 4 h**, **Details**
+- **Display**: the card shows the progress, e.g. **1.5 / 4 h** (while the target
+  waits for the next day, the row is called **Tomorrow** instead of **Today**), **Details**
   in full, e.g. **1.5 / 4 h · until 22:00 · about 2.3 kWh to go**, in the row
   **Plan** when SLEMS plans the rest, e.g.
   **release 12:20–14:20 · forced from 14:20 · takes about 1 h 5 min**, and the

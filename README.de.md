@@ -1981,7 +1981,8 @@ Je gesteuertem Verbraucher, auf seiner Karte unter **Tagesziel**.
   Mindestlaufzeit), auch wenn der Ladestand danach etwas sinkt; ein höherer
   Ziel-Ladestand gilt wieder als offen. Die Karte zeigt z. B. **62 / 80 % · bis
   07:00**, ohne Auto zusätzlich **nicht angesteckt**.
-- **Anzeige**: Die Karte zeigt den Fortschritt, z. B. **1,5 / 4 h**, die **Details**
+- **Anzeige**: Die Karte zeigt den Fortschritt, z. B. **1,5 / 4 h** (wartet das
+  Ziel auf den nächsten Tag, heißt die Zeile **Morgen** statt **Heute**), die **Details**
   ausführlich, z. B. **1,5 / 4 h · bis 22:00 · noch ca. 2,3 kWh**, in der Zeile
   **Plan**, wann SLEMS den Rest einplant,
   z. B. **Freigabe 12:20–14:20 · erzwungen ab 14:20 · dauert ca. 1 h 5 min**,

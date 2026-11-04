@@ -265,7 +265,9 @@ const STRINGS = {
     targetSource: "Source",
     targetPriority: "Before the batteries when short",
     targetProgress: "Today",
+    targetProgressTomorrow: "Tomorrow",
     hotWaterTargetProgress: "Hot water today",
+    hotWaterTargetProgressTomorrow: "Hot water tomorrow",
     targetUntil: "until {time}",
     wearCost: "Wear costs",
     wearEstimated: "estimated",
@@ -1024,7 +1026,9 @@ const STRINGS = {
     targetSource: "Quelle",
     targetPriority: "Vor der Batterie, wenn knapp",
     targetProgress: "Heute",
+    targetProgressTomorrow: "Morgen",
     hotWaterTargetProgress: "Warmwasser heute",
+    hotWaterTargetProgressTomorrow: "Warmwasser morgen",
     targetUntil: "bis {time}",
     wearCost: "Verschleißkosten",
     wearEstimated: "geschätzt",
@@ -2676,7 +2680,7 @@ class SlemsPanel extends HTMLElement {
       this._phaseRow(c.device_id, c.name),
       c.controllable ? this._row(t.consumerResponseTime, `${seconds(attrs.response_on_s)} / ${seconds(attrs.response_off_s)}`, planned?.entity_id) : "",
       c.controllable ? this._row(t.gridResponseTime, `${seconds(attrs.grid_response_on_s)} / ${seconds(attrs.grid_response_off_s)}`, planned?.entity_id) : "",
-      targeted ? this._row(hotWater ? t.hotWaterTargetProgress : t.targetProgress, escapeHtml(this._targetText(attrs, source)), planned?.entity_id) : "",
+      targeted ? this._row(this._targetWaitsForTomorrow(attrs) ? (hotWater ? t.hotWaterTargetProgressTomorrow : t.targetProgressTomorrow) : hotWater ? t.hotWaterTargetProgress : t.targetProgress, escapeHtml(this._targetText(attrs, source)), planned?.entity_id) : "",
       planText ? this._row(hotWater ? t.hotWaterTargetPlan : t.targetPlan, escapeHtml(planText), planned?.entity_id) : "",
       support ? this._row(t.batterySupport, escapeHtml(this._supportText(support)), support.entity_id) : "",
     ].join("");
@@ -5420,7 +5424,7 @@ class SlemsPanel extends HTMLElement {
       row(t.temperature, temperature) +
       row(t.timeWindow, windowText) +
       row(t.energyNeed, energy) +
-      row(t.targetProgress, state) +
+      row(this._targetWaitsForTomorrow(attrs) ? t.targetProgressTomorrow : t.targetProgress, state) +
       this._releaseRow(c)
     );
   }
@@ -5439,6 +5443,11 @@ class SlemsPanel extends HTMLElement {
     return this._t.targetUntil.replace("{time}", this._clock(attrs.target_deadline));
   }
 
+  /** Whether a daily target waits for its earliest start on a later day (after the deadline until midnight or that start). */
+  _targetWaitsForTomorrow(attrs) {
+    return attrs.target_mode === "waiting" && Boolean(attrs.target_earliest) && new Date(attrs.target_earliest).toDateString() !== new Date().toDateString();
+  }
+
   /** Energy still needed, once reached that of the coming period: "noch ca. 2,5 kWh", "morgen ca. 3 kWh". */
   _targetEnergyText(attrs) {
     const t = this._t;
@@ -5451,8 +5460,7 @@ class SlemsPanel extends HTMLElement {
       return text(isToday(attrs.target_energy_next_at) ? t.targetEnergyToday : t.targetEnergyTomorrow, next);
     }
     if (energy > 0) {
-      const later = attrs.target_mode === "waiting" && attrs.target_earliest && !isToday(attrs.target_earliest);
-      return text(later ? t.targetEnergyTomorrow : t.targetEnergyLeft, energy);
+      return text(this._targetWaitsForTomorrow(attrs) ? t.targetEnergyTomorrow : t.targetEnergyLeft, energy);
     }
     return attrs.target_type === "temperature" ? t.targetEnergyLearning : "";
   }
@@ -5570,11 +5578,8 @@ class SlemsPanel extends HTMLElement {
     if (attrs.plugged === false && mode !== "done") parts.push(t.unplugged);
     const energy = attrs.target_energy_wh;
     if (mode !== "done" && energy > 0) {
-      // Waiting for a later day (after the deadline until midnight, or the earliest
-      // start tomorrow): the energy is that of the coming period.
-      const tomorrow =
-        mode === "waiting" && attrs.target_earliest && new Date(attrs.target_earliest).toDateString() !== new Date().toDateString();
-      const text = tomorrow
+      // Waiting for a later day: the energy is that of the coming period.
+      const text = this._targetWaitsForTomorrow(attrs)
         ? attrs.target_energy_estimated ? t.targetEnergyTomorrowEstimated : t.targetEnergyTomorrow
         : attrs.target_energy_estimated ? t.targetEnergyEstimated : t.targetEnergyLeft;
       parts.push(text.replace("{energy}", `${number(energy / 1000)} kWh`));
