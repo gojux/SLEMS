@@ -225,7 +225,7 @@ const STRINGS = {
     releaseLatest: "latest start {time}",
     releaseSection: "Release",
     hotWaterReleaseSection: "Hot water release",
-    releaseWindow: "Window",
+    releaseWindow: "Release duration",
     windowBeforeForced: "Before the forced run",
     surplusWindow: "Surplus window",
     blocked: "blocked",
@@ -271,18 +271,18 @@ const STRINGS = {
     wearEstimated: "estimated",
     wearHint: "Wear costs estimated: the purchase price and the rated cycles can be added in the battery configuration (Settings → SLEMS → edit battery).",
     targetLatest: "forced from {time}",
-    targetWindow: "window open",
+    targetWindow: "release open",
     targetPlanned: "surplus window open",
     planSurplus: "surplus window {from}–{until}",
     laneSurplus: "surplus window {from}–{until}",
     targetPlan: "Plan",
     hotWaterTargetPlan: "Hot water plan",
-    planWindow: "window {from}–{until}",
+    planWindow: "release {from}–{until}",
     planRun: "takes about {duration}",
     planForecast: "about {temperature} at {time} without heating",
     lanesTitle: "Daily targets",
     lanePeriod: "period {from}–{until}",
-    laneWindow: "release window {from}–{until}",
+    laneWindow: "release {from}–{until}",
     laneForced: "forced {from}–{until}",
     laneDone: "reached",
     targetLatestPrice: "from {time} in the cheapest window",
@@ -632,11 +632,11 @@ const STRINGS = {
       target_type:
         "Runtime: time the consumer draws power. Enabled time: time SLEMS has it switched on, for devices with their own control (a dehumidifier with a hygrostat). Energy: kWh. Temperature: minimum and target temperature of its storage (temperature sensors). State of charge: the car's at a wallbox (its sensor and battery capacity); once reached the wallbox stays off until the deadline. Counted from one deadline to the next; met from the surplus first. A temperature target applies from midnight (or the earliest start) to the deadline: after the deadline the consumer stays off until then, also with surplus.",
       release_window:
-        "Once released, the release stays open at least this long, also without surplus, until the daily target is met or its deadline has passed (e.g. so your automation can wait for a compressor run of the heat pump). SLEMS plans only the energy the consumer really takes; unlike the minimum runtime the window does not count for **Avoid short runs**. 0: off.",
+        "Once opened, the release stays open at least this long, also without surplus, until the daily target is met or its deadline has passed (e.g. so your automation can wait for a compressor run of the heat pump). If it starts during this time, a part may come from the batteries or the grid. With the source **Surplus only** this applies only while the consumer runs: until then the release closes without surplus and opens again with new surplus. SLEMS plans only the energy the consumer really takes; unlike the minimum runtime the release duration does not count for **Avoid short runs**. 0: off.",
       surplus_window:
-        "From the PV and consumption forecasts SLEMS finds the time when the surplus will probably suit the run best. This window lies between the earliest start and the forced run.\n**By surplus**: SLEMS releases as soon as and while there is enough surplus. No window is planned.\n**Show forecast**: The window appears on the card and in the day chart, but SLEMS still releases only with a surplus.\n**By forecast**: SLEMS also releases for the whole window, also while the surplus dips. A part may then come from the batteries or the grid.",
+        "From the PV and consumption forecasts SLEMS finds the window in which a start at any time needs as little energy as possible from the batteries or the grid. It lies between the earliest start and the forced run and sets the start: a hot water charge or a minimum runtime can go beyond it.\n**By surplus**: SLEMS releases as soon as there is enough surplus. The release then stays open for the **Release duration**, afterwards while the surplus lasts. No window is planned.\n**By forecast**: The window appears on the card and in the day chart, and SLEMS also releases for the whole window, also while the surplus dips. A part may then come from the batteries or the grid. With the source **Surplus only** the window is only shown.",
       window_before_forced:
-        "The window lies before the forced run: from the latest start minus the window on, SLEMS releases the consumer also without surplus, but not forced; forced only from the latest start, if your automation has not started it by then. Only with a source beyond the surplus; such a run uses the batteries or the grid like the forced one, just earlier.",
+        "The release also opens by the **Release duration** before the latest start, also without surplus, but not forced. It is forced only from the latest start, if your automation has not started the consumer by then. Only with a source beyond the surplus; such a run uses the batteries or the grid like the forced one, just earlier.",
       target_earliest_enabled:
         "Not switched on before the earliest start, also with surplus (e.g. a dehumidifier only from 10:00). Counted until the deadline; the latest start is never before it.",
       target_sensor:
@@ -984,7 +984,7 @@ const STRINGS = {
     releaseLatest: "spätester Start {time}",
     releaseSection: "Freigabe",
     hotWaterReleaseSection: "Warmwasser-Freigabe",
-    releaseWindow: "Fenster",
+    releaseWindow: "Freigabedauer",
     windowBeforeForced: "Vor dem erzwungenen Start",
     surplusWindow: "Überschuss-Fenster",
     blocked: "gesperrt",
@@ -1030,18 +1030,18 @@ const STRINGS = {
     wearEstimated: "geschätzt",
     wearHint: "Verschleißkosten geschätzt: Anschaffungspreis und Zyklen laut Hersteller lassen sich in der Batterie-Konfiguration nachtragen (Einstellungen → SLEMS → Batterie bearbeiten).",
     targetLatest: "erzwungen ab {time}",
-    targetWindow: "Fenster offen",
+    targetWindow: "Freigabe offen",
     targetPlanned: "Überschuss-Fenster offen",
     planSurplus: "Überschuss-Fenster {from}–{until}",
     laneSurplus: "Überschuss-Fenster {from}–{until}",
     targetPlan: "Plan",
     hotWaterTargetPlan: "Warmwasser-Plan",
-    planWindow: "Fenster {from}–{until}",
+    planWindow: "Freigabe {from}–{until}",
     planRun: "dauert ca. {duration}",
     planForecast: "ohne Heizen um {time} ca. {temperature}",
     lanesTitle: "Tagesziele",
     lanePeriod: "Zeitraum {from}–{until}",
-    laneWindow: "Freigabefenster {from}–{until}",
+    laneWindow: "Freigabe {from}–{until}",
     laneForced: "erzwungen {from}–{until}",
     laneDone: "erreicht",
     targetLatestPrice: "ab {time} im günstigsten Fenster",
@@ -1391,11 +1391,11 @@ const STRINGS = {
       target_type:
         "Laufzeit: Zeit, in der der Verbraucher Leistung zieht. Freigabezeit: Zeit, in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung (Luftentfeuchter mit Hygrostat). Energie: kWh. Temperatur: Mindest- und Zieltemperatur seines Speichers (Temperaturfühler). Ladestand: der des Autos an einer Wallbox (sein Sensor und die Akkukapazität); erreicht, bleibt die Wallbox bis zur Frist aus. Gezählt von Frist zu Frist; zuerst aus dem Überschuss. Ein Temperaturziel gilt von Mitternacht (oder dem frühesten Beginn) bis zur Frist: Nach der Frist bleibt der Verbraucher bis dahin aus, auch mit Überschuss.",
       release_window:
-        "Einmal freigegeben, bleibt die Freigabe mindestens so lange offen, auch ohne Überschuss, bis das Tagesziel erreicht oder seine Frist vorbei ist (z. B. damit deine Automation auf einen Kompressorlauf der Wärmepumpe warten kann). SLEMS plant nur die Energie, die der Verbraucher wirklich aufnimmt; anders als die Mindestlaufzeit zählt das Fenster nicht für **Takten vermeiden**. 0: aus.",
+        "Einmal geöffnet, bleibt die Freigabe mindestens so lange offen, auch ohne Überschuss, bis das Tagesziel erreicht oder seine Frist vorbei ist (z. B. damit deine Automation auf einen Kompressorlauf der Wärmepumpe warten kann). Startet sie in dieser Zeit, kann ein Teil aus Batterien oder Netz kommen. Mit der Quelle **Nur Überschuss** gilt das nur, solange der Verbraucher läuft: Bis dahin schließt die Freigabe ohne Überschuss und öffnet bei neuem Überschuss wieder. SLEMS plant nur die Energie, die der Verbraucher wirklich aufnimmt; anders als die Mindestlaufzeit zählt die Freigabedauer nicht für **Takten vermeiden**. 0: aus.",
       surplus_window:
-        "SLEMS sucht mit PV- und Verbrauchsprognose die Zeit, in der der Überschuss für den Lauf voraussichtlich am besten reicht. Dieses Fenster liegt zwischen dem frühesten Beginn und dem erzwungenen Lauf.\n**Nach Überschuss**: SLEMS gibt frei, sobald und solange gerade genug Überschuss da ist. Es wird kein Fenster geplant.\n**Prognose anzeigen**: Das Fenster steht auf der Karte und im Tagesdiagramm, SLEMS gibt aber weiter nur bei Überschuss frei.\n**Nach Prognose**: SLEMS gibt zusätzlich während des ganzen Fensters frei, auch wenn der Überschuss kurz fehlt. Dann kann ein Teil aus Batterien oder Netz kommen.",
+        "SLEMS sucht mit PV- und Verbrauchsprognose das Fenster, in dem für einen Start zu jeder Zeit möglichst wenig Energie aus Batterien oder Netz nötig ist. Es liegt zwischen dem frühesten Beginn und dem erzwungenen Lauf und bestimmt den Start: Eine Warmwasserladung oder eine Mindestlaufzeit kann darüber hinausgehen.\n**Nach Überschuss**: SLEMS gibt frei, sobald genug Überschuss da ist. Danach bleibt die Freigabe für die **Freigabedauer** offen, anschließend solange der Überschuss reicht. Es wird kein Fenster geplant.\n**Nach Prognose**: Das Fenster steht auf der Karte und im Tagesdiagramm, und SLEMS gibt zusätzlich während des ganzen Fensters frei, auch wenn der Überschuss kurz fehlt. Dann kann ein Teil aus Batterien oder Netz kommen. Mit der Quelle **Nur Überschuss** wird das Fenster nur angezeigt.",
       window_before_forced:
-        "Das Fenster liegt vor dem erzwungenen Start: Ab spätestem Start minus Fenster gibt SLEMS den Verbraucher auch ohne Überschuss frei, aber nicht erzwungen; erzwungen erst ab dem spätesten Start, wenn deine Automation ihn bis dahin nicht gestartet hat. Nur mit einer Quelle über den Überschuss hinaus; so ein Lauf nutzt Batterien oder Netz wie der erzwungene, nur früher.",
+        "Die Freigabe öffnet zusätzlich um die **Freigabedauer** vor dem spätesten Start, auch ohne Überschuss, aber nicht erzwungen. Erzwungen wird erst ab dem spätesten Start, wenn deine Automation den Verbraucher bis dahin nicht gestartet hat. Nur mit einer Quelle über den Überschuss hinaus; so ein Lauf nutzt Batterien oder Netz wie der erzwungene, nur früher.",
       target_earliest_enabled:
         "Vor dem frühesten Beginn wird der Verbraucher nicht eingeschaltet, auch nicht mit Überschuss (z. B. ein Luftentfeuchter erst ab 10:00). Gezählt bis zur Frist; die späteste Startzeit liegt nie davor.",
       target_sensor:
@@ -5607,7 +5607,7 @@ class SlemsPanel extends HTMLElement {
     return [];
   }
 
-  /** "Fenster 12:20–14:20 · erzwungen ab 14:20 · dauert ca. 1 h 5 min": when SLEMS plans the rest. */
+  /** "Freigabe 12:20–14:20 · erzwungen ab 14:20 · dauert ca. 1 h 5 min": when SLEMS plans the rest. */
   _planText(attrs, source) {
     const t = this._t;
     const mode = attrs.target_mode;

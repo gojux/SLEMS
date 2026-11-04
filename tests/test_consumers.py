@@ -322,6 +322,7 @@ def test_saturation_ends_when_the_target_is_met_or_waiting() -> None:
         controller=SimpleNamespace(saturated=frozenset({"rod"}), end_saturation=ended.append),
         _runtime=runtime,
         target_states={},
+        _waits_without_surplus=lambda consumer, available_w: False,
     )
     end = SlemsCoordinator._end_needless_saturation
     for mode in (TargetMode.SURPLUS, TargetMode.FORCED, TargetMode.NONE):
@@ -388,6 +389,53 @@ def test_release_window_keeps_the_release_open() -> None:
     assert not holds(coordinator, release, 60.0, TargetMode.SURPLUS)
 
 
+def test_release_window_with_surplus_only_keeps_a_run_but_starts_none() -> None:
+    from custom_components.slems.consumer_targets import TargetMode, TargetSettings, TargetSource
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    release = replace(consumer(), control_mode=ControlMode.RELEASE)
+    coordinator = _release_coordinator(TargetSettings(release_window_min=150, source=TargetSource.SURPLUS))
+    coordinator._runtime.update("rod", True, 0.0)
+    holds = SlemsCoordinator._window_holds
+    # Running: kept. Not started yet: not held, it closes without surplus.
+    assert holds(coordinator, release, 60.0, TargetMode.SURPLUS, 800.0)
+    assert not holds(coordinator, release, 60.0, TargetMode.SURPLUS, 0.0)
+    # Power unknown: kept; without a target it has no source to follow.
+    assert holds(coordinator, release, 60.0, TargetMode.SURPLUS, None)
+    assert holds(coordinator, release, 60.0, TargetMode.NONE, 0.0)
+    # With a source beyond the surplus it waits.
+    coordinator.consumer_targets["rod"].source = TargetSource.GRID
+    assert holds(coordinator, release, 60.0, TargetMode.SURPLUS, 0.0)
+
+
+def test_saturated_release_with_surplus_only_closes_without_surplus() -> None:
+    from custom_components.slems.consumer_targets import TargetMode, TargetSettings, TargetSource, TargetState
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    release = replace(consumer(), control_mode=ControlMode.RELEASE, nominal_power_w=2000)
+
+    def ended(source: TargetSource, available_w: float | None) -> list[str]:
+        calls: list[str] = []
+        coordinator = SimpleNamespace(
+            consumers=[release],
+            target_states={"rod": TargetState(TargetMode.SURPLUS)},
+            controller=SimpleNamespace(saturated=frozenset({"rod"}), end_saturation=calls.append),
+            consumer_targets={"rod": TargetSettings(source=source)},
+            effective_consumer=lambda c: c,
+            _full_power_w=SlemsCoordinator._full_power_w,
+            _runtime=RuntimeTracker(),
+        )
+        coordinator._waits_without_surplus = lambda c, w: SlemsCoordinator._waits_without_surplus(coordinator, c, w)
+        SlemsCoordinator._end_needless_saturation(coordinator, 0.0, available_w)
+        return calls
+
+    assert ended(TargetSource.SURPLUS, 1000.0) == ["rod"]
+    # Enough surplus, or not known, or allowed to wait without it: still waiting.
+    assert ended(TargetSource.SURPLUS, 2500.0) == []
+    assert ended(TargetSource.SURPLUS, None) == []
+    assert ended(TargetSource.GRID, 1000.0) == []
+
+
 def test_avoiding_short_runs_with_a_temperature_target_needs_the_charge_only() -> None:
     from custom_components.slems.const import TargetType
     from custom_components.slems.consumer_targets import TargetMode, TargetSettings
@@ -420,14 +468,19 @@ def test_surplus_window_is_kept_once_open_and_releases() -> None:
 
     from homeassistant.util import dt as dt_util
 
-    from custom_components.slems.const import SurplusWindow, TargetType
+    from custom_components.slems.const import SurplusWindow, TargetSource, TargetType
     from custom_components.slems.consumer_targets import TargetMode, TargetSettings, TargetState
     from custom_components.slems.coordinator import SlemsCoordinator
 
     zone = dt_util.get_default_time_zone()
     day = datetime(2026, 10, 12, tzinfo=zone)
     release = replace(consumer(), control_mode=ControlMode.RELEASE)
-    settings = TargetSettings(type=TargetType.TEMPERATURE, surplus_window=SurplusWindow.SHOW, release_window_min=120)
+    settings = TargetSettings(
+        type=TargetType.TEMPERATURE,
+        source=TargetSource.GRID,
+        surplus_window=SurplusWindow.RELEASE,
+        release_window_min=120,
+    )
     coordinator = SimpleNamespace(surplus_windows={}, target_energy_wh={"rod": 2800.0})
     state = TargetState(TargetMode.SURPLUS, end=day.replace(hour=15, minute=30))
     plan = SlemsCoordinator._surplus_window
@@ -439,19 +492,51 @@ def test_surplus_window_is_kept_once_open_and_releases() -> None:
             hourly_surplus=forecast, power_w=2800.0,
         )
 
-    # Shown only: planned 11:30–13:30, the mode unchanged.
+    # Planned 11:00–13:00, before it the mode unchanged.
     assert at(9).mode is TargetMode.SURPLUS
-    assert coordinator.surplus_windows["rod"][:2] == (day.replace(hour=11, minute=30), day.replace(hour=13, minute=30))
-    # Released: open from 11:30; kept while open although the forecast moved.
-    released = replace(settings, surplus_window=SurplusWindow.RELEASE)
-    assert at(11, current=released).mode is TargetMode.SURPLUS
-    assert at(11, 45, current=released).mode is TargetMode.PLANNED
+    assert coordinator.surplus_windows["rod"][:2] == (day.replace(hour=11), day.replace(hour=13))
+    # Open from 11:00; kept while open although the forecast moved.
+    assert at(10, 45).mode is TargetMode.SURPLUS
+    assert at(11, 15).mode is TargetMode.PLANNED
     later = {day.replace(hour=14): 3000.0}
-    assert at(12, forecast=later, current=released).mode is TargetMode.PLANNED
-    assert coordinator.surplus_windows["rod"][0] == day.replace(hour=11, minute=30)
+    assert at(12, forecast=later).mode is TargetMode.PLANNED
+    assert coordinator.surplus_windows["rod"][0] == day.replace(hour=11)
+    # The source "surplus only": shown, not released without surplus.
+    assert at(11, 15, current=replace(settings, source=TargetSource.SURPLUS)).mode is TargetMode.SURPLUS
+    assert coordinator.surplus_windows["rod"][0] == day.replace(hour=11)
     # Off: no window.
     assert at(12, current=replace(settings, surplus_window=SurplusWindow.OFF)).mode is TargetMode.SURPLUS
     assert "rod" not in coordinator.surplus_windows
+
+
+def test_surplus_window_counts_what_runs_on_after_it_closes() -> None:
+    from datetime import datetime
+
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.slems.const import SurplusWindow, TargetType
+    from custom_components.slems.consumer_targets import TargetMode, TargetSettings, TargetState
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    day = datetime(2026, 10, 12, tzinfo=dt_util.get_default_time_zone())
+    settings = TargetSettings(type=TargetType.TEMPERATURE, surplus_window=SurplusWindow.RELEASE, release_window_min=120)
+    state = TargetState(TargetMode.SURPLUS, end=day.replace(hour=15, minute=30))
+    # A run of 2 h at 2.8 kW, with the surplus only from 10:00 to 12:00.
+    surplus = {day.replace(hour=10): 3000.0, day.replace(hour=11): 3000.0}
+
+    def planned(config):
+        coordinator = SimpleNamespace(surplus_windows={}, target_energy_wh={"rod": 5600.0})
+        SlemsCoordinator._surplus_window(
+            coordinator, config, settings, state, day.replace(hour=9), hourly_surplus=surplus, power_w=2800.0
+        )
+        return tuple(moment.hour + moment.minute / 60 for moment in coordinator.surplus_windows["rod"][:2])
+
+    release = replace(consumer(), control_mode=ControlMode.RELEASE)
+    # Without a minimum runtime it ends with the window.
+    assert planned(release) == (10, 12)
+    assert planned(replace(release, min_on_s=3600.0)) == (9.5, 11.5)
+    # A hot water charge goes on until it ends.
+    assert planned(replace(release, mode_entity_id="sensor.status")) == (9, 11)
 
 
 def test_consumer_found_running_after_a_start_counts_as_on() -> None:
@@ -662,6 +747,49 @@ def test_nothing_is_planned_for_a_wallbox_without_a_car() -> None:
     # The target is still shown, but nothing is planned for it.
     assert "wallbox" in unplugged.target_states
     assert unplugged.target_load == {} and unplugged.target_demands == []
+
+
+def test_a_heat_pump_charge_counts_once_in_the_expected_surplus() -> None:
+    from datetime import datetime, time as clock
+
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.slems.consumer_targets import TargetMode, TargetProgress, TargetSettings, TargetType
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    dt_util.set_default_time_zone(dt_util.get_time_zone("Europe/Vienna"))
+    now = datetime(2026, 10, 4, 10, 0, tzinfo=dt_util.get_default_time_zone())
+    noon = now.replace(hour=11)
+    forecast = SimpleNamespace(total={noon: 2000.0}, heat_pump={noon: 2000.0})
+
+    def mode(consumer_type: ConsumerType) -> TargetMode:
+        config = replace(consumer(), consumer_type=consumer_type)
+        coordinator = SimpleNamespace(
+            consumers=[config],
+            effective_consumer=lambda c: c,
+            consumer_targets={
+                "rod": TargetSettings(type=TargetType.ENERGY, energy_kwh=2.0, deadline=clock(16, 0), priority=True)
+            },
+            target_progress={"rod": TargetProgress(end=now.replace(hour=16))},
+            target_energy_estimate={},
+            consumer_control_disabled=set(),
+            charge_now=set(),
+            settings=SimpleNamespace(feed_in_cap=False),
+            thermal_learners={},
+            cooling_learners={},
+            _full_power_w=lambda c: 2000.0,
+            _target_wh_per_k=lambda settings, thermal: None,
+            _price_window=lambda consumer, settings, state, wall_now, **kwargs: state,
+            _surplus_window=lambda consumer, settings, state, wall_now, **kwargs: state,
+        )
+        snapshot = SimpleNamespace(consumption_forecast=forecast, consumers={"rod": ConsumerState(power_w=0.0)})
+        SlemsCoordinator._target_states(coordinator, snapshot, None, {noon: 3000.0}, None, now)
+        return coordinator.target_states["rod"].mode
+
+    # 3 kWh PV: the 2 kWh of the heat pump forecast are the charge to plan, which fits.
+    assert mode(ConsumerType.HEAT_PUMP) is TargetMode.SURPLUS
+    # Another consumer's target comes on top of that consumption: 1 kWh is short.
+    assert mode(ConsumerType.HEATING_ROD) is TargetMode.BOOST
 
 
 def test_charging_now_ends_when_the_car_is_unplugged_or_charged() -> None:

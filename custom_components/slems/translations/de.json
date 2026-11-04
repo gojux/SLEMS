@@ -997,7 +997,6 @@
         "name": "Überschuss-Fenster",
         "state": {
           "off": "Nach Überschuss",
-          "show": "Prognose anzeigen",
           "release": "Nach Prognose"
         }
       },
@@ -1005,7 +1004,6 @@
         "name": "Warmwasser-Überschuss-Fenster",
         "state": {
           "off": "Nach Überschuss",
-          "show": "Prognose anzeigen",
           "release": "Nach Prognose"
         }
       },
@@ -1402,10 +1400,10 @@
     },
     "switch": {
       "window_before_forced": {
-        "name": "Fenster vor erzwungenem Start"
+        "name": "Freigabe vor erzwungenem Start"
       },
       "hot_water_window_before_forced": {
-        "name": "Warmwasser-Fenster vor erzwungenem Start"
+        "name": "Warmwasser-Freigabe vor erzwungenem Start"
       },
       "vacation": {
         "name": "Urlaub"
@@ -1512,10 +1510,10 @@
     },
     "number": {
       "release_window": {
-        "name": "Freigabefenster"
+        "name": "Freigabedauer"
       },
       "hot_water_release_window": {
-        "name": "Warmwasser-Freigabefenster"
+        "name": "Warmwasser-Freigabedauer"
       },
       "peak_shaving_grid_limit": {
         "name": "Bezugsgrenze für Spitzenabfang"

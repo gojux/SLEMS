@@ -997,7 +997,6 @@
         "name": "Surplus window",
         "state": {
           "off": "Off",
-          "show": "Show only",
           "release": "Release"
         }
       },
@@ -1005,7 +1004,6 @@
         "name": "Hot water surplus window",
         "state": {
           "off": "Off",
-          "show": "Show only",
           "release": "Release"
         }
       },
@@ -1402,10 +1400,10 @@
     },
     "switch": {
       "window_before_forced": {
-        "name": "Window before the forced run"
+        "name": "Release before the forced run"
       },
       "hot_water_window_before_forced": {
-        "name": "Hot water window before the forced run"
+        "name": "Hot water release before the forced run"
       },
       "vacation": {
         "name": "Vacation"
@@ -1512,10 +1510,10 @@
     },
     "number": {
       "release_window": {
-        "name": "Release window"
+        "name": "Release duration"
       },
       "hot_water_release_window": {
-        "name": "Hot water release window"
+        "name": "Hot water release duration"
       },
       "peak_shaving_grid_limit": {
         "name": "Peak shaving grid import limit"

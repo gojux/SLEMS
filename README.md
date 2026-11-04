@@ -1537,31 +1537,39 @@ the energy flow.
     at the latest; empty once it is met.
 
   On the consumer card under **Release**:
-  - **Window** (minutes, 0 = off): once released, the release stays open at
+  - **Release duration** (minutes, 0 = off): once opened, the release stays open at
     least this long, also without surplus, until the daily target is met or
     its deadline has passed. For an automation that waits for the right
-    moment, e.g. a compressor run of the heat pump. Unlike the minimum
-    runtime it does not count for **Avoid short runs**: SLEMS plans only the
-    energy the consumer really takes.
+    moment, e.g. a compressor run of the heat pump. With the source
+    **Surplus only** this applies only while the consumer runs: until then the
+    release closes without surplus and opens again with new surplus. Unlike the
+    minimum runtime it does not count for **Avoid short runs**: SLEMS plans only
+    the energy the consumer really takes.
   - **Before the forced run** (with a daily target whose source goes beyond
-    the surplus): the window lies before the latest start. SLEMS releases the
-    consumer from latest start − window on, also without surplus, but not
+    the surplus): the **Release duration** lies before the latest start. SLEMS releases the
+    consumer from latest start − release duration on, also without surplus, but not
     forced; **Forced run** only from the latest start. The card shows when
-    the window opens ("window 12:20–14:20 · forced from 14:20").
+    the release opens ("release 12:20–14:20 · forced from 14:20").
   - **Surplus window** (with a daily target): from the PV and consumption
-    forecast SLEMS plans when the surplus covers the run best (from the
-    earliest start until the forced run, the energy still needed at its
-    learned power), with the window around it. **By surplus**: released
-    only with the surplus there, no window planned. **Show forecast**: the card
-    (row **Time window**) and the day chart show it, released only with the
-    surplus there. **By forecast**: also released for the planned window, also
-    while the surplus dips, so the automation can wait for its moment; a part may
-    then come from the batteries or the grid. Once open, the window stays as
+    forecast SLEMS plans the window, as long as the **Release duration**, at
+    least as long as the run (from the earliest start until the forced run,
+    the energy still needed at its learned power). As the automation can start
+    anywhere in the window, all starts in it count: SLEMS takes the window that
+    needs the least energy from the batteries or the grid, of equal ones the
+    one with the most surplus. A run ends with the window, but goes on beyond
+    it up to the minimum runtime, a hot water charge until it ends. **By surplus**: released
+    as soon as there is enough surplus, then for the **Release duration** and
+    afterwards while it lasts, no window planned. **By forecast**: the card
+    (row **Time window**) and the day chart show it, and it is also released for
+    the planned window, also while the surplus dips, so the automation can wait
+    for its moment; a part may then come from the batteries or the grid. With
+    the source **Surplus only** the window is only shown. Once open, the window stays as
     planned until it closes.
 
   While the automation has not started the device, it draws nothing: SLEMS
   keeps the release on and gives the surplus to the batteries meanwhile (as
-  for a saturated consumer).
+  for a saturated consumer). With the source **Surplus only** it closes as soon
+  as the surplus no longer suffices.
 
   **Heat pump with release** (hot water): with the type **Heat pump** the
   release is for its hot water charge. It needs the **Operating mode** (e.g.
@@ -1835,7 +1843,7 @@ Per controlled consumer, on its card under **Daily target**.
   heated (heat losses and the usual water draws, about the last two weeks).
   Once it knows 12 hours of the day, it forecasts the temperature at the
   deadline: if the storage will fall below the minimum by then, the forced
-  run (and a release window before it) is planned for that temperature, also
+  run (and a release before it) is planned for that temperature, also
   while it is still above the minimum and before the earliest start. The row
   **Plan** shows the forecast, e.g. **about 37 °C at 15:30 without heating**.
 - **State of charge**: target state of charge of the car by the deadline
@@ -1851,7 +1859,7 @@ Per controlled consumer, on its card under **Daily target**.
 - **Display**: the card shows the progress, e.g. **1.5 / 4 h**, **Details**
   in full, e.g. **1.5 / 4 h · until 22:00 · about 2.3 kWh to go**, in the row
   **Plan** when SLEMS plans the rest, e.g.
-  **window 12:20–14:20 · forced from 14:20 · takes about 1 h 5 min**, and the
+  **release 12:20–14:20 · forced from 14:20 · takes about 1 h 5 min**, and the
   chips **priority** or
   **forced** while they apply; the consumer's box in the energy flow carries
   the same badge, and the strategy tile lists it (**Before the batteries:
@@ -1878,7 +1886,7 @@ Per controlled consumer, on its card under **Daily target**.
   day chart as **Consumers (planned)** and in the consumption forecast, the state
   of charge forecast and the night discharge. Below the day chart, **Daily
   targets** shows a lane per consumer with a daily target: its period (faint),
-  the release window before the forced run, the forced run and the deadline
+  the release before the forced run, the forced run and the deadline
   (a mark). A consumer with the role
   **Supporting** is left out of the surplus part while the feed-in cap is on:
   the feed-in cap plans it with the surplus above the limit.

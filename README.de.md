@@ -1637,32 +1637,43 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
     starten muss; leer, wenn es erreicht ist.
 
   Auf der Verbraucherkarte unter **Freigabe**:
-  - **Fenster** (Minuten, 0 = aus): Einmal freigegeben, bleibt die Freigabe
+  - **Freigabedauer** (Minuten, 0 = aus): Einmal geöffnet, bleibt die Freigabe
     mindestens so lange offen, auch ohne Überschuss, bis das Tagesziel
     erreicht oder seine Frist vorbei ist. Für eine Automation, die auf den
     richtigen Moment wartet, z. B. einen Kompressorlauf der Wärmepumpe.
-    Anders als die Mindestlaufzeit zählt es nicht für **Takten vermeiden**:
-    SLEMS plant nur die Energie, die der Verbraucher wirklich aufnimmt.
+    Mit der Quelle **Nur Überschuss** gilt das nur, solange der Verbraucher
+    läuft: Bis dahin schließt die Freigabe ohne Überschuss und öffnet bei neuem
+    Überschuss wieder. Anders als die Mindestlaufzeit zählt sie nicht für
+    **Takten vermeiden**: SLEMS plant nur die Energie, die der Verbraucher
+    wirklich aufnimmt.
   - **Vor dem erzwungenen Start** (mit einem Tagesziel, dessen Quelle über
-    den Überschuss hinausgeht): Das Fenster liegt vor dem spätesten Start.
-    SLEMS gibt den Verbraucher ab spätestem Start − Fenster frei, auch ohne
+    den Überschuss hinausgeht): Die **Freigabedauer** liegt vor dem spätesten Start.
+    SLEMS gibt den Verbraucher ab spätestem Start − Freigabedauer frei, auch ohne
     Überschuss, aber nicht erzwungen; **Erzwungener Lauf** erst ab dem
-    spätesten Start. Die Karte zeigt, wann das Fenster öffnet („Fenster
+    spätesten Start. Die Karte zeigt, wann die Freigabe öffnet („Freigabe
     12:20–14:20 · erzwungen ab 14:20“).
   - **Überschuss-Fenster** (mit Tagesziel): Aus PV- und Verbrauchsprognose
-    plant SLEMS, wann der Überschuss den Lauf am besten deckt (vom frühesten
-    Beginn bis zum erzwungenen Lauf, die noch nötige Energie mit der
-    gelernten Leistung), mit dem Fenster darum. **Nach Überschuss**: freigegeben
-    nur mit Überschuss, ohne geplantes Fenster. **Prognose anzeigen**: Karte (Zeile
-    **Zeitfenster**) und Tagesdiagramm zeigen es, freigegeben nur mit Überschuss.
-    **Nach Prognose**: zusätzlich für das geplante Fenster freigegeben, auch wenn
-    der Überschuss kurz fehlt, damit die Automation auf ihren Moment warten
-    kann; dann kann ein Teil aus Batterien oder Netz kommen. Einmal offen,
+    plant SLEMS das Fenster, so lang wie die **Freigabedauer**, mindestens wie
+    der Lauf (vom frühesten Beginn bis zum erzwungenen Lauf, die noch nötige
+    Energie mit der gelernten Leistung). Weil die Automation jederzeit im
+    Fenster starten kann, zählen alle Startzeiten darin: Gewählt wird das
+    Fenster, bei dem am wenigsten Energie aus Batterien oder Netz nötig ist,
+    bei Gleichstand das mit dem meisten Überschuss. Ein Lauf endet mit dem
+    Fenster, reicht aber bis zur Mindestlaufzeit darüber hinaus, eine
+    Warmwasserladung bis zu ihrem Ende. **Nach Überschuss**: freigegeben,
+    sobald genug Überschuss da ist, dann für die **Freigabedauer** und
+    anschließend solange er reicht, ohne geplantes Fenster. **Nach Prognose**:
+    Karte (Zeile **Zeitfenster**) und Tagesdiagramm zeigen es, und es wird
+    zusätzlich für das geplante Fenster freigegeben, auch wenn der Überschuss
+    kurz fehlt, damit die Automation auf ihren Moment warten kann; dann kann ein
+    Teil aus Batterien oder Netz kommen. Mit der Quelle **Nur Überschuss** wird
+    das Fenster nur angezeigt. Einmal offen,
     bleibt das Fenster wie geplant, bis es schließt.
 
   Startet die Automation das Gerät noch nicht, zieht es nichts: SLEMS lässt
   die Freigabe dann an und gibt den Überschuss solange den Batterien (wie bei
-  einem gesättigten Verbraucher).
+  einem gesättigten Verbraucher). Mit der Quelle **Nur Überschuss** schließt sie
+  dabei, sobald der Überschuss nicht mehr reicht.
 
   **Wärmepumpe mit Freigabe** (Warmwasser): Mit dem Typ **Wärmepumpe** gilt
   die Freigabe ihrer Warmwasserladung. Dazu gehören der **Betriebsmodus**
@@ -1952,7 +1963,7 @@ Je gesteuertem Verbraucher, auf seiner Karte unter **Tagesziel**.
   geheizt wird (Wärmeverluste und die üblichen Zapfungen, etwa die letzten
   zwei Wochen). Kennt es 12 Stunden des Tages, sagt es die Temperatur zur
   Frist voraus: Fällt der Speicher bis dahin unter das Minimum, plant es den
-  erzwungenen Lauf (und ein Freigabefenster davor) für diese Temperatur, auch
+  erzwungenen Lauf (und eine Freigabe davor) für diese Temperatur, auch
   solange er noch darüber liegt und vor dem frühesten Beginn. Die Zeile
   **Plan** zeigt die Vorhersage, z. B. **ohne Heizen um 15:30 ca. 37 °C**.
 - **Ladestand**: Ziel-Ladestand des Autos bis zur Frist (Standard 80 %). Die
@@ -1967,7 +1978,7 @@ Je gesteuertem Verbraucher, auf seiner Karte unter **Tagesziel**.
 - **Anzeige**: Die Karte zeigt den Fortschritt, z. B. **1,5 / 4 h**, die **Details**
   ausführlich, z. B. **1,5 / 4 h · bis 22:00 · noch ca. 2,3 kWh**, in der Zeile
   **Plan**, wann SLEMS den Rest einplant,
-  z. B. **Fenster 12:20–14:20 · erzwungen ab 14:20 · dauert ca. 1 h 5 min**,
+  z. B. **Freigabe 12:20–14:20 · erzwungen ab 14:20 · dauert ca. 1 h 5 min**,
   und die Chips **Vorrang** oder
   **erzwungen**, solange sie gelten; die Box des Verbrauchers im Energiefluss
   trägt dasselbe Abzeichen, und die Kachel Strategie nennt ihn (**Vorrang vor
@@ -1997,7 +2008,7 @@ Je gesteuertem Verbraucher, auf seiner Karte unter **Tagesziel**.
   Tagesdiagramm als **Verbraucher (geplant)** und geht in Verbrauchsprognose,
   Ladezustandsprognose und Nachtentladung ein. Unter dem Tagesdiagramm zeigt
   **Tagesziele** je Verbraucher mit Tagesziel eine Bahn: seinen Zeitraum
-  (blass), das Freigabefenster vor dem erzwungenen Lauf, den erzwungenen Lauf
+  (blass), die Freigabe vor dem erzwungenen Lauf, den erzwungenen Lauf
   und die Frist (Strich). Ein Verbraucher mit dem Einsatz
   **Unterstützend** bleibt beim Überschuss-Teil außen vor, solange die
   Einspeisebegrenzung an ist: Sie plant ihn mit dem Überschuss über der

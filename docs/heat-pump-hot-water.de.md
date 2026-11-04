@@ -36,7 +36,7 @@ stellt zwei Binärsensoren bereit, auf die deine Automation reagiert:
 | | **Warmwasser-Freigabe** | **Erzwungene Warmwasserladung** |
 |---|---|---|
 | Bedeutung | Die Ladung **darf** jetzt starten. | Die Ladung **muss** jetzt starten. |
-| An, wenn | genug Überschuss da ist oder ein Fenster offen ist | der späteste Start des Tagesziels erreicht ist |
+| An, wenn | genug Überschuss da ist oder SLEMS sie ohne Überschuss offen hält | der späteste Start des Tagesziels erreicht ist |
 | Die Automation | wartet auf einen guten Moment | startet sofort |
 
 Warum wartet die Automation bei der Freigabe? Eine Wärmepumpe ist kein
@@ -44,7 +44,7 @@ Heizstab: Ob ein Start gerade gut passt, hängt von ihrem Zustand ab, den
 SLEMS nicht kennt. Läuft der Kompressor ohnehin und ist das Haus warm genug,
 kann sie ohne eigenen Start auf Warmwasser wechseln; kommt sie gerade aus dem
 Abtauen oder einer Sperrzeit, wartet sie besser. Damit die Automation warten
-kann, hält das **Fenster** die Freigabe eine Zeit lang offen, auch wenn der
+kann, hält die **Freigabedauer** die Freigabe eine Zeit lang offen, auch wenn der
 Überschuss kurz fehlt. Findet sich bis zum spätesten Start kein guter Moment,
 schaltet SLEMS **Erzwungene Warmwasserladung** ein, und die Automation startet
 die Ladung trotzdem.
@@ -100,18 +100,19 @@ Verbrauch und Batterien ein.
 Außerdem lernt SLEMS, wie schnell der Boiler abkühlt, und plant den
 erzwungenen Lauf auch dann, wenn er erst bis zur Frist unter das Minimum
 fallen würde. Die Zeile **Warmwasser-Plan** zeigt das, z. B. „ohne Heizen um 15:30 ca. 30 °C ·
-Überschuss-Fenster 10:30–13:00 · Fenster 12:25–14:55 · erzwungen ab 14:55“.
+Überschuss-Fenster 10:30–13:00 · Freigabe 12:25–14:55 · erzwungen ab 14:55“.
 
 **Warmwasser-Freigabe**
 
-- **Fenster**: z. B. 150 Minuten. So lange bleibt die Freigabe mindestens
+- **Freigabedauer**: z. B. 150 Minuten. So lange bleibt die Freigabe mindestens
   offen, damit die Automation auf einen guten Moment warten kann.
 - **Überschuss-Fenster**: **Nach Prognose**. SLEMS legt das Fenster aus PV- und
   Verbrauchsprognose in die Zeit, in der der Überschuss die Ladung am besten
   deckt, und gibt in dieser Zeit frei, auch wenn der Überschuss kurz fehlt.
-  Mit **Nach Überschuss** gibt SLEMS nur frei, solange genug Überschuss da ist.
-- **Vor dem erzwungenen Start**: an. Das Fenster liegt dann zusätzlich vor dem
-  spätesten Start: Hat die Automation bis dahin keinen guten Moment gefunden,
+  Mit **Nach Überschuss** gibt SLEMS frei, sobald genug Überschuss da ist, und
+  hält die Freigabe für die **Freigabedauer** offen; ein Fenster wird nicht geplant.
+- **Vor dem erzwungenen Start**: an. Die Freigabe öffnet dann zusätzlich um die
+  **Freigabedauer** vor dem spätesten Start: Hat die Automation bis dahin keinen guten Moment gefunden,
   bekommt sie vor dem erzwungenen Lauf noch einmal die Chance dazu.
 
 **Batterie-Unterstützung** bestimmt, ob die Batterien Lücken im Überschuss
@@ -120,7 +121,7 @@ während der Ladung decken (**Immer**), nur mit dem, was sie übrig haben
 [Batterie-Unterstützung](../README.de.md#batterie-unterstützung).
 
 Das Tagesdiagramm zeigt unter **Tagesziele** das Überschuss-Fenster (orange
-umrandet), das Fenster vor dem erzwungenen Start (hell) und den erzwungenen
+umrandet), die Freigabe vor dem erzwungenen Start (hell) und den erzwungenen
 Lauf (kräftig); fährst du darüber, nennt es die Zeiten:
 
 ![SLEMS: Tagesdiagramm mit dem Warmwasser-Fenster](images/heat_pump_hot_water_chart_de.png)
@@ -283,7 +284,10 @@ actions:
 ## Was SLEMS dabei tut
 
 - Solange die Freigabe an ist, aber die Wärmepumpe noch nicht lädt, nimmt sie
-  nichts ab: SLEMS gibt den Überschuss so lange den Batterien.
+  nichts ab: SLEMS gibt den Überschuss so lange den Batterien. Mit **Nur
+  Überschuss** schließt die Freigabe dabei, sobald der Überschuss nicht mehr
+  reicht; das Warten geht also nur mit einer Quelle über den Überschuss hinaus
+  ohne Unterbrechung.
 - Die Leistung der Wärmepumpe zählt nur im Warmwasserbetrieb als gesteuert;
   in dieser Zeit lernt SLEMS ihre Leistung, sie folgt so der Leistungszahl.
 - Erreicht der Boiler die Zieltemperatur, schließt die Freigabe für den Rest
@@ -302,9 +306,9 @@ actions:
 - **Der Offset ist gesetzt, die Wärmepumpe lädt nicht**: Ist der Boiler schon
   wärmer als Solltemperatur + Offset? Braucht der Offset eine bestimmte
   Betriebsart, die nach einem Stromausfall verloren ging?
-- **Die Ladung wird fast jeden Tag erzwungen**: Das Fenster ist zu kurz für
-  deine Bedingungen, oder der früheste Beginn liegt zu spät. Ein längeres
-  **Fenster** oder **Überschuss-Fenster** **Nach Prognose** gibt der Automation
+- **Die Ladung wird fast jeden Tag erzwungen**: Die Freigabedauer ist zu kurz für
+  deine Bedingungen, oder der früheste Beginn liegt zu spät. Eine längere
+  **Freigabedauer** oder **Überschuss-Fenster** **Nach Prognose** gibt der Automation
   mehr Zeit.
 - **Nach dem Ende startet gleich eine zweite Ladung**: Der Offset steht noch;
   er muss nach der Ladung wieder auf 0.

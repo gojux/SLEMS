@@ -248,6 +248,7 @@ from .consumer_targets import (
     target_temperature,
     window_opens,
     window_start,
+    without_own_charge,
 )
 from .night_discharge import NightDischargePlan, plan_night_discharge, pv_takeover
 from .price_chart import hourly_import_prices, period_import_prices
@@ -3150,7 +3151,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         settings = self.settings
         # The daily targets first: their forced runs are a load in the plans.
         self._target_states(snapshot, battery, pv_forecast, load, wall_now)
-        self._end_needless_saturation(time.monotonic())
+        self._end_needless_saturation(time.monotonic(), snapshot.available_power_w)
         if self.bad_weather.update(
             wall_now,
             hourly(pv_forecast) if pv_forecast is not None else None,
@@ -4543,7 +4544,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         keep_on, keep_off = (
             (False, False) if charge_now else self._cycling_holds(consumer, now, mode, available_w, run_surplus)
         )
-        must_stay_on = self._runtime.must_stay_on(consumer, now) or keep_on or self._window_holds(consumer, now, mode)
+        must_stay_on = self._runtime.must_stay_on(consumer, now) or keep_on or self._window_holds(consumer, now, mode, drawing_w)
         forced = charge_now or mode in (TargetMode.FORCED, TargetMode.WINDOW, TargetMode.PLANNED)
         return ConsumerRequest(
             subentry_id=consumer.subentry_id,
@@ -4584,8 +4585,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         power_w: float,
     ) -> TargetState:
         """Planned window of a release consumer for its run from the surplus
-        (see consumer_targets.plan_surplus_window); with the option "release"
-        it is released for it (*planned*).
+        (see consumer_targets.plan_surplus_window), released for it
+        (*planned*) unless its source is the surplus only.
 
         Before the window opens it follows the forecast; once open it is kept
         until it closes, so the automation gets one window.
@@ -4611,10 +4612,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if settings.source is not TargetSource.SURPLUS and state.latest_start is not None:
                 end = min(end, state.latest_start)
             energy = self.target_energy_wh.get(subentry_id)
+            min_run = timedelta(seconds=consumer.min_on_s)
             run = (
                 timedelta(hours=energy / power_w)
                 if energy
-                else timedelta(minutes=settings.release_window_min or 60)
+                else max(timedelta(minutes=settings.release_window_min or 60), min_run)
             )
             window = (
                 plan_surplus_window(
@@ -4624,6 +4626,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     run=run,
                     power_w=power_w,
                     window=timedelta(minutes=settings.release_window_min),
+                    # A hot water charge goes on after the release closes.
+                    runs_on=run if consumer.hot_water_release else min_run,
                 )
                 if hourly_surplus is not None and end > start
                 else None
@@ -4633,20 +4637,32 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 return state
             self.surplus_windows[subentry_id] = (*window, state.end)
         if (
-            settings.surplus_window is SurplusWindow.RELEASE
+            settings.source is not TargetSource.SURPLUS
             and window[0] <= local_now < window[1]
             and state.mode in (TargetMode.SURPLUS, TargetMode.BOOST)
         ):
             return replace(state, mode=TargetMode.PLANNED)
         return state
 
-    def _window_holds(self, consumer: ConsumerConfig, now: float, mode: TargetMode) -> bool:
+    def _window_holds(
+        self, consumer: ConsumerConfig, now: float, mode: TargetMode, drawing_w: float | None = None
+    ) -> bool:
         """A release stays open for its window (see consumer_targets), unless
-        its daily target is met or waits for its period."""
-        window_s = self.consumer_targets[consumer.subentry_id].release_window_min * 60
+        its daily target is met or waits for its period. With the source
+        "surplus only" this keeps a run going but starts none: ``drawing_w`` is
+        its power, None if unknown."""
+        settings = self.consumer_targets[consumer.subentry_id]
+        window_s = settings.release_window_min * 60
         if consumer.control_mode is not ControlMode.RELEASE or window_s <= 0:
             return False
         if mode in (TargetMode.DONE, TargetMode.WAITING):
+            return False
+        if (
+            mode is not TargetMode.NONE
+            and settings.source is TargetSource.SURPLUS
+            and drawing_w is not None
+            and drawing_w < RUNNING_W
+        ):
             return False
         on_for = self._runtime.on_for(consumer.subentry_id, now)
         return on_for is not None and on_for < window_s
@@ -4667,17 +4683,30 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self.charge_now.discard(subentry_id)
             self._charge_now_plugged.discard(subentry_id)
 
-    def _end_needless_saturation(self, now: float) -> None:
+    def _waits_without_surplus(self, consumer: ConsumerConfig, available_w: float | None) -> bool:
+        """A release with the source "surplus only" whose power the surplus does not cover."""
+        return (
+            consumer.control_mode is ControlMode.RELEASE
+            and self.consumer_targets[consumer.subentry_id].source is TargetSource.SURPLUS
+            and available_w is not None
+            and available_w < self._full_power_w(self.effective_consumer(consumer))
+        )
+
+    def _end_needless_saturation(self, now: float, available_w: float | None = None) -> None:
         """A saturated consumer keeps its command (see controller), a release its
-        release; once its daily target is met or waits for its period, it is
-        controlled again after its minimum runtime, so it is switched off."""
+        release; once its daily target is met or waits for its period, or it may
+        not start without the surplus now short, it is controlled again after
+        its minimum runtime, so it is switched off."""
         for consumer in self.consumers:
             subentry_id = consumer.subentry_id
             state = self.target_states.get(subentry_id)
             if (
                 subentry_id in self.controller.saturated
                 and state is not None
-                and state.mode in (TargetMode.DONE, TargetMode.WAITING)
+                and (
+                    state.mode in (TargetMode.DONE, TargetMode.WAITING)
+                    or self._waits_without_surplus(consumer, available_w)
+                )
                 and not self._runtime.must_stay_on(consumer, now)
             ):
                 self.controller.end_saturation(subentry_id)
@@ -4837,14 +4866,6 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             progress = self.target_progress[consumer.subentry_id]
             power = self._full_power_w(consumer)
             end = progress.end
-            surplus = 0.0
-            if pv_forecast is not None and end is not None:
-                surplus = sum(
-                    power_w * hours
-                    for _, power_w, hours in remaining_surplus_by_hour(
-                        pv_forecast, consumption.total if consumption else None, load, wall_now, end
-                    )
-                )
             thermal = self.thermal_learners.get(consumer.subentry_id)
             temperature = (
                 target_temperature(settings, state.temperature_c, state.temperatures_c)
@@ -4871,6 +4892,22 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     energy = expected
                     self.target_energy_estimated.add(consumer.subentry_id)
             self.target_energy_wh[consumer.subentry_id] = energy
+            hourly_surplus = (
+                remaining_surplus_by_hour(
+                    pv_forecast,
+                    (
+                        without_own_charge(consumption.total, consumption.heat_pump, energy)
+                        if consumption and energy and consumer.consumer_type is ConsumerType.HEAT_PUMP
+                        else consumption.total if consumption else None
+                    ),
+                    load,
+                    wall_now,
+                    end,
+                )
+                if pv_forecast is not None and end is not None
+                else None
+            )
+            surplus = sum(power_w * hours for _, power_w, hours in hourly_surplus or ())
             # The batteries must deliver an on/off consumer's full power, a
             # power controlled one at least its minimum (it is then limited).
             needed = power if consumer.control_mode.on_off else max(consumer.min_power_w or 0, 1.0)
@@ -4930,13 +4967,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 self.target_states[consumer.subentry_id],
                 wall_now,
                 hourly_surplus=(
-                    {
-                        start: surplus_w
-                        for start, surplus_w, _ in remaining_surplus_by_hour(
-                            pv_forecast, consumption.total if consumption else None, load, wall_now, end
-                        )
-                    }
-                    if pv_forecast is not None and end is not None
+                    {start: surplus_w for start, surplus_w, _ in hourly_surplus}
+                    if hourly_surplus is not None
                     else None
                 ),
                 power_w=power,

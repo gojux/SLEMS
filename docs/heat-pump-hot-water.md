@@ -36,7 +36,7 @@ provides two binary sensors your automation reacts to:
 | | **Hot water release** | **Hot water forced run** |
 |---|---|---|
 | Meaning | The charge **may** start now. | The charge **must** start now. |
-| On when | there is enough surplus or a window is open | the latest start of the daily target is reached |
+| On when | there is enough surplus or SLEMS keeps it open without surplus | the latest start of the daily target is reached |
 | The automation | waits for a good moment | starts at once |
 
 Why does the automation wait on a release? A heat pump is not a heating rod:
@@ -44,7 +44,7 @@ whether a start suits it right now depends on its state, which SLEMS does not
 know. If the compressor is running anyway and the house is warm enough, it
 can switch to hot water without a start of its own; if it has just come out
 of defrosting or a lockout time, it had better wait. So that the automation
-can wait, the **Window** keeps the release open for a while, also while the
+can wait, the **Release duration** keeps the release open for a while, also while the
 surplus dips. If no good moment comes up until the latest start, SLEMS turns
 on **Hot water forced run** and the automation starts the charge anyway.
 
@@ -98,18 +98,19 @@ the charge into the forecast of consumption and batteries.
 SLEMS also learns how fast the boiler cools down and plans the forced run
 also when it would only fall below the minimum by the deadline. The line **Hot
 water plan** shows this, e.g. "without heating at 15:30 approx. 30 °C ·
-surplus window 10:30–13:00 · window 12:25–14:55 · forced from 14:55".
+surplus window 10:30–13:00 · release 12:25–14:55 · forced from 14:55".
 
 **Hot water release**
 
-- **Window**: e.g. 150 minutes. The release stays open at least this long, so
+- **Release duration**: e.g. 150 minutes. The release stays open at least this long, so
   the automation can wait for a good moment.
 - **Surplus window**: **By forecast**. From the PV and consumption forecast SLEMS
   places the window in the time the surplus covers the charge best, and
   releases during that time, also while the surplus dips. With **By surplus** SLEMS
-  releases only while there is enough surplus.
-- **Before the forced run**: on. The window then also lies before the latest
-  start: if the automation has not found a good moment by then, it gets
+  releases as soon as there is enough surplus and keeps the release open for the
+  **Release duration**; no window is planned.
+- **Before the forced run**: on. The release then also opens by the
+  **Release duration** before the latest start: if the automation has not found a good moment by then, it gets
   another chance before the forced run.
 
 **Battery support** sets whether the batteries cover dips of the surplus
@@ -117,7 +118,7 @@ during the charge (**Always**), only with what they have to spare
 (**Automatic**), or never. See [Battery support](../README.md#battery-support).
 
 Under **Daily targets** the day chart shows the surplus window (outlined in
-orange), the window before the forced run (light) and the forced run
+orange), the release before the forced run (light) and the forced run
 (strong); hover over it for the times:
 
 ![SLEMS: day chart with the hot water window](images/heat_pump_hot_water_chart_en.png)
@@ -280,7 +281,9 @@ actions:
 ## What SLEMS does
 
 - While the release is on but the heat pump does not charge yet, it draws
-  nothing: SLEMS gives the surplus to the batteries meanwhile.
+  nothing: SLEMS gives the surplus to the batteries meanwhile. With **Surplus
+  only** the release closes as soon as the surplus no longer suffices; so waiting
+  without interruption needs a source beyond the surplus.
 - The power of the heat pump counts as controlled only in hot water mode;
   during that time SLEMS learns its power, so it follows the coefficient of
   performance.
@@ -300,8 +303,8 @@ actions:
 - **The offset is set, but the heat pump does not charge**: is the boiler
   already warmer than set temperature + offset? Does the offset need a
   certain operating mode that was lost after a power cut?
-- **The charge is forced almost every day**: the window is too short for your
-  conditions, or the earliest start is too late. A longer **Window** or
+- **The charge is forced almost every day**: the release duration is too short for your
+  conditions, or the earliest start is too late. A longer **Release duration** or
   **Surplus window** **By forecast** gives the automation more time.
 - **Right after the end a second charge starts**: the offset is still set; it
   has to go back to 0 after the charge.

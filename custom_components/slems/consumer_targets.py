@@ -20,7 +20,8 @@ can wait for a heat pump's compressor run. Optionally the window lies before
 the latest start (*window*): released without surplus from latest start −
 window on, forced only from the latest start. A planned surplus window
 (``surplus_window``) is the time the forecast surplus covers the run best
-(``plan_surplus_window``): shown, or also released for (*planned*).
+(``plan_surplus_window``): released for it too (*planned*), with the source
+"surplus only" just shown.
 
 An earliest start (optional) restricts the period to the time from the last
 earliest start before the deadline: before it SLEMS keeps the consumer off,
@@ -502,41 +503,67 @@ def plan_surplus_window(
     run: timedelta,
     power_w: float,
     window: timedelta,
+    runs_on: timedelta = timedelta(0),
 ) -> tuple[datetime, datetime] | None:
-    """Window between ``start`` and ``end`` around the run the forecast surplus
-    covers best, None without any surplus for it.
+    """Window between ``start`` and ``end`` whose runs the forecast surplus
+    covers best, None without any surplus for them.
 
     ``surplus_w`` is the mean forecast surplus per hour (start of the hour ->
-    W). The run of length ``run`` at ``power_w`` covers ``min(surplus,
-    power)`` per hour; of equal runs the earliest. The window is ``window``
-    long (at least the run), centred on the run and kept within the bounds.
+    W). The automation can start a run anywhere in the window, so all starts
+    count: a run of length ``run`` at ``power_w`` covers ``min(surplus, power)``
+    per hour and ends when the window closes, unless ``runs_on`` from its start
+    is later (a minimum runtime, a charge that goes on). The window is ``window``
+    long (at least the run). Of equally covered ones the one with the most
+    surplus, as the forecast may be too high; of equal ones the earliest.
     """
-    run = min(run, end - start)
-    if run <= timedelta(0) or power_w <= 0:
+    if run <= timedelta(0) or power_w <= 0 or end <= start:
         return None
+    length = min(max(window, run), end - start)
 
-    def covered_wh(begin: datetime) -> float:
-        total, moment, until = 0.0, begin, begin + run
-        while moment < until:
-            hour = moment.replace(minute=0, second=0, microsecond=0)
-            step = min(hour + timedelta(hours=1), until)
-            total += min(surplus_w.get(hour, 0.0), power_w) * ((step - moment) / timedelta(hours=1))
-            moment = step
-        return total
+    def score(opens: datetime) -> tuple[float, float]:
+        covered_wh, surplus_wh, begin, closes = 0.0, 0.0, opens, opens + length
+        while begin < closes:
+            moment, until = begin, min(begin + run, max(closes, begin + runs_on))
+            while moment < until:
+                hour = moment.replace(minute=0, second=0, microsecond=0)
+                step = min(hour + timedelta(hours=1), until)
+                hours = (step - moment) / timedelta(hours=1)
+                forecast = surplus_w.get(hour, 0.0)
+                covered_wh += min(forecast, power_w) * hours
+                surplus_wh += forecast * hours
+                moment = step
+            begin += SURPLUS_WINDOW_STEP
+        return covered_wh, surplus_wh
 
     first = start.replace(second=0, microsecond=0)
     first += timedelta(minutes=-first.minute % 15)
-    best, best_wh, moment = None, 0.0, first
-    while moment + run <= end:
-        if (wh := covered_wh(moment)) > best_wh + 1e-6:
-            best, best_wh = moment, wh
+    last = end - length
+    best, best_covered, best_surplus, moment = None, 0.0, 0.0, min(first, last)
+    while moment <= last:
+        covered, surplus = score(moment)
+        if covered > best_covered + 1e-6 or (covered > best_covered - 1e-6 and surplus > best_surplus + 1e-6):
+            best, best_covered, best_surplus = moment, covered, surplus
         moment += SURPLUS_WINDOW_STEP
-    if best is None:
-        return None
-    length = max(window, run)
-    opens = max(start, best + run / 2 - length / 2)
-    closes = min(end, opens + length)
-    return max(start, closes - length), closes
+    return None if best is None else (best, best + length)
+
+
+def without_own_charge(
+    total: Mapping[datetime, float], heat_pump: Mapping[datetime, float], energy_wh: float
+) -> dict[datetime, float]:
+    """Hourly consumption forecast without a heat pump's charge that is being
+    planned: its forecast comes from its whole power, so it holds the charges
+    of the past days. ``energy_wh`` of each day's heat pump forecast, in its
+    hourly shape, as the forecast does not tell heating and charges apart."""
+    daily: dict[date, float] = {}
+    for start, wh in heat_pump.items():
+        day = dt_util.as_local(start).date()
+        daily[day] = daily.get(day, 0.0) + wh
+    return {
+        start: wh
+        - heat_pump.get(start, 0.0)
+        * min(1.0, energy_wh / max(daily.get(dt_util.as_local(start).date(), 0.0), 1.0))
+        for start, wh in total.items()
+    }
 
 
 def window_opens(settings: TargetSettings, latest: datetime, end: datetime) -> datetime | None:

@@ -340,9 +340,8 @@ class SurplusWindow(StrEnum):
     """Planned window of a release consumer for its run from the surplus."""
 
     OFF = "off"
-    # Planned and shown; released as before, with the surplus there.
-    SHOW = "show"
-    # Released for the planned window, also while the surplus dips.
+    # Planned and shown; also released for it, also while the surplus dips
+    # (with the source "surplus only" shown only).
     RELEASE = "release"
 
 

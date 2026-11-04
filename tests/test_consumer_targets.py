@@ -594,8 +594,8 @@ def test_planned_surplus_window() -> None:
     window = plan_surplus_window(
         surplus, local(9), local(15, 30), run=timedelta(hours=1), power_w=2800, window=timedelta(minutes=150)
     )
-    # The run 11:00–12:00 (the earliest of the best), the window 150 min around it.
-    assert window == (local(10, 15), local(12, 45))
+    # All starts in the 150 min count: the low 10:00 and 13:00 weigh least here.
+    assert window == (local(10, 45), local(13, 15))
     # Kept within the bounds: from 11:30 on.
     window = plan_surplus_window(
         surplus, local(11, 30), local(15, 30), run=timedelta(hours=1), power_w=2800, window=timedelta(minutes=150)
@@ -607,3 +607,49 @@ def test_planned_surplus_window() -> None:
     ) == (local(11), local(12))
     # No surplus: no window.
     assert plan_surplus_window({}, local(9), local(15), run=timedelta(hours=1), power_w=2800, window=timedelta(0)) is None
+
+
+def test_surplus_window_counts_all_starts_in_it() -> None:
+    from custom_components.slems.consumer_targets import plan_surplus_window
+
+    # Both 11:00–12:00 and 14:00–15:00 cover a run at its start; only around
+    # 14:00 the surplus also lasts for later starts in the window.
+    surplus = {local(11): 3000.0, local(14): 3000.0, local(15): 3000.0}
+    opens, closes = plan_surplus_window(
+        surplus, local(9), local(18), run=timedelta(hours=1), power_w=2800, window=timedelta(hours=2)
+    )
+    assert (opens, closes) == (local(14), local(16))
+
+
+def test_surplus_window_prefers_the_margin_of_equally_covered_ones() -> None:
+    from custom_components.slems.consumer_targets import plan_surplus_window
+
+    surplus = {local(9): 2900.0, local(12): 6000.0}
+    assert plan_surplus_window(
+        surplus, local(8), local(15), run=timedelta(hours=1), power_w=2800, window=timedelta(0)
+    ) == (local(12), local(13))
+
+
+def test_surplus_window_counts_the_run_after_it_closes() -> None:
+    from custom_components.slems.consumer_targets import plan_surplus_window
+
+    # Surplus only until 12:00. A run that ends with the window can use it up
+    # to its close; one that goes on needs the surplus for the later starts too.
+    surplus = {local(10): 3000.0, local(11): 3000.0}
+    plan = dict(run=timedelta(hours=2), power_w=2800, window=timedelta(hours=2))
+    assert plan_surplus_window(surplus, local(9), local(15), **plan) == (local(10), local(12))
+    goes_on = plan_surplus_window(surplus, local(9), local(15), runs_on=timedelta(hours=2), **plan)
+    assert goes_on == (local(9), local(11))
+    # A minimum runtime shorter than the run: only that far.
+    assert plan_surplus_window(surplus, local(9), local(15), runs_on=timedelta(hours=1), **plan) == (local(9, 30), local(11, 30))
+
+
+def test_consumption_without_the_own_charge() -> None:
+    from custom_components.slems.consumer_targets import without_own_charge
+
+    total = {local(10): 1000.0, local(11): 1500.0, local(12): 300.0}
+    heat_pump = {local(10): 500.0, local(11): 1500.0}
+    # 1 kWh of the 2 kWh of the day: half of each hour.
+    assert without_own_charge(total, heat_pump, 1000.0) == {local(10): 750.0, local(11): 750.0, local(12): 300.0}
+    # More than the heat pump forecast holds: all of it, no more.
+    assert without_own_charge(total, heat_pump, 5000.0) == {local(10): 500.0, local(11): 0.0, local(12): 300.0}
