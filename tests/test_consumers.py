@@ -389,6 +389,34 @@ def test_release_window_keeps_the_release_open() -> None:
     assert not holds(coordinator, release, 60.0, TargetMode.SURPLUS)
 
 
+def test_minimum_runtime_of_a_release_counts_from_the_start_of_its_device() -> None:
+    release = replace(consumer(), control_mode=ControlMode.RELEASE, min_on_s=3600.0)
+    tracker = RuntimeTracker()
+    tracker.update("rod", True, 0.0)
+    # Not started: only for the time its start needs, not a whole minimum runtime.
+    tracker.note_running("rod", False, 300.0)
+    assert tracker.must_stay_on(release, 300.0)
+    assert not tracker.must_stay_on(release, 600.0)
+    # A short minimum runtime limits that time.
+    assert not tracker.must_stay_on(replace(release, min_on_s=120.0), 300.0)
+    # Started late: the whole minimum runtime from then on.
+    tracker.note_running("rod", True, 900.0)
+    tracker.note_running("rod", False, 1000.0)
+    tracker.note_running("rod", True, 1100.0)
+    assert tracker.must_stay_on(release, 4400.0)
+    assert not tracker.must_stay_on(release, 4500.0)
+    # Closed and opened again: a new start counts.
+    tracker.update("rod", False, 5000.0)
+    tracker.note_running("rod", True, 5100.0)
+    tracker.update("rod", True, 6000.0)
+    assert tracker.must_stay_on(release, 6500.0)
+    assert not tracker.must_stay_on(release, 6600.0)
+    # Other consumers count from when SLEMS switched them on.
+    switched = replace(consumer(), min_on_s=3600.0)
+    assert tracker.must_stay_on(switched, 9500.0)
+    assert not tracker.must_stay_on(switched, 9600.0)
+
+
 def test_release_window_with_surplus_only_keeps_a_run_but_starts_none() -> None:
     from custom_components.slems.consumer_targets import TargetMode, TargetSettings, TargetSource
     from custom_components.slems.coordinator import SlemsCoordinator

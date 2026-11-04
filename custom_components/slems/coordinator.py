@@ -1879,6 +1879,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             settled = since is None or now - since >= max(CONSUMER_SETTLE_S, 2 * response)
             full_command = settled and is_full_command(consumer, command, full_power)
             learner.update(now, command is not None and command > 0, state.power_w, full_command)
+            self._runtime.note_running(
+                consumer.subentry_id, state.power_w is not None and state.power_w >= RUNNING_W, now
+            )
             if thermal := self.thermal_learners.get(consumer.subentry_id):
                 thermal.update(
                     now,

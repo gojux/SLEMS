@@ -1675,6 +1675,12 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
   einem gesättigten Verbraucher). Mit der Quelle **Nur Überschuss** schließt sie
   dabei, sobald der Überschuss nicht mehr reicht.
 
+  Die **Mindestlaufzeit** einer Freigabe zählt ab dem Start des Geräts (ab 50 W),
+  nicht ab dem Öffnen. Bis zum Start bleibt die Freigabe auch ohne Überschuss bis
+  zu 10 Minuten offen, höchstens so lange wie die Mindestlaufzeit: So nimmt eine
+  kurze Wolke sie nicht zurück, bevor die Automation starten konnte oder der
+  Leistungsmesser den Start zeigt.
+
   **Wärmepumpe mit Freigabe** (Warmwasser): Mit dem Typ **Wärmepumpe** gilt
   die Freigabe ihrer Warmwasserladung. Dazu gehören der **Betriebsmodus**
   (z. B. ihr Sensor **Status**) und im nächsten Schritt die Zustände, die

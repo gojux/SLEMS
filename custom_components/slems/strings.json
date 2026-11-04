@@ -565,7 +565,7 @@
             "nominal_power_w": "A rough estimate is enough if **Use learned values** is on: SLEMS then measures the real power while it runs the consumer (operating mode active) and uses it after about 15 minutes of running (the median of its last hour of running). Rather estimate a little too low than too high: too high, SLEMS waits for a larger surplus and may never switch the consumer on, so nothing is learned. For a heat pump with **Release**: its power for hot water; SLEMS learns it in hot water mode, so it follows the coefficient of performance.",
             "block_entity": "SLEMS does not control the consumer while it is blocked (e.g. by the device or an automation): a water heater while its operation mode is \"off\", other entities while they are \"on\".",
             "priority": "1 = highest priority when distributing surplus power.",
-            "min_on_minutes": "Optional. Once switched on by SLEMS, the consumer keeps running at least this long.",
+            "min_on_minutes": "Optional. Once switched on by SLEMS, the consumer keeps running at least this long. For a release it counts from the start of the device.",
             "min_off_minutes": "Optional. Once switched off by SLEMS, the consumer stays off at least this long.",
             "temperature_entity": "Optional, e.g. the sensor of the boiler at the heating rod, or a water heater (its current temperature). SLEMS learns from the mean of the sensors how much energy the storage takes per degree and from which temperature the thermostat cycles, and plans the consumer for the feed-in cap only as far as it can still take energy.",
             "temperature_2_entity": "Optional, e.g. a sensor higher up in the boiler; makes the estimate more accurate.",

@@ -1571,6 +1571,12 @@ the energy flow.
   for a saturated consumer). With the source **Surplus only** it closes as soon
   as the surplus no longer suffices.
 
+  The **Minimum runtime** of a release counts from the start of the device (from
+  50 W), not from the opening. Until the start the release stays open also without
+  surplus for up to 10 minutes, at most as long as the minimum runtime: this way a
+  short cloud does not take it back before the automation could start or the power
+  sensor shows the start.
+
   **Heat pump with release** (hot water): with the type **Heat pump** the
   release is for its hot water charge. It needs the **Operating mode** (e.g.
   its sensor **Status**) and, in the next step, the states that mean hot

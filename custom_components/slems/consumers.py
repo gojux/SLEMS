@@ -344,16 +344,26 @@ def _celsius(value: float, unit: str | None) -> float:
     return (value - 32) * 5 / 9 if unit == "°F" else value
 
 
+# A release waiting for its device to start stays open this long with a minimum
+# runtime: its automation may wait for minutes, and the power sensor of e.g. a
+# heat pump shows a start up to 2-3 minutes late.
+RELEASE_START_GRACE_S = 600.0
+
+
 class RuntimeTracker:
     """Tracks when SLEMS switched a consumer on or off.
 
     Enforces the optional minimum runtime and minimum pause. The tracked state
-    is the one commanded by SLEMS (in simulation mode the virtual one).
+    is the one commanded by SLEMS (in simulation mode the virtual one). The
+    minimum runtime of a release counts from when its device runs, as the
+    release alone does not start it.
     """
 
     def __init__(self) -> None:
         # subentry id -> (is on, monotonic time of the last change)
         self._states: dict[str, tuple[bool, float]] = {}
+        # subentry id -> monotonic time its device was first seen running while on
+        self._running_since: dict[str, float] = {}
 
     def update(self, subentry_id: str, is_on: bool, now: float) -> None:
         previous = self._states.get(subentry_id)
@@ -362,6 +372,12 @@ class RuntimeTracker:
             self._states[subentry_id] = (False, -math.inf)
         elif previous is None or previous[0] != is_on:
             self._states[subentry_id] = (is_on, now)
+            self._running_since.pop(subentry_id, None)
+
+    def note_running(self, subentry_id: str, running: bool, now: float) -> None:
+        """The device of a consumer switched on draws power."""
+        if running and self.is_on(subentry_id):
+            self._running_since.setdefault(subentry_id, now)
 
     def adopt_running(self, subentry_id: str, now: float) -> None:
         """A consumer found running whose state is not known yet (after a
@@ -370,6 +386,7 @@ class RuntimeTracker:
         not end."""
         if subentry_id not in self._states:
             self._states[subentry_id] = (True, now)
+            self._running_since[subentry_id] = now
 
     def is_on(self, subentry_id: str) -> bool:
         """Switched on by SLEMS (or virtually, in simulation mode)."""
@@ -383,7 +400,14 @@ class RuntimeTracker:
 
     def must_stay_on(self, consumer: ConsumerConfig, now: float) -> bool:
         state = self._states.get(consumer.subentry_id)
-        return state is not None and state[0] and now - state[1] < consumer.min_on_s
+        if state is None or not state[0]:
+            return False
+        if consumer.control_mode is not ControlMode.RELEASE:
+            return now - state[1] < consumer.min_on_s
+        running_since = self._running_since.get(consumer.subentry_id)
+        if running_since is not None:
+            return now - running_since < consumer.min_on_s
+        return now - state[1] < min(consumer.min_on_s, RELEASE_START_GRACE_S)
 
     def must_stay_off(self, consumer: ConsumerConfig, now: float) -> bool:
         state = self._states.get(consumer.subentry_id)
