@@ -16,8 +16,8 @@ system).
 
 ![SLEMS overview: energy flow, key figures and the forecast and plan chart of the day](docs/images/dashboard_overview_en.png)
 
-> **Status: beta.** SLEMS runs every day on a real installation, but it is
-> still under active development. In the operating mode **Active** it sends
+> **Status: beta.** SLEMS has been running in production without problems
+> for quite some time, but it is still developed further often. In the operating mode **Active** it sends
 > commands to batteries and switches consumers. Use it at your own risk: check
 > the limits of your batteries and the fuses of your circuits. Please report
 > faults as an [issue](https://github.com/gojux/SLEMS/issues) with the
@@ -120,11 +120,11 @@ In five steps:
 2. Add the integration, select the smart meter and the PV systems and check
    the sign of the grid power ([Setup](#setup)).
 3. Add batteries and consumers ([Batteries](#batteries),
-   [Consumers](#consumers)). Disconnect a Venus from other integrations first:
-   it allows only one Modbus connection.
-4. Let SLEMS run for a while (e.g. a day) in the operating mode **Observe
-   only**, which is the default. The dashboard shows the forecast and the
-   plan; nothing is controlled yet.
+   [Consumers](#consumers)). Most batteries allow only one Modbus
+   connection: disconnect them from other integrations first.
+4. Let SLEMS run in the operating mode **Observe only** for a while (the
+   default), so obvious problems show up early. The dashboard shows the
+   forecast and the plan; nothing is controlled yet.
 5. Turn off other controls of the same batteries and consumers (automations,
    other integrations) and set the [operating mode](#operating-mode) to
    **Active**. New batteries first run their
@@ -167,6 +167,11 @@ controls precisely:
 - **Feed-in cap.** If you may feed in only part of the PV power (e.g. 60 % or
   nothing at all), SLEMS stores the energy above the limit and makes room in
   the batteries in time instead of curtailing PV.
+- **Import peaks shaved economically.** With power based grid fees (a power
+  price for the highest quarter hour of the month) SLEMS picks the import
+  limit and the reserve with the lowest expected cost, keeps energy in the
+  batteries for the peaks, lets forced consumers give way and tops the
+  batteries up below the limit before the peaks.
 - **Prices in view.** Tariffs as on the bill, with templates for Austria,
   Germany and Switzerland; day-ahead prices per quarter hour only with your
   consent, estimated until the next day's prices are published. The price
@@ -227,7 +232,7 @@ state of charge. evcc specialises in EV charging and complements SLEMS well
 | Any number of batteries, added/edited/removed at any time | ✅ |
 | Smart meter, PV power and weather entity freely selectable | ✅ |
 | Setup from the devices of smart meter and PV systems and from the energy dashboard; several PV systems summed up | ✅ |
-| Smart meter read directly over Modbus as well (SunSpec, e.g. SolarEdge), with the sensor as fallback | ✅ |
+| Smart meter read directly over Modbus as well (SunSpec), with the sensor as fallback | ✅ |
 | Operating mode **Off / Observe only / Active** | ✅ |
 | Vacation switch and bad weather mode | ✅ |
 | Repair issues, notifications and diagnostics | ✅ |
@@ -257,7 +262,7 @@ state of charge. evcc specialises in EV charging and complements SLEMS well
 | Consumers | Status |
 |---|---|
 | Consumers with own power/energy sensors, inside or outside the smart meter | ✅ |
-| Consumer setup from its device: devices ranked by fit (e.g. Hoval, my-PV, evcc), entities, control and its range suggested | ✅ |
+| Consumer setup from its device: devices ranked by fit (e.g. heat pump, heating rod, wallbox), entities, control and its range suggested | ✅ |
 | Phase of consumers learned from the smart meter's phases (starting with the history), of batteries in the self-test, change reported, learn again; energy counters that do not net the phases detected | ✅ (control per phase not yet) |
 | Heat pump as consumer type (weather dependent forecast), optionally a release of its hot water charge (operating mode, learned hot water power, [guide](docs/heat-pump-hot-water.md)) | ✅ |
 | Control of consumers: on/off, power set point or release for an automation of your own (with latest start), priority, minimum runtime/pause, avoid short runs, external blocking, control switchable per consumer | ✅ |
@@ -321,8 +326,7 @@ Requires Home Assistant 2026.9 or newer.
 1. **Settings → Devices & services → Add integration → SLEMS**.
 2. Select the devices of your smart meter and your PV systems (optional,
    preselected from the energy dashboard of Home Assistant; the devices that
-   fit best come first, e.g. a Shelly Pro 3EM or the meter of a SolarEdge
-   inverter in the SolarEdge Modbus or SolarEdge Modbus Multi integration).
+   fit best come first, e.g. a Shelly Pro 3EM or the meter of an inverter).
    SLEMS suggests their sensors and fills in what the energy dashboard
    already knows, including the sign of its grid power, the PV forecast
    entries and the weather entity. Check the grid power entity (positive =
@@ -377,15 +381,14 @@ does not use it yet.
 The entity of the smart meter is updated once per polling cycle of its
 integration, often only about once per second, and then shows only a part of
 the meter's values. With **Also read the smart meter over Modbus** SLEMS reads
-the grid power directly from a SunSpec meter, e.g. the meter at a SolarEdge
-inverter, every 0.5 seconds (0.2 to 5 s). The control sees every value
+the grid power directly from a SunSpec meter every 0.5 seconds (0.2 to
+5 s). The control sees every value
 sooner; the gain is largest with fast batteries.
 
 - SLEMS uses the shared Modbus connection of Home Assistant. As long as the
   inverter integration keeps the inverter's only Modbus TCP connection to
-  itself (e.g. SolarEdge Modbus Multi), enter a Modbus proxy in front of the
-  inverter as host. If the inverter integration shares its connection one
-  day, the inverter itself can be entered and the proxy is no longer needed.
+  itself, a Modbus proxy has to be set up, e.g. the app [Modbus
+  Proxy](https://github.com/TCzerny/ha-modbusproxy).
 - SLEMS finds the meters in the SunSpec model chain; with several meters
   (e.g. export+import and consumption) you choose the one at the grid
   connection point, the current power of each helps to recognise it.
@@ -447,7 +450,9 @@ it. Options of a price sheet (e.g. an upgrade to certified green electricity,
 a bonus for an online bill, the metering of the feed-in direction) are chosen
 in an extra step. A feed-in tariff of its own is a template of its own, added
 as a separate current tariff (SLEMS counts all current tariffs as one
-contract). It remembers its templates, though: when an update of SLEMS (or an own
+contract).
+
+A tariff from templates remembers its templates: when an update of SLEMS (or an own
 template) brings newer prices or a successor tariff, a repair issue tells
 you, as it does when a current tariff is past its end. **Update to the new
 prices** in the menu of the lines takes them over (with several successors you
@@ -456,23 +461,29 @@ apply from then on, the old prices stay for the past and own lines stay as
 they are. A corrected template (e.g. a misplaced decimal point, same dates)
 is offered the same way: the values are corrected in place, also for the
 past, lines you changed yourself stay. **Reset to the template values** undoes
-your own changes of the template lines. Own templates: YAML files in
-the folder `slems_tariff_templates` of your Home Assistant configuration.
-Suggest a template for everyone as an
-[issue](https://github.com/gojux/SLEMS/issues) with the source of the
-prices. Switzerland: **Add tariff → From ElCom** queries the open data of
+your own changes of the template lines.
+
+Own templates: YAML files in the folder `slems_tariff_templates` of your Home
+Assistant configuration. Suggest a template for everyone as an
+[issue](https://github.com/gojux/SLEMS/issues) with the source of the prices.
+
+Switzerland: **Add tariff → From ElCom** queries the open data of
 ElCom (ld.admin.ch) for the tariff of your municipality and consumption
 category (energy, grid and levies, excluding VAT, as the mean of the
 category; high and low tariff times are averaged); the next year, published
 in September, is offered as new prices, in the background only with
-**Fetch market prices** switched on. Austria: the grid fees of every grid area (network level 7, from the
-grid fee ordinance, with the reduced price from April to September 10–16 h)
+**Fetch market prices** switched on.
+
+Austria: the grid fees of every grid area (network level 7, from the grid fee
+ordinance, with the reduced price from April to September 10–16 h)
 and the federal levies; the metering fee is entered at its legal maximum
 (your grid operator may charge less) and municipal levies (e.g. the
-Gebrauchsabgabe in Vienna) are not included. Austria and Germany: a general
-template **Dynamic tariff** (energy at the day-ahead price per quarter hour);
+Gebrauchsabgabe in Vienna) are not included.
+
+Austria and Germany: a general template **Dynamic tariff** (energy at the day-ahead price per quarter hour);
 enter the markup and the monthly fee of your contract afterwards in its
 lines, as suppliers of dynamic tariffs mostly publish them only per postcode.
+
 Germany: the federal levies
 (electricity tax, surcharges and the concession levy by the size of the
 municipality, at its legal maximum), the grid fees of the largest grid
@@ -485,8 +496,10 @@ an option at its legal maximum by meter type and consumption) and
 the EEG feed-in credit of PV plants up
 to 10 kWp per commissioning period; for plants commissioned since 25 February
 2025 the credit is 0 while the day-ahead price is negative (**Fetch market
-prices** needed). A line can have **Zero at negative market prices** for this. A line may also be a **percent of the group** (e.g. a municipal levy of
-7 % on the energy).
+prices** needed). A line can have **Zero at negative market prices** for this.
+
+A line may also be a **percent of the group** (e.g. a municipal levy of 7 % on
+the energy).
 
 Where the energy comes from: SLEMS records grid import and feed-in per
 quarter hour itself from every grid value (kept for 400 days), so import and
@@ -637,19 +650,18 @@ steps, so it can be selected in SLEMS directly.
 ### Weather (optional)
 
 The weather entity improves the consumption forecast, especially for a heat
-pump. Recommendations for Vorarlberg / the Alpine region:
+pump. The forecast of the national weather service fits best:
 
-- **GeoSphere Austria AROME**: high resolution model of the Austrian weather
-  service, well suited for alpine valleys. Available in Home Assistant through
-  custom integrations such as [GeoSphere Austria
-  Plus](https://github.com/coding-pagro/GeoSphere-Austria-Plus) or [GeoSphere
-  Austria Next](https://github.com/slettmayer/ha-geosphere-next) (HACS). The
-  built-in *GeoSphere Austria* integration only provides station measurements,
-  no forecast.
-- **Open-Meteo** (built-in integration): no account needed, combines several
-  weather models.
-- **Met.no** (Home Assistant default): works everywhere, less detailed in
-  alpine terrain.
+| Country | Recommendation | Why |
+|---|---|---|
+| Germany | [DWD Weather](https://github.com/FL550/dwd_weather) (HACS) | forecast of the German weather service for a station near you, hourly |
+| Austria | [GeoSphere Austria Plus](https://github.com/coding-pagro/GeoSphere-Austria-Plus) or [GeoSphere Austria Next](https://github.com/slettmayer/ha-geosphere-next) (HACS) | high resolution AROME model of GeoSphere Austria, well suited for alpine valleys; the built-in *GeoSphere Austria* integration only provides measurements, no forecast |
+| Switzerland | [Swiss Weather](https://github.com/izacus/hass-swissweather) (HACS) | local forecast of MeteoSwiss for your postcode, hourly |
+| Liechtenstein | [Swiss Weather](https://github.com/izacus/hass-swissweather) (HACS) | MeteoSwiss covers Liechtenstein as well |
+| Anywhere | **Open-Meteo** (built-in integration) | no account needed, combines several weather models; a good choice without an extra integration |
+
+**Met.no**, the Home Assistant default, works everywhere but is less detailed
+in alpine terrain.
 
 ### Consumption forecast
 
@@ -1132,8 +1144,6 @@ dashboard continue.
 
 - Make a full backup of Home Assistant first; the tool writes directly into
   the database.
-- Check the preview: the counters of the Venus (registers 33000/33002) have
-  the same value in both integrations, so the total continues without a jump.
 - Compare the sign of power sensors: the SLEMS **AC power** is positive when
   discharging.
 - Afterwards replace the old sensors in the energy dashboard with the SLEMS
@@ -1491,9 +1501,8 @@ the energy flow.
 
 - **Device** (first step, optional): the consumer's device in Home Assistant,
   e.g. the heat pump, the heating rod or the wallbox. The devices that fit best
-  come first (known integrations such as Hoval, my-PV or evcc, and the
-  entities they have); devices whose entities SLEMS already uses are not
-  listed. SLEMS suggests the entities of the next steps from it: power and
+  come first (by their integration and the entities they have); devices
+  whose entities SLEMS already uses are not listed. SLEMS suggests the entities of the next steps from it: power and
   energy (of a heat pump the electrical power, not the heat output), the
   control and its control entity with its range, the start/stop entity and
   active phases of a wallbox, the operating mode and the storage of a heat

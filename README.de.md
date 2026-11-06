@@ -16,8 +16,8 @@ Tiere](https://en.wikipedia.org/wiki/Sea_slug)) und *EMS*
 
 ![SLEMS-Übersicht: Energiefluss, Kennzahlen und das Diagramm mit Prognose und Plan des Tages](docs/images/dashboard_overview_de.png)
 
-> **Status: Beta.** SLEMS läuft täglich an einer echten Anlage, wird aber noch
-> laufend weiterentwickelt. Im Betriebsmodus **Aktiv** sendet es Vorgaben an
+> **Status: Beta.** SLEMS läuft schon längere Zeit problemlos im
+> Produktivbetrieb, wird aber weiterhin häufig weiterentwickelt. Im Betriebsmodus **Aktiv** sendet es Vorgaben an
 > Batterien und schaltet Verbraucher. Die Nutzung erfolgt auf eigene
 > Verantwortung: Prüfe die Grenzen deiner Batterien und die Absicherung deiner
 > Stromkreise. Fehler bitte als [Issue](https://github.com/gojux/SLEMS/issues)
@@ -119,11 +119,11 @@ In fünf Schritten:
 2. Die Integration hinzufügen, Smart Meter und PV-Anlagen auswählen und das
    Vorzeichen der Netzleistung prüfen ([Einrichtung](#einrichtung)).
 3. Batterien und Verbraucher hinzufügen ([Batterien](#batterien),
-   [Verbraucher](#verbraucher)). Eine Venus vorher von anderen Integrationen
-   trennen: Sie erlaubt nur eine Modbus-Verbindung.
-4. SLEMS eine Weile (z. B. einen Tag) im Betriebsmodus **Nur beobachten**
-   laufen lassen, das ist die Voreinstellung. Im Dashboard siehst du Prognose
-   und Plan; gesteuert wird noch nichts.
+   [Verbraucher](#verbraucher)). Die meisten Batterien erlauben nur eine
+   Modbus-Verbindung: Trenne sie vorher von anderen Integrationen.
+4. SLEMS vorübergehend im Betriebsmodus **Nur beobachten** laufen lassen (die
+   Voreinstellung), so fallen offensichtliche Probleme früh auf. Im Dashboard
+   siehst du Prognose und Plan; gesteuert wird noch nichts.
 5. Andere Steuerungen derselben Batterien und Verbraucher (Automationen,
    andere Integrationen) abschalten und den [Betriebsmodus](#betriebsmodus)
    auf **Aktiv** stellen. Neue Batterien machen zuerst ihren
@@ -167,6 +167,11 @@ SLEMS plant voraus und regelt genau:
 - **Einspeisebegrenzung.** Darfst du nur einen Teil der PV-Leistung einspeisen
   (z. B. 60 % oder gar nichts), speichert SLEMS die Energie über der Grenze und
   schafft vorher rechtzeitig Platz in den Batterien, statt PV abzuregeln.
+- **Bezugsspitzen wirtschaftlich abfangen.** Bei leistungsbezogenen
+  Netzentgelten (Leistungspreis für die höchste Viertelstunde des Monats)
+  wählt SLEMS Bezugsgrenze und Reserve mit den niedrigsten erwarteten Kosten,
+  hält Energie in den Batterien für die Spitzen zurück, lässt erzwungene
+  Verbraucher zurücktreten und lädt vor den Spitzen unter der Grenze nach.
 - **Preise im Blick.** Tarife wie auf der Rechnung, mit Vorlagen für
   Österreich, Deutschland und die Schweiz; Börsenpreise je Viertelstunde nur
   mit deiner Zustimmung, geschätzt, bis die Preise des Folgetags erscheinen.
@@ -230,7 +235,7 @@ das Laden von E-Autos spezialisiert und ergänzt SLEMS gut (siehe
 | Beliebig viele Batterien, jederzeit hinzufügen, bearbeiten, entfernen | ✅ |
 | Smart Meter, PV-Leistung und Wetter frei wählbar | ✅ |
 | Einrichtung aus den Geräten von Smart Meter und PV-Anlagen und aus dem Energie-Dashboard; mehrere PV-Anlagen addiert | ✅ |
-| Smart Meter zusätzlich direkt per Modbus lesen (SunSpec, z. B. SolarEdge), mit dem Sensor als Rückfallebene | ✅ |
+| Smart Meter zusätzlich direkt per Modbus lesen (SunSpec), mit dem Sensor als Rückfallebene | ✅ |
 | Betriebsmodus **Aus / Nur beobachten / Aktiv** | ✅ |
 | Urlaubsschalter und Schlechtwetter-Modus | ✅ |
 | Reparaturhinweise, Benachrichtigungen und Diagnosedaten | ✅ |
@@ -260,7 +265,7 @@ das Laden von E-Autos spezialisiert und ergänzt SLEMS gut (siehe
 | Verbraucher | Status |
 |---|---|
 | Verbraucher mit eigenen Leistungs-/Energiesensoren, im oder außerhalb des Smart Meters | ✅ |
-| Verbraucher aus seinem Gerät einrichten: Geräte nach Eignung sortiert (z. B. Hoval, my-PV, evcc), Entitäten, Steuerung und ihr Bereich vorgeschlagen | ✅ |
+| Verbraucher aus seinem Gerät einrichten: Geräte nach Eignung sortiert (z. B. Wärmepumpe, Heizstab, Wallbox), Entitäten, Steuerung und ihr Bereich vorgeschlagen | ✅ |
 | Phase von Verbrauchern aus den Phasen des Smart Meters gelernt (beginnend mit dem Verlauf), von Batterien im Selbsttest, Wechsel gemeldet, neu lernen; Energiezähler, die nicht über die Phasen saldieren, erkannt | ✅ (Regelung je Phase noch nicht) |
 | Wärmepumpe als Verbrauchertyp (wetterabhängige Prognose), optional Freigabe ihrer Warmwasserladung (Betriebsmodus, gelernte Warmwasserleistung, [Anleitung](docs/heat-pump-hot-water.de.md)) | ✅ |
 | Steuerung von Verbrauchern: Ein/Aus, Leistungsvorgabe oder Freigabe für eine eigene Automation (mit spätestem Start), Priorität, Mindestlaufzeit/-pause, Takten vermeiden, externe Sperre, Steuerung je Verbraucher abschaltbar | ✅ |
@@ -326,8 +331,7 @@ Voraussetzung: Home Assistant 2026.9 oder neuer.
 2. Die Geräte deines Smart Meters und deiner PV-Anlagen auswählen (optional,
    vorausgewählt aus dem Energie-Dashboard von Home Assistant; die am besten
    passenden Geräte stehen oben, z. B. ein Shelly Pro 3EM oder der Zähler
-   eines SolarEdge-Wechselrichters in der Integration SolarEdge Modbus oder
-   SolarEdge Modbus Multi). SLEMS schlägt ihre Sensoren vor und ergänzt, was
+   eines Wechselrichters). SLEMS schlägt ihre Sensoren vor und ergänzt, was
    das Energie-Dashboard schon kennt, auch das Vorzeichen seiner
    Netzleistung, die PV-Prognose und das Wetter. Die Netzleistungs-Entität
    prüfen (positiv = Bezug, negativ = Einspeisung; das Formular zeigt ihren
@@ -386,16 +390,14 @@ Regelung verwendet sie noch nicht.
 Die Entität des Smart Meters wird einmal pro Abfragedurchlauf ihrer
 Integration aktualisiert, oft nur etwa einmal pro Sekunde, und zeigt dann nur
 einen Teil der Zählerwerte. Mit **Smart Meter zusätzlich per Modbus lesen**
-liest SLEMS die Netzleistung direkt von einem SunSpec-Zähler, z. B. dem Zähler
-am SolarEdge-Wechselrichter, alle 0,5 Sekunden (0,2 bis 5 s). Die Regelung
+liest SLEMS die Netzleistung direkt von einem SunSpec-Zähler alle
+0,5 Sekunden (0,2 bis 5 s). Die Regelung
 sieht jeden Wert früher; am meisten bringt das bei schnellen Batterien.
 
 - SLEMS nutzt die geteilte Modbus-Verbindung von Home Assistant. Solange die
   Integration des Wechselrichters dessen einzige Modbus-TCP-Verbindung selbst
-  belegt (z. B. SolarEdge Modbus Multi), als Host einen Modbus-Proxy vor dem
-  Wechselrichter angeben. Teilt die Wechselrichter-Integration ihre Verbindung
-  eines Tages, lässt sich direkt der Wechselrichter eintragen, und der Proxy
-  wird nicht mehr gebraucht.
+  belegt, muss ein Modbus-Proxy eingerichtet werden, z. B. die App [Modbus
+  Proxy](https://github.com/TCzerny/ha-modbusproxy).
 - SLEMS findet die Zähler in der SunSpec-Modellkette; bei mehreren Zählern
   (z. B. Einspeisung/Bezug und Verbrauch) wählst du den am Netzanschlusspunkt,
   die aktuelle Leistung jedes Zählers hilft beim Erkennen.
@@ -462,7 +464,9 @@ nicht. Optionen eines Preisblatts (z. B. ein Ökostrom-Upgrade, ein Bonus für
 die Online-Rechnung, das Messentgelt der Einspeiserichtung) wählst du in einem
 eigenen Schritt. Ein eigener Einspeisetarif ist eine eigene Vorlage und wird
 als weiterer aktueller Tarif angelegt (SLEMS zählt alle aktuellen Tarife als
-einen Vertrag). Er merkt sich aber seine Vorlagen: Bringt ein Update von SLEMS (oder
+einen Vertrag).
+
+Ein Tarif aus Vorlagen merkt sich seine Vorlagen: Bringt ein Update von SLEMS (oder
 eine eigene Vorlage) neuere Preise oder einen Nachfolgetarif, meldet das ein
 Reparaturhinweis, ebenso wenn ein aktueller Tarif abgelaufen ist. **Auf neue
 Preise aktualisieren** im Menü der Posten übernimmt sie (bei mehreren
@@ -472,23 +476,29 @@ Vergangenheit und eigene Posten bleiben, wie sie sind. Eine korrigierte
 Vorlage (z. B. ein verrutschtes Komma, gleiche Daten) bietet SLEMS genauso
 an: Die Werte werden an Ort und Stelle korrigiert, auch für die
 Vergangenheit; selbst geänderte Posten bleiben. **Auf Vorlagenwerte
-zurücksetzen** nimmt eigene Änderungen an den Vorlagen-Posten zurück. Eigene Vorlagen: YAML-Dateien im Ordner
-`slems_tariff_templates` deiner Home-Assistant-Konfiguration. Eine Vorlage für
-alle schlägst du als [Issue](https://github.com/gojux/SLEMS/issues) mit der
-Quelle der Preise vor. Schweiz: **Tarif hinzufügen → Von der ElCom** fragt die
+zurücksetzen** nimmt eigene Änderungen an den Vorlagen-Posten zurück.
+
+Eigene Vorlagen: YAML-Dateien im Ordner `slems_tariff_templates` deiner
+Home-Assistant-Konfiguration. Eine Vorlage für alle schlägst du als
+[Issue](https://github.com/gojux/SLEMS/issues) mit der Quelle der Preise vor.
+
+Schweiz: **Tarif hinzufügen → Von der ElCom** fragt die
 offenen Daten der ElCom (ld.admin.ch) nach dem Tarif deiner Gemeinde und
 Verbrauchskategorie ab (Energie, Netz und Abgaben, ohne MWST, als Mittel der
 Kategorie; Hoch- und Niedertarifzeiten sind darin gemittelt); das im September
 veröffentlichte Folgejahr bietet SLEMS als neue Preise an, im Hintergrund nur
-mit eingeschaltetem **Börsenpreise abrufen**. Österreich: die Netzentgelte aller Netzbereiche
-(Netzebene 7, aus der Systemnutzungsentgelte-Verordnung, mit dem günstigeren
+mit eingeschaltetem **Börsenpreise abrufen**.
+
+Österreich: die Netzentgelte aller Netzbereiche (Netzebene 7, aus der Systemnutzungsentgelte-Verordnung, mit dem günstigeren
 Preis von April bis September 10–16 Uhr) und die bundesweiten Abgaben; das
 Messentgelt steht mit dem gesetzlichen Höchstpreis drin (dein Netzbetreiber
 kann weniger verrechnen), Gemeindeabgaben (z. B. die Gebrauchsabgabe in Wien)
-fehlen. Österreich und Deutschland: eine allgemeine Vorlage **Dynamischer
-Tarif** (Energie zum Day-Ahead-Börsenpreis je Viertelstunde); den Aufschlag und
+fehlen.
+
+Österreich und Deutschland: eine allgemeine Vorlage **Dynamischer Tarif** (Energie zum Day-Ahead-Börsenpreis je Viertelstunde); den Aufschlag und
 die Monatsgebühr deines Vertrags trägst du danach in ihren Posten ein, weil
 Anbieter dynamischer Tarife sie meist nur je Postleitzahl veröffentlichen.
+
 Deutschland: die bundesweiten Abgaben (Stromsteuer, Umlagen und die
 Konzessionsabgabe nach Gemeindegröße mit ihrem gesetzlichen Höchstbetrag), die
 Netzentgelte der größten Netzbetreiber (Westnetz, Bayernwerk, E.DIS, Avacon,
@@ -501,8 +511,10 @@ gesetzlichen Höchstpreis nach Zählerart und Verbrauch) und die
 EEG-Einspeisevergütung von PV-Anlagen bis 10 kWp je Inbetriebnahme-Zeitraum;
 für Anlagen ab 25. Februar 2025 ist die Vergütung 0, solange der
 Day-Ahead-Preis negativ ist (**Börsenpreise abrufen** nötig). Ein Posten kann
-dafür **Null bei negativen Börsenpreisen** haben. Ein Posten kann auch **Prozent der Gruppe** sein (z. B.
-eine Gebrauchsabgabe von 7 % auf die Energie).
+dafür **Null bei negativen Börsenpreisen** haben.
+
+Ein Posten kann auch **Prozent der Gruppe** sein (z. B. eine Gebrauchsabgabe
+von 7 % auf die Energie).
 
 Woher die Energie kommt: SLEMS zeichnet Netzbezug und Einspeisung aus jedem
 Netzwert selbst je Viertelstunde auf (400 Tage lang), damit sich Bezug und
@@ -672,19 +684,18 @@ Energie-Dashboard in 15-Minuten-Schritten und ist in SLEMS direkt auswählbar.
 ### Wetter (optional)
 
 Die Wetter-Entität verbessert die Verbrauchsprognose, besonders bei einer
-Wärmepumpe. Empfehlungen für Vorarlberg bzw. den Alpenraum:
+Wärmepumpe. Am besten passt die Prognose des nationalen Wetterdienstes:
 
-- **GeoSphere Austria AROME**: hochaufgelöstes Modell des österreichischen
-  Wetterdienstes, gut geeignet für Alpentäler. In Home Assistant über
-  benutzerdefinierte Integrationen wie [GeoSphere Austria
-  Plus](https://github.com/coding-pagro/GeoSphere-Austria-Plus) oder
-  [GeoSphere Austria Next](https://github.com/slettmayer/ha-geosphere-next)
-  (HACS). Die eingebaute Integration *GeoSphere Austria* liefert nur
-  Stationsmesswerte, keine Prognose.
-- **Open-Meteo** (eingebaute Integration): ohne Konto nutzbar, kombiniert
-  mehrere Wettermodelle.
-- **Met.no** (Standard in Home Assistant): funktioniert überall, im alpinen
-  Gelände weniger detailliert.
+| Land | Empfehlung | Warum |
+|---|---|---|
+| Deutschland | [DWD Weather](https://github.com/FL550/dwd_weather) (HACS) | Prognose des Deutschen Wetterdienstes für eine Station in deiner Nähe, stündlich |
+| Österreich | [GeoSphere Austria Plus](https://github.com/coding-pagro/GeoSphere-Austria-Plus) oder [GeoSphere Austria Next](https://github.com/slettmayer/ha-geosphere-next) (HACS) | hochaufgelöstes AROME-Modell von GeoSphere Austria, gut für Alpentäler; die eingebaute Integration *GeoSphere Austria* liefert nur Messwerte, keine Prognose |
+| Schweiz | [Swiss Weather](https://github.com/izacus/hass-swissweather) (HACS) | Lokalprognose von MeteoSchweiz für deine Postleitzahl, stündlich |
+| Liechtenstein | [Swiss Weather](https://github.com/izacus/hass-swissweather) (HACS) | MeteoSchweiz deckt auch Liechtenstein ab |
+| Überall | **Open-Meteo** (eingebaute Integration) | ohne Konto, kombiniert mehrere Wettermodelle; gute Wahl ohne eigene Integration |
+
+**Met.no**, die Voreinstellung von Home Assistant, funktioniert überall, ist
+aber im alpinen Gelände weniger detailliert.
 
 ### Verbrauchsprognose
 
@@ -1198,9 +1209,6 @@ Langzeitstatistiken, sodass die Summen im Energie-Dashboard weiterlaufen.
 
 - Vorher ein vollständiges Backup von Home Assistant machen; das Werkzeug
   schreibt direkt in die Datenbank.
-- Die Vorschau prüfen: Die Zähler der Venus (Register 33000/33002) haben in
-  beiden Integrationen denselben Wert, die Summe läuft also ohne Sprung
-  weiter.
 - Das Vorzeichen von Leistungssensoren vergleichen: Die **AC-Leistung** von
   SLEMS ist beim Entladen positiv.
 - Danach im Energie-Dashboard die alten Sensoren durch die SLEMS-Sensoren
@@ -1586,9 +1594,9 @@ bekommen nur eine eigene Karte und ein Feld im Energiefluss.
 
 - **Gerät** (erster Schritt, optional): das Gerät des Verbrauchers in Home
   Assistant, z. B. die Wärmepumpe, der Heizstab oder die Wallbox. Die am
-  besten passenden Geräte stehen oben (bekannte Integrationen wie Hoval, my-PV
-  oder evcc, und die Entitäten, die sie haben); Geräte, deren Entitäten SLEMS
-  schon verwendet, fehlen in der Liste. SLEMS schlägt daraus die Entitäten der
+  besten passenden Geräte stehen oben (nach ihrer Integration und den
+  Entitäten, die sie haben); Geräte, deren Entitäten SLEMS schon verwendet,
+  fehlen in der Liste. SLEMS schlägt daraus die Entitäten der
   nächsten Schritte vor: Leistung und Energie (bei einer Wärmepumpe die
   elektrische Leistung, nicht die Heizleistung), die Steuerung und ihre
   Steuer-Entität mit ihrem Bereich, die Start/Stopp-Entität und die aktiven
