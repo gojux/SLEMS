@@ -123,13 +123,19 @@ def backtest_savings(
     market: Mapping[datetime, float],
     min_gain_ct: float,
     references: Mapping[str, Mapping[str, float]] | None = None,
+    export_prices: Mapping[str, Mapping[datetime, float | None]] | None = None,
 ) -> dict[str, dict[str, float]]:
-    """Per month ("2026-05") and tariff the estimated saving (€) of the price aware control."""
+    """Per month ("2026-05") and tariff the estimated saving (€) of the price
+    aware control; ``export_prices``: the feed-in credit per tariff and hour
+    (feeding in from the batteries)."""
     hours = sorted(load_wh)
     usual = play(hours, load_wh, pv_wh, battery, None, min_gain_ct)
     savings: dict[str, dict[str, float]] = {}
     for key, tariff in tariffs.items():
-        aware = play(hours, load_wh, pv_wh, battery, import_prices[key], min_gain_ct)
+        aware = play(
+            hours, load_wh, pv_wh, battery, import_prices[key], min_gain_ct,
+            export_prices=(export_prices or {}).get(key),
+        )
         before = compare({key: tariff}, first, last, *usual, market, references)
         after = {row["month"]: row for row in compare({key: tariff}, first, last, *aware, market, references)}
         for row in before:
@@ -291,6 +297,7 @@ async def async_tariff_comparison(hass: HomeAssistant, entry: SlemsConfigEntry) 
                 row["savings"] = savings.get(row["month"], {})
             result["backtest"] = {
                 "grid_charge": coordinator.settings.grid_charge,
+                "battery_export": coordinator.settings.battery_export,
                 "min_gain_ct": coordinator.settings.price_min_gain_ct,
             }
     coordinator.tariff_comparison_cache = (monotonic_time.monotonic(), key, result)
@@ -327,9 +334,14 @@ async def _async_savings(
         from .price_chart import hourly_import_prices
 
         import_prices = {key: hourly_import_prices(tariff, prices, start, end) for key, tariff in tariffs.items()}
+        export_prices = (
+            {key: hourly_import_prices(tariff, prices, start, end, Side.EXPORT) for key, tariff in tariffs.items()}
+            if battery.battery_export
+            else None
+        )
         return backtest_savings(
             tariffs, first, today, load, pv, battery, import_prices, market,
-            coordinator.settings.price_min_gain_ct, prices.references,
+            coordinator.settings.price_min_gain_ct, prices.references, export_prices,
         )
 
     return await hass.async_add_executor_job(run)

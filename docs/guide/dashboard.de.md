@@ -171,7 +171,8 @@ Batterien steht unter den Kosten eines Tarifs eine Schätzung, was die
 [preisbewusste Steuerung](../../README.de.md#tarife-optional) gespart hätte: Aufgezeichneter
 Hausverbrauch und PV laufen stündlich durch ein einfaches Batteriemodell,
 einmal wie üblich und einmal geplant wie die preisbewusste Steuerung (mit
-Laden aus dem Netz, wenn es eingeschaltet ist). Der Plan kennt Verbrauch und
+Laden aus dem Netz und Einspeisen aus den Batterien, wenn sie eingeschaltet
+sind). Der Plan kennt Verbrauch und
 PV genau, die Schätzung ist daher eine Obergrenze. Tarife, bei denen die
 Steuerung nichts spart (Fixpreis), haben keine solche Zeile.
 

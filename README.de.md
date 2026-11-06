@@ -617,7 +617,6 @@ Nutzern mit einer echten Wallbox zur [evcc-Anleitung](docs/wallbox-evcc.de.md).
   Posten-Art mit der Formel des Lieferanten, die Monatswerte des Index mit
   Zustimmung von der Energieagentur abgerufen; damit auch Vorlagen für
   Index-Tarife.
-- Einspeisen aus den Batterien auch in der Schätzung des Tarifvergleichs.
 - Tarifvergleich mit anderer Hardware: was eine größere Batterie, mehr
   Ladeleistung, ein anderer höchster Ladezustand oder mehr PV im
   aufgezeichneten Jahr gebracht hätten (das Batteriemodell der Schätzung mit

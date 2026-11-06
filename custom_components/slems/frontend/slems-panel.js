@@ -475,9 +475,11 @@ const STRINGS = {
     tariffSigns: "Costs: import minus feed-in credit; positive you pay, negative you get money.",
     tariffDiffHint: "Below each comparison tariff the difference to the current one: green better, red worse. Select a tariff to show or hide it.",
     tariffSavingHint:
-      "Saving price control: estimate of what keeping the battery energy for the expensive hours would have saved, from the recorded consumption and PV with a simple battery model and a perfect forecast (an upper bound).",
-    tariffSavingHintCharge:
-      "Saving price control: estimate of what keeping the battery energy for the expensive hours and charging from the grid would have saved, from the recorded consumption and PV with a simple battery model and a perfect forecast (an upper bound).",
+      "Saving price control: estimate of what {actions} would have saved, from the recorded consumption and PV with a simple battery model and a perfect forecast (an upper bound).",
+    tariffSavingHold: "keeping the battery energy for the expensive hours",
+    tariffSavingCharge: "charging from the grid",
+    tariffSavingExport: "feeding in from the batteries",
+    tariffSavingAnd: " and ",
     tariffSource: "Market prices: {source}",
     tariffUnpriced: "* Part of the energy has no market price yet and is not included.",
     tariffPeakSaving: "peak shaving ≈ −{amount} ({kw} kW)",
@@ -1239,9 +1241,11 @@ const STRINGS = {
     tariffSigns: "Kosten: Bezug minus Einspeisevergütung; positiv zahlst du, negativ bekommst du Geld.",
     tariffDiffHint: "Unter jedem Vergleichstarif der Unterschied zum aktuellen: grün besser, rot schlechter. Wähle einen Tarif, um ihn ein- oder auszublenden.",
     tariffSavingHint:
-      "Ersparnis Preissteuerung: Schätzung, was das Zurückhalten der Batterieenergie für die teuren Stunden gespart hätte, aus aufgezeichnetem Verbrauch und PV mit einem einfachen Batteriemodell und perfekter Prognose (eine Obergrenze).",
-    tariffSavingHintCharge:
-      "Ersparnis Preissteuerung: Schätzung, was das Zurückhalten der Batterieenergie für die teuren Stunden und das Laden aus dem Netz gespart hätten, aus aufgezeichnetem Verbrauch und PV mit einem einfachen Batteriemodell und perfekter Prognose (eine Obergrenze).",
+      "Ersparnis Preissteuerung: Schätzung der Ersparnis durch {actions}, aus aufgezeichnetem Verbrauch und PV mit einem einfachen Batteriemodell und perfekter Prognose (eine Obergrenze).",
+    tariffSavingHold: "das Zurückhalten der Batterieenergie für die teuren Stunden",
+    tariffSavingCharge: "das Laden aus dem Netz",
+    tariffSavingExport: "das Einspeisen aus den Batterien",
+    tariffSavingAnd: " und ",
     tariffSource: "Börsenpreise: {source}",
     tariffUnpriced: "* Für einen Teil der Energie gibt es noch keinen Börsenpreis; er ist nicht enthalten.",
     tariffPeakSaving: "Spitzenabfang ≈ −{amount} ({kw} kW)",
@@ -4905,6 +4909,16 @@ class SlemsPanel extends HTMLElement {
     this._queueRender();
   }
 
+  /** What the estimate of the price aware control includes, as a list in words. */
+  _savingActions(backtest) {
+    const t = this._t;
+    const actions = [t.tariffSavingHold];
+    if (backtest.grid_charge) actions.push(t.tariffSavingCharge);
+    if (backtest.battery_export) actions.push(t.tariffSavingExport);
+    const last = actions.pop();
+    return actions.length ? `${actions.join(", ")}${t.tariffSavingAnd}${last}` : last;
+  }
+
   _renderTariffs() {
     const state = this._tariffs;
     if (!state.requested && this._hass) {
@@ -5022,7 +5036,7 @@ class SlemsPanel extends HTMLElement {
       tariffs.some((tariff) => tariff.dynamic && !tariff.foreign_currency) && !result.market_prices ? t.tariffNoPrices : "",
       foreign.length ? t.tariffForeignCurrency.replace("{names}", foreign.map((tariff) => tariff.name).join(", ")) : "",
       result.power_hours > 0 ? t.tariffGridPower : "",
-      withSaving.size ? (backtest.grid_charge ? t.tariffSavingHintCharge : t.tariffSavingHint) : "",
+      withSaving.size ? t.tariffSavingHint.replace("{actions}", this._savingActions(backtest)) : "",
       result.measured?.runs
         ? t.tariffMeasured.replace("{amount}", money.format(result.measured.total_eur)).replace("{runs}", result.measured.runs)
         : "",

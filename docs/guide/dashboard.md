@@ -157,7 +157,8 @@ energy without a market price is marked. With batteries a line below the
 costs of a tariff adds an estimate of what the [price aware control](../../README.md#tariffs-optional) would
 have saved: the recorded hourly house consumption and PV are played through a
 simple battery model, once as usual and once planned like the price aware
-control (with charging from the grid if it is switched on). The plan knows
+control (with charging from the grid and feeding in from the batteries if
+they are switched on). The plan knows
 consumption and PV exactly, so the estimate is an upper bound. Tariffs where
 the control saves nothing (a fixed price) have no such line.
 

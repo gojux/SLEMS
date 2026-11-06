@@ -7,8 +7,11 @@ simple battery model twice:
   order (minimum and maximum state of charge, power, efficiency),
 * *price aware*: the same, but every deficit run (until PV takes over again,
   at most ``MAX_RUN``) is planned with ``grid_charge.plan_grid_charge`` with
-  the hourly import prices of the tariff (the recordings are hourly): holding for the expensive hours, and
-  charging from the grid if that option is on.
+  the hourly import prices and feed-in credits of the tariff (the recordings
+  are hourly): holding for the expensive hours, charging from the grid and
+  feeding in from the batteries if those options are on (feeding in at most
+  the export limit; without the morning reserve, as the plan knows the
+  morning exactly).
 
 Both give hourly grid import and export; priced with the tariff, their
 difference is the estimated saving. The plan knows the consumption and PV of
@@ -21,6 +24,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import math
 
 from .grid_charge import HOUR, ChargeBattery, plan_grid_charge
 
@@ -40,6 +44,10 @@ class BacktestBattery:
     wear_ct: float
     grid_charge: bool
     grid_max_wh: float
+    # Feeding in from the batteries beyond the deficit (option of the price
+    # aware control), at most this AC power.
+    battery_export: bool = False
+    export_max_w: float = math.inf
 
 
 def play(
@@ -50,10 +58,12 @@ def play(
     prices: Mapping[datetime, float | None] | None,
     min_gain_ct: float,
     start_wh: float | None = None,
+    export_prices: Mapping[datetime, float | None] | None = None,
 ) -> tuple[dict[datetime, float], dict[datetime, float]]:
     """Grid import and export (Wh) per hour; ``prices`` None: as usual.
 
-    ``hours`` are consecutive local hour starts.
+    ``hours`` are consecutive local hour starts; ``export_prices``: the feed-in
+    credit per hour (only used with ``battery.battery_export``).
     """
     eff = battery.efficiency or 1.0
     stored = (battery.min_wh + battery.full_wh) / 2 if start_wh is None else start_wh
@@ -61,6 +71,7 @@ def play(
     exported: dict[datetime, float] = {}
     charge: Mapping[datetime, float] = {}
     limits: Mapping[datetime, float] = {}
+    exports: Mapping[datetime, float] = {}
     planned_until: datetime | None = None
     for index, hour in enumerate(hours):
         if hour not in load_wh:
@@ -74,17 +85,20 @@ def play(
             planned_until = None
             continue
         if prices is not None and (planned_until is None or hour >= planned_until):
-            charge, limits, planned_until = _plan_run(hours, index, load_wh, pv_wh, battery, stored, prices, min_gain_ct)
+            charge, limits, exports, planned_until = _plan_run(
+                hours, index, load_wh, pv_wh, battery, stored, prices, export_prices, min_gain_ct
+            )
         if hour in charge:
             charged = min(charge[hour], max(0.0, battery.full_wh - stored) / eff)
             stored += charged * eff
             imported[hour], exported[hour] = net + charged, 0.0
             continue
-        deliver = min(net, battery.max_discharge_w, max(0.0, stored - battery.min_wh) * eff)
+        wanted = net + exports.get(hour, 0.0)
+        deliver = min(wanted, battery.max_discharge_w, max(0.0, stored - battery.min_wh) * eff)
         if hour in limits:
             deliver = min(deliver, limits[hour])
         stored -= deliver / eff
-        imported[hour], exported[hour] = net - deliver, 0.0
+        imported[hour], exported[hour] = max(0.0, net - deliver), max(0.0, deliver - net)
     return imported, exported
 
 
@@ -96,8 +110,9 @@ def _plan_run(
     battery: BacktestBattery,
     stored: float,
     prices: Mapping[datetime, float | None],
+    export_prices: Mapping[datetime, float | None] | None,
     min_gain_ct: float,
-) -> tuple[Mapping[datetime, float], Mapping[datetime, float], datetime]:
+) -> tuple[Mapping[datetime, float], Mapping[datetime, float], Mapping[datetime, float], datetime]:
     """Plan of the deficit run starting at ``hours[index]`` (perfect forecast)."""
     start = hours[index]
     deficits: dict[datetime, float] = {}
@@ -128,11 +143,15 @@ def _plan_run(
         prices,
         until,
         min_gain_ct,
+        export_prices=export_prices,
+        export_floor_wh=battery.min_wh,
+        export_max_w=battery.export_max_w,
+        battery_export=battery.battery_export and export_prices is not None,
         period=HOUR,
     )
     if plan is None:
-        return {}, {}, end
-    return plan.charge_w, plan.limits_w, end
+        return {}, {}, {}, end
+    return plan.charge_w, plan.limits_w, plan.export_w, end
 
 
 def run_cost(

@@ -285,7 +285,11 @@ the morning reserve, at most the maximum grid export while discharging and
 the feed-in cap. This only pays with a feed-in credit that follows the market
 price per hour; with a fixed or monthly credit the strategy says the option
 has no effect. Check your contract and any subsidy first: some do not allow
-feeding in energy that was charged from the grid.
+feeding in energy that was charged from the grid. With the switch on, the
+estimate in the [tariff comparison](dashboard.md#simulation) feeds in too:
+at the hourly credit of each tariff, at most the maximum grid export while
+discharging and the feed-in cap, without the morning reserve (the estimate
+knows the morning exactly).
 
 ### Measured saving
 

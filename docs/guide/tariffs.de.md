@@ -308,7 +308,11 @@ Einspeisung beim Entladen und die Einspeisebegrenzung. Das lohnt nur mit
 einer Einspeisevergütung, die stündlich dem Börsenpreis folgt; mit fester
 oder monatlicher Vergütung zeigt die Strategie, dass die Option ohne Wirkung
 ist. Vorher Vertrag und Förderung prüfen: Manche erlauben nicht, aus dem Netz
-geladene Energie wieder einzuspeisen.
+geladene Energie wieder einzuspeisen. Mit eingeschaltetem Schalter speist
+auch die Schätzung im [Tarifvergleich](dashboard.de.md#simulation) ein: zur
+stündlichen Vergütung des jeweiligen Tarifs, höchstens die maximale
+Einspeisung beim Entladen und die Einspeisebegrenzung, ohne Morgenreserve
+(die Schätzung kennt den Morgen genau).
 
 ### Gemessene Ersparnis
 

@@ -4214,6 +4214,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             else 0.0,
             grid_charge=settings.grid_charge,
             grid_max_wh=min(settings.grid_charge_max_soc_pct, battery.full_soc_pct) / 100 * capacity,
+            battery_export=settings.battery_export,
+            export_max_w=min(
+                settings.discharge_max_grid_export_w,
+                settings.feed_in_cap_limit_w if settings.feed_in_cap else math.inf,
+            ),
         )
 
     def battery_export_effective(self, tariff: Tariff | None = None) -> bool:

@@ -601,8 +601,6 @@ wallbox on the [evcc guide](docs/wallbox-evcc.md).
 - Index tariffs (e.g. on the Austrian electricity price index ÖSPI): a line
   type with the supplier's formula, the monthly index values fetched (with
   consent) from the Austrian Energy Agency; templates for index tariffs too.
-- Feeding in from the batteries also in the estimate of the tariff
-  comparison.
 - Tariff comparison with other hardware: what a larger battery, more charge
   power, another maximum state of charge or more PV would have brought in the
   recorded year (the battery model of the estimate with the settings of the

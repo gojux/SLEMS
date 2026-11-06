@@ -1,6 +1,7 @@
 """Tests for the backtest of the price aware control (made-up values)."""
 
 from datetime import datetime, timedelta
+import math
 
 import pytest
 
@@ -19,10 +20,11 @@ def day_hours(days: int = 2) -> list[datetime]:
     return [start + timedelta(hours=i) for i in range(24 * days)]
 
 
-def battery(grid_charge: bool = False) -> BacktestBattery:
+def battery(grid_charge: bool = False, export: bool = False, export_max_w: float = math.inf) -> BacktestBattery:
     return BacktestBattery(
         capacity_wh=5000, min_wh=500, full_wh=5000, max_charge_w=2000, max_discharge_w=2000,
         efficiency=0.95, wear_ct=1.0, grid_charge=grid_charge, grid_max_wh=4500,
+        battery_export=export, export_max_w=export_max_w,
     )
 
 
@@ -83,3 +85,49 @@ def test_measured_saving_of_a_held_night() -> None:
     usual_cost = (4 * 500 * 20 + 2 * 500 * 40) / 1000  # 2–6 at 20 ct, 6–8 at 40 ct
     real_cost = 6 * 500 * 20 / 1000
     assert saving == pytest.approx((usual_cost - real_cost) / 100, abs=0.01)
+
+
+def export_scenario():
+    hours, load, pv, prices = scenario()
+    # A credit following the market: very high at 18, low otherwise.
+    credits = {h: 60.0 if h.hour == 18 else 5.0 for h in hours}
+    return hours, load, pv, prices, credits
+
+
+def net_cost(result, prices, credits) -> float:
+    imported, exported = result
+    return cost(imported, prices) - sum(wh * credits[h] for h, wh in exported.items()) / 1000
+
+
+def evening_export(result, hours) -> float:
+    return sum(wh for h, wh in result[1].items() if not 10 <= h.hour < 14)
+
+
+def test_feeding_in_from_the_batteries_at_a_high_credit() -> None:
+    hours, load, pv, prices, credits = export_scenario()
+    held = play(hours, load, pv, battery(), prices, 2.0, start_wh=1500, export_prices=credits)
+    fed = play(hours, load, pv, battery(export=True), prices, 2.0, start_wh=1500, export_prices=credits)
+    # Without the option the batteries never feed in outside the PV surplus.
+    assert evening_export(held, hours) == 0
+    # With it they feed in at 18 (power left after the 500 W house) and it pays.
+    first_evening = hours[18]
+    assert fed[1][first_evening] == pytest.approx(1500, abs=60)
+    assert fed[0][first_evening] == 0
+    assert net_cost(fed, prices, credits) < net_cost(held, prices, credits)
+
+
+def test_feeding_in_respects_the_export_limit() -> None:
+    hours, load, pv, prices, credits = export_scenario()
+    fed = play(
+        hours, load, pv, battery(export=True, export_max_w=800), prices, 2.0, start_wh=1500, export_prices=credits
+    )
+    assert 0 < fed[1][hours[18]] <= 800 + 1e-6
+    # No feed-in at all with a limit of 0.
+    none = play(hours, load, pv, battery(export=True, export_max_w=0), prices, 2.0, start_wh=1500, export_prices=credits)
+    assert evening_export(none, hours) == 0
+
+
+def test_feeding_in_needs_the_credits() -> None:
+    hours, load, pv, prices, _ = export_scenario()
+    fed = play(hours, load, pv, battery(export=True), prices, 2.0, start_wh=1500)
+    assert evening_export(fed, hours) == 0

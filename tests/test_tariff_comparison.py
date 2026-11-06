@@ -1,13 +1,14 @@
 """Tests for the tariff comparison (made-up tariffs)."""
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 import pytest
 
 from homeassistant.util import dt as dt_util
 
 from custom_components.slems.tariff import Group, Role, Side, Tariff, TariffItem, Unit
-from custom_components.slems.tariff_comparison import compare, month_start
+from custom_components.slems.price_backtest import BacktestBattery
+from custom_components.slems.tariff_comparison import backtest_savings, compare, month_start
 
 
 @pytest.fixture(autouse=True)
@@ -86,3 +87,33 @@ def test_tariff_choices_and_chosen_tariff() -> None:
     tariff = chosen_tariff(entry, "c", "gone")
     assert tariff.name == "Fixed"
     assert chosen_tariff(SimpleNamespace(subentries={}), "b", "") is None
+
+
+def test_backtest_saving_includes_feeding_in_from_the_batteries() -> None:
+    zone = dt_util.get_default_time_zone()
+    start = datetime(2026, 6, 1, tzinfo=zone)
+    hours = [start + timedelta(hours=i) for i in range(48)]
+    load = {h: 500.0 for h in hours}
+    pv = {h: 3000.0 if 10 <= h.hour < 14 else 0.0 for h in hours}
+    # Market price (€/MWh) very high at 18, low otherwise.
+    market = {h: 500.0 if h.hour == 18 else 100.0 for h in hours}
+    spot = Tariff("Spot", Role.CURRENT, (
+        TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.SPOT, 2.0),
+        TariffItem("Feed-in", Side.EXPORT, Group.ENERGY, Unit.SPOT, 0.0),
+    ), {})
+    import_ct = {h: market[h] / 10 + 2.0 for h in hours}
+    export_ct = {h: market[h] / 10 for h in hours}
+
+    def saving(export: bool) -> float:
+        battery = BacktestBattery(
+            capacity_wh=5000, min_wh=500, full_wh=5000, max_charge_w=2000, max_discharge_w=2000,
+            efficiency=0.95, wear_ct=1.0, grid_charge=False, grid_max_wh=4500, battery_export=export,
+        )
+        result = backtest_savings(
+            {"a": spot}, date(2026, 6, 1), date(2026, 6, 2), load, pv, battery,
+            {"a": import_ct}, market, 2.0, export_prices={"a": export_ct},
+        )
+        return result["2026-06"]["a"]
+
+    # Feeding in the full batteries at the 50 ct hour adds to the saving.
+    assert saving(True) > saving(False) + 0.3
