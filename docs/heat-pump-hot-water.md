@@ -65,7 +65,7 @@ reconfigure the existing consumer of the heat pump):
 - **Power when on**: a starting value, e.g. 3,000 W. With **Use learned
   values** SLEMS learns the power in hot water mode.
 
-See [Consumers](../README.md#consumers) for all settings.
+See [Consumers](guide/consumers.md) for all settings.
 
 ## Step 2: daily target and release
 
@@ -115,7 +115,7 @@ surplus window 10:30–13:00 · release 12:25–14:55 · forced from 14:55".
 
 **Battery support** sets whether the batteries cover dips of the surplus
 during the charge (**Always**), only with what they have to spare
-(**Automatic**), or never. See [Battery support](../README.md#battery-support).
+(**Automatic**), or never. See [Battery support](guide/consumers.md#battery-support).
 
 Under **Daily targets** the day chart shows the surplus window (outlined in
 orange), the release before the forced run (light) and the forced run

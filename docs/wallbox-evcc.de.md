@@ -228,14 +228,14 @@ Phasen)**.
   Batterien decken das Laden nur mit dem Spielraum, den sie bis zur nächsten
   Ladung aus PV übrig haben; den Rest liefert das Netz. **Nie** lädt das Auto ohne
   Überschuss nur aus dem Netz, **Immer** auch aus den Batterien. Siehe
-  [Batterie-Unterstützung](../README.de.md#batterie-unterstützung).
+  [Batterie-Unterstützung](guide/consumers.de.md#batterie-unterstützung).
 - **Tagesziel** statt Ladeplan in evcc (Betriebsart A): z. B. **Ladestand** 80 %
   oder **Energie** 10 kWh bis 07:00 mit Quelle **Netz**. SLEMS lädt zuerst mit
   Überschuss und rechtzeitig aus dem Netz, was noch fehlt. Siehe
-  [Tagesziel](../README.de.md#tagesziel).
+  [Tagesziel](guide/consumers.de.md#tagesziel).
 - **Sofort laden** statt evcc-Modus **Schnell** (Betriebsart A): lädt mit voller
   Leistung, bis das Auto abgesteckt wird oder den Ladestand **Sofort laden
-  bis** erreicht. Siehe [Auto an der Wallbox](../README.de.md#auto-an-der-wallbox).
+  bis** erreicht. Siehe [Auto an der Wallbox](guide/consumers.de.md#auto-an-der-wallbox).
 - **Einspeisebegrenzung**: Mit der Rolle **Unterstützend** nimmt die Wallbox
   Mittagsspitzen auf, wenn ein Auto angesteckt ist.
 

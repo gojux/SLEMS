@@ -224,14 +224,14 @@ the planned power with current and phases, e.g. **10,440 W (15 A, 3 phases)**.
   the charging only with the budget they can spare until the next charge from
   PV; the grid delivers the rest. **Never** charges the car without surplus from
   the grid only, **always** also from the batteries. See
-  [battery support](../README.md#battery-support).
+  [battery support](guide/consumers.md#battery-support).
 - **Daily target** instead of an evcc charging plan (mode A): e.g. **state of
   charge** 80 % or **energy** 10 kWh until 07:00 with the source **grid**. SLEMS
   charges with surplus first and in time from the grid what is still missing.
-  See [daily target](../README.md#daily-target).
+  See [daily target](guide/consumers.md#daily-target).
 - **Charge now** instead of evcc's mode **Fast** (mode A): charges at full power
   until the car is unplugged or reaches the state of charge **Charge now up
-  to**. See [car at the wallbox](../README.md#car-at-the-wallbox).
+  to**. See [car at the wallbox](guide/consumers.md#car-at-the-wallbox).
 - **Feed-in cap**: with the role **supporting** the wallbox absorbs midday peaks
   while a car is plugged in.
 

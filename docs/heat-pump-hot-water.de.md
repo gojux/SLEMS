@@ -66,7 +66,7 @@ konfigurieren):
 - **Leistung im eingeschalteten Zustand**: ein Startwert, z. B. 3.000 W. Mit
   **Gelernte Werte verwenden** lernt SLEMS die Leistung im Warmwasserbetrieb.
 
-Siehe [Verbraucher](../README.de.md#verbraucher) für alle Einstellungen.
+Siehe [Verbraucher](guide/consumers.de.md) für alle Einstellungen.
 
 ## Schritt 2: Tagesziel und Freigabe einstellen
 
@@ -118,7 +118,7 @@ fallen würde. Die Zeile **Warmwasser-Plan** zeigt das, z. B. „ohne Heizen um 
 **Batterie-Unterstützung** bestimmt, ob die Batterien Lücken im Überschuss
 während der Ladung decken (**Immer**), nur mit dem, was sie übrig haben
 (**Automatisch**), oder nie. Siehe
-[Batterie-Unterstützung](../README.de.md#batterie-unterstützung).
+[Batterie-Unterstützung](guide/consumers.de.md#batterie-unterstützung).
 
 Das Tagesdiagramm zeigt unter **Tagesziele** das Überschuss-Fenster (orange
 umrandet), die Freigabe vor dem erzwungenen Start (hell) und den erzwungenen
