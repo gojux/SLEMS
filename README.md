@@ -54,7 +54,6 @@ you could test it.
   - [HACS (custom repository)](#hacs-custom-repository)
   - [Manual](#manual)
 - [Setup](#setup)
-  - [Phases (optional)](#phases-optional)
   - [Smart meter over Modbus (optional)](#smart-meter-over-modbus-optional)
   - [Tariffs (optional)](#tariffs-optional)
   - [PV forecast](#pv-forecast)
@@ -183,8 +182,7 @@ controls precisely:
   higher. It also recognises a full charge the BMS ends slightly below 100 %,
   and it measures the cell delta at the top.
 - **Learns instead of asking.** Besides the consumption forecast, SLEMS learns
-  the conversion losses and the response time of the batteries, the phase of
-  batteries and consumers (with a smart meter measuring each phase), the smart
+  the conversion losses and the response time of the batteries, the smart
   meter interval, the control gain and the consumption peaks; on request also
   the forecast buffers, the grid surplus targets, the control timing, the
   usable capacity of every battery and the power and thermostat behaviour of
@@ -327,44 +325,11 @@ Requires Home Assistant 2026.9 or newer.
 3. On the SLEMS integration page choose **Add battery** for every battery and
    **Add consumer** for every consumer you want to measure or control.
 
-### Phases (optional)
-
-If your smart meter measures each phase, select its **Grid power L1**, **L2**
-and **L3** in the SLEMS settings (suggested from the smart meter's device, same
-sign as the grid power). SLEMS then learns the phase of every consumer behind
-the smart meter, and of every battery in its self-test and its probe step:
-
-- **Consumers**: SLEMS compares the power of all batteries, consumers and the
-  PV system with the smart meter's phases, averaged over two minutes each. A
-  change of a consumer's power shows up on one phase with about the same size,
-  or a third on each phase for a three phase device, even while the batteries
-  compensate it at the same time. SLEMS starts with the last two days of the
-  Home Assistant history and then goes on with the live values, so a consumer
-  that switched a few times in this period gets its phase right away.
-  Sensors that report up to a minute late are no problem.
-- **Batteries**: the control moves the batteries together and against every
-  other load, so their phase cannot be told from normal operation. The
-  [self-test](docs/guide/batteries.md#self-test-of-a-battery) shows it: the other batteries and the
-  consumers are held meanwhile. So does the
-  [probe step](docs/guide/batteries.md#measuring-response-time-and-phase) if the smart meter reports
-  its phases as fast as the total power.
-
-The sensor **Phase** of the device shows the result (**L1**, **L2**, **L3** or
-**Three phases**), its attribute *shares* the measured share per phase. For a
-wallbox whose active phases come from an entity, only the one phase it uses
-while charging on one phase is learned. The phase appears in **Details** of the
-battery or consumer. It is shown and checked only; the control
-does not use it yet.
-
-- **Change**: if a consumer clearly shows up on another phase (e.g. a heater
-  moved to another socket; older values fade over a few days), or a self-test
-  measures another phase, **Settings → Repairs** asks which phase it is
-  connected to; the measured one is preselected.
-- **Learn phase again** (button of the device, **Learn again** next to the
-  phase in **Details** or in the menu (⋮) of a consumer, after a confirmation): forgets the phase and learns it anew from the history; for a
-  battery run a self-test afterwards. If the same phase comes out again,
-  Repairs asks whether it is right or which phase to take instead. A phase you
-  chose other than the measured one is kept; a change is still reported.
+**Phases** (optional): if your smart meter measures each phase, you can
+select its **Grid power L1**, **L2** and **L3** in the SLEMS settings. SLEMS
+then learns which phase each device is on and shows it; this does not
+affect the control yet (see
+[Phase of batteries and consumers](#phase-of-batteries-and-consumers)).
 
 ### Smart meter over Modbus (optional)
 
@@ -395,231 +360,20 @@ sooner; the gain is largest with fast batteries.
 
 ### Tariffs (optional)
 
-With **Add tariff** on the SLEMS integration page you enter your electricity
-tariff the way your bill shows it; the values stay in your Home Assistant.
-Prices are in the currency set in Home Assistant under **Settings → System →
-General** (hundredths per kWh, e.g. ct or Rp., and whole amounts per year);
-market prices come in euro.
+With a tariff SLEMS works in money: it checks your electricity bill, shows
+every month what another tariff would have cost and can control the batteries
+by the prices.
 
-1. Name, role (**current tariff** or **comparison tariff**) and VAT: for the
-   consumption bill, for the feed-in energy (often 0 % for private PV) and for
-   the other feed-in items. Separate contracts for import and feed-in: add
-   both as **current tariff**, they count together as one. A comparison tariff
-   with items for only one side (e.g. a dynamic supply tariff) takes the other
-   side from the current tariffs, so the comparison always shows total costs.
-2. The lines of the bill one by one: name, side (**consumption** or
-   **feed-in**), group (**energy**, **grid**, **levies**) and the net price (without
-   VAT; SLEMS adds the VAT of step 1) in ct/kWh or €/year (charged per day; a
-   discount is negative). If the bill only shows gross prices, enter those and
-   set the VAT to 0 %. Optionally only in some
-   months, on some weekdays or in a time window of the day, e.g. a cheaper
-   grid price at noon in summer: a line with a window replaces the line of the
-   same name in its window. A price change is the same line again with
-   **valid from**. On the feed-in side the energy price is your credit.
-3. **Check against a bill**: enter its period and amounts; SLEMS computes the
-   period with the tariff and your recorded grid import and export and shows
-   both amounts and the deviation, per side and group.
+- **Enter a tariff** as on the bill, line by line, from **templates** with
+  public list prices (Austria, Germany, Switzerland through ElCom) or as YAML,
+  also created by an AI from a bill.
+- **Dynamic tariffs** with day-ahead prices per quarter hour (fetched only when
+  you switch it on) and **power prices** for the monthly peak.
+- **Price aware control** (optional): keeps the batteries' energy for expensive
+  hours, on request charges cheaply from the grid or feeds in when it pays
+  well, and measures what that saved.
 
-**Import and export as YAML.** Instead of entering the lines, **Add tariff →
-Paste YAML** takes a tariff file (format `slems-tariff` with a version
-number; prices net, plus optional supplier, validity from/to and source).
-**Export as YAML** in the menu of the lines shows a tariff as such a file, e.g.
-to save it or to use it in another SLEMS. An AI can turn a bill into such a
-file: [prompt and instructions](docs/tariff-prompt.md). A file of a newer
-format version is refused with a hint to update SLEMS; older versions are
-converted.
-
-**Templates.** **Add tariff → From templates** offers tariffs with public list
-prices, per country and part of the bill: the energy of a supplier, the grid
-fees of a grid area, the levies. First choose the energy tariff; the grid
-tariff usually combined with it (households) and the levies of the country
-are then preselected, each with the prices in effect today, and SLEMS
-combines them into one tariff (then compare it with a bill). The result is
-an ordinary tariff you can edit; later changes of a template do not touch
-it. Options of a price sheet (e.g. an upgrade to certified green electricity,
-a bonus for an online bill, the metering of the feed-in direction) are chosen
-in an extra step. A feed-in tariff of its own is a template of its own, added
-as a separate current tariff (SLEMS counts all current tariffs as one
-contract).
-
-A tariff from templates remembers its templates: when an update of SLEMS (or an own
-template) brings newer prices or a successor tariff, a repair issue tells
-you, as it does when a current tariff is past its end. **Update to the new
-prices** in the menu of the lines takes them over (with several successors you
-choose one, or none): the current lines end the day before, the new ones
-apply from then on, the old prices stay for the past and own lines stay as
-they are. A corrected template (e.g. a misplaced decimal point, same dates)
-is offered the same way: the values are corrected in place, also for the
-past, lines you changed yourself stay. **Reset to the template values** undoes
-your own changes of the template lines.
-
-Own templates: YAML files in the folder `slems_tariff_templates` of your Home
-Assistant configuration. Suggest a template for everyone as an
-[issue](https://github.com/gojux/SLEMS/issues) with the source of the prices.
-
-Switzerland: **Add tariff → From ElCom** queries the open data of
-ElCom (ld.admin.ch) for the tariff of your municipality and consumption
-category (energy, grid and levies, excluding VAT, as the mean of the
-category; high and low tariff times are averaged); the next year, published
-in September, is offered as new prices, in the background only with
-**Fetch market prices** switched on.
-
-Austria: the grid fees of every grid area (network level 7, from the grid fee
-ordinance, with the reduced price from April to September 10–16 h)
-and the federal levies; the metering fee is entered at its legal maximum
-(your grid operator may charge less) and municipal levies (e.g. the
-Gebrauchsabgabe in Vienna) are not included.
-
-Austria and Germany: a general template **Dynamic tariff** (energy at the day-ahead price per quarter hour);
-enter the markup and the monthly fee of your contract afterwards in its
-lines, as suppliers of dynamic tariffs mostly publish them only per postcode.
-
-Germany: the federal levies
-(electricity tax, surcharges and the concession levy by the size of the
-municipality, at its legal maximum), the grid fees of the largest grid
-operators (Westnetz, Bayernwerk, E.DIS, Avacon, Netze BW, Schleswig-Holstein
-Netz, Stromnetz Berlin, Hamburger Energienetze, EWE NETZ, N-ERGIE Netz, SWM
-Infrastruktur, RheinNetz, enercity Netz, Thüringer Energienetze, Netze ODR,
-LEW Verteilnetz, Westfalen Weser Netz, Syna, Mainnetz; also with § 14a module 1 and
-module 1 + 3 with time variable prices for controllable devices; metering as
-an option at its legal maximum by meter type and consumption) and
-the EEG feed-in credit of PV plants up
-to 10 kWp per commissioning period; for plants commissioned since 25 February
-2025 the credit is 0 while the day-ahead price is negative (**Fetch market
-prices** needed). A line can have **Zero at negative market prices** for this.
-
-A line may also be a **percent of the group** (e.g. a municipal levy of 7 % on
-the energy).
-
-Where the energy comes from: SLEMS records grid import and feed-in per
-quarter hour itself from every grid value (kept for 400 days), so import and
-feed-in within an hour do not cancel out and dynamic prices apply per quarter
-hour. For exact totals choose the energy counters of your smart meter
-(**Grid import energy (counter)** / **Grid export energy (counter)**) in the SLEMS
-options: the recorded quarter hours are then scaled to the counter of each
-hour. Hours before the recording use the counters, without counters the
-hourly mean of the grid power (less exact).
-
-**Power price.** A line with **€ per kW and month (peak power)**
-charges the peak import of each calendar month, as the Austrian grid tariffs
-do from 2027: the mean power of the highest quarter hour (or hour) of the
-month, or the mean of several highest ones, at least **Power billed at
-least** (e.g. 2 kW) and rounded up to **Rounded up to** if the tariff does
-so. **Charged from** / **Charged up to** split it into tiers with their own
-price, e.g. a second line with the higher price above 10 kW. The peak comes
-from the recorded quarter hours; hours before the recording only have their
-hourly mean, which is lower than their highest quarter hour, so the
-comparison marks months in which such an hour could hide a quarter hour
-above the billed power (its mean × 4 is above it). How SLEMS keeps the peak low: see
-[Import peak shaving and power price](#import-peak-shaving-and-power-price).
-
-**Dynamic tariffs and market prices.** A line can also follow the day-ahead
-market: **spot price (hourly)** or **monthly market price**, each as market price
-+ share in % of its amount + price in ct/kWh, e.g. "spot + 5 % + 1.2 ct" or
-"monthly market price − 0.5 ct" for the feed-in; a markup in % stays a markup
-at negative market prices. **Market price at most** caps the market price
-before the markups (e.g. 60 ct/kWh net at Salzburg AG FlexSpot). Published monthly market
-prices can be entered per month (e.g. "2026-08: 7.1"); months without a value
-use the mean of the spot prices weighted by your feed-in. If the price
-follows an official monthly value, choose it as the line's **Monthly value**
-(Austria: the reference market value for PV, wind or hydro published by
-E-Control according to § 13 EAG); SLEMS then fetches it with the market
-prices, the weighted mean stands in until it is published.
-
-SLEMS only fetches market prices from the internet once you switch on
-**Fetch market prices** (off by default). **Price source** selects where from:
-APG (Austria), SMARD of the Bundesnetzagentur (Germany/Luxembourg) or
-Energy-Charts of Fraunhofer ISE (Austria, Germany/Luxembourg and Switzerland);
-the default follows the country set in Home Assistant. Swiss prices are in euro
-like all exchange prices. At the moment SLEMS only supports market prices in
-euro: with another currency set in Home Assistant, the tariff comparison and
-**Check against a bill** leave out tariffs that follow the market price, and a
-repair notice says so if the current tariff is one of them. SLEMS then loads the last 12 months once, stores them
-locally and fetches the next day after the day-ahead auction (from 13:00).
-The sensor **Market price** shows the price of the current quarter hour in
-ct/kWh without fees and VAT, with the source as attribution.
-
-**Price aware control** (switch, off by default; needs a tariff): if the
-stored energy does not last for every hour until PV refills the batteries
-(a day whose forecast PV surplus fills them from the minimum to the maximum
-state of charge; a little surplus on a dull day does not count), they cover the hours with the highest import price of the current tariff and
-keep their energy in hours that are cheaper by at least the **minimum gain**
-(default 2 ct/kWh); there the house draws from the grid. The grid import
-stays the same, it only moves to cheaper hours – no charging from the grid
-and no feed-in from the batteries. Any time dependent price counts: market
-prices or time windows of a fixed tariff. Import peak shaving still applies.
-The strategy shows **Price hold** with the hours concerned, the day chart and
-the simulation include it. The price plans work in quarter hours (market
-prices change every quarter hour): the hourly consumption forecast is spread
-evenly over its quarters, PV comes from the forecast; the day chart shows
-their hourly means. Daily targets with the source **+ grid**: if the
-forecast surplus is short for them anyway, the forced run starts in the
-window with the lowest cost before the deadline (cheaper by at least the
-minimum gain per kWh than at the latest start); the consumer card shows
-**from … in the cheapest window**. The cost per quarter hour: what the
-forecast surplus covers counts at the feed-in credit, the rest at the import
-price. For an on/off consumer whose power clearly depends on the outdoor
-temperature (e.g. the hot water charge of an air source heat pump) its
-learned power at the forecast temperature of the hour counts: a warm
-afternoon can so beat a cold morning with cheaper electricity.
-
-**Estimated prices**: the day-ahead prices of the next day are published
-around 13:00. For the quarter hours after the last known price the price aware
-control plans with estimates: per time of day the median of the last 14 days
-of the same kind (working day, or weekend and public holiday of the bidding
-zone; in Switzerland the days off in at least half of the cantons), its swing around the mean of the day halved as a safety margin. So the night and a cloudy next day are planned
-before the real prices are known; a new plan follows as soon as they are.
-Only known negative prices start the plan for negative prices. The price
-chart shows the estimates faint.
-
-**Charge batteries from the grid** (switch, off by default; only with price
-aware control): SLEMS plans until PV refills the batteries (as above; at most
-until the last known price, after it with the estimated ones) which hours the
-batteries cover, which they hold and in which they charge from the grid. A
-smaller PV surplus before is part of the plan: the batteries take it, and
-only what is still missing for the expensive hours is charged from the grid
-(e.g. at a cheap noon before an expensive evening after a dull day). A charge must pay after the
-charge and discharge losses, the [wear costs](docs/guide/batteries.md#battery-wear-costs) and the
-minimum gain; of equal plans the later charge wins, as home storage ages
-mostly with time at a high state of charge. Limits: **Highest state of charge
-from the grid** (default 90 %), **Highest grid charge power** (0 = the charge
-power of the batteries), the import limit of peak shaving and the space the
-feed-in cap needs when PV takes over. Your own PV surplus is taken first. The plan includes the price hold; the strategy shows **Grid charging** with the energy, the
-start and the expected saving, the day chart the planned charging.
-
-**Surplus hours and negative prices**: with price aware control and a
-feed-in credit that follows the market price per hour, or a negative import
-price or credit within the known prices, the plan also covers the surplus
-hours, without any further switch: the batteries keep room for the PV surplus
-of the hours with a lower or negative credit (they take only part of the
-surplus before and feed in the rest at the higher credit; strategy **Room for
-cheaper hours**). With **Charge batteries from the grid** they also charge
-from the grid when the import price including all fees is negative. Your own
-PV surplus is taken first. **Highest grid import while charging from the
-grid** (sum of all phases, 0 = no limit, e.g. for the agreed connection power;
-it does not protect a single phase or the main fuse) and the import limit of
-peak shaving cap the import. The plan then reaches the last known price (at
-most 36 hours) and is computed in the background; until it is ready, the
-previous one applies.
-
-**Feed in from the batteries** (switch, off by default; only with price
-aware control): the same plan may feed in from the batteries beyond the
-house's need when the credit of the hour is higher than what the energy is
-worth later plus the minimum gain and the wear costs of the batteries (the
-energy is mostly charged again later, an extra cycle) – accepting grid import
-later. Not below
-the morning reserve, at most the maximum grid export while discharging and
-the feed-in cap. This only pays with a feed-in credit that follows the market
-price per hour; with a fixed or monthly credit the strategy says the option
-has no effect. Check your contract and any subsidy first: some do not allow
-feeding in energy that was charged from the grid.
-
-**Measured saving**: the sensor **Saving price control** adds up per month what
-the price aware control saved: after every night (or other run until PV takes
-over) in which it held, charged or fed in, SLEMS compares the recorded costs
-with the same hours played *as usual* through the battery model, starting from
-the measured state of charge. Nights without such an action count nothing.
-The tariff comparison shows the value next to the estimate.
+All settings and details: [Tariffs and prices](docs/guide/tariffs.md).
 
 ### PV forecast
 
@@ -655,82 +409,16 @@ in alpine terrain.
 
 ### Consumption forecast
 
-SLEMS learns the consumption from the long-term statistics of Home Assistant
-and forecasts today and tomorrow hourly. Recent days count more than older
-ones, so changes are followed within days. Heat pumps are forecast from the
-outdoor temperature of the day, so a warm day in the heating season
-immediately predicts less heating energy. The share that does not depend on
-the temperature (mostly hot water) comes from the last two weeks only, the
-dependency on the temperature from the whole year: if a heating rod heats the
-hot water in summer and the heat pump in winter, the forecast follows the
-switch within days. After a sudden rise (e.g. the heat
-pump starting the heating season) the forecast is raised at once: if the last
-three hours took on average at least 200 W and 30 % more than forecast, that
-excess is added to the next 24 hours, so the night discharge and the
-grid friendly charging plan with it until the learned forecast has caught up
-(card **Forecast accuracy**: **Raised**). It is never lowered this way. Two
-optional settings help at the start:
+SLEMS learns your house's consumption from the long-term statistics of Home
+Assistant and forecasts today and tomorrow by the hour: heat pumps by the
+outdoor temperature, public holidays like weekends. When the consumption rises
+suddenly (e.g. at the start of the heating season), SLEMS raises the forecast
+at once. The card **Forecast accuracy** shows how well the consumption and PV
+forecasts hit. When switching from another battery integration, choose its
+house consumption sensor as **House consumption history**, then SLEMS learns
+from the whole history at once.
 
-- **Outdoor temperature**: a temperature sensor with history. Without it,
-  SLEMS records the temperature of the weather entity itself; the heat pump
-  model then needs about a week before it uses the temperature.
-- **House consumption history**: a power sensor of the house consumption with
-  existing history (e.g. from another battery integration), used for the time
-  before SLEMS recorded its own values.
-
-Public holidays count as weekend days, in the learned profile and in the
-forecast: those of the country set in Home Assistant and of the state or
-canton selected as **Public holidays** in the system settings. When the
-system settings are opened and no region is stored yet, SLEMS suggests one
-from the location of Home Assistant: a single request to Nominatim
-(OpenStreetMap) with the coordinates rounded to about 100 m, the service the
-onboarding of Home Assistant uses for the country as well. With **National
-holidays**, or if no region is found, only the holidays of the whole country
-count (in Switzerland those kept in at least half of the cantons).
-
-Recommended setup when switching from another battery integration:
-
-1. Select that integration's house consumption sensor as **House consumption
-   history**. SLEMS then learns from the full history right away. Without it,
-   SLEMS derives the history from grid and PV only; the battery power before
-   SLEMS is unknown, so charging and discharging would distort the learned
-   consumption.
-2. Select an outdoor temperature sensor with history if one exists. Otherwise
-   the heat pump forecast uses the mean of the last days until SLEMS has
-   recorded about a week of temperatures.
-
-**Forecast accuracy** (card in the overview, sensors **Consumption forecast
-accuracy** and **PV forecast accuracy**):
-
-- Consumption: SLEMS recalculates the forecast of each of the last 14 days as
-  it would have been made at midnight, with the history up to then, and
-  compares it with the measured consumption. Shown are the accuracy of the
-  daily energy (100 % minus the mean deviation), the tendency (too high or too
-  low), the deviation per hour (how well the course of the day is hit), the
-  data basis (days of consumption, days of heat pump data with temperature)
-  and tomorrow's forecast with its expected deviation. The heat pump is
-  recalculated with the measured temperature of the day, so its share looks
-  somewhat better than it was.
-- PV: past forecasts are not available from the solar forecast integration, so
-  SLEMS records the forecast of each day at its start and compares it with the
-  production in the evening. The card shows accuracy and expected deviation
-  from 7 compared days on (before: **collecting data**), because a few days say
-  little.
-
-The sensor **House consumption** (used for the forecast and shown in the energy
-flow) is calculated as grid + PV − batteries. The smart meter often reports a
-change later than PV and batteries; a momentarily negative result is therefore
-replaced by the last valid value (for at most 30 seconds, then unknown).
-If an enabled, controllable battery cannot be read, it counts with its last
-measured power for up to 5 minutes, since it keeps its last set point without
-new commands. After that the house consumption is unknown until the battery can
-be read again, instead of adding its power to the house. A disabled battery
-never makes the house consumption unknown: while it is not yet handed back to
-its own logic it keeps counting with its last measured power, once released it
-counts with 0 W. In release state **Automatic** it may charge or discharge on
-its own: it counts with its last measured power for up to 5 minutes, then with
-0 W, and a repair points out that the house consumption is inaccurate. The consumption forecast leaves out hours in which the statistics
-of a battery lack a value.
+Details: [Consumption forecast](docs/guide/consumption-forecast.md).
 
 ## Without batteries
 
@@ -1804,6 +1492,45 @@ attributes.
 | Power of an on/off consumer by the outdoor temperature | the mean power and outdoor temperature (own sensor, else the weather entity) of each run of 10 minutes or more, the last 60 runs; a straight line, used only with a span of at least 8 K and a change of the power of at least 10 % over it (a ground source heat pump or a heating rod shows none, then it has no effect); attributes of the sensor **Learned power** | 6 runs |
 | Morning reserve (**Morning reserve coverage** sets how cautious; shown only while the reserve is automatic) | the morning gap: energy the house needed from battery or grid between the planned takeover of PV (end of the night discharge) and the real one (PV covering the consumption for 15 minutes), in % of the day's forecast consumption; the reserve covers the chosen share of the mornings (90 % = 9 of 10), above 100 % the largest gap times the value (110 % = 10 % more than the worst morning) | 14 measured mornings (also measured while the night discharge is off) |
 | Power and thermostat of a consumer (per consumer, **Use learned values**) | the power while switched on (on/off consumers: replaces the nominal power; power controlled consumers: the typical power at full load, measured while commanded at ≥ 90 % of the maximum power for at least 15 s or twice its response time, used for planning: forecast, daily target, feed-in cap; it is still commanded up to its maximum power) and pauses of its own thermostat while it is commanded, lasting 30 s to 10 min (two within 30 days: its own thermostat cycles, see **Own thermostat**; applies also without **Use learned values**; longer pauses, e.g. a dehumidifier at its target humidity, do not count) | 30 samples, two pauses |
+
+#### Phase of batteries and consumers
+
+If your smart meter measures each phase, select its **Grid power L1**, **L2**
+and **L3** in the SLEMS settings (suggested from the smart meter's device, same
+sign as the grid power). SLEMS then learns the phase of every consumer behind
+the smart meter, and of every battery in its self-test and its probe step:
+
+- **Consumers**: SLEMS compares the power of all batteries, consumers and the
+  PV system with the smart meter's phases, averaged over two minutes each. A
+  change of a consumer's power shows up on one phase with about the same size,
+  or a third on each phase for a three phase device, even while the batteries
+  compensate it at the same time. SLEMS starts with the last two days of the
+  Home Assistant history and then goes on with the live values, so a consumer
+  that switched a few times in this period gets its phase right away.
+  Sensors that report up to a minute late are no problem.
+- **Batteries**: the control moves the batteries together and against every
+  other load, so their phase cannot be told from normal operation. The
+  [self-test](docs/guide/batteries.md#self-test-of-a-battery) shows it: the other batteries and the
+  consumers are held meanwhile. So does the
+  [probe step](docs/guide/batteries.md#measuring-response-time-and-phase) if the smart meter reports
+  its phases as fast as the total power.
+
+The sensor **Phase** of the device shows the result (**L1**, **L2**, **L3** or
+**Three phases**), its attribute *shares* the measured share per phase. For a
+wallbox whose active phases come from an entity, only the one phase it uses
+while charging on one phase is learned. The phase appears in **Details** of the
+battery or consumer. It is shown and checked only; the control
+does not use it yet.
+
+- **Change**: if a consumer clearly shows up on another phase (e.g. a heater
+  moved to another socket; older values fade over a few days), or a self-test
+  measures another phase, **Settings → Repairs** asks which phase it is
+  connected to; the measured one is preselected.
+- **Learn phase again** (button of the device, **Learn again** next to the
+  phase in **Details** or in the menu (⋮) of a consumer, after a confirmation): forgets the phase and learns it anew from the history; for a
+  battery run a self-test afterwards. If the same phase comes out again,
+  Repairs asks whether it is right or which phase to take instead. A phase you
+  chose other than the measured one is kept; a change is still reported.
 
 ### Further settings (entities)
 

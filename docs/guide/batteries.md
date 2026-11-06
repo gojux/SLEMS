@@ -414,7 +414,7 @@ Checked are:
   unclear.
 
 If the smart meter measures each phase, the test also learns the battery's
-[phase](../../README.md#phases-optional): the phase on which the steps show up.
+[phase](../../README.md#phase-of-batteries-and-consumers): the phase on which the steps show up.
 
 If the house consumption changes a lot during the test, the checks at the smart
 meter are **unclear** instead of failed; repeat the test at a quieter time
@@ -462,7 +462,7 @@ reversal adds the driver's extra time). The times until 60 % count as
 measurements of the battery's response time. Without a probe step the driver's
 value (Marstek Venus 0.45 s) or half the learned response time applies as
 before. If the smart meter reports its phases as fast as the total power, the
-step also shows the battery's [phase](../../README.md#phases-optional).
+step also shows the battery's [phase](../../README.md#phase-of-batteries-and-consumers).
 
 SLEMS measures by itself as soon as the grid is quiet:
 

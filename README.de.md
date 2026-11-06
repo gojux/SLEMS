@@ -54,7 +54,6 @@ Wenn du SLEMS mit einer anderen Batterie nutzen möchtest, erstelle bitte ein
   - [HACS (benutzerdefiniertes Repository)](#hacs-benutzerdefiniertes-repository)
   - [Manuell](#manuell)
 - [Einrichtung](#einrichtung)
-  - [Phasen (optional)](#phasen-optional)
   - [Smart Meter per Modbus (optional)](#smart-meter-per-modbus-optional)
   - [Tarife (optional)](#tarife-optional)
   - [PV-Prognose](#pv-prognose)
@@ -185,8 +184,7 @@ SLEMS plant voraus und regelt genau:
   Vollladung, die das BMS knapp unter 100 % beendet, und misst dabei das
   Zell-Delta am oberen Ladeende.
 - **Lernt statt zu fragen.** Neben der Verbrauchsprognose lernt SLEMS die
-  Umwandlungsverluste und die Reaktionszeit der Batterien, die Phase von
-  Batterien und Verbrauchern (mit einem Smart Meter, der jede Phase misst), das
+  Umwandlungsverluste und die Reaktionszeit der Batterien, das
   Meldeintervall des Smart Meters, die Regelverstärkung und die
   Verbrauchsspitzen; auf Wunsch
   auch die Prognose-Puffer, die Ziel-Netzüberschüsse, die Regelzeiten, die
@@ -333,48 +331,11 @@ Voraussetzung: Home Assistant 2026.9 oder neuer.
    hinzufügen** und für jeden Verbraucher, der gemessen oder gesteuert werden
    soll, **Verbraucher hinzufügen** wählen.
 
-### Phasen (optional)
-
-Misst dein Smart Meter jede Phase, wähle in den SLEMS-Einstellungen seine
-**Netzleistung L1**, **L2** und **L3** aus (vorgeschlagen aus dem Gerät des
-Smart Meters, mit demselben Vorzeichen wie die Netzleistung). SLEMS lernt dann
-die Phase jedes Verbrauchers hinter dem Smart Meter, und die jeder Batterie in
-ihrem Selbsttest und ihrem Probeschritt:
-
-- **Verbraucher**: SLEMS vergleicht die Leistung aller Batterien, Verbraucher
-  und der PV-Anlage mit den Phasen des Smart Meters, jeweils über zwei Minuten
-  gemittelt. Eine Änderung der Leistung eines Verbrauchers zeigt sich an einer
-  Phase in etwa gleicher Größe, bei einem dreiphasigen Gerät zu einem Drittel
-  an jeder Phase, auch wenn die Batterien sie gleichzeitig ausgleichen. SLEMS
-  beginnt mit den letzten zwei Tagen aus dem Verlauf von Home Assistant und
-  rechnet dann mit den aktuellen Werten weiter; ein Verbraucher, der in dieser
-  Zeit ein paarmal geschaltet hat, bekommt seine Phase also sofort. Sensoren,
-  die bis zu einer Minute verzögert melden, sind kein Problem.
-- **Batterien**: Die Regelung bewegt die Batterien gemeinsam und gegen jede
-  andere Last, daher lässt sich ihre Phase im normalen Betrieb nicht erkennen.
-  Der [Selbsttest](docs/guide/batteries.de.md#selbsttest-einer-batterie) zeigt sie: Die anderen
-  Batterien und die Verbraucher werden dabei festgehalten. Ebenso der
-  [Probeschritt](docs/guide/batteries.de.md#reaktionszeit-und-phase-messen), wenn der Smart Meter seine
-  Phasen so schnell meldet wie die Gesamtleistung.
-
-Der Sensor **Phase** des Geräts zeigt das Ergebnis (**L1**, **L2**, **L3** oder
-**Dreiphasig**), sein Attribut *shares* den gemessenen Anteil je Phase. Bei
-einer Wallbox, deren aktive Phasen eine Entität nennt, lernt SLEMS nur die eine
-Phase, mit der sie einphasig lädt. Die Phase steht in den **Details** der
-Batterie und des Verbrauchers. Sie wird nur angezeigt und geprüft; die
-Regelung verwendet sie noch nicht.
-
-- **Wechsel**: Zeigt sich ein Verbraucher deutlich an einer anderen Phase
-  (z. B. ein Heizlüfter in einer anderen Steckdose; ältere Werte verblassen
-  über einige Tage), oder misst ein Selbsttest eine andere Phase, fragt
-  **Einstellungen → Reparaturen**, an welcher Phase das Gerät hängt; die
-  gemessene ist vorausgewählt.
-- **Phase neu lernen** (Button des Geräts, **Neu lernen** neben der Phase in
-  den **Details** oder im Menü (⋮) eines Verbrauchers, nach einer Rückfrage): verwirft die Phase und lernt sie neu aus dem Verlauf; bei einer
-  Batterie danach einen Selbsttest machen. Kommt wieder dieselbe heraus, fragt
-  Reparaturen, ob sie stimmt oder welche Phase stattdessen gelten soll. Eine
-  andere als die gemessene Phase, die du gewählt hast, bleibt erhalten; ein
-  Wechsel wird weiter gemeldet.
+**Phasen** (optional): Misst dein Smart Meter jede Phase, kannst du in den
+SLEMS-Einstellungen seine **Netzleistung L1**, **L2** und **L3** auswählen.
+SLEMS lernt dann, an welcher Phase jedes Gerät hängt, und zeigt sie an; auf
+die Regelung hat das noch keinen Einfluss (siehe
+[Phase von Batterien und Verbrauchern](#phase-von-batterien-und-verbrauchern)).
 
 ### Smart Meter per Modbus (optional)
 
@@ -405,255 +366,21 @@ sieht jeden Wert früher; am meisten bringt das bei schnellen Batterien.
 
 ### Tarife (optional)
 
-Mit **Tarif hinzufügen** auf der Seite der SLEMS-Integration trägst du deinen
-Stromtarif so ein, wie ihn deine Rechnung zeigt; die Werte bleiben in deinem
-Home Assistant. Preise gelten in der Währung, die in Home Assistant unter
-**Einstellungen → System → Allgemein** eingestellt ist (Hundertstel je kWh, z. B.
-ct oder Rp., und ganze Beträge je Jahr); Börsenpreise kommen in Euro.
+Mit einem Tarif rechnet SLEMS in Geld: Es prüft deine Stromrechnung nach,
+zeigt jeden Monat, was ein anderer Tarif gekostet hätte, und kann die
+Batterien nach den Preisen steuern.
 
-1. Name, Rolle (**aktueller Tarif** oder **Vergleichstarif**) und Umsatzsteuer:
-   für die Bezugsrechnung, für die eingespeiste Energie (bei privaten
-   PV-Anlagen oft 0 %) und für die anderen Einspeise-Posten. Getrennte
-   Verträge für Bezug und Einspeisung: beide als **aktueller Tarif** anlegen, sie
-   zählen zusammen als einer. Ein Vergleichstarif mit Posten nur für eine Seite
-   (z. B. ein dynamischer Stromtarif) übernimmt die andere Seite von den
-   aktuellen Tarifen, der Vergleich zeigt so immer die Gesamtkosten.
-2. Die Posten der Rechnung einzeln: Name, Seite (**Bezug** oder
-   **Einspeisung**), Gruppe (**Energie**, **Netz**, **Abgaben**) und Nettopreis (ohne
-   USt.; SLEMS rechnet die USt. aus Schritt 1 dazu) in ct/kWh oder €/Jahr (je
-   Tag verrechnet; ein Rabatt ist negativ). Zeigt die Rechnung nur
-   Bruttopreise, diese eingeben und die USt. auf 0 % setzen. Optional nur in
-   bestimmten Monaten, an bestimmten Wochentagen oder in einem Zeitfenster
-   des Tages, z. B. ein günstigerer Netzpreis zu Mittag im Sommer: Ein Posten
-   mit Fenster ersetzt in seinem Fenster den gleichnamigen Posten. Eine
-   Preisänderung ist derselbe Posten noch einmal mit **Gültig ab**. Auf der
-   Einspeiseseite ist der Energiepreis deine Vergütung.
-3. **Mit einer Rechnung vergleichen**: Zeitraum und Beträge der Rechnung
-   eingeben; SLEMS rechnet den Zeitraum mit dem Tarif und deinem
-   aufgezeichneten Netzbezug und deiner Einspeisung nach und zeigt beide
-   Beträge und die Abweichung, je Seite und Gruppe.
+- **Tarif eintragen** wie auf der Rechnung, Posten für Posten, aus
+  **Vorlagen** mit öffentlichen Listenpreisen (Österreich, Deutschland, die
+  Schweiz über die ElCom) oder als YAML, auch von einer KI aus einer Rechnung
+  erstellt.
+- **Dynamische Tarife** mit Börsenpreisen je Viertelstunde (abgerufen nur,
+  wenn du es einschaltest) und **Leistungspreise** für die Monatsspitze.
+- **Preisbewusste Steuerung** (optional): hebt die Energie der Batterien für
+  teure Stunden auf, lädt auf Wunsch günstig aus dem Netz oder speist teuer
+  ein und misst, was das gespart hat.
 
-**Import und Export als YAML.** Statt die Posten einzutippen, nimmt **Tarif
-hinzufügen → YAML einfügen** eine Tarifdatei (Format `slems-tariff` mit
-Versionsnummer; Preise netto, dazu optional Lieferant, Gültigkeit von/bis und
-Quelle). **Als YAML exportieren** im Menü der Posten zeigt einen Tarif als
-solche Datei, z. B. zum Sichern oder für ein anderes SLEMS. Eine KI kann eine
-Rechnung in eine solche Datei umwandeln:
-[Prompt und Anleitung](docs/tariff-prompt.de.md). Eine Datei mit neuerer
-Formatversion lehnt SLEMS mit dem Hinweis ab, SLEMS zu aktualisieren; ältere
-Versionen werden umgewandelt.
-
-**Vorlagen.** **Tarif hinzufügen → Aus Vorlagen** bietet Tarife mit
-öffentlichen Listenpreisen an, je Land und Teil der Rechnung: die Energie
-eines Lieferanten, die Netzentgelte eines Netzgebiets, die Abgaben. Zuerst
-wählst du den Energietarif; der Netztarif, mit dem er meist kombiniert wird
-(Haushalte), und die Abgaben des Landes sind dann vorausgewählt, jeweils mit
-den heute gültigen Preisen, und SLEMS setzt alles zu einem Tarif zusammen
-(danach mit einer Rechnung vergleichen). Das Ergebnis ist ein normaler Tarif,
-den du bearbeiten kannst; spätere Änderungen einer Vorlage berühren ihn
-nicht. Optionen eines Preisblatts (z. B. ein Ökostrom-Upgrade, ein Bonus für
-die Online-Rechnung, das Messentgelt der Einspeiserichtung) wählst du in einem
-eigenen Schritt. Ein eigener Einspeisetarif ist eine eigene Vorlage und wird
-als weiterer aktueller Tarif angelegt (SLEMS zählt alle aktuellen Tarife als
-einen Vertrag).
-
-Ein Tarif aus Vorlagen merkt sich seine Vorlagen: Bringt ein Update von SLEMS (oder
-eine eigene Vorlage) neuere Preise oder einen Nachfolgetarif, meldet das ein
-Reparaturhinweis, ebenso wenn ein aktueller Tarif abgelaufen ist. **Auf neue
-Preise aktualisieren** im Menü der Posten übernimmt sie (bei mehreren
-Nachfolgern wählst du einen oder keinen): Die aktuellen Posten enden am Tag
-davor, die neuen gelten ab dann, die alten Preise bleiben für die
-Vergangenheit und eigene Posten bleiben, wie sie sind. Eine korrigierte
-Vorlage (z. B. ein verrutschtes Komma, gleiche Daten) bietet SLEMS genauso
-an: Die Werte werden an Ort und Stelle korrigiert, auch für die
-Vergangenheit; selbst geänderte Posten bleiben. **Auf Vorlagenwerte
-zurücksetzen** nimmt eigene Änderungen an den Vorlagen-Posten zurück.
-
-Eigene Vorlagen: YAML-Dateien im Ordner `slems_tariff_templates` deiner
-Home-Assistant-Konfiguration. Eine Vorlage für alle schlägst du als
-[Issue](https://github.com/gojux/SLEMS/issues) mit der Quelle der Preise vor.
-
-Schweiz: **Tarif hinzufügen → Von der ElCom** fragt die
-offenen Daten der ElCom (ld.admin.ch) nach dem Tarif deiner Gemeinde und
-Verbrauchskategorie ab (Energie, Netz und Abgaben, ohne MWST, als Mittel der
-Kategorie; Hoch- und Niedertarifzeiten sind darin gemittelt); das im September
-veröffentlichte Folgejahr bietet SLEMS als neue Preise an, im Hintergrund nur
-mit eingeschaltetem **Börsenpreise abrufen**.
-
-Österreich: die Netzentgelte aller Netzbereiche (Netzebene 7, aus der Systemnutzungsentgelte-Verordnung, mit dem günstigeren
-Preis von April bis September 10–16 Uhr) und die bundesweiten Abgaben; das
-Messentgelt steht mit dem gesetzlichen Höchstpreis drin (dein Netzbetreiber
-kann weniger verrechnen), Gemeindeabgaben (z. B. die Gebrauchsabgabe in Wien)
-fehlen.
-
-Österreich und Deutschland: eine allgemeine Vorlage **Dynamischer Tarif** (Energie zum Day-Ahead-Börsenpreis je Viertelstunde); den Aufschlag und
-die Monatsgebühr deines Vertrags trägst du danach in ihren Posten ein, weil
-Anbieter dynamischer Tarife sie meist nur je Postleitzahl veröffentlichen.
-
-Deutschland: die bundesweiten Abgaben (Stromsteuer, Umlagen und die
-Konzessionsabgabe nach Gemeindegröße mit ihrem gesetzlichen Höchstbetrag), die
-Netzentgelte der größten Netzbetreiber (Westnetz, Bayernwerk, E.DIS, Avacon,
-Netze BW, Schleswig-Holstein Netz, Stromnetz Berlin, Hamburger Energienetze,
-EWE NETZ, N-ERGIE Netz, SWM Infrastruktur, RheinNetz, enercity Netz,
-Thüringer Energienetze, Netze ODR, LEW Verteilnetz, Westfalen Weser Netz, Syna,
-Mainnetz; auch mit § 14a Modul 1 und Modul 1 + 3 mit zeitvariablen Preisen für
-steuerbare Verbrauchseinrichtungen; der Messstellenbetrieb als Option mit dem
-gesetzlichen Höchstpreis nach Zählerart und Verbrauch) und die
-EEG-Einspeisevergütung von PV-Anlagen bis 10 kWp je Inbetriebnahme-Zeitraum;
-für Anlagen ab 25. Februar 2025 ist die Vergütung 0, solange der
-Day-Ahead-Preis negativ ist (**Börsenpreise abrufen** nötig). Ein Posten kann
-dafür **Null bei negativen Börsenpreisen** haben.
-
-Ein Posten kann auch **Prozent der Gruppe** sein (z. B. eine Gebrauchsabgabe
-von 7 % auf die Energie).
-
-Woher die Energie kommt: SLEMS zeichnet Netzbezug und Einspeisung aus jedem
-Netzwert selbst je Viertelstunde auf (400 Tage lang), damit sich Bezug und
-Einspeisung innerhalb einer Stunde nicht aufheben und dynamische Preise je
-Viertelstunde gelten. Für genaue Summen in den SLEMS-Optionen die
-Energiezähler des Smart Meters wählen (**Netzbezug (Zähler)** /
-**Netzeinspeisung (Zähler)**): Die aufgezeichneten Viertelstunden werden dann auf
-den Zähler jeder Stunde skaliert. Stunden vor der Aufzeichnung nutzen die
-Zähler, ohne Zähler das Stundenmittel der Netzleistung (ungenauer).
-
-**Leistungspreis.** Ein Posten mit **€ pro kW und Monat
-(Spitzenleistung)** verrechnet den höchsten Bezug jedes Kalendermonats, wie
-die österreichischen Netztarife ab 2027: die mittlere Leistung der höchsten
-Viertelstunde (oder Stunde) im Monat oder den Mittelwert mehrerer höchster,
-mindestens **Mindestens verrechnete Leistung** (z. B. 2 kW) und aufgerundet
-auf **Aufgerundet auf**, wenn der Tarif das tut. **Verrechnet ab** /
-**Verrechnet bis** teilen sie in Stufen mit eigenem Preis, z. B. ein zweiter
-Posten mit dem höheren Preis über 10 kW. Die Spitze kommt aus den
-aufgezeichneten Viertelstunden; Stunden vor der Aufzeichnung haben nur ihr
-Stundenmittel, das niedriger ist als ihre höchste Viertelstunde, deshalb
-markiert der Vergleich Monate, in denen eine solche Stunde eine Viertelstunde
-über der verrechneten Leistung verbergen könnte (ihr Mittel × 4 liegt
-darüber). Wie SLEMS die Spitze niedrig hält: siehe
-[Bezugsspitzen abfangen und Leistungspreis](#bezugsspitzen-abfangen-und-leistungspreis).
-
-**Dynamische Tarife und Börsenpreise.** Ein Posten kann auch dem
-Day-Ahead-Markt folgen: **Börsenpreis (stündlich)** oder **Monatsmarktpreis**,
-jeweils als Marktpreis + Aufschlag in % seines Betrags + Preis in ct/kWh, z. B.
-„Börsenpreis + 5 % + 1,2 ct“ oder „Monatsmarktpreis − 0,5 ct“ für die
-Einspeisung; ein Aufschlag in % bleibt auch bei negativem Marktpreis ein
-Aufschlag. **Börsenpreis höchstens** begrenzt den Marktpreis vor den
-Aufschlägen (z. B. 60 ct/kWh netto bei Salzburg AG FlexSpot). Veröffentlichte Monatsmarktpreise lassen sich je Monat eintragen
-(z. B. „2026-08: 7,1“); Monate ohne Wert nutzen das Mittel der Börsenpreise,
-gewichtet mit deiner Einspeisung. Folgt der Preis einem offiziellen
-Monatswert, wählst du ihn beim Posten als **Monatswert** (Österreich: der
-Referenzmarktwert PV, Wind oder Wasserkraft der E-Control nach § 13 EAG);
-SLEMS holt ihn dann mit den Börsenpreisen, bis zur Veröffentlichung gilt das
-gewichtete Mittel.
-
-SLEMS ruft Börsenpreise erst aus dem Internet ab, wenn du **Börsenpreise
-abrufen** einschaltest (standardmäßig aus). **Preisquelle** wählt woher: APG
-(Österreich), SMARD der Bundesnetzagentur (Deutschland/Luxemburg) oder
-Energy-Charts des Fraunhofer ISE (Österreich, Deutschland/Luxemburg und
-Schweiz); voreingestellt nach dem in Home Assistant eingestellten Land.
-Schweizer Börsenpreise sind wie alle Börsenpreise in Euro. SLEMS unterstützt
-zum aktuellen Zeitpunkt nur Börsenpreise in Euro: Ist in Home Assistant eine
-andere Währung eingestellt, lassen Tarifvergleich und **Mit einer Rechnung
-vergleichen** Tarife aus, die vom Börsenpreis abhängen; hängt der aktuelle
-Tarif davon ab, weist eine Reparaturmeldung darauf hin. SLEMS lädt dann einmal die letzten
-12 Monate, speichert sie lokal und holt nach der Day-Ahead-Auktion (ab 13 Uhr)
-den nächsten Tag. Der Sensor **Börsenpreis** zeigt den Preis der aktuellen
-Viertelstunde in ct/kWh ohne Gebühren und Steuern, mit der Quelle als
-Quellenangabe.
-
-**Preisbewusste Steuerung** (Schalter, standardmäßig aus; braucht einen
-Tarif): Reicht die gespeicherte Energie nicht für alle Stunden, bis die PV die
-Batterien wieder füllt (ein Tag, dessen prognostizierter PV-Überschuss sie
-vom minimalen bis zum maximalen Ladezustand füllt; etwas Überschuss an einem
-trüben Tag zählt nicht), decken sie die Stunden mit dem höchsten Bezugspreis
-des aktuellen Tarifs und halten ihre Energie in Stunden zurück, die um
-mindestens den **Mindestgewinn** (Standard 2 ct/kWh) günstiger sind; dort
-bezieht das Haus aus dem Netz. Der Netzbezug bleibt gleich, er wandert nur in
-günstigere Stunden – kein Laden aus dem Netz und keine Einspeisung aus den
-Batterien. Jeder zeitabhängige Preis zählt: Börsenpreise oder Zeitfenster
-eines festen Tarifs. Bezugsspitzen abfangen gilt weiter. Die Strategie zeigt
-**Für teure Stunden halten** mit den betroffenen Stunden, Tagesdiagramm und
-Simulation berücksichtigen es. Die Preispläne arbeiten in Viertelstunden
-(Börsenpreise wechseln je Viertelstunde): Die stündliche Verbrauchsprognose
-wird gleichmäßig auf ihre Viertelstunden verteilt, die PV kommt aus der
-Prognose; das Tagesdiagramm zeigt ihre Stundenmittel. Tagesziele mit der Quelle **+ Netz**: Reicht der
-prognostizierte Überschuss ohnehin nicht, startet der erzwungene Lauf im
-Fenster mit den niedrigsten Kosten vor der Frist (um mindestens den
-Mindestgewinn je kWh günstiger als zum spätesten Start); die
-Verbraucherkarte zeigt **ab … im günstigsten Fenster**. Die Kosten je
-Viertelstunde: Was der prognostizierte Überschuss deckt, zählt mit der
-Einspeisevergütung, der Rest mit dem Bezugspreis. Bei einem
-Ein/Aus-Verbraucher, dessen Leistung deutlich von der Außentemperatur
-abhängt (z. B. die Warmwasserladung einer Luft-Wärmepumpe), zählt seine
-gelernte Leistung bei der prognostizierten Temperatur der Stunde: Ein warmer
-Nachmittag kann so einen kalten Morgen mit billigerem Strom schlagen.
-
-**Geschätzte Preise**: Die Day-Ahead-Preise des nächsten Tages erscheinen
-gegen 13 Uhr. Für die Viertelstunden nach dem letzten bekannten Preis plant
-die preisbewusste Steuerung mit Schätzungen: je Uhrzeit der Median der
-letzten 14 Tage derselben Art (Werktag, oder Wochenende und Feiertag des
-Marktgebiets; in der Schweiz die Feiertage von mindestens der Hälfte der
-Kantone), sein Ausschlag um das Tagesmittel als Sicherheitsabschlag
-halbiert. So werden die Nacht und ein
-trüber Folgetag schon geplant, bevor die echten Preise bekannt sind; sobald
-sie da sind, wird neu geplant. Nur bekannte negative Preise lösen die Planung
-für negative Preise aus. Das Preisdiagramm zeigt die Schätzungen blass.
-
-**Batterien aus dem Netz laden** (Schalter, standardmäßig aus; nur mit
-preisbewusster Steuerung): SLEMS plant bis zum Nachladen durch PV (wie oben;
-höchstens bis zum letzten bekannten Preis, danach mit den geschätzten), in
-welchen Stunden die Batterien decken, halten oder aus dem Netz laden. Ein
-kleinerer PV-Überschuss davor ist Teil des Plans: Die Batterien nehmen ihn,
-und nur was für die teuren Stunden noch fehlt, wird aus dem Netz geladen
-(z. B. an einem günstigen Mittag vor einem teuren Abend nach einem trüben
-Tag). Laden muss sich nach
-Lade- und Entladeverlusten, den
-[Verschleißkosten](docs/guide/batteries.de.md#verschleißkosten-der-batterie) und dem Mindestgewinn
-lohnen; bei gleichen Kosten gewinnt das spätere Laden, weil Heimspeicher vor
-allem mit der Zeit bei hohem Ladezustand altern. Grenzen: **Höchster
-Ladezustand aus dem Netz** (Standard 90 %), **Höchste Netzladeleistung** (0 =
-Ladeleistung der Batterien), die Bezugsgrenze von Bezugsspitzen abfangen und
-der Platz, den die Einspeisebegrenzung zur PV-Übernahme braucht. Dein
-eigener PV-Überschuss geht vor. Der Plan schließt das Halten ein;
-die Strategie zeigt
-**Netzladen** mit Energie, Beginn und erwarteter Ersparnis, das Tagesdiagramm
-das geplante Laden.
-
-**Überschussstunden und negative Preise**: Mit preisbewusster Steuerung und
-einer Einspeisevergütung, die stündlich dem Börsenpreis folgt, oder einem
-negativen Bezugspreis bzw. einer negativen Vergütung innerhalb der bekannten
-Preise plant SLEMS auch die Überschussstunden, ohne dass dafür ein weiterer
-Schalter nötig ist: Die Batterien halten Platz für den PV-Überschuss der
-Stunden mit niedrigerer oder negativer Vergütung frei (sie nehmen davor nur
-einen Teil des Überschusses auf und speisen den Rest zur höheren Vergütung
-ein; Strategie **Platz für günstigere Stunden**). Mit **Batterien aus dem Netz
-laden** laden sie auch aus dem Netz, wenn der Bezugspreis samt allen
-Entgelten negativ ist. Der eigene PV-Überschuss geht dabei vor. **Höchster
-Netzbezug beim Netzladen** (Summe aller Phasen, 0 = keine Grenze, z. B. für
-die vereinbarte Anschlussleistung; schützt keine einzelne Phase und nicht die
-Hauptsicherung) und die Bezugsgrenze von Bezugsspitzen abfangen begrenzen
-den Bezug. Der Plan reicht dann bis zum letzten bekannten Preis (höchstens 36
-Stunden) und wird im Hintergrund gerechnet; bis er fertig ist, gilt der
-vorige.
-
-**Batterien ins Netz entladen** (Schalter, standardmäßig aus; nur mit
-preisbewusster Steuerung): Derselbe Plan darf über den Bedarf des Hauses
-hinaus aus den Batterien einspeisen, wenn die Vergütung der Stunde höher ist
-als der spätere Wert der Energie plus Mindestgewinn und Verschleißkosten der
-Batterien (die Energie wird meist später wieder geladen, ein zusätzlicher
-Zyklus) – späterer Netzbezug wird dafür in Kauf genommen. Nicht unter die Morgenreserve, höchstens die maximale
-Einspeisung beim Entladen und die Einspeisebegrenzung. Das lohnt nur mit
-einer Einspeisevergütung, die stündlich dem Börsenpreis folgt; mit fester
-oder monatlicher Vergütung zeigt die Strategie, dass die Option ohne Wirkung
-ist. Vorher Vertrag und Förderung prüfen: Manche erlauben nicht, aus dem Netz
-geladene Energie wieder einzuspeisen.
-
-**Gemessene Ersparnis**: Der Sensor **Ersparnis Preissteuerung** summiert je
-Monat, was die preisbewusste Steuerung gespart hat: Nach jeder Nacht (oder
-anderen Phase bis zur PV-Übernahme), in der sie gehalten, geladen oder
-eingespeist hat, vergleicht SLEMS die aufgezeichneten Kosten mit denselben
-Stunden *wie üblich*, gerechnet mit dem Batteriemodell ab dem gemessenen
-Ladezustand. Nächte ohne solche Aktion zählen nichts. Der Tarifvergleich
-zeigt den Wert neben der Schätzung.
+Alle Einstellungen und Details: [Tarife und Preise](docs/guide/tariffs.de.md).
 
 ### PV-Prognose
 
@@ -690,86 +417,16 @@ aber im alpinen Gelände weniger detailliert.
 
 ### Verbrauchsprognose
 
-SLEMS lernt den Verbrauch aus den Langzeitstatistiken von Home Assistant und
-prognostiziert heute und morgen stundenweise. Jüngere Tage zählen mehr als
-ältere, Änderungen werden so innerhalb weniger Tage übernommen. Wärmepumpen
-werden über die Außentemperatur des Tages prognostiziert, ein warmer Tag in
-der Heizsaison ergibt also sofort weniger Heizenergie. Der Anteil ohne
-Temperaturabhängigkeit (vor allem Warmwasser) kommt nur aus den letzten zwei
-Wochen, die Abhängigkeit von der Temperatur aus dem ganzen Jahr: Heizt im
-Sommer eine Heizpatrone das Warmwasser und im Winter die Wärmepumpe, folgt die
-Prognose dem Wechsel in wenigen Tagen. Nach einem plötzlichen
-Anstieg (z. B. wenn die Wärmepumpe die Heizsaison beginnt) hebt SLEMS die
-Prognose sofort an: Lagen die letzten drei Stunden im Mittel mindestens 200 W
-und 30 % über der Prognose, kommt dieser Mehrverbrauch auf die nächsten 24
-Stunden, damit Nachtentladung und netzdienliches Laden damit planen, bis die
-gelernte Prognose aufgeholt hat (Karte **Prognosegüte**: **Angehoben**). Abgesenkt
-wird so nie. Zwei optionale Einstellungen helfen beim Start:
+SLEMS lernt den Verbrauch deines Hauses aus den Langzeitstatistiken von Home
+Assistant und prognostiziert heute und morgen stundenweise: Wärmepumpen über
+die Außentemperatur, Feiertage wie Wochenenden. Steigt der Verbrauch plötzlich
+(z. B. zu Beginn der Heizsaison), hebt SLEMS die Prognose sofort an. Die Karte
+**Prognosegüte** zeigt, wie gut Verbrauchs- und PV-Prognose treffen. Beim
+Umstieg von einer anderen Batterie-Integration deren Hausverbrauchssensor als
+**Historie Hausverbrauch** wählen, dann lernt SLEMS sofort aus der ganzen
+Historie.
 
-- **Außentemperatur**: ein Temperatursensor mit Historie. Ohne ihn zeichnet
-  SLEMS die Temperatur der Wetter-Entität selbst auf; das Wärmepumpenmodell
-  nutzt die Temperatur dann nach etwa einer Woche.
-- **Historie Hausverbrauch**: ein Leistungssensor des Hausverbrauchs mit
-  vorhandener Historie (z. B. aus einer anderen Batterie-Integration), für die
-  Zeit, bevor SLEMS eigene Werte aufgezeichnet hat.
-
-Feiertage zählen wie Wochenendtage, im gelernten Profil und in der Prognose:
-die des in Home Assistant eingestellten Landes und des Bundeslands oder
-Kantons, das in den Systemeinstellungen bei **Feiertage** ausgewählt ist.
-Werden die Systemeinstellungen geöffnet und ist noch keine Region gespeichert,
-schlägt SLEMS eine aus dem Standort von Home Assistant vor: eine einzige
-Anfrage an Nominatim (OpenStreetMap) mit auf etwa 100 m gerundeten
-Koordinaten, den Dienst, den auch das Onboarding von Home Assistant für das
-Land verwendet. Mit **Landesweite Feiertage**, oder wenn keine Region gefunden
-wird, zählen nur die Feiertage des ganzen Landes (in der Schweiz die, die in
-mindestens der Hälfte der Kantone gelten).
-
-Empfohlene Einrichtung beim Umstieg von einer anderen Batterie-Integration:
-
-1. Den Hausverbrauchssensor dieser Integration als **Historie Hausverbrauch**
-   wählen. SLEMS lernt dann sofort aus der gesamten Historie. Ohne ihn leitet
-   SLEMS die Historie nur aus Netz und PV ab; die Batterieleistung vor SLEMS
-   ist unbekannt, Laden und Entladen würden den gelernten Verbrauch
-   verfälschen.
-2. Falls vorhanden, einen Außentemperatursensor mit Historie wählen. Sonst
-   nutzt die Wärmepumpenprognose den Durchschnitt der letzten Tage, bis SLEMS
-   etwa eine Woche Temperaturen aufgezeichnet hat.
-
-**Prognosegüte** (Karte in der Übersicht, Sensoren **Treffsicherheit
-Verbrauchsprognose** und **Treffsicherheit PV-Prognose**):
-
-- Verbrauch: SLEMS rechnet die Prognose jedes der letzten 14 Tage so nach, wie
-  sie um Mitternacht mit der Historie bis dahin entstanden wäre, und
-  vergleicht sie mit dem gemessenen Verbrauch. Angezeigt werden die
-  Treffsicherheit der Tagesenergie (100 % minus mittlere Abweichung), die
-  Tendenz (zu hoch oder zu niedrig), die Abweichung pro Stunde (wie gut der
-  Tagesverlauf getroffen wird), die Datenbasis (Tage mit Verbrauch, Tage mit
-  Wärmepumpe und Temperatur) und die Prognose für morgen mit ihrer erwarteten
-  Abweichung. Die Wärmepumpe wird mit der gemessenen Temperatur des Tages
-  nachgerechnet; ihr Anteil wirkt dadurch etwas besser, als er war.
-- PV: Vergangene Prognosen liefert die Solarprognose-Integration nicht mehr,
-  daher speichert SLEMS die Prognose jedes Tages zu Tagesbeginn und vergleicht
-  sie abends mit der Erzeugung. Die Karte zeigt Treffsicherheit und erwartete
-  Abweichung ab 7 verglichenen Tagen (vorher: **sammelt noch Daten**), weil
-  wenige Tage wenig aussagen.
-
-Der Sensor **Hausverbrauch** (Grundlage der Prognose und Anzeige im
-Energiefluss) wird als Netz + PV − Batterien berechnet. Der Smart Meter meldet
-eine Änderung oft später als PV und Batterien; ein kurzzeitig negatives
-Ergebnis wird daher durch den letzten gültigen Wert ersetzt (höchstens 30
-Sekunden, danach unbekannt).
-Kann eine aktivierte, steuerbare Batterie nicht gelesen werden, zählt sie bis
-zu 5 Minuten mit ihrer zuletzt gemessenen Leistung, weil sie ihre letzte
-Vorgabe ohne neue Befehle weiterführt. Danach ist der Hausverbrauch unbekannt,
-bis die Batterie wieder lesbar ist, statt ihre Leistung dem Haus zuzurechnen.
-Eine deaktivierte Batterie macht den Hausverbrauch nie unbekannt: Solange sie
-noch nicht an ihre eigene Logik zurückgegeben ist, zählt sie weiter mit ihrer
-zuletzt gemessenen Leistung, nach der Freigabe mit 0 W. Mit dem Zustand
-**Automatik** bei der Freigabe lädt oder entlädt sie womöglich selbst: Sie
-zählt bis zu 5 Minuten mit ihrer zuletzt gemessenen Leistung, danach mit 0 W,
-und eine Reparatur weist darauf hin, dass der Hausverbrauch ungenau ist.
-Stunden, in denen der Statistik einer Batterie ein Wert fehlt, lässt die
-Verbrauchsprognose aus.
+Details: [Verbrauchsprognose](docs/guide/consumption-forecast.de.md).
 
 ## Ohne Batterien
 
@@ -1911,6 +1568,49 @@ Verwendung** enthält alle gelernten Werte als Attribute.
 | Leistung eines Ein/Aus-Verbrauchers nach der Außentemperatur | mittlerer Leistung und Außentemperatur (eigener Fühler, sonst Wetter-Entität) jedes Laufs ab 10 Minuten, die letzten 60 Läufe; eine Gerade, nur genutzt bei mindestens 8 K Spanne und mindestens 10 % Änderung der Leistung darüber (eine Sole-Wärmepumpe oder ein Heizstab zeigt keine, dann wirkt es nicht); Attribute des Sensors **Gelernte Leistung** | 6 Läufe |
 | Morgenreserve (**Deckung der Morgenreserve** bestimmt, wie vorsichtig; nur sichtbar, solange die Reserve automatisch ist) | der Morgenlücke: Energie, die das Haus zwischen der geplanten Übernahme durch die PV (Ende der Nachtentladung) und der tatsächlichen (PV deckt den Verbrauch 15 Minuten lang) aus Batterie oder Netz brauchte, in % des prognostizierten Tagesverbrauchs; die Reserve deckt den gewählten Anteil der Morgen (90 % = 9 von 10), über 100 % die größte Lücke mal dem Wert (110 % = 10 % mehr als der schlechteste Morgen) | 14 gemessene Morgen (gemessen wird auch bei ausgeschalteter Nachtentladung) |
 | Leistung und Thermostat eines Verbrauchers (je Verbraucher, **Gelernte Werte verwenden**) | der Leistung im eingeschalteten Zustand (Ein/Aus-Verbraucher: ersetzt die Nennleistung; leistungsgeregelte Verbraucher: die typische Leistung bei Volllast, gemessen bei einer Vorgabe ab 90 % der maximalen Leistung seit mindestens 15 s bzw. der doppelten Reaktionszeit, für die Planung: Prognose, Tagesziel, Einspeisebegrenzung; angesteuert wird weiter bis zur maximalen Leistung) und Pausen des eigenen Thermostats trotz Vorgabe von 30 s bis 10 min (zwei innerhalb von 30 Tagen: der eigene Thermostat taktet, siehe **Eigener Thermostat**; gilt auch ohne **Gelernte Werte verwenden**; längere Pausen, z. B. ein Luftentfeuchter bei erreichter Zielfeuchte, zählen nicht) | 30 Messwerte, zwei Pausen |
+
+#### Phase von Batterien und Verbrauchern
+
+Misst dein Smart Meter jede Phase, wähle in den SLEMS-Einstellungen seine
+**Netzleistung L1**, **L2** und **L3** aus (vorgeschlagen aus dem Gerät des
+Smart Meters, mit demselben Vorzeichen wie die Netzleistung). SLEMS lernt dann
+die Phase jedes Verbrauchers hinter dem Smart Meter, und die jeder Batterie in
+ihrem Selbsttest und ihrem Probeschritt:
+
+- **Verbraucher**: SLEMS vergleicht die Leistung aller Batterien, Verbraucher
+  und der PV-Anlage mit den Phasen des Smart Meters, jeweils über zwei Minuten
+  gemittelt. Eine Änderung der Leistung eines Verbrauchers zeigt sich an einer
+  Phase in etwa gleicher Größe, bei einem dreiphasigen Gerät zu einem Drittel
+  an jeder Phase, auch wenn die Batterien sie gleichzeitig ausgleichen. SLEMS
+  beginnt mit den letzten zwei Tagen aus dem Verlauf von Home Assistant und
+  rechnet dann mit den aktuellen Werten weiter; ein Verbraucher, der in dieser
+  Zeit ein paarmal geschaltet hat, bekommt seine Phase also sofort. Sensoren,
+  die bis zu einer Minute verzögert melden, sind kein Problem.
+- **Batterien**: Die Regelung bewegt die Batterien gemeinsam und gegen jede
+  andere Last, daher lässt sich ihre Phase im normalen Betrieb nicht erkennen.
+  Der [Selbsttest](docs/guide/batteries.de.md#selbsttest-einer-batterie) zeigt sie: Die anderen
+  Batterien und die Verbraucher werden dabei festgehalten. Ebenso der
+  [Probeschritt](docs/guide/batteries.de.md#reaktionszeit-und-phase-messen), wenn der Smart Meter seine
+  Phasen so schnell meldet wie die Gesamtleistung.
+
+Der Sensor **Phase** des Geräts zeigt das Ergebnis (**L1**, **L2**, **L3** oder
+**Dreiphasig**), sein Attribut *shares* den gemessenen Anteil je Phase. Bei
+einer Wallbox, deren aktive Phasen eine Entität nennt, lernt SLEMS nur die eine
+Phase, mit der sie einphasig lädt. Die Phase steht in den **Details** der
+Batterie und des Verbrauchers. Sie wird nur angezeigt und geprüft; die
+Regelung verwendet sie noch nicht.
+
+- **Wechsel**: Zeigt sich ein Verbraucher deutlich an einer anderen Phase
+  (z. B. ein Heizlüfter in einer anderen Steckdose; ältere Werte verblassen
+  über einige Tage), oder misst ein Selbsttest eine andere Phase, fragt
+  **Einstellungen → Reparaturen**, an welcher Phase das Gerät hängt; die
+  gemessene ist vorausgewählt.
+- **Phase neu lernen** (Button des Geräts, **Neu lernen** neben der Phase in
+  den **Details** oder im Menü (⋮) eines Verbrauchers, nach einer Rückfrage): verwirft die Phase und lernt sie neu aus dem Verlauf; bei einer
+  Batterie danach einen Selbsttest machen. Kommt wieder dieselbe heraus, fragt
+  Reparaturen, ob sie stimmt oder welche Phase stattdessen gelten soll. Eine
+  andere als die gemessene Phase, die du gewählt hast, bleibt erhalten; ein
+  Wechsel wird weiter gemeldet.
 
 ### Weitere Einstellungen (Entitäten)
 
