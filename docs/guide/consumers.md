@@ -103,7 +103,8 @@ On the consumer card under **Release**:
   it up to the minimum runtime, a hot water charge until it ends. **By surplus**: released
   as soon as there is enough surplus, then for the **Release duration** and
   afterwards while it lasts, no window planned. **By forecast**: the card
-  (row **Time window**) and the day chart show it, and it is also released for
+  (row **Release planned**, with the source **Surplus only** **Surplus
+  window**) and the day chart show it, and it is also released for
   the planned window, also while the surplus dips, so the automation can wait
   for its moment; a part may then come from the batteries or the grid. With
   the source **Surplus only** the window is only shown. Once open, the window stays as
@@ -441,7 +442,12 @@ Per controlled consumer, on its card under **Daily target**.
   day chart as **Consumers (planned)** and in the consumption forecast, the state
   of charge forecast and the night discharge. Below the day chart, **Daily
   targets** shows a lane per consumer with a daily target: its period (faint),
-  the release before the forced run, the forced run and the deadline
-  (a mark). A consumer with the role
+  the release (the planned window and the release before the forced run, one
+  span where they overlap), the planned window outlined in the PV colour, the
+  forced run and the deadline (a mark); a legend below names what is shown.
+  While a hot water charge runs, the release it started in stays, the
+  release still to come and the forced run give way to the charge (hatched,
+  until about the target temperature); if the charge stops early, for
+  example for a defrost, they come back. A consumer with the role
   **Supporting** is left out of the surplus part while the feed-in cap is on:
   the feed-in cap plans it with the surplus above the limit.

@@ -96,7 +96,8 @@ Zellausgleich und die Phase eines laufenden Ausgleichs.
 ![Reiter Verbraucher: Wärmepumpe mit Warmwasser-Steuerung, Heizstab mit Einstellungen, zwei Wallboxen](../images/dashboard_consumers_de.png)
 
 Eine Karte je Verbraucher mit den wichtigen Werten: aktuelle Leistung,
-Temperatur, **Zeitfenster** (das geplante Fenster, sonst die eingestellte Zeit),
+Temperatur, **Freigabe geplant** (das geplante Fenster; sonst **Zeitfenster** mit
+der eingestellten Zeit),
 **Energiebedarf** (der noch nötige, bei erreichtem Ziel der der nächsten
 Periode), Stand des Tagesziels und die Freigabe; bei einer Wallbox das Auto.
 Eine Wärmepumpe zeigt oben ihren **Status** und die Prognose des Tages (mit

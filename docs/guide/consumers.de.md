@@ -111,7 +111,8 @@ Auf der Verbraucherkarte unter **Freigabe**:
   Warmwasserladung bis zu ihrem Ende. **Nach Überschuss**: freigegeben,
   sobald genug Überschuss da ist, dann für die **Freigabedauer** und
   anschließend solange er reicht, ohne geplantes Fenster. **Nach Prognose**:
-  Karte (Zeile **Zeitfenster**) und Tagesdiagramm zeigen es, und es wird
+  Karte (Zeile **Freigabe geplant**, mit der Quelle **Nur Überschuss**
+  **Überschuss-Fenster**) und Tagesdiagramm zeigen es, und es wird
   zusätzlich für das geplante Fenster freigegeben, auch wenn der Überschuss
   kurz fehlt, damit die Automation auf ihren Moment warten kann; dann kann ein
   Teil aus Batterien oder Netz kommen. Mit der Quelle **Nur Überschuss** wird
@@ -468,8 +469,14 @@ Je gesteuertem Verbraucher, auf seiner Karte unter **Tagesziel**.
   Tagesdiagramm als **Verbraucher (geplant)** und geht in Verbrauchsprognose,
   Ladezustandsprognose und Nachtentladung ein. Unter dem Tagesdiagramm zeigt
   **Tagesziele** je Verbraucher mit Tagesziel eine Bahn: seinen Zeitraum
-  (blass), die Freigabe vor dem erzwungenen Lauf, den erzwungenen Lauf
-  und die Frist (Strich). Ein Verbraucher mit dem Einsatz
+  (blass), die Freigabe (das geplante Fenster und die Freigabe vor dem
+  erzwungenen Lauf, als ein Abschnitt, wo sie sich überlappen), das geplante
+  Fenster in der PV-Farbe umrandet, den erzwungenen Lauf und die Frist
+  (Strich); eine Legende darunter nennt, was zu sehen ist. Während eine
+  Warmwasserladung läuft, bleibt die Freigabe, in der sie begonnen hat; die
+  noch kommende Freigabe und der erzwungene Lauf weichen der Ladung
+  (schraffiert, bis etwa zur Zieltemperatur); bricht die Ladung früher ab,
+  etwa für ein Abtauen, erscheinen sie wieder. Ein Verbraucher mit dem Einsatz
   **Unterstützend** bleibt beim Überschuss-Teil außen vor, solange die
   Einspeisebegrenzung an ist: Sie plant ihn mit dem Überschuss über der
   Grenze ein.

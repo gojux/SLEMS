@@ -197,6 +197,7 @@ const STRINGS = {
     forecastToday: "Forecast today",
     aboutEnergy: "about {energy}",
     timeWindow: "Time window",
+    releasePlanned: "Release planned",
     energyNeed: "Energy needed",
     targetEnergyToday: "today about {energy}",
     enableControl: "Turn control on",
@@ -286,7 +287,9 @@ const STRINGS = {
     lanePeriod: "period {from}–{until}",
     laneWindow: "release {from}–{until}",
     laneForced: "forced {from}–{until}",
+    laneRunning: "running, until about {until}",
     laneDone: "reached",
+    laneLegend: { period: "Period", release: "Release", surplus: "Surplus window", forced: "Forced", running: "Running", deadline: "Deadline" },
     targetLatestPrice: "from {time} in the cheapest window",
     targetForcedPrice: "running in the cheapest window",
     targetDone: "reached",
@@ -958,6 +961,7 @@ const STRINGS = {
     forecastToday: "Prognose heute",
     aboutEnergy: "ca. {energy}",
     timeWindow: "Zeitfenster",
+    releasePlanned: "Freigabe geplant",
     energyNeed: "Energiebedarf",
     targetEnergyToday: "heute ca. {energy}",
     enableControl: "Steuerung einschalten",
@@ -1047,7 +1051,9 @@ const STRINGS = {
     lanePeriod: "Zeitraum {from}–{until}",
     laneWindow: "Freigabe {from}–{until}",
     laneForced: "erzwungen {from}–{until}",
+    laneRunning: "läuft, bis ca. {until}",
     laneDone: "erreicht",
+    laneLegend: { period: "Zeitraum", release: "Freigabe", surplus: "Überschuss-Fenster", forced: "Erzwungen", running: "Läuft", deadline: "Frist" },
     targetLatestPrice: "ab {time} im günstigsten Fenster",
     targetForcedPrice: "läuft im günstigsten Fenster",
     targetDone: "erreicht",
@@ -4258,10 +4264,27 @@ class SlemsPanel extends HTMLElement {
       </svg></div>`;
   }
 
-  /** Per consumer with a daily target a lane under the day chart: its period
-   * (faint), the release window before the forced run, the forced run and the
-   * deadline, on the time axis of the chart. The spans are kept in
-   * _laneSpans for the tooltip of the day chart. */
+  /** Swatch style of a part of a daily target lane (legend and tooltip). */
+  _laneSwatch(kind) {
+    const c = this._colors;
+    return {
+      period: `background:${c.consumer};opacity:0.3`,
+      release: `background:${c.consumer};opacity:0.6`,
+      surplus: `border:2px solid ${c.pv};box-sizing:border-box`,
+      forced: `background:${c.consumer};opacity:0.9`,
+      running: `background:repeating-linear-gradient(45deg, ${c.consumer} 0 2px, transparent 2px 4px)`,
+      deadline: `background:${c.consumer};width:2px`,
+    }[kind];
+  }
+
+  /** Per consumer with a daily target a lane under the day chart, on the time
+   * axis of the chart: its period (faint), the release (the planned surplus
+   * window and the window before the forced run as one span where they
+   * overlap), the surplus window outlined, the forced run and the deadline.
+   * While a hot water charge runs the release it started in stays, the
+   * release still to come and the forced run give way to the charge until
+   * about the target temperature; an interrupted charge brings them back.
+   * The spans are kept in _laneSpans for the tooltip of the day chart. */
   _targetLanes() {
     const geometry = this._chartGeometry;
     if (!geometry) return "";
@@ -4273,7 +4296,9 @@ class SlemsPanel extends HTMLElement {
     if (this._chartDay === "tomorrow") dayStart.setDate(dayStart.getDate() + 1);
     const hourOf = (iso) => (new Date(iso) - dayStart) / 3600000;
     const x = (hour) => pad.left + (Math.max(0, Math.min(24, hour)) / 24) * plotW;
+    const visible = (from, until) => until > 0 && from < 24 && until > from;
     const lanes = [];
+    const kinds = new Set();
     for (const consumer of this._config.consumers || []) {
       const attrs = this._state("planned_power", consumer.device_id)?.attributes || {};
       if (!attrs.target_type || attrs.target_type === "none" || !attrs.target_deadline) continue;
@@ -4289,48 +4314,76 @@ class SlemsPanel extends HTMLElement {
       const opens = latest !== null && attrs.target_window_opens ? hourOf(attrs.target_window_opens) : null;
       const runEnd = latest !== null ? Math.min(end, latest + (attrs.target_run_s ? attrs.target_run_s / 3600 : end - latest)) : null;
       const clock = (hour) => this._time(new Date(dayStart.getTime() + hour * 3600000).toISOString());
+      const label = (template, from, until) => template.replace("{from}", clock(from)).replace("{until}", clock(until));
+      const surplus = attrs.target_surplus_window ? attrs.target_surplus_window.map(hourOf) : null;
+      // A hot water charge running in the period (not one the heat pump started on its own before it).
+      const nowHour = hourOf(new Date().toISOString());
+      const running = Boolean(attrs.hot_water_active) && !done && attrs.target_mode !== "waiting";
+      const runUntil = running && attrs.target_run_s ? nowHour + attrs.target_run_s / 3600 : null;
+      // Released for the surplus window (with the source "surplus only" just
+      // shown) and before the forced run; while running only up to now.
+      const releases = [];
+      if (surplus && source !== "surplus") releases.push([...surplus]);
+      if (opens !== null && latest > opens) releases.push([opens, latest]);
+      const merged = [];
+      for (const [from, until] of releases.filter(([from]) => !running || from <= nowHour).sort((a, b) => a[0] - b[0])) {
+        const last = merged[merged.length - 1];
+        if (last && from <= last[1]) last[1] = Math.max(last[1], until);
+        else merged.push([from, until]);
+      }
+      const forced = latest !== null && !running ? [latest, runEnd] : null;
       // Ordered from the most specific span, which the tooltip shows.
-      const tipSpans = [];
-      const tipSpan = (from, until, opacity, label) => {
-        if (until > 0 && from < 24 && until > from)
-          tipSpans.push({ from, until, opacity, label: label.replace("{from}", clock(from)).replace("{until}", clock(until)) });
+      const parts = [];
+      const part = (kind, from, until, template, outline = false) => {
+        if (visible(from, until)) parts.push({ kind, from, until, outline, label: label(template, from, until) });
       };
-      if (latest !== null) tipSpan(latest, runEnd, 0.9, t.laneForced);
-      if (opens !== null) tipSpan(opens, latest, 0.45, t.laneWindow);
-      const surplus = attrs.target_surplus_window;
-      if (surplus) tipSpan(hourOf(surplus[0]), hourOf(surplus[1]), 0.55, t.laneSurplus);
-      tipSpan(start, end, 0.18, done ? `${t.lanePeriod} · ${t.laneDone}` : t.lanePeriod);
-      if (tipSpans.length) this._laneSpans.push({ name: consumer.name, spans: tipSpans });
-      const span = (from, until, opacity, label) =>
-        until > 0 && from < 24 && until > from
-          ? `<rect x="${x(from)}" y="0" width="${Math.max(2, x(until) - x(from))}" height="10" rx="3" fill="${c.consumer}" fill-opacity="${opacity}"><title>${escapeHtml(
-              `${consumer.name}: ${label.replace("{from}", clock(from)).replace("{until}", clock(until))}`
-            )}</title></rect>`
-          : "";
-      const surplusSpan = surplus && hourOf(surplus[1]) > 0 && hourOf(surplus[0]) < 24
-        ? `<rect x="${x(hourOf(surplus[0]))}" y="1" width="${Math.max(2, x(hourOf(surplus[1])) - x(hourOf(surplus[0])))}" height="8" rx="3" fill="${c.pv}" fill-opacity="0.55" stroke="${c.pv}"><title>${escapeHtml(
-            `${consumer.name}: ${t.laneSurplus.replace("{from}", this._time(surplus[0])).replace("{until}", this._time(surplus[1]))}`
-          )}</title></rect>`
-        : "";
-      const shapes = [
-        span(start, end, 0.18, done ? `${t.lanePeriod} · ${t.laneDone}` : t.lanePeriod),
-        surplusSpan,
-        opens !== null ? span(opens, latest, 0.45, t.laneWindow) : "",
-        latest !== null ? span(latest, runEnd, 0.9, t.laneForced) : "",
-        end > 0 && end <= 24 ? `<line x1="${x(end)}" x2="${x(end)}" y1="-3" y2="13" stroke="${c.consumer}" stroke-width="2"/>` : "",
-      ].join("");
-      lanes.push({ name: `${consumer.name}${done ? ` · ${t.laneDone}` : ""}`, shapes });
+      if (runUntil !== null) part("running", nowHour, runUntil, t.laneRunning);
+      if (forced) part("forced", ...forced, t.laneForced);
+      if (surplus) part("surplus", ...surplus, t.laneSurplus, true);
+      for (const [from, until] of merged) part("release", from, until, t.laneWindow);
+      part("period", start, end, done ? `${t.lanePeriod} · ${t.laneDone}` : t.lanePeriod);
+      if (!parts.length) continue;
+      this._laneSpans.push({
+        name: consumer.name,
+        spans: parts.map(({ from, until, kind, label }) => ({ from, until, swatch: this._laneSwatch(kind), label })),
+      });
+      const rect = ({ kind, from, until, outline, label }) => {
+        kinds.add(kind);
+        const fill = {
+          period: `fill="${c.consumer}" fill-opacity="0.18"`,
+          release: `fill="${c.consumer}" fill-opacity="0.45"`,
+          forced: `fill="${c.consumer}" fill-opacity="0.9"`,
+          running: `fill="url(#lane-running)"`,
+        }[kind];
+        const shape = outline
+          ? `x="${x(from) + 0.75}" y="0.75" width="${Math.max(2, x(until) - x(from) - 1.5)}" height="8.5" fill="none" stroke="${c.pv}" stroke-width="1.5"`
+          : `x="${x(from)}" y="0" width="${Math.max(2, x(until) - x(from))}" height="10" ${fill}`;
+        return `<rect ${shape} rx="3"><title>${escapeHtml(`${consumer.name}: ${label}`)}</title></rect>`;
+      };
+      // Drawn from the background up: the outline of the surplus window on top.
+      const order = ["period", "release", "forced", "running", "surplus"];
+      const shapes = [...parts].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind)).map(rect);
+      if (end > 0 && end <= 24) {
+        kinds.add("deadline");
+        shapes.push(`<line x1="${x(end)}" x2="${x(end)}" y1="-3" y2="13" stroke="${c.consumer}" stroke-width="2"/>`);
+      }
+      lanes.push({ name: `${consumer.name}${done ? ` · ${t.laneDone}` : ""}`, shapes: shapes.join("") });
     }
     if (!lanes.length) return "";
     const laneH = 30;
     const height = lanes.length * laneH + 4;
+    const legend = ["period", "release", "surplus", "forced", "running", "deadline"]
+      .filter((kind) => kinds.has(kind))
+      .map((kind) => `<span><span class="swatch" style="${this._laneSwatch(kind)}"></span>${escapeHtml(t.laneLegend[kind])}</span>`)
+      .join("");
     return `<div class="lanes"><h3 class="lanes-title">${t.lanesTitle}</h3><svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="chart" role="img" aria-label="${escapeHtml(t.lanesTitle)}">
+      <defs><pattern id="lane-running" patternUnits="userSpaceOnUse" width="4" height="4" patternTransform="rotate(45)"><rect width="2" height="4" fill="${c.consumer}"/></pattern></defs>
       ${lanes
         .map(
           (lane, i) => `<g transform="translate(0 ${i * laneH})"><text x="${pad.left}" y="9" class="tick">${escapeHtml(lane.name)}</text>
             <g transform="translate(0 14)"><line x1="${pad.left}" x2="${width - pad.right}" y1="5" y2="5" stroke="${c.grid_line}"/>${lane.shapes}</g></g>`
         )
-        .join("")}</svg></div>`;
+        .join("")}</svg><div class="lanes-legend" style="padding-left:${(pad.left / width) * 100}%">${legend}</div></div>`;
   }
 
   _chartTable(rows) {
@@ -4407,7 +4460,7 @@ class SlemsPanel extends HTMLElement {
       .map((lane) => {
         const span = lane.spans.find((s) => s.from < (slot + 1) / 2 && s.until > slot / 2);
         return span
-          ? `<div><span class="swatch" style="background:${c.consumer};opacity:${Math.max(0.35, span.opacity)}"></span>${escapeHtml(
+          ? `<div><span class="swatch" style="${span.swatch}"></span>${escapeHtml(
               lane.name
             )}<b>${escapeHtml(span.label)}</b></div>`
           : "";
@@ -5422,18 +5475,32 @@ class SlemsPanel extends HTMLElement {
     const row = (label, text) => (text ? this._row(label, escapeHtml(text), planned?.entity_id) : "");
     return (
       row(t.temperature, temperature) +
-      row(t.timeWindow, windowText) +
+      row(this._targetWindowLabel(attrs, source), windowText) +
       row(t.energyNeed, energy) +
       row(this._targetWaitsForTomorrow(attrs) ? t.targetProgressTomorrow : t.targetProgress, state) +
       this._releaseRow(c)
     );
   }
 
+  /** Whether the time window row shows a planned window (surplus window or
+   * release before the forced run) rather than the set time. */
+  _targetWindowPlanned(attrs, source) {
+    return Boolean(attrs.target_surplus_window || (source !== "surplus" && attrs.target_latest_start && attrs.target_window_opens));
+  }
+
+  /** Label of the time window row: a planned release, a surplus window only
+   * shown (source "surplus only"), else the set time. */
+  _targetWindowLabel(attrs, source) {
+    const t = this._t;
+    if (attrs.target_surplus_window && source === "surplus") return t.laneLegend.surplus;
+    return this._targetWindowPlanned(attrs, source) ? t.releasePlanned : t.timeWindow;
+  }
+
   /** Planned window if there is one, else the set time: "12:08–14:38", "bis 15:30". */
   _targetWindowText(attrs, source) {
     const range = (from, until) => `${this._clock(from)}–${this._time(until)}`;
     if (attrs.target_surplus_window) return range(...attrs.target_surplus_window);
-    if (source !== "surplus" && attrs.target_latest_start && attrs.target_window_opens) {
+    if (this._targetWindowPlanned(attrs, source)) {
       return range(attrs.target_window_opens, attrs.target_latest_start);
     }
     if (!attrs.target_deadline) return "";
@@ -6255,6 +6322,8 @@ const STYLE = `
   .chart-wrap { position: relative; }
   .lanes { margin-top: 8px; }
   .lanes-title { margin: 0 0 4px; font-size: 12px; font-weight: 500; color: var(--secondary-text-color); }
+  .lanes-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 2px; font-size: 11px; color: var(--secondary-text-color); }
+  .lanes-legend > span { display: inline-flex; align-items: center; gap: 5px; }
   .chart { display: block; max-width: 100%; }
   .chart .tick, .price-chart .tick { font-size: 11px; fill: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
   #daychart, #pricechart { position: relative; }

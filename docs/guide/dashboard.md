@@ -89,7 +89,7 @@ of a running one.
 ![Consumers tab: heat pump with its hot water control, heating rod with its settings, two wallboxes](../images/dashboard_consumers_en.png)
 
 One card per consumer with the important values: current power, temperature,
-**Time window** (the planned window, otherwise the set time), **Energy needed**
+**Release planned** (the planned window; otherwise **Time window** with the set time), **Energy needed**
 (what is still missing, with a reached target that of the coming period), state
 of the daily target and the release; for a wallbox the car. A heat pump shows
 its **Status** and today's forecast at the top (with controlled hot water
