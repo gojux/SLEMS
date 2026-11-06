@@ -176,6 +176,40 @@ sind). Der Plan kennt Verbrauch und
 PV genau, die Schätzung ist daher eine Obergrenze. Tarife, bei denen die
 Steuerung nichts spart (Fixpreis), haben keine solche Zeile.
 
+**Andere Hardware im aufgezeichneten Jahr**: Weicht in der Simulation PV,
+Verbrauch oder ein Batteriewert (Kapazität, minimaler/maximaler Ladezustand,
+Lade- oder Entladeleistung) vom heutigen ab, zeigt eine Karte unter dem
+Tarifvergleich, was das in den aufgezeichneten Monaten geändert hätte:
+Netzbezug, Einspeisung und je Tarif die Kosten (Bezug minus
+Einspeisevergütung, inkl. USt.) mit der heutigen und der simulierten Hardware
+und ihre Differenz (grün günstiger, rot teurer); **Pro Monat** klappt die
+Differenzen Monat für Monat auf. Im Tarifvergleich ausgeblendete
+Vergleichstarife sind auch hier ausgeblendet.
+
+![Andere Hardware im aufgezeichneten Jahr: 20 kWh statt 15,36 kWh nutzbarer Kapazität und 30 % mehr PV](../images/dashboard_hardware_de.png)
+
+Aufgezeichneter stündlicher Hausverbrauch und PV laufen durch dasselbe
+einfache Batteriemodell wie die Schätzung der preisbewussten Steuerung,
+einmal mit den heutigen Batterien und einmal mit den simulierten Werten; PV
+und Verbrauch werden um ihre Änderung in der Simulation skaliert. Beide
+Seiten stammen aus dem Modell, die Differenz zeigt also nur die andere
+Hardware. Es ist eine Schätzung mit Grenzen:
+
+- **Stundenwerte**: Spitzen innerhalb einer Stunde werden gemittelt; mehr
+  Lade- oder Entladeleistung bringt daher eher etwas mehr als angezeigt, eine
+  größere Batterie eher etwas weniger.
+- **Ohne netzdienliches Laden, Einspeisebegrenzung und Preissteuerung**: Das
+  Modell speist jeden Überschuss ein; mit mehr PV fällt die
+  Einspeisevergütung daher zu hoch aus, wo eine Einspeisebegrenzung abregeln
+  würde. Mit einem dynamischen Tarif kann eine größere Batterie mehr bringen
+  als angezeigt, weil die preisbewusste Steuerung sie ebenfalls nutzen würde.
+- **Die PV-Änderung skaliert die aufgezeichnete PV-Kurve**: Zusätzliche
+  Module nach Osten oder Westen würden die Kurve breiter machen, nicht nur
+  höher; schon abgeregelte Stunden werden mitskaliert.
+- Verbraucher, die nach Überschuss schalten (z. B. Heizstab, Wallbox),
+  behalten ihre aufgezeichnete Energie; Anschaffungskosten und Verschleiß der
+  Hardware sind nicht eingerechnet.
+
 ## Reiter Einstellungen
 
 Alle Einstellwerte gruppiert und direkt änderbar; wird ein Wert gelernt

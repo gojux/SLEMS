@@ -45,6 +45,7 @@ from .tariff import Side, Tariff
 from .tariff_comparison import chosen_tariff, tariff_choices
 
 if TYPE_CHECKING:
+    from .allocation import BatteryGroup
     from .coordinator import ControlSettings, SlemsCoordinator
 
 # Settings that change the plans (the others act in the real-time allocation).
@@ -160,6 +161,19 @@ def _day_metrics(
     }
 
 
+def base_battery(battery: BatteryGroup | None) -> dict[str, float] | None:
+    """The starting values of the battery fields (``BATTERY_KEYS``) from the real group."""
+    if battery is None:
+        return None
+    return {
+        "capacity_kwh": round(battery.capacity_wh / 1000, 2),
+        "min_soc_pct": round(battery.min_soc_pct, 1),
+        "max_soc_pct": round(battery.full_soc_pct, 1),
+        "max_charge_w": round(battery.max_charge_w),
+        "max_discharge_w": round(battery.max_discharge_w),
+    }
+
+
 def simulate(coordinator: SlemsCoordinator, request: dict[str, Any]) -> dict[str, Any]:
     """Day plans and key figures with the settings of ``request``."""
     snapshot = coordinator.data
@@ -168,15 +182,7 @@ def simulate(coordinator: SlemsCoordinator, request: dict[str, Any]) -> dict[str
     battery = coordinator._battery_group(snapshot, planning=True) if snapshot is not None else None
     base = {
         "settings": {key: getattr(real, key) for key in SETTINGS},
-        "battery": None
-        if battery is None
-        else {
-            "capacity_kwh": round(battery.capacity_wh / 1000, 2),
-            "min_soc_pct": round(battery.min_soc_pct, 1),
-            "max_soc_pct": round(battery.full_soc_pct, 1),
-            "max_charge_w": round(battery.max_charge_w),
-            "max_discharge_w": round(battery.max_discharge_w),
-        },
+        "battery": base_battery(battery),
         "tariffs": tariff_choices(coordinator.config_entry),
     }
     if snapshot is None or battery is None or snapshot.pv_forecast is None:

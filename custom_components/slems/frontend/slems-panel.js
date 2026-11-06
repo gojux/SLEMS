@@ -490,6 +490,22 @@ const STRINGS = {
     tariffForeignCurrency: "At the moment SLEMS only supports market prices in euro. Tariffs that follow the market price are therefore not computed: {names}.",
     tariffGridPower: "Hours before SLEMS recorded import and feed-in per quarter hour come from the hourly mean of the grid power (less exact) without energy counters; they can be chosen in the SLEMS options.",
     tariffEmpty: "No recorded energy yet.",
+    hwTitle: "Other hardware in the recorded year",
+    hwHint:
+      "What the PV, consumption and battery values of the simulation would have changed in the recorded months: your recorded hourly consumption and PV run through a simple battery model, once with your current batteries and once with the simulated values (PV and consumption scaled by their change). Costs: import minus feed-in credit, incl. VAT.",
+    hwUnchanged: "Change PV, consumption or the battery values in the simulation to see what they would have changed.",
+    hwUnavailable: "Needs batteries, a tariff and recorded house consumption.",
+    hwLoading: "Calculating …",
+    hwChanges: "Simulated: {changes}",
+    hwPv: "PV",
+    hwConsumption: "Consumption",
+    hwCurrent: "Current hardware",
+    hwSimulated: "Simulated hardware",
+    hwDiff: "Difference",
+    hwCosts: "Costs {tariff}",
+    hwPerMonth: "Per month (simulated minus current hardware)",
+    hwLimits:
+      "An estimate with limits: hourly values (peaks within an hour are averaged); grid friendly charging, the feed-in cap and the price aware control are not included (with more PV the feed-in credit comes out too high, with a dynamic tariff larger batteries can bring more than shown); the PV change scales the recorded PV curve and does not know the orientation of additional modules; consumers switched by surplus (e.g. heating rod, wallbox) keep their recorded energy; purchase costs are not included.",
     mExport: "Feed-in",
     mImport: "Grid import",
     mMaxImport: "Highest import",
@@ -1256,6 +1272,22 @@ const STRINGS = {
     tariffForeignCurrency: "SLEMS unterstützt zum aktuellen Zeitpunkt nur Börsenpreise in Euro. Tarife, die vom Börsenpreis abhängen, werden deshalb nicht berechnet: {names}.",
     tariffGridPower: "Stunden, bevor SLEMS Bezug und Einspeisung je Viertelstunde aufgezeichnet hat, stammen ohne Energiezähler aus dem Stundenmittel der Netzleistung (ungenauer); die Zähler lassen sich in den SLEMS-Optionen wählen.",
     tariffEmpty: "Noch keine aufgezeichnete Energie.",
+    hwTitle: "Andere Hardware im aufgezeichneten Jahr",
+    hwHint:
+      "Was die PV-, Verbrauchs- und Batteriewerte der Simulation in den aufgezeichneten Monaten geändert hätten: Dein aufgezeichneter stündlicher Verbrauch und deine PV laufen durch ein einfaches Batteriemodell, einmal mit deinen heutigen Batterien und einmal mit den simulierten Werten (PV und Verbrauch um ihre Änderung skaliert). Kosten: Netzbezug minus Einspeisevergütung, inkl. MwSt.",
+    hwUnchanged: "Ändere PV, Verbrauch oder die Batteriewerte in der Simulation, um zu sehen, was sie geändert hätten.",
+    hwUnavailable: "Braucht Batterien, einen Tarif und aufgezeichneten Hausverbrauch.",
+    hwLoading: "Wird berechnet …",
+    hwChanges: "Simuliert: {changes}",
+    hwPv: "PV",
+    hwConsumption: "Verbrauch",
+    hwCurrent: "Heutige Hardware",
+    hwSimulated: "Simulierte Hardware",
+    hwDiff: "Differenz",
+    hwCosts: "Kosten {tariff}",
+    hwPerMonth: "Pro Monat (simulierte minus heutige Hardware)",
+    hwLimits:
+      "Eine Schätzung mit Grenzen: Stundenwerte (Spitzen innerhalb einer Stunde werden gemittelt); netzdienliches Laden, Einspeisebegrenzung und Preissteuerung sind nicht enthalten (mit mehr PV fällt die Einspeisevergütung zu hoch aus, mit einem dynamischen Tarif können größere Batterien mehr bringen als angezeigt); die PV-Änderung skaliert die aufgezeichnete PV-Kurve und kennt die Ausrichtung zusätzlicher Module nicht; Verbraucher, die nach Überschuss schalten (z. B. Heizstab, Wallbox), behalten ihre aufgezeichnete Energie; Anschaffungskosten sind nicht eingerechnet.",
     mExport: "Einspeisung",
     mImport: "Netzbezug",
     mMaxImport: "Höchster Bezug",
@@ -1909,6 +1941,9 @@ class SlemsPanel extends HTMLElement {
     this._showTable = false;
     // Simulation tab: form values, last result (see _simulate).
     this._sim = { form: null, result: null, serial: 0, timer: null, requested: false };
+    // Comparison with the simulation's hardware (slems/hardware_comparison):
+    // key of the values asked for, last result, newest request.
+    this._hw = { key: null, result: null, serial: 0, timer: null };
     // Tariff comparison (slems/tariff_comparison), loaded once per visit of the tab.
     this._tariffs = { result: null, requested: false };
     // Comparison tariffs hidden in the table (kept in the browser).
@@ -3121,6 +3156,8 @@ class SlemsPanel extends HTMLElement {
           // Starts with the real settings on every visit.
           this._sim = { form: null, result: null, serial: this._sim.serial + 1, timer: null, requested: false };
           this._tariffs = { result: null, requested: false };
+          clearTimeout(this._hw.timer);
+          this._hw = { key: null, result: null, serial: this._hw.serial + 1, timer: null };
         }
         this._tab = tab;
         this._sections = {};
@@ -3238,6 +3275,7 @@ class SlemsPanel extends HTMLElement {
             <div id="pricechart"></div>
             <section class="card"><div id="simmetrics"></div></section>
             <div id="tariffs"></div>
+            <div id="hardware"></div>
           </div>
           <section class="card sim-side"><div id="simintro"></div><div id="simcontrols"></div></section>
         </div>`;
@@ -4765,7 +4803,10 @@ class SlemsPanel extends HTMLElement {
       const result = await this._hass.callWS(request);
       if (serial !== sim.serial) return;
       sim.result = result;
-      if (!sim.form) sim.form = this._simBaseForm(result.base);
+      if (!sim.form) {
+        sim.form = this._simBaseForm(result.base);
+        this._hwSchedule();
+      }
     } catch (err) {
       console.error("SLEMS: simulation failed", err);
       sim.result = { available: false };
@@ -4789,12 +4830,162 @@ class SlemsPanel extends HTMLElement {
   _simSchedule() {
     clearTimeout(this._sim.timer);
     this._sim.timer = setTimeout(() => this._simulate(), 250);
+    this._hwSchedule();
+  }
+
+  // What the simulated PV, consumption and batteries would have changed in the
+  // recorded months (see hardware_comparison.py); only asked for again when
+  // those values change.
+
+  _hwRequest() {
+    const form = this._sim.form;
+    if (!form) return null;
+    return { battery: { ...form.battery }, pv_pct: form.pv_pct, consumption_pct: form.consumption_pct };
+  }
+
+  _hwSchedule() {
+    const request = this._hwRequest();
+    const key = request && JSON.stringify(request);
+    if (!key || key === this._hw.key) return;
+    this._hw.key = key;
+    clearTimeout(this._hw.timer);
+    this._hw.timer = setTimeout(() => this._loadHardware(request), 600);
+    this._sections.hardware = undefined;
+    this._queueRender();
+  }
+
+  async _loadHardware(request) {
+    if (!this._hass) return;
+    const hw = this._hw;
+    const serial = ++hw.serial;
+    let result;
+    try {
+      result = await this._hass.callWS({ type: `${DOMAIN}/hardware_comparison`, ...request });
+    } catch (err) {
+      console.error("SLEMS: hardware comparison failed", err);
+      result = { available: false, changed: true, tariffs: [], months: [] };
+    }
+    if (serial !== hw.serial) return;
+    hw.result = { ...result, key: JSON.stringify(request) };
+    this._sections.hardware = undefined;
+    this._queueRender();
+  }
+
+  /** The simulated values that differ from the real ones, in words. */
+  _hwChanges() {
+    const form = this._sim.form;
+    const base = this._sim.result?.base?.battery || {};
+    const t = this._t;
+    const language = this._hass?.locale?.language || "en";
+    const number = (v, digits = 1) => new Intl.NumberFormat(language, { maximumFractionDigits: digits }).format(v);
+    const signed = (v) => `${v > 0 ? "+" : "−"}${number(Math.abs(v), 0)} %`;
+    const changes = [];
+    if (form.pv_pct) changes.push(`${t.hwPv} ${signed(form.pv_pct)}`);
+    if (form.consumption_pct) changes.push(`${t.hwConsumption} ${signed(form.consumption_pct)}`);
+    for (const [key, label, unit, digits] of [
+      ["capacity_kwh", t.simCapacity, "kWh", 2],
+      ["min_soc_pct", t.simMinSoc, "%", 1],
+      ["max_soc_pct", t.simMaxSoc, "%", 1],
+      ["max_charge_w", t.simChargePower, "W", 0],
+      ["max_discharge_w", t.simDischargePower, "W", 0],
+    ]) {
+      const value = form.battery?.[key];
+      if (value !== undefined && base[key] !== undefined && value !== base[key]) {
+        changes.push(`${label} ${number(base[key], digits)} → ${number(value, digits)} ${unit}`);
+      }
+    }
+    return changes.join(", ");
+  }
+
+  _renderHardware() {
+    const t = this._t;
+    const hw = this._hw;
+    const card = (body) =>
+      `<section class="card"><h2>${escapeHtml(t.hwTitle)}</h2><p class="hint">${escapeHtml(t.hwHint)}</p>${body}</section>`;
+    if (!this._sim.form) {
+      this._setSection("hardware", "");
+      return;
+    }
+    const result = hw.result;
+    if (!result || result.key !== hw.key) {
+      this._setSection("hardware", card(`<p class="empty">${escapeHtml(t.hwLoading)}</p>`));
+      return;
+    }
+    if (!result.changed) {
+      this._setSection("hardware", card(`<p class="empty">${escapeHtml(t.hwUnchanged)}</p>`));
+      return;
+    }
+    if (!result.available || !result.months.length) {
+      this._setSection("hardware", card(`<p class="empty">${escapeHtml(result.available ? t.tariffEmpty : t.hwUnavailable)}</p>`));
+      return;
+    }
+    const language = this._hass?.locale?.language || "en";
+    const money = new Intl.NumberFormat(language, { style: "currency", currency: this._currency() });
+    const energy = new Intl.NumberFormat(language, { maximumFractionDigits: 0 });
+    const sign = (value) => (value > 0 ? "+" : value < 0 ? "−" : "±");
+    const signedMoney = (value) => sign(value) + money.format(Math.abs(value));
+    const signedEnergy = (value) => sign(Math.round(value)) + energy.format(Math.abs(value));
+    const tariffs = result.tariffs.filter((tariff) => tariff.role === "current" || !this._hiddenTariffs.has(tariff.id));
+    const sums = { current: { import_kwh: 0, export_kwh: 0, costs: {} }, simulated: { import_kwh: 0, export_kwh: 0, costs: {} } };
+    for (const month of result.months) {
+      for (const side of ["current", "simulated"]) {
+        sums[side].import_kwh += month[side].import_kwh || 0;
+        sums[side].export_kwh += month[side].export_kwh || 0;
+        for (const [id, value] of Object.entries(month[side].costs)) sums[side].costs[id] = (sums[side].costs[id] || 0) + value;
+      }
+    }
+    // Lower costs are better (green), higher worse (red).
+    const tone = (diff) => (diff <= -0.005 ? "better" : diff >= 0.005 ? "worse" : "");
+    const energyRow = (label, key) => {
+      const before = sums.current[key];
+      const after = sums.simulated[key];
+      return `<tr><td>${escapeHtml(label)} (kWh)</td><td>${escapeHtml(energy.format(before))}</td>
+        <td>${escapeHtml(energy.format(after))}</td><td>${escapeHtml(signedEnergy(after - before))}</td></tr>`;
+    };
+    const tariffLabel = (tariff) => (tariff.role === "current" ? `${tariff.name} (${t.tariffCurrent})` : tariff.name);
+    const costRow = (tariff) => {
+      const before = sums.current.costs[tariff.id] || 0;
+      const after = sums.simulated.costs[tariff.id] || 0;
+      return `<tr><td>${escapeHtml(t.hwCosts.replace("{tariff}", tariffLabel(tariff)))}</td><td>${escapeHtml(money.format(before))}</td>
+        <td>${escapeHtml(money.format(after))}</td><td class="${tone(after - before)}">${escapeHtml(signedMoney(after - before))}</td></tr>`;
+    };
+    const summary = `<div class="table-wrap"><table class="tariff-table hw-table">
+      <thead><tr><th></th><th>${escapeHtml(t.hwCurrent)}</th><th>${escapeHtml(t.hwSimulated)}</th><th>${escapeHtml(t.hwDiff)}</th></tr></thead>
+      <tbody>${energyRow(t.tariffImport, "import_kwh")}${energyRow(t.tariffExport, "export_kwh")}${tariffs.map(costRow).join("")}</tbody></table></div>`;
+    const monthRows = [...result.months]
+      .reverse()
+      .map((month) => {
+        const diff = (key) => (month.simulated[key] || 0) - (month.current[key] || 0);
+        return `<tr><td>${escapeHtml(this._monthLabel(month.month))}</td>
+          <td>${escapeHtml(signedEnergy(diff("import_kwh")))}</td><td>${escapeHtml(signedEnergy(diff("export_kwh")))}</td>
+          ${tariffs
+            .map((tariff) => {
+              const value = (month.simulated.costs[tariff.id] || 0) - (month.current.costs[tariff.id] || 0);
+              return `<td class="${tone(value)}">${escapeHtml(signedMoney(value))}</td>`;
+            })
+            .join("")}</tr>`;
+      })
+      .join("");
+    const perMonth = `<details class="hw-months"><summary>${escapeHtml(t.hwPerMonth)}</summary>
+      <div class="table-wrap"><table class="tariff-table"><thead><tr><th>${escapeHtml(t.tariffMonth)}</th>
+      <th>${escapeHtml(t.tariffImport)} (kWh)</th><th>${escapeHtml(t.tariffExport)} (kWh)</th>
+      ${tariffs.map((tariff) => `<th>${escapeHtml(tariffLabel(tariff))}</th>`).join("")}</tr></thead>
+      <tbody>${monthRows}</tbody></table></div></details>`;
+    const changes = this._hwChanges();
+    this._setSection(
+      "hardware",
+      card(
+        `${changes ? `<p class="hint">${escapeHtml(t.hwChanges.replace("{changes}", changes))}</p>` : ""}${summary}${perMonth}
+        <p class="hint">${escapeHtml(t.hwLimits)}</p>`
+      )
+    );
   }
 
   _renderSimulation() {
     const t = this._t;
     const sim = this._sim;
     this._renderTariffs();
+    this._renderHardware();
     if (!sim.result) {
       if (!sim.requested) {
         sim.requested = true;
@@ -4919,6 +5110,16 @@ class SlemsPanel extends HTMLElement {
     return actions.length ? `${actions.join(", ")}${t.tariffSavingAnd}${last}` : last;
   }
 
+  /** "2026-05" as a short month name, the current month marked "to date". */
+  _monthLabel(month) {
+    const language = this._hass?.locale?.language || "en";
+    const today = new Date();
+    const thisMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+    const [year, number] = month.split("-").map(Number);
+    const label = new Date(year, number - 1, 1).toLocaleDateString(language, { month: "short", year: "numeric" });
+    return month === thisMonth ? `${label} (${this._t.tariffToDate})` : label;
+  }
+
   _renderTariffs() {
     const state = this._tariffs;
     if (!state.requested && this._hass) {
@@ -4938,18 +5139,11 @@ class SlemsPanel extends HTMLElement {
     const tariffs = result.tariffs;
     const current = tariffs.find((tariff) => tariff.role === "current");
     const others = current ? tariffs.filter((tariff) => tariff !== current) : [];
-    const today = new Date();
-    const thisMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
     let unpriced = false;
     let peakFromHours = false;
     let peakSaving = false;
     const sums = { import_kwh: 0, export_kwh: 0, costs: {}, savings: {} };
     const backtest = result.backtest;
-    const monthLabel = (month) => {
-      const [year, number] = month.split("-").map(Number);
-      const label = new Date(year, number - 1, 1).toLocaleDateString(language, { month: "short", year: "numeric" });
-      return month === thisMonth ? `${label} (${t.tariffToDate})` : label;
-    };
     for (const month of result.months) {
       sums.import_kwh += month.import_kwh || 0;
       sums.export_kwh += month.export_kwh || 0;
@@ -5015,7 +5209,7 @@ class SlemsPanel extends HTMLElement {
             .map(() => `<th class="side side-start">${escapeHtml(t.tariffImportCost)}</th><th class="side">${escapeHtml(t.tariffExportCredit)}</th>`)
             .join("")}</tr>`);
     const body = result.months.length
-      ? [...result.months].reverse().map((month) => row(monthLabel(month.month), month)).join("") +
+      ? [...result.months].reverse().map((month) => row(this._monthLabel(month.month), month)).join("") +
         row(t.tariffSum, sums, "sum")
       : `<tr><td colspan="${3 + shown.length * sides.length}" class="empty">${escapeHtml(t.tariffEmpty)}</td></tr>`;
     // Chips to show or hide the comparison tariffs, and the switch to sum the sides.
@@ -6046,6 +6240,7 @@ class SlemsPanel extends HTMLElement {
         // Not stored: the choice lasts until the page is reloaded.
       }
       this._sections.tariffs = undefined;
+      this._sections.hardware = undefined;
       this._render();
       return;
     }
@@ -6214,6 +6409,8 @@ const STYLE = `
   .tariff-table .side-start { border-left: 1px solid var(--divider-color); }
   .tariff-table td.better { background: rgba(67, 160, 71, 0.12); }
   .tariff-table td.worse { background: rgba(229, 57, 53, 0.10); }
+  .hw-months { margin-top: 12px; }
+  .hw-months summary { cursor: pointer; color: var(--secondary-text-color); }
   .sim-note { margin: 0 0 12px; }
   .sim-metrics th { white-space: normal; }
   @media (max-width: 500px) {

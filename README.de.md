@@ -260,7 +260,7 @@ das Laden von E-Autos spezialisiert und ergänzt SLEMS gut (siehe
 | Dashboard | Status |
 |---|---|
 | Dashboard (Seitenleiste): Energiefluss, Kennzahlen, Tagesdiagramm mit Prognose und Plan, Batterien, Verbraucher, Einstellungen | ✅ |
-| Simulation im Dashboard: Tagesplan mit anderen Einstellungen im Vergleich zum aktuellen (heute oder morgen), mit Preisdiagramm | ✅ |
+| Simulation im Dashboard: Tagesplan mit anderen Einstellungen im Vergleich zum aktuellen (heute oder morgen), mit Preisdiagramm; was andere Batterien, mehr PV oder ein anderer Verbrauch im aufgezeichneten Jahr geändert hätten | ✅ |
 
 | Tarife und Preise | Status |
 |---|---|
@@ -495,7 +495,8 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
 - **Batterien** und **Verbraucher**: eine Karte je Gerät mit Zustand, Plan,
   Tagesziel und den wichtigsten Einstellungen.
 - **Simulation**: andere Einstellungen ausprobieren und mit den aktuellen
-  vergleichen, ohne etwas zu ändern.
+  vergleichen, ohne etwas zu ändern; auch, was andere Batterien oder mehr PV
+  im aufgezeichneten Jahr geändert hätten.
 - **Einstellungen**: alle Einstellwerte gruppiert und direkt änderbar, mit den
   gelernten Werten.
 
@@ -617,10 +618,6 @@ Nutzern mit einer echten Wallbox zur [evcc-Anleitung](docs/wallbox-evcc.de.md).
   Posten-Art mit der Formel des Lieferanten, die Monatswerte des Index mit
   Zustimmung von der Energieagentur abgerufen; damit auch Vorlagen für
   Index-Tarife.
-- Tarifvergleich mit anderer Hardware: was eine größere Batterie, mehr
-  Ladeleistung, ein anderer höchster Ladezustand oder mehr PV im
-  aufgezeichneten Jahr gebracht hätten (das Batteriemodell der Schätzung mit
-  den Einstellungen der Simulation).
 
 **Prognose**
 

@@ -977,6 +977,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.plan_changes = PlanChanges()
         # Last tariff comparison for the dashboard: (monotonic time, result).
         self.tariff_comparison_cache: tuple[float, tuple, dict] | None = None
+        # Last comparison with the simulation's hardware: (monotonic time, request key, result).
+        self.hardware_comparison_cache: tuple[float, tuple, dict] | None = None
         # Grid power read over Modbus (see grid_meter); None if not configured
         # or not available (then grid_meter_error says why).
         self.grid_meter: ModbusGridMeter | None = None
@@ -1283,6 +1285,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._grid_charge_cache.clear()
         self._grid_charge_last = None
         self.tariff_comparison_cache = None
+        self.hardware_comparison_cache = None
         self._wanted_references()
         self.market_prices.references_update = None
         self.market_prices.refresh()

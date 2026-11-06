@@ -430,6 +430,22 @@ import prices (perfect forecast). Both priced with `compare`; the difference
 per month and tariff is `savings`. Runs in the executor (about half a second
 for a year), cached with the comparison (30 minutes).
 
+Other hardware (`hardware_comparison.py`, websocket
+`slems/hardware_comparison`, card below the tariff comparison in the
+simulation tab): the battery values, `pv_pct` and `consumption_pct` of the
+simulation form. `simulated_battery` applies only the changed values to
+`backtest_battery()` (a capacity keeps the SoC window in %, a power shifts the
+backtest power by the change), so unchanged values give exactly the backtest
+battery. `hardware_rows` plays the recorded hours as usual (no price plan)
+with both batteries, PV and consumption scaled for the simulated one, and
+prices both with `compare`; per month and tariff `current` / `simulated`
+import, export and total costs. Both sides are model runs, so the difference
+is only the hardware. Not modelled (named in the card): hourly values, grid
+friendly charging, feed-in cap, price aware control, orientation of more PV.
+The panel asks again only when those values change (600 ms debounce); the
+last result is cached on the coordinator (30 minutes, cleared with the
+tariffs).
+
 ### Recorded quarter hours
 
 `grid_quarters.py`: every grid value (entity or Modbus, via

@@ -162,6 +162,38 @@ they are switched on). The plan knows
 consumption and PV exactly, so the estimate is an upper bound. Tariffs where
 the control saves nothing (a fixed price) have no such line.
 
+**Other hardware in the recorded year**: when PV, consumption or a battery
+value (capacity, minimum/maximum state of charge, charge or discharge power)
+in the simulation differs from today, a card below the tariff comparison
+shows what that would have changed in the recorded months: grid import,
+feed-in and per tariff the costs (import minus feed-in credit, incl. VAT)
+with the current and with the simulated hardware and their difference (green
+cheaper, red more expensive); **Per month** opens the differences month by
+month. The comparison tariffs hidden in the tariff comparison are hidden here
+too.
+
+![Other hardware in the recorded year: 20 kWh instead of 15.36 kWh of usable capacity and 30 % more PV](../images/dashboard_hardware_en.png)
+
+The recorded hourly house consumption and PV run through the same simple
+battery model as the estimate of the price aware control, once with the
+current batteries and once with the simulated values; PV and consumption are
+scaled by their change in the simulation. Both sides come from the model, so
+the difference only shows the other hardware. It is an estimate with limits:
+
+- **Hourly values**: peaks within an hour are averaged, so more charge or
+  discharge power tends to bring a little more than shown, a larger battery
+  a little less.
+- **Without grid friendly charging, the feed-in cap and the price aware
+  control**: the model feeds in every surplus, so with more PV the feed-in
+  credit comes out too high where a feed-in cap would curtail; with a dynamic
+  tariff a larger battery can bring more than shown, as the price aware
+  control would use it too.
+- **The PV change scales the recorded PV curve**: additional modules facing
+  east or west would make the curve wider, not only higher; hours already
+  curtailed are scaled too.
+- Consumers switched by surplus (e.g. heating rod, wallbox) keep their
+  recorded energy; purchase costs and wear of the hardware are not included.
+
 ## Settings tab
 
 All settings grouped and editable directly; while a value is learned (switch

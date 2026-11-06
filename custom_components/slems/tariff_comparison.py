@@ -304,6 +304,24 @@ async def async_tariff_comparison(hass: HomeAssistant, entry: SlemsConfigEntry) 
     return result
 
 
+async def async_backtest_history(
+    hass: HomeAssistant, coordinator, start: datetime, end: datetime
+) -> tuple[dict[datetime, float], dict[datetime, float]] | None:
+    """Recorded hourly house consumption and PV (Wh, not negative) for the
+    battery model; None without house consumption."""
+    sources = coordinator.history_sources()
+    ids = [*sources.house, *sources.pv]
+    means = await async_statistic_means(hass, ids, start, end)
+    house = next((means[i] for i in sources.house if means.get(i)), None)
+    if not house:
+        return None
+    pv = sum_series(means.get(p, {}) for p in sources.pv)
+    return (
+        {hour: max(0.0, value) for hour, value in house.items()},
+        {hour: max(0.0, value) for hour, value in pv.items()},
+    )
+
+
 async def _async_savings(
     hass: HomeAssistant,
     coordinator,
@@ -317,15 +335,10 @@ async def _async_savings(
     battery = coordinator.backtest_battery()
     if battery is None:
         return None
-    sources = coordinator.history_sources()
-    ids = [*sources.house, *sources.pv]
-    means = await async_statistic_means(hass, ids, start, end)
-    house = next((means[i] for i in sources.house if means.get(i)), None)
-    if not house:
+    history = await async_backtest_history(hass, coordinator, start, end)
+    if history is None:
         return None
-    pv = sum_series(means.get(p, {}) for p in sources.pv)
-    load = {hour: max(0.0, value) for hour, value in house.items()}
-    pv = {hour: max(0.0, value) for hour, value in pv.items()}
+    load, pv = history
     prices = coordinator.market_prices
     market = prices.period_means({hour: 3600 for hour in load})
 

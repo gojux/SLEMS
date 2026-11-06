@@ -256,7 +256,7 @@ state of charge. evcc specialises in EV charging and complements SLEMS well
 | Dashboard | Status |
 |---|---|
 | Dashboard (sidebar panel): energy flow, key figures, daily forecast and plan chart, batteries, consumers, settings | ✅ |
-| Simulation in the dashboard: day plan with other settings compared with the current one (today or tomorrow), with the price chart | ✅ |
+| Simulation in the dashboard: day plan with other settings compared with the current one (today or tomorrow), with the price chart; what other batteries, more PV or another consumption would have changed in the recorded year | ✅ |
 
 | Tariffs and prices | Status |
 |---|---|
@@ -482,7 +482,8 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
 - **Batteries** and **Consumers**: one card per device with its state, plan,
   daily target and the most important settings.
 - **Simulation**: try other settings and compare them with the current ones,
-  without changing anything.
+  without changing anything; also what other batteries or more PV would have
+  changed in the recorded year.
 - **Settings**: all settings grouped and directly editable, with the learned
   values.
 
@@ -601,10 +602,6 @@ wallbox on the [evcc guide](docs/wallbox-evcc.md).
 - Index tariffs (e.g. on the Austrian electricity price index ÖSPI): a line
   type with the supplier's formula, the monthly index values fetched (with
   consent) from the Austrian Energy Agency; templates for index tariffs too.
-- Tariff comparison with other hardware: what a larger battery, more charge
-  power, another maximum state of charge or more PV would have brought in the
-  recorded year (the battery model of the estimate with the settings of the
-  simulation).
 
 **Forecast**
 

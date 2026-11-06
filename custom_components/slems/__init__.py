@@ -45,6 +45,7 @@ from .response_probe import CONFIG_KEYS, CONTROL_ENTITY_KEYS, digest
 from .simulation import async_register_websocket
 from .price_chart import async_register_websocket as async_register_price_websocket
 from .tariff_comparison import async_register_websocket as async_register_tariff_websocket
+from .hardware_comparison import async_register_websocket as async_register_hardware_websocket
 from .tariff_updates import async_check_tariff_updates
 
 _LOGGER = logging.getLogger(__name__)
@@ -130,6 +131,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
     await async_register_panel(hass, entry)
     async_register_websocket(hass)
     async_register_tariff_websocket(hass)
+    async_register_hardware_websocket(hass)
     async_register_price_websocket(hass)
     # The switch and select restored consent and source when their platforms were set up.
     coordinator.market_prices.start()
