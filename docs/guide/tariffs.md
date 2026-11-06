@@ -92,7 +92,7 @@ your own changes of the template lines.
 
 YAML files in the folder `slems_tariff_templates` of your Home
 Assistant configuration. Suggest a template for everyone as an
-[issue](https://github.com/gojux/SLEMS/issues) with the source of the prices.
+[issue](https://github.com/gojux/SLEMS/issues/new?template=tariff_template.yml) with the source of the prices.
 
 ### Switzerland
 

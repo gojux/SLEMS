@@ -1,0 +1,13 @@
+name: Idee oder Wunsch / Feature request
+description: Eine neue Funktion, ein weiteres Gerät oder eine Verbesserung / A new feature, another device or an improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Was wünschst du dir? / What would you like?
+      description: |
+        Beschreibe deine Anlage und was SLEMS dort besser machen sollte.
+        Describe your installation and what SLEMS should do better there.
+    validations:
+      required: true

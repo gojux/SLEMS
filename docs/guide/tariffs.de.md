@@ -98,7 +98,7 @@ zurücksetzen** nimmt eigene Änderungen an den Vorlagen-Posten zurück.
 
 YAML-Dateien im Ordner `slems_tariff_templates` deiner
 Home-Assistant-Konfiguration. Eine Vorlage für alle schlägst du als
-[Issue](https://github.com/gojux/SLEMS/issues) mit der Quelle der Preise vor.
+[Issue](https://github.com/gojux/SLEMS/issues/new?template=tariff_template.yml) mit der Quelle der Preise vor.
 
 ### Schweiz
 

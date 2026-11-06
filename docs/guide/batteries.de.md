@@ -211,7 +211,7 @@ Laständerungen (Kochen, Wasserkocher).
 
 Lässt es sich über Modbus TCP steuern, versuch eine [Batterie aus einem
 Modbus-Profil](battery-modbus-profile.de.md). Soll SLEMS ein Modell direkt
-unterstützen, bitte ein [Issue](https://github.com/gojux/SLEMS/issues) anlegen
+unterstützen, bitte ein [Issue](https://github.com/gojux/SLEMS/issues/new?template=feature_request.yml) anlegen
 mit Hersteller und Modell, Schnittstelle (Modbus TCP/RTU, lokale API, nur
 Cloud), Registerliste oder API-Doku, falls vorhanden, und der
 Home-Assistant-Integration, die es dafür gibt.

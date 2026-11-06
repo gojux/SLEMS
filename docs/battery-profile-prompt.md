@@ -404,7 +404,7 @@ Rules:
 ## Suggest a profile as a shipped profile
 
 A profile that works well can become a shipped profile for everybody with the
-same battery. Open an [issue](https://github.com/gojux/SLEMS/issues) with:
+same battery. Open an [issue](https://github.com/gojux/SLEMS/issues/new?template=battery_profile.yml) with:
 
 - the profile (in SLEMS: **Edit battery** → **Show the profile as YAML**),
 - manufacturer, model and firmware versions (in the diagnostics of SLEMS),

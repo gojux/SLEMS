@@ -20,7 +20,7 @@ system).
 > for quite some time; new features and improvements keep coming often. In the operating mode **Active** it sends
 > commands to batteries and switches consumers. Use it at your own risk: check
 > the limits of your batteries and the fuses of your circuits. Please report
-> faults as an [issue](https://github.com/gojux/SLEMS/issues) with the
+> faults as an [issue](https://github.com/gojux/SLEMS/issues/new?template=bug_report.yml) with the
 > diagnostics (see [Quick start](#quick-start)).
 
 ## Does SLEMS fit your installation?
@@ -33,7 +33,7 @@ system).
 | No battery | PV surplus into consumers only ([without batteries](#without-batteries)) |
 
 If you would like to use SLEMS with another battery, please
-[open an issue](https://github.com/gojux/SLEMS/issues) with the model and how
+[open an issue](https://github.com/gojux/SLEMS/issues/new?template=feature_request.yml) with the model and how
 it is connected (Modbus, local API, Home Assistant integration), and whether
 you could test it.
 

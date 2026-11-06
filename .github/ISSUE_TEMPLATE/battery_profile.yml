@@ -1,0 +1,57 @@
+name: Batterie-Profil einreichen / Submit a battery profile
+description: Ein Modbus-Profil, das seinen Probebetrieb bestanden hat, oder die Bestätigung eines Profils / A Modbus profile that passed its trial, or the confirmation of a profile
+title: "Batterie-Profil: <Hersteller> <Modell>"
+labels: ["battery profile"]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Art / Kind
+      options:
+        - Eigenes Profil als mitgeliefertes Profil vorschlagen / Suggest an own profile as a shipped profile
+        - Ungeprüftes mitgeliefertes Profil bestätigen / Confirm an unverified shipped profile
+        - Rückmeldung zu einem Kandidaten-Profil / Feedback on a candidate profile
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Hersteller, Modell und Firmware / Manufacturer, model and firmware
+      description: |
+        Die Firmware-Versionen stehen in den Diagnosedaten. Bei einem Gateway (z. B. RS485 auf Modbus TCP) auch dieses.
+        The firmware versions are in the diagnostics. With a gateway (e.g. RS485 to Modbus TCP) name it too.
+      placeholder: "Marstek Venus E Gen 2, Firmware …, Elfin EW11"
+    validations:
+      required: true
+  - type: textarea
+    id: trial
+    attributes:
+      label: Ergebnis des Probebetriebs / Result of the trial
+      description: |
+        Nur den Abschnitt `trial` deiner Batterie aus den Diagnosedaten (**Einstellungen → Geräte & Dienste → SLEMS → ⋮ → Diagnosedaten herunterladen**). Der Download enthält sonst deine ganze Konfiguration.
+        Only the section `trial` of your battery from the diagnostics (**Settings → Devices & services → SLEMS → ⋮ → Download diagnostics**). The download also holds your whole configuration.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: profile
+    attributes:
+      label: Profil als YAML / Profile as YAML
+      description: |
+        **Batterie bearbeiten** → **Profil als YAML anzeigen**. Nicht nötig, wenn du ein mitgeliefertes Profil unverändert bestätigst.
+        **Edit battery** → **Show the profile as YAML**. Not needed when you confirm a shipped profile unchanged.
+      render: yaml
+  - type: input
+    id: source
+    attributes:
+      label: Quelle der Register / Source of the registers
+      description: |
+        Link oder Name und Version des Handbuchs, oder die Quellen aus dem Netz.
+        A link or the name and version of the manual, or the sources found online.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anmerkungen / Notes
+      description: |
+        Was ist dir aufgefallen (Einstellungen am Gerät, Vorzeichen, Verzögerungen, Rückfall nach einem Ausfall)?
+        What did you notice (settings at the device, signs, delays, fall-back after an outage)?

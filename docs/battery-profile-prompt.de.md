@@ -420,7 +420,7 @@ Regeln:
 
 Ein Profil, das sich bewährt, kann ein mitgeliefertes Profil für alle mit
 derselben Batterie werden. Melde es als
-[Issue](https://github.com/gojux/SLEMS/issues) mit:
+[Issue](https://github.com/gojux/SLEMS/issues/new?template=battery_profile.yml) mit:
 
 - dem Profil (in SLEMS: **Batterie bearbeiten** → **Profil als YAML
   anzeigen**),

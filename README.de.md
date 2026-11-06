@@ -21,7 +21,7 @@ Tiere](https://en.wikipedia.org/wiki/Sea_slug)) und *EMS*
 > dazu. Im Betriebsmodus **Aktiv** sendet es Vorgaben an
 > Batterien und schaltet Verbraucher. Die Nutzung erfolgt auf eigene
 > Verantwortung: Prüfe die Grenzen deiner Batterien und die Absicherung deiner
-> Stromkreise. Fehler bitte als [Issue](https://github.com/gojux/SLEMS/issues)
+> Stromkreise. Fehler bitte als [Issue](https://github.com/gojux/SLEMS/issues/new?template=bug_report.yml)
 > mit den Diagnosedaten melden (siehe [Schnellstart](#schnellstart)).
 
 ## Passt SLEMS zu deiner Anlage?
@@ -34,7 +34,7 @@ Tiere](https://en.wikipedia.org/wiki/Sea_slug)) und *EMS*
 | Keine Batterie | PV-Überschuss nur in Verbraucher ([ohne Batterien](#ohne-batterien)) |
 
 Wenn du SLEMS mit einer anderen Batterie nutzen möchtest, erstelle bitte ein
-[Issue](https://github.com/gojux/SLEMS/issues) mit dem Modell, der Anbindung
+[Issue](https://github.com/gojux/SLEMS/issues/new?template=feature_request.yml) mit dem Modell, der Anbindung
 (Modbus, lokale API, Home-Assistant-Integration) und ob du testen könntest.
 
 | Tarif-Vorlagen | |

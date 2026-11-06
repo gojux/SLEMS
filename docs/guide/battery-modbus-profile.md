@@ -111,7 +111,7 @@ the same trial as an own profile, and its write preview asks you to confirm
 compared the write registers with the manual, if there is one**. If your
 battery passes its trial (the sensor **Trial** shows **Passed**; **Taken as
 passed** from the repair issue does not count), please report it in an
-[issue](https://github.com/gojux/SLEMS/issues) with the model and the section
+[issue](https://github.com/gojux/SLEMS/issues/new?template=battery_profile.yml) with the model and the section
 `trial` of your battery from the diagnostics (**Settings → Devices & services
 → SLEMS → ⋮ → Download diagnostics**). The profile is then listed as
 verified, with the firmware of your battery. Post only that section: the

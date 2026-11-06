@@ -124,4 +124,4 @@ Regeln:
 Ein Tarif mit öffentlich verfügbaren Listenpreisen (z. B. aus einem
 Preisblatt des Lieferanten) kann anderen als Vorlage helfen. Exportiere ihn in
 SLEMS mit **Als YAML exportieren**, entferne persönliche Rabatte und melde ihn
-als [Issue](https://github.com/gojux/SLEMS/issues) mit der Quelle der Preise.
+als [Issue](https://github.com/gojux/SLEMS/issues/new?template=tariff_template.yml) mit der Quelle der Preise.

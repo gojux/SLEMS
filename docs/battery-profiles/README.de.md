@@ -31,7 +31,7 @@ dem KI-Prompt zu erstellen.
 3. Prüfe die oben aufgeführten Punkte, während die Batterie läuft.
 
 **Melden**: Ob es geklappt hat oder nicht, eröffne bitte ein
-[Issue](https://github.com/gojux/SLEMS/issues) mit dem Modell, der Firmware,
+[Issue](https://github.com/gojux/SLEMS/issues/new?template=battery_profile.yml) mit dem Modell, der Firmware,
 deinen Befunden zu den Punkten oben und, nach einem bestandenen Probebetrieb,
 dem Abschnitt `trial` deiner Batterie aus den Diagnosedaten. Ein Kandidat,
 der seinen Probebetrieb bestanden hat, wird ein mit SLEMS geliefertes Profil.

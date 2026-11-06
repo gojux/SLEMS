@@ -204,7 +204,7 @@ network cable reaches it. The difference matters most with fast load changes
 
 If it can be controlled over Modbus TCP, try a [battery from a Modbus
 profile](battery-modbus-profile.md). If you would like SLEMS to support a
-model directly, please open an [issue](https://github.com/gojux/SLEMS/issues)
+model directly, please open an [issue](https://github.com/gojux/SLEMS/issues/new?template=feature_request.yml)
 with manufacturer and model, interface (Modbus TCP/RTU, local API, cloud
 only), a register list or API documentation if available, and the Home
 Assistant integration that exists for it.

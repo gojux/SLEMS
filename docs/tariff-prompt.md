@@ -120,4 +120,4 @@ Rules:
 A tariff with publicly available list prices (e.g. from a supplier's price
 sheet) can help others as a template. Export it in SLEMS with **Export as
 YAML**, remove personal discounts and report it as an
-[issue](https://github.com/gojux/SLEMS/issues) with the source of the prices.
+[issue](https://github.com/gojux/SLEMS/issues/new?template=tariff_template.yml) with the source of the prices.

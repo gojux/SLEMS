@@ -1,0 +1,43 @@
+name: Fehler melden / Report a bug
+description: Etwas funktioniert nicht wie erwartet / Something does not work as expected
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Was ist passiert? / What happened?
+      description: |
+        Was hast du erwartet, was ist stattdessen passiert, und wann (Datum, Uhrzeit)?
+        What did you expect, what happened instead, and when (date, time)?
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versionen / Versions
+      placeholder: "SLEMS 0.1.0, Home Assistant 2026.11.0"
+    validations:
+      required: true
+  - type: input
+    id: setup
+    attributes:
+      label: Batterien und Anbindung / Batteries and connection
+      description: |
+        Modell und Art der Anbindung (eingebauter Treiber, Modbus-Profil, Entitäten), dazu der Smart Meter.
+        Model and kind of connection (built-in driver, Modbus profile, entities), plus the smart meter.
+      placeholder: "2× Marstek Venus E 3.0 (Modbus TCP), Shelly Pro 3EM"
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnosedaten / Diagnostics
+      description: |
+        **Einstellungen → Geräte & Dienste → SLEMS → ⋮ → Diagnosedaten herunterladen** und die Datei hier hineinziehen. Adressen und Seriennummern sind darin entfernt.
+        **Settings → Devices & services → SLEMS → ⋮ → Download diagnostics** and drag the file in here. Addresses and serial numbers are redacted in it.
+  - type: textarea
+    id: log
+    attributes:
+      label: Log (optional)
+      description: |
+        Passende Zeilen aus dem Home-Assistant-Log mit `slems`.
+        Matching lines of the Home Assistant log containing `slems`.
+      render: text

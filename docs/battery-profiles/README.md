@@ -31,7 +31,7 @@ prompt.
 3. Check the points listed at the top while the battery runs.
 
 **Reporting**: whether it worked or not, please open an
-[issue](https://github.com/gojux/SLEMS/issues) with the model, the firmware,
+[issue](https://github.com/gojux/SLEMS/issues/new?template=battery_profile.yml) with the model, the firmware,
 your findings on the points at the top and, after a passed trial, the
 section `trial` of your battery from the diagnostics. A candidate that passed
 its trial becomes a profile shipped with SLEMS.

@@ -1,0 +1,32 @@
+name: Tarif-Vorlage vorschlagen / Suggest a tariff template
+description: Ein Tarif mit öffentlichen Listenpreisen als Vorlage für SLEMS / A tariff with public list prices as a template for SLEMS
+title: "Tarif-Vorlage: <Lieferant/Netzbetreiber> <Tarif> <Jahr>"
+labels: ["tariff template"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Exportiere den Tarif in SLEMS mit **Als YAML exportieren** und füge ihn unten ein.
+        Nur öffentliche Listenpreise (Preisblatt), keine persönlichen Rabatte oder Daten.
+        Export the tariff in SLEMS with **Export as YAML** and paste it below.
+        Public list prices only (price sheet), no personal discounts or data.
+  - type: input
+    id: source
+    attributes:
+      label: Quelle der Preise (Link zum Preisblatt) / Source of the prices (link to the price sheet)
+    validations:
+      required: true
+  - type: textarea
+    id: yaml
+    attributes:
+      label: Tarif als YAML / Tariff as YAML
+      render: yaml
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Bestätigung / Confirmation
+      options:
+        - label: Keine persönlichen Daten (Name, Adresse, Kunden-/Zählpunktnummer) und keine persönlichen Rabatte / No personal data and no personal discounts
+          required: true

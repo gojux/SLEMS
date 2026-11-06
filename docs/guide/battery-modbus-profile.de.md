@@ -119,7 +119,7 @@ bewusst, dass dieses Profil noch an keiner echten Batterie geprüft wurde; ich
 habe die Schreibregister mit dem Handbuch verglichen, soweit es eines gibt**.
 Besteht deine Batterie den Probebetrieb (der Sensor **Probebetrieb** zeigt
 **Bestanden**; **Als bestanden übernommen** aus der Reparatur zählt nicht),
-melde es bitte in einem [Issue](https://github.com/gojux/SLEMS/issues) mit
+melde es bitte in einem [Issue](https://github.com/gojux/SLEMS/issues/new?template=battery_profile.yml) mit
 dem Modell und dem Abschnitt `trial` deiner Batterie aus den Diagnosedaten
 (**Einstellungen → Geräte & Dienste → SLEMS → ⋮ → Diagnosedaten
 herunterladen**). Dann wird das Profil als geprüft geführt, mit der Firmware
