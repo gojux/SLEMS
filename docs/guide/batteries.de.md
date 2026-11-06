@@ -2,6 +2,32 @@
 
 [Zurück zur README](../../README.de.md#batterien) · [English](batteries.md)
 
+<!-- toc -->
+
+- [Marstek Venus E 3.0](#marstek-venus-e-30)
+  - [Fernsteuerung](#fernsteuerung)
+  - [Suche](#suche)
+  - [IP-Adresse finden](#ip-adresse-finden)
+- [Vorhandene Home-Assistant-Entitäten](#vorhandene-home-assistant-entitäten)
+  - [Eigene PV-Module an der Batterie](#eigene-pv-module-an-der-batterie)
+  - [Reaktionszeit](#reaktionszeit)
+  - [Direkt oder über eine andere Integration?](#direkt-oder-über-eine-andere-integration)
+  - [Ein weiteres Batteriemodell?](#ein-weiteres-batteriemodell)
+  - [Beispiel: eine Batterie über Omnibattery](#beispiel-eine-batterie-über-omnibattery)
+- [Batterie aus einem Modbus-Profil (experimentell)](#batterie-aus-einem-modbus-profil-experimentell)
+- [Zustand bei Freigabe](#zustand-bei-freigabe)
+- [Aufteilung auf die Batterien](#aufteilung-auf-die-batterien)
+- [Verschleißkosten der Batterie](#verschleißkosten-der-batterie)
+- [Wirkungsgrad der Batterie](#wirkungsgrad-der-batterie)
+- [Umstieg von einer anderen Batterie-Integration](#umstieg-von-einer-anderen-batterie-integration)
+- [Zell-Delta und aktiver Zellausgleich](#zell-delta-und-aktiver-zellausgleich)
+- [Selbsttest einer Batterie](#selbsttest-einer-batterie)
+- [Reaktionszeit und Phase messen](#reaktionszeit-und-phase-messen)
+- [Firmware-Updates und Batterie-Menü](#firmware-updates-und-batterie-menü)
+- [Grenzen und Schutz der Batterien](#grenzen-und-schutz-der-batterien)
+
+<!-- /toc -->
+
 ## Marstek Venus E 3.0
 
 Host/IP, Port (502) und Modbus Unit-ID. Die Batterie akzeptiert nur **eine**

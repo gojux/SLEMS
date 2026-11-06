@@ -2,6 +2,32 @@
 
 [Back to the README](../../README.md#batteries) · [Deutsch](batteries.de.md)
 
+<!-- toc -->
+
+- [Marstek Venus E 3.0](#marstek-venus-e-30)
+  - [Remote control](#remote-control)
+  - [Search](#search)
+  - [Finding the IP address](#finding-the-ip-address)
+- [Existing Home Assistant entities](#existing-home-assistant-entities)
+  - [Own PV modules at the battery](#own-pv-modules-at-the-battery)
+  - [Response time](#response-time)
+  - [Directly or through another integration?](#directly-or-through-another-integration)
+  - [Another battery model?](#another-battery-model)
+  - [Example: a battery through Omnibattery](#example-a-battery-through-omnibattery)
+- [Battery from a Modbus profile (experimental)](#battery-from-a-modbus-profile-experimental)
+- [State when released](#state-when-released)
+- [Distribution between batteries](#distribution-between-batteries)
+- [Battery wear costs](#battery-wear-costs)
+- [Battery efficiency](#battery-efficiency)
+- [Switching from another battery integration](#switching-from-another-battery-integration)
+- [Cell delta and active cell balancing](#cell-delta-and-active-cell-balancing)
+- [Self-test of a battery](#self-test-of-a-battery)
+- [Measuring response time and phase](#measuring-response-time-and-phase)
+- [Firmware updates and battery menu](#firmware-updates-and-battery-menu)
+- [Battery limits and protection](#battery-limits-and-protection)
+
+<!-- /toc -->
+
 ## Marstek Venus E 3.0
 
 Host/IP, port (502) and Modbus unit ID. The battery accepts only **one**

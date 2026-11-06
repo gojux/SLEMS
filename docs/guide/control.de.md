@@ -2,6 +2,21 @@
 
 [Zurück zur README](../../README.de.md#betrieb-und-regelung) · [English](control.md)
 
+<!-- toc -->
+
+- [Schlechtwetter-Modus](#schlechtwetter-modus)
+- [So funktioniert die Regelung](#so-funktioniert-die-regelung)
+- [Welche Option wann?](#welche-option-wann)
+- [Netzdienliches Laden](#netzdienliches-laden)
+- [Einspeisebegrenzung](#einspeisebegrenzung)
+- [Bezugsspitzen abfangen und Leistungspreis](#bezugsspitzen-abfangen-und-leistungspreis)
+- [Gelernte Werte](#gelernte-werte)
+  - [Phase von Batterien und Verbrauchern](#phase-von-batterien-und-verbrauchern)
+- [Weitere Einstellungen (Entitäten)](#weitere-einstellungen-entitäten)
+- [Probleme und Benachrichtigungen](#probleme-und-benachrichtigungen)
+
+<!-- /toc -->
+
 ## Schlechtwetter-Modus
 
 Kommt schlechtes Wetter, speichert der Schalter **Schlechtwetter-Modus** (auch

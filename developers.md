@@ -7,7 +7,10 @@
 - Both READMEs (`README.md`, `README.de.md`) are kept in sync, as are the
   user guides in `docs/guide/` (`<topic>.md` / `<topic>.de.md`). The README
   gives an overview with the use and benefit of each feature; details longer
-  than about a screen go into a guide, linked from the README.
+  than about a screen go into a guide, linked from the README. Longer guides
+  have a table of contents between `<!-- toc -->` and `<!-- /toc -->`; after
+  changing their headings run `python3 dev/guide_toc.py` (`--check` reports
+  an outdated one).
 - Code comments contain only lasting information (what, conventions, hardware
   facts, reasons for non-obvious decisions), never development history or
   status notes; those belong here or in commit messages.

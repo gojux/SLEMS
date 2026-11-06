@@ -2,6 +2,21 @@
 
 [Back to the README](../../README.md#operation-and-control) · [Deutsch](control.de.md)
 
+<!-- toc -->
+
+- [Bad weather mode](#bad-weather-mode)
+- [How the control works](#how-the-control-works)
+- [Which option when?](#which-option-when)
+- [Grid friendly charging](#grid-friendly-charging)
+- [Feed-in cap](#feed-in-cap)
+- [Import peak shaving and power price](#import-peak-shaving-and-power-price)
+- [Learned values](#learned-values)
+  - [Phase of batteries and consumers](#phase-of-batteries-and-consumers)
+- [Further settings (entities)](#further-settings-entities)
+- [Problems and notifications](#problems-and-notifications)
+
+<!-- /toc -->
+
 ## Bad weather mode
 
 When bad weather is coming, the switch **Bad weather mode** (also in the menu

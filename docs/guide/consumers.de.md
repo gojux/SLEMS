@@ -2,6 +2,21 @@
 
 [Zurück zur README](../../README.de.md#verbraucher) · [English](consumers.md)
 
+<!-- toc -->
+
+- [Einstellungen](#einstellungen)
+- [Freigabe für eine eigene Automation](#freigabe-für-eine-eigene-automation)
+  - [Wärmepumpe mit Freigabe (Warmwasser)](#wärmepumpe-mit-freigabe-warmwasser)
+- [Weitere Einstellungen und Verhalten](#weitere-einstellungen-und-verhalten)
+- [Stromvorgabe](#stromvorgabe)
+- [Auto an der Wallbox](#auto-an-der-wallbox)
+- [Temperaturfühler des Speichers](#temperaturfühler-des-speichers)
+- [Batterie-Unterstützung](#batterie-unterstützung)
+- [Einsatz in der Einspeisebegrenzung](#einsatz-in-der-einspeisebegrenzung)
+- [Tagesziel](#tagesziel)
+
+<!-- /toc -->
+
 Jeder Verbraucher braucht einen eigenen Leistungs- **und** Energiesensor.
 
 Welche Verbraucher anlegen: die, die SLEMS steuert (Heizstab, Wallbox,

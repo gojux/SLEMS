@@ -2,6 +2,28 @@
 
 [Zurück zur README](../../README.de.md#tarife-optional) · [English](tariffs.md)
 
+<!-- toc -->
+
+- [Tarif eintragen](#tarif-eintragen)
+- [Import und Export als YAML](#import-und-export-als-yaml)
+- [Vorlagen](#vorlagen)
+  - [Eigene Vorlagen](#eigene-vorlagen)
+  - [Schweiz](#schweiz)
+  - [Österreich](#österreich)
+  - [Dynamischer Tarif (Österreich und Deutschland)](#dynamischer-tarif-österreich-und-deutschland)
+  - [Deutschland](#deutschland)
+- [Woher die Energie kommt](#woher-die-energie-kommt)
+- [Leistungspreis](#leistungspreis)
+- [Dynamische Tarife und Börsenpreise](#dynamische-tarife-und-börsenpreise)
+- [Preisbewusste Steuerung](#preisbewusste-steuerung)
+  - [Geschätzte Preise](#geschätzte-preise)
+  - [Batterien aus dem Netz laden](#batterien-aus-dem-netz-laden)
+  - [Überschussstunden und negative Preise](#überschussstunden-und-negative-preise)
+  - [Batterien ins Netz entladen](#batterien-ins-netz-entladen)
+  - [Gemessene Ersparnis](#gemessene-ersparnis)
+
+<!-- /toc -->
+
 ## Tarif eintragen
 
 Mit **Tarif hinzufügen** auf der Seite der SLEMS-Integration trägst du deinen

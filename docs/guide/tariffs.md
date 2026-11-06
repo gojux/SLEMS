@@ -2,6 +2,28 @@
 
 [Back to the README](../../README.md#tariffs-optional) · [Deutsch](tariffs.de.md)
 
+<!-- toc -->
+
+- [Entering a tariff](#entering-a-tariff)
+- [Import and export as YAML](#import-and-export-as-yaml)
+- [Templates](#templates)
+  - [Own templates](#own-templates)
+  - [Switzerland](#switzerland)
+  - [Austria](#austria)
+  - [Dynamic tariff (Austria and Germany)](#dynamic-tariff-austria-and-germany)
+  - [Germany](#germany)
+- [Where the energy comes from](#where-the-energy-comes-from)
+- [Power price](#power-price)
+- [Dynamic tariffs and market prices](#dynamic-tariffs-and-market-prices)
+- [Price aware control](#price-aware-control)
+  - [Estimated prices](#estimated-prices)
+  - [Charge batteries from the grid](#charge-batteries-from-the-grid)
+  - [Surplus hours and negative prices](#surplus-hours-and-negative-prices)
+  - [Feed in from the batteries](#feed-in-from-the-batteries)
+  - [Measured saving](#measured-saving)
+
+<!-- /toc -->
+
 ## Entering a tariff
 
 With **Add tariff** on the SLEMS integration page you enter your electricity

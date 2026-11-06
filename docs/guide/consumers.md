@@ -2,6 +2,21 @@
 
 [Back to the README](../../README.md#consumers) · [Deutsch](consumers.de.md)
 
+<!-- toc -->
+
+- [Settings](#settings)
+- [Release for an automation of your own](#release-for-an-automation-of-your-own)
+  - [Heat pump with release (hot water)](#heat-pump-with-release-hot-water)
+- [Further settings and behaviour](#further-settings-and-behaviour)
+- [Current control](#current-control)
+- [Car at the wallbox](#car-at-the-wallbox)
+- [Temperature sensors of the storage](#temperature-sensors-of-the-storage)
+- [Battery support](#battery-support)
+- [Role in the feed-in cap](#role-in-the-feed-in-cap)
+- [Daily target](#daily-target)
+
+<!-- /toc -->
+
 Every consumer needs its own power **and** energy sensor.
 
 Which consumers to add: the ones SLEMS controls (heating rod, wallbox,
