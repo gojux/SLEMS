@@ -532,6 +532,8 @@ def battery_entities(token: str) -> None:
                 "name": "Venus 3",
                 "soc_entity": "sensor.venus_3_state_of_charge",
                 "power_entity": "sensor.venus_3_ac_power",
+                # Register 30006 of the Venus reports charging negative.
+                "power_inverted": True,
                 "battery_control": "split",
             },
             "ha_split": {

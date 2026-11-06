@@ -93,7 +93,7 @@ Zellausgleich und die Phase eines laufenden Ausgleichs.
 
 ## Reiter Verbraucher
 
-![Reiter Verbraucher: Wärmepumpe nur gemessen, Heizstab mit Einstellungen und Tagesziel](../images/dashboard_consumers_de.png)
+![Reiter Verbraucher: Wärmepumpe mit Warmwasser-Steuerung, Heizstab mit Einstellungen, zwei Wallboxen](../images/dashboard_consumers_de.png)
 
 Eine Karte je Verbraucher mit den wichtigen Werten: aktuelle Leistung,
 Temperatur, **Zeitfenster** (das geplante Fenster, sonst die eingestellte Zeit),
@@ -115,7 +115,7 @@ Plan des Tagesziels und die Batterie-Unterstützung.
 
 ## Simulation
 
-![Simulation: Tagesplan ohne Einspeisebegrenzung im Vergleich zu den aktuellen Einstellungen](../images/dashboard_simulation_de.png)
+![Simulation: der Rest des Tages mit doppelter PV-Prognose im Vergleich zu den aktuellen Einstellungen](../images/dashboard_simulation_de.png)
 
 Andere Einstellungen ausprobieren, ohne etwas zu ändern.
 

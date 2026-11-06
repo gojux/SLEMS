@@ -86,7 +86,7 @@ of a running one.
 
 ## Consumers tab
 
-![Consumers tab: heat pump measured only, heating rod with its settings and daily target](../images/dashboard_consumers_en.png)
+![Consumers tab: heat pump with its hot water control, heating rod with its settings, two wallboxes](../images/dashboard_consumers_en.png)
 
 One card per consumer with the important values: current power, temperature,
 **Time window** (the planned window, otherwise the set time), **Energy needed**
@@ -107,7 +107,7 @@ support.
 
 ## Simulation
 
-![Simulation: day plan without the feed-in cap compared with the current settings](../images/dashboard_simulation_en.png)
+![Simulation: the rest of today with a doubled PV forecast compared with the current settings](../images/dashboard_simulation_en.png)
 
 Try other settings without changing anything.
 
