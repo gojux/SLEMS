@@ -2547,8 +2547,9 @@ values with their date and run it again; earlier price levels stay.
 python3 tools/at_grid_templates.py
 ```
 
-`dev/readme_charts.py` creates the charts of the README section *Which option
-when?* (`docs/images/<scenario>_<language>.svg`) from the SLEMS state of charge
+`dev/readme_charts.py` creates the charts of the section *Which option when?*
+of the control guide (`docs/guide/control.md`, images in
+`docs/images/<scenario>_<language>.svg`) from the SLEMS state of charge
 projection with example data; after changes to the planning run it again
 (two steps: simulate in the tests container, render on the host; see its
 docstring).

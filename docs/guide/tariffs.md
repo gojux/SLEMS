@@ -138,7 +138,7 @@ from the recorded quarter hours; hours before the recording only have their
 hourly mean, which is lower than their highest quarter hour, so the
 comparison marks months in which such an hour could hide a quarter hour
 above the billed power (its mean × 4 is above it). How SLEMS keeps the peak low: see
-[Import peak shaving and power price](../../README.md#import-peak-shaving-and-power-price).
+[Import peak shaving and power price](control.md#import-peak-shaving-and-power-price).
 
 ## Dynamic tariffs and market prices
 

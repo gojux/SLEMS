@@ -632,7 +632,7 @@
       "step": {
         "user": {
           "title": "Add tariff",
-          "description": "Enter the tariff line by line, or paste it as YAML (an export of SLEMS or the answer of an AI, see the README).",
+          "description": "Enter the tariff line by line, or paste it as YAML (an export of SLEMS or the answer of an AI, see the tariff guide).",
           "menu_options": {
             "details": "Enter manually",
             "elcom": "From ElCom (Switzerland)",

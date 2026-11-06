@@ -146,7 +146,7 @@ Stundenmittel, das niedriger ist als ihre höchste Viertelstunde, deshalb
 markiert der Vergleich Monate, in denen eine solche Stunde eine Viertelstunde
 über der verrechneten Leistung verbergen könnte (ihr Mittel × 4 liegt
 darüber). Wie SLEMS die Spitze niedrig hält: siehe
-[Bezugsspitzen abfangen und Leistungspreis](../../README.de.md#bezugsspitzen-abfangen-und-leistungspreis).
+[Bezugsspitzen abfangen und Leistungspreis](control.de.md#bezugsspitzen-abfangen-und-leistungspreis).
 
 ## Dynamische Tarife und Börsenpreise
 

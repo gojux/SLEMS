@@ -632,7 +632,7 @@
       "step": {
         "user": {
           "title": "Tarif hinzufügen",
-          "description": "Gib den Tarif Posten für Posten ein oder füge ihn als YAML ein (ein Export aus SLEMS oder die Antwort einer KI, siehe README).",
+          "description": "Gib den Tarif Posten für Posten ein oder füge ihn als YAML ein (ein Export aus SLEMS oder die Antwort einer KI, siehe Anleitung Tarife).",
           "menu_options": {
             "details": "Manuell eingeben",
             "elcom": "Von der ElCom (Schweiz)",

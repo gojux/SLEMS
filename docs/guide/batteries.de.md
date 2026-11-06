@@ -435,7 +435,7 @@ Geprüft wird:
   Leistung, ist die Prüfung unklar.
 
 Misst der Smart Meter jede Phase, lernt der Test auch die
-[Phase](../../README.de.md#phase-von-batterien-und-verbrauchern) der Batterie: die Phase, an der sich die Schritte
+[Phase](control.de.md#phase-von-batterien-und-verbrauchern) der Batterie: die Phase, an der sich die Schritte
 zeigen.
 
 Schwankt der Hausverbrauch während des Tests stark, sind die Prüfungen am Smart
@@ -487,7 +487,7 @@ Die Zeiten bis 60 % gehen als Messungen in die Reaktionszeit der Batterie ein.
 Ohne Probeschritt gilt wie bisher die Vorgabe des Treibers (Marstek Venus
 0,45 s) bzw. die Hälfte der gelernten Reaktionszeit. Meldet der Smart Meter
 seine Phasen so schnell wie die Gesamtleistung, zeigt der Schritt auch die
-[Phase](../../README.de.md#phase-von-batterien-und-verbrauchern) der Batterie.
+[Phase](control.de.md#phase-von-batterien-und-verbrauchern) der Batterie.
 
 SLEMS misst von selbst, sobald das Netz ruhig ist:
 
