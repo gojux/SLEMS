@@ -241,7 +241,7 @@ das Laden von E-Autos spezialisiert und ergänzt SLEMS gut (siehe
 | Verbraucher mit eigenem Thermostat: Pausen erkannt, ihre Leistung geht solange an die Batterien | ✅ |
 | Temperaturfühler eines Speichers: gelernte Energie pro Grad, noch aufnehmbare Energie, gelernte Abkühlung je Stunde | ✅ |
 | Einsatz eines Verbrauchers in der Einspeisebegrenzung (unterstützend, normal, nie) | ✅ |
-| Tagesziele: Laufzeit, Freigabezeit, Energie, Temperatur oder Ladestand des Autos, mit frühestem Start, Frist und Quelle (Überschuss, Batterie, Netz) | ✅ |
+| Tagesziele: Laufzeit, Freigabezeit, Energie, Temperatur oder Ladestand des Autos, mit frühestem Start, Frist und Quelle (Überschuss, Batterie, Netz); Temperaturziele mit Sicherheitsnetz (Minimum spätestens wieder nach einer eingestellten Zeit) | ✅ |
 | Batterie-Unterstützung je Verbraucher (immer, automatisch mit der Energie, die die Batterien übrig haben, nie) | ✅ |
 | Wallbox / evcc-Ladepunkt: Stromvorgabe in A mit Phasen, Start/Stopp ([Anleitung](docs/wallbox-evcc.de.md)) | ✅ (noch nicht mit einer echten Wallbox getestet) |
 | Auto an der Wallbox: Ladestand im Energiefluss, ohne angestecktes Auto keine Regelung und keine Planung, **Sofort laden** mit voller Leistung | ✅ (noch nicht mit einer echten Wallbox getestet) |
@@ -638,10 +638,6 @@ Nutzern mit einer echten Wallbox zur [evcc-Anleitung](docs/wallbox-evcc.de.md).
   Vorheizen und Vorkühlen als Freigabe mit Grenzen (höchste Temperatur,
   Offset, Dauer), nicht als Tagesziel. Die Prognose weiß, dass die vorgezogene
   Wärme später fehlt.
-- Temperatur-Tagesziele mit Sicherheitsnetz: fällt die Temperatur außerhalb
-  des Zeitfensters unter das Minimum (z. B. Warmwasser nach dem Duschen am
-  Abend), wird das Minimum innerhalb einer eingestellten Zeit wieder erreicht
-  statt erst zur Frist am nächsten Tag.
 
 **Batterien und Anlagen**
 

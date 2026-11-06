@@ -1282,9 +1282,13 @@ class PlannedConsumerPowerSensor(SlemsConsumerEntity, SensorEntity):
                 if target
                 and target.latest_start
                 and target.end
-                and (opens := window_opens(settings, target.latest_start, target.end))
+                and (opens := window_opens(settings, target.latest_start, target.end, net_since=target.net_since))
                 else None
             ),
+            # Safety net: below the minimum since, the minimum again by (the
+            # latest start and window refer to it then), None while it does not apply.
+            "target_net_since": target.net_since.isoformat() if target and target.net_since else None,
+            "target_net_until": target.end.isoformat() if target and target.net_since and target.end else None,
             # The forced run starts early in a cheaper window (price aware control).
             "target_price_window": bool(target and target.price_window),
             "target_last_result": progress.last_result,

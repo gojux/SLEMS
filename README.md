@@ -237,7 +237,7 @@ state of charge. evcc specialises in EV charging and complements SLEMS well
 | Consumers with their own thermostat: pauses recognised, their power goes to the batteries meanwhile | ✅ |
 | Temperature sensors of a storage: learned energy per degree, remaining capacity, learned cooling per hour | ✅ |
 | Role of a consumer in the feed-in cap (supporting, normal, never) | ✅ |
-| Daily targets: runtime, enabled time, energy, temperature or the car's state of charge, with earliest start, deadline and source (surplus, batteries, grid) | ✅ |
+| Daily targets: runtime, enabled time, energy, temperature or the car's state of charge, with earliest start, deadline and source (surplus, batteries, grid); temperature targets with a safety net (minimum again within a set time) | ✅ |
 | Battery support per consumer (always, automatic with the energy the batteries can spare, never) | ✅ |
 | Wallbox / evcc loadpoint: current set point in A with phases, start/stop ([guide](docs/wallbox-evcc.md)) | ✅ (not yet tested with a real wallbox) |
 | Car at the wallbox: state of charge in the energy flow, without a plugged in car no control and no planning, **Charge now** at full power | ✅ (not yet tested with a real wallbox) |
@@ -621,10 +621,6 @@ wallbox on the [evcc guide](docs/wallbox-evcc.md).
   cooling ahead as a release with limits (highest temperature, offset,
   duration), not as a daily target. The forecast knows that the heat drawn
   ahead is missing later.
-- Temperature targets with a safety net: if the temperature drops below the
-  minimum outside the target's window (e.g. hot water after showering in the
-  evening), the minimum is reached again within a set time instead of only
-  by the next day's deadline.
 
 **Batteries and installations**
 

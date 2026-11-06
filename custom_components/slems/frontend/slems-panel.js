@@ -262,6 +262,10 @@ const STRINGS = {
     hideSettings: "Hide settings",
     targetMin: "Minimum temperature",
     targetMax: "Target temperature",
+    targetMinAgain: "Minimum again within",
+    targetNetUntil: "minimum by {time}",
+    targetNetChip: "safety net",
+    laneNet: "safety net: minimum by {until} (since {from})",
     targetDeadline: "Until",
     targetSource: "Source",
     targetPriority: "Before the batteries when short",
@@ -289,7 +293,7 @@ const STRINGS = {
     laneForced: "forced {from}–{until}",
     laneRunning: "running, until about {until}",
     laneDone: "reached",
-    laneLegend: { period: "Period", release: "Release", surplus: "Surplus window", forced: "Forced", running: "Running", deadline: "Deadline" },
+    laneLegend: { period: "Period", net: "Safety net", release: "Release", surplus: "Surplus window", forced: "Forced", running: "Running", deadline: "Deadline" },
     targetLatestPrice: "from {time} in the cheapest window",
     targetForcedPrice: "running in the cheapest window",
     targetDone: "reached",
@@ -657,7 +661,7 @@ const STRINGS = {
       target_hours:
         "Hours the daily target needs per period (from one deadline to the next), in half hours. Runtime counts the time the consumer draws power (from 50 W; for a heat pump with hot water release only in hot water mode). Enabled time counts the time SLEMS has it switched on or released, also while it draws nothing (e.g. because its own thermostat or your automation has not started it yet).",
       target_type:
-        "Runtime: time the consumer draws power. Enabled time: time SLEMS has it switched on, for devices with their own control (a dehumidifier with a hygrostat). Energy: kWh. Temperature: minimum and target temperature of its storage (temperature sensors). State of charge: the car's at a wallbox (its sensor and battery capacity); once reached the wallbox stays off until the deadline. Counted from one deadline to the next; met from the surplus first. A temperature target applies from midnight (or the earliest start) to the deadline: after the deadline the consumer stays off until then, also with surplus.",
+        "Runtime: time the consumer draws power. Enabled time: time SLEMS has it switched on, for devices with their own control (a dehumidifier with a hygrostat). Energy: kWh. Temperature: minimum and target temperature of its storage (temperature sensors). State of charge: the car's at a wallbox (its sensor and battery capacity); once reached the wallbox stays off until the deadline. Counted from one deadline to the next; met from the surplus first. A temperature target applies from midnight (or the earliest start) to the deadline: after the deadline the consumer stays off until then, also with surplus (unless **Minimum again within** is set and the temperature falls below the minimum).",
       release_window:
         "Once opened, the release stays open at least this long, also without surplus, until the daily target is met or its deadline has passed (e.g. so your automation can wait for a compressor run of the heat pump). If it starts during this time, a part may come from the batteries or the grid. With the source **Surplus only** this applies only while the consumer runs: until then the release closes without surplus and opens again with new surplus. SLEMS plans only the energy the consumer really takes; unlike the minimum runtime the release duration does not count for **Avoid short runs**. 0: off.",
       surplus_window:
@@ -666,6 +670,8 @@ const STRINGS = {
         "The release also opens by the **Release duration** before the latest start, also without surplus, but not forced. It is forced only from the latest start, if your automation has not started the consumer by then. Only with a source beyond the surplus; such a run uses the batteries or the grid like the forced one, just earlier.",
       target_earliest_enabled:
         "Not switched on before the earliest start, also with surplus (e.g. a dehumidifier only from 10:00). Counted until the deadline; the latest start is never before it.",
+      target_min_again:
+        "Safety net: if the temperature falls below the minimum while the deadline is further away than this (e.g. after showering in the evening), SLEMS sets a replacement target: the minimum again by then. First from the surplus, with the price aware control in the cheapest window, at the end forced, following the **Source** (with **Surplus only** without a forced run). It ends once the minimum is reached; if it is not reached in time, a notification says so. 0: off, after the deadline the consumer waits for the next period as before.",
       target_sensor:
         "Which temperature the minimum and target temperature apply to: the mean of both sensors, or one of them (e.g. the upper sensor for the hot water at the tap). Sensor 1 is the temperature sensor of the storage, sensor 2 the second one in the consumer's configuration. The latest start is estimated with the energy per degree learned for the chosen sensor (the mean's until it is learned).",
       battery_support:
@@ -1048,6 +1054,10 @@ const STRINGS = {
     hideSettings: "Einstellungen ausblenden",
     targetMin: "Mindesttemperatur",
     targetMax: "Zieltemperatur",
+    targetMinAgain: "Minimum spätestens wieder nach",
+    targetNetUntil: "Minimum bis {time}",
+    targetNetChip: "Sicherheitsnetz",
+    laneNet: "Sicherheitsnetz: Minimum bis {until} (seit {from})",
     targetDeadline: "Bis",
     targetSource: "Quelle",
     targetPriority: "Vor der Batterie, wenn knapp",
@@ -1075,7 +1085,7 @@ const STRINGS = {
     laneForced: "erzwungen {from}–{until}",
     laneRunning: "läuft, bis ca. {until}",
     laneDone: "erreicht",
-    laneLegend: { period: "Zeitraum", release: "Freigabe", surplus: "Überschuss-Fenster", forced: "Erzwungen", running: "Läuft", deadline: "Frist" },
+    laneLegend: { period: "Zeitraum", net: "Sicherheitsnetz", release: "Freigabe", surplus: "Überschuss-Fenster", forced: "Erzwungen", running: "Läuft", deadline: "Frist" },
     targetLatestPrice: "ab {time} im günstigsten Fenster",
     targetForcedPrice: "läuft im günstigsten Fenster",
     targetDone: "erreicht",
@@ -1443,7 +1453,7 @@ const STRINGS = {
       target_hours:
         "Wie viele Stunden das Tagesziel je Zeitraum braucht (von einer Frist zur nächsten), in halben Stunden. Bei Laufzeit zählt die Zeit, in der der Verbraucher Leistung zieht (ab 50 W; bei einer Wärmepumpe mit Warmwasser-Freigabe nur im Warmwasserbetrieb). Bei Freigabezeit zählt die Zeit, in der SLEMS ihn eingeschaltet bzw. freigegeben hat, auch wenn er dabei nichts zieht (z. B. weil sein eigener Thermostat oder deine Automation ihn noch nicht gestartet hat).",
       target_type:
-        "Laufzeit: Zeit, in der der Verbraucher Leistung zieht. Freigabezeit: Zeit, in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung (Luftentfeuchter mit Hygrostat). Energie: kWh. Temperatur: Mindest- und Zieltemperatur seines Speichers (Temperaturfühler). Ladestand: der des Autos an einer Wallbox (sein Sensor und die Akkukapazität); erreicht, bleibt die Wallbox bis zur Frist aus. Gezählt von Frist zu Frist; zuerst aus dem Überschuss. Ein Temperaturziel gilt von Mitternacht (oder dem frühesten Beginn) bis zur Frist: Nach der Frist bleibt der Verbraucher bis dahin aus, auch mit Überschuss.",
+        "Laufzeit: Zeit, in der der Verbraucher Leistung zieht. Freigabezeit: Zeit, in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung (Luftentfeuchter mit Hygrostat). Energie: kWh. Temperatur: Mindest- und Zieltemperatur seines Speichers (Temperaturfühler). Ladestand: der des Autos an einer Wallbox (sein Sensor und die Akkukapazität); erreicht, bleibt die Wallbox bis zur Frist aus. Gezählt von Frist zu Frist; zuerst aus dem Überschuss. Ein Temperaturziel gilt von Mitternacht (oder dem frühesten Beginn) bis zur Frist: Nach der Frist bleibt der Verbraucher bis dahin aus, auch mit Überschuss (außer **Minimum spätestens wieder nach** ist gesetzt und die Temperatur fällt unter das Minimum).",
       release_window:
         "Einmal geöffnet, bleibt die Freigabe mindestens so lange offen, auch ohne Überschuss, bis das Tagesziel erreicht oder seine Frist vorbei ist (z. B. damit deine Automation auf einen Kompressorlauf der Wärmepumpe warten kann). Startet sie in dieser Zeit, kann ein Teil aus Batterien oder Netz kommen. Mit der Quelle **Nur Überschuss** gilt das nur, solange der Verbraucher läuft: Bis dahin schließt die Freigabe ohne Überschuss und öffnet bei neuem Überschuss wieder. SLEMS plant nur die Energie, die der Verbraucher wirklich aufnimmt; anders als die Mindestlaufzeit zählt die Freigabedauer nicht für **Takten vermeiden**. 0: aus.",
       surplus_window:
@@ -1452,6 +1462,8 @@ const STRINGS = {
         "Die Freigabe öffnet zusätzlich um die **Freigabedauer** vor dem spätesten Start, auch ohne Überschuss, aber nicht erzwungen. Erzwungen wird erst ab dem spätesten Start, wenn deine Automation den Verbraucher bis dahin nicht gestartet hat. Nur mit einer Quelle über den Überschuss hinaus; so ein Lauf nutzt Batterien oder Netz wie der erzwungene, nur früher.",
       target_earliest_enabled:
         "Vor dem frühesten Beginn wird der Verbraucher nicht eingeschaltet, auch nicht mit Überschuss (z. B. ein Luftentfeuchter erst ab 10:00). Gezählt bis zur Frist; die späteste Startzeit liegt nie davor.",
+      target_min_again:
+        "Sicherheitsnetz: Fällt die Temperatur unter das Minimum und ist die Frist weiter weg als diese Zeit (z. B. nach dem Duschen am Abend), setzt SLEMS ein Ersatzziel: das Minimum bis dahin wieder. Zuerst aus dem Überschuss, mit der Preissteuerung im günstigsten Fenster, am Ende erzwungen, nach der **Quelle** (mit **Nur Überschuss** ohne erzwungenen Lauf). Es endet, sobald das Minimum erreicht ist; wird es nicht rechtzeitig erreicht, meldet das eine Benachrichtigung. 0: aus, nach der Frist wartet der Verbraucher wie bisher auf den nächsten Zeitraum.",
       target_sensor:
         "Für welche Temperatur Mindest- und Zieltemperatur gelten: das Mittel beider Fühler oder einer davon (z. B. der obere Fühler für das Warmwasser am Hahn). Fühler 1 ist der Temperaturfühler des Speichers, Fühler 2 der zweite in der Konfiguration des Verbrauchers. Die späteste Startzeit wird mit der für den gewählten Fühler gelernten Energie pro Grad geschätzt (bis sie gelernt ist, mit der des Mittelwerts).",
       battery_support:
@@ -4332,6 +4344,7 @@ class SlemsPanel extends HTMLElement {
     const c = this._colors;
     return {
       period: `background:${c.consumer};opacity:0.3`,
+      net: `border:2px dashed ${c.consumer};box-sizing:border-box`,
       release: `background:${c.consumer};opacity:0.6`,
       surplus: `border:2px solid ${c.pv};box-sizing:border-box`,
       forced: `background:${c.consumer};opacity:0.9`,
@@ -4344,6 +4357,8 @@ class SlemsPanel extends HTMLElement {
    * axis of the chart: its period (faint), the release (the planned surplus
    * window and the window before the forced run as one span where they
    * overlap), the surplus window outlined, the forced run and the deadline.
+   * Under the safety net its replacement target is outlined dashed, with a
+   * dashed line at its end; release and forced run then refer to it.
    * While a hot water charge runs the release it started in stays, the
    * release still to come and the forced run give way to the charge until
    * about the target temperature; an interrupted charge brings them back.
@@ -4369,13 +4384,16 @@ class SlemsPanel extends HTMLElement {
       const end = hourOf(attrs.target_deadline);
       // A temperature target without an earliest start applies from midnight.
       const start = attrs.target_earliest ? hourOf(attrs.target_earliest) : attrs.target_type === "temperature" ? Math.floor(end / 24) * 24 : end - 24;
-      if (end <= 0 || start >= 24) continue;
+      // Safety net: the replacement target, to which the latest start and window then refer.
+      const net = attrs.target_net_until ? [hourOf(attrs.target_net_since), hourOf(attrs.target_net_until)] : null;
+      if ((end <= 0 || start >= 24) && !(net && visible(...net))) continue;
+      const runTo = net ? net[1] : end;
       const done = attrs.target_mode === "done";
       const source = this._state("target_source", consumer.device_id)?.state;
       // Also a reached target, if its storage cools below the minimum by the deadline.
       const latest = source !== "surplus" && attrs.target_latest_start ? hourOf(attrs.target_latest_start) : null;
       const opens = latest !== null && attrs.target_window_opens ? hourOf(attrs.target_window_opens) : null;
-      const runEnd = latest !== null ? Math.min(end, latest + (attrs.target_run_s ? attrs.target_run_s / 3600 : end - latest)) : null;
+      const runEnd = latest !== null ? Math.min(runTo, latest + (attrs.target_run_s ? attrs.target_run_s / 3600 : runTo - latest)) : null;
       const clock = (hour) => this._time(new Date(dayStart.getTime() + hour * 3600000).toISOString());
       const label = (template, from, until) => template.replace("{from}", clock(from)).replace("{until}", clock(until));
       const surplus = attrs.target_surplus_window ? attrs.target_surplus_window.map(hourOf) : null;
@@ -4404,6 +4422,7 @@ class SlemsPanel extends HTMLElement {
       if (forced) part("forced", ...forced, t.laneForced);
       if (surplus) part("surplus", ...surplus, t.laneSurplus, true);
       for (const [from, until] of merged) part("release", from, until, t.laneWindow);
+      if (net) part("net", ...net, t.laneNet, true);
       part("period", start, end, done ? `${t.lanePeriod} · ${t.laneDone}` : t.lanePeriod);
       if (!parts.length) continue;
       this._laneSpans.push({
@@ -4418,24 +4437,28 @@ class SlemsPanel extends HTMLElement {
           forced: `fill="${c.consumer}" fill-opacity="0.9"`,
           running: `fill="url(#lane-running)"`,
         }[kind];
+        const stroke = kind === "net" ? `stroke="${c.consumer}" stroke-dasharray="3 2"` : `stroke="${c.pv}"`;
         const shape = outline
-          ? `x="${x(from) + 0.75}" y="0.75" width="${Math.max(2, x(until) - x(from) - 1.5)}" height="8.5" fill="none" stroke="${c.pv}" stroke-width="1.5"`
+          ? `x="${x(from) + 0.75}" y="0.75" width="${Math.max(2, x(until) - x(from) - 1.5)}" height="8.5" fill="none" ${stroke} stroke-width="1.5"`
           : `x="${x(from)}" y="0" width="${Math.max(2, x(until) - x(from))}" height="10" ${fill}`;
         return `<rect ${shape} rx="3"><title>${escapeHtml(`${consumer.name}: ${label}`)}</title></rect>`;
       };
       // Drawn from the background up: the outline of the surplus window on top.
-      const order = ["period", "release", "forced", "running", "surplus"];
+      const order = ["period", "release", "forced", "running", "net", "surplus"];
       const shapes = [...parts].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind)).map(rect);
       if (end > 0 && end <= 24) {
         kinds.add("deadline");
         shapes.push(`<line x1="${x(end)}" x2="${x(end)}" y1="-3" y2="13" stroke="${c.consumer}" stroke-width="2"/>`);
+      }
+      if (net && net[1] > 0 && net[1] <= 24) {
+        shapes.push(`<line x1="${x(net[1])}" x2="${x(net[1])}" y1="-3" y2="13" stroke="${c.consumer}" stroke-width="2" stroke-dasharray="3 2"/>`);
       }
       lanes.push({ name: `${consumer.name}${done ? ` · ${t.laneDone}` : ""}`, shapes: shapes.join("") });
     }
     if (!lanes.length) return "";
     const laneH = 30;
     const height = lanes.length * laneH + 4;
-    const legend = ["period", "release", "surplus", "forced", "running", "deadline"]
+    const legend = ["period", "net", "release", "surplus", "forced", "running", "deadline"]
       .filter((kind) => kinds.has(kind))
       .map((kind) => `<span><span class="swatch" style="${this._laneSwatch(kind)}"></span>${escapeHtml(t.laneLegend[kind])}</span>`)
       .join("");
@@ -5620,6 +5643,7 @@ class SlemsPanel extends HTMLElement {
             attrs.resting ? t.resting : "",
             attrs.running_on_its_own ? t.runningOnItsOwn : "",
             attrs.charge_now ? t.chargeNowChip : "",
+            attrs.target_net_until ? t.targetNetChip : "",
             attrs.target_mode === "boost" ? t.targetBoostChip : "",
             attrs.target_mode === "forced" ? t.targetForcedChip : "",
           ]
@@ -5720,7 +5744,7 @@ class SlemsPanel extends HTMLElement {
     const heater = c.type === "heating_rod" || this._hotWater(c);
     const windowText = targeted ? this._targetWindowText(attrs, source) : "";
     const energy = targeted && heater ? this._targetEnergyText(attrs) : "";
-    const state = targeted ? this._targetStateText(attrs) : "";
+    const state = targeted ? this._targetStateText(attrs, source) : "";
     const row = (label, text) => (text ? this._row(label, escapeHtml(text), planned?.entity_id) : "");
     return (
       row(t.temperature, temperature) +
@@ -5752,6 +5776,7 @@ class SlemsPanel extends HTMLElement {
     if (this._targetWindowPlanned(attrs, source)) {
       return range(attrs.target_window_opens, attrs.target_latest_start);
     }
+    if (attrs.target_net_until) return this._t.targetNetUntil.replace("{time}", this._clock(attrs.target_net_until));
     if (!attrs.target_deadline) return "";
     // A temperature target applies from midnight without an earliest start.
     const earliest = attrs.target_earliest ? new Date(attrs.target_earliest) : null;
@@ -5782,8 +5807,11 @@ class SlemsPanel extends HTMLElement {
   }
 
   /** "1,5 / 2 h · wartet bis 10:30"; of a temperature target only the state. */
-  _targetStateText(attrs) {
+  _targetStateText(attrs, source) {
     const parts = attrs.target_type === "temperature" ? [] : [this._targetProgressText(attrs)];
+    // Safety net: the replacement target, unless the time window row shows it already.
+    const windowShowsNet = !this._targetWindowPlanned(attrs, source) && !attrs.target_surplus_window;
+    if (attrs.target_net_until && !windowShowsNet) parts.push(this._t.targetNetUntil.replace("{time}", this._clock(attrs.target_net_until)));
     return [...parts, ...this._targetModeTexts(attrs)].join(" · ");
   }
 
@@ -5849,7 +5877,8 @@ class SlemsPanel extends HTMLElement {
       controls.push(
         [s("target_sensor"), t.targetSensor],
         [s("target_min_temperature"), t.targetMin],
-        [s("target_max_temperature"), t.targetMax]
+        [s("target_max_temperature"), t.targetMax],
+        [s("target_min_again"), t.targetMinAgain]
       );
     }
     if (type !== "none") {
@@ -5890,7 +5919,12 @@ class SlemsPanel extends HTMLElement {
     } else {
       parts.push(this._targetProgressText(attrs));
     }
-    parts.push(t.targetUntil.replace("{time}", clock(attrs.target_deadline)));
+    // Under the safety net the replacement target instead of the deadline.
+    parts.push(
+      attrs.target_net_until
+        ? t.targetNetUntil.replace("{time}", clock(attrs.target_net_until))
+        : t.targetUntil.replace("{time}", clock(attrs.target_deadline))
+    );
     if (attrs.plugged === false && mode !== "done") parts.push(t.unplugged);
     const energy = attrs.target_energy_wh;
     if (mode !== "done" && energy > 0) {
@@ -5934,7 +5968,7 @@ class SlemsPanel extends HTMLElement {
     const mode = attrs.target_mode;
     if (!attrs.target_type || attrs.target_type === "none" || mode === "none" || mode === "forced") return "";
     const parts = [];
-    if (attrs.target_forecast_c !== null && attrs.target_forecast_c !== undefined) {
+    if (attrs.target_forecast_c !== null && attrs.target_forecast_c !== undefined && !attrs.target_net_until) {
       const temperature = `${new Intl.NumberFormat(this._hass?.locale?.language || "en", { maximumFractionDigits: 1 }).format(attrs.target_forecast_c)} °C`;
       parts.push(t.planForecast.replace("{temperature}", temperature).replace("{time}", this._clock(attrs.target_deadline)));
     }

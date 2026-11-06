@@ -264,3 +264,25 @@ def test_driver_issues_become_repairs() -> None:
         reported = {}
         reporter.update(1.0)
         assert issue not in registry.issues
+
+
+async def test_safety_net_notification() -> None:
+    created = []
+    hass = SimpleNamespace(config=SimpleNamespace(language="de"))
+    reporter = problems.ProblemReporter(hass, coordinator([]))
+
+    async def texts():
+        return lambda key, **values: f"{key}: " + ", ".join(f"{k}={v}" for k, v in sorted(values.items()))
+
+    notification = SimpleNamespace(async_create=lambda _hass, message, title, notification_id: created.append(
+        (message, title, notification_id)
+    ))
+    with patch.object(reporter, "_texts", texts), patch.object(problems, "persistent_notification", notification):
+        await reporter.async_notify_net_missed("abc", "Belaria", 38.04, 42, "01:30")
+        await reporter.async_notify_net_missed("abc", "Belaria", 38, 42, "01:30", blocked_s=1200)
+    message, title, notification_id = created[0]
+    assert message.startswith("net_missed_message:") and "got=38,0 °C" in message and "goal=42,0 °C" in message
+    assert "until=01:30" in message and title.startswith("net_missed_title:")
+    # Its own notification, next to the one of the daily target.
+    assert notification_id == f"{DOMAIN}_net_abc"
+    assert created[1][0].startswith("net_missed_blocked_message:") and "blocked=20 min" in created[1][0]

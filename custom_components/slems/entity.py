@@ -69,6 +69,7 @@ HOT_WATER_KEYS = frozenset(
         "target_energy",
         "target_min_temperature",
         "target_max_temperature",
+        "target_min_again",
         "target_deadline",
         "target_earliest",
         "release",

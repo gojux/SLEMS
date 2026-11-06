@@ -426,6 +426,26 @@ Je gesteuertem Verbraucher, auf seiner Karte unter **Tagesziel**.
   erzwungenen Lauf (und eine Freigabe davor) für diese Temperatur, auch
   solange er noch darüber liegt und vor dem frühesten Beginn. Die Zeile
   **Plan** zeigt die Vorhersage, z. B. **ohne Heizen um 15:30 ca. 37 °C**.
+- **Minimum spätestens wieder nach** (Temperaturziel, optional, z. B. 3 h;
+  0: aus): ein Sicherheitsnetz für die Zeit, die das Ziel nicht abdeckt,
+  etwa Warmwasser nach dem Duschen am Abend. Fällt die Temperatur unter das
+  Minimum und ist die Frist weiter weg als diese Zeit (nach der Frist, vor
+  dem frühesten Beginn oder früh im Zeitraum), setzt SLEMS ein Ersatzziel:
+  das Minimum bis dahin wieder (z. B. um 20:00 darunter gefallen → Minimum
+  bis 23:00, auch über Mitternacht). Es wird wie eine Frist erfüllt: zuerst
+  aus dem Überschuss mit Vorrang, mit der Preissteuerung im günstigsten
+  Netzfenster, am Ende erzwungen, nach der **Quelle** (mit **Nur Überschuss**
+  ohne erzwungenen Lauf). Es endet, sobald das Minimum erreicht ist; danach
+  wartet der Verbraucher wieder wie gewohnt. Wird das Minimum nicht
+  rechtzeitig erreicht, bleibt er erzwungen, und eine Benachrichtigung
+  **Minimum von … nicht rechtzeitig erreicht** meldet das einmal (nicht, wenn
+  SLEMS den Verbraucher in der Zeit nicht steuern konnte oder sein eigener
+  Thermostat ablehnte; eine externe Sperre nennt sie mit ihrer Dauer). Das
+  Tagesziel selbst (erreicht, verfehlt, Zieltemperatur) bleibt davon
+  unberührt. Solange es gilt, zeigt die Karte den Chip **Sicherheitsnetz** und
+  **Minimum bis 23:00** statt der Frist, die Zeile **Plan** Freigabe und
+  erzwungenen Lauf dafür, und die Bahn unter dem Tagesdiagramm das Ersatzziel
+  gestrichelt umrandet mit einem gestrichelten Strich an seinem Ende.
 - **Ladestand**: Ziel-Ladestand des Autos bis zur Frist (Standard 80 %). Die
   noch nötige Energie ist der fehlende Ladestand × Akkukapazität, mit 10 %
   Ladeverlusten (z. B. 40 % von 60 kWh: ca. 26,7 kWh aus dem Netz); daraus

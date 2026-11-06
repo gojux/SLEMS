@@ -4620,7 +4620,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if kept is not None and kept[2] == state.end and kept[0] <= local_now < kept[1]:
             window = kept[:2]
         else:
-            start = max(local_now, window_start(settings, state.end) or local_now)
+            period_start = None if state.net_since is not None else window_start(settings, state.end)
+            start = max(local_now, period_start or local_now)
             # Up to the forced run: from then on it runs anyway.
             end = state.end
             if settings.source is not TargetSource.SURPLUS and state.latest_start is not None:
@@ -4774,6 +4775,23 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             and (start is None or local_now >= start)
         ):
             progress.track_temperature(settings, temperature)
+        # Safety net: also after the deadline and before the earliest start.
+        if (
+            progress.track_net(settings, temperature, local_now)
+            and not progress.net_uncontrolled
+            and not progress.net_declined
+            and temperature is not None
+            and progress.net_until is not None
+        ):
+            self.config_entry.async_create_background_task(
+                self.hass,
+                self.problems.async_notify_net_missed(
+                    consumer.subentry_id, consumer.name, temperature, settings.min_temp_c,
+                    dt_util.as_local(progress.net_until).strftime("%H:%M"),
+                    progress.net_blocked_s,
+                ),
+                "slems safety net notification",
+            )
         # Only if SLEMS could control the consumer all the period and it did
         # not decline power (saturated or resting: it needed no more).
         if result == "missed" and end is not None and progress.last_controlled and not progress.last_declined:
@@ -5016,14 +5034,19 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 continue
             if demand is not None:
                 self.target_demands.append(demand)
-            following = next_period_demand(
-                settings,
-                self.target_states[consumer.subentry_id].end or period_end(local_now, settings.deadline),
-                power_w=power,
-                estimate_wh=estimate,
-            )
+            normal_end = end or period_end(local_now, settings.deadline)
+            following = next_period_demand(settings, normal_end, power_w=power, estimate_wh=estimate)
             if following is not None:
                 self.target_demands.append(following)
+            # Under the safety net before its period: the period itself too.
+            if (
+                self.target_states[consumer.subentry_id].net_since is not None
+                and local_now < (window_start(settings, normal_end) or local_now)
+                and (current := next_period_demand(
+                    settings, normal_end - timedelta(days=1), power_w=power, estimate_wh=estimate
+                )) is not None
+            ):
+                self.target_demands.append(current)
 
     def _live_outdoor_c(self, snapshot: SystemSnapshot) -> float | None:
         """Outdoor temperature now: the configured sensor, else the weather entity."""
@@ -5139,7 +5162,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
         if start is None:
             return state
-        opens = window_opens(settings, start, state.end)
+        opens = window_opens(settings, start, state.end, net_since=state.net_since)
         if local_now >= start:
             mode = TargetMode.FORCED
         elif opens is not None and local_now >= opens:

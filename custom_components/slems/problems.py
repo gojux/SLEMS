@@ -516,6 +516,40 @@ class ProblemReporter:
             notification_id=f"{DOMAIN}_target_{subentry_id}",
         )
 
+    async def async_notify_net_missed(
+        self,
+        subentry_id: str,
+        name: str,
+        temperature_c: float,
+        min_c: float,
+        until: str,
+        blocked_s: float = 0.0,
+    ) -> None:
+        """Notification: the safety net of a temperature target did not bring
+        the storage back to its minimum in time, with the time it was blocked
+        externally meanwhile."""
+        text = await self._texts()
+        comma = self._hass.config.language.startswith("de")
+
+        def number(value: float) -> str:
+            formatted = f"{value:.1f}"
+            return formatted.replace(".", ",") if comma else formatted
+
+        placeholders = {
+            "name": name,
+            "got": f"{number(temperature_c)} °C",
+            "goal": f"{number(min_c)} °C",
+            "until": until,
+            "blocked": _duration(blocked_s),
+        }
+        key = "net_missed_blocked_message" if blocked_s >= 60 else "net_missed_message"
+        persistent_notification.async_create(
+            self._hass,
+            text(key, **placeholders),
+            title=text("net_missed_title", **placeholders),
+            notification_id=f"{DOMAIN}_net_{subentry_id}",
+        )
+
 
 def _check_line(text, check: Check) -> str:
     """A check with its outcome and the registers it found, e.g. "42020: 625 → 0 (48 s)"."""

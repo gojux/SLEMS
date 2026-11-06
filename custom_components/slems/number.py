@@ -528,6 +528,18 @@ TARGET_NUMBERS: tuple[TargetNumberDescription, ...] = (
         mode=NumberMode.BOX,
         entity_category=EntityCategory.CONFIG,
     ),
+    # Safety net of a temperature target (see consumer_targets), 0: off.
+    TargetNumberDescription(
+        key="target_min_again",
+        translation_key="target_min_again",
+        attribute="min_again_h",
+        native_unit_of_measurement=UnitOfTime.HOURS,
+        native_min_value=0,
+        native_max_value=12,
+        native_step=0.5,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+    ),
     TargetNumberDescription(
         key="charge_now_soc",
         translation_key="charge_now_soc",
@@ -554,8 +566,12 @@ TARGET_NUMBERS: tuple[TargetNumberDescription, ...] = (
 
 
 def _has_target_number(consumer: ConsumerConfig, description: TargetNumberDescription) -> bool:
-    """Temperatures only with temperature sensors, the states of charge only with the car's sensor."""
-    if description.native_unit_of_measurement == UnitOfTemperature.CELSIUS:
+    """Temperatures and the safety net only with temperature sensors, the
+    states of charge only with the car's sensor."""
+    if (
+        description.native_unit_of_measurement == UnitOfTemperature.CELSIUS
+        or description.attribute == "min_again_h"
+    ):
         return bool(consumer.temperature_entity_ids)
     if description.attribute in ("target_soc_pct", "charge_now_soc_pct"):
         return consumer.vehicle_soc_entity_id is not None

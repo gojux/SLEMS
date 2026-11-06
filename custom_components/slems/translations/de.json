@@ -1623,6 +1623,9 @@
       "target_max_temperature": {
         "name": "Zieltemperatur"
       },
+      "target_min_again": {
+        "name": "Minimum spätestens wieder nach"
+      },
       "target_soc": {
         "name": "Ziel-Ladestand"
       },
@@ -1649,6 +1652,9 @@
       },
       "hot_water_target_max_temperature": {
         "name": "Warmwasser-Zieltemperatur"
+      },
+      "hot_water_target_min_again": {
+        "name": "Warmwasser-Minimum spätestens wieder nach"
       },
       "min_power": {
         "name": "Mindestleistung"
@@ -1790,6 +1796,15 @@
     },
     "target_missed_unplugged_message": {
       "message": "{name} hat bis {deadline} {got} von {goal} erreicht; in dieser Zeit war {unplugged} kein Auto angesteckt. Stecke das Auto rechtzeitig an, oder lege die Uhrzeit des Ziels auf die Zeit, zu der es meist angesteckt ist."
+    },
+    "net_missed_title": {
+      "message": "Minimum von {name} nicht rechtzeitig erreicht"
+    },
+    "net_missed_message": {
+      "message": "{name} hatte um {until} {got} statt mindestens {goal}. SLEMS heizt weiter, bis das Minimum erreicht ist. Kommt das öfter vor, prüfe Quelle und Leistung auf seiner Karte, oder gib mit **Minimum spätestens wieder nach** mehr Zeit."
+    },
+    "net_missed_blocked_message": {
+      "message": "{name} hatte um {until} {got} statt mindestens {goal}; er war in dieser Zeit {blocked} extern gesperrt. Kommt das öfter vor, prüfe die Sperr-Entität auf seiner Karte (z. B. eine Sperrzeit des Netzbetreibers oder eine Automation)."
     },
     "self_test_not_controllable": {
       "message": "Diese Batterie wird nur gelesen, nicht gesteuert; ein Selbsttest ist nicht möglich."

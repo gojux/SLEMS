@@ -186,6 +186,100 @@ def test_temperature_target_waits_after_the_deadline_until_midnight() -> None:
 
 
 
+def test_safety_net_after_the_deadline() -> None:
+    settings = TargetSettings(
+        type=TargetType.TEMPERATURE, min_temp_c=40, target_temp_c=55,
+        deadline=time(16, 0), source=TargetSource.GRID, min_again_h=3,
+    )
+    progress = TargetProgress(end=local(16, day=2))
+    # Above the minimum after the deadline: nothing, it waits as before.
+    assert not progress.track_net(settings, 45, local(19))
+    assert progress.net_until is None
+    assert state(settings, progress, local(19), temperature_c=45).mode is TargetMode.WAITING
+    # Below the minimum at 20:00: the minimum again by 23:00, fixed.
+    assert not progress.track_net(settings, 35, local(20))
+    assert (progress.net_since, progress.net_until) == (local(20), local(23))
+    progress.track_net(settings, 34, local(21))
+    assert progress.net_until == local(23)
+    # 5 K × 200 Wh/K at 2000 W = 30 min × 1.2 = 36 min, minus 10 min: 22:14.
+    evening = state(settings, progress, local(20, 30), temperature_c=35, wh_per_k=200, power_w=2000)
+    assert evening.mode is TargetMode.BOOST
+    assert (evening.latest_start, evening.end, evening.net_since) == (local(22, 14), local(23), local(20))
+    assert state(settings, progress, local(22, 20), temperature_c=35, wh_per_k=200, power_w=2000).mode is TargetMode.FORCED
+    # Its forced run is planned, its rest from the surplus from now on.
+    assert forced_load(settings, evening, local(20, 30), power_w=2000, wh_per_k=200) == {local(22): 1000.0}
+    demand = surplus_demand(settings, evening, local(20, 30), energy_wh=4000, forced_wh=1000, power_w=2000)
+    assert (demand.start, demand.end, demand.energy_wh) == (local(20, 30), local(23), 3000)
+    # Missed at 23:00: notified once, it stays forced until the minimum.
+    assert progress.track_net(settings, 38, local(23))
+    assert not progress.track_net(settings, 38, local(23, 5))
+    assert state(settings, progress, local(23, 5), temperature_c=38).mode is TargetMode.FORCED
+    # The minimum reached: over, waiting again.
+    assert not progress.track_net(settings, 40, local(23, 30))
+    assert progress.net_until is None and not progress.net_missed
+    assert state(settings, progress, local(23, 30), temperature_c=40).mode is TargetMode.WAITING
+
+
+def test_safety_net_within_the_period() -> None:
+    settings = TargetSettings(
+        type=TargetType.TEMPERATURE, min_temp_c=40, target_temp_c=55,
+        deadline=time(16, 0), source=TargetSource.GRID, min_again_h=3,
+    )
+    progress = TargetProgress(end=local(16))
+    # The deadline within 3 h: the target itself covers it.
+    progress.track_net(settings, 35, local(14))
+    assert progress.net_until is None
+    # Showering at 7:00: the minimum by 10:00, not only by the deadline.
+    progress.track_net(settings, 35, local(7))
+    assert progress.net_until == local(10)
+    assert state(settings, progress, local(9), temperature_c=35).mode is TargetMode.FORCED
+    # The daily target itself is not affected by it.
+    progress.track_temperature(settings, 35)
+    assert not progress.min_reached
+
+
+def test_safety_net_across_midnight_and_before_the_earliest_start() -> None:
+    settings = TargetSettings(
+        type=TargetType.TEMPERATURE, min_temp_c=40, target_temp_c=55, deadline=time(16, 0),
+        source=TargetSource.GRID, earliest_enabled=True, earliest=time(11, 0), min_again_h=3,
+    )
+    progress = TargetProgress(end=local(16, day=2))
+    progress.track_net(settings, 35, local(22, 30))
+    assert progress.net_until == local(1, 30, day=2)
+    # It goes on past midnight, before the earliest start.
+    assert state(settings, progress, local(0, 30, day=2), temperature_c=35).end == local(1, 30, day=2)
+    # Its release window is not bound to the earliest start.
+    settings.release_window_min, settings.window_before_forced = 60, True
+    assert window_opens(settings, local(23, 20), local(1, 30, day=2), net_since=local(22, 30)) == local(22, 30)
+    assert window_opens(settings, local(23, 50), local(1, 30, day=2), net_since=local(22, 30)) == local(22, 50)
+    assert state(settings, progress, local(22, 30), temperature_c=35).mode is TargetMode.WINDOW
+
+
+def test_safety_net_off_and_stored() -> None:
+    settings = TargetSettings(type=TargetType.TEMPERATURE, min_temp_c=40, deadline=time(16, 0))
+    progress = TargetProgress(end=local(16, day=2))
+    # Off (0 h): as before.
+    progress.track_net(settings, 30, local(20))
+    assert progress.net_until is None
+    assert state(settings, progress, local(20), temperature_c=30).mode is TargetMode.WAITING
+    # Only surplus: from the surplus with priority, never forced.
+    settings.min_again_h = 2
+    progress.track_net(settings, 30, local(20))
+    assert state(settings, progress, local(21, 55), temperature_c=30).mode is TargetMode.BOOST
+    # A missing temperature keeps it; switched off ends it.
+    progress.track_net(settings, None, local(20, 5))
+    assert progress.net_until == local(22)
+    progress.update(0.0, local(20, 6), settings, 0.0, False, blocked=True)
+    progress.update(60.0, local(20, 7), settings, 0.0, False, controlled=False)
+    stored = TargetProgress.from_dict(progress.as_dict())
+    assert (stored.net_since, stored.net_until, stored.net_blocked_s, stored.net_uncontrolled) == (
+        local(20), local(22), 60.0, True
+    )
+    settings.min_again_h = 0
+    stored.track_net(settings, 30, local(20, 10))
+    assert stored.net_until is None and stored.net_blocked_s == 0
+
+
 def test_temperature_target_with_an_earliest_start() -> None:
     settings = TargetSettings(
         type=TargetType.TEMPERATURE, min_temp_c=40, target_temp_c=55, deadline=time(16, 0),

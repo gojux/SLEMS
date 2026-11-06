@@ -29,6 +29,16 @@ also with surplus (*waiting*). A temperature target starts at midnight
 without one: after its deadline the consumer waits for the next day (or its
 earliest start).
 
+*Safety net* (temperature target, optional ``min_again_h``): if the
+temperature falls below the minimum while the next deadline is further away
+than ``min_again_h`` (after the deadline, before the earliest start, or early
+in the period), a replacement target "minimum by then" applies from that
+moment on (``TargetProgress.net_until``, fixed, also across midnight): first
+the surplus, a cheaper window of the price aware control, the forced run
+before it as for a deadline, following the source. It ends once the minimum
+is reached; if it is not reached in time, it stays forced and is notified
+once. The daily target itself (met, missed, done) is not affected.
+
 The planning (day chart, SoC projection, night discharge) counts the forced
 run as an extra load from the latest start on (``forced_load``): the worst
 case, as if no surplus covered any of the rest; it shrinks as the surplus
@@ -112,6 +122,9 @@ class TargetSettings:
     release_window_min: float = 0.0
     window_before_forced: bool = False
     surplus_window: SurplusWindow = SurplusWindow.OFF
+    # Temperature target: below the minimum it is reached again within this
+    # many hours at the latest (safety net, 0: off).
+    min_again_h: float = 0.0
     # Wallbox: charging now ends at this state of charge of the car (not a
     # daily target; kept here with the other settings of its card).
     charge_now_soc_pct: float = 100.0
@@ -188,6 +201,15 @@ class TargetProgress:
     # Time no car was plugged in at the wallbox in the period, and in the last one.
     unplugged_s: float = 0.0
     last_unplugged_s: float = 0.0
+    # Safety net: below the minimum since, the minimum again by (local, aware;
+    # None while it does not apply); notified once when missed, with what the
+    # target notification names (not controlled, declined, blocked).
+    net_since: datetime | None = None
+    net_until: datetime | None = None
+    net_missed: bool = False
+    net_uncontrolled: bool = False
+    net_declined: bool = False
+    net_blocked_s: float = 0.0
     # The previous sample: its state applies until this one.
     _last: tuple[float, float | None, bool, bool, bool] | None = field(default=None, repr=False)
 
@@ -222,10 +244,13 @@ class TargetProgress:
             self.last_declined = self.declined
             self.last_unplugged_s = self.unplugged_s
             self._reset(end)
+        net = self.net_until is not None
         if not controlled:
             self.uncontrolled = True
+            self.net_uncontrolled = self.net_uncontrolled or net
         if declined:
             self.declined = True
+            self.net_declined = self.net_declined or net
         elif end != self.end:
             # The deadline was changed: the counters stay.
             self.end = end
@@ -242,6 +267,8 @@ class TargetProgress:
             self.enabled_s += elapsed
         if last_blocked:
             self.blocked_s += elapsed
+            if net:
+                self.net_blocked_s += elapsed
         if last_unplugged:
             self.unplugged_s += elapsed
         if last_power is not None:
@@ -276,6 +303,38 @@ class TargetProgress:
         self.min_reached = True
         if temperature_c >= settings.target_temp_c:
             self.mark_done(settings.target_temp_c)
+
+    def track_net(self, settings: TargetSettings, temperature_c: float | None, local_now: datetime) -> bool:
+        """Safety net: start, end or miss the replacement target; True when
+        it was missed just now (notified once)."""
+        if settings.type is not TargetType.TEMPERATURE or settings.min_again_h <= 0:
+            self.end_net()
+            return False
+        if temperature_c is None:
+            return False
+        if temperature_c >= settings.min_temp_c:
+            self.end_net()
+            return False
+        if self.net_until is None:
+            until = local_now + timedelta(hours=settings.min_again_h)
+            end = self.end or period_end(local_now, settings.deadline)
+            start = window_start(settings, end)
+            # The deadline of the period comes first: the target itself covers it.
+            if (start is None or local_now >= start) and end <= until:
+                return False
+            self.net_since, self.net_until = local_now, until
+            self.net_missed = self.net_uncontrolled = self.net_declined = False
+            self.net_blocked_s = 0.0
+            return False
+        if not self.net_missed and local_now >= self.net_until:
+            self.net_missed = True
+            return True
+        return False
+
+    def end_net(self) -> None:
+        self.net_since = self.net_until = None
+        self.net_missed = self.net_uncontrolled = self.net_declined = False
+        self.net_blocked_s = 0.0
 
     def mark_done(self, target_c: float) -> None:
         """The target temperature ``target_c`` was reached in this period."""
@@ -326,12 +385,19 @@ class TargetProgress:
             "last_declined": self.last_declined,
             "unplugged_s": self.unplugged_s,
             "last_unplugged_s": self.last_unplugged_s,
+            "net_since": self.net_since.isoformat() if self.net_since else None,
+            "net_until": self.net_until.isoformat() if self.net_until else None,
+            "net_missed": self.net_missed,
+            "net_uncontrolled": self.net_uncontrolled,
+            "net_declined": self.net_declined,
+            "net_blocked_s": self.net_blocked_s,
         }
 
     @classmethod
     def from_dict(cls, data: dict | None) -> TargetProgress:
         data = data or {}
         end = data.get("end")
+        net_since, net_until = data.get("net_since"), data.get("net_until")
         return cls(
             end=datetime.fromisoformat(end) if end else None,
             runtime_s=data.get("runtime_s", 0.0),
@@ -351,6 +417,12 @@ class TargetProgress:
             last_declined=data.get("last_declined", False),
             unplugged_s=data.get("unplugged_s", 0.0),
             last_unplugged_s=data.get("last_unplugged_s", 0.0),
+            net_since=datetime.fromisoformat(net_since) if net_since else None,
+            net_until=datetime.fromisoformat(net_until) if net_until else None,
+            net_missed=data.get("net_missed", False),
+            net_uncontrolled=data.get("net_uncontrolled", False),
+            net_declined=data.get("net_declined", False),
+            net_blocked_s=data.get("net_blocked_s", 0.0),
         )
 
 
@@ -390,6 +462,8 @@ class TargetState:
     end: datetime | None = None
     # The latest start was moved to a cheaper window (see price_hold).
     price_window: bool = False
+    # Safety net: below the minimum since then, ``end`` is the replacement target.
+    net_since: datetime | None = None
 
 
 def evaluate(
@@ -429,6 +503,13 @@ def evaluate(
         waiting = earliest is not None and local_now < earliest
         if temperature_c is None:
             return TargetState(TargetMode.WAITING if waiting else TargetMode.SURPLUS, end=end)
+        if (
+            settings.min_again_h > 0
+            and progress.net_until is not None
+            and progress.net_since is not None
+            and temperature_c < settings.min_temp_c
+        ):
+            return _net_state(settings, progress, local_now, temperature_c, wh_per_k, power_w, may_force)
         # What the storage misses at the deadline: by then it cools down (as
         # forecast), heated late it has to make up for that.
         lowest = temperature_c if temperature_at_end_c is None else min(temperature_c, temperature_at_end_c)
@@ -438,10 +519,7 @@ def evaluate(
             if waiting:
                 return TargetState(TargetMode.WAITING, end=end)
             return TargetState(TargetMode.DONE if reached else TargetMode.SURPLUS, end=end)
-        if wh_per_k and power_w > 0:
-            duration = timedelta(hours=missing_k * wh_per_k / power_w * TIME_FACTOR)
-        else:
-            duration = TEMPERATURE_FALLBACK
+        duration = _heating_time(missing_k, wh_per_k, power_w)
         latest = max(end - duration - START_MARGIN, earliest) if earliest is not None else end - duration - START_MARGIN
         if waiting:
             return TargetState(TargetMode.WAITING, missing_k, latest, end)
@@ -490,6 +568,36 @@ def evaluate(
     if settings.priority and expected_surplus_wh < energy + battery_need_wh:
         return TargetState(TargetMode.BOOST, missing, latest, end)
     return TargetState(TargetMode.SURPLUS, missing, latest, end)
+
+
+def _heating_time(missing_k: float, wh_per_k: float | None, power_w: float) -> timedelta:
+    """Time that heats the storage by ``missing_k`` (with margin)."""
+    if wh_per_k and power_w > 0:
+        return timedelta(hours=missing_k * wh_per_k / power_w * TIME_FACTOR)
+    return TEMPERATURE_FALLBACK
+
+
+def _net_state(
+    settings: TargetSettings,
+    progress: TargetProgress,
+    local_now: datetime,
+    temperature_c: float,
+    wh_per_k: float | None,
+    power_w: float,
+    may_force: bool,
+) -> TargetState:
+    """Mode under the safety net: the minimum by ``progress.net_until``."""
+    end = progress.net_until
+    missing_k = settings.min_temp_c - temperature_c
+    latest = end - _heating_time(missing_k, wh_per_k, power_w) - START_MARGIN
+    opens = window_opens(settings, latest, end, net_since=progress.net_since)
+    if may_force and local_now >= latest:
+        mode = TargetMode.FORCED
+    elif may_force and opens is not None and local_now >= opens:
+        mode = TargetMode.WINDOW
+    else:
+        mode = TargetMode.BOOST
+    return TargetState(mode, missing_k, latest, end, net_since=progress.net_since)
 
 
 SURPLUS_WINDOW_STEP = timedelta(minutes=15)
@@ -566,10 +674,13 @@ def without_own_charge(
     }
 
 
-def window_opens(settings: TargetSettings, latest: datetime, end: datetime) -> datetime | None:
+def window_opens(
+    settings: TargetSettings, latest: datetime, end: datetime, *, net_since: datetime | None = None
+) -> datetime | None:
     """Start of the release window before the latest start, not before the
-    earliest start of the period ending at ``end``; None without one (also
-    with the source "surplus only": there is no forced run)."""
+    earliest start of the period ending at ``end`` (of a replacement target:
+    not before ``net_since``); None without one (also with the source
+    "surplus only": there is no forced run)."""
     if (
         not settings.window_before_forced
         or settings.release_window_min <= 0
@@ -577,7 +688,7 @@ def window_opens(settings: TargetSettings, latest: datetime, end: datetime) -> d
     ):
         return None
     opens = latest - timedelta(minutes=settings.release_window_min)
-    earliest = window_start(settings, end)
+    earliest = net_since or window_start(settings, end)
     return max(opens, earliest) if earliest is not None else opens
 
 
@@ -683,7 +794,7 @@ def surplus_demand(
     ):
         return None
     rest = energy_wh - forced_wh
-    earliest = window_start(settings, state.end)
+    earliest = None if state.net_since is not None else window_start(settings, state.end)
     start = max(local_now, earliest) if earliest is not None else local_now
     if rest <= 0 or start >= state.end:
         return None

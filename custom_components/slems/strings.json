@@ -1623,6 +1623,9 @@
       "target_max_temperature": {
         "name": "Target temperature"
       },
+      "target_min_again": {
+        "name": "Minimum again within"
+      },
       "target_soc": {
         "name": "Target state of charge"
       },
@@ -1649,6 +1652,9 @@
       },
       "hot_water_target_max_temperature": {
         "name": "Hot water target temperature"
+      },
+      "hot_water_target_min_again": {
+        "name": "Hot water minimum again within"
       },
       "min_power": {
         "name": "Minimum power"
@@ -1790,6 +1796,15 @@
     },
     "target_missed_unplugged_message": {
       "message": "{name} got {got} of {goal} by {deadline}; no car was plugged in for {unplugged} of the period. Plug the car in early enough, or set the deadline to when it is usually plugged in."
+    },
+    "net_missed_title": {
+      "message": "Minimum of {name} not reached in time"
+    },
+    "net_missed_message": {
+      "message": "{name} had {got} at {until} instead of at least {goal}. SLEMS keeps heating until the minimum is reached. If this happens more often, check its source and power on its card, or allow more time with **Minimum again within**."
+    },
+    "net_missed_blocked_message": {
+      "message": "{name} had {got} at {until} instead of at least {goal}; it was blocked externally for {blocked} in this time. If this happens more often, check the block entity on its card (e.g. a blocking time of the grid operator or an automation)."
     },
     "self_test_not_controllable": {
       "message": "This battery is only read, not controlled; a self-test is not possible."

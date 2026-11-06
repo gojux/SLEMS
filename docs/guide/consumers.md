@@ -401,6 +401,25 @@ Per controlled consumer, on its card under **Daily target**.
   run (and a release before it) is planned for that temperature, also
   while it is still above the minimum and before the earliest start. The row
   **Plan** shows the forecast, e.g. **about 37 °C at 15:30 without heating**.
+- **Minimum again within** (temperature target, optional, e.g. 3 h; 0: off):
+  a safety net for the time the target does not cover, e.g. hot water after
+  showering in the evening. If the temperature falls below the minimum while
+  the deadline is further away than this time (after the deadline, before
+  the earliest start, or early in the period), SLEMS sets a replacement
+  target: the minimum again by then (e.g. fallen below at 20:00 → minimum by
+  23:00, also across midnight). It is met like a deadline: first from the
+  surplus with priority, with the price aware control in the cheapest grid
+  window, at the end forced, following the **Source** (with **Surplus only**
+  without a forced run). It ends once the minimum is reached; then the
+  consumer waits again as usual. If the minimum is not reached in time, it
+  stays forced and a notification **Minimum of … not reached in time** says
+  so once (not when SLEMS could not control the consumer meanwhile or its
+  own thermostat declined; an external block is named with its duration).
+  The daily target itself (reached, missed, target temperature) is not
+  affected. Meanwhile the card shows the chip **safety net** and **minimum by
+  23:00** instead of the deadline, the row **Plan** the release and the
+  forced run for it, and the lane under the day chart the replacement target
+  outlined dashed with a dashed mark at its end.
 - **State of charge**: target state of charge of the car by the deadline
   (default 80 %). The energy still needed is the missing state of charge ×
   battery capacity, with 10 % charging losses (e.g. 40 % of 60 kWh: about
