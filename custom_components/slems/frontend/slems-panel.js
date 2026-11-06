@@ -425,7 +425,7 @@ const STRINGS = {
     capLostReasons: { full: "batteries full", charge_power: "charge power too low" },
     simulation: "Simulation",
     simIntro:
-      "Try other settings: the chart and the key figures show how today and tomorrow would look, calculated from the current state of charge and the current forecasts. Nothing here is saved or used by SLEMS; grey dotted: the plan with the current settings. The daily targets of the consumers are planned as in the real plan; otherwise consumers controlled by SLEMS are not simulated.",
+      "Try other settings: in **Day plan** the chart and the key figures show how today and tomorrow would look, calculated from the current state of charge and the current forecasts; grey dotted: the plan with the current settings. The daily targets of the consumers are planned as in the real plan; otherwise consumers controlled by SLEMS are not simulated. **Recorded months** compares the tariffs over the recorded months, with the simulated PV, consumption and batteries if they differ. Nothing here is saved or used by SLEMS.",
     simToday: "Simulation: today",
     simTomorrow: "Simulation: tomorrow (expected)",
     simReset: "Reset to the current settings",
@@ -494,26 +494,32 @@ const STRINGS = {
     tariffForeignCurrency: "At the moment SLEMS only supports market prices in euro. Tariffs that follow the market price are therefore not computed: {names}.",
     tariffGridPower: "Hours before SLEMS recorded import and feed-in per quarter hour come from the hourly mean of the grid power (less exact) without energy counters; they can be chosen in the SLEMS options.",
     tariffEmpty: "No recorded energy yet.",
-    hwTitle: "Other hardware in the recorded year",
+    simViewDay: "Day plan",
+    simViewMonths: "Recorded months",
+    tariffNone: "No tariff yet: add yours with **Add tariff** on the SLEMS integration page to compare tariffs and simulated hardware here.",
     hwHint:
-      "What the PV, consumption and battery values of the simulation would have changed in the recorded months: your recorded hourly consumption and PV run through a simple battery model, once with your current batteries and once with the simulated values (PV and consumption scaled by their change). Costs: import minus feed-in credit, incl. VAT.",
-    hwUnchanged: "Change PV, consumption or the battery values in the simulation to see what they would have changed.",
-    hwUnavailable: "Needs batteries, a tariff and recorded house consumption.",
-    hwLoading: "Calculating …",
+      "With the simulated hardware: the recorded values plus the change a simple battery model calculates for it; “hardware …” below a value is this change. Your recorded hourly consumption and PV run through the model once with your current batteries and once with the simulated values (PV and consumption scaled by their change). Of the simulation only PV, consumption, the battery values and the price aware control with its settings count here.",
+    hwUnchanged:
+      "Change PV, consumption or the battery values in the simulation to see here what they would have changed. The price aware control and its settings count too; all other settings only change the day plan.",
+    hwUnavailable: "The simulated hardware needs batteries and recorded house consumption.",
+    hwLoading: "Calculating the simulated hardware …",
+    hwReloading: "Calculating the simulated hardware anew … Until then the table shows the last result, dimmed.",
     hwChanges: "Simulated: {changes}",
+    hwChangesOff: "Simulated: {changes}; select **Simulated** to include the change.",
+    hwView: "Hardware",
+    hwViewCurrent: "Current",
+    hwViewSimulated: "Simulated",
+    hwDeltaShort: "hardware {amount}",
+    hwNoPeak: "Peak shaving is not estimated with the simulated hardware.",
+    hwMissing: "Unchanged without recorded house consumption and PV: {months}.",
     hwPv: "PV",
     hwConsumption: "Consumption",
-    hwCurrent: "Current hardware",
-    hwSimulated: "Simulated hardware",
-    hwDiff: "Difference",
-    hwCosts: "Costs {tariff}",
-    hwPerMonth: "Per month (simulated minus current hardware)",
     hwLimits:
       "An estimate with limits: hourly values (peaks within an hour are averaged); grid friendly charging and the feed-in cap are not included (with more PV the feed-in credit comes out too high); the PV change scales the recorded PV curve and does not know the orientation of additional modules; consumers switched by surplus (e.g. heating rod, wallbox) keep their recorded energy; purchase costs are not included.",
-    hwPriceShare: "of which price control",
     hwPriceNote:
-      "The price aware control is switched on in the simulation: the costs include what it would have saved with each tariff and the simulated price settings (planned with a perfect forecast, an upper bound); “of which price control” is its share. Import and feed-in are without it.",
-    hwNoPrice: "The price aware control is switched off in the simulation and not included; with a dynamic tariff larger batteries can bring more than shown.",
+      "Saving price control: estimate of what {actions} would have saved with the simulated hardware and the simulated price settings, with a simple battery model and a perfect forecast (an upper bound).",
+    hwNoPrice:
+      "The price aware control is switched off in the simulation and not included; with a dynamic tariff larger batteries can bring more than shown.",
     mExport: "Feed-in",
     mImport: "Grid import",
     mMaxImport: "Highest import",
@@ -1217,7 +1223,7 @@ const STRINGS = {
     capLostReasons: { full: "Batterien voll", charge_power: "Ladeleistung zu gering" },
     simulation: "Simulation",
     simIntro:
-      "Probiere andere Einstellungen aus: Diagramm und Kennzahlen zeigen, wie heute und morgen aussehen würden, gerechnet ab dem aktuellen Ladezustand mit den aktuellen Prognosen. Nichts davon wird gespeichert oder von SLEMS verwendet; grau gepunktet: der Plan mit den aktuellen Einstellungen. Die Tagesziele der Verbraucher gehen wie in der echten Planung ein; sonst werden von SLEMS gesteuerte Verbraucher nicht simuliert.",
+      "Probiere andere Einstellungen aus: Unter **Tagesplan** zeigen Diagramm und Kennzahlen, wie heute und morgen aussehen würden, gerechnet ab dem aktuellen Ladezustand mit den aktuellen Prognosen; grau gepunktet: der Plan mit den aktuellen Einstellungen. Die Tagesziele der Verbraucher gehen wie in der echten Planung ein; sonst werden von SLEMS gesteuerte Verbraucher nicht simuliert. **Aufgezeichnete Monate** vergleicht die Tarife über die aufgezeichneten Monate, mit simulierter PV, simuliertem Verbrauch und simulierten Batterien, wenn sie abweichen. Nichts davon wird gespeichert oder von SLEMS verwendet.",
     simToday: "Simulation: heute",
     simTomorrow: "Simulation: morgen (erwartet)",
     simReset: "Auf aktuelle Einstellungen zurücksetzen",
@@ -1286,26 +1292,32 @@ const STRINGS = {
     tariffForeignCurrency: "SLEMS unterstützt zum aktuellen Zeitpunkt nur Börsenpreise in Euro. Tarife, die vom Börsenpreis abhängen, werden deshalb nicht berechnet: {names}.",
     tariffGridPower: "Stunden, bevor SLEMS Bezug und Einspeisung je Viertelstunde aufgezeichnet hat, stammen ohne Energiezähler aus dem Stundenmittel der Netzleistung (ungenauer); die Zähler lassen sich in den SLEMS-Optionen wählen.",
     tariffEmpty: "Noch keine aufgezeichnete Energie.",
-    hwTitle: "Andere Hardware im aufgezeichneten Jahr",
+    simViewDay: "Tagesplan",
+    simViewMonths: "Aufgezeichnete Monate",
+    tariffNone: "Noch kein Tarif: Lege deinen mit **Tarif hinzufügen** auf der Seite der SLEMS-Integration an, um hier Tarife und simulierte Hardware zu vergleichen.",
     hwHint:
-      "Was die PV-, Verbrauchs- und Batteriewerte der Simulation in den aufgezeichneten Monaten geändert hätten: Dein aufgezeichneter stündlicher Verbrauch und deine PV laufen durch ein einfaches Batteriemodell, einmal mit deinen heutigen Batterien und einmal mit den simulierten Werten (PV und Verbrauch um ihre Änderung skaliert). Kosten: Netzbezug minus Einspeisevergütung, inkl. MwSt.",
-    hwUnchanged: "Ändere PV, Verbrauch oder die Batteriewerte in der Simulation, um zu sehen, was sie geändert hätten.",
-    hwUnavailable: "Braucht Batterien, einen Tarif und aufgezeichneten Hausverbrauch.",
-    hwLoading: "Wird berechnet …",
+      "Mit simulierter Hardware: die aufgezeichneten Werte plus die Änderung, die ein einfaches Batteriemodell dafür berechnet; „Hardware …“ unter einem Wert ist diese Änderung. Dein aufgezeichneter stündlicher Verbrauch und deine PV laufen einmal mit deinen heutigen Batterien und einmal mit den simulierten Werten durch das Modell (PV und Verbrauch um ihre Änderung skaliert). Von der Simulation wirken hier nur PV, Verbrauch, die Batteriewerte und die Preissteuerung mit ihren Einstellungen.",
+    hwUnchanged:
+      "Ändere in der Simulation PV, Verbrauch oder die Batteriewerte, um hier zu sehen, was sie geändert hätten. Die Preissteuerung und ihre Einstellungen wirken dann mit; alle anderen Einstellungen ändern nur den Tagesplan.",
+    hwUnavailable: "Die simulierte Hardware braucht Batterien und aufgezeichneten Hausverbrauch.",
+    hwLoading: "Simulierte Hardware wird berechnet …",
+    hwReloading: "Simulierte Hardware wird neu berechnet … Bis dahin zeigt die Tabelle abgeblendet den letzten Stand.",
     hwChanges: "Simuliert: {changes}",
+    hwChangesOff: "Simuliert: {changes}; wähle **Simuliert**, um die Änderung einzurechnen.",
+    hwView: "Hardware",
+    hwViewCurrent: "Heute",
+    hwViewSimulated: "Simuliert",
+    hwDeltaShort: "Hardware {amount}",
+    hwNoPeak: "Den Spitzenabfang schätzt der Vergleich mit simulierter Hardware nicht.",
+    hwMissing: "Ohne aufgezeichneten Hausverbrauch und PV unverändert: {months}.",
     hwPv: "PV",
     hwConsumption: "Verbrauch",
-    hwCurrent: "Heutige Hardware",
-    hwSimulated: "Simulierte Hardware",
-    hwDiff: "Differenz",
-    hwCosts: "Kosten {tariff}",
-    hwPerMonth: "Pro Monat (simulierte minus heutige Hardware)",
     hwLimits:
       "Eine Schätzung mit Grenzen: Stundenwerte (Spitzen innerhalb einer Stunde werden gemittelt); netzdienliches Laden und Einspeisebegrenzung sind nicht enthalten (mit mehr PV fällt die Einspeisevergütung zu hoch aus); die PV-Änderung skaliert die aufgezeichnete PV-Kurve und kennt die Ausrichtung zusätzlicher Module nicht; Verbraucher, die nach Überschuss schalten (z. B. Heizstab, Wallbox), behalten ihre aufgezeichnete Energie; Anschaffungskosten sind nicht eingerechnet.",
-    hwPriceShare: "davon Preissteuerung",
     hwPriceNote:
-      "Die Preissteuerung ist in der Simulation eingeschaltet: Die Kosten enthalten, was sie mit jedem Tarif und den simulierten Preis-Einstellungen gespart hätte (geplant mit perfekter Prognose, eine Obergrenze); „davon Preissteuerung“ ist ihr Anteil. Bezug und Einspeisung sind ohne sie.",
-    hwNoPrice: "Die Preissteuerung ist in der Simulation ausgeschaltet und nicht enthalten; mit einem dynamischen Tarif können größere Batterien mehr bringen als angezeigt.",
+      "Ersparnis Preissteuerung: Schätzung der Ersparnis durch {actions} mit der simulierten Hardware und den simulierten Preis-Einstellungen, mit einem einfachen Batteriemodell und perfekter Prognose (eine Obergrenze).",
+    hwNoPrice:
+      "Die Preissteuerung ist in der Simulation ausgeschaltet und nicht enthalten; mit einem dynamischen Tarif können größere Batterien mehr bringen als angezeigt.",
     mExport: "Einspeisung",
     mImport: "Netzbezug",
     mMaxImport: "Höchster Bezug",
@@ -1902,6 +1914,8 @@ const HW_PRICE_SETTINGS = [
 ];
 // localStorage key: "1" shows import costs and feed-in credit of a tariff summed.
 const TARIFF_SUM_KEY = "slems-tariff-sum";
+// localStorage key of the view of the simulation tab: "day" (day plan) or "months" (recorded months).
+const SIM_VIEW_KEY = "slems-sim-view";
 // localStorage key: "devices" shows the energy flow by device (see _flowNodes).
 const FLOW_VIEW_KEY = "slems-flow-view";
 // Menu id of a flow box: this prefix and the device of its consumer.
@@ -1974,9 +1988,19 @@ class SlemsPanel extends HTMLElement {
     this._showTable = false;
     // Simulation tab: form values, last result (see _simulate).
     this._sim = { form: null, result: null, serial: 0, timer: null, requested: false };
+    // View of the simulation tab: "day" (day plan) or "months" (recorded months).
+    this._simView = "day";
+    try {
+      if (localStorage.getItem(SIM_VIEW_KEY) === "months") this._simView = "months";
+    } catch (err) {
+      // Storage not available: the day plan first.
+    }
     // Comparison with the simulation's hardware (slems/hardware_comparison):
-    // key of the values asked for, last result, newest request.
-    this._hw = { key: null, result: null, serial: 0, timer: null };
+    // key of the values asked for, last result, newest request. The tariff
+    // comparison shows it with "simulated" chosen (_hwView); while a new one
+    // is calculated, the last usable result (last) dimmed.
+    this._hw = { key: null, result: null, last: null, serial: 0, timer: null };
+    this._hwView = "simulated";
     // Tariff comparison (slems/tariff_comparison), loaded once per visit of the tab.
     this._tariffs = { result: null, requested: false };
     // Comparison tariffs hidden in the table (kept in the browser).
@@ -3190,7 +3214,7 @@ class SlemsPanel extends HTMLElement {
           this._sim = { form: null, result: null, serial: this._sim.serial + 1, timer: null, requested: false };
           this._tariffs = { result: null, requested: false };
           clearTimeout(this._hw.timer);
-          this._hw = { key: null, result: null, serial: this._hw.serial + 1, timer: null };
+          this._hw = { key: null, result: null, last: null, serial: this._hw.serial + 1, timer: null };
         }
         this._tab = tab;
         this._sections = {};
@@ -3303,12 +3327,14 @@ class SlemsPanel extends HTMLElement {
     if (this._tab === "simulation") {
       return `
         <div class="sim-layout">
+          <div id="simview"></div>
           <div class="sim-main">
-            <section class="card"><div id="simnote"></div><div id="daychart"></div></section>
-            <div id="pricechart"></div>
-            <section class="card"><div id="simmetrics"></div></section>
-            <div id="tariffs"></div>
-            <div id="hardware"></div>
+            <div class="sim-view" data-view="day">
+              <section class="card"><div id="simnote"></div><div id="daychart"></div></section>
+              <div id="pricechart"></div>
+              <section class="card"><div id="simmetrics"></div></section>
+            </div>
+            <div class="sim-view" data-view="months"><div id="tariffs"></div></div>
           </div>
           <section class="card sim-side"><div id="simintro"></div><div id="simcontrols"></div></section>
         </div>`;
@@ -4892,13 +4918,14 @@ class SlemsPanel extends HTMLElement {
   }
 
   _hwSchedule() {
+    if (this._simView !== "months") return;
     const request = this._hwRequest();
     const key = request && JSON.stringify(request);
     if (!key || key === this._hw.key) return;
     this._hw.key = key;
     clearTimeout(this._hw.timer);
     this._hw.timer = setTimeout(() => this._loadHardware(request), 600);
-    this._sections.hardware = undefined;
+    this._sections.tariffs = undefined;
     this._queueRender();
   }
 
@@ -4915,7 +4942,8 @@ class SlemsPanel extends HTMLElement {
     }
     if (serial !== hw.serial) return;
     hw.result = { ...result, key: JSON.stringify(request) };
-    this._sections.hardware = undefined;
+    if (result.changed && result.available && result.months?.length) hw.last = hw.result;
+    this._sections.tariffs = undefined;
     this._queueRender();
   }
 
@@ -4945,111 +4973,90 @@ class SlemsPanel extends HTMLElement {
     return changes.join(", ");
   }
 
-  _renderHardware() {
-    const t = this._t;
-    const hw = this._hw;
-    const card = (body) =>
-      `<section class="card"><h2>${escapeHtml(t.hwTitle)}</h2><p class="hint">${escapeHtml(t.hwHint)}</p>${body}</section>`;
-    if (!this._sim.form) {
-      this._setSection("hardware", "");
-      return;
-    }
-    const result = hw.result;
-    if (!result || result.key !== hw.key) {
-      this._setSection("hardware", card(`<p class="empty">${escapeHtml(t.hwLoading)}</p>`));
-      return;
-    }
-    if (!result.changed) {
-      this._setSection("hardware", card(`<p class="empty">${escapeHtml(t.hwUnchanged)}</p>`));
-      return;
-    }
-    if (!result.available || !result.months.length) {
-      this._setSection("hardware", card(`<p class="empty">${escapeHtml(result.available ? t.tariffEmpty : t.hwUnavailable)}</p>`));
-      return;
-    }
-    const language = this._hass?.locale?.language || "en";
-    const money = new Intl.NumberFormat(language, { style: "currency", currency: this._currency() });
-    const energy = new Intl.NumberFormat(language, { maximumFractionDigits: 0 });
-    const sign = (value) => (value > 0 ? "+" : value < 0 ? "−" : "±");
-    const signedMoney = (value) => sign(value) + money.format(Math.abs(value));
-    const signedEnergy = (value) => sign(Math.round(value)) + energy.format(Math.abs(value));
-    const tariffs = result.tariffs.filter((tariff) => tariff.role === "current" || !this._hiddenTariffs.has(tariff.id));
-    // Costs with the price aware control where it was computed; its share apart.
-    const cost = (side, id) => side.price_costs?.[id] ?? side.costs[id] ?? 0;
-    const share = (side, id) => (side.price_costs?.[id] !== undefined ? side.price_costs[id] - side.costs[id] : 0);
-    const empty = () => ({ import_kwh: 0, export_kwh: 0, costs: {}, shares: {} });
-    const sums = { current: empty(), simulated: empty() };
-    for (const month of result.months) {
-      for (const side of ["current", "simulated"]) {
-        sums[side].import_kwh += month[side].import_kwh || 0;
-        sums[side].export_kwh += month[side].export_kwh || 0;
-        for (const id of Object.keys(month[side].costs)) {
-          sums[side].costs[id] = (sums[side].costs[id] || 0) + cost(month[side], id);
-          sums[side].shares[id] = (sums[side].shares[id] || 0) + share(month[side], id);
-        }
-      }
-    }
-    // Lower costs are better (green), higher worse (red).
-    const tone = (diff) => (diff <= -0.005 ? "better" : diff >= 0.005 ? "worse" : "");
-    const energyRow = (label, key) => {
-      const before = sums.current[key];
-      const after = sums.simulated[key];
-      return `<tr><td>${escapeHtml(label)} (kWh)</td><td>${escapeHtml(energy.format(before))}</td>
-        <td>${escapeHtml(energy.format(after))}</td><td>${escapeHtml(signedEnergy(after - before))}</td></tr>`;
-    };
-    const tariffLabel = (tariff) => (tariff.role === "current" ? `${tariff.name} (${t.tariffCurrent})` : tariff.name);
-    const costRow = (tariff) => {
-      const before = sums.current.costs[tariff.id] || 0;
-      const after = sums.simulated.costs[tariff.id] || 0;
-      let html = `<tr><td>${escapeHtml(t.hwCosts.replace("{tariff}", tariffLabel(tariff)))}</td><td>${escapeHtml(money.format(before))}</td>
-        <td>${escapeHtml(money.format(after))}</td><td class="${tone(after - before)}">${escapeHtml(signedMoney(after - before))}</td></tr>`;
-      // A tariff where the price aware control saves nothing (a fixed price) has no such row.
-      const shareBefore = sums.current.shares[tariff.id] || 0;
-      const shareAfter = sums.simulated.shares[tariff.id] || 0;
-      if (Math.abs(shareBefore) >= 0.005 || Math.abs(shareAfter) >= 0.005) {
-        html += `<tr class="hw-share"><td>${escapeHtml(t.hwPriceShare)}</td><td>${escapeHtml(signedMoney(shareBefore))}</td>
-          <td>${escapeHtml(signedMoney(shareAfter))}</td><td class="${tone(shareAfter - shareBefore)}">${escapeHtml(signedMoney(shareAfter - shareBefore))}</td></tr>`;
-      }
-      return html;
-    };
-    const summary = `<div class="table-wrap"><table class="tariff-table hw-table">
-      <thead><tr><th></th><th>${escapeHtml(t.hwCurrent)}</th><th>${escapeHtml(t.hwSimulated)}</th><th>${escapeHtml(t.hwDiff)}</th></tr></thead>
-      <tbody>${energyRow(t.tariffImport, "import_kwh")}${energyRow(t.tariffExport, "export_kwh")}${tariffs.map(costRow).join("")}</tbody></table></div>`;
-    const monthRows = [...result.months]
-      .reverse()
-      .map((month) => {
-        const diff = (key) => (month.simulated[key] || 0) - (month.current[key] || 0);
-        return `<tr><td>${escapeHtml(this._monthLabel(month.month))}</td>
-          <td>${escapeHtml(signedEnergy(diff("import_kwh")))}</td><td>${escapeHtml(signedEnergy(diff("export_kwh")))}</td>
-          ${tariffs
-            .map((tariff) => {
-              const value = cost(month.simulated, tariff.id) - cost(month.current, tariff.id);
-              return `<td class="${tone(value)}">${escapeHtml(signedMoney(value))}</td>`;
-            })
-            .join("")}</tr>`;
-      })
-      .join("");
-    const perMonth = `<details class="hw-months"><summary>${escapeHtml(t.hwPerMonth)}</summary>
-      <div class="table-wrap"><table class="tariff-table"><thead><tr><th>${escapeHtml(t.tariffMonth)}</th>
-      <th>${escapeHtml(t.tariffImport)} (kWh)</th><th>${escapeHtml(t.tariffExport)} (kWh)</th>
-      ${tariffs.map((tariff) => `<th>${escapeHtml(tariffLabel(tariff))}</th>`).join("")}</tr></thead>
-      <tbody>${monthRows}</tbody></table></div></details>`;
+  /**
+   * The simulated hardware for the tariff comparison: "unchanged" (no
+   * simulated PV, consumption or battery value differs), "loading" (with the
+   * last usable result, if any), "unavailable" or "ready" with the result of
+   * slems/hardware_comparison.
+   */
+  _hwInfo() {
+    if (!this._sim.form || !this._sim.result) return { state: "unchanged", changes: "" };
     const changes = this._hwChanges();
-    this._setSection(
-      "hardware",
-      card(
-        `${changes ? `<p class="hint">${escapeHtml(t.hwChanges.replace("{changes}", changes))}</p>` : ""}${summary}${perMonth}
-        <p class="hint">${escapeHtml(result.price_control ? t.hwPriceNote : t.hwNoPrice)}</p>
-        <p class="hint">${escapeHtml(t.hwLimits)}</p>`
-      )
-    );
+    if (!changes) return { state: "unchanged", changes };
+    const hw = this._hw;
+    const result = hw.result;
+    if (!result || result.key !== hw.key) return { state: "loading", changes, result: hw.last };
+    if (!result.changed) return { state: "unchanged", changes: "" };
+    if (!result.available || !result.months.length) return { state: "unavailable", changes };
+    return { state: "ready", changes, result };
+  }
+
+  /**
+   * The recorded months of the tariff comparison with the simulated hardware:
+   * each value plus the change the battery model calculates for it (simulated
+   * minus current hardware, see hardware_comparison.py) in ``hwDelta``; the
+   * saving of the price aware control from the simulated hardware. Months the
+   * model has no data for stay as recorded (``hwMissing``).
+   */
+  _hwMonths(months, hw) {
+    const models = new Map(hw.months.map((month) => [month.month, month]));
+    return months.map((month) => {
+      const model = models.get(month.month);
+      if (!model) return { ...month, savings: {}, hwMissing: true };
+      const { current, simulated } = model;
+      const delta = {
+        import_kwh: (simulated.import_kwh || 0) - (current.import_kwh || 0),
+        export_kwh: (simulated.export_kwh || 0) - (current.export_kwh || 0),
+        costs: {},
+      };
+      const costs = {};
+      for (const [id, cost] of Object.entries(month.costs)) {
+        // Peak shaving is estimated with the current batteries only.
+        const { peak_saving: _saving, peak_limit_kw: _limit, ...rest } = cost;
+        const before = current.costs[id];
+        const after = simulated.costs[id];
+        if (!before || !after) {
+          costs[id] = rest;
+          continue;
+        }
+        const change = {};
+        for (const key of ["import", "export", "total"]) change[key] = after[key] - before[key];
+        costs[id] = { ...rest, import: cost.import + change.import, export: cost.export + change.export, total: cost.total + change.total };
+        delta.costs[id] = change;
+      }
+      const savings = {};
+      for (const [id, priced] of Object.entries(simulated.price_costs || {})) {
+        if (simulated.costs[id]) savings[id] = simulated.costs[id].total - priced;
+      }
+      return {
+        ...month,
+        import_kwh: Math.max(0, (month.import_kwh || 0) + delta.import_kwh),
+        export_kwh: Math.max(0, (month.export_kwh || 0) + delta.export_kwh),
+        costs,
+        savings,
+        hwDelta: delta,
+      };
+    });
   }
 
   _renderSimulation() {
     const t = this._t;
     const sim = this._sim;
-    this._renderTariffs();
-    this._renderHardware();
+    const view = this._simView;
+    this._setSection(
+      "simview",
+      `<div class="segmented" role="group">${[
+        ["day", t.simViewDay],
+        ["months", t.simViewMonths],
+      ]
+        .map(
+          ([key, label]) =>
+            `<button data-action="sim-view" data-view="${key}" class="${view === key ? "active" : ""}" aria-pressed="${view === key}">${escapeHtml(label)}</button>`
+        )
+        .join("")}</div>`
+    );
+    for (const element of this.shadowRoot.querySelectorAll(".sim-view")) element.hidden = element.dataset.view !== view;
+    if (view === "months") this._renderTariffs();
     if (!sim.result) {
       if (!sim.requested) {
         sim.requested = true;
@@ -5058,8 +5065,9 @@ class SlemsPanel extends HTMLElement {
       this._setSection("daychart", `<p class="empty">…</p>`);
       return;
     }
-    this._setSection("simintro", `<p class="hint">${escapeHtml(t.simIntro)}</p>`);
+    this._setSection("simintro", `<p class="hint">${hintHtml(t.simIntro)}</p>`);
     this._setSection("simcontrols", this._simControls());
+    if (view !== "day") return;
     if (!sim.result.available) {
       this._setSection("daychart", `<p class="empty">${t.noData}</p>`);
       this._setSection("simmetrics", "");
@@ -5190,31 +5198,59 @@ class SlemsPanel extends HTMLElement {
       state.requested = true;
       this._loadTariffs();
     }
+    const t = this._t;
     const result = state.result;
-    if (!result?.tariffs?.length) {
-      this._setSection("tariffs", "");
+    if (!result) {
+      this._setSection("tariffs", `<section class="card"><h2>${escapeHtml(t.tariffTitle)}</h2><p class="empty">…</p></section>`);
       return;
     }
-    const t = this._t;
+    if (!result.tariffs?.length) {
+      this._setSection(
+        "tariffs",
+        `<section class="card"><h2>${escapeHtml(t.tariffTitle)}</h2><p class="empty">${hintHtml(t.tariffNone)}</p></section>`
+      );
+      return;
+    }
     const language = this._hass?.locale?.language || "en";
     const money = new Intl.NumberFormat(language, { style: "currency", currency: this._currency() });
     const energy = new Intl.NumberFormat(language, { maximumFractionDigits: 0 });
-    const signed = (value) => (value > 0 ? "+" : value < 0 ? "−" : "±") + money.format(Math.abs(value));
+    const sign = (value) => (value > 0 ? "+" : value < 0 ? "−" : "±");
+    const signed = (value) => sign(value) + money.format(Math.abs(value));
+    const signedEnergy = (value) => sign(Math.round(value)) + energy.format(Math.abs(value));
     const tariffs = result.tariffs;
     const current = tariffs.find((tariff) => tariff.role === "current");
     const others = current ? tariffs.filter((tariff) => tariff !== current) : [];
+    // The simulated hardware: the recorded values plus the change of the battery model.
+    const hw = this._hwInfo();
+    const switchable = hw.state === "ready" || (hw.state === "loading" && Boolean(hw.result));
+    const simulated = switchable && this._hwView === "simulated";
+    const stale = simulated && hw.state === "loading";
+    const months = simulated ? this._hwMonths(result.months, hw.result) : result.months;
     let unpriced = false;
     let peakFromHours = false;
     let peakSaving = false;
     const sums = { import_kwh: 0, export_kwh: 0, costs: {}, savings: {} };
-    const backtest = result.backtest;
-    for (const month of result.months) {
+    if (simulated) sums.hwDelta = { import_kwh: 0, export_kwh: 0, costs: {} };
+    // The saving of the price aware control: with the simulated hardware from
+    // its comparison (only with the price aware control on in the simulation).
+    const backtest = simulated
+      ? hw.result.price_control && { grid_charge: this._sim.form.settings?.grid_charge, battery_export: this._sim.form.settings?.battery_export }
+      : result.backtest;
+    for (const month of months) {
       sums.import_kwh += month.import_kwh || 0;
       sums.export_kwh += month.export_kwh || 0;
       for (const [id, value] of Object.entries(month.savings || {})) sums.savings[id] = (sums.savings[id] || 0) + value;
       for (const [id, cost] of Object.entries(month.costs)) {
         const sum = (sums.costs[id] ||= { total: 0, import: 0, export: 0, unpriced_kwh: 0 });
         for (const key of Object.keys(sum)) sum[key] += cost[key] || 0;
+      }
+      if (month.hwDelta) {
+        sums.hwDelta.import_kwh += month.hwDelta.import_kwh;
+        sums.hwDelta.export_kwh += month.hwDelta.export_kwh;
+        for (const [id, change] of Object.entries(month.hwDelta.costs)) {
+          const sum = (sums.hwDelta.costs[id] ||= { total: 0, import: 0, export: 0 });
+          for (const key of Object.keys(sum)) sum[key] += change[key];
+        }
       }
     }
     // The saving of the price aware control only where there is one (a fixed price saves nothing).
@@ -5224,24 +5260,29 @@ class SlemsPanel extends HTMLElement {
     const shown = tariffs.filter((tariff) => tariff === current || !this._hiddenTariffs.has(tariff.id));
     const sum = this._tariffSum;
     // Per tariff the import costs and the feed-in credit (or both summed as
-    // costs), below the difference to the current tariff (green: better, red:
-    // worse) and the saving of the price control.
+    // costs), below the change by the simulated hardware, the difference to
+    // the current tariff (green: better, red: worse) and the saving of the
+    // price control.
     const sides = sum ? [["total", 1]] : [["import", 1], ["export", -1]];
+    const toneOf = (worse) => (worse <= -0.005 ? "better" : worse >= 0.005 ? "worse" : "");
     const cells = (month, tariff) => {
       const cost = month.costs[tariff.id];
       if (!cost) return sides.map(() => "<td>–</td>").join("");
       if (cost.unpriced_kwh > 0) unpriced = true;
       if (cost.peak_from_hours) peakFromHours = true;
       const base = current && tariff !== current ? month.costs[current.id] : null;
+      const change = month.hwDelta?.costs[tariff.id];
       return sides
         .map(([key, costSign], index) => {
           let html = `${escapeHtml(money.format(cost[key]))}${cost.unpriced_kwh > 0 ? "*" : ""}${cost.peak_from_hours && key !== "export" ? "†" : ""}`;
+          if (change && Math.abs(change[key]) >= 0.005) {
+            html += `<span class="sub ${toneOf(change[key] * costSign)}">${escapeHtml(t.hwDeltaShort.replace("{amount}", signed(change[key])))}</span>`;
+          }
           let tone = "";
           if (base) {
             const diff = cost[key] - base[key];
             // A higher feed-in credit is better, higher costs are worse.
-            const worse = diff * costSign;
-            tone = worse <= -0.005 ? "better" : worse >= 0.005 ? "worse" : "";
+            tone = toneOf(diff * costSign);
             html += `<span class="sub">${escapeHtml(signed(diff))}</span>`;
           }
           const saving = month.savings?.[tariff.id];
@@ -5258,9 +5299,13 @@ class SlemsPanel extends HTMLElement {
         })
         .join("");
     };
+    const energyCell = (month, key) =>
+      `<td>${escapeHtml(energy.format(month[key] || 0))}${
+        month.hwDelta && Math.round(month.hwDelta[key]) ? `<span class="sub">${escapeHtml(signedEnergy(month.hwDelta[key]))}</span>` : ""
+      }</td>`;
     const row = (label, month, extraClass = "") =>
       `<tr class="${extraClass}"><td>${escapeHtml(label)}</td>
-        <td>${escapeHtml(energy.format(month.import_kwh || 0))}</td><td>${escapeHtml(energy.format(month.export_kwh || 0))}</td>
+        ${energyCell(month, "import_kwh")}${energyCell(month, "export_kwh")}
         ${shown.map((tariff) => cells(month, tariff)).join("")}</tr>`;
     const tariffName = (tariff) => escapeHtml(tariff === current ? `${tariff.name} (${t.tariffCurrent})` : tariff.name);
     const span = sum ? "" : ' rowspan="2"';
@@ -5272,9 +5317,8 @@ class SlemsPanel extends HTMLElement {
         : `<tr>${shown
             .map(() => `<th class="side side-start">${escapeHtml(t.tariffImportCost)}</th><th class="side">${escapeHtml(t.tariffExportCredit)}</th>`)
             .join("")}</tr>`);
-    const body = result.months.length
-      ? [...result.months].reverse().map((month) => row(this._monthLabel(month.month), month)).join("") +
-        row(t.tariffSum, sums, "sum")
+    const body = months.length
+      ? [...months].reverse().map((month) => row(this._monthLabel(month.month), month)).join("") + row(t.tariffSum, sums, "sum")
       : `<tr><td colspan="${3 + shown.length * sides.length}" class="empty">${escapeHtml(t.tariffEmpty)}</td></tr>`;
     // Chips to show or hide the comparison tariffs, and the switch to sum the sides.
     const sumChip = `<button class="legend-item${sum ? "" : " off"}" data-action="toggle-tariff-sum" aria-pressed="${sum}">${escapeHtml(t.tariffSumSides)}</button>`;
@@ -5286,25 +5330,55 @@ class SlemsPanel extends HTMLElement {
           })
           .join("")}</div>`
       : `<div class="legend">${sumChip}</div>`;
+    // Current or simulated hardware, once the simulated one is calculated.
+    const hwView = this._hwView;
+    const spinner = hw.state === "loading" ? `<ha-icon class="spin" icon="mdi:loading"></ha-icon>` : "";
+    const hwSwitch =
+      switchable
+        ? `<div class="hw-view">${spinner}<span>${escapeHtml(t.hwView)}</span><div class="segmented" role="group">${[
+            ["current", t.hwViewCurrent],
+            ["simulated", t.hwViewSimulated],
+          ]
+            .map(
+              ([key, label]) =>
+                `<button data-action="hw-view" data-view="${key}" class="${hwView === key ? "active" : ""}" aria-pressed="${hwView === key}">${escapeHtml(label)}</button>`
+            )
+            .join("")}</div></div>`
+        : spinner && `<div class="hw-view">${spinner}<span>${escapeHtml(t.hwView)}</span></div>`;
+    const hwLine = {
+      unchanged: t.hwUnchanged,
+      loading: stale ? t.hwReloading : t.hwLoading,
+      unavailable: t.hwUnavailable,
+      ready: simulated ? t.hwChanges.replace("{changes}", hw.changes) : t.hwChangesOff.replace("{changes}", hw.changes),
+    }[hw.state];
     const foreign = tariffs.filter((tariff) => tariff.foreign_currency);
+    const missing = months.filter((month) => month.hwMissing).map((month) => this._monthLabel(month.month));
+    const measuredPeak = result.months.some((month) => Object.values(month.costs).some((cost) => cost.peak_saving));
     const notes = [
+      simulated ? t.hwHint : "",
       unpriced ? t.tariffUnpriced : "",
       peakFromHours ? t.tariffPeakFromHours : "",
       peakSaving ? t.tariffPeakSavingHint : "",
+      simulated && measuredPeak ? t.hwNoPeak : "",
       tariffs.some((tariff) => tariff.dynamic && !tariff.foreign_currency) && !result.market_prices ? t.tariffNoPrices : "",
       foreign.length ? t.tariffForeignCurrency.replace("{names}", foreign.map((tariff) => tariff.name).join(", ")) : "",
       result.power_hours > 0 ? t.tariffGridPower : "",
-      withSaving.size ? t.tariffSavingHint.replace("{actions}", this._savingActions(backtest)) : "",
-      result.measured?.runs
+      withSaving.size ? (simulated ? t.hwPriceNote : t.tariffSavingHint).replace("{actions}", this._savingActions(backtest)) : "",
+      simulated && !hw.result.price_control ? t.hwNoPrice : "",
+      !simulated && result.measured?.runs
         ? t.tariffMeasured.replace("{amount}", money.format(result.measured.total_eur)).replace("{runs}", result.measured.runs)
         : "",
+      missing.length ? t.hwMissing.replace("{months}", missing.join(", ")) : "",
+      simulated ? t.hwLimits : "",
       result.attribution ? t.tariffSource.replace("{source}", result.attribution) : "",
     ].filter(Boolean);
     this._setSection(
       "tariffs",
-      `<section class="card"><h2>${escapeHtml(t.tariffTitle)}</h2><p class="hint">${escapeHtml(t.tariffHint)}</p>
+      `<section class="card"><div class="chart-head"><h2>${escapeHtml(t.tariffTitle)}</h2>${hwSwitch}</div>
+        <p class="hint">${escapeHtml(t.tariffHint)}</p>
+        ${hwLine ? `<p class="hint">${hintHtml(hwLine)}</p>` : ""}
         <p class="hint">${escapeHtml(sum ? t.tariffSigns : t.tariffSidesHint)}${others.length ? ` ${escapeHtml(t.tariffDiffHint)}` : ""}</p>${chips}
-        <div class="table-wrap"><table class="tariff-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>
+        <div class="table-wrap${stale ? " stale" : ""}"><table class="tariff-table"><thead>${head}</thead><tbody>${body}</tbody></table></div>
         ${notes.map((note) => `<p class="hint">${escapeHtml(note)}</p>`).join("")}</section>`
     );
   }
@@ -6257,6 +6331,26 @@ class SlemsPanel extends HTMLElement {
       this._render();
       return;
     }
+    const simView = event.target.closest("[data-action='sim-view']");
+    if (simView) {
+      this._simView = simView.dataset.view === "months" ? "months" : "day";
+      try {
+        localStorage.setItem(SIM_VIEW_KEY, this._simView);
+      } catch (err) {
+        // Not stored: the choice lasts until the page is reloaded.
+      }
+      for (const key of ["simview", "simnote", "daychart", "pricechart", "simmetrics", "tariffs"]) this._sections[key] = undefined;
+      this._hwSchedule();
+      this._render();
+      return;
+    }
+    const hwView = event.target.closest("[data-action='hw-view']");
+    if (hwView) {
+      this._hwView = hwView.dataset.view === "current" ? "current" : "simulated";
+      this._sections.tariffs = undefined;
+      this._render();
+      return;
+    }
     const hintButton = event.target.closest("[data-action='toggle-hint']");
     if (hintButton) {
       const key = hintButton.dataset.key;
@@ -6315,7 +6409,6 @@ class SlemsPanel extends HTMLElement {
         // Not stored: the choice lasts until the page is reloaded.
       }
       this._sections.tariffs = undefined;
-      this._sections.hardware = undefined;
       this._render();
       return;
     }
@@ -6472,7 +6565,9 @@ const STYLE = `
   .tile { min-width: 0; overflow-wrap: break-word; hyphens: auto; }
   .tile.wide { grid-column: 1 / -1; }
   .sim-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
-  .sim-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .sim-main, .sim-view { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .sim-view[hidden] { display: none; }
+  #simview { grid-column: 1 / -1; order: -2; }
   .sim-side h3, #simmetrics h3 { margin: 16px 0 8px; font-size: 14px; }
   .sim-group:first-child h3 { margin-top: 8px; }
   .sim-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
@@ -6484,10 +6579,12 @@ const STYLE = `
   .tariff-table .side-start { border-left: 1px solid var(--divider-color); }
   .tariff-table td.better { background: rgba(67, 160, 71, 0.12); }
   .tariff-table td.worse { background: rgba(229, 57, 53, 0.10); }
-  .hw-months { margin-top: 12px; }
-  .hw-table tr.hw-share td { font-size: 12px; color: var(--secondary-text-color); border-top: none; }
-  .hw-table tr.hw-share td:first-child { padding-left: 24px; }
-  .hw-months summary { cursor: pointer; color: var(--secondary-text-color); }
+  .tariff-table td .sub.better { color: var(--success-color, #2e7d32); }
+  .tariff-table td .sub.worse { color: var(--error-color, #c62828); }
+  .hw-view { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--secondary-text-color); }
+  .hw-view ha-icon.spin { --mdc-icon-size: 18px; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .table-wrap.stale { opacity: 0.5; transition: opacity 0.2s; }
   .sim-note { margin: 0 0 12px; }
   .sim-metrics th { white-space: normal; }
   @media (max-width: 500px) {

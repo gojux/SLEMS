@@ -7,7 +7,8 @@ values of the simulation (capacity, minimum and maximum state of charge,
 charge and discharge power), PV and consumption scaled by the simulation's
 changes. Both runs are priced with each tariff (``tariff_comparison.compare``);
 the difference per month and tariff is what the other hardware would have
-brought. Both sides come from the model, so unchanged values differ by nothing.
+brought. Both sides come from the model, so unchanged values differ by nothing;
+the panel adds the difference to the recorded values of the tariff comparison.
 
 With the price aware control switched on in the simulation, both batteries
 are also played planned like the price aware control with each tariff's
@@ -64,8 +65,9 @@ def hardware_rows(
     min_gain_ct: float = 0.0,
 ) -> list[dict[str, Any]]:
     """Per month (only months with energy in both runs): grid import and
-    export (kWh) and the costs per tariff (import minus feed-in credit, with
-    VAT) with the ``current`` and the ``simulated`` hardware.
+    export (kWh) and per tariff the import costs, the feed-in credit and the
+    costs (import minus credit), with VAT, with the ``current`` and the
+    ``simulated`` hardware.
 
     With ``prices`` (per tariff) ``price_costs``: the costs per tariff with
     the price aware control, for the tariffs in ``prices``.
@@ -81,7 +83,10 @@ def hardware_rows(
             row["month"]: {
                 "import_kwh": row["import_kwh"],
                 "export_kwh": row["export_kwh"],
-                "costs": {key: cost["total"] for key, cost in row["costs"].items()},
+                "costs": {
+                    key: {"import": cost["import"], "export": cost["export"], "total": cost["total"]}
+                    for key, cost in row["costs"].items()
+                },
             }
             for row in usual
         }

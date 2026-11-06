@@ -73,7 +73,10 @@ def test_larger_battery_imports_and_feeds_in_less() -> None:
     current, simulated = row["current"], row["simulated"]
     assert simulated["import_kwh"] < current["import_kwh"]
     assert simulated["export_kwh"] < current["export_kwh"]
-    assert simulated["costs"]["a"] < current["costs"]["a"]
+    assert simulated["costs"]["a"]["total"] < current["costs"]["a"]["total"]
+    for side in (current, simulated):
+        cost = side["costs"]["a"]
+        assert abs(cost["import"] - cost["export"] - cost["total"]) <= 0.011
 
 
 def test_pv_and_consumption_factors() -> None:
@@ -81,7 +84,7 @@ def test_pv_and_consumption_factors() -> None:
     assert more_pv["simulated"]["export_kwh"] > more_pv["current"]["export_kwh"] + 20
     more_load = rows(BASE, load_factor=1.5)
     assert more_load["simulated"]["import_kwh"] > more_load["current"]["import_kwh"]
-    assert more_load["simulated"]["costs"]["a"] > more_load["current"]["costs"]["a"]
+    assert more_load["simulated"]["costs"]["a"]["total"] > more_load["current"]["costs"]["a"]["total"]
 
 
 def test_months_without_energy_in_one_run_are_left_out() -> None:
@@ -111,7 +114,7 @@ def test_price_control_share() -> None:
     for side in ("current", "simulated"):
         # Only for the tariffs with prices; the price aware control is never more expensive.
         assert set(row[side]["price_costs"]) == {"b"}
-        assert row[side]["price_costs"]["b"] <= row[side]["costs"]["b"] + 1e-9
+        assert row[side]["price_costs"]["b"] <= row[side]["costs"]["b"]["total"] + 1e-9
 
 
 def test_grid_charge_power_apart_from_the_surplus_charge_power() -> None:

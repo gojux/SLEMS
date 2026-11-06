@@ -109,7 +109,10 @@ support.
 
 ![Simulation: the rest of today with a doubled PV forecast compared with the current settings](../images/dashboard_simulation_en.png)
 
-Try other settings without changing anything.
+Try other settings without changing anything. Two views at the top:
+**Day plan** (day chart, price chart and key figures of today or tomorrow)
+and **Recorded months** (the tariff comparison, with the simulated hardware
+if it differs); the settings next to them count for both.
 
 - **What can be changed**: next to the day chart (today from now on or
   tomorrow) grid friendly charging, night discharge, import peak shaving and
@@ -144,47 +147,56 @@ Try other settings without changing anything.
   otherwise consumers controlled by SLEMS and the battery priority (which acts
   in the real-time distribution) are not simulated.
 
-**Tariff comparison**: with [tariffs](../../README.md#tariffs-optional) the simulation tab
-shows per month of the last year (and the current month to date) the recorded
-grid import and feed-in and, per tariff including VAT, the costs of the
-import and the credit for the feed-in (less its fees; a switch shows both
-summed), below each comparison tariff its difference to the current one
-(green better, red worse). The comparison tariffs can be shown or
-hidden by selecting their names (remembered in the browser). It is a passive comparison: the recorded energy priced
-differently, not what SLEMS would have done with another tariff (e.g. charging
-the batteries in cheap hours). Dynamic tariffs use the stored market prices;
-energy without a market price is marked. With batteries a line below the
-costs of a tariff adds an estimate of what the [price aware control](../../README.md#tariffs-optional) would
-have saved: the recorded hourly house consumption and PV are played through a
+**Tariff comparison**: with [tariffs](../../README.md#tariffs-optional)
+**Recorded months** shows per month of the last year (and the current month
+to date) the recorded grid import and feed-in and, per tariff including VAT,
+the costs of the import and the credit for the feed-in (less its fees; a
+switch shows both summed), below each comparison tariff its difference to the
+current one (green better, red worse). The comparison tariffs can be shown or
+hidden by selecting their names (remembered in the browser). It is a passive
+comparison: the recorded energy priced differently, not what SLEMS would have
+done with another tariff (e.g. charging the batteries in cheap hours).
+Dynamic tariffs use the stored market prices; energy without a market price
+is marked. With batteries a line below the costs of a tariff adds an estimate
+of what the [price aware control](../../README.md#tariffs-optional) would have
+saved: the recorded hourly house consumption and PV are played through a
 simple battery model, once as usual and once planned like the price aware
 control (with charging from the grid and feeding in from the batteries if
-they are switched on). The plan knows
-consumption and PV exactly, so the estimate is an upper bound. Tariffs where
-the control saves nothing (a fixed price) have no such line.
+they are switched on). The plan knows consumption and PV exactly, so the
+estimate is an upper bound. Tariffs where the control saves nothing (a fixed
+price) have no such line.
 
-**Other hardware in the recorded year**: when PV, consumption or a battery
-value (capacity, minimum/maximum state of charge, charge or discharge power)
-in the simulation differs from today, a card below the tariff comparison
-shows what that would have changed in the recorded months: grid import,
-feed-in and per tariff the costs (import minus feed-in credit, incl. VAT)
-with the current and with the simulated hardware and their difference (green
-cheaper, red more expensive); **Per month** opens the differences month by
-month. The comparison tariffs hidden in the tariff comparison are hidden here
-too.
+**Simulated hardware**: when PV, consumption or a battery value (capacity,
+minimum/maximum state of charge, charge or discharge power) in the
+simulation differs from today, **Hardware** next to the title of the tariff
+comparison switches between **Simulated** (chosen then) and **Current**.
+With **Simulated** every value of the table is the recorded one plus the
+change a battery model calculates for the simulated hardware; the change
+stands below it as **hardware …** (green cheaper, red more expensive), for
+grid import and feed-in as a number. The differences between the tariffs, the
+total and the hidden tariffs work as usual, so the table shows which tariff
+fits the other hardware. The line **price control saves …** then comes from
+the simulated hardware and price settings (only with **Price aware control**
+switched on in the simulation); peak shaving is not estimated for it. Months
+without recorded house consumption and PV stay unchanged and are named below
+the table. Of the simulation only PV, consumption, the battery values and the
+price aware control with its settings count here; all other settings only
+change the day plan. While a change of them is calculated (a few seconds), a
+turning symbol stands next to **Hardware** and the table shows the last
+result dimmed.
 
-![Other hardware in the recorded year: 20 kWh instead of 15.36 kWh of usable capacity and 30 % more PV](../images/dashboard_hardware_en.png)
+![Tariff comparison with simulated hardware: 20 kWh instead of 15.36 kWh of usable capacity and 30 % more PV](../images/dashboard_hardware_en.png)
 
 The recorded hourly house consumption and PV run through the same simple
 battery model as the estimate of the price aware control, once with the
 current batteries and once with the simulated values; PV and consumption are
-scaled by their change in the simulation. Both sides come from the model, so
-the difference only shows the other hardware. With **Price aware control**
-switched on in the simulation, both are also planned like the price aware
-control with each tariff's hourly prices and the simulated price settings
-(charging from the grid, feeding in from the batteries): the costs then
-include it, and a row **of which price control** below a tariff shows its
-share (a fixed price has no such row). Import and feed-in are without it. It
-is an estimate with limits:
+scaled by their change in the simulation. Only the difference of both runs
+is added to the recorded values, so what the model misses on both sides alike
+cancels out. With **Price aware control** switched on in the simulation, both
+are also planned like the price aware control with each tariff's hourly
+prices and the simulated price settings (charging from the grid, feeding in
+from the batteries); its saving is the difference to the usual run of the
+simulated hardware. It is an estimate with limits:
 
 - **Hourly values**: peaks within an hour are averaged, so more charge or
   discharge power tends to bring a little more than shown, a larger battery
@@ -193,7 +205,7 @@ is an estimate with limits:
   every surplus, so with more PV the feed-in credit comes out too high where
   a feed-in cap would curtail.
 - **Price aware control**: its plan knows consumption and PV exactly, so its
-  share is an upper bound; switched off in the simulation it is not included,
+  saving is an upper bound; switched off in the simulation it is not included,
   and with a dynamic tariff a larger battery can then bring more than shown.
 - **The PV change scales the recorded PV curve**: additional modules facing
   east or west would make the curve wider, not only higher; hours already

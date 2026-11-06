@@ -118,7 +118,11 @@ Plan des Tagesziels und die Batterie-Unterstützung.
 
 ![Simulation: der Rest des Tages mit doppelter PV-Prognose im Vergleich zu den aktuellen Einstellungen](../images/dashboard_simulation_de.png)
 
-Andere Einstellungen ausprobieren, ohne etwas zu ändern.
+Andere Einstellungen ausprobieren, ohne etwas zu ändern. Oben zwei
+Ansichten: **Tagesplan** (Tagesdiagramm, Preisdiagramm und Kennzahlen von
+heute oder morgen) und **Aufgezeichnete Monate** (der Tarifvergleich, mit der
+simulierten Hardware, wenn sie abweicht); die Einstellungen daneben gelten
+für beide.
 
 - **Was sich ändern lässt**: Neben dem Tagesdiagramm (heute ab jetzt oder
   morgen) lassen sich netzdienliches Laden, Nachtentladung, Bezugsspitzen
@@ -156,50 +160,60 @@ Andere Einstellungen ausprobieren, ohne etwas zu ändern.
   werden von SLEMS gesteuerte Verbraucher und der Batterievorrang (er wirkt in
   der Echtzeit-Verteilung) nicht simuliert.
 
-**Tarifvergleich**: Mit [Tarifen](../../README.de.md#tarife-optional) zeigt der Reiter
-Simulation für jeden Monat des letzten Jahres (und den laufenden Monat bis
-heute) den aufgezeichneten Netzbezug und die Einspeisung und je Tarif
-inklusive Umsatzsteuer die Kosten des Bezugs und die Vergütung der Einspeisung
-(abzüglich ihrer Gebühren; ein Schalter zeigt beides summiert), unter jedem
-Vergleichstarif die Differenz zum aktuellen (grün besser, rot schlechter). Die Vergleichstarife lassen sich durch Auswählen
-ihres Namens ein- und ausblenden (im Browser gemerkt).
-Es ist ein passiver Vergleich: die aufgezeichnete Energie anders bepreist,
-nicht das, was SLEMS mit einem anderen Tarif anders gemacht hätte (z. B. die
-Batterien in günstigen Stunden laden). Dynamische Tarife nutzen die
-gespeicherten Börsenpreise; Energie ohne Börsenpreis wird markiert. Mit
-Batterien steht unter den Kosten eines Tarifs eine Schätzung, was die
-[preisbewusste Steuerung](../../README.de.md#tarife-optional) gespart hätte: Aufgezeichneter
-Hausverbrauch und PV laufen stündlich durch ein einfaches Batteriemodell,
-einmal wie üblich und einmal geplant wie die preisbewusste Steuerung (mit
-Laden aus dem Netz und Einspeisen aus den Batterien, wenn sie eingeschaltet
-sind). Der Plan kennt Verbrauch und
-PV genau, die Schätzung ist daher eine Obergrenze. Tarife, bei denen die
-Steuerung nichts spart (Fixpreis), haben keine solche Zeile.
+**Tarifvergleich**: Mit [Tarifen](../../README.de.md#tarife-optional) zeigt
+**Aufgezeichnete Monate** für jeden Monat des letzten Jahres (und den
+laufenden Monat bis heute) den aufgezeichneten Netzbezug und die Einspeisung
+und je Tarif inklusive Umsatzsteuer die Kosten des Bezugs und die Vergütung
+der Einspeisung (abzüglich ihrer Gebühren; ein Schalter zeigt beides
+summiert), unter jedem Vergleichstarif die Differenz zum aktuellen (grün
+besser, rot schlechter). Die Vergleichstarife lassen sich durch Auswählen
+ihres Namens ein- und ausblenden (im Browser gemerkt). Es ist ein passiver
+Vergleich: die aufgezeichnete Energie anders bepreist, nicht das, was SLEMS
+mit einem anderen Tarif anders gemacht hätte (z. B. die Batterien in
+günstigen Stunden laden). Dynamische Tarife nutzen die gespeicherten
+Börsenpreise; Energie ohne Börsenpreis wird markiert. Mit Batterien steht
+unter den Kosten eines Tarifs eine Schätzung, was die
+[preisbewusste Steuerung](../../README.de.md#tarife-optional) gespart hätte:
+Aufgezeichneter Hausverbrauch und PV laufen stündlich durch ein einfaches
+Batteriemodell, einmal wie üblich und einmal geplant wie die preisbewusste
+Steuerung (mit Laden aus dem Netz und Einspeisen aus den Batterien, wenn sie
+eingeschaltet sind). Der Plan kennt Verbrauch und PV genau, die Schätzung ist
+daher eine Obergrenze. Tarife, bei denen die Steuerung nichts spart
+(Fixpreis), haben keine solche Zeile.
 
-**Andere Hardware im aufgezeichneten Jahr**: Weicht in der Simulation PV,
-Verbrauch oder ein Batteriewert (Kapazität, minimaler/maximaler Ladezustand,
-Lade- oder Entladeleistung) vom heutigen ab, zeigt eine Karte unter dem
-Tarifvergleich, was das in den aufgezeichneten Monaten geändert hätte:
-Netzbezug, Einspeisung und je Tarif die Kosten (Bezug minus
-Einspeisevergütung, inkl. USt.) mit der heutigen und der simulierten Hardware
-und ihre Differenz (grün günstiger, rot teurer); **Pro Monat** klappt die
-Differenzen Monat für Monat auf. Im Tarifvergleich ausgeblendete
-Vergleichstarife sind auch hier ausgeblendet.
+**Simulierte Hardware**: Weicht in der Simulation PV, Verbrauch oder ein
+Batteriewert (Kapazität, minimaler/maximaler Ladezustand, Lade- oder
+Entladeleistung) vom heutigen ab, schaltet **Hardware** neben dem Titel des
+Tarifvergleichs zwischen **Simuliert** (dann gewählt) und **Heute** um. Mit
+**Simuliert** ist jeder Wert der Tabelle der aufgezeichnete plus die
+Änderung, die ein Batteriemodell für die simulierte Hardware berechnet; die
+Änderung steht als **Hardware …** darunter (grün günstiger, rot teurer), bei
+Netzbezug und Einspeisung als Zahl. Die Differenzen zwischen den Tarifen, die
+Summe und die ausgeblendeten Tarife wirken wie gewohnt; die Tabelle zeigt
+also, welcher Tarif zur anderen Hardware passt. Die Zeile **Preissteuerung
+spart …** stammt dann aus der simulierten Hardware und den simulierten
+Preis-Einstellungen (nur mit eingeschalteter **Preisbewusster Steuerung** in
+der Simulation); den Spitzenabfang schätzt dieser Vergleich nicht. Monate
+ohne aufgezeichneten Hausverbrauch und PV bleiben unverändert und stehen
+unter der Tabelle. Von der Simulation wirken hier nur PV, Verbrauch, die
+Batteriewerte und die Preissteuerung mit ihren Einstellungen; alle anderen
+Einstellungen ändern nur den Tagesplan. Während eine Änderung daran
+berechnet wird (einige Sekunden), dreht sich neben **Hardware** ein Symbol,
+und die Tabelle zeigt abgeblendet den letzten Stand.
 
-![Andere Hardware im aufgezeichneten Jahr: 20 kWh statt 15,36 kWh nutzbarer Kapazität und 30 % mehr PV](../images/dashboard_hardware_de.png)
+![Tarifvergleich mit simulierter Hardware: 20 kWh statt 15,36 kWh nutzbarer Kapazität und 30 % mehr PV](../images/dashboard_hardware_de.png)
 
 Aufgezeichneter stündlicher Hausverbrauch und PV laufen durch dasselbe
 einfache Batteriemodell wie die Schätzung der preisbewussten Steuerung,
 einmal mit den heutigen Batterien und einmal mit den simulierten Werten; PV
-und Verbrauch werden um ihre Änderung in der Simulation skaliert. Beide
-Seiten stammen aus dem Modell, die Differenz zeigt also nur die andere
-Hardware. Ist in der Simulation die **Preisbewusste Steuerung** eingeschaltet,
-werden beide zusätzlich wie die preisbewusste Steuerung mit den Stundenpreisen
-jedes Tarifs und den simulierten Preis-Einstellungen geplant (Laden aus dem
-Netz, Einspeisen aus den Batterien): Die Kosten enthalten sie dann, und eine
-Zeile **davon Preissteuerung** unter einem Tarif zeigt ihren Anteil (ein
-Fixpreis hat keine solche Zeile). Bezug und Einspeisung sind ohne sie. Es
-ist eine Schätzung mit Grenzen:
+und Verbrauch werden um ihre Änderung in der Simulation skaliert. Nur die
+Differenz beider Läufe kommt zu den aufgezeichneten Werten dazu; was das
+Modell auf beiden Seiten gleich verfehlt, hebt sich also auf. Ist in der
+Simulation die **Preisbewusste Steuerung** eingeschaltet, werden beide
+zusätzlich wie die preisbewusste Steuerung mit den Stundenpreisen jedes
+Tarifs und den simulierten Preis-Einstellungen geplant (Laden aus dem Netz,
+Einspeisen aus den Batterien); ihre Ersparnis ist die Differenz zum üblichen
+Lauf der simulierten Hardware. Es ist eine Schätzung mit Grenzen:
 
 - **Stundenwerte**: Spitzen innerhalb einer Stunde werden gemittelt; mehr
   Lade- oder Entladeleistung bringt daher eher etwas mehr als angezeigt, eine
@@ -207,8 +221,8 @@ ist eine Schätzung mit Grenzen:
 - **Ohne netzdienliches Laden und Einspeisebegrenzung**: Das Modell speist
   jeden Überschuss ein; mit mehr PV fällt die Einspeisevergütung daher zu
   hoch aus, wo eine Einspeisebegrenzung abregeln würde.
-- **Preissteuerung**: Ihr Plan kennt Verbrauch und PV genau, ihr Anteil ist
-  daher eine Obergrenze; in der Simulation ausgeschaltet ist sie nicht
+- **Preissteuerung**: Ihr Plan kennt Verbrauch und PV genau, ihre Ersparnis
+  ist daher eine Obergrenze; in der Simulation ausgeschaltet ist sie nicht
   enthalten, und mit einem dynamischen Tarif kann eine größere Batterie dann
   mehr bringen als angezeigt.
 - **Die PV-Änderung skaliert die aufgezeichnete PV-Kurve**: Zusätzliche
