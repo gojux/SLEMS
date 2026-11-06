@@ -17,7 +17,7 @@ system).
 ![SLEMS overview: energy flow, key figures and the forecast and plan chart of the day](docs/images/dashboard_overview_en.png)
 
 > **Status: beta.** SLEMS has been running in production without problems
-> for quite some time, but it is still developed further often. In the operating mode **Active** it sends
+> for quite some time; new features and improvements keep coming often. In the operating mode **Active** it sends
 > commands to batteries and switches consumers. Use it at your own risk: check
 > the limits of your batteries and the fuses of your circuits. Please report
 > faults as an [issue](https://github.com/gojux/SLEMS/issues) with the

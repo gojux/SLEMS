@@ -17,7 +17,8 @@ Tiere](https://en.wikipedia.org/wiki/Sea_slug)) und *EMS*
 ![SLEMS-Übersicht: Energiefluss, Kennzahlen und das Diagramm mit Prognose und Plan des Tages](docs/images/dashboard_overview_de.png)
 
 > **Status: Beta.** SLEMS läuft schon längere Zeit problemlos im
-> Produktivbetrieb, wird aber weiterhin häufig weiterentwickelt. Im Betriebsmodus **Aktiv** sendet es Vorgaben an
+> Produktivbetrieb; neue Funktionen und Verbesserungen kommen weiterhin häufig
+> dazu. Im Betriebsmodus **Aktiv** sendet es Vorgaben an
 > Batterien und schaltet Verbraucher. Die Nutzung erfolgt auf eigene
 > Verantwortung: Prüfe die Grenzen deiner Batterien und die Absicherung deiner
 > Stromkreise. Fehler bitte als [Issue](https://github.com/gojux/SLEMS/issues)
