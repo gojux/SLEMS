@@ -599,6 +599,13 @@ Every controllable battery has these settings (dashboard: **Settings**):
   consumption forecast do not contain power that does not flow.
 - **Charge power limit** and **Discharge power limit** (default: the maximum of
   the battery), e.g. 800 W for a plug-in system.
+
+  If several batteries share one circuit (e.g. two Venus with 2.5 kW each
+  behind a B16 circuit breaker, 16 A × 230 V ≈ 3.7 kW), set both limits of
+  each battery to its share with some margin, e.g. 1.65 kW each. Otherwise
+  both charge or discharge at full power and the breaker trips after a
+  while. If other devices are on the same circuit, subtract their usual
+  load.
 - **Minimum power**: no charging or discharging with so little power that it
   does not pay off. Below the fixed loss of the inverter (Venus about
   35–48 W) charging even discharges the battery.

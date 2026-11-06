@@ -635,6 +635,13 @@ Jede steuerbare Batterie hat diese Einstellungen (Dashboard: **Einstellungen**):
   Verbrauchsprognose keine Leistung enthalten, die nicht fließt.
 - **Grenze Ladeleistung** und **Grenze Entladeleistung** (Standard: das Maximum
   der Batterie), z. B. 800 W für ein Steckergerät.
+
+  Hängen mehrere Batterien an einem Stromkreis (z. B. zwei Venus mit je
+  2,5 kW hinter einem B16-Leitungsschutzschalter, 16 A × 230 V ≈ 3,7 kW),
+  setz beide Grenzen jeder Batterie auf ihren Anteil mit etwas Abstand, z. B.
+  je 1,65 kW. Sonst laden oder entladen beide mit voller Leistung, und der
+  Schalter löst nach einiger Zeit aus. Hängen am selben Stromkreis noch andere
+  Geräte, zieh deren übliche Last davon ab.
 - **Mindestleistung**: kein Laden oder Entladen mit so kleiner Leistung, dass
   es sich nicht lohnt. Unter dem festen Verlust des Wechselrichters (Venus
   etwa 35–48 W) entlädt das Laden die Batterie sogar.

@@ -600,7 +600,9 @@ Nutzern mit einer echten Wallbox zur [evcc-Anleitung](docs/wallbox-evcc.de.md).
   - die Tagesziele der Verbraucher gemeinsam mit den Batterien geplant,
   - ein stabilerer Plan der preisbewussten Steuerung (nur bei deutlicher
     Verbesserung geändert).
-- Verbraucher bei negativen Preisen bevorzugen (z. B. den Heizstab).
+- Verbraucher bei sehr günstigen oder negativen Preisen bevorzugen: eine
+  Preisschwelle je Verbraucher (z. B. Heizstab oder Boiler), gemessen am
+  gesamten Bezugspreis mit Netzentgelten, nicht nur am Börsenpreis.
 - Geschätzte Preise nach dem Wetter: die Prognose von Wind, Sonne und Last des
   Marktgebiets (Energy-Charts) verschiebt die Schätzung; bei genau bekannten
   Werten wäre die Abweichung im letzten Jahr um etwa ein Drittel gesunken.
@@ -645,16 +647,6 @@ Nutzern mit einer echten Wallbox zur [evcc-Anleitung](docs/wallbox-evcc.de.md).
   Abend), wird das Minimum innerhalb einer eingestellten Zeit wieder erreicht
   statt erst zur Frist am nächsten Tag.
 
-**Dashboard**
-
-- Ein übersichtlicherer Reiter **Einstellungen**: nach ihrer Rolle in der
-  Regelung gruppiert (Netzanschluss, Laden aus PV, Reserven, Entladen, Preise,
-  Batterien), die Experten-Einstellungen eingeklappt, Unterpunkte
-  ausgeblendet, solange ihre Funktion aus ist, und nur die Einstellungen, die
-  in der eigenen Anlage etwas bewirken (z. B. keine Batterie-Einstellungen
-  ohne Batterien). Dazu weniger Einstellungen, wo SLEMS den Wert selbst
-  lernen kann.
-
 **Batterien und Anlagen**
 
 - Batteriegruppen mit gemeinsamer Absicherung: mehrere Batterien an einem
@@ -663,18 +655,11 @@ Nutzern mit einer echten Wallbox zur [evcc-Anleitung](docs/wallbox-evcc.de.md).
   teilen, statt fest der Hälfte für jede.
 - Batterien mit eigener PV: die ersten echten Geräte (Marstek B2500, Zendure
   SolarFlow) und Hybrid-Wechselrichter über ihre Integrationen oder über
-  Modbus-Profile (Kandidaten zum Testen vorhanden), ein
-  gemeinsamer höchster Ausgang für mehrere Einheiten an einem Wechselrichter
-  und die Prüfung auf doppelt gezählte PV auch in den Systemeinstellungen.
+  Modbus-Profile (Kandidaten zum Testen vorhanden) und ein
+  gemeinsamer höchster Ausgang für mehrere Einheiten an einem Wechselrichter.
 - Weitere Anlagenarten: Batterien mit eigenem Zähler oder einem
   Notstromausgang mit Lasten dahinter, und Batterien an mehreren
   Wechselrichtern.
-- Laufende Prüfung der Batterien im Betrieb: saubere Änderungen der Vorgabe
-  (eine Batterie, kein schaltender Verbraucher, ruhiger Smart Meter) mit dem
-  Smart Meter und der gemeldeten Leistung verglichen; nach vielen
-  übereinstimmenden Abweichungen (z. B. ein durch ein Update der Integration
-  gedrehtes Vorzeichen) rät eine Reparaturmeldung zum Selbsttest. Zuerst nur in
-  den Diagnosedaten gezählt, um die Grenzen mit echten Daten festzulegen.
 - Weitere Batteriemodelle: mitgelieferte Modbus-Profile aus eigenen Profilen
   und [Kandidaten](docs/battery-profiles/README.de.md), die bei Nutzern dieser
   Batterien ihren Probebetrieb bestanden haben; ein eigener Treiber nur für

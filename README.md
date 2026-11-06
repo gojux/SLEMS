@@ -584,7 +584,9 @@ wallbox on the [evcc guide](docs/wallbox-evcc.md).
   - the daily targets of the consumers planned together with the batteries,
   - a more stable plan of the price aware control (changed only when clearly
     better).
-- Consumers preferred at negative prices (e.g. the heating rod).
+- Consumers preferred at very cheap or negative prices: a price threshold per
+  consumer (e.g. the heating rod or a boiler), based on the total import
+  price including grid fees, not only the exchange price.
 - Estimated prices from the weather: the forecast of wind, solar and load of
   the bidding zone (Energy-Charts) moves the estimate; with them known
   exactly, the deviation of the last year would have dropped by about a
@@ -629,15 +631,6 @@ wallbox on the [evcc guide](docs/wallbox-evcc.md).
   evening), the minimum is reached again within a set time instead of only
   by the next day's deadline.
 
-**Dashboard**
-
-- A clearer **Settings** tab: grouped by their role in the control (grid
-  connection, charging from PV, reserves, discharging, prices, batteries), the
-  expert settings collapsed, sub-settings hidden while their feature is off,
-  and only the settings that have an effect in your installation (e.g. no
-  battery settings without batteries). Also fewer settings where SLEMS can
-  learn the value itself.
-
 **Batteries and installations**
 
 - Battery groups with a shared fuse: several batteries on one circuit (e.g.
@@ -645,17 +638,10 @@ wallbox on the [evcc guide](docs/wallbox-evcc.md).
   the active batteries of the group share, instead of a fixed half for each.
 - Batteries with their own PV: the first real devices (Marstek B2500,
   Zendure SolarFlow) and hybrid inverters through their integrations or
-  through Modbus profiles (candidates to test are available), a
-  shared highest output for several units at one inverter, and the check
-  for PV counted twice also in the system settings.
+  through Modbus profiles (candidates to test are available), and a
+  shared highest output for several units at one inverter.
 - Further kinds of installations: batteries with their own meter or a backup
   output with loads behind it, and batteries serving several inverters.
-- Ongoing check of the batteries in normal operation: clean set point changes
-  (one battery, no consumer switching, a quiet smart meter) compared with the
-  smart meter and the reported power; after many consistent mismatches (e.g. a
-  sign turned by an update of the integration) a repair issue suggests the
-  self-test. First only counted in the diagnostics to set the limits with real
-  data.
 - Further battery models: shipped Modbus profiles from own profiles and
   [candidates](docs/battery-profiles/README.md) that passed their trial with
   users of these batteries; a driver of its own only for models that do not
