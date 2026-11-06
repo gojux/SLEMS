@@ -9,7 +9,7 @@ battery profile for SLEMS. Paste the result in SLEMS under
 **Battery from a Modbus profile (experimental)**.
 The whole way from the manual to a controlled battery is described in the
 README under
-[Battery from a Modbus profile](../README.md#battery-from-a-modbus-profile-experimental).
+[Battery from a Modbus profile](guide/battery-modbus-profile.md).
 
 How to do it:
 

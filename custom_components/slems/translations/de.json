@@ -462,7 +462,7 @@
       "error": {
         "cannot_connect": "Keine Verbindung zur Batterie möglich.",
         "no_auto_release": "Automatik braucht eine Fernsteuerungs-Entität, eine Modus-Option für Automatik oder ein Freigabe-Skript; sonst Standby wählen.",
-        "none_found": "Im Netz wurde keine Marstek Venus gefunden. Adresse von Hand eingeben (siehe README: IP-Adresse finden); andere Integrationen, die die Batterie verwenden, vorher stoppen.",
+        "none_found": "Im Netz wurde keine Marstek Venus gefunden. Adresse von Hand eingeben (siehe Anleitung Batterien: IP-Adresse finden); andere Integrationen, die die Batterie verwenden, vorher stoppen.",
         "output_needs_own_pv": "**Ausgang** braucht **Eigene PV-Module an der Batterie**.",
         "input_needs_sensor": "Eine Vorgabe des Eingangs braucht den **Eingang aus dem Netz** im vorigen Schritt.",
         "own_pv_counted_twice": "Diese Entitäten sind auch als PV-Anlagen eingetragen: {pv_systems}. Ihre Erzeugung würde doppelt zählen. Wähle **Bei den PV-Anlagen entfernen** aus oder andere Entitäten.",

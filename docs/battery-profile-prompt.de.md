@@ -9,7 +9,7 @@ erstellen. Füge das Ergebnis in SLEMS unter
 **Einstellungen → Geräte & Dienste → SLEMS → Batterie hinzufügen** mit dem
 Modell **Batterie aus einem Modbus-Profil (experimentell)** ein. Den ganzen
 Weg vom Handbuch bis zur geregelten Batterie beschreibt die README unter
-[Batterie aus einem Modbus-Profil](../README.de.md#batterie-aus-einem-modbus-profil-experimentell).
+[Batterie aus einem Modbus-Profil](guide/battery-modbus-profile.de.md).
 
 So geht's:
 

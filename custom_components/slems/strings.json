@@ -462,7 +462,7 @@
       "error": {
         "cannot_connect": "Cannot connect to the battery.",
         "no_auto_release": "Automatic needs a remote control entity, a mode option for automatic or a release script; otherwise choose standby.",
-        "none_found": "No Marstek Venus found in the network. Enter the address by hand (see README: finding the IP address); stop other integrations using the battery first.",
+        "none_found": "No Marstek Venus found in the network. Enter the address by hand (see the battery guide: finding the IP address); stop other integrations using the battery first.",
         "output_needs_own_pv": "**Output** needs **Own PV modules at the battery**.",
         "input_needs_sensor": "An input set point needs the **Input from the grid** in the previous step.",
         "own_pv_counted_twice": "These entities are also entered as PV systems: {pv_systems}. Their production would count twice. Select **Remove them from the PV systems** or choose other entities.",
