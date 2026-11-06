@@ -7,7 +7,9 @@ import pytest
 
 from homeassistant.util import dt as dt_util
 
-from custom_components.slems.hardware_comparison import hardware_rows, simulated_battery
+from custom_components.slems.allocation import BatteryGroup
+from custom_components.slems.hardware_comparison import hardware_rows
+from custom_components.slems.simulation import simulated_group
 from custom_components.slems.price_backtest import BacktestBattery
 from custom_components.slems.tariff import Group, Role, Side, Tariff, TariffItem, Unit
 
@@ -17,38 +19,31 @@ def vienna() -> None:
     dt_util.set_default_time_zone(dt_util.get_time_zone("Europe/Vienna"))
 
 
-# Charging reduced by a battery with own PV (2500 W of the group's 3000 W).
 BASE = BacktestBattery(
     capacity_wh=5120, min_wh=512, full_wh=4864, max_charge_w=2500, max_discharge_w=2500,
     efficiency=0.95, wear_ct=1.0, grid_charge=False, grid_max_wh=4608,
 )
-REAL = {"capacity_kwh": 5.12, "min_soc_pct": 10.0, "max_soc_pct": 95.0, "max_charge_w": 3000.0, "max_discharge_w": 2500.0}
 FIXED = Tariff("Fixed", Role.CURRENT, (
     TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.KWH, 30.0),
     TariffItem("Feed-in", Side.EXPORT, Group.ENERGY, Unit.KWH, 5.0),
 ), {})
+REAL = {"capacity_kwh": 5.12, "min_soc_pct": 10.0, "max_soc_pct": 95.0, "max_charge_w": 3000.0, "max_discharge_w": 2500.0}
 
 
-def test_unchanged_values_keep_the_backtest_battery() -> None:
-    assert simulated_battery(BASE, REAL, dict(REAL)) == BASE
+def larger(capacity_wh: float) -> BacktestBattery:
+    scale = capacity_wh / BASE.capacity_wh
+    return replace(BASE, capacity_wh=capacity_wh, min_wh=BASE.min_wh * scale, full_wh=BASE.full_wh * scale)
 
 
-def test_changed_values() -> None:
-    # A larger capacity keeps the states of charge in %.
-    larger = simulated_battery(BASE, REAL, REAL | {"capacity_kwh": 10.24})
-    assert (larger.capacity_wh, larger.min_wh, larger.full_wh, larger.grid_max_wh) == pytest.approx(
-        (10240, 1024, 9728, 9216)
+def test_simulated_group_changes_only_the_changed_values() -> None:
+    group = BatteryGroup(
+        soc_pct=50.0, capacity_wh=5123.4, max_charge_w=3000.4, max_discharge_w=2500.0,
+        charge_efficiency=0.95, min_soc_pct=10.04, full_soc_pct=95.0,
     )
-    # Another maximum state of charge; the grid charge limit stays below it.
-    lower = simulated_battery(BASE, REAL, REAL | {"max_soc_pct": 80.0})
-    assert lower.full_wh == pytest.approx(4096)
-    assert lower.grid_max_wh == pytest.approx(4096)
-    # Power: the backtest power shifted by the change, never below 0.
-    stronger = simulated_battery(BASE, REAL, REAL | {"max_charge_w": 5000.0, "max_discharge_w": 0.0})
-    assert (stronger.max_charge_w, stronger.max_discharge_w) == (4500, 0)
-    # A minimum above the maximum: no usable energy, not a negative one.
-    crossed = simulated_battery(BASE, REAL, REAL | {"min_soc_pct": 98.0})
-    assert crossed.full_wh == crossed.min_wh
+    # Starting values are rounded; unchanged ones keep the exact value.
+    assert simulated_group(group, REAL | {"capacity_kwh": 5.12, "min_soc_pct": 10.0}, REAL) == group
+    changed = simulated_group(group, REAL, REAL | {"capacity_kwh": 10.0, "max_charge_w": 5000.0})
+    assert (changed.capacity_wh, changed.max_charge_w, changed.min_soc_pct) == (10000.0, 5000.0, 10.04)
 
 
 def scenario(days: int = 3):
@@ -74,7 +69,7 @@ def test_unchanged_hardware_costs_the_same() -> None:
 
 
 def test_larger_battery_imports_and_feeds_in_less() -> None:
-    row = rows(simulated_battery(BASE, REAL, REAL | {"capacity_kwh": 15.0}))
+    row = rows(larger(15000))
     current, simulated = row["current"], row["simulated"]
     assert simulated["import_kwh"] < current["import_kwh"]
     assert simulated["export_kwh"] < current["export_kwh"]
@@ -98,3 +93,34 @@ def test_months_without_energy_in_one_run_are_left_out() -> None:
     )
     # play starts half full: 1e6 Wh cover the three days without import.
     assert result == []
+
+
+def test_price_control_share() -> None:
+    load, pv = scenario()
+    # Expensive evening, cheap night: the price plan keeps energy for the evening.
+    import_ct = {h: 50.0 if 17 <= h.hour < 21 else 20.0 for h in load}
+    spot = Tariff("Spot", Role.COMPARISON, (TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.SPOT, 0.0),), {})
+    market = {h: value * 10 for h, value in import_ct.items()}
+    battery = replace(BASE, grid_charge=True, grid_charge_w=1000.0)
+    result = hardware_rows(
+        {"a": FIXED, "b": spot}, date(2026, 6, 1), date(2026, 6, 3), load, pv, battery,
+        replace(battery, capacity_wh=15000, full_wh=14000, grid_max_wh=14000), 1.0, 1.0, market,
+        prices={"b": (import_ct, None)}, min_gain_ct=1.0,
+    )
+    row = result[0]
+    for side in ("current", "simulated"):
+        # Only for the tariffs with prices; the price aware control is never more expensive.
+        assert set(row[side]["price_costs"]) == {"b"}
+        assert row[side]["price_costs"]["b"] <= row[side]["costs"]["b"] + 1e-9
+
+
+def test_grid_charge_power_apart_from_the_surplus_charge_power() -> None:
+    from custom_components.slems.price_backtest import play
+
+    hours = [datetime(2026, 6, 1, tzinfo=dt_util.get_default_time_zone()) + timedelta(hours=i) for i in range(24)]
+    load = {h: 200.0 for h in hours}
+    pv = {h: 3000.0 if 10 <= h.hour < 12 else 0.0 for h in hours}
+    battery = replace(BASE, max_charge_w=2500, grid_charge_w=500.0, min_wh=0, full_wh=5000, efficiency=1.0)
+    imported, exported = play(hours, load, pv, battery, None, 0.0, start_wh=0.0)
+    # The surplus charges with 2500 W, not with the grid charge power.
+    assert sum(exported.values()) == pytest.approx(2 * (2800 - 2500))

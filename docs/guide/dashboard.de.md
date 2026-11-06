@@ -193,16 +193,24 @@ einfache Batteriemodell wie die Schätzung der preisbewussten Steuerung,
 einmal mit den heutigen Batterien und einmal mit den simulierten Werten; PV
 und Verbrauch werden um ihre Änderung in der Simulation skaliert. Beide
 Seiten stammen aus dem Modell, die Differenz zeigt also nur die andere
-Hardware. Es ist eine Schätzung mit Grenzen:
+Hardware. Ist in der Simulation die **Preisbewusste Steuerung** eingeschaltet,
+werden beide zusätzlich wie die preisbewusste Steuerung mit den Stundenpreisen
+jedes Tarifs und den simulierten Preis-Einstellungen geplant (Laden aus dem
+Netz, Einspeisen aus den Batterien): Die Kosten enthalten sie dann, und eine
+Zeile **davon Preissteuerung** unter einem Tarif zeigt ihren Anteil (ein
+Fixpreis hat keine solche Zeile). Bezug und Einspeisung sind ohne sie. Es
+ist eine Schätzung mit Grenzen:
 
 - **Stundenwerte**: Spitzen innerhalb einer Stunde werden gemittelt; mehr
   Lade- oder Entladeleistung bringt daher eher etwas mehr als angezeigt, eine
   größere Batterie eher etwas weniger.
-- **Ohne netzdienliches Laden, Einspeisebegrenzung und Preissteuerung**: Das
-  Modell speist jeden Überschuss ein; mit mehr PV fällt die
-  Einspeisevergütung daher zu hoch aus, wo eine Einspeisebegrenzung abregeln
-  würde. Mit einem dynamischen Tarif kann eine größere Batterie mehr bringen
-  als angezeigt, weil die preisbewusste Steuerung sie ebenfalls nutzen würde.
+- **Ohne netzdienliches Laden und Einspeisebegrenzung**: Das Modell speist
+  jeden Überschuss ein; mit mehr PV fällt die Einspeisevergütung daher zu
+  hoch aus, wo eine Einspeisebegrenzung abregeln würde.
+- **Preissteuerung**: Ihr Plan kennt Verbrauch und PV genau, ihr Anteil ist
+  daher eine Obergrenze; in der Simulation ausgeschaltet ist sie nicht
+  enthalten, und mit einem dynamischen Tarif kann eine größere Batterie dann
+  mehr bringen als angezeigt.
 - **Die PV-Änderung skaliert die aufgezeichnete PV-Kurve**: Zusätzliche
   Module nach Osten oder Westen würden die Kurve breiter machen, nicht nur
   höher; schon abgeregelte Stunden werden mitskaliert.

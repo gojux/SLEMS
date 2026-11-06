@@ -48,6 +48,8 @@ class BacktestBattery:
     # aware control), at most this AC power.
     battery_export: bool = False
     export_max_w: float = math.inf
+    # Charge power from the grid; None: ``max_charge_w``.
+    grid_charge_w: float | None = None
 
 
 def play(
@@ -134,7 +136,11 @@ def _plan_run(
             floor_wh=battery.min_wh,
             grid_max_wh=battery.grid_max_wh,
             max_charge_w=battery.max_charge_w,
-            grid_charge_w=battery.max_charge_w if battery.grid_charge else 0.0,
+            grid_charge_w=(
+                (battery.max_charge_w if battery.grid_charge_w is None else battery.grid_charge_w)
+                if battery.grid_charge
+                else 0.0
+            ),
             max_discharge_w=battery.max_discharge_w,
             efficiency=battery.efficiency,
             wear_ct=battery.wear_ct,

@@ -505,7 +505,11 @@ const STRINGS = {
     hwCosts: "Costs {tariff}",
     hwPerMonth: "Per month (simulated minus current hardware)",
     hwLimits:
-      "An estimate with limits: hourly values (peaks within an hour are averaged); grid friendly charging, the feed-in cap and the price aware control are not included (with more PV the feed-in credit comes out too high, with a dynamic tariff larger batteries can bring more than shown); the PV change scales the recorded PV curve and does not know the orientation of additional modules; consumers switched by surplus (e.g. heating rod, wallbox) keep their recorded energy; purchase costs are not included.",
+      "An estimate with limits: hourly values (peaks within an hour are averaged); grid friendly charging and the feed-in cap are not included (with more PV the feed-in credit comes out too high); the PV change scales the recorded PV curve and does not know the orientation of additional modules; consumers switched by surplus (e.g. heating rod, wallbox) keep their recorded energy; purchase costs are not included.",
+    hwPriceShare: "of which price control",
+    hwPriceNote:
+      "The price aware control is switched on in the simulation: the costs include what it would have saved with each tariff and the simulated price settings (planned with a perfect forecast, an upper bound); “of which price control” is its share. Import and feed-in are without it.",
+    hwNoPrice: "The price aware control is switched off in the simulation and not included; with a dynamic tariff larger batteries can bring more than shown.",
     mExport: "Feed-in",
     mImport: "Grid import",
     mMaxImport: "Highest import",
@@ -1287,7 +1291,11 @@ const STRINGS = {
     hwCosts: "Kosten {tariff}",
     hwPerMonth: "Pro Monat (simulierte minus heutige Hardware)",
     hwLimits:
-      "Eine Schätzung mit Grenzen: Stundenwerte (Spitzen innerhalb einer Stunde werden gemittelt); netzdienliches Laden, Einspeisebegrenzung und Preissteuerung sind nicht enthalten (mit mehr PV fällt die Einspeisevergütung zu hoch aus, mit einem dynamischen Tarif können größere Batterien mehr bringen als angezeigt); die PV-Änderung skaliert die aufgezeichnete PV-Kurve und kennt die Ausrichtung zusätzlicher Module nicht; Verbraucher, die nach Überschuss schalten (z. B. Heizstab, Wallbox), behalten ihre aufgezeichnete Energie; Anschaffungskosten sind nicht eingerechnet.",
+      "Eine Schätzung mit Grenzen: Stundenwerte (Spitzen innerhalb einer Stunde werden gemittelt); netzdienliches Laden und Einspeisebegrenzung sind nicht enthalten (mit mehr PV fällt die Einspeisevergütung zu hoch aus); die PV-Änderung skaliert die aufgezeichnete PV-Kurve und kennt die Ausrichtung zusätzlicher Module nicht; Verbraucher, die nach Überschuss schalten (z. B. Heizstab, Wallbox), behalten ihre aufgezeichnete Energie; Anschaffungskosten sind nicht eingerechnet.",
+    hwPriceShare: "davon Preissteuerung",
+    hwPriceNote:
+      "Die Preissteuerung ist in der Simulation eingeschaltet: Die Kosten enthalten, was sie mit jedem Tarif und den simulierten Preis-Einstellungen gespart hätte (geplant mit perfekter Prognose, eine Obergrenze); „davon Preissteuerung“ ist ihr Anteil. Bezug und Einspeisung sind ohne sie.",
+    hwNoPrice: "Die Preissteuerung ist in der Simulation ausgeschaltet und nicht enthalten; mit einem dynamischen Tarif können größere Batterien mehr bringen als angezeigt.",
     mExport: "Einspeisung",
     mImport: "Netzbezug",
     mMaxImport: "Höchster Bezug",
@@ -1867,6 +1875,19 @@ const SHOWN_SERIES_KEY = "slems-shown-series";
 const LIMIT_CHOICE_KEY = "slems-limit-series";
 // localStorage key of the comparison tariffs hidden in the tariff comparison.
 const HIDDEN_TARIFFS_KEY = "slems-hidden-tariffs";
+// Simulated settings the comparison with other hardware uses (price aware control).
+const HW_PRICE_SETTINGS = [
+  "price_control",
+  "price_min_gain_ct",
+  "grid_charge",
+  "grid_charge_max_soc_pct",
+  "grid_charge_max_w",
+  "battery_export",
+  "discharge_max_grid_export_w",
+  "feed_in_cap",
+  "feed_in_cap_limit_pct",
+  "pv_peak_power_kwp",
+];
 // localStorage key: "1" shows import costs and feed-in credit of a tariff summed.
 const TARIFF_SUM_KEY = "slems-tariff-sum";
 // localStorage key: "devices" shows the energy flow by device (see _flowNodes).
@@ -4840,7 +4861,11 @@ class SlemsPanel extends HTMLElement {
   _hwRequest() {
     const form = this._sim.form;
     if (!form) return null;
-    return { battery: { ...form.battery }, pv_pct: form.pv_pct, consumption_pct: form.consumption_pct };
+    // The price settings only count with the price aware control switched on.
+    const settings = form.settings?.price_control
+      ? Object.fromEntries(HW_PRICE_SETTINGS.map((key) => [key, form.settings[key]]))
+      : { price_control: false };
+    return { settings, battery: { ...form.battery }, pv_pct: form.pv_pct, consumption_pct: form.consumption_pct };
   }
 
   _hwSchedule() {
@@ -4926,12 +4951,19 @@ class SlemsPanel extends HTMLElement {
     const signedMoney = (value) => sign(value) + money.format(Math.abs(value));
     const signedEnergy = (value) => sign(Math.round(value)) + energy.format(Math.abs(value));
     const tariffs = result.tariffs.filter((tariff) => tariff.role === "current" || !this._hiddenTariffs.has(tariff.id));
-    const sums = { current: { import_kwh: 0, export_kwh: 0, costs: {} }, simulated: { import_kwh: 0, export_kwh: 0, costs: {} } };
+    // Costs with the price aware control where it was computed; its share apart.
+    const cost = (side, id) => side.price_costs?.[id] ?? side.costs[id] ?? 0;
+    const share = (side, id) => (side.price_costs?.[id] !== undefined ? side.price_costs[id] - side.costs[id] : 0);
+    const empty = () => ({ import_kwh: 0, export_kwh: 0, costs: {}, shares: {} });
+    const sums = { current: empty(), simulated: empty() };
     for (const month of result.months) {
       for (const side of ["current", "simulated"]) {
         sums[side].import_kwh += month[side].import_kwh || 0;
         sums[side].export_kwh += month[side].export_kwh || 0;
-        for (const [id, value] of Object.entries(month[side].costs)) sums[side].costs[id] = (sums[side].costs[id] || 0) + value;
+        for (const id of Object.keys(month[side].costs)) {
+          sums[side].costs[id] = (sums[side].costs[id] || 0) + cost(month[side], id);
+          sums[side].shares[id] = (sums[side].shares[id] || 0) + share(month[side], id);
+        }
       }
     }
     // Lower costs are better (green), higher worse (red).
@@ -4946,8 +4978,16 @@ class SlemsPanel extends HTMLElement {
     const costRow = (tariff) => {
       const before = sums.current.costs[tariff.id] || 0;
       const after = sums.simulated.costs[tariff.id] || 0;
-      return `<tr><td>${escapeHtml(t.hwCosts.replace("{tariff}", tariffLabel(tariff)))}</td><td>${escapeHtml(money.format(before))}</td>
+      let html = `<tr><td>${escapeHtml(t.hwCosts.replace("{tariff}", tariffLabel(tariff)))}</td><td>${escapeHtml(money.format(before))}</td>
         <td>${escapeHtml(money.format(after))}</td><td class="${tone(after - before)}">${escapeHtml(signedMoney(after - before))}</td></tr>`;
+      // A tariff where the price aware control saves nothing (a fixed price) has no such row.
+      const shareBefore = sums.current.shares[tariff.id] || 0;
+      const shareAfter = sums.simulated.shares[tariff.id] || 0;
+      if (Math.abs(shareBefore) >= 0.005 || Math.abs(shareAfter) >= 0.005) {
+        html += `<tr class="hw-share"><td>${escapeHtml(t.hwPriceShare)}</td><td>${escapeHtml(signedMoney(shareBefore))}</td>
+          <td>${escapeHtml(signedMoney(shareAfter))}</td><td class="${tone(shareAfter - shareBefore)}">${escapeHtml(signedMoney(shareAfter - shareBefore))}</td></tr>`;
+      }
+      return html;
     };
     const summary = `<div class="table-wrap"><table class="tariff-table hw-table">
       <thead><tr><th></th><th>${escapeHtml(t.hwCurrent)}</th><th>${escapeHtml(t.hwSimulated)}</th><th>${escapeHtml(t.hwDiff)}</th></tr></thead>
@@ -4960,7 +5000,7 @@ class SlemsPanel extends HTMLElement {
           <td>${escapeHtml(signedEnergy(diff("import_kwh")))}</td><td>${escapeHtml(signedEnergy(diff("export_kwh")))}</td>
           ${tariffs
             .map((tariff) => {
-              const value = (month.simulated.costs[tariff.id] || 0) - (month.current.costs[tariff.id] || 0);
+              const value = cost(month.simulated, tariff.id) - cost(month.current, tariff.id);
               return `<td class="${tone(value)}">${escapeHtml(signedMoney(value))}</td>`;
             })
             .join("")}</tr>`;
@@ -4976,6 +5016,7 @@ class SlemsPanel extends HTMLElement {
       "hardware",
       card(
         `${changes ? `<p class="hint">${escapeHtml(t.hwChanges.replace("{changes}", changes))}</p>` : ""}${summary}${perMonth}
+        <p class="hint">${escapeHtml(result.price_control ? t.hwPriceNote : t.hwNoPrice)}</p>
         <p class="hint">${escapeHtml(t.hwLimits)}</p>`
       )
     );
@@ -6410,6 +6451,8 @@ const STYLE = `
   .tariff-table td.better { background: rgba(67, 160, 71, 0.12); }
   .tariff-table td.worse { background: rgba(229, 57, 53, 0.10); }
   .hw-months { margin-top: 12px; }
+  .hw-table tr.hw-share td { font-size: 12px; color: var(--secondary-text-color); border-top: none; }
+  .hw-table tr.hw-share td:first-child { padding-left: 24px; }
   .hw-months summary { cursor: pointer; color: var(--secondary-text-color); }
   .sim-note { margin: 0 0 12px; }
   .sim-metrics th { white-space: normal; }

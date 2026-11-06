@@ -178,16 +178,23 @@ The recorded hourly house consumption and PV run through the same simple
 battery model as the estimate of the price aware control, once with the
 current batteries and once with the simulated values; PV and consumption are
 scaled by their change in the simulation. Both sides come from the model, so
-the difference only shows the other hardware. It is an estimate with limits:
+the difference only shows the other hardware. With **Price aware control**
+switched on in the simulation, both are also planned like the price aware
+control with each tariff's hourly prices and the simulated price settings
+(charging from the grid, feeding in from the batteries): the costs then
+include it, and a row **of which price control** below a tariff shows its
+share (a fixed price has no such row). Import and feed-in are without it. It
+is an estimate with limits:
 
 - **Hourly values**: peaks within an hour are averaged, so more charge or
   discharge power tends to bring a little more than shown, a larger battery
   a little less.
-- **Without grid friendly charging, the feed-in cap and the price aware
-  control**: the model feeds in every surplus, so with more PV the feed-in
-  credit comes out too high where a feed-in cap would curtail; with a dynamic
-  tariff a larger battery can bring more than shown, as the price aware
-  control would use it too.
+- **Without grid friendly charging and the feed-in cap**: the model feeds in
+  every surplus, so with more PV the feed-in credit comes out too high where
+  a feed-in cap would curtail.
+- **Price aware control**: its plan knows consumption and PV exactly, so its
+  share is an upper bound; switched off in the simulation it is not included,
+  and with a dynamic tariff a larger battery can then bring more than shown.
 - **The PV change scales the recorded PV curve**: additional modules facing
   east or west would make the curve wider, not only higher; hours already
   curtailed are scaled too.

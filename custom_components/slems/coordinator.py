@@ -4190,21 +4190,23 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         }
         self._grid_charge_cache[key] = (monotonic + GRID_CHARGE_REPLAN_S, plan)
 
-    def backtest_battery(self) -> BacktestBattery | None:
-        """The batteries and price settings for the backtest of the price aware control."""
+    def backtest_battery(
+        self, settings: ControlSettings | None = None, group: BatteryGroup | None = None
+    ) -> BacktestBattery | None:
+        """The batteries and price settings for the backtest of the price aware
+        control; ``settings`` / ``group``: other ones (simulation) instead of the real."""
         snapshot = self.data
-        battery = self._battery_group(snapshot, planning=True) if snapshot is not None else None
+        battery = group or (self._battery_group(snapshot, planning=True) if snapshot is not None else None)
         if battery is None:
             return None
-        settings = self.settings
+        settings = settings or self.settings
         capacity = battery.capacity_wh
         enabled = [b for b in self.batteries if b.enabled]
         weights = [b.driver.capabilities.capacity_wh or 1.0 for b in enabled]
-        # Batteries with own PV and without an input do not charge from the grid.
-        own = self._own_pv_batteries(snapshot, dt_util.now())
+        # Batteries with own PV and without an input take no AC power.
+        own = self._own_pv_batteries(snapshot, dt_util.now()) if snapshot is not None else []
         max_charge = max(0.0, battery.max_charge_w - sum(b.max_charge_w for b in own))
-        if settings.grid_charge_max_w > 0:
-            max_charge = min(max_charge, settings.grid_charge_max_w)
+        grid_charge = min(max_charge, settings.grid_charge_max_w) if settings.grid_charge_max_w > 0 else max_charge
         return BacktestBattery(
             capacity_wh=capacity,
             min_wh=battery.min_soc_pct / 100 * capacity,
@@ -4222,6 +4224,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 settings.discharge_max_grid_export_w,
                 settings.feed_in_cap_limit_w if settings.feed_in_cap else math.inf,
             ),
+            grid_charge_w=grid_charge,
         )
 
     def battery_export_effective(self, tariff: Tariff | None = None) -> bool:

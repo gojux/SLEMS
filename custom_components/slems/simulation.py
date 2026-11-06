@@ -174,6 +174,50 @@ def base_battery(battery: BatteryGroup | None) -> dict[str, float] | None:
     }
 
 
+def simulated_settings(real: ControlSettings, values: dict[str, Any]) -> ControlSettings:
+    """``real`` with the simulated ``values`` of the fields in ``SETTINGS``."""
+    changes = {}
+    for key, value in values.items():
+        if key in SETTINGS:
+            current = getattr(real, key)
+            if isinstance(current, bool):
+                changes[key] = bool(value)
+            elif isinstance(current, StrEnum):
+                try:
+                    changes[key] = type(current)(value)
+                except ValueError:
+                    continue
+            else:
+                changes[key] = float(value)
+    return replace(real, **changes)
+
+
+def battery_values(base: dict[str, float], values: dict[str, Any]) -> dict[str, float]:
+    """The starting values ``base`` with the simulated battery ``values``."""
+    return base | {key: float(value) for key, value in values.items() if key in BATTERY_KEYS}
+
+
+def simulated_group(group: BatteryGroup, base: dict[str, float], values: dict[str, float]) -> BatteryGroup:
+    """``group`` with the battery ``values`` that differ from their starting
+    values ``base`` (the unchanged ones keep their exact, unrounded value; the
+    state of charge in % stays)."""
+    fields = {
+        "capacity_kwh": ("capacity_wh", 1000),
+        "min_soc_pct": ("min_soc_pct", 1),
+        "max_soc_pct": ("full_soc_pct", 1),
+        "max_charge_w": ("max_charge_w", 1),
+        "max_discharge_w": ("max_discharge_w", 1),
+    }
+    return replace(
+        group,
+        **{
+            name: values[key] * factor
+            for key, (name, factor) in fields.items()
+            if abs(values[key] - base[key]) > 1e-9
+        },
+    )
+
+
 def simulate(coordinator: SlemsCoordinator, request: dict[str, Any]) -> dict[str, Any]:
     """Day plans and key figures with the settings of ``request``."""
     snapshot = coordinator.data
@@ -188,31 +232,9 @@ def simulate(coordinator: SlemsCoordinator, request: dict[str, Any]) -> dict[str
     if snapshot is None or battery is None or snapshot.pv_forecast is None:
         return {"available": False, "base": base}
 
-    changes = {}
-    for key, value in request.get("settings", {}).items():
-        if key in SETTINGS:
-            current = getattr(real, key)
-            if isinstance(current, bool):
-                changes[key] = bool(value)
-            elif isinstance(current, StrEnum):
-                try:
-                    changes[key] = type(current)(value)
-                except ValueError:
-                    continue
-            else:
-                changes[key] = float(value)
-    settings = replace(real, **changes)
-    values = base["battery"] | {
-        key: float(value) for key, value in request.get("battery", {}).items() if key in BATTERY_KEYS
-    }
-    battery = replace(
-        battery,
-        capacity_wh=values["capacity_kwh"] * 1000,
-        min_soc_pct=values["min_soc_pct"],
-        full_soc_pct=values["max_soc_pct"],
-        max_charge_w=values["max_charge_w"],
-        max_discharge_w=values["max_discharge_w"],
-    )
+    settings = simulated_settings(real, request.get("settings", {}))
+    values = battery_values(base["battery"], request.get("battery", {}))
+    battery = simulated_group(battery, base["battery"], values)
     pv_factor = 1 + request.get("pv_pct", 0) / 100
     load_factor = 1 + request.get("consumption_pct", 0) / 100
     forecast = snapshot.consumption_forecast
