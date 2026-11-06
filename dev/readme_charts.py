@@ -33,6 +33,28 @@ LOAD = {h: 250 for h in range(24)} | {6: 600, 7: 700, 8: 400, 12: 800, 18: 900, 
                                        20: 900, 21: 700, 22: 400}
 # Cloudy day with an evening and a morning peak (peak shaving example).
 LOAD_PEAKS = LOAD | {18: 2600, 19: 1900, 7: 2300}
+# Price aware control example: a small PV system and a large battery with a
+# dynamic tariff. Day-ahead price (ct/kWh) per hour of the day; the feed-in
+# credit is the day-ahead price, the import price adds fees and VAT.
+# Shown from midnight to midnight; the plan looks on until the next noon (with
+# estimated prices, as SLEMS does), so the battery keeps energy for the next
+# morning instead of feeding all of it in in the evening.
+MARKET = {
+    0: 10, 1: 9, 2: 9, 3: 10, 4: 16, 5: 28, 6: 34, 7: 36, 8: 28, 9: 12, 10: 4, 11: 0,
+    12: -2, 13: -2, 14: 0, 15: 4, 16: 12, 17: 26, 18: 36, 19: 38, 20: 30, 21: 18, 22: 11, 23: 10,
+}
+# Normal at night, low in the early morning, a midday and an evening peak.
+LOAD_PRICE = {h: 300 for h in range(24)} | {
+    0: 450, 1: 400, 2: 400, 3: 400, 4: 300, 5: 200, 6: 200, 7: 250, 8: 250,
+    12: 800, 17: 700, 18: 900, 19: 1000, 20: 900, 21: 700, 22: 500, 23: 450,
+}
+IMPORT_FEES_CT = 15.0
+PRICE_START_HOUR, PRICE_HOURS, PRICE_PLAN_HOURS = 0, 24, 36
+PRICE_EXPORT_MAX_W = 2000.0
+PRICE_PV_FACTOR = 0.25  # 2 kWp
+PRICE_CAPACITY_WH = 20000.0
+PRICE_SOC_PCT = 70.0
+PRICE_MIN_GAIN_CT = 2.0
 
 
 def simulate() -> dict:
@@ -43,6 +65,7 @@ def simulate() -> dict:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from custom_components.slems.allocation import BatteryGroup
     from custom_components.slems.feed_in_cap import CapSettings, plan_cap
+    from custom_components.slems.grid_charge import ChargeBattery, plan_grid_charge
     from custom_components.slems.soc_projection import ProjectionSettings, project_soc
 
     dt_util.set_default_time_zone(dt_util.get_time_zone("Europe/Vienna"))
@@ -70,25 +93,64 @@ def simulate() -> dict:
         values.update(changes)
         return ProjectionSettings(**values)
 
-    def run(soc, pv, load, projection_settings, cap_limit=None, with_cap=False):
+    def run(soc, pv, load, projection_settings, cap_limit=None, with_cap=False, prices=None,
+            capacity=CAPACITY_WH, start=None, hours=HOURS, plan_hours=HOURS):
+        now_ = start or now
         battery = BatteryGroup(
-            soc_pct=soc, capacity_wh=CAPACITY_WH, max_charge_w=5000, max_discharge_w=5000,
+            soc_pct=soc, capacity_wh=capacity, max_charge_w=5000, max_discharge_w=5000,
             charge_efficiency=EFFICIENCY, min_soc_pct=10.0,
         )
         cap = None
         if with_cap:
             cap = plan_cap(
-                now, battery, 5000, 5000, pv, load,
+                now_, battery, 5000, 5000, pv, load,
                 CapSettings(limit_w=cap_limit, buffer_pct=20, min_buffer_wh=400),
             )
+        plan = None
+        if prices is not None:
+            # As the coordinator does (see coordinator._grid_charge) with
+            # charging from the grid and feeding in from the batteries: until
+            # the last known price, as the credit follows the market price.
+            import_prices, credits = prices
+            end = now_ + timedelta(hours=plan_hours)
+            nets, quarter_import, quarter_credit = {}, {}, {}
+            moment = now_
+            while moment < end:
+                hour = moment.replace(minute=0)
+                nets[moment] = (load[hour] - pv[hour]) / 4
+                quarter_import[moment] = import_prices[hour]
+                quarter_credit[moment] = credits[hour]
+                moment += timedelta(minutes=15)
+            floor = battery.min_soc_pct / 100 * capacity
+            plan = plan_grid_charge(
+                now_,
+                ChargeBattery(
+                    capacity_wh=capacity, stored_wh=soc / 100 * capacity, floor_wh=floor,
+                    grid_max_wh=0.9 * capacity, max_charge_w=5000, max_discharge_w=5000,
+                    efficiency=EFFICIENCY, wear_ct=0.0, full_wh=capacity,
+                ),
+                nets, quarter_import, None, PRICE_MIN_GAIN_CT,
+                export_prices=quarter_credit, export_floor_wh=floor, export_max_w=PRICE_EXPORT_MAX_W,
+            )
+        grid_load = None
+        if plan is not None:
+            grid_load = {
+                hour: max(0.0, load[hour] - pv[hour] - limit)
+                for hour, limit in plan.hourly_limits_w.items()
+            }
         projection = project_soc(
-            now, battery, pv, load, None, projection_settings, None, 0.0, cap
+            now_, battery, pv, load, None, projection_settings, None, 0.0, cap,
+            grid_load=grid_load,
+            grid_charge=plan.hourly_charge_w if plan else None,
+            battery_export=plan.hourly_export_w if plan else None,
+            charge_caps=plan.hourly_caps_w if plan else None,
+            night_keep=plan.kept_wh if plan else None,
         )
-        stored = soc / 100 * CAPACITY_WH
+        stored = soc / 100 * capacity
         result = {"soc": [soc], "grid": [], "curtailed": []}
-        for i in range(HOURS):
-            hour = now + timedelta(hours=i)
-            end = projection.soc_pct[hour] / 100 * CAPACITY_WH
+        for i in range(hours):
+            hour = now_ + timedelta(hours=i)
+            end = projection.soc_pct[hour] / 100 * capacity
             delta = end - stored
             battery_ac = delta / EFFICIENCY if delta > 0 else delta * EFFICIENCY
             grid = load[hour] - pv[hour] + battery_ac
@@ -103,10 +165,15 @@ def simulate() -> dict:
         return result
 
     sunny, load, peaks = series(PV_SUNNY), series(LOAD), series(LOAD_PEAKS)
+    small_pv = series(PV_SUNNY, PRICE_PV_FACTOR)
+    credit = series(MARKET)
+    import_price = series({h: ct + IMPORT_FEES_CT for h, ct in MARKET.items()})
+    price_load = series(LOAD_PRICE)
+    price_start = day0 + timedelta(hours=PRICE_START_HOUR)
     cloudy = series(PV_SUNNY, 0.2)
 
-    def profile(pv, consumption) -> dict:
-        hours = [now + timedelta(hours=i) for i in range(HOURS)]
+    def profile(pv, consumption, start=None, count=HOURS) -> dict:
+        hours = [(start or now) + timedelta(hours=i) for i in range(count)]
         return {"pv": [pv[h] for h in hours], "load": [consumption[h] for h in hours]}
 
     result = {
@@ -129,10 +196,24 @@ def simulate() -> dict:
                 cap_limit=CAP_LIMIT_W, with_cap=True,
             ),
         },
+        "price_control": {
+            "without": run(PRICE_SOC_PCT, small_pv, price_load, settings(), capacity=PRICE_CAPACITY_WH,
+                           start=price_start, hours=PRICE_HOURS),
+            "with": run(PRICE_SOC_PCT, small_pv, price_load, settings(), prices=(import_price, credit),
+                        capacity=PRICE_CAPACITY_WH, start=price_start, hours=PRICE_HOURS,
+                        plan_hours=PRICE_PLAN_HOURS),
+            "start_hour": PRICE_START_HOUR,
+        },
     }
     for scenario, scenario_data in result.items():
+        if scenario == "price_control":
+            scenario_data |= profile(small_pv, price_load, price_start, PRICE_HOURS)
+            continue
         scenario_data |= profile(cloudy if scenario == "peak_shaving" else sunny,
                                  peaks if scenario == "peak_shaving" else load)
+    hours = [price_start + timedelta(hours=i) for i in range(PRICE_HOURS)]
+    result["price_control"]["price"] = [import_price[h] for h in hours]
+    result["price_control"]["credit"] = [credit[h] for h in hours]
     return result
 
 
@@ -140,34 +221,40 @@ def simulate() -> dict:
 
 COLORS = {"pv": "#eda100", "load": "#4a3aa7", "soc": "#1baf7a", "grid": "#2a78d6", "without": "#898781", "curtailed": "#d03b3b",
           "axis": "#c3c2b7", "grid_line": "#e1e0d9", "text": "#3d3d3a", "muted": "#6f6e69",
-          "limit": "#eda100"}
+          "limit": "#eda100", "price": "#b0479a", "credit": "#2a78d6"}
 TEXT = {
     "en": {
         "power": "PV and consumption", "pv": "PV", "load": "consumption",
         "soc": "State of charge", "grid": "Grid (+ import / − export)",
         "without": "without", "with": "with", "curtailed": "curtailed", "limit": "feed-in limit",
+        "price": "Price", "price_short": "import price", "credit": "feed-in credit",
         "titles": {
             "grid_friendly": "Grid friendly charging",
             "night_discharge": "Night discharge",
             "peak_shaving": "Import peak shaving (cloudy day)",
             "feed_in_cap": f"Feed-in cap {CAP_LIMIT_PCT} % (with night discharge)",
+            "price_control": "Price aware control (2 kWp, 20 kWh battery, dynamic tariff)",
         },
         "note": "Example: 8 kWp, 10 kWh battery; SLEMS state of charge projection, hourly means",
+        "note_price_control": "Example: 2 kWp, 20 kWh battery; SLEMS price plan and state of charge projection, hourly means",
     },
     "de": {
         "power": "PV und Verbrauch", "pv": "PV", "load": "Verbrauch",
         "soc": "Ladezustand", "grid": "Netz (+ Bezug / − Einspeisung)",
         "without": "ohne", "with": "mit", "curtailed": "abgeregelt", "limit": "Einspeisegrenze",
+        "price": "Preis", "price_short": "Bezugspreis", "credit": "Vergütung",
         "titles": {
             "grid_friendly": "Netzdienliches Laden",
             "night_discharge": "Nachtentladung",
             "peak_shaving": "Bezugsspitzen abfangen (trüber Tag)",
             "feed_in_cap": f"Einspeisebegrenzung {CAP_LIMIT_PCT} % (mit Nachtentladung)",
+            "price_control": "Preisbewusste Steuerung (2 kWp, 20-kWh-Batterie, dynamischer Tarif)",
         },
         "note": "Beispiel: 8 kWp, 10-kWh-Batterie; SoC-Projektion von SLEMS, Stundenmittel",
+        "note_price_control": "Beispiel: 2 kWp, 20-kWh-Batterie; Preisplan und SoC-Projektion von SLEMS, Stundenmittel",
     },
 }
-W, PANEL_H, POWER_H, PAD_L, PAD_R, TOP = 760, 150, 110, 56, 16, 80
+W, PANEL_H, POWER_H, PRICE_H, PAD_L, PAD_R, TOP = 760, 150, 110, 110, 56, 16, 80
 
 
 def _polyline(points, color, dash=False, width=2):
@@ -181,10 +268,13 @@ def render_svg(scenario: str, data: dict, lang: str) -> str:
     t = TEXT[lang]
     plot_w = W - PAD_L - PAD_R
     top0 = TOP
-    top1 = top0 + POWER_H + 40
+    price_top = top0 + POWER_H + 40
+    top1 = top0 + POWER_H + 40 + (PRICE_H + 40 if "price" in data else 0)
     top2 = top1 + PANEL_H + 40
     height = top2 + PANEL_H + 70
-    x_hour = lambda i: PAD_L + i / HOURS * plot_w  # noqa: E731
+    count = len(data["pv"])
+    start_hour = data.get("start_hour", START_HOUR)
+    x_hour = lambda i: PAD_L + i / count * plot_w  # noqa: E731
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {height}" width="{W}" '
         f'height="{height}" font-family="Helvetica, Arial, sans-serif" font-size="12">',
@@ -212,6 +302,12 @@ def render_svg(scenario: str, data: dict, lang: str) -> str:
         lx += 110
         parts.append(_polyline([(lx, 40), (lx + 24, 40)], COLORS["limit"], True, 1.5))
         parts.append(f'<text x="{lx + 30}" y="44" fill="{COLORS["text"]}">{t["limit"]}</text>')
+    if "price" in data:
+        parts.append(_polyline([(lx, 40), (lx + 24, 40)], COLORS["price"]))
+        parts.append(f'<text x="{lx + 30}" y="44" fill="{COLORS["text"]}">{t["price_short"]}</text>')
+        lx += 120
+        parts.append(_polyline([(lx, 40), (lx + 24, 40)], COLORS["credit"], True))
+        parts.append(f'<text x="{lx + 30}" y="44" fill="{COLORS["text"]}">{t["credit"]}</text>')
 
     # Panel 0: PV and consumption (the same with and without the option).
     power_top = max(max(data["pv"]), max(data["load"])) / 1000
@@ -230,6 +326,26 @@ def render_svg(scenario: str, data: dict, lang: str) -> str:
         for i, w in enumerate(data[key]):
             points += [(x_hour(i), y_power(w)), (x_hour(i + 1), y_power(w))]
         parts.append(_polyline(points, COLORS[key]))
+
+    if "price" in data:
+        # Panel 0b: import price and feed-in credit (ct/kWh), in steps of 20.
+        prices = data["price"] + data.get("credit", [])
+        price_max = 20 * -(-max(prices) // 20)
+        price_min = min(0, 20 * (min(prices) // 20))
+        y_price = lambda ct: price_top + (price_max - ct) / (price_max - price_min) * PRICE_H  # noqa: E731
+        parts.append(f'<text x="{PAD_L}" y="{price_top - 4}" fill="{COLORS["muted"]}">{t["price"]}</text>')
+        for ct in range(int(price_min), int(price_max) + 1, 20):
+            parts.append(f'<line x1="{PAD_L}" x2="{W - PAD_R}" y1="{y_price(ct)}" y2="{y_price(ct)}" '
+                         f'stroke="{COLORS["axis"] if ct == 0 else COLORS["grid_line"]}"/>')
+            parts.append(f'<text x="{PAD_L - 6}" y="{y_price(ct) + 4}" text-anchor="end" '
+                         f'fill="{COLORS["muted"]}">{ct} ct</text>')
+        for key, dash in (("price", False), ("credit", True)):
+            if key not in data:
+                continue
+            points = []
+            for i, ct in enumerate(data[key]):
+                points += [(x_hour(i), y_price(ct)), (x_hour(i + 1), y_price(ct))]
+            parts.append(_polyline(points, COLORS[key], dash))
 
     # Panel 1: state of charge.
     y_soc = lambda v: top1 + PANEL_H - v / 100 * PANEL_H  # noqa: E731
@@ -259,7 +375,7 @@ def render_svg(scenario: str, data: dict, lang: str) -> str:
         parts.append(f'<text x="{PAD_L - 6}" y="{y_grid(value * 1000) + 4}" text-anchor="end" '
                      f'fill="{COLORS["muted"]}">{value:g} kW</text>')
         value += step
-    slot = plot_w / HOURS
+    slot = plot_w / count
     if scenario == "feed_in_cap":
         parts.append(_polyline([(PAD_L, y_grid(-CAP_LIMIT_W)), (W - PAD_R, y_grid(-CAP_LIMIT_W))],
                                COLORS["limit"], True, 1.5))
@@ -282,12 +398,12 @@ def render_svg(scenario: str, data: dict, lang: str) -> str:
 
     # Time axis.
     base = top2 + PANEL_H + 18
-    for i in range(0, HOURS + 1, 6):
-        hour = (START_HOUR + i) % 24
+    for i in range(0, count + 1, 6):
+        hour = (start_hour + i) % 24
         parts.append(f'<text x="{x_hour(i)}" y="{base}" text-anchor="middle" '
                      f'fill="{COLORS["muted"]}">{hour:02d}:00</text>')
     parts.append(f'<text x="{PAD_L}" y="{base + 26}" font-size="11" fill="{COLORS["muted"]}">'
-                 f'{t["note"]}</text>')
+                 f'{t.get("note_" + scenario, t["note"])}</text>')
     parts.append("</svg>")
     return "\n".join(parts) + "\n"
 

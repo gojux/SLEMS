@@ -360,6 +360,8 @@ Batterien nach den Preisen steuern.
   teure Stunden auf, lädt auf Wunsch günstig aus dem Netz oder speist teuer
   ein und misst, was das gespart hat.
 
+  ![Preisbewusste Steuerung](docs/images/price_control_de.svg)
+
 Alle Einstellungen und Details: [Tarife und Preise](docs/guide/tariffs.de.md).
 
 ### PV-Prognose

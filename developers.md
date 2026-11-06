@@ -2548,7 +2548,8 @@ python3 tools/at_grid_templates.py
 ```
 
 `dev/readme_charts.py` creates the charts of the section *Which option when?*
-of the control guide (`docs/guide/control.md`, images in
+of the control guide (`docs/guide/control.md`) and of price aware control in
+the tariff guide (`docs/guide/tariffs.md`; images in
 `docs/images/<scenario>_<language>.svg`) from the SLEMS state of charge
 projection with example data; after changes to the planning run it again
 (two steps: simulate in the tests container, render on the host; see its

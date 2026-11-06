@@ -170,6 +170,18 @@ ct/kWh without fees and VAT, with the source as attribution.
 
 ## Price aware control
 
+![Price aware control](../images/price_control_en.svg)
+
+In the example the house has a small PV system (2 kWp) and a large battery
+(20 kWh), a dynamic tariff and a feed-in credit that follows the day-ahead
+price; **Charge batteries from the grid** and **Feed in from the batteries**
+are on. Without price aware control the battery only covers the house's
+consumption and the grid stays at zero. With it, it supplies the house at
+night as usual, feeds in at the morning price peak, charges from the grid at
+midday when electricity is cheapest and then with the sun. In the evening it
+supplies the house and feeds in a little at the price peak; afterwards it is
+still about half full for the next morning.
+
 **Price aware control** (switch, off by default; needs a tariff): if the
 stored energy does not last for every hour until PV refills the batteries
 (a day whose forecast PV surplus fills them from the minimum to the maximum

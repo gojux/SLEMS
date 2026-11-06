@@ -181,6 +181,18 @@ Quellenangabe.
 
 ## Preisbewusste Steuerung
 
+![Preisbewusste Steuerung](../images/price_control_de.svg)
+
+Im Beispiel hat das Haus eine kleine PV-Anlage (2 kWp) und eine große Batterie
+(20 kWh), einen dynamischen Tarif und eine Einspeisevergütung, die dem
+Börsenpreis folgt; **Batterien aus dem Netz laden** und **Batterien ins Netz
+entladen** sind an. Ohne preisbewusste Steuerung deckt die Batterie nur den
+Verbrauch des Hauses, das Netz bleibt bei null. Mit versorgt sie nachts das
+Haus wie sonst auch, speist bei der Preisspitze am Morgen ein, lädt zu Mittag
+aus dem Netz, wenn der Strom am billigsten ist, und danach mit der Sonne. Am
+Abend versorgt sie das Haus und speist bei der Preisspitze etwas ein; danach
+ist sie wieder gut halb voll für den nächsten Morgen.
+
 **Preisbewusste Steuerung** (Schalter, standardmäßig aus; braucht einen
 Tarif): Reicht die gespeicherte Energie nicht für alle Stunden, bis die PV die
 Batterien wieder füllt (ein Tag, dessen prognostizierter PV-Überschuss sie

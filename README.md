@@ -353,6 +353,8 @@ by the prices.
   hours, on request charges cheaply from the grid or feeds in when it pays
   well, and measures what that saved.
 
+  ![Price aware control](docs/images/price_control_en.svg)
+
 All settings and details: [Tariffs and prices](docs/guide/tariffs.md).
 
 ### PV forecast
