@@ -21,10 +21,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntry
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_HOST, DOMAIN
+from .const import CONF_GRID_MODBUS_HOST, CONF_HOST, DOMAIN
 from .coordinator import BatteryRuntime, SlemsConfigEntry, SlemsCoordinator
 
-TO_REDACT = {CONF_HOST, "mac_address"}
+TO_REDACT = {CONF_HOST, CONF_GRID_MODBUS_HOST, "mac_address"}
 TRIAL_TO_REDACT = {*TO_REDACT, "device"}
 
 

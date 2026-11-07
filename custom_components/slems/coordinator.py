@@ -1139,7 +1139,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self.controller.battery_responses.restore_samples(samples)
             names = {battery.subentry_id: battery.name for battery in self.batteries}
             for kind, battery_id in self.controller.battery_responses.drop_single_values():
-                _LOGGER.info(
+                _LOGGER.debug(
                     "Battery %s: a single stored %s response time dropped, measured again",
                     names.get(battery_id, battery_id), kind,
                 )
@@ -2716,7 +2716,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             responses = self.controller.battery_responses
             share = responses.early_share(battery.subentry_id)
             if share is not None and share > EARLY_SHARE:
-                _LOGGER.info(
+                _LOGGER.debug(
                     "Battery %s: %.0f %% of the last response measurements moved too early, probe step due",
                     battery.name,
                     100 * share,
@@ -2727,7 +2727,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             reason = battery.probe_record.due(wall)
             if reason is None or self.probe_blocked(battery) is not None:
                 continue
-            _LOGGER.info("Battery %s: probe step (%s)", battery.name, reason)
+            _LOGGER.debug("Battery %s: probe step (%s)", battery.name, reason)
             battery.probe = ResponseProbe(reason, now)
             return
 
@@ -2774,7 +2774,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if (phase := probe.phase) is not None and battery.subentry_id in self.phase_model.devices:
                 self.phase_learner(battery.subentry_id).observe(phase)
                 self._phase_changed()
-        _LOGGER.info(
+        _LOGGER.debug(
             "Probe step of %s: %s, dead time %s, measurements %s",
             battery.name,
             probe.result,
@@ -2796,7 +2796,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if battery.control_entity is not None:
             fingerprint["control"] = self._entity_versions(battery.control_entity)
         if changed := battery.probe_record.check(fingerprint):
-            _LOGGER.info("Battery %s: %s changed, learned response times dropped, probe step due", battery.name, ", ".join(changed))
+            _LOGGER.debug("Battery %s: %s changed, learned response times dropped, probe step due", battery.name, ", ".join(changed))
             self.controller.battery_responses.clear(battery.subentry_id)
 
     def _entity_versions(self, entity_id: str) -> dict[str, str]:

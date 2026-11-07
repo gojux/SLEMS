@@ -38,6 +38,6 @@ body:
     attributes:
       label: Log (optional)
       description: |
-        Passende Zeilen aus dem Home-Assistant-Log mit `slems`.
-        Matching lines of the Home Assistant log containing `slems`.
+        Passende Zeilen aus dem Home-Assistant-Log mit `slems`. Bei Regelproblemen hilft das Debug-Log: **Einstellungen → Geräte & Dienste → SLEMS → Debug-Protokollierung aktivieren**, den Fehler abwarten, dann wieder deaktivieren (die Datei wird heruntergeladen).
+        Matching lines of the Home Assistant log containing `slems`. For control problems the debug log helps: **Settings → Devices & services → SLEMS → Enable debug logging**, wait for the fault, then disable it again (the file is downloaded).
       render: text
