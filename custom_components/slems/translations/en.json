@@ -82,7 +82,7 @@
       "no_meter": "The SunSpec model chain contains no meter (model 201 to 204).",
       "sign_undecidable": "The grid power is too small to compare the sign (Modbus {modbus} W, entity {entity} W). Try again later or choose the sign.",
       "sign_mismatch": "Modbus ({modbus} W) and entity ({entity} W) match with neither sign. Is the right meter chosen? Otherwise choose the sign.",
-      "pv_is_own_pv": "These entities are the own PV modules or the output of a battery: {own_pv}. SLEMS counts their production with the battery; as a PV system it would count twice. Remove them from **PV power**."
+      "pv_is_own_pv": "These entities are the own PV modules or the output of a battery: {own_pv}. SLEMS counts their production with the battery; as a PV system it would count twice. Remove them from “PV power”."
     }
   },
   "options": {
@@ -165,7 +165,7 @@
       "no_meter": "The SunSpec model chain contains no meter (model 201 to 204).",
       "sign_undecidable": "The grid power is too small to compare the sign (Modbus {modbus} W, entity {entity} W). Try again later or choose the sign.",
       "sign_mismatch": "Modbus ({modbus} W) and entity ({entity} W) match with neither sign. Is the right meter chosen? Otherwise choose the sign.",
-      "pv_is_own_pv": "These entities are the own PV modules or the output of a battery: {own_pv}. SLEMS counts their production with the battery; as a PV system it would count twice. Remove them from **PV power**."
+      "pv_is_own_pv": "These entities are the own PV modules or the output of a battery: {own_pv}. SLEMS counts their production with the battery; as a PV system it would count twice. Remove them from “PV power”."
     }
   },
   "config_subentries": {
@@ -467,18 +467,18 @@
         "cannot_connect": "Cannot connect to the battery.",
         "no_auto_release": "Automatic needs a remote control entity, a mode option for automatic or a release script; otherwise choose standby.",
         "none_found": "No Marstek Venus found in the network. Enter the address by hand (see the battery guide: finding the IP address); stop other integrations using the battery first.",
-        "output_needs_own_pv": "**Output** needs **Own PV modules at the battery**.",
-        "input_needs_sensor": "An input set point needs the **Input from the grid** in the previous step.",
-        "own_pv_counted_twice": "These entities are also entered as PV systems: {pv_systems}. Their production would count twice. Select **Remove them from the PV systems** or choose other entities.",
-        "output_negative": "**Output into the house** reads {output_now} right now. SLEMS expects positive while feeding and counts a negative output as 0. If the unit is feeding the house right now, enable **Invert output sign**. Otherwise select **OK** again to go on.",
-        "input_negative": "**Input from the grid** reads {input_now} right now. SLEMS expects positive while charging and counts a negative input as 0. If the unit is charging from the grid right now, enable **Invert input sign**. Otherwise select **OK** again to go on.",
+        "output_needs_own_pv": "“Output” needs “Own PV modules at the battery”.",
+        "input_needs_sensor": "An input set point needs the “Input from the grid” in the previous step.",
+        "own_pv_counted_twice": "These entities are also entered as PV systems: {pv_systems}. Their production would count twice. Select “Remove them from the PV systems” or choose other entities.",
+        "output_negative": "“Output into the house” reads {output_now} right now. SLEMS expects positive while feeding and counts a negative output as 0. If the unit is feeding the house right now, enable “Invert output sign”. Otherwise select “OK” again to go on.",
+        "input_negative": "“Input from the grid” reads {input_now} right now. SLEMS expects positive while charging and counts a negative input as 0. If the unit is charging from the grid right now, enable “Invert input sign”. Otherwise select “OK” again to go on.",
         "power_required": "SLEMS needs the battery power to control the battery.",
-        "address_shared": "The paused battery {battery} uses this address (allowed for a comparison while the debug log is on). SLEMS keeps one of the two paused while the other one communicates: {battery} stays paused as long as this battery runs. Select **OK** again to go on.",
+        "address_shared": "The paused battery {battery} uses this address (allowed for a comparison while the debug log is on). SLEMS keeps one of the two paused while the other one communicates: {battery} stays paused as long as this battery runs. Select “OK” again to go on.",
         "address_in_use": "This address is already used by the battery {battery}. A battery takes only one connection: remove {battery} first, or choose another address.",
         "not_checked": "Compare the write registers with the manual first.",
         "not_checked_unverified": "Confirm the note on the unverified profile first.",
         "others_not_at_rest": "Not changed, they do not answer or a write register is outside its range at rest with the new profile: {batteries}. Leave them out or check them.",
-        "profile_bundled_id": "A shipped profile has the id **{detail}**; select it under **Profile** or give your profile an id of its own.",
+        "profile_bundled_id": "A shipped profile has the id “{detail}”; select it under “Profile” or give your profile an id of its own.",
         "profile_syntax": "The text is no valid YAML ({where}): {detail}",
         "profile_not_profile": "This is no SLEMS battery profile: the line `slems_battery_profile: 1` is missing.",
         "profile_version_newer": "The profile has format version {detail}; this SLEMS knows an older one. Update SLEMS.",
@@ -2029,7 +2029,7 @@
       "title": "{name} seems to be on another phase",
       "fix_flow": {
         "step": {
-          "init": {
+          "confirm": {
             "title": "Phase of {name}",
             "description": "SLEMS now measures {name} on {measured} instead of {phase}, e.g. because it was plugged into another socket. Select the phase it is connected to; another one than measured is kept as chosen by you.",
             "data": {
@@ -2047,7 +2047,7 @@
       "title": "{name}: the same phase again",
       "fix_flow": {
         "step": {
-          "init": {
+          "confirm": {
             "title": "Phase of {name}",
             "description": "Learning it anew gave {phase} again. Keep it, or select the phase {name} is connected to; another one than measured is kept as chosen by you.",
             "data": {
@@ -2065,9 +2065,9 @@
       "title": "{name}: output into the house with the opposite sign?",
       "fix_flow": {
         "step": {
-          "init": {
+          "confirm": {
             "title": "Sign of the output of {name}",
-            "description": "**Output into the house** of {name} ({entity}) has read negative values for 10 minutes, e.g. {value} W. SLEMS expects positive while feeding and counts a negative output as 0, so the power the unit feeds into the house is missing from the house consumption. Select **Submit** to change the sign (**Invert output sign** in the settings of the battery); SLEMS then sets up the battery again."
+            "description": "**Output into the house** of {name} ({entity}) has read negative values for 10 minutes, e.g. {value} W. SLEMS expects positive while feeding and counts a negative output as 0, so the power the unit feeds into the house is missing from the house consumption. Select **OK** to change the sign (**Invert output sign** in the settings of the battery); SLEMS then sets up the battery again."
           }
         },
         "abort": {
@@ -2079,9 +2079,9 @@
       "title": "{name}: input from the grid with the opposite sign?",
       "fix_flow": {
         "step": {
-          "init": {
+          "confirm": {
             "title": "Sign of the input of {name}",
-            "description": "**Input from the grid** of {name} ({entity}) has read negative values for 10 minutes, e.g. {value} W. SLEMS expects positive while charging and counts a negative input as 0, so charging from the grid is missing from the balance. Select **Submit** to change the sign (**Invert input sign** in the settings of the battery); SLEMS then sets up the battery again."
+            "description": "**Input from the grid** of {name} ({entity}) has read negative values for 10 minutes, e.g. {value} W. SLEMS expects positive while charging and counts a negative input as 0, so charging from the grid is missing from the balance. Select **OK** to change the sign (**Invert input sign** in the settings of the battery); SLEMS then sets up the battery again."
           }
         },
         "abort": {
@@ -2093,9 +2093,9 @@
       "title": "{name}: battery power with the opposite sign?",
       "fix_flow": {
         "step": {
-          "init": {
+          "confirm": {
             "title": "Sign of the battery power of {name}",
-            "description": "**Battery power** of {name} ({entity}) has pointed the other way than own PV + input − output for 10 minutes, e.g. {value} W against {balance} W. SLEMS expects positive = charging. Select **Submit** to change the sign (**Invert power sign** in the settings of the battery); SLEMS then sets up the battery again."
+            "description": "**Battery power** of {name} ({entity}) has pointed the other way than own PV + input − output for 10 minutes, e.g. {value} W against {balance} W. SLEMS expects positive = charging. Select **OK** to change the sign (**Invert power sign** in the settings of the battery); SLEMS then sets up the battery again."
           }
         },
         "abort": {
@@ -2139,7 +2139,7 @@
       "title": "{name}: trial partly unclear",
       "fix_flow": {
         "step": {
-          "init": {
+          "confirm": {
             "title": "Take the trial of {name} as passed",
             "description": "The self-test of {name} found nothing wrong, but could not check everything:\n\n{details}\n\nSLEMS repeats it in 10 minutes. If you are sure the profile is right, submit to let SLEMS control {name} without a passed trial. It goes back into its trial when the profile or the firmware changes."
           }

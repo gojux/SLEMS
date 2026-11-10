@@ -18,13 +18,24 @@ from .phases import Phase, label
 from .trial import TrialStatus
 
 
-class PhaseFlow(RepairsFlow):
+class _Dialog(RepairsFlow):
+    """A repair dialog whose form is the step ``confirm``: Home Assistant starts
+    ``init`` with the issue id as input, which is no answer."""
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> data_entry_flow.FlowResult:
+        return await self.async_step_confirm()
+
+    async def async_step_confirm(self, user_input: dict[str, Any] | None = None) -> data_entry_flow.FlowResult:
+        raise NotImplementedError
+
+
+class PhaseFlow(_Dialog):
     """Which phase a battery or consumer is connected to: the measured one is preselected."""
 
     def __init__(self, subentry_id: str) -> None:
         self._subentry_id = subentry_id
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> data_entry_flow.FlowResult:
+    async def async_step_confirm(self, user_input: dict[str, Any] | None = None) -> data_entry_flow.FlowResult:
         entries = self.hass.config_entries.async_loaded_entries(DOMAIN)
         if not entries:
             return self.async_abort(reason="not_loaded")
@@ -38,7 +49,7 @@ class PhaseFlow(RepairsFlow):
             # Answered meanwhile (e.g. learned anew).
             return self.async_abort(reason="not_needed")
         return self.async_show_form(
-            step_id="init",
+            step_id="confirm",
             data_schema=vol.Schema(
                 {
                     vol.Required("phase", default=measured.value): selector.SelectSelector(
@@ -54,13 +65,13 @@ class PhaseFlow(RepairsFlow):
         )
 
 
-class TrialFlow(RepairsFlow):
+class TrialFlow(_Dialog):
     """Take the unclear trial of a battery as passed (not possible for a failed one)."""
 
     def __init__(self, subentry_id: str) -> None:
         self._subentry_id = subentry_id
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> data_entry_flow.FlowResult:
+    async def async_step_confirm(self, user_input: dict[str, Any] | None = None) -> data_entry_flow.FlowResult:
         entries = self.hass.config_entries.async_loaded_entries(DOMAIN)
         if not entries:
             return self.async_abort(reason="not_loaded")
@@ -73,13 +84,13 @@ class TrialFlow(RepairsFlow):
                 return self.async_abort(reason="not_needed")
             return self.async_create_entry(data={})
         return self.async_show_form(
-            step_id="init",
+            step_id="confirm",
             data_schema=vol.Schema({}),
             description_placeholders={"name": battery.name, "details": battery.trial.details or "–"},
         )
 
 
-class SignFlow(RepairsFlow):
+class SignFlow(_Dialog):
     """Change the sign of a power sensor of a battery from entities (the
     battery is set up again with it)."""
 
@@ -88,7 +99,7 @@ class SignFlow(RepairsFlow):
         self._subentry_id = subentry_id
         self._key = key
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> data_entry_flow.FlowResult:
+    async def async_step_confirm(self, user_input: dict[str, Any] | None = None) -> data_entry_flow.FlowResult:
         entries = self.hass.config_entries.async_entries(DOMAIN)
         entry = next((e for e in entries if self._subentry_id in e.subentries), None)
         if entry is None:
@@ -101,7 +112,7 @@ class SignFlow(RepairsFlow):
         issue = ir.async_get(self.hass).async_get_issue(DOMAIN, self._issue_id)
         placeholders = dict(issue.translation_placeholders or {}) if issue is not None else {}
         placeholders.setdefault("name", subentry.title)
-        return self.async_show_form(step_id="init", data_schema=vol.Schema({}), description_placeholders=placeholders)
+        return self.async_show_form(step_id="confirm", data_schema=vol.Schema({}), description_placeholders=placeholders)
 
 
 async def async_create_fix_flow(

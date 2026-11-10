@@ -37,7 +37,8 @@ guidelines:
   never "Sie"; correct German imperatives ("gib", not "gebe").
 - Names of UI elements (settings, switches, options, menu items, steps,
   sensors) in **bold**, also in translations and form help; italics only for
-  real emphasis or a term being introduced.
+  real emphasis or a term being introduced. Form errors show no Markdown:
+  there UI names go in quotes („…“ in German, “…” in English).
 - "Select" / "auswählen" instead of "click" / "klicken" (also touch screens).
 - Sentence case for titles, headings and labels: only the first word and
   proper names capitalised.

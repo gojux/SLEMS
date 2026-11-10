@@ -137,7 +137,7 @@ SLEMS erwartet Ausgang und Eingang positiv und zählt einen negativen Wert als
 der Batterie einen negativen Wert, weist SLEMS darauf hin. Im Betrieb meldet
 SLEMS eine Reparatur, wenn Ausgang oder Eingang 10 Minuten lang negativ
 waren oder die Batterieleistung so lange in die andere Richtung zeigte als
-eigene PV + Eingang − Ausgang; **Absenden** ändert dort das Vorzeichen.
+eigene PV + Eingang − Ausgang; **OK** ändert dort das Vorzeichen.
 
 **Reicht die PV bei voller Batterie durch**: schalte es ein, wenn das Gerät
 bei voller Batterie seine PV unabhängig von der Vorgabe des Ausgangs ins Haus

@@ -313,13 +313,37 @@ def test_the_sign_dialog_changes_the_switch() -> None:
     )
     flow.flow_id, flow.handler = "flow", "slems"
     with patch.object(repairs.ir, "async_get", lambda _hass: registry):
-        form = asyncio.run(flow.async_step_init())
+        # Home Assistant starts the dialog with the issue id as input: nothing changes yet.
+        form = asyncio.run(flow.async_step_init({"issue_id": "own_pv_output_sign_b1"}))
+    assert form["type"] == "form" and form["step_id"] == "confirm" and updated == []
     assert form["description_placeholders"]["value"] == "-93"
-    asyncio.run(flow.async_step_init({}))
+    asyncio.run(flow.async_step_confirm({}))
     assert updated == [(entry, subentry, {"output_entity": "sensor.growatt_output", "output_inverted": True})]
     # A battery that is gone: nothing to change.
     entry.subentries.clear()
-    assert asyncio.run(flow.async_step_init())["type"] == "abort"
+    assert asyncio.run(flow.async_step_init({"issue_id": "own_pv_output_sign_b1"}))["type"] == "abort"
+
+
+def test_the_trial_dialog_asks_before_taking_the_trial_as_passed() -> None:
+    import asyncio
+
+    from custom_components.slems import repairs
+    from custom_components.slems.trial import TrialStatus
+
+    battery = SimpleNamespace(
+        subentry_id="b1", name="Pack", trial=SimpleNamespace(status=TrialStatus.UNCLEAR, details="no answer")
+    )
+    confirmed = []
+    coordinator = SimpleNamespace(batteries=[battery], confirm_trial=lambda b: confirmed.append(b) or True)
+    flow = asyncio.run(repairs.async_create_fix_flow(None, "profile_trial_unclear_b1", {"subentry_id": "b1", "kind": "trial"}))
+    flow.hass = SimpleNamespace(
+        config_entries=SimpleNamespace(async_loaded_entries=lambda _domain: [SimpleNamespace(runtime_data=coordinator)])
+    )
+    flow.flow_id, flow.handler = "flow", "slems"
+    form = asyncio.run(flow.async_step_init({"issue_id": "profile_trial_unclear_b1"}))
+    assert form["type"] == "form" and form["step_id"] == "confirm" and confirmed == []
+    asyncio.run(flow.async_step_confirm({}))
+    assert confirmed == [battery]
 
 
 async def test_safety_net_notification() -> None:

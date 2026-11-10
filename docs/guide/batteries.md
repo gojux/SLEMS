@@ -133,7 +133,7 @@ over MQTT); switch on **Invert output sign** or **Invert input sign** for it.
 If a sensor reads negative while you set up the battery, SLEMS points it out.
 In operation SLEMS reports a repair when the output or the input has read
 negative for 10 minutes, or when the battery power has pointed the other way
-than own PV + input − output for that long; selecting **Submit** there
+than own PV + input − output for that long; selecting **OK** there
 changes the sign.
 
 **Passes the PV through when full**: switch it on if the device feeds its

@@ -82,7 +82,7 @@
       "no_meter": "Die SunSpec-Modellkette enthält keinen Zähler (Modell 201 bis 204).",
       "sign_undecidable": "Die Netzleistung ist zu klein, um das Vorzeichen zu vergleichen (Modbus {modbus} W, Entität {entity} W). Später erneut versuchen oder das Vorzeichen wählen.",
       "sign_mismatch": "Modbus ({modbus} W) und Entität ({entity} W) passen mit keinem Vorzeichen zusammen. Ist der richtige Zähler gewählt? Sonst das Vorzeichen wählen.",
-      "pv_is_own_pv": "Diese Entitäten sind eigene PV-Module oder der Ausgang einer Batterie: {own_pv}. SLEMS zählt ihre Erzeugung schon bei der Batterie; als PV-Anlage würde sie doppelt zählen. Entferne sie bei **PV-Leistung**."
+      "pv_is_own_pv": "Diese Entitäten sind eigene PV-Module oder der Ausgang einer Batterie: {own_pv}. SLEMS zählt ihre Erzeugung schon bei der Batterie; als PV-Anlage würde sie doppelt zählen. Entferne sie bei „PV-Leistung“."
     }
   },
   "options": {
@@ -165,7 +165,7 @@
       "no_meter": "Die SunSpec-Modellkette enthält keinen Zähler (Modell 201 bis 204).",
       "sign_undecidable": "Die Netzleistung ist zu klein, um das Vorzeichen zu vergleichen (Modbus {modbus} W, Entität {entity} W). Später erneut versuchen oder das Vorzeichen wählen.",
       "sign_mismatch": "Modbus ({modbus} W) und Entität ({entity} W) passen mit keinem Vorzeichen zusammen. Ist der richtige Zähler gewählt? Sonst das Vorzeichen wählen.",
-      "pv_is_own_pv": "Diese Entitäten sind eigene PV-Module oder der Ausgang einer Batterie: {own_pv}. SLEMS zählt ihre Erzeugung schon bei der Batterie; als PV-Anlage würde sie doppelt zählen. Entferne sie bei **PV-Leistung**."
+      "pv_is_own_pv": "Diese Entitäten sind eigene PV-Module oder der Ausgang einer Batterie: {own_pv}. SLEMS zählt ihre Erzeugung schon bei der Batterie; als PV-Anlage würde sie doppelt zählen. Entferne sie bei „PV-Leistung“."
     }
   },
   "config_subentries": {
@@ -467,18 +467,18 @@
         "cannot_connect": "Keine Verbindung zur Batterie möglich.",
         "no_auto_release": "Automatik braucht eine Fernsteuerungs-Entität, eine Modus-Option für Automatik oder ein Freigabe-Skript; sonst Standby wählen.",
         "none_found": "Im Netz wurde keine Marstek Venus gefunden. Adresse von Hand eingeben (siehe Anleitung Batterien: IP-Adresse finden); andere Integrationen, die die Batterie verwenden, vorher stoppen.",
-        "output_needs_own_pv": "**Ausgang** braucht **Eigene PV-Module an der Batterie**.",
-        "input_needs_sensor": "Eine Vorgabe des Eingangs braucht den **Eingang aus dem Netz** im vorigen Schritt.",
-        "own_pv_counted_twice": "Diese Entitäten sind auch als PV-Anlagen eingetragen: {pv_systems}. Ihre Erzeugung würde doppelt zählen. Wähle **Bei den PV-Anlagen entfernen** aus oder andere Entitäten.",
-        "output_negative": "**Ausgang ins Haus** meldet gerade {output_now}. SLEMS erwartet positiv beim Liefern und zählt einen negativen Ausgang als 0. Liefert die Einheit gerade ins Haus, aktiviere **Vorzeichen des Ausgangs umkehren**. Sonst wähl erneut **OK** aus, um weiterzumachen.",
-        "input_negative": "**Eingang aus dem Netz** meldet gerade {input_now}. SLEMS erwartet positiv beim Laden und zählt einen negativen Eingang als 0. Lädt die Einheit gerade aus dem Netz, aktiviere **Vorzeichen des Eingangs umkehren**. Sonst wähl erneut **OK** aus, um weiterzumachen.",
+        "output_needs_own_pv": "„Ausgang“ braucht „Eigene PV-Module an der Batterie“.",
+        "input_needs_sensor": "Eine Vorgabe des Eingangs braucht den „Eingang aus dem Netz“ im vorigen Schritt.",
+        "own_pv_counted_twice": "Diese Entitäten sind auch als PV-Anlagen eingetragen: {pv_systems}. Ihre Erzeugung würde doppelt zählen. Wähle „Bei den PV-Anlagen entfernen“ aus oder andere Entitäten.",
+        "output_negative": "„Ausgang ins Haus“ meldet gerade {output_now}. SLEMS erwartet positiv beim Liefern und zählt einen negativen Ausgang als 0. Liefert die Einheit gerade ins Haus, aktiviere „Vorzeichen des Ausgangs umkehren“. Sonst wähl erneut „OK“ aus, um weiterzumachen.",
+        "input_negative": "„Eingang aus dem Netz“ meldet gerade {input_now}. SLEMS erwartet positiv beim Laden und zählt einen negativen Eingang als 0. Lädt die Einheit gerade aus dem Netz, aktiviere „Vorzeichen des Eingangs umkehren“. Sonst wähl erneut „OK“ aus, um weiterzumachen.",
         "power_required": "SLEMS braucht die Batterieleistung, um die Batterie zu steuern.",
-        "address_shared": "Diese Adresse nutzt die pausierte Batterie {battery} (für einen Vergleich erlaubt, solange das Debug-Log aktiv ist). SLEMS hält eine der beiden pausiert, solange die andere kommuniziert: {battery} bleibt pausiert, solange diese Batterie läuft. Wähl erneut **OK** aus, um weiterzumachen.",
+        "address_shared": "Diese Adresse nutzt die pausierte Batterie {battery} (für einen Vergleich erlaubt, solange das Debug-Log aktiv ist). SLEMS hält eine der beiden pausiert, solange die andere kommuniziert: {battery} bleibt pausiert, solange diese Batterie läuft. Wähl erneut „OK“ aus, um weiterzumachen.",
         "address_in_use": "Diese Adresse nutzt schon die Batterie {battery}. Eine Batterie nimmt nur eine Verbindung an: Entferne zuerst {battery} oder wähle eine andere Adresse.",
         "not_checked": "Vergleiche zuerst die Schreibregister mit dem Handbuch.",
         "not_checked_unverified": "Bestätige zuerst den Hinweis zum ungeprüften Profil.",
         "others_not_at_rest": "Nicht geändert, sie antworten nicht oder ein Schreibregister liegt mit dem neuen Profil außerhalb seines Ruhebereichs: {batteries}. Lass sie weg oder prüfe sie.",
-        "profile_bundled_id": "Ein mitgeliefertes Profil hat die id **{detail}**; wähl es unter **Profil** aus oder gib deinem Profil eine eigene id.",
+        "profile_bundled_id": "Ein mitgeliefertes Profil hat die id „{detail}“; wähl es unter „Profil“ aus oder gib deinem Profil eine eigene id.",
         "profile_syntax": "Der Text ist kein gültiges YAML ({where}): {detail}",
         "profile_not_profile": "Das ist kein SLEMS-Batterieprofil: Die Zeile `slems_battery_profile: 1` fehlt.",
         "profile_version_newer": "Das Profil hat Formatversion {detail}; dieses SLEMS kennt eine ältere. Aktualisiere SLEMS.",
@@ -2029,7 +2029,7 @@
       "title": "{name} scheint an einer anderen Phase zu hängen",
       "fix_flow": {
         "step": {
-          "init": {
+          "confirm": {
             "title": "Phase von {name}",
             "description": "SLEMS misst {name} inzwischen an {measured} statt an {phase}, z. B. weil es in eine andere Steckdose gesteckt wurde. Wähle die Phase aus, an der es hängt; eine andere als die gemessene bleibt als von dir gewählt erhalten.",
             "data": {
@@ -2047,7 +2047,7 @@
       "title": "{name}: wieder dieselbe Phase",
       "fix_flow": {
         "step": {
-          "init": {
+          "confirm": {
             "title": "Phase von {name}",
             "description": "Das Neu-Lernen hat wieder {phase} ergeben. Behalte sie, oder wähle die Phase aus, an der {name} hängt; eine andere als die gemessene bleibt als von dir gewählt erhalten.",
             "data": {
@@ -2065,9 +2065,9 @@
       "title": "{name}: Ausgang ins Haus mit umgekehrtem Vorzeichen?",
       "fix_flow": {
         "step": {
-          "init": {
+          "confirm": {
             "title": "Vorzeichen des Ausgangs von {name}",
-            "description": "**Ausgang ins Haus** von {name} ({entity}) meldet seit 10 Minuten negative Werte, z. B. {value} W. SLEMS erwartet positiv beim Liefern und zählt einen negativen Ausgang als 0; die Leistung, die die Einheit ins Haus liefert, fehlt dann im Hausverbrauch. Wähl **Absenden** aus, um das Vorzeichen zu ändern (**Vorzeichen des Ausgangs umkehren** in den Einstellungen der Batterie); SLEMS richtet die Batterie dann neu ein."
+            "description": "**Ausgang ins Haus** von {name} ({entity}) meldet seit 10 Minuten negative Werte, z. B. {value} W. SLEMS erwartet positiv beim Liefern und zählt einen negativen Ausgang als 0; die Leistung, die die Einheit ins Haus liefert, fehlt dann im Hausverbrauch. Wähl **OK** aus, um das Vorzeichen zu ändern (**Vorzeichen des Ausgangs umkehren** in den Einstellungen der Batterie); SLEMS richtet die Batterie dann neu ein."
           }
         },
         "abort": {
@@ -2079,9 +2079,9 @@
       "title": "{name}: Eingang aus dem Netz mit umgekehrtem Vorzeichen?",
       "fix_flow": {
         "step": {
-          "init": {
+          "confirm": {
             "title": "Vorzeichen des Eingangs von {name}",
-            "description": "**Eingang aus dem Netz** von {name} ({entity}) meldet seit 10 Minuten negative Werte, z. B. {value} W. SLEMS erwartet positiv beim Laden und zählt einen negativen Eingang als 0; das Laden aus dem Netz fehlt dann in der Bilanz. Wähl **Absenden** aus, um das Vorzeichen zu ändern (**Vorzeichen des Eingangs umkehren** in den Einstellungen der Batterie); SLEMS richtet die Batterie dann neu ein."
+            "description": "**Eingang aus dem Netz** von {name} ({entity}) meldet seit 10 Minuten negative Werte, z. B. {value} W. SLEMS erwartet positiv beim Laden und zählt einen negativen Eingang als 0; das Laden aus dem Netz fehlt dann in der Bilanz. Wähl **OK** aus, um das Vorzeichen zu ändern (**Vorzeichen des Eingangs umkehren** in den Einstellungen der Batterie); SLEMS richtet die Batterie dann neu ein."
           }
         },
         "abort": {
@@ -2093,9 +2093,9 @@
       "title": "{name}: Batterieleistung mit umgekehrtem Vorzeichen?",
       "fix_flow": {
         "step": {
-          "init": {
+          "confirm": {
             "title": "Vorzeichen der Batterieleistung von {name}",
-            "description": "**Batterieleistung** von {name} ({entity}) zeigt seit 10 Minuten in die andere Richtung als eigene PV + Eingang − Ausgang, z. B. {value} W gegenüber {balance} W. SLEMS erwartet positiv = Laden. Wähl **Absenden** aus, um das Vorzeichen zu ändern (**Vorzeichen der Leistung umkehren** in den Einstellungen der Batterie); SLEMS richtet die Batterie dann neu ein."
+            "description": "**Batterieleistung** von {name} ({entity}) zeigt seit 10 Minuten in die andere Richtung als eigene PV + Eingang − Ausgang, z. B. {value} W gegenüber {balance} W. SLEMS erwartet positiv = Laden. Wähl **OK** aus, um das Vorzeichen zu ändern (**Vorzeichen der Leistung umkehren** in den Einstellungen der Batterie); SLEMS richtet die Batterie dann neu ein."
           }
         },
         "abort": {
@@ -2139,7 +2139,7 @@
       "title": "{name}: Probebetrieb teilweise unklar",
       "fix_flow": {
         "step": {
-          "init": {
+          "confirm": {
             "title": "Probebetrieb von {name} als bestanden übernehmen",
             "description": "Der Selbsttest von {name} hat nichts Falsches gefunden, konnte aber nicht alles prüfen:\n\n{details}\n\nSLEMS wiederholt ihn in 10 Minuten. Wenn du sicher bist, dass das Profil stimmt, bestätige, damit SLEMS {name} ohne bestandenen Probebetrieb steuert. Ändern sich das Profil oder die Firmware, geht die Batterie wieder in den Probebetrieb."
           }

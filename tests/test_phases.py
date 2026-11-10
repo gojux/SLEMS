@@ -204,8 +204,10 @@ def test_phase_dialog_preselects_the_measured_phase() -> None:
         config_entries=SimpleNamespace(async_loaded_entries=lambda _domain: [SimpleNamespace(runtime_data=coordinator)])
     )
     flow.flow_id, flow.handler = "flow", "slems"
-    form = asyncio.run(flow.async_step_init())
+    # Home Assistant starts the dialog with the issue id as input: no answer yet.
+    form = asyncio.run(flow.async_step_init({"issue_id": "phase_changed_venus_l3"}))
+    assert form["type"] == "form" and form["step_id"] == "confirm" and chosen == []
     assert form["description_placeholders"] == {"name": "Venus", "phase": "L1", "measured": "L3"}
     assert next(iter(form["data_schema"].schema)).default() == "l3"
-    asyncio.run(flow.async_step_init({"phase": "l2"}))
+    asyncio.run(flow.async_step_confirm({"phase": "l2"}))
     assert chosen == [("venus", Phase.L2)]
