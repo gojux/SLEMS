@@ -127,6 +127,15 @@ input, discharge: output). It then charges beyond its own PV from the grid
 (input = charge power − own PV, output 0) and takes part in charging from
 the grid. Without an input it is left out there.
 
+SLEMS expects output and input positive and counts a negative value as 0.
+Some integrations report the output into the house as negative (e.g. Growatt
+over MQTT); switch on **Invert output sign** or **Invert input sign** for it.
+If a sensor reads negative while you set up the battery, SLEMS points it out.
+In operation SLEMS reports a repair when the output or the input has read
+negative for 10 minutes, or when the battery power has pointed the other way
+than own PV + input − output for that long; selecting **Submit** there
+changes the sign.
+
 **Passes the PV through when full**: switch it on if the device feeds its
 PV into the house when full whatever the output set point. Otherwise the
 device curtails its modules once the battery takes less than PV − output

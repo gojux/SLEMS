@@ -111,10 +111,14 @@ CONF_KEEPALIVE_S: Final = "keepalive_s"
 CONF_OWN_PV: Final = "own_pv"
 CONF_OWN_PV_ENTITY: Final = "own_pv_entity"
 CONF_OUTPUT_ENTITY: Final = "output_entity"
+# The output sensor reports feeding the house as negative.
+CONF_OUTPUT_INVERTED: Final = "output_inverted"
 CONF_OUTPUT_SETPOINT_ENTITY: Final = "output_setpoint_entity"
 CONF_MAX_OUTPUT_W: Final = "max_output_w"
 # Input from the grid (measured power and set point), optional.
 CONF_INPUT_ENTITY: Final = "input_entity"
+# The input sensor reports charging from the grid as negative.
+CONF_INPUT_INVERTED: Final = "input_inverted"
 CONF_INPUT_SETPOINT_ENTITY: Final = "input_setpoint_entity"
 CONF_PASSES_PV_THROUGH: Final = "passes_pv_through"
 # PV forecast provider entry of the own PV modules.

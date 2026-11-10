@@ -130,6 +130,15 @@ Ein Gerät mit AC-Eingang (z. B. Zendure SolarFlow mit **inputLimit** und
 aus dem Netz (Eingang = Ladeleistung − eigene PV, Ausgang 0) und nimmt am
 Laden aus dem Netz teil. Ohne Eingang bleibt es dort außen vor.
 
+SLEMS erwartet Ausgang und Eingang positiv und zählt einen negativen Wert als
+0. Manche Integrationen melden den Ausgang ins Haus negativ (z. B. Growatt
+über MQTT); schalte dafür **Vorzeichen des Ausgangs umkehren** oder
+**Vorzeichen des Eingangs umkehren** ein. Meldet ein Sensor beim Einrichten
+der Batterie einen negativen Wert, weist SLEMS darauf hin. Im Betrieb meldet
+SLEMS eine Reparatur, wenn Ausgang oder Eingang 10 Minuten lang negativ
+waren oder die Batterieleistung so lange in die andere Richtung zeigte als
+eigene PV + Eingang − Ausgang; **Absenden** ändert dort das Vorzeichen.
+
 **Reicht die PV bei voller Batterie durch**: schalte es ein, wenn das Gerät
 bei voller Batterie seine PV unabhängig von der Vorgabe des Ausgangs ins Haus
 liefert. Sonst regelt das Gerät seine Module ab, sobald die Batterie weniger

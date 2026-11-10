@@ -19,6 +19,11 @@ With own PV modules the driver reads their power, the output and, if set, the
 input (required; without them the unit cannot be balanced) and reports the AC
 power as own PV + input − output. At the top of the charge it probes for
 curtailed PV unless the device passes its PV through when full (see own_pv).
+The output and the input are never negative (a negative reading counts as 0);
+one that reads clearly negative for ``SIGN_CHECK_AFTER_S`` has the opposite
+sign, and so has a battery power sensor whose sign is opposite to own PV +
+input − output for that long. Both are reported as repairs (``SIGN_ISSUES``)
+whose dialog switches the sign of the sensor.
 
 An optional remote control entity (switch or select) is switched on before the
 first set point and off again when the battery is released to its automatic.
@@ -35,6 +40,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 import logging
+import time
 from typing import Any
 
 from homeassistant.const import (
@@ -67,9 +73,11 @@ from ..const import (
     CONF_MODE_ENTITY,
     CONF_MODE_STANDBY,
     CONF_INPUT_ENTITY,
+    CONF_INPUT_INVERTED,
     CONF_INPUT_SETPOINT_ENTITY,
     CONF_MAX_OUTPUT_W,
     CONF_OUTPUT_ENTITY,
+    CONF_OUTPUT_INVERTED,
     CONF_OUTPUT_SETPOINT_ENTITY,
     CONF_OWN_PV,
     CONF_OWN_PV_ENTITY,
@@ -110,6 +118,49 @@ EXTRA_ENTITIES: dict[str, str] = {
     "total_discharging_energy": CONF_DISCHARGED_ENERGY_ENTITY,
 }
 
+# Sign checks of a battery with own PV: an output or input below
+# -SIGN_NEGATIVE_W, or a battery power against own PV + input − output while
+# both are at least SIGN_BALANCE_MIN_W, for SIGN_CHECK_AFTER_S on end. Readings
+# near 0 tell nothing; one with the expected sign starts the check again.
+SIGN_NEGATIVE_W = 20.0
+SIGN_BALANCE_MIN_W = 100.0
+SIGN_CHECK_AFTER_S = 600.0
+ISSUE_OUTPUT_SIGN = "own_pv_output_sign"
+ISSUE_INPUT_SIGN = "own_pv_input_sign"
+ISSUE_POWER_SIGN = "battery_power_sign"
+# Repair issue -> subentry key of the switch that changes the sign.
+SIGN_ISSUES: dict[str, str] = {
+    ISSUE_OUTPUT_SIGN: CONF_OUTPUT_INVERTED,
+    ISSUE_INPUT_SIGN: CONF_INPUT_INVERTED,
+    ISSUE_POWER_SIGN: CONF_POWER_INVERTED,
+}
+
+
+class _SignCheck:
+    """Whether a sensor has had the wrong sign for ``SIGN_CHECK_AFTER_S``; the
+    placeholders of its repair are kept from then on (a new value would create
+    the issue again with every reading)."""
+
+    def __init__(self) -> None:
+        self._since: float | None = None
+        self.found: dict[str, str] | None = None
+
+    def update(self, wrong: bool | None, now: float, placeholders: dict[str, str]) -> bool:
+        """``wrong``: None if the reading tells nothing (near 0). True if the
+        wrong sign has just been found."""
+        if wrong is None:
+            return False
+        if not wrong:
+            self._since = None
+            self.found = None
+            return False
+        if self._since is None:
+            self._since = now
+        if self.found is None and now - self._since >= SIGN_CHECK_AFTER_S:
+            self.found = placeholders
+            return True
+        return False
+
 @dataclass(frozen=True)
 class EntityBatteryConfig:
     """Entities and options of a battery backed by Home Assistant entities."""
@@ -142,9 +193,11 @@ class EntityBatteryConfig:
     own_pv: bool = False
     own_pv_entity_id: str | None = None
     output_entity_id: str | None = None
+    output_inverted: bool = False
     output_setpoint_entity_id: str | None = None
     max_output_w: int | None = None
     input_entity_id: str | None = None
+    input_inverted: bool = False
     input_setpoint_entity_id: str | None = None
     passes_pv_through: bool = False
 
@@ -184,9 +237,11 @@ class EntityBatteryConfig:
             own_pv=bool(data.get(CONF_OWN_PV, False)),
             own_pv_entity_id=data.get(CONF_OWN_PV_ENTITY),
             output_entity_id=data.get(CONF_OUTPUT_ENTITY),
+            output_inverted=bool(data.get(CONF_OUTPUT_INVERTED, False)),
             output_setpoint_entity_id=data.get(CONF_OUTPUT_SETPOINT_ENTITY),
             max_output_w=int(data[CONF_MAX_OUTPUT_W]) if data.get(CONF_MAX_OUTPUT_W) else None,
             input_entity_id=data.get(CONF_INPUT_ENTITY),
+            input_inverted=bool(data.get(CONF_INPUT_INVERTED, False)),
             input_setpoint_entity_id=data.get(CONF_INPUT_SETPOINT_ENTITY),
             passes_pv_through=bool(data.get(CONF_PASSES_PV_THROUGH, False)),
         )
@@ -224,6 +279,7 @@ class HomeAssistantEntityDriver(BatteryDriver):
         self._own_pv = OwnPvPorts(
             config.max_output_w, bool(config.input_setpoint_entity_id), config.passes_pv_through
         )
+        self._sign_checks = {key: _SignCheck() for key in SIGN_ISSUES}
 
     @property
     def capabilities(self) -> BatteryCapabilities:
@@ -280,9 +336,15 @@ class HomeAssistantEntityDriver(BatteryDriver):
         if not config.own_pv:
             return BatteryTelemetry(soc_pct=soc, power_w=power, extra=extra)
         pv = self._own_pv_w()
-        output = self._watts_read(config.output_entity_id)
-        grid_input = self._watts_read(config.input_entity_id) if config.input_entity_id else None
+        raw_output = self._watts_read(config.output_entity_id, config.output_inverted)
+        output = max(0.0, raw_output)
+        raw_input = None
+        grid_input = None
+        if config.input_entity_id:
+            raw_input = self._watts_read(config.input_entity_id, config.input_inverted)
+            grid_input = max(0.0, raw_input)
         ac_power = pv + (grid_input or 0.0) - output
+        self._check_signs(raw_output, raw_input, power, ac_power)
         return BatteryTelemetry(
             soc_pct=soc,
             power_w=power if power is not None else ac_power,
@@ -295,14 +357,65 @@ class HomeAssistantEntityDriver(BatteryDriver):
 
     def _own_pv_w(self) -> float:
         """Power of the own PV modules (W, >= 0)."""
-        return self._watts_read(self._config.own_pv_entity_id)
+        return max(0.0, self._watts_read(self._config.own_pv_entity_id))
 
-    def _watts_read(self, entity_id: str | None) -> float:
-        """A power sensor of a battery with own PV (W, >= 0); required."""
+    def _output_w(self) -> float:
+        """Output into the house (W, >= 0)."""
+        return max(0.0, self._watts_read(self._config.output_entity_id, self._config.output_inverted))
+
+    def _watts_read(self, entity_id: str | None, inverted: bool = False) -> float:
+        """A power sensor of a battery with own PV (W, with the configured sign); required."""
         value = state_as_watts(self._hass.states.get(entity_id)) if entity_id else None
         if value is None:
             raise BatteryDriverError(f"{entity_id} is unavailable")
-        return max(0.0, value)
+        return -value if inverted else value
+
+    def _check_signs(
+        self, output: float, grid_input: float | None, power: float | None, ac_power: float
+    ) -> None:
+        """Update the sign checks with the readings (the configured sign applied)."""
+        config = self._config
+        now = time.monotonic()
+
+        def negative(value: float) -> bool | None:
+            if value < -SIGN_NEGATIVE_W:
+                return True
+            return False if value > SIGN_NEGATIVE_W else None
+
+        checks = self._sign_checks
+        output_negative = negative(output)
+        input_negative = negative(grid_input) if grid_input is not None else None
+        found = checks[ISSUE_OUTPUT_SIGN].update(
+            output_negative, now, {"entity": str(config.output_entity_id), "value": f"{output:.0f}"}
+        )
+        if grid_input is not None:
+            found |= checks[ISSUE_INPUT_SIGN].update(
+                input_negative, now, {"entity": str(config.input_entity_id), "value": f"{grid_input:.0f}"}
+            )
+        if power is not None:
+            opposite = None
+            # A negative output or input makes the balance wrong, not the battery power.
+            if (
+                not output_negative
+                and not input_negative
+                and abs(power) >= SIGN_BALANCE_MIN_W
+                and abs(ac_power) >= SIGN_BALANCE_MIN_W
+            ):
+                opposite = (power > 0) != (ac_power > 0)
+            found |= checks[ISSUE_POWER_SIGN].update(
+                opposite,
+                now,
+                {"entity": str(config.power_entity_id), "value": f"{power:.0f}", "balance": f"{ac_power:.0f}"},
+            )
+        if found:
+            _LOGGER.warning(
+                "A power sensor of the battery has the opposite sign for %d minutes: %s",
+                SIGN_CHECK_AFTER_S // 60,
+                {key: check.found for key, check in checks.items() if check.found},
+            )
+
+    def issues(self) -> dict[str, dict[str, str]]:
+        return {key: check.found for key, check in self._sign_checks.items() if check.found is not None}
 
     def set_own_pv_state(self, *, at_top: bool, curtail_w: float) -> None:
         self._own_pv.set_state(at_top=at_top, curtail_w=curtail_w)
@@ -351,9 +464,7 @@ class HomeAssistantEntityDriver(BatteryDriver):
 
     def _ports(self, power: int) -> tuple[float, float]:
         """(input, output) that make the battery take ``power`` from the current own PV."""
-        return self._own_pv.ports(
-            power, self._own_pv_w(), lambda: self._watts_read(self._config.output_entity_id)
-        )
+        return self._own_pv.ports(power, self._own_pv_w(), self._output_w)
 
     async def _apply_ports(self, grid_input: float, output: float, refresh: bool) -> None:
         """Write the input and the output; the one that stops first."""

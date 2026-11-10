@@ -1,5 +1,6 @@
 """Dialogs of the repair issues that ask something: the phase of a battery or
-consumer, and whether an unclear trial of a battery is taken as passed."""
+consumer, whether an unclear trial of a battery is taken as passed, and
+whether the sign of a battery's power sensor is changed."""
 
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ import voluptuous as vol
 from homeassistant import data_entry_flow
 from homeassistant.components.repairs import RepairsFlow
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import selector
+from homeassistant.helpers import issue_registry as ir, selector
 
 from .const import DOMAIN
 from .phases import Phase, label
@@ -78,6 +79,31 @@ class TrialFlow(RepairsFlow):
         )
 
 
+class SignFlow(RepairsFlow):
+    """Change the sign of a power sensor of a battery from entities (the
+    battery is set up again with it)."""
+
+    def __init__(self, issue_id: str, subentry_id: str, key: str) -> None:
+        self._issue_id = issue_id
+        self._subentry_id = subentry_id
+        self._key = key
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> data_entry_flow.FlowResult:
+        entries = self.hass.config_entries.async_entries(DOMAIN)
+        entry = next((e for e in entries if self._subentry_id in e.subentries), None)
+        if entry is None:
+            return self.async_abort(reason="not_needed")
+        subentry = entry.subentries[self._subentry_id]
+        if user_input is not None:
+            data = {**subentry.data, self._key: not subentry.data.get(self._key, False)}
+            self.hass.config_entries.async_update_subentry(entry, subentry, data=data)
+            return self.async_create_entry(data={})
+        issue = ir.async_get(self.hass).async_get_issue(DOMAIN, self._issue_id)
+        placeholders = dict(issue.translation_placeholders or {}) if issue is not None else {}
+        placeholders.setdefault("name", subentry.title)
+        return self.async_show_form(step_id="init", data_schema=vol.Schema({}), description_placeholders=placeholders)
+
+
 async def async_create_fix_flow(
     hass: HomeAssistant, issue_id: str, data: dict[str, str | int | float | None] | None
 ) -> RepairsFlow:
@@ -85,4 +111,6 @@ async def async_create_fix_flow(
     data = data or {}
     if data.get("kind") == "trial":
         return TrialFlow(str(data["subentry_id"]))
+    if data.get("kind") == "sign":
+        return SignFlow(issue_id, str(data["subentry_id"]), str(data["key"]))
     return PhaseFlow(str(data["subentry_id"]))

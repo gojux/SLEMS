@@ -184,7 +184,7 @@ custom_components/slems/
   energy_dashboard.py  grid, PV and device sensors of HA's energy dashboard (config flow suggestions)
   phases.py          phase of a battery or consumer learned from the smart meter's phases
   netting.py         whether the smart meter's energy counters net the phases
-  repairs.py         dialogs of the repair issues that ask (the phase)
+  repairs.py         dialogs of the repair issues that ask (phase, unclear trial, sign of a sensor)
   button.py          learn the phase again
   drivers/
     base.py          BatteryDriver contract (read_telemetry, apply_power, release_control, own PV state)
@@ -1907,7 +1907,15 @@ CH395 can be sent from the simulator container to test it.
   charge power + the own forecast), the simulation scales
   `own_pv_forecasts` with the PV. The system step
   rejects own PV or output entities as PV systems (`_own_pv_owners`, error
-  `pv_is_own_pv`) and does not suggest them.
+  `pv_is_own_pv`) and does not suggest them. Output and input have a sign
+  switch each (`output_inverted`, `input_inverted`); a negative value counts
+  as 0. The step `ha_own_pv` shows a negative reading once
+  (`output_negative` / `input_negative`, the next OK saves). The driver's
+  `_SignCheck`s report a repair (`SIGN_ISSUES`, fixable: `repairs.SignFlow`
+  toggles the switch in the subentry, which reloads the entry) when the
+  output or input reads below −`SIGN_NEGATIVE_W`, or the battery power
+  points against PV + input − output (both ≥ `SIGN_BALANCE_MIN_W`, not
+  while a port reads negative), for `SIGN_CHECK_AFTER_S` on end.
 - **Dev instance**: `venus-sim-3` is controlled only through Modbus and
   template entities (`dev/config/configuration.yaml`: template numbers for
   charge/discharge power, template select for the force mode, Modbus switch

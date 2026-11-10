@@ -96,9 +96,11 @@ from .const import (
     CONF_SETPOINT_ENTITY,
     CONF_SETPOINT_INVERTED,
     CONF_INPUT_ENTITY,
+    CONF_INPUT_INVERTED,
     CONF_INPUT_SETPOINT_ENTITY,
     CONF_MAX_OUTPUT_W,
     CONF_OUTPUT_ENTITY,
+    CONF_OUTPUT_INVERTED,
     CONF_OUTPUT_SETPOINT_ENTITY,
     CONF_OWN_PV,
     CONF_OWN_PV_ENTITY,
@@ -187,7 +189,7 @@ from .battery_profiles import (
     profile_text,
 )
 from .discovery import async_find_batteries
-from .drivers.ha_entities import EntityBatteryConfig
+from .drivers.ha_entities import SIGN_NEGATIVE_W, EntityBatteryConfig
 from .drivers.marstek_venus_e3 import HARDWARE_MAX_POWER_W, MarstekVenusE3Driver
 from .drivers.profile import (
     HaUnitTransport,
@@ -331,9 +333,15 @@ _CONTROL_KEYS: dict[BatteryControl, tuple[str, ...]] = {
     ),
 }
 _OWN_PV_KEYS = (
-    CONF_OWN_PV_ENTITY, CONF_OUTPUT_ENTITY, CONF_INPUT_ENTITY, CONF_MAX_OUTPUT_W,
-    CONF_PASSES_PV_THROUGH, CONF_OWN_PV_FORECAST_ENTRY,
+    CONF_OWN_PV_ENTITY, CONF_OUTPUT_ENTITY, CONF_OUTPUT_INVERTED, CONF_INPUT_ENTITY, CONF_INPUT_INVERTED,
+    CONF_MAX_OUTPUT_W, CONF_PASSES_PV_THROUGH, CONF_OWN_PV_FORECAST_ENTRY,
 )
+# Sensor of a port of a battery with own PV -> its sign switch and the error
+# shown once while it reads negative.
+_PORT_SIGNS = {
+    CONF_OUTPUT_ENTITY: (CONF_OUTPUT_INVERTED, "output_negative"),
+    CONF_INPUT_ENTITY: (CONF_INPUT_INVERTED, "input_negative"),
+}
 _REMOTE_KEYS = (CONF_REMOTE_ENTITY, CONF_REMOTE_ON, CONF_REMOTE_OFF)
 _CONTROLLED_KEYS = (CONF_RELEASE_STATE, CONF_MIN_COMMAND_INTERVAL_S, CONF_KEEPALIVE_S)
 
@@ -789,6 +797,8 @@ class BatterySubentryFlow(ConfigSubentryFlow):
         self._data: dict[str, Any] = {}
         # PV systems to remove on saving: they are the battery's own PV.
         self._remove_from_pv: list[str] = []
+        # Port sensors already shown as reading negative (saved anyway on the next OK).
+        self._sign_warned: set[str] = set()
         # Battery from a Modbus profile: the profile, its YAML (own profiles),
         # address and transport, what was read there and name and limits.
         self._profile: BatteryProfile | None = None
@@ -1520,8 +1530,12 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             if not self._data.get(CONF_PASSES_PV_THROUGH):
                 self._data.pop(CONF_PASSES_PV_THROUGH, None)
             twice = self._counted_as_pv()
+            negative = self._negative_ports()
             if twice and not user_input.get(CONF_REMOVE_FROM_PV):
                 errors["base"] = "own_pv_counted_twice"
+            elif not negative.keys() <= self._sign_warned:
+                self._sign_warned |= negative.keys()
+                errors.update({key: _PORT_SIGNS[key][1] for key in negative})
             else:
                 self._remove_from_pv = twice
                 return await self._async_step_control()
@@ -1535,7 +1549,13 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             vol.Required(
                 CONF_OUTPUT_ENTITY, default=data.get(CONF_OUTPUT_ENTITY, vol.UNDEFINED)
             ): _POWER_SENSOR,
+            vol.Required(
+                CONF_OUTPUT_INVERTED, default=data.get(CONF_OUTPUT_INVERTED, False)
+            ): selector.BooleanSelector(),
             _optional(CONF_INPUT_ENTITY, data): _POWER_SENSOR,
+            vol.Required(
+                CONF_INPUT_INVERTED, default=data.get(CONF_INPUT_INVERTED, False)
+            ): selector.BooleanSelector(),
             vol.Required(
                 CONF_MAX_OUTPUT_W, default=data.get(CONF_MAX_OUTPUT_W, 800)
             ): _watts(100_000),
@@ -1561,8 +1581,26 @@ class BatterySubentryFlow(ConfigSubentryFlow):
             step_id="ha_own_pv",
             data_schema=vol.Schema(schema),
             errors=errors,
-            description_placeholders={"pv_systems": ", ".join(twice) or "-"},
+            description_placeholders={
+                "pv_systems": ", ".join(twice) or "-",
+                **{
+                    f"{key.removesuffix('_entity')}_now": _watts_text(self.hass, data.get(key), data.get(inverted))
+                    for key, (inverted, _) in _PORT_SIGNS.items()
+                },
+            },
         )
+
+    def _negative_ports(self) -> dict[str, float]:
+        """Port sensors (output, input) that read clearly negative now, with the sign switch applied."""
+        result = {}
+        for key, (inverted, _) in _PORT_SIGNS.items():
+            entity_id = self._data.get(key)
+            value = state_as_watts(self.hass.states.get(entity_id)) if entity_id else None
+            if value is not None:
+                value = -value if self._data.get(inverted) else value
+                if value < -SIGN_NEGATIVE_W:
+                    result[key] = value
+        return result
 
     def _counted_as_pv(self) -> list[str]:
         """The battery's own PV or output entities entered as a PV system."""
@@ -2328,6 +2366,14 @@ def _own_pv_owners(entry: ConfigEntry | None) -> dict[str, str]:
                 if entity_id := subentry.data.get(key):
                     owners.setdefault(entity_id, subentry.title)
     return owners
+
+
+def _watts_text(hass: HomeAssistant, entity_id: str | None, inverted: bool | None) -> str:
+    """Current power of a sensor with the sign switch applied, for a form text."""
+    value = state_as_watts(hass.states.get(entity_id)) if entity_id else None
+    if value is None:
+        return "–"
+    return f"{-value if inverted else value:.0f} W"
 
 
 def _now_placeholders(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, str]:

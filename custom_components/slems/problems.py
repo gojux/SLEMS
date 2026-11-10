@@ -20,7 +20,8 @@ themselves when the problem is gone:
   anew gave the same phase (both with a dialog to answer, see ``repairs``),
 * the smart meter's energy counters do not net the phases (``netting``),
 * problems a battery driver reports (``BatteryDriver.issues``, e.g. a profile
-  register outside its range at rest),
+  register outside its range at rest, or a power sensor of a battery from
+  entities with the opposite sign, with a dialog to change it, see ``repairs``),
 * a battery from a Modbus profile in its trial (new, profile changed or
   after a finding of its observation), observed after a firmware update, its
   trial unclear (with a dialog to take it as passed, see ``repairs``) or
@@ -57,7 +58,8 @@ from .currency import currency_code, market_prices_usable
 from .tariff_comparison import configured_tariffs
 from .tariff_updates import TARIFF_ISSUE_PREFIX
 from .controller import ControlStatus
-from .drivers.profile import ISSUES as DRIVER_ISSUES
+from .drivers.ha_entities import SIGN_ISSUES
+from .drivers.profile import ISSUES as PROFILE_ISSUES
 from .phases import label
 from .self_test import Check, Outcome
 from .trial import TrialStatus
@@ -188,7 +190,7 @@ class ProblemReporter:
                 _unreadable_issue(battery),
                 _release_issue(battery),
                 _house_inaccurate_issue(battery),
-                *(f"{key}_{battery.subentry_id}" for key in DRIVER_ISSUES),
+                *(f"{key}_{battery.subentry_id}" for key in (*PROFILE_ISSUES, *SIGN_ISSUES)),
                 *(f"{prefix}{battery.subentry_id}" for prefix in (TRIAL_ISSUE, TRIAL_UNCLEAR_ISSUE, TRIAL_FAILED_ISSUE)),
             }
             for issue_id, issue in _trial_issues(battery).items():
@@ -197,7 +199,10 @@ class ProblemReporter:
                     fixable[issue_id] = {"subentry_id": battery.subentry_id, "kind": "trial"}
             placeholders = {"name": battery.name}
             for key, values in battery.driver.issues().items():
-                wanted[f"{key}_{battery.subentry_id}"] = (key, {**placeholders, **values})
+                issue_id = f"{key}_{battery.subentry_id}"
+                wanted[issue_id] = (key, {**placeholders, **values})
+                if key in SIGN_ISSUES:
+                    fixable[issue_id] = {"subentry_id": battery.subentry_id, "kind": "sign", "key": SIGN_ISSUES[key]}
             if battery.not_responding:
                 wanted[_not_responding_issue(battery)] = ("battery_not_responding", placeholders)
             since = battery.unreadable_since

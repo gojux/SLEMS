@@ -313,3 +313,59 @@ def test_battery_takes_the_energy_dashboards_sensors() -> None:
             CONF_POWER_INVERTED: False,
         }
         assert take(None, dashboard, "other", {}, set()) == {}
+
+
+def test_own_pv_step_points_out_a_negative_output_once() -> None:
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from custom_components.slems.config_flow import BatterySubentryFlow
+    from custom_components.slems.const import (
+        CONF_INPUT_ENTITY,
+        CONF_INPUT_INVERTED,
+        CONF_MAX_OUTPUT_W,
+        CONF_OUTPUT_ENTITY,
+        CONF_OUTPUT_INVERTED,
+        CONF_OWN_PV_ENTITY,
+        CONF_PASSES_PV_THROUGH,
+    )
+
+    states = {
+        "sensor.pv": SimpleNamespace(state="300", attributes={"unit_of_measurement": "W"}),
+        "sensor.output": SimpleNamespace(state="-93", attributes={"unit_of_measurement": "W"}),
+        "sensor.input": SimpleNamespace(state="0", attributes={"unit_of_measurement": "W"}),
+    }
+    flow = BatterySubentryFlow()
+    flow.hass = SimpleNamespace(states=SimpleNamespace(get=states.get))
+    flow.flow_id, flow.handler = "flow", ("entry", "battery")
+    user_input = {
+        CONF_OWN_PV_ENTITY: "sensor.pv",
+        CONF_OUTPUT_ENTITY: "sensor.output",
+        CONF_OUTPUT_INVERTED: False,
+        CONF_INPUT_ENTITY: "sensor.input",
+        CONF_INPUT_INVERTED: False,
+        CONF_MAX_OUTPUT_W: 800,
+        CONF_PASSES_PV_THROUGH: False,
+    }
+
+    async def next_step():
+        return "next"
+
+    async def no_providers(_hass):
+        return []
+
+    with (
+        patch.object(config_flow, "async_forecast_provider_entries", no_providers),
+        patch.object(BatterySubentryFlow, "_counted_as_pv", lambda _self: []),
+        patch.object(BatterySubentryFlow, "_async_step_control", lambda _self: next_step()),
+    ):
+        form = asyncio.run(flow.async_step_ha_own_pv(dict(user_input)))
+        assert form["errors"] == {CONF_OUTPUT_ENTITY: "output_negative"}
+        assert form["description_placeholders"]["output_now"] == "-93 W"
+        # The sign changed: no hint, the reading counts positive.
+        assert asyncio.run(flow.async_step_ha_own_pv({**user_input, CONF_OUTPUT_INVERTED: True})) == "next"
+        # Saved anyway on the second OK.
+        flow._sign_warned = set()
+        asyncio.run(flow.async_step_ha_own_pv(dict(user_input)))
+        assert asyncio.run(flow.async_step_ha_own_pv(dict(user_input))) == "next"

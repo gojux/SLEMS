@@ -352,7 +352,9 @@
           "data": {
             "own_pv_entity": "Power of the own PV modules",
             "output_entity": "Output into the house",
+            "output_inverted": "Invert output sign",
             "input_entity": "Input from the grid (optional)",
+            "input_inverted": "Invert input sign",
             "max_output_w": "Highest output",
             "passes_pv_through": "Passes the PV through when full",
             "own_pv_forecast_entry": "PV forecast of the modules (optional)",
@@ -361,7 +363,9 @@
           "data_description": {
             "own_pv_entity": "Power of the modules at the battery's PV inputs (DC, e.g. \"Total input\").",
             "output_entity": "Power the unit feeds into the house (AC, positive while feeding).",
+            "output_inverted": "Enable if the sensor reports feeding the house as negative. SLEMS counts a negative output as 0.",
             "input_entity": "Power the unit takes from the grid to charge (AC, positive while charging). Required for an input set point.",
+            "input_inverted": "Enable if the sensor reports charging from the grid as negative. SLEMS counts a negative input as 0.",
             "max_output_w": "Limit of the inverter at the output, e.g. 800 W; own PV and discharge share it.",
             "passes_pv_through": "When full the device feeds its PV into the house whatever the output set point. Otherwise SLEMS raises the output in small steps at the top of the charge, so the device does not curtail its modules.",
             "own_pv_forecast_entry": "Forecast entry of these modules. It counts towards the PV forecast of the installation; without it the battery does not charge in the forecast of the state of charge.",
@@ -466,6 +470,8 @@
         "output_needs_own_pv": "**Output** needs **Own PV modules at the battery**.",
         "input_needs_sensor": "An input set point needs the **Input from the grid** in the previous step.",
         "own_pv_counted_twice": "These entities are also entered as PV systems: {pv_systems}. Their production would count twice. Select **Remove them from the PV systems** or choose other entities.",
+        "output_negative": "**Output into the house** reads {output_now} right now. SLEMS expects positive while feeding and counts a negative output as 0. If the unit is feeding the house right now, enable **Invert output sign**. Otherwise select **OK** again to go on.",
+        "input_negative": "**Input from the grid** reads {input_now} right now. SLEMS expects positive while charging and counts a negative input as 0. If the unit is charging from the grid right now, enable **Invert input sign**. Otherwise select **OK** again to go on.",
         "power_required": "SLEMS needs the battery power to control the battery.",
         "address_shared": "The paused battery {battery} uses this address (allowed for a comparison while the debug log is on). SLEMS keeps one of the two paused while the other one communicates: {battery} stays paused as long as this battery runs. Select **OK** again to go on.",
         "address_in_use": "This address is already used by the battery {battery}. A battery takes only one connection: remove {battery} first, or choose another address.",
@@ -2052,6 +2058,48 @@
         "abort": {
           "not_loaded": "SLEMS is not running.",
           "not_needed": "Already answered."
+        }
+      }
+    },
+    "own_pv_output_sign": {
+      "title": "{name}: output into the house with the opposite sign?",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Sign of the output of {name}",
+            "description": "**Output into the house** of {name} ({entity}) has read negative values for 10 minutes, e.g. {value} W. SLEMS expects positive while feeding and counts a negative output as 0, so the power the unit feeds into the house is missing from the house consumption. Select **Submit** to change the sign (**Invert output sign** in the settings of the battery); SLEMS then sets up the battery again."
+          }
+        },
+        "abort": {
+          "not_needed": "The battery is no longer set up."
+        }
+      }
+    },
+    "own_pv_input_sign": {
+      "title": "{name}: input from the grid with the opposite sign?",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Sign of the input of {name}",
+            "description": "**Input from the grid** of {name} ({entity}) has read negative values for 10 minutes, e.g. {value} W. SLEMS expects positive while charging and counts a negative input as 0, so charging from the grid is missing from the balance. Select **Submit** to change the sign (**Invert input sign** in the settings of the battery); SLEMS then sets up the battery again."
+          }
+        },
+        "abort": {
+          "not_needed": "The battery is no longer set up."
+        }
+      }
+    },
+    "battery_power_sign": {
+      "title": "{name}: battery power with the opposite sign?",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Sign of the battery power of {name}",
+            "description": "**Battery power** of {name} ({entity}) has pointed the other way than own PV + input − output for 10 minutes, e.g. {value} W against {balance} W. SLEMS expects positive = charging. Select **Submit** to change the sign (**Invert power sign** in the settings of the battery); SLEMS then sets up the battery again."
+          }
+        },
+        "abort": {
+          "not_needed": "The battery is no longer set up."
         }
       }
     },

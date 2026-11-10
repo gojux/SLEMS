@@ -266,6 +266,62 @@ def test_driver_issues_become_repairs() -> None:
         assert issue not in registry.issues
 
 
+def test_a_wrong_sign_becomes_a_fixable_repair() -> None:
+    reported = {"own_pv_output_sign": {"entity": "sensor.growatt_output", "value": "-93"}}
+    battery = SimpleNamespace(
+        subentry_id="b1", name="Growatt", not_responding=False, unreadable_since=None,
+        release_pending_since=None, communication_paused=False, driver=SimpleNamespace(issues=lambda: reported), trial=None,
+    )
+    registry = FakeIssues(set())
+    reporter = problems.ProblemReporter(None, coordinator([battery]))
+    issue = (DOMAIN, "own_pv_output_sign_b1")
+    with (
+        patch.object(problems, "ir", registry),
+        patch.object(reporter, "_update_cap_notifications", lambda *_: None),
+    ):
+        reporter.update(0.0)
+        assert registry.issues[issue]["is_fixable"]
+        assert registry.issues[issue]["data"] == {"subentry_id": "b1", "kind": "sign", "key": "output_inverted"}
+        assert registry.issues[issue]["translation_placeholders"] == {
+            "name": "Growatt", "entity": "sensor.growatt_output", "value": "-93"
+        }
+        reported = {}
+        reporter.update(1.0)
+        assert issue not in registry.issues
+
+
+def test_the_sign_dialog_changes_the_switch() -> None:
+    import asyncio
+
+    from custom_components.slems import repairs
+
+    subentry = SimpleNamespace(title="Growatt", data={"output_entity": "sensor.growatt_output"})
+    entry = SimpleNamespace(subentries={"b1": subentry})
+    updated = []
+    issue = SimpleNamespace(translation_placeholders={"name": "Growatt", "entity": "sensor.growatt_output", "value": "-93"})
+    registry = SimpleNamespace(async_get_issue=lambda domain, issue_id: issue if issue_id == "own_pv_output_sign_b1" else None)
+    flow = asyncio.run(
+        repairs.async_create_fix_flow(
+            None, "own_pv_output_sign_b1", {"subentry_id": "b1", "kind": "sign", "key": "output_inverted"}
+        )
+    )
+    flow.hass = SimpleNamespace(
+        config_entries=SimpleNamespace(
+            async_entries=lambda _domain: [entry],
+            async_update_subentry=lambda e, s, data: updated.append((e, s, data)),
+        )
+    )
+    flow.flow_id, flow.handler = "flow", "slems"
+    with patch.object(repairs.ir, "async_get", lambda _hass: registry):
+        form = asyncio.run(flow.async_step_init())
+    assert form["description_placeholders"]["value"] == "-93"
+    asyncio.run(flow.async_step_init({}))
+    assert updated == [(entry, subentry, {"output_entity": "sensor.growatt_output", "output_inverted": True})]
+    # A battery that is gone: nothing to change.
+    entry.subentries.clear()
+    assert asyncio.run(flow.async_step_init())["type"] == "abort"
+
+
 async def test_safety_net_notification() -> None:
     created = []
     hass = SimpleNamespace(config=SimpleNamespace(language="de"))

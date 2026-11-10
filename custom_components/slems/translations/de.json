@@ -352,7 +352,9 @@
           "data": {
             "own_pv_entity": "Leistung der eigenen PV-Module",
             "output_entity": "Ausgang ins Haus",
+            "output_inverted": "Vorzeichen des Ausgangs umkehren",
             "input_entity": "Eingang aus dem Netz (optional)",
+            "input_inverted": "Vorzeichen des Eingangs umkehren",
             "max_output_w": "Höchster Ausgang",
             "passes_pv_through": "Reicht die PV bei voller Batterie durch",
             "own_pv_forecast_entry": "PV-Prognose der Module (optional)",
@@ -361,7 +363,9 @@
           "data_description": {
             "own_pv_entity": "Leistung der Module an den PV-Eingängen der Batterie (DC, z. B. „Total Input“).",
             "output_entity": "Leistung, die die Einheit ins Haus liefert (AC, positiv beim Liefern).",
+            "output_inverted": "Aktivieren, wenn der Sensor das Liefern ins Haus negativ meldet. SLEMS zählt einen negativen Ausgang als 0.",
             "input_entity": "Leistung, die die Einheit zum Laden aus dem Netz nimmt (AC, positiv beim Laden). Nötig für eine Vorgabe des Eingangs.",
+            "input_inverted": "Aktivieren, wenn der Sensor das Laden aus dem Netz negativ meldet. SLEMS zählt einen negativen Eingang als 0.",
             "max_output_w": "Grenze des Wechselrichters am Ausgang, z. B. 800 W; eigene PV und Entladen teilen sie sich.",
             "passes_pv_through": "Bei voller Batterie liefert das Gerät seine PV unabhängig von der Vorgabe des Ausgangs ins Haus. Sonst hebt SLEMS den Ausgang am Ende der Ladung in kleinen Schritten an, damit das Gerät seine Module nicht abregelt.",
             "own_pv_forecast_entry": "Prognose-Eintrag dieser Module. Er zählt zur PV-Prognose der Anlage; ohne ihn lädt die Batterie in der Prognose des Ladezustands nicht.",
@@ -466,6 +470,8 @@
         "output_needs_own_pv": "**Ausgang** braucht **Eigene PV-Module an der Batterie**.",
         "input_needs_sensor": "Eine Vorgabe des Eingangs braucht den **Eingang aus dem Netz** im vorigen Schritt.",
         "own_pv_counted_twice": "Diese Entitäten sind auch als PV-Anlagen eingetragen: {pv_systems}. Ihre Erzeugung würde doppelt zählen. Wähle **Bei den PV-Anlagen entfernen** aus oder andere Entitäten.",
+        "output_negative": "**Ausgang ins Haus** meldet gerade {output_now}. SLEMS erwartet positiv beim Liefern und zählt einen negativen Ausgang als 0. Liefert die Einheit gerade ins Haus, aktiviere **Vorzeichen des Ausgangs umkehren**. Sonst wähl erneut **OK** aus, um weiterzumachen.",
+        "input_negative": "**Eingang aus dem Netz** meldet gerade {input_now}. SLEMS erwartet positiv beim Laden und zählt einen negativen Eingang als 0. Lädt die Einheit gerade aus dem Netz, aktiviere **Vorzeichen des Eingangs umkehren**. Sonst wähl erneut **OK** aus, um weiterzumachen.",
         "power_required": "SLEMS braucht die Batterieleistung, um die Batterie zu steuern.",
         "address_shared": "Diese Adresse nutzt die pausierte Batterie {battery} (für einen Vergleich erlaubt, solange das Debug-Log aktiv ist). SLEMS hält eine der beiden pausiert, solange die andere kommuniziert: {battery} bleibt pausiert, solange diese Batterie läuft. Wähl erneut **OK** aus, um weiterzumachen.",
         "address_in_use": "Diese Adresse nutzt schon die Batterie {battery}. Eine Batterie nimmt nur eine Verbindung an: Entferne zuerst {battery} oder wähle eine andere Adresse.",
@@ -2052,6 +2058,48 @@
         "abort": {
           "not_loaded": "SLEMS läuft nicht.",
           "not_needed": "Bereits beantwortet."
+        }
+      }
+    },
+    "own_pv_output_sign": {
+      "title": "{name}: Ausgang ins Haus mit umgekehrtem Vorzeichen?",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Vorzeichen des Ausgangs von {name}",
+            "description": "**Ausgang ins Haus** von {name} ({entity}) meldet seit 10 Minuten negative Werte, z. B. {value} W. SLEMS erwartet positiv beim Liefern und zählt einen negativen Ausgang als 0; die Leistung, die die Einheit ins Haus liefert, fehlt dann im Hausverbrauch. Wähl **Absenden** aus, um das Vorzeichen zu ändern (**Vorzeichen des Ausgangs umkehren** in den Einstellungen der Batterie); SLEMS richtet die Batterie dann neu ein."
+          }
+        },
+        "abort": {
+          "not_needed": "Die Batterie ist nicht mehr eingerichtet."
+        }
+      }
+    },
+    "own_pv_input_sign": {
+      "title": "{name}: Eingang aus dem Netz mit umgekehrtem Vorzeichen?",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Vorzeichen des Eingangs von {name}",
+            "description": "**Eingang aus dem Netz** von {name} ({entity}) meldet seit 10 Minuten negative Werte, z. B. {value} W. SLEMS erwartet positiv beim Laden und zählt einen negativen Eingang als 0; das Laden aus dem Netz fehlt dann in der Bilanz. Wähl **Absenden** aus, um das Vorzeichen zu ändern (**Vorzeichen des Eingangs umkehren** in den Einstellungen der Batterie); SLEMS richtet die Batterie dann neu ein."
+          }
+        },
+        "abort": {
+          "not_needed": "Die Batterie ist nicht mehr eingerichtet."
+        }
+      }
+    },
+    "battery_power_sign": {
+      "title": "{name}: Batterieleistung mit umgekehrtem Vorzeichen?",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Vorzeichen der Batterieleistung von {name}",
+            "description": "**Batterieleistung** von {name} ({entity}) zeigt seit 10 Minuten in die andere Richtung als eigene PV + Eingang − Ausgang, z. B. {value} W gegenüber {balance} W. SLEMS erwartet positiv = Laden. Wähl **Absenden** aus, um das Vorzeichen zu ändern (**Vorzeichen der Leistung umkehren** in den Einstellungen der Batterie); SLEMS richtet die Batterie dann neu ein."
+          }
+        },
+        "abort": {
+          "not_needed": "Die Batterie ist nicht mehr eingerichtet."
         }
       }
     },

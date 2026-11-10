@@ -5,8 +5,13 @@ from types import SimpleNamespace
 import pytest
 
 from custom_components.slems.const import BatteryControl, ReleaseState
+from custom_components.slems.drivers import ha_entities
 from custom_components.slems.drivers.base import BatteryDriverError
 from custom_components.slems.drivers.ha_entities import (
+    ISSUE_INPUT_SIGN,
+    ISSUE_OUTPUT_SIGN,
+    ISSUE_POWER_SIGN,
+    SIGN_CHECK_AFTER_S,
     EntityBatteryConfig,
     HomeAssistantEntityDriver,
 )
@@ -394,3 +399,105 @@ async def test_curtailing_and_probing_at_the_top() -> None:
     battery.set_own_pv_state(at_top=True, curtail_w=0)
     await battery.apply_power(400)
     assert float(fake.value("number.output")) == 200
+
+
+class Clock:
+    """Monotonic time of the driver's sign checks."""
+
+    def __init__(self, monkeypatch) -> None:
+        self.now = 1000.0
+        monkeypatch.setattr(ha_entities, "time", SimpleNamespace(monotonic=lambda: self.now))
+
+
+async def test_sign_switches_of_output_and_input() -> None:
+    fake = hass()
+    battery = plug_in_with_input(fake, output_inverted=True, input_inverted=True)
+    fake._states["sensor.output"].state = "-0.2"  # kW, feeding reported as negative
+    fake._states["sensor.input"].state = "-100"
+    telemetry = await battery.read_telemetry()
+    assert telemetry.output_w == 200 and telemetry.input_w == 100
+    assert telemetry.ac_power_w == 500
+    assert battery.issues() == {}
+
+
+async def test_negative_output_becomes_a_repair_after_ten_minutes(monkeypatch) -> None:
+    clock = Clock(monkeypatch)
+    fake = hass()
+    battery = plug_in(fake)
+    fake._states["sensor.output"].state = "-0.2"
+    telemetry = await battery.read_telemetry()
+    # Counted as 0 meanwhile.
+    assert telemetry.output_w == 0 and telemetry.ac_power_w == 600
+    clock.now += SIGN_CHECK_AFTER_S - 1
+    await battery.read_telemetry()
+    assert battery.issues() == {}
+    # Near 0 tells nothing (e.g. at night).
+    fake._states["sensor.output"].state = "0.005"
+    await battery.read_telemetry()
+    clock.now += 1
+    fake._states["sensor.output"].state = "-0.2"
+    await battery.read_telemetry()
+    assert battery.issues() == {ISSUE_OUTPUT_SIGN: {"entity": "sensor.output", "value": "-200"}}
+    # The values of the repair stay (a new value would create it again).
+    fake._states["sensor.output"].state = "-0.3"
+    clock.now += 5
+    await battery.read_telemetry()
+    assert battery.issues()[ISSUE_OUTPUT_SIGN]["value"] == "-200"
+    # A positive output clears it and starts the check again.
+    fake._states["sensor.output"].state = "0.1"
+    await battery.read_telemetry()
+    assert battery.issues() == {}
+    fake._states["sensor.output"].state = "-0.2"
+    clock.now += SIGN_CHECK_AFTER_S - 1
+    await battery.read_telemetry()
+    assert battery.issues() == {}
+
+
+async def test_negative_input_becomes_a_repair(monkeypatch) -> None:
+    clock = Clock(monkeypatch)
+    fake = hass()
+    battery = plug_in_with_input(fake)
+    fake._states["sensor.input"].state = "-300"
+    await battery.read_telemetry()
+    clock.now += SIGN_CHECK_AFTER_S
+    await battery.read_telemetry()
+    assert battery.issues() == {ISSUE_INPUT_SIGN: {"entity": "sensor.input", "value": "-300"}}
+
+
+async def test_battery_power_against_the_balance_becomes_a_repair(monkeypatch) -> None:
+    clock = Clock(monkeypatch)
+    fake = hass()
+    # PV 600 W, output 200 W: the battery charges 400 W, the sensor reads -300 W.
+    battery = plug_in(fake, power_entity_id="sensor.power")
+    await battery.read_telemetry()
+    clock.now += SIGN_CHECK_AFTER_S
+    await battery.read_telemetry()
+    assert battery.issues() == {
+        ISSUE_POWER_SIGN: {"entity": "sensor.power", "value": "-300", "balance": "400"}
+    }
+    # With the sign switched it agrees.
+    battery = plug_in(fake, power_entity_id="sensor.power", power_inverted=True)
+    await battery.read_telemetry()
+    clock.now += SIGN_CHECK_AFTER_S
+    await battery.read_telemetry()
+    assert battery.issues() == {}
+    # Small powers tell nothing.
+    fake._states["sensor.power"].state = "-50"
+    battery = plug_in(fake, power_entity_id="sensor.power")
+    await battery.read_telemetry()
+    clock.now += SIGN_CHECK_AFTER_S
+    await battery.read_telemetry()
+    assert battery.issues() == {}
+
+
+async def test_negative_output_is_not_blamed_on_the_battery_power(monkeypatch) -> None:
+    clock = Clock(monkeypatch)
+    fake = hass()
+    battery = plug_in(fake, power_entity_id="sensor.power")
+    # Discharging 300 W with 100 W PV: output 400 W, reported as -400 W (counted as 0).
+    fake._states["sensor.pv"].state = "100"
+    fake._states["sensor.output"].state = "-0.4"
+    await battery.read_telemetry()
+    clock.now += SIGN_CHECK_AFTER_S
+    await battery.read_telemetry()
+    assert set(battery.issues()) == {ISSUE_OUTPUT_SIGN}
