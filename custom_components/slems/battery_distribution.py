@@ -8,9 +8,11 @@ the current number is kept while it is within ``KEEP_TOLERANCE`` of the best,
 to avoid toggling around the break-even point.
 
 Which batteries: when discharging the ones with the highest state of charge,
-when charging the ones with the lowest. An active battery is replaced when it
-is more than the rotation threshold below (discharging) or above (charging) the
-best inactive one, but not more often than the minimum rotation interval.
+when charging the ones with the lowest, but first those below their minimum
+SoC. An active battery is replaced when it is more than the rotation threshold
+below (discharging) or above (charging) the best inactive one, or when charging
+by one below its minimum SoC, but not more often than the minimum rotation
+interval.
 
 Transitions are smooth: every battery has a weight that ramps towards 1
 (selected) or 0 (not selected); the total power is split in proportion to
@@ -38,7 +40,8 @@ battery_limits) gets that minimum first, the total less it is distributed as
 above with the rest of its charge power, whatever the direction.
 
 A battery due for its regular full charge (see full_charge) gets the charge
-power first; the others share the rest as above. When discharging it is
+power first; the others share the rest as above. Not while another battery is
+below its minimum SoC: those are charged up to it first. When discharging it is
 spared while all others have more than ``SPARE_OTHERS_MIN_SOC_PCT`` and can
 deliver the power.
 """
@@ -94,6 +97,8 @@ class BatteryUnit:
     response_s: float | None = None
     # Charging that happens in any case (W).
     min_charge_w: float = 0.0
+    # Below its minimum SoC: preferred when charging.
+    below_min_soc: bool = False
 
     @property
     def leaving(self) -> bool:
@@ -201,7 +206,10 @@ class BatteryDistributor:
         full_charge: str | None,
     ) -> Distribution:
         unit = next((u for u in units if u.battery_id == full_charge), None)
-        if unit is not None and total_w > 0 and unit.can(True):
+        others_below_min = any(
+            u.below_min_soc and u.can(True) and not u.leaving for u in units if u is not unit
+        )
+        if unit is not None and total_w > 0 and unit.can(True) and not others_below_min:
             first = min(total_w, unit.max_charge_w)
             others = [u for u in units if u is not unit]
             result = self._distribute(total_w - first, others, settings, now, elapsed)
@@ -323,7 +331,8 @@ class BatteryDistributor:
             best_inactive = inactive[0]
             gap = abs(by_id[worst].soc_pct - best_inactive.soc_pct)
             better = _rank(best_inactive, charging) < _rank(by_id[worst], charging)
-            if better and gap > settings.soc_threshold_pct:
+            to_min_soc = charging and best_inactive.below_min_soc and not by_id[worst].below_min_soc
+            if better and (gap > settings.soc_threshold_pct or to_min_soc):
                 selected[selected.index(worst)] = best_inactive.battery_id
                 self._last_rotation = now
         self._selected = tuple(selected)
@@ -454,9 +463,12 @@ def _shift_to_fast(
             break
 
 
-def _rank(unit: BatteryUnit, charging: bool) -> float:
-    """Lower is preferred: lowest SoC when charging, highest when discharging."""
-    return unit.soc_pct if charging else -unit.soc_pct
+def _rank(unit: BatteryUnit, charging: bool) -> tuple[bool, float]:
+    """Lower is preferred: when charging those below their minimum SoC, then
+    the lowest SoC; when discharging the highest SoC."""
+    if charging:
+        return (not unit.below_min_soc, unit.soc_pct)
+    return (False, -unit.soc_pct)
 
 
 def _ordered(units: Sequence[BatteryUnit], charging: bool) -> list[BatteryUnit]:

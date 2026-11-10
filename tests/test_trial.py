@@ -162,7 +162,7 @@ async def test_a_battery_in_its_trial_is_released_only_after_its_test_wrote() ->
     battery = SimpleNamespace(
         name="Venus 4", driver=driver, trial=TrialState("p@1"), release_pending_since=5.0, communication_paused=False
     )
-    coordinator = SimpleNamespace(_store=MagicMock(), _data_to_store=dict)
+    coordinator = SimpleNamespace(_schedule_save=MagicMock())
     assert await SlemsCoordinator.async_release_battery(coordinator, battery)
     driver.release_control.assert_not_awaited()
     assert battery.release_pending_since is None
@@ -182,7 +182,7 @@ async def test_the_device_information_is_compared_before_control(monkeypatch: py
     )
     controls = MagicMock(return_value=False)
     coordinator = SimpleNamespace(
-        controls=controls, controller=MagicMock(), _store=MagicMock(), _data_to_store=dict,
+        controls=controls, controller=MagicMock(), _schedule_save=MagicMock(),
         _check_probe_fingerprint=lambda _battery: None,
     )
     await SlemsCoordinator._async_read_device_info(coordinator, battery, 100.0)
@@ -344,8 +344,8 @@ async def test_a_pause_is_followed_by_a_comparison_of_the_device_information() -
         device_info_checked=True, driver=SimpleNamespace(close=AsyncMock(), capabilities=SimpleNamespace(controllable=True)),
     )
     coordinator = SimpleNamespace(
-        settings=SimpleNamespace(communication_pause_min=5), controller=MagicMock(), _store=MagicMock(),
-        _data_to_store=dict, async_update_listeners=MagicMock(),
+        settings=SimpleNamespace(communication_pause_min=5), controller=MagicMock(),
+        _schedule_save=MagicMock(), async_update_listeners=MagicMock(),
     )
     await SlemsCoordinator.async_pause_communication(coordinator, battery, "firmware_update")
     assert battery.pause_reason == "firmware_update"

@@ -169,6 +169,46 @@ def test_full_charge_battery_is_charged_first() -> None:
     assert result.power_w == {"a": 0, "b": 0, "c": 1000}
 
 
+def below_min(battery_id: str, soc: float) -> BatteryUnit:
+    return BatteryUnit(battery_id, soc, 2500, 2500, LOSSES, below_min_soc=True)
+
+
+def test_charging_prefers_a_battery_below_its_minimum_soc() -> None:
+    # b has the lower SoC, but a is below its (higher) minimum.
+    result = settle(BatteryDistributor(), 200, [below_min("a", 20), unit("b", 10)])
+    assert result.selected == ("a",)
+    # Discharging is not affected.
+    result = settle(BatteryDistributor(), -200, [below_min("a", 20), unit("b", 10)])
+    assert result.selected == ("a",)
+    result = settle(BatteryDistributor(), -200, [below_min("a", 10), unit("b", 20)])
+    assert result.selected == ("b",)
+
+
+def test_full_charge_waits_while_another_battery_is_below_its_minimum_soc() -> None:
+    units = [below_min("a", 7.1), below_min("b", 9.6), unit("c", 12.8)]
+    result = settle(BatteryDistributor(), 200, units, full_charge="c")
+    assert result.power_w == {"a": pytest.approx(200), "b": 0, "c": 0}
+    # The due battery itself below its minimum: charged first as before.
+    units = [unit("a", 30), below_min("c", 8)]
+    result = settle(BatteryDistributor(), 3000, units, full_charge="c")
+    assert result.power_w["c"] == 2500
+
+
+def test_rotation_to_a_battery_below_its_minimum_soc_ignores_the_threshold() -> None:
+    distributor = BatteryDistributor()
+    settle(distributor, 200, [unit("a", 13), unit("b", 14)])
+    # b drops below its minimum while a charges; the gap stays under 5 %.
+    units = [unit("a", 13), below_min("b", 11)]
+    result = distributor.distribute(200, units, SETTINGS, 400.0)
+    assert result.selected == ("b",)
+    # The minimum rotation interval still applies.
+    units = [below_min("a", 10), unit("b", 12)]
+    result = distributor.distribute(200, units, SETTINGS, 500.0)
+    assert result.selected == ("b",)
+    result = distributor.distribute(200, units, SETTINGS, 1400.0)
+    assert result.selected == ("a",)
+
+
 def test_full_charge_battery_spared_while_the_others_are_above_half() -> None:
     units = [unit("a", 70), unit("b", 60), unit("c", 95)]
     result = settle(BatteryDistributor(), -1500, units, full_charge="c")

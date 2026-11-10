@@ -890,6 +890,9 @@ def is_full_command(consumer: ConsumerConfig, command: float | None, full_power_
 class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     """Polls all batteries, reads the measurement entities and allocates power."""
 
+    # Monotonic time of the pending save of the main store, None: none pending.
+    _save_due: float | None = None
+
     config_entry: SlemsConfigEntry
 
     def __init__(
@@ -1220,7 +1223,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.forecaster.sources = self._forecast_sources()
         self.forecaster.holiday_place = self._holiday_place()
         if self.settings.vacation and self.vacation_days.mark(dt_util.now().date()):
-            self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
+            self._schedule_save(STORAGE_SAVE_DELAY_S)
         excluded = frozenset(self.vacation_days.days)
         self.morning_gap.forget(excluded)
         try:
@@ -1483,7 +1486,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             )
         else:
             self.bad_weather.switch_off()
-        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self._schedule_save(BALANCING_SAVE_DELAY_S)
         self.hass.async_create_task(self.async_request_refresh())
 
     def _integrate_export(self, grid_w: float | None, now: float) -> None:
@@ -1554,7 +1557,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             )
             self.price_savings.add(run, saving)
             _LOGGER.debug("Price aware control %s – %s: saved %.2f €", start, end, saving)
-        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self._schedule_save(BALANCING_SAVE_DELAY_S)
         self.async_update_listeners()
 
     async def _async_save_quarters(self, _now: datetime) -> None:
@@ -1600,6 +1603,20 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if self._export_day[0] != dt_util.now().date():
             return 0.0
         return self._export_day[1]
+
+    def _schedule_save(self, delay_s: float) -> None:
+        """Save the main store within ``delay_s``.
+
+        ``Store.async_delay_save`` moves a pending save to the latest requested
+        time, so calling it every cycle would postpone the save forever. A
+        pending save that comes sooner is kept; it writes the current data.
+        """
+        now = time.monotonic()
+        due = now + delay_s
+        if self._save_due is not None and now < self._save_due <= due:
+            return
+        self._save_due = due
+        self._store.async_delay_save(self._data_to_store, delay_s)
 
     def _data_to_store(self) -> dict:
         data: dict = {
@@ -1718,7 +1735,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         pv = None if snapshot.pv_power_w is None else snapshot.pv_power_w - snapshot.own_pv_power_w
         if self.phase_model.add(now, readings, phases, pv, three_phase_w):
             self.phase_model.evaluate()
-            self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
+            self._schedule_save(STORAGE_SAVE_DELAY_S)
 
     def _grid_phases_w(self) -> tuple[float | None, float | None, float | None] | None:
         """The smart meter's power per phase (+ import), None if not configured."""
@@ -1828,7 +1845,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self.grid_quarters,
         )
         if len(self.netting.per_phase) != found:
-            self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
+            self._schedule_save(STORAGE_SAVE_DELAY_S)
 
     @callback
     def relearn_phase(self, subentry_id: str) -> None:
@@ -1847,7 +1864,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._phase_changed()
 
     def _phase_changed(self) -> None:
-        self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
+        self._schedule_save(STORAGE_SAVE_DELAY_S)
         if self.data is not None:
             self.problems.update(time.monotonic(), self.data)
             self.async_update_listeners()
@@ -1936,7 +1953,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         outdoor = self._live_outdoor_c(snapshot)
         for subentry_id, outdoor_learner in self.outdoor_power.items():
             if outdoor_learner.update(now, snapshot.consumers[subentry_id].power_w, outdoor):
-                self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
+                self._schedule_save(STORAGE_SAVE_DELAY_S)
 
         # The batteries are read in parallel (each has its own connection), so
         # a slow one does not delay the others. A failing battery must not take
@@ -1988,7 +2005,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self._update_self_test(battery, snapshot, now)
         self._update_probes(now)
         self._update_full_charge(snapshot, now)
-        self._store.async_delay_save(self._data_to_store, STORAGE_SAVE_DELAY_S)
+        self._schedule_save(STORAGE_SAVE_DELAY_S)
 
         snapshot.unread_battery_power_w = self._unread_battery_power_w(snapshot, now)
         self._house_hold.check(snapshot, now)
@@ -2196,7 +2213,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         elif step.phase is BalancingPhase.ERROR:
             self.end_balancing(battery, balancer.error or "error")
         elif step.phase is not previous_phase:
-            self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+            self._schedule_save(BALANCING_SAVE_DELAY_S)
 
     def _update_full_charge(self, snapshot: SystemSnapshot, now: float) -> None:
         """Battery due for its regular full charge, and the rest once it got full."""
@@ -2332,7 +2349,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if reason == "firmware_update":
                 battery.pause_reason = reason
             _LOGGER.info("Battery %s: communication pause extended", battery.name)
-            self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+            self._schedule_save(BALANCING_SAVE_DELAY_S)
             self.async_update_listeners()
             return
         if reason == "manual" and battery.driver.capabilities.controllable:
@@ -2358,7 +2375,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 self.settings.communication_pause_min,
             )
         self.controller.request()
-        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self._schedule_save(BALANCING_SAVE_DELAY_S)
         self.async_update_listeners()
 
     def communicating_twin(self, battery: BatteryRuntime) -> BatteryRuntime | None:
@@ -2387,7 +2404,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         """A device takes only one connection: the pause goes on while the twin communicates."""
         battery.paused_until = dt_util.utcnow().timestamp() + self.settings.communication_pause_min * 60
         _LOGGER.info("Battery %s stays paused: %s at the same address communicates", battery.name, twin.name)
-        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self._schedule_save(BALANCING_SAVE_DELAY_S)
 
     @callback
     def resume_communication(self, battery: BatteryRuntime) -> None:
@@ -2398,7 +2415,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         battery.pause_reason = None
         if battery.trial is not None:
             battery.device_info_checked = False
-        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self._schedule_save(BALANCING_SAVE_DELAY_S)
 
     def _unread_battery_power_w(self, snapshot: SystemSnapshot, now: float) -> float | None:
         """Last measured power of the controllable batteries missing from
@@ -2524,7 +2541,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             elif check.outcome is Outcome.FAILED:
                 trial.observation_failed(wall, quiet=True)
                 self._observation_found(battery, {"reason": "quiet", "check": check.as_dict()})
-            self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+            self._schedule_save(BALANCING_SAVE_DELAY_S)
             return
         problem = None
         if self.controls(battery):
@@ -2551,7 +2568,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         elif observation.complete(wall):
             trial.observation_passed()
             _LOGGER.info("Battery %s: observation after the firmware update passed", battery.name)
-        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self._schedule_save(BALANCING_SAVE_DELAY_S)
 
     def _observation_found(self, battery: BatteryRuntime, problem: dict) -> None:
         _LOGGER.warning("Battery %s behaves differently after the firmware update: %s", battery.name, problem)
@@ -2593,7 +2610,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 battery.release_pending_since = time.monotonic()
             self.controller.request()
         battery.device_info_checked = True
-        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self._schedule_save(BALANCING_SAVE_DELAY_S)
 
     @property
     def measurement_holds(self) -> bool:
@@ -2639,7 +2656,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
     def request_probe(self, battery: BatteryRuntime) -> None:
         """Probe the battery as soon as the grid is quiet (the button)."""
         battery.probe_record.request("manual")
-        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self._schedule_save(BALANCING_SAVE_DELAY_S)
 
     def _probe_report(self, grid: float) -> None:
         """A grid meter report: the house load for the quiet check and the running probe step."""
@@ -2782,7 +2799,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             probe.measurements,
         )
         self.controller.request()
-        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self._schedule_save(BALANCING_SAVE_DELAY_S)
 
     def _check_probe_fingerprint(self, battery: BatteryRuntime) -> None:
         """Compare what decides the battery's response times with its last probe step;
@@ -2859,7 +2876,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # A discharging battery hands over smoothly, like when it is disabled.
         self.controller.disable_battery(battery)
         self.controller.request()
-        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self._schedule_save(BALANCING_SAVE_DELAY_S)
 
     @callback
     def end_self_test(self, battery: BatteryRuntime, reason: str | None = None) -> None:
@@ -2887,14 +2904,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             )
         _LOGGER.info("Self-test of %s: %s", battery.name, test.result)
         self.controller.request()
-        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self._schedule_save(BALANCING_SAVE_DELAY_S)
 
     @callback
     def cancel_self_test(self, battery: BatteryRuntime) -> None:
         """Cancel a running self-test, or no longer wait for the one asked for at the setup."""
         battery.self_test_pending = False
         self.end_self_test(battery, "cancelled")
-        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self._schedule_save(BALANCING_SAVE_DELAY_S)
 
     def _update_self_test(self, battery: BatteryRuntime, snapshot: SystemSnapshot, now: float) -> None:
         """One step of a running self-test, or the start of one asked for at the setup."""
@@ -2971,7 +2988,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # A discharging battery hands over smoothly, like when it is disabled.
         self.controller.disable_battery(battery)
         self.controller.request()
-        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self._schedule_save(BALANCING_SAVE_DELAY_S)
 
     @callback
     def end_balancing(self, battery: BatteryRuntime, result: str) -> None:
@@ -3003,7 +3020,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         battery.balancing_result = result
         battery.leaving_until = None
         self.controller.request()
-        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self._schedule_save(BALANCING_SAVE_DELAY_S)
 
     def _balancing_charge_wh(self, snapshot: SystemSnapshot) -> float:
         """Energy balancing batteries still charge before they reach the top."""
@@ -3163,7 +3180,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             hourly(pv_forecast) if pv_forecast is not None else None,
             self._with_target_load(consumption.total) if consumption else None,
         ):
-            self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+            self._schedule_save(BALANCING_SAVE_DELAY_S)
         forecast_plan = self.forecast_plan(
             snapshot, plan_battery, wall_now, load, settings, balancing_wh, background=True
         )
@@ -3354,7 +3371,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             settings.operating_mode is OperatingMode.ACTIVE
             and allocation.strategy in (Strategy.PRICE_HOLD, Strategy.GRID_CHARGE, Strategy.BATTERY_EXPORT),
         ):
-            self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+            self._schedule_save(BALANCING_SAVE_DELAY_S)
         snapshot.distribution = self._distributor.distribute(
             allocation.battery_power_w,
             units,
@@ -5665,6 +5682,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     loss_model=battery.loss_curve.model(LossModel()),
                     response_s=self.controller.battery_responses.learned(battery.subentry_id),
                     min_charge_w=limits.min_charge_w,
+                    below_min_soc=telemetry.soc_pct < battery.limits.min_soc_pct,
                     leaving_fraction=(
                         None
                         if battery.plannable
@@ -5713,7 +5731,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         battery.release_pending_since = None
         if battery.trial is not None and battery.trial.wrote:
             battery.trial.wrote = False
-            self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+            self._schedule_save(BALANCING_SAVE_DELAY_S)
         if battery.trial is not None and battery.trial.observation is not None:
             battery.trial.observation.released(time.monotonic())
         return True
@@ -5722,7 +5740,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         """The test of a battery in its trial writes: from now on it is to be released."""
         if battery.trial is not None and battery.trial.in_trial and not battery.trial.wrote:
             battery.trial.wrote = True
-            self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+            self._schedule_save(BALANCING_SAVE_DELAY_S)
 
     @callback
     def confirm_trial(self, battery: BatteryRuntime) -> bool:
@@ -5731,7 +5749,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             return False
         _LOGGER.info("Trial of %s confirmed by the user", battery.name)
         self.controller.request()
-        self._store.async_delay_save(self._data_to_store, BALANCING_SAVE_DELAY_S)
+        self._schedule_save(BALANCING_SAVE_DELAY_S)
         self.async_update_listeners()
         return True
 

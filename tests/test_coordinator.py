@@ -858,3 +858,31 @@ def test_the_diagnostics_show_the_response_measurements() -> None:
         "Venus 3": {"step": [14.97, 15.12, 14.8]},
         "Venus 1": {"reversal": [1.76]},
     }
+
+
+def test_saves_requested_every_cycle_do_not_postpone_the_pending_save(monkeypatch) -> None:
+    from custom_components.slems import coordinator as module
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    clock = [1000.0]
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock[0])
+    calls: list[float] = []
+    coordinator = SlemsCoordinator.__new__(SlemsCoordinator)
+    coordinator._save_due = None
+    coordinator._store = SimpleNamespace(async_delay_save=lambda _func, delay: calls.append(delay))
+
+    coordinator._schedule_save(600)
+    for _ in range(5):
+        clock[0] += 1
+        coordinator._schedule_save(600)
+    assert calls == [600]
+    # A sooner save replaces the pending one.
+    coordinator._schedule_save(5)
+    assert calls == [600, 5]
+    clock[0] += 3
+    coordinator._schedule_save(600)
+    assert calls == [600, 5]
+    # Once the pending save is done, the next request schedules a new one.
+    clock[0] += 3
+    coordinator._schedule_save(600)
+    assert calls == [600, 5, 600]

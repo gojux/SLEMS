@@ -245,9 +245,11 @@ a Venus keeps its remote control on for this.
 With several batteries SLEMS decides how many run and which: at low power a
 single battery is usually more efficient, at high power sharing is. When
 discharging the battery with the highest state of charge runs, when charging
-the one with the lowest. If the running battery drifts more than **Battery
-rotation threshold** (default 5 %) away from the best inactive one, SLEMS
-switches, at most once per **Battery rotation minimum interval** (default 15
+the one with the lowest, but first batteries below their **Minimum state of
+charge**. If
+the running battery drifts more than **Battery rotation threshold** (default 5
+%) away from the best inactive one, or when charging an inactive one is below
+its minimum SoC, SLEMS switches, at most once per **Battery rotation minimum interval** (default 15
 min) and with a smooth transition: the power moves with **Battery rotation ramp
 rate** (default 100 W/s), but never takes longer than **Battery rotation maximum
 ramp time** (default 30 s). The conversion losses per power level are learned
@@ -553,7 +555,8 @@ days), or never full since SLEMS records it, is charged first until it was
 full once. Only one battery at a time, the one whose last full charge is the
 oldest (never full first, then by name). The split between batteries and
 consumers does not change; the battery only gets the charge power before the
-other batteries. For this it may exceed its maximum SoC once; afterwards the
+other batteries, and not while another battery is below its minimum SoC: that
+one is charged up to it first. It may exceed its maximum SoC once; afterwards the
 limit applies again. If it does not get full for lack of PV, it stays first
 the next days. When discharging it is spared while all other batteries have
 more than 50 % and can deliver the power, so it starts the next day higher.

@@ -253,9 +253,10 @@ Fernsteuerung.
 Bei mehreren Batterien entscheidet SLEMS, wie viele und welche laufen: Bei
 kleiner Leistung ist meist eine einzelne Batterie effizienter, bei großer das
 Aufteilen. Beim Entladen läuft die Batterie mit dem höchsten Ladezustand, beim
-Laden die mit dem niedrigsten. Entfernt sich die laufende Batterie um mehr als
-die **Schwelle Batteriewechsel** (Standard 5 %) von der besten inaktiven, wird
-gewechselt, höchstens einmal pro **Mindestabstand Batteriewechsel** (Standard 15
+Laden die mit dem niedrigsten, vorher aber Batterien unter ihrem **minimalen
+Ladezustand**. Entfernt sich die laufende Batterie um mehr als die **Schwelle
+Batteriewechsel** (Standard 5 %) von der besten inaktiven oder liegt beim Laden
+eine inaktive unter ihrem minimalen Ladezustand, wird gewechselt, höchstens einmal pro **Mindestabstand Batteriewechsel** (Standard 15
 min) und mit sanftem Übergang: Die Leistung wandert mit der **Rampe
 Batteriewechsel** (Standard 100 W/s), aber nie länger als die **Maximale
 Übergangszeit Batteriewechsel** (Standard 30 s). Die Umwandlungsverluste je
@@ -584,7 +585,9 @@ Tage) nicht voll war oder seit der Aufzeichnung durch SLEMS noch nie, wird
 zuerst geladen, bis sie einmal voll war. Immer nur eine Batterie, die mit der
 ältesten letzten Vollladung (noch nie voll zuerst, dann nach Namen). Die
 Aufteilung zwischen Batterien und Verbrauchern ändert sich nicht; die Batterie
-bekommt die Ladeleistung nur vor den anderen Batterien. Dafür darf sie ihren
+bekommt die Ladeleistung nur vor den anderen Batterien, und nicht, solange
+eine andere unter ihrem minimalen Ladezustand liegt: Diese wird zuerst bis
+dorthin geladen. Sie darf ihren
 maximalen Ladezustand einmal überschreiten, danach gilt die Grenze wieder.
 Wird sie mangels PV nicht voll, bleibt sie an den nächsten Tagen zuerst dran.
 Beim Entladen wird sie geschont, solange alle anderen Batterien über 50 %

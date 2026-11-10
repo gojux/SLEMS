@@ -5612,7 +5612,7 @@ class SlemsPanel extends HTMLElement {
               s("last_full_charge")?.attributes?.preferred ? `<span class="chip" title="${escapeHtml(t.fullChargeDueHint)}">${t.fullChargeDue}</span>` : ""
             }`)}
             ${problem}
-            <div class="soc"><div class="soc-bar"><div style="width:${soc ?? 0}%"></div></div>
+            <div class="soc"${s("battery_soc")?.entity_id ? ` data-more-info="${s("battery_soc").entity_id}"` : ""}><div class="soc-bar"><div style="width:${soc ?? 0}%"></div></div>
               <span>${soc === null ? "–" : Math.round(soc) + " %"}</span></div>
             <dl>${rows.map(([label, st, entityId]) => this._row(label, escapeHtml(st.text ?? this._format(st)), entityId)).join("")}</dl>
             ${this._cellSection(b)}
@@ -6610,7 +6610,7 @@ const STYLE = `
   .info-box button { margin-left: auto; }
   #details dl { margin: 0 0 16px; min-width: 300px; }
   [data-more-info] { cursor: pointer; }
-  .tile[data-more-info]:hover .value, dd[data-more-info]:hover, dt[data-more-info]:hover + dd { color: var(--slems-accent); }
+  .tile[data-more-info]:hover .value, dd[data-more-info]:hover, dt[data-more-info]:hover + dd, .soc[data-more-info]:hover span { color: var(--slems-accent); }
   .fbox[data-more-info], .fbox[data-action="battery-menu"] { cursor: pointer; }
   .fbox[data-more-info]:hover, .fbox[data-action="battery-menu"]:hover, .fbox[aria-expanded="true"] { border-color: var(--accent); }
   .flow-menu { position: absolute; z-index: 5; width: 240px; }
