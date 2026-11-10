@@ -7,6 +7,7 @@ from custom_components.slems.battery_limits import (
     power_limits,
 )
 from custom_components.slems.delivery_monitor import (
+    COMM_FAILURE_SPACING_S,
     COOLDOWN_S,
     ENGAGE_GRACE_S,
     FAIL_THRESHOLD,
@@ -106,8 +107,18 @@ def test_bms_stop_ends_after_charging_or_rising_soc() -> None:
 
 def test_communication_failures_exclude_without_wake() -> None:
     monitor = DeliveryMonitor("test")
-    actions = [monitor.record_comm_failure(t) for t in range(FAIL_THRESHOLD)]
+    actions = [monitor.record_comm_failure(t * COMM_FAILURE_SPACING_S) for t in range(FAIL_THRESHOLD)]
     assert actions[-1] is Action.EXCLUDE
+
+
+def test_communication_failures_count_once_per_poll_interval() -> None:
+    monitor = DeliveryMonitor("test")
+    # A reconnect or a short network outage: several commands fail within a second.
+    for t in (100.0, 100.03, 100.5, 101.0, 104.9):
+        assert monitor.record_comm_failure(t) is Action.NONE
+    assert monitor.fail_count == 1
+    assert monitor.record_comm_failure(105.0) is Action.NONE
+    assert monitor.record_comm_failure(110.0) is Action.EXCLUDE
 
 
 def test_bms_full_below_100_percent_blocks_charging_without_failure() -> None:

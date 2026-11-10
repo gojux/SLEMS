@@ -33,8 +33,11 @@ operating mode active:
   (all control registers are written again, RS485 control included) and the
   count starts again; the next time the battery is excluded for
   ``COOLDOWN_S``: treated like a disabled battery and handed back to its own
-  logic, then retried. Communication failures skip the wake attempt. A
-  battery that delivers resets everything.
+  logic, then retried. Communication failures skip the wake attempt and
+  count at most once per ``COMM_FAILURE_SPACING_S`` (the poll interval): the
+  controller sends every half second or so, and a network outage of a second
+  or two must not exclude a battery. A battery that delivers resets
+  everything.
 """
 
 from __future__ import annotations
@@ -56,6 +59,7 @@ BMS_DISCHARGE_CUTOFF_SOC_PCT = 20.0
 BMS_STOP_RELEASE_PCT = 2.0
 BMS_RETRY_RATIO = 0.5
 BMS_RETRY_MIN_W = 300.0
+COMM_FAILURE_SPACING_S = 5.0
 
 
 class Action(StrEnum):
@@ -75,6 +79,8 @@ class DeliveryMonitor:
         self.reason: str | None = None
         self.excluded_until: float | None = None
         self._wake_used = False
+        # Monotonic time of the last counted communication failure.
+        self._comm_failure_at: float | None = None
         # SoC (%) at which the BMS first stopped discharging and the allowed
         # discharge power since (0: blocked); None while not stopped.
         self.bms_stop_soc: float | None = None
@@ -225,6 +231,9 @@ class DeliveryMonitor:
         """A write failed or the set point did not read back as written."""
         if self.excluded(now):
             return Action.NONE
+        if self._comm_failure_at is not None and now - self._comm_failure_at < COMM_FAILURE_SPACING_S:
+            return Action.NONE
+        self._comm_failure_at = now
         return self._fail(now, "write_failed", "command not confirmed", False)
 
     def _fail(self, now: float, reason: str, detail: str, allow_wake: bool) -> Action:

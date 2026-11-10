@@ -678,5 +678,6 @@ logic, the others take over) and then retried. A battery at the top that stops
 charging or a battery at 20 % or less that stops discharging does not count
 (the BMS protects it, see the SoC window). The Venus also reads its control registers back after
 every complete write (first command and every 60 s); a write that is not
-confirmed counts as well. The binary sensor **Not responding** and the dashboard
+confirmed or cannot be sent counts as well, at most once every 5 seconds (a
+short network outage does not exclude a battery). The binary sensor **Not responding** and the dashboard
 show an excluded battery.

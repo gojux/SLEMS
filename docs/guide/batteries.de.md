@@ -718,6 +718,7 @@ versucht. Eine Batterie am oberen Ladeende, die nicht mehr lädt, oder eine
 Batterie bei höchstens 20 %, die nicht mehr entlädt, zählt nicht (das BMS
 schützt sie, siehe Ladezustandsfenster). Die
 Venus liest außerdem nach jedem vollständigen Schreiben (erster Befehl und
-alle 60 s) ihre Steuerregister zurück; ein nicht bestätigter Befehl zählt
-ebenfalls. Der Binärsensor **Reagiert nicht** und das Dashboard zeigen eine
+alle 60 s) ihre Steuerregister zurück; ein nicht bestätigter oder nicht
+gesendeter Befehl zählt ebenfalls, höchstens einmal alle 5 Sekunden (ein kurzer
+Netzwerkausfall schließt keine Batterie aus). Der Binärsensor **Reagiert nicht** und das Dashboard zeigen eine
 ausgeschlossene Batterie.
