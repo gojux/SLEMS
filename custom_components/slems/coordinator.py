@@ -2385,6 +2385,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 battery.name,
                 self.settings.communication_pause_min,
             )
+        else:
+            _LOGGER.info(
+                "Battery %s: communication paused for %d minutes (%s)",
+                battery.name,
+                self.settings.communication_pause_min,
+                reason,
+            )
         self.controller.request()
         self._schedule_save(BALANCING_SAVE_DELAY_S)
         self.async_update_listeners()
