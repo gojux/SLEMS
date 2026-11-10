@@ -711,16 +711,12 @@ Zellspannungen werden nicht begrenzt.
 Im Betriebsmodus **Aktiv** prüft SLEMS wie Omnibattery, ob jede Batterie die
 vorgegebene Leistung liefert. Liefert eine Batterie bei einer Vorgabe von
 mindestens 100 W (nach 30 s in dieser Richtung) dreimal hintereinander weniger
-als 10 % davon, baut SLEMS zuerst die Verbindung neu auf und schreibt alle
-Steuerregister neu; hilft das nicht, wird sie für 5 Minuten ausgeschlossen
-(wie eine deaktivierte Batterie, an ihre eigene Logik übergeben, die anderen
-übernehmen) und danach wieder versucht. Eine Batterie am oberen Ladeende, die
-nicht mehr lädt, oder eine Batterie bei höchstens 20 %, die nicht mehr
-entlädt, zählt nicht (das BMS schützt sie, siehe Ladezustandsfenster). Steht
-eine solche Batterie dabei im Standby, baut SLEMS einmal die Verbindung neu
-auf, bevor es einen BMS-Stopp annimmt: Eine Venus E 3.0 kann nach einer kurzen
-Stromunterbrechung im Standby hängen bleiben, und nur eine neue Verbindung
-holt sie zurück. Die
+als 10 % davon, werden zuerst alle Steuerregister neu geschrieben; hilft das
+nicht, wird sie für 5 Minuten ausgeschlossen (wie eine deaktivierte Batterie,
+an ihre eigene Logik übergeben, die anderen übernehmen) und danach wieder
+versucht. Eine Batterie am oberen Ladeende, die nicht mehr lädt, oder eine
+Batterie bei höchstens 20 %, die nicht mehr entlädt, zählt nicht (das BMS
+schützt sie, siehe Ladezustandsfenster). Die
 Venus liest außerdem nach jedem vollständigen Schreiben (erster Befehl und
 alle 60 s) ihre Steuerregister zurück; ein nicht bestätigter Befehl zählt
 ebenfalls. Der Binärsensor **Reagiert nicht** und das Dashboard zeigen eine

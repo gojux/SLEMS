@@ -28,15 +28,10 @@ operating mode active:
   ``BMS_RETRY_MIN_W``); a stop at that power, or a command too small to
   lower, blocks it. Both last until it charged or its SoC rose by
   ``BMS_STOP_RELEASE_PCT`` above the SoC at the first stop. Without them the
-  battery would stay planned with power it does not deliver. A battery in
-  standby is first reconnected once (fresh connection, all control registers
-  written again): after a short AC interruption a Venus E 3.0 at a low SoC
-  can stay in standby with RS485 control reading enabled and never discharge,
-  which looks like a BMS stop; only a fresh connection recovers it
-  (Omnibattery issue #720).
+  battery would stay planned with power it does not deliver.
 * After ``FAIL_THRESHOLD`` consecutive failures the first time a wake attempt
-  (fresh connection, all control registers written again, RS485 control
-  included) and the count starts again; the next time the battery is excluded for
+  (all control registers are written again, RS485 control included) and the
+  count starts again; the next time the battery is excluded for
   ``COOLDOWN_S``: treated like a disabled battery and handed back to its own
   logic, then retried. Communication failures skip the wake attempt. A
   battery that delivers resets everything.
@@ -69,8 +64,6 @@ class Action(StrEnum):
     EXCLUDE = "exclude"
     BMS_STOP = "bms_stop"
     BMS_FULL = "bms_full"
-    # A fresh connection before a BMS stop is assumed (see the module docstring).
-    RECONNECT = "reconnect"
 
 
 class DeliveryMonitor:
@@ -82,8 +75,6 @@ class DeliveryMonitor:
         self.reason: str | None = None
         self.excluded_until: float | None = None
         self._wake_used = False
-        # The reconnect before a BMS stop was tried in this refusal.
-        self._reconnect_used = False
         # SoC (%) at which the BMS first stopped discharging and the allowed
         # discharge power since (0: blocked); None while not stopped.
         self.bms_stop_soc: float | None = None
@@ -113,7 +104,6 @@ class DeliveryMonitor:
         self.fail_count = 0
         self.reason = None
         self._wake_used = False
-        self._reconnect_used = False
         self._stop_count = 0
 
     @property
@@ -151,7 +141,6 @@ class DeliveryMonitor:
         _LOGGER.info("Battery %s: discharging allowed again after the BMS stop", self._name)
         self.bms_stop_soc = None
         self.bms_limit_w = None
-        self._reconnect_used = False
         return True
 
     def observe(
@@ -162,12 +151,8 @@ class DeliveryMonitor:
         delivered_w: float | None,
         soc_pct: float | None,
         max_cell_v: float | None = None,
-        standby: bool = False,
     ) -> Action:
-        """Judge one poll: commanded and delivered AC power (+charge / -discharge).
-
-        ``standby``: the battery reports its inverter in standby.
-        """
+        """Judge one poll: commanded and delivered AC power (+charge / -discharge)."""
         if self.excluded(now) or delivered_w is None:
             return Action.NONE
         charging = commanded_w > 0
@@ -211,14 +196,6 @@ class DeliveryMonitor:
             if self._stop_count < FAIL_THRESHOLD:
                 return Action.NONE
             self._stop_count = 0
-            if standby and self.bms_stop_soc is None and not self._reconnect_used:
-                self._reconnect_used = True
-                _LOGGER.info(
-                    "Battery %s does not discharge at %.1f %% and stays in standby, "
-                    "reconnecting once before assuming a BMS stop",
-                    self._name, soc_pct,
-                )
-                return Action.RECONNECT
             retry_w = max(BMS_RETRY_RATIO * -commanded_w, BMS_RETRY_MIN_W)
             if self.bms_limit_w is None and retry_w < -commanded_w:
                 self.bms_limit_w = retry_w
@@ -261,9 +238,7 @@ class DeliveryMonitor:
         self.fail_count = 0
         if allow_wake and not self._wake_used:
             self._wake_used = True
-            _LOGGER.info(
-                "Battery %s does not deliver (%s), reconnecting and writing control again", self._name, detail
-            )
+            _LOGGER.info("Battery %s does not deliver (%s), writing control again", self._name, detail)
             return Action.WAKE
         self.excluded_until = now + COOLDOWN_S
         _LOGGER.warning(
