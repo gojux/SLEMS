@@ -253,11 +253,17 @@ class MarstekVenusE3Driver(BatteryDriver):
             raw = decode_registers(words, spec.data_type) if words else None
             if raw is not None:
                 values[spec.key] = round(raw * spec.scale, 3) if spec.scale != 1.0 else raw
-        if "battery_soc" not in values and values:
+        debug = _LOGGER.isEnabledFor(logging.DEBUG)
+        if values and ("battery_soc" not in values or debug):
+            # With a debug log 37005 is read beside 34002, so a jump of the SoC
+            # shows whether the two registers disagree (one more frame per poll).
             words = await self._link.read(SOC_FALLBACK.address, register_count(SOC_FALLBACK.data_type))
             raw = decode_registers(words, SOC_FALLBACK.data_type) if words else None
             if raw is not None:
-                values["battery_soc"] = raw
+                if "battery_soc" in values:
+                    values["bms_soc"] = raw
+                else:
+                    values["battery_soc"] = raw
         if not values:
             # Nothing answered: drop the socket so the next poll reconnects.
             await self._link.close()

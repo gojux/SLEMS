@@ -419,6 +419,8 @@ class BatteryRuntime:
     unreadable_since: float | None = None
     # A fresh connection is opened before the next read (see delivery_monitor).
     reconnect_pending: bool = False
+    # SoC and states last written to the debug log (see _log_battery_state).
+    logged_state: tuple[Any, ...] | None = None
     # Last polled AC power (+charge / -discharge) and its monotonic time; the
     # controller trusts it over a command the battery does not follow.
     measured_power_w: float | None = None
@@ -2510,6 +2512,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         finally:
             battery.telemetry_read_s = round(time.monotonic() - read_start, 3)
         battery.unreadable_since = None
+        self._log_battery_state(battery, telemetry)
         if telemetry.extra.get("inverter_state") != "ota_upgrade":
             await self._async_read_device_info(battery, now)
         battery.trial_registers = None
@@ -2537,6 +2540,31 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             else:
                 battery.observed_registers = (registers, battery.driver.write_count == count)
         return telemetry
+
+    @staticmethod
+    def _log_battery_state(battery: BatteryRuntime, telemetry: BatteryTelemetry) -> None:
+        """Debug log of the SoC and the device states whenever one of them changes.
+
+        Power and cell voltages change with almost every poll and are left out
+        (the power is in the controller's cycle lines).
+        """
+        if not _LOGGER.isEnabledFor(logging.DEBUG):
+            return
+        extra = telemetry.extra
+        state = (
+            telemetry.soc_pct,
+            extra.get("bms_soc"),
+            extra.get("inverter_state"),
+            extra.get("rs485_control"),
+        )
+        if state == battery.logged_state:
+            return
+        battery.logged_state = state
+        _LOGGER.debug(
+            "Battery %s: SoC %s %% (BMS register %s %%), inverter state %s, RS485 control %s",
+            battery.name,
+            *state,
+        )
 
     def _command_direction(self, battery: BatteryRuntime) -> str | None:
         """Direction of the latest command while SLEMS controls the battery."""

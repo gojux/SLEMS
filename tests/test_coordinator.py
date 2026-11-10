@@ -920,6 +920,30 @@ def test_protection_charge_starts_well_below_the_minimum_and_ends_at_it() -> Non
     assert power(a=12.0, b=12.0, c=5.0) == 0
 
 
+def test_debug_log_names_soc_and_states_only_when_they_change(caplog) -> None:
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    battery = SimpleNamespace(name="Venus", logged_state=None)
+
+    def log(soc: float, power: float) -> None:
+        telemetry = BatteryTelemetry(
+            soc_pct=soc, power_w=power, extra={"bms_soc": 12, "inverter_state": "standby", "rs485_control": True}
+        )
+        SlemsCoordinator._log_battery_state(battery, telemetry)
+
+    log(7.1, 0)
+    assert battery.logged_state is None  # no debug log: nothing kept
+    caplog.set_level("DEBUG", logger="custom_components.slems.coordinator")
+    log(7.1, 0)
+    log(7.1, -11)  # the power alone does not count
+    log(7.0, -11)
+    lines = [r.getMessage() for r in caplog.records]
+    assert lines == [
+        "Battery Venus: SoC 7.1 % (BMS register 12 %), inverter state standby, RS485 control True",
+        "Battery Venus: SoC 7.0 % (BMS register 12 %), inverter state standby, RS485 control True",
+    ]
+
+
 async def test_a_pending_reconnect_closes_the_connection_before_the_read() -> None:
     from unittest.mock import AsyncMock, MagicMock
 

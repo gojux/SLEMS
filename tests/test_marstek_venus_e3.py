@@ -231,6 +231,16 @@ async def test_soc_falls_back_to_whole_percent_register() -> None:
     assert telemetry.soc_pct == 64
 
 
+async def test_debug_log_reads_the_whole_percent_register_beside(caplog) -> None:
+    link = FakeLink({34002: 71, 37005: 12, 30001: 0})
+    telemetry = await make_driver(link).read_telemetry()
+    assert "bms_soc" not in telemetry.extra
+    caplog.set_level("DEBUG", logger=venus.__name__)
+    telemetry = await make_driver(link).read_telemetry()
+    assert telemetry.soc_pct == pytest.approx(7.1)
+    assert telemetry.extra["bms_soc"] == 12
+
+
 async def test_keepalive_skips_registers_the_telemetry_confirmed(monkeypatch) -> None:
     clock = [100.0]
     monkeypatch.setattr(venus.time, "monotonic", lambda: clock[0])
