@@ -11,7 +11,7 @@ from homeassistant.const import STATE_ON, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.event import async_track_time_change
-from homeassistant.helpers.restore_state import async_get as async_get_restore_state
+from homeassistant.helpers.restore_state import StoredState, async_get as async_get_restore_state
 
 from .battery_profiles import ProfileError, bundled_profiles, profile_of
 from .battery_wear import wear_cost
@@ -155,10 +155,24 @@ def _remove_old_settings(hass: HomeAssistant, entry: SlemsConfigEntry) -> None:
     # The switch "automatic import limit" became the peak shaving mode: its
     # last state chooses the mode once (see PeakShavingModeSelect).
     if entity_id := registry.async_get_entity_id(Platform.SWITCH, DOMAIN, f"{entry.entry_id}_peak_shaving_auto"):
-        last = async_get_restore_state(hass).last_states.get(entity_id)
+        last = _last_stored_state(hass, entity_id)
         if last is not None:
             entry.runtime_data.legacy_peak_shaving_auto = last.state.state == STATE_ON
         registry.async_remove(entity_id)
+
+
+def _last_stored_state(hass: HomeAssistant, entity_id: str) -> StoredState | None:
+    """The state an entity had before the restart, or None. The store is internal
+    to Home Assistant: from 2026.11 it has async_get_stored_state instead of the
+    dict last_states. A further change only loses this state, never the setup."""
+    try:
+        restore = async_get_restore_state(hass)
+        if hasattr(restore, "async_get_stored_state"):
+            return restore.async_get_stored_state(entity_id)
+        return restore.last_states.get(entity_id)
+    except Exception:  # noqa: BLE001
+        _LOGGER.warning("The last state of %s could not be read", entity_id, exc_info=True)
+        return None
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> bool:

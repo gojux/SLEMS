@@ -19,7 +19,7 @@ x-venus-sim: &venus-sim
 services:
   homeassistant:
     # By default the same version as the development instance.
-    image: ghcr.io/home-assistant/home-assistant:${HA_VERSION:-2026.10.4}
+    image: ghcr.io/home-assistant/home-assistant:${HA_VERSION:-2026.11.1}
     tmpfs:
       - /config
     volumes:
