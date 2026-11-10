@@ -70,6 +70,34 @@ def test_bms_discharge_stop_retries_lower_then_blocks_without_failure() -> None:
     assert monitor.fail_count == 0 and not monitor.excluded(200)
 
 
+def test_battery_in_standby_is_reconnected_once_before_a_bms_stop() -> None:
+    monitor = DeliveryMonitor("test")
+    actions = [monitor.observe(40 + 5 * i, -2500, 0, 0, 12.4, standby=True) for i in range(FAIL_THRESHOLD)]
+    assert actions[-1] is Action.RECONNECT and monitor.bms_stop_soc is None
+    # Still nothing after the fresh connection: the BMS stop as before.
+    actions = [monitor.observe(55 + 5 * i, -2500, 0, 0, 12.4, standby=True) for i in range(FAIL_THRESHOLD)]
+    assert actions[-1] is Action.BMS_STOP and monitor.bms_limit_w == 1250
+    # The lower power is refused as well: blocked, no further reconnect.
+    actions = [monitor.observe(100 + 5 * i, -1250, 0, 0, 12.2, standby=True) for i in range(FAIL_THRESHOLD)]
+    assert actions[-1] is Action.BMS_STOP and monitor.bms_limit_w == 0
+    # After the stop ended, a new refusal gets its reconnect again.
+    assert monitor.update_stop(14.4, 0)
+    actions = [monitor.observe(200 + 5 * i, -2500, 0, 0, 14.4, standby=True) for i in range(FAIL_THRESHOLD)]
+    assert actions[-1] is Action.RECONNECT
+
+
+def test_reconnect_ends_a_refusal_once_the_battery_delivers() -> None:
+    monitor = DeliveryMonitor("test")
+    for i in range(FAIL_THRESHOLD):
+        monitor.observe(40 + 5 * i, -2500, 0, 0, 12.4, standby=True)
+    monitor.observe(60, -2500, 0, -2400, 12.4)  # delivers after the reconnect
+    assert monitor.bms_stop_soc is None and monitor.bms_limit_w is None
+    # Not in standby (e.g. discharging, just not enough): no reconnect.
+    monitor = DeliveryMonitor("test")
+    actions = [monitor.observe(40 + 5 * i, -2500, 0, 0, 12.4) for i in range(FAIL_THRESHOLD)]
+    assert actions[-1] is Action.BMS_STOP
+
+
 def test_bms_stop_at_low_power_blocks_at_once() -> None:
     monitor = DeliveryMonitor("test")
     for i in range(FAIL_THRESHOLD):

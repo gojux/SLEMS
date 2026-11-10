@@ -672,11 +672,14 @@ voltages are not limited.
 In operating mode **active** SLEMS checks, like Omnibattery, whether every
 battery delivers the commanded power. A battery that delivers less than 10 %
 of a command of at least 100 W (after 30 s in that direction) three polls in a
-row first gets all control registers written again; if that does not help, it
-is excluded for 5 minutes (like a disabled battery, handed back to its own
-logic, the others take over) and then retried. A battery at the top that stops
-charging or a battery at 20 % or less that stops discharging does not count
-(the BMS protects it, see the SoC window). The Venus also reads its control registers back after
+row is first reconnected and gets all control registers written again; if that
+does not help, it is excluded for 5 minutes (like a disabled battery, handed
+back to its own logic, the others take over) and then retried. A battery at the
+top that stops charging or a battery at 20 % or less that stops discharging
+does not count (the BMS protects it, see the SoC window). If such a battery is
+in standby, SLEMS reconnects once before it assumes a BMS stop: after a short
+power interruption a Venus E 3.0 can stay stuck in standby, and only a new
+connection brings it back. The Venus also reads its control registers back after
 every complete write (first command and every 60 s); a write that is not
 confirmed counts as well. The binary sensor **Not responding** and the dashboard
 show an excluded battery.

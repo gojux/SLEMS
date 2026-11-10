@@ -632,7 +632,7 @@ def test_delivery_counts_only_what_the_pv_read_allows() -> None:
     observed = []
     battery.delivery = SimpleNamespace(
         tick=lambda now: None,
-        observe=lambda now, commanded, *args: observed.append(commanded),
+        observe=lambda now, commanded, *args, **kwargs: observed.append(commanded),
     )
     battery.leaving_until = None
     coordinator = SimpleNamespace(
@@ -918,3 +918,29 @@ def test_protection_charge_starts_well_below_the_minimum_and_ends_at_it() -> Non
     assert power(a=12.0, b=8.0, c=5.0) == PROTECT_CHARGE_W
     assert coordinator.protect_charging == {"b"}
     assert power(a=12.0, b=12.0, c=5.0) == 0
+
+
+async def test_a_pending_reconnect_closes_the_connection_before_the_read() -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from custom_components.slems.coordinator import SlemsCoordinator
+    from custom_components.slems.drivers.base import BatteryDriverError
+
+    calls: list[str] = []
+    driver = SimpleNamespace(
+        close=AsyncMock(side_effect=lambda: calls.append("close")),
+        read_telemetry=AsyncMock(side_effect=BatteryDriverError("offline")),
+    )
+    battery = SimpleNamespace(
+        name="Venus", subentry_id="venus", driver=driver, paused_until=None,
+        release_pending_since=None, reconnect_pending=True, self_test=None,
+        telemetry_read_s=None, unreadable_since=None,
+    )
+    controller = SimpleNamespace(force_refresh=MagicMock(side_effect=lambda _id: calls.append("refresh")))
+    coordinator = SimpleNamespace(controller=controller)
+    assert await SlemsCoordinator._async_read_battery(coordinator, battery, 0.0) is None
+    assert calls == ["close", "refresh"] and not battery.reconnect_pending
+    driver.read_telemetry.assert_awaited_once()
+    # Only once.
+    await SlemsCoordinator._async_read_battery(coordinator, battery, 5.0)
+    assert calls == ["close", "refresh"]

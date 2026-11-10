@@ -417,6 +417,8 @@ class BatteryRuntime:
     telemetry_read_s: float | None = None
     # Monotonic time of the first failed read since the last successful one.
     unreadable_since: float | None = None
+    # A fresh connection is opened before the next read (see delivery_monitor).
+    reconnect_pending: bool = False
     # Last polled AC power (+charge / -discharge) and its monotonic time; the
     # controller trusts it over a command the battery does not follow.
     measured_power_w: float | None = None
@@ -2307,6 +2309,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             telemetry.grid_side_power_w,
             telemetry.soc_pct,
             telemetry.extra.get("max_cell_voltage"),
+            standby=telemetry.extra.get("inverter_state") == "standby",
         )
         if action in (Action.WAKE, Action.EXCLUDE) and battery.probe_hints.not_delivered(now):
             _LOGGER.info(
@@ -2314,7 +2317,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 "a probe step (Measure response time and phase) may help",
                 battery.name,
             )
-        if action is Action.WAKE:
+        if action in (Action.WAKE, Action.RECONNECT):
+            battery.reconnect_pending = True
             self.controller.force_refresh(battery.subentry_id)
         elif action is Action.EXCLUDE:
             self.controller.request()
@@ -2482,6 +2486,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self.resume_communication(battery)
         if battery.release_pending_since is not None and not self.controls(battery):
             await self.async_release_battery(battery)
+        if battery.reconnect_pending:
+            battery.reconnect_pending = False
+            # The read opens the fresh connection, the next command writes all
+            # control registers again.
+            await battery.driver.close()
+            self.controller.force_refresh(battery.subentry_id)
         read_start = time.monotonic()
         try:
             telemetry = await battery.driver.read_telemetry(complete=battery.self_test is not None)
