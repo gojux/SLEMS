@@ -577,6 +577,16 @@ Every controllable battery has these settings (dashboard: **Settings**):
   is the lowest target of the night discharge. Active cell balancing ignores
   the SoC window (it needs the top of the charge).
 
+  In standby the battery powers its electronics from the cells (about 6–11 W
+  for a Venus E 3.0), so without a surplus the SoC slowly drops below the
+  minimum. Once it is 3 % below, the **protection charge from the grid**
+  starts: 500 W per affected battery, whatever the prices and independent of
+  **Charge batteries from the grid**, until the minimum is reached again. The
+  peak shaving limit and the **Highest grid import while charging from the
+  grid** apply. A surplus charges
+  batteries below the minimum first anyway. The Venus does this itself in its
+  own modes (at 11 %), but not while SLEMS controls it.
+
   Near the minimum the BMS may stop discharging earlier than set, e.g. when a
   weak cell sags under a high load. If a battery delivers nothing below 20 %
   for three polls in a row although SLEMS asks it to discharge, SLEMS first

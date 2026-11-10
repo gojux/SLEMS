@@ -886,3 +886,35 @@ def test_saves_requested_every_cycle_do_not_postpone_the_pending_save(monkeypatc
     clock[0] += 3
     coordinator._schedule_save(600)
     assert calls == [600, 5, 600]
+
+
+def test_protection_charge_starts_well_below_the_minimum_and_ends_at_it() -> None:
+    from custom_components.slems.coordinator import PROTECT_CHARGE_W, SlemsCoordinator
+
+    def venus(subentry_id: str, ac_charge: bool = True) -> SimpleNamespace:
+        return SimpleNamespace(
+            subentry_id=subentry_id, name=subentry_id, participating=True, plannable=True,
+            driver=SimpleNamespace(capabilities=SimpleNamespace(controllable=True, ac_charge=ac_charge)),
+            limits=SimpleNamespace(min_soc_pct=12.0),
+        )
+
+    coordinator = SimpleNamespace(
+        batteries=[venus("a"), venus("b"), venus("c", ac_charge=False)], protect_charging=frozenset()
+    )
+
+    def power(**socs: float) -> float:
+        snapshot = SimpleNamespace(
+            batteries={key: SimpleNamespace(soc_pct=soc) for key, soc in socs.items()}
+        )
+        return SlemsCoordinator._protect_charge_w(coordinator, snapshot)
+
+    # Below the minimum, but not yet 3 % below: nothing.
+    assert power(a=10.0, b=12.5, c=5.0) == 0
+    assert coordinator.protect_charging == frozenset()
+    assert power(a=9.0, b=12.5, c=5.0) == PROTECT_CHARGE_W
+    assert coordinator.protect_charging == {"a"}
+    # Goes on above the start until the minimum is reached.
+    assert power(a=11.5, b=12.5, c=5.0) == PROTECT_CHARGE_W
+    assert power(a=12.0, b=8.0, c=5.0) == PROTECT_CHARGE_W
+    assert coordinator.protect_charging == {"b"}
+    assert power(a=12.0, b=12.0, c=5.0) == 0

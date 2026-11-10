@@ -46,7 +46,9 @@ shaving still covers the import above its limit.
 
 Grid charging (optional, see grid_charge): outside a surplus the batteries
 charge with the planned power from the grid, below the import limit of peak
-shaving.
+shaving. The protection charge works the same way, always on: a battery the
+idle draw of its own electronics took well below its minimum SoC is charged
+back to it from the grid, whatever the prices.
 
 Room for cheaper hours (price aware control with negative prices ahead, see
 grid_charge): in a surplus the batteries take at most the planned power, the
@@ -113,6 +115,9 @@ class Strategy(StrEnum):
     GRID_CHARGE = "grid_charge"
     # Charging from the grid for peak shaving (see peak_charge).
     PEAK_CHARGE = "peak_charge"
+    # Charging from the grid back to the minimum SoC (the battery's own
+    # electronics drained it while idle).
+    PROTECT_CHARGE = "protect_charge"
     BATTERY_EXPORT = "battery_export"
     PRICE_ROOM = "price_room"
     GRID_FRIENDLY = "grid_friendly"
@@ -277,6 +282,7 @@ def allocate(
     charge_cap_w: float | None = None,
     grid_import_limit_w: float = math.inf,
     peak_charge_w: float = 0.0,
+    protect_charge_w: float = 0.0,
 ) -> Allocation:
     """Distribute ``available_w`` between batteries and consumers.
 
@@ -287,7 +293,9 @@ def allocate(
     deficit, ``charge_cap_w``: the batteries take at most this of a surplus
     (room kept for cheaper hours), ``grid_import_limit_w``: grid import that
     charging from the grid must not exceed, ``peak_charge_w``: planned
-    charging from the grid for peak shaving (within its limit).
+    charging from the grid for peak shaving (within its limit),
+    ``protect_charge_w``: charging from the grid of batteries well below their
+    minimum SoC, whatever the prices.
 
     ``unsupported`` are controllable consumers whose planned power the
     batteries must not cover, ``unsupported_measured_w`` the measured power of
@@ -323,7 +331,7 @@ def allocate(
     )
     peak_w = _peak_excess_w(remaining, settings)
 
-    charge_w = max(grid_charge_w, peak_charge_w)
+    charge_w = max(grid_charge_w, peak_charge_w, protect_charge_w)
     if (
         battery is not None
         and charge_w > 0
@@ -338,7 +346,13 @@ def allocate(
         # remaining is the surplus (+) or deficit (−) before charging.
         power = min(power, max(0.0, limit + remaining))
         return Allocation(
-            strategy=Strategy.GRID_CHARGE if grid_charge_w >= peak_charge_w else Strategy.PEAK_CHARGE,
+            strategy=(
+                Strategy.GRID_CHARGE
+                if grid_charge_w >= max(peak_charge_w, protect_charge_w)
+                else Strategy.PEAK_CHARGE
+                if peak_charge_w >= protect_charge_w
+                else Strategy.PROTECT_CHARGE
+            ),
             battery_power_w=power,
             consumer_power_w=consumer_power,
             charge_secured=charge_secured,

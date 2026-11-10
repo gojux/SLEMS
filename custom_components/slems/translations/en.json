@@ -1210,6 +1210,7 @@
           "price_hold": "Price hold",
           "grid_charge": "Grid charging",
           "peak_charge": "Peak shaving: charging from the grid",
+          "protect_charge": "Protection charge from the grid",
           "battery_export": "Feed-in from batteries",
           "price_room": "Room for cheaper hours",
           "below_min_power": "Below minimum power"

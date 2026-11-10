@@ -308,6 +308,11 @@ MIN_POWER_STRATEGIES = frozenset(
     }
 )
 STORAGE_SAVE_DELAY_S = 600
+# Protection charge: starts this far below the minimum SoC, charges each battery
+# with this power from the grid until it is back at its minimum. The Venus E 3.0
+# does the same in its own modes (at 11 %), not under remote control.
+PROTECT_CHARGE_BELOW_PCT = 3.0
+PROTECT_CHARGE_W = 500.0
 # Start, phase changes and end of a balancing run are saved sooner.
 BALANCING_SAVE_DELAY_S = 5
 # A self-test ends when the battery cannot be read for this long.
@@ -892,6 +897,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
 
     # Monotonic time of the pending save of the main store, None: none pending.
     _save_due: float | None = None
+    # Batteries in their protection charge (see PROTECT_CHARGE_BELOW_PCT).
+    protect_charging: frozenset[str] = frozenset()
 
     config_entry: SlemsConfigEntry
 
@@ -3208,6 +3215,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         peak_charge_w = forecast_plan.peak_charge.get(slot_start(dt_util.as_local(wall_now)), 0.0) if settings.peak_shaving else 0.0
         if settings.price_control:
             self.plan_changes.add(wall_now, price_decision(price_limit_w, grid_charge_w, battery_export_w, charge_cap_w))
+        protect_charge_w = self._protect_charge_w(snapshot)
 
         surplus_w = self._run_surplus(pv_forecast, consumption, load, wall_now)
         for consumer in map(self.effective_consumer, self.consumers):
@@ -3314,6 +3322,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             charge_cap_w=charge_cap_w,
             grid_import_limit_w=settings.grid_import_max_w or math.inf,
             peak_charge_w=peak_charge_w,
+            protect_charge_w=protect_charge_w,
         )
         # Resting consumers draw nothing: the batteries take their allocation.
         # Counted at their command (controller cycle), that command is not in
@@ -3333,7 +3342,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             )
         elif unused_w < 0:
             allocation.battery_power_w += unused_w
-        if allocation.strategy not in (Strategy.GRID_CHARGE, Strategy.PEAK_CHARGE):
+        if allocation.strategy not in (Strategy.GRID_CHARGE, Strategy.PEAK_CHARGE, Strategy.PROTECT_CHARGE):
             allocation.battery_power_w = limit_charge_to_surplus(
                 allocation.battery_power_w,
                 -snapshot.grid_without_batteries_filtered_w,
@@ -5692,6 +5701,41 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 )
             )
         return units
+
+    def _protect_charge_w(self, snapshot: SystemSnapshot) -> float:
+        """Grid charge power of the protection charge (see PROTECT_CHARGE_BELOW_PCT).
+
+        A battery starts it once it is ``PROTECT_CHARGE_BELOW_PCT`` below its
+        minimum SoC and keeps it until it is back at the minimum.
+        """
+        protecting = set()
+        power = 0.0
+        for battery in self.batteries:
+            telemetry = snapshot.batteries.get(battery.subentry_id)
+            caps = battery.driver.capabilities
+            if (
+                telemetry is None
+                or telemetry.soc_pct is None
+                or not (battery.participating and battery.plannable)
+                or not (caps.controllable and caps.ac_charge)
+            ):
+                continue
+            minimum = battery.limits.min_soc_pct
+            if telemetry.soc_pct >= minimum:
+                continue
+            if (
+                battery.subentry_id in self.protect_charging
+                or telemetry.soc_pct <= minimum - PROTECT_CHARGE_BELOW_PCT
+            ):
+                protecting.add(battery.subentry_id)
+                power += PROTECT_CHARGE_W
+        if protecting != self.protect_charging:
+            _LOGGER.info(
+                "Protection charge from the grid: %s",
+                ", ".join(b.name for b in self.batteries if b.subentry_id in protecting) or "ended",
+            )
+        self.protect_charging = frozenset(protecting)
+        return power
 
     async def async_release_batteries(self) -> None:
         """Hand all controllable batteries back to their internal logic."""

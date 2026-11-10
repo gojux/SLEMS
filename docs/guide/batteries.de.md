@@ -610,6 +610,16 @@ Jede steuerbare Batterie hat diese Einstellungen (Dashboard: **Einstellungen**):
   Der aktive Zellausgleich ignoriert diese Grenzen (er braucht das obere
   Ladeende).
 
+  Im Standby versorgt die Batterie ihre Elektronik aus den Zellen (bei einer
+  Venus E 3.0 rund 6–11 W), ohne Überschuss sinkt der Ladezustand daher
+  langsam unter das Minimum. Liegt er 3 % darunter, startet die
+  **Schutzladung aus dem Netz**: 500 W je betroffener Batterie, unabhängig von
+  den Preisen und von **Batterien aus dem Netz laden**, bis das Minimum wieder
+  erreicht ist. Die Grenze des Spitzenabfangs und der **Höchste Netzbezug beim
+  Netzladen** gelten dabei. Ein Überschuss lädt Batterien unter dem Minimum ohnehin zuerst. Die
+  Venus macht das in ihren eigenen Betriebsarten selbst (bei 11 %), unter der
+  Steuerung durch SLEMS aber nicht.
+
   Nahe am Minimum kann das BMS das Entladen früher beenden als eingestellt,
   z. B. wenn eine schwache Zelle unter hoher Last einbricht. Liefert eine
   Batterie unter 20 % bei drei Abfragen in Folge nichts, obwohl SLEMS sie

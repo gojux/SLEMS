@@ -1210,6 +1210,7 @@
           "price_hold": "Für teure Stunden halten",
           "grid_charge": "Netzladen",
           "peak_charge": "Spitzenabfang: Netzladen",
+          "protect_charge": "Schutzladung aus dem Netz",
           "battery_export": "Einspeisen aus den Batterien",
           "price_room": "Platz für günstigere Stunden",
           "below_min_power": "Unter Mindestleistung"

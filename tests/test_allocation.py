@@ -492,6 +492,22 @@ def test_grid_charge_outside_a_surplus_below_the_import_limit() -> None:
     assert allocate(2000, battery(30), [], SETTINGS, None, grid_charge_w=1500.0).strategy is not Strategy.GRID_CHARGE
 
 
+def test_protection_charge_from_the_grid_within_the_peak_limit() -> None:
+    charging = allocate(-800, battery(8), [], SETTINGS, None, discharge_limit_w=0.0, protect_charge_w=500.0)
+    assert charging.strategy is Strategy.PROTECT_CHARGE and charging.battery_power_w == 500
+    # Peak shaving: house 1800 W, only 200 W left up to the 2000 W limit.
+    peak = _with(peak_shaving=True, peak_shaving_grid_limit_w=2000)
+    limited = allocate(-1800, battery(8), [], peak, None, protect_charge_w=500.0)
+    assert limited.strategy is Strategy.PROTECT_CHARGE
+    assert limited.battery_power_w == pytest.approx(200)
+    # The house above the limit: no charging from the grid.
+    assert allocate(-2500, battery(8), [], peak, None, protect_charge_w=500.0).battery_power_w <= 0
+    # A larger planned grid charge wins.
+    assert allocate(-800, battery(8), [], SETTINGS, None, grid_charge_w=1500.0, protect_charge_w=500.0).strategy is Strategy.GRID_CHARGE
+    # A surplus: the normal allocation charges the batteries.
+    assert allocate(2000, battery(8), [], SETTINGS, None, protect_charge_w=500.0).strategy is not Strategy.PROTECT_CHARGE
+
+
 def test_battery_export_covers_the_deficit_and_feeds_in_on_top() -> None:
     feeding = allocate(-800, battery(60), [], SETTINGS, None, battery_export_w=1500.0)
     assert feeding.strategy is Strategy.BATTERY_EXPORT
