@@ -195,8 +195,9 @@ from .bad_weather import BadWeatherMode
 from .battery_wear import ESTIMATED_CT_PER_KWH, Wear
 from .battery_support import BatterySupport, SupportBudget, next_refill, support_budget_wh
 from .grid_filter import MAX_HOLD_S, GridPowerFilter
-from .grid_meter import ModbusGridMeter
+from .grid_meter import READ_TIMEOUT_S as GRID_READ_TIMEOUT_S, ModbusGridMeter
 from .grid_quarters import GridQuarters
+from .ha_modbus import holding_reader
 from .netting import NettingCheck
 from .phases import HISTORY_S, REPLAY_STEP_S, Phase, PhaseLearner, PhaseModel, replay
 from .market_prices import MarketPrices
@@ -1371,8 +1372,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self.grid_meter_error = str(err)
             _LOGGER.warning("Grid meter over Modbus not available: %s", err)
             return
+        # Before the first request: a raised time-out reconnects at once.
+        unit.require_timeout(GRID_READ_TIMEOUT_S)
+        self.config_entry.async_on_unload(partial(unit.require_timeout, None))
         self.grid_meter = ModbusGridMeter(
-            unit.read_holding_registers,
+            holding_reader(unit, "Grid meter"),
             config[CONF_GRID_MODBUS_REGISTER],
             config[CONF_GRID_MODBUS_INTERVAL_S],
             config.get(CONF_GRID_MODBUS_INVERTED, False),

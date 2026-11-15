@@ -75,7 +75,7 @@ Wenn du SLEMS mit einer anderen Batterie nutzen möchtest, erstelle bitte ein
 
 Was du brauchst:
 
-- Home Assistant 2026.9 oder neuer und HACS.
+- Home Assistant 2026.10 oder neuer und HACS.
 - Einen Smart Meter in Home Assistant, der die Netzleistung (Bezug und
   Einspeisung) laufend meldet, z. B. ein Shelly Pro 3EM. Je öfter er meldet,
   desto genauer regelt SLEMS (z. B. jede Sekunde).
@@ -292,7 +292,7 @@ Hand:
 `custom_components/slems` in den Ordner `custom_components` deiner
 Home-Assistant-Konfiguration kopieren und Home Assistant neu starten.
 
-Voraussetzung: Home Assistant 2026.9 oder neuer.
+Voraussetzung: Home Assistant 2026.10 oder neuer.
 
 ## Einrichtung
 
@@ -329,7 +329,11 @@ sieht jeden Wert früher; am meisten bringt das bei schnellen Batterien.
 - SLEMS nutzt die geteilte Modbus-Verbindung von Home Assistant. Solange die
   Integration des Wechselrichters dessen einzige Modbus-TCP-Verbindung selbst
   belegt, muss ein Modbus-Proxy eingerichtet werden, z. B. die App [Modbus
-  Proxy](https://github.com/TCzerny/ha-modbusproxy).
+  Proxy](https://github.com/TCzerny/ha-modbusproxy). SLEMS verlangt von der
+  geteilten Verbindung ein Timeout von 1 Sekunde; braucht eine andere
+  Integration am selben Gerät länger, gilt das längere. Antwortet der Zähler
+  nicht, verbindet SLEMS sofort neu; andere Integrationen am selben Gerät
+  merken das als kurzes Neuverbinden.
 - SLEMS findet die Zähler in der SunSpec-Modellkette; bei mehreren Zählern
   (z. B. Einspeisung/Bezug und Verbrauch) wählst du den am Netzanschlusspunkt,
   die aktuelle Leistung jedes Zählers hilft beim Erkennen.

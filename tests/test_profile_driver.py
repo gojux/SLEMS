@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 from unittest.mock import patch
 
-from modbus_connection import IllegalDataAddressError, ModbusTimeoutError
+from modbus_connection import IllegalDataAddressError, ModbusConnectionError, ModbusTimeoutError
 import pytest
 
 from custom_components.slems.battery_profiles import Register, bundled_profile_text, bundled_profiles, parse_profile
@@ -567,6 +567,8 @@ class FakeUnit:
         self.calls: list[tuple] = []
         self.fail = False
         self.refuse = False
+        # Requests that still find the connection lost.
+        self.lost = 0
         self.reads = 0
 
     def set_message_spacing(self, seconds: float) -> None:
@@ -580,6 +582,9 @@ class FakeUnit:
 
     async def read_holding_registers(self, address: int, count: int) -> list[int]:
         self.reads += 1
+        if self.lost:
+            self.lost -= 1
+            raise ModbusConnectionError("Connection lost before response was received")
         if self.fail:
             raise ModbusTimeoutError("no answer")
         if self.refuse:
@@ -639,6 +644,34 @@ async def test_home_assistant_unit_transport_drops_a_silent_connection() -> None
         assert await transport.connect()
     assert waits and 0 < waits[0] <= profile_driver.RECONNECT_SETTLE_S
     assert await transport.read(7, 1) == [7]
+
+
+async def test_home_assistant_unit_transport_asks_again_after_a_lost_connection() -> None:
+    unit = FakeUnit()
+    unloads = []
+    transport = HaUnitTransport(lambda: unit, message_spacing_s=0.15, timeout_s=3.0, on_unload=unloads.append)
+    waits = []
+
+    async def sleep(seconds: float) -> None:
+        waits.append(seconds)
+
+    with patch.object(profile_driver.asyncio, "sleep", sleep):
+        assert await transport.connect()
+        # Lost (e.g. dropped by another integration): asked again, the connection is not dropped.
+        unit.lost = 2
+        assert await transport.read(7, 1) == [7]
+        assert ("disconnect",) not in unit.calls and transport.connected
+        # Lost again and again: the rest of the read fails at once, still without dropping.
+        unit.lost = 3
+        assert await transport.read(7, 1) is None
+        assert not transport.connected and ("disconnect",) not in unit.calls
+        reads = unit.reads
+        assert await transport.read(7, 1) is None and unit.reads == reads
+        assert await transport.connect() and await transport.read(7, 1) == [7]
+    # The time-out was required once and is withdrawn when the entry unloads.
+    assert unit.calls.count(("timeout", 3.0)) == 1 and len(unloads) == 1
+    unloads[0]()
+    assert unit.calls[-1] == ("timeout", None)
 
 
 class DroppingLink(SimLink):

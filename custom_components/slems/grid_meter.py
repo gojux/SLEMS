@@ -6,7 +6,8 @@ meter registers directly every ``interval_s`` gives the controller each new
 value sooner. The connection comes from the Home Assistant Modbus backend
 (``async_get_unit``), so it is shared with other integrations using it; while
 the inverter integration keeps its own connection, a Modbus proxy in front of
-the inverter is needed.
+the inverter is needed. The reads go through ``ha_modbus.request`` with a
+time-out of ``READ_TIMEOUT_S``.
 
 * ``find_meters`` walks the SunSpec model chain and returns the meters
   (models 201-204) with the address of their total real power.
@@ -45,7 +46,11 @@ POWER_OFFSET = 16
 POWER_BLOCK = 5
 NOT_IMPLEMENTED = 0x8000
 
+# Time-out required from the backend for the meter's unit (see ha_modbus).
 READ_TIMEOUT_S = 1.0
+# Limit of a whole read: covers a lost connection asked again; applies while
+# another integration requires a longer time-out for the same unit id.
+READ_LIMIT_S = 4.0
 FRESH_INTERVALS = 3
 FRESH_MIN_S = 5.0
 BACKOFF_AFTER = 3
@@ -213,7 +218,7 @@ class ModbusGridMeter:
         self._last_poll = start
         try:
             value = await asyncio.wait_for(
-                read_power(self._read, self.power_register), READ_TIMEOUT_S
+                read_power(self._read, self.power_register), READ_LIMIT_S
             )
             if value is None:
                 raise ValueError("register not implemented")

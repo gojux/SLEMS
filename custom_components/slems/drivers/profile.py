@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from functools import partial
 import logging
 import time
 from typing import Any, Protocol
@@ -71,6 +72,7 @@ from ..battery_profiles import (
     split_power,
 )
 from ..const import ReleaseState
+from ..ha_modbus import FAILED_ANSWER_ERRORS, drop_connection, request
 from ..own_pv import OwnPvPorts
 from ..profile_check import ProbeReading
 from ..self_test import SMALL_W, TrialRegister, TrialSpec
@@ -122,19 +124,32 @@ class HaUnitTransport:
 
     The backend connects by itself and serializes the requests of all users of
     the device; ``close`` drops the shared connection (e.g. to pause the
-    communication), the next request opens it again. A request without an
-    answer drops it as well and fails the remaining requests until the next
-    ``connect`` (the backend lets every request wait for its time-out, a
-    silent battery cost up to 90 s per read); ``connect`` waits until
-    ``RECONNECT_SETTLE_S`` after such a drop (a Venus refuses connections for
-    about 0.5 s after the last one closed).
+    communication), the next request opens it again. Every request goes
+    through ``ha_modbus.request``: a lost connection is asked again, a request
+    without an answer drops the connection. After such a request, or a
+    connection lost again and again, the remaining requests fail without
+    asking the device until the next ``connect`` (a silent battery would
+    otherwise cost a time-out per request); ``connect`` waits until
+    ``RECONNECT_SETTLE_S`` after a drop (a Venus refuses connections for about
+    0.5 s after the last one closed).
+
+    The time-out of the profile is required before the first request (a raised
+    time-out reconnects at once) and withdrawn through ``on_unload``.
     """
 
-    def __init__(self, unit_factory: Callable[[], Any], *, message_spacing_s: float, timeout_s: float) -> None:
+    def __init__(
+        self,
+        unit_factory: Callable[[], Any],
+        *,
+        message_spacing_s: float,
+        timeout_s: float,
+        on_unload: Callable[[Callable[[], None]], Any] | None = None,
+    ) -> None:
         self._unit_factory = unit_factory
         self._unit: Any = None
         self._message_spacing_s = message_spacing_s
         self._timeout_s = timeout_s
+        self._on_unload = on_unload
         self._open = False
         # When this transport dropped the connection (monotonic).
         self._dropped_at: float | None = None
@@ -153,6 +168,8 @@ class HaUnitTransport:
                 return False
             unit.set_message_spacing(self._message_spacing_s)
             unit.require_timeout(self._timeout_s)
+            if self._on_unload is not None:
+                self._on_unload(partial(unit.require_timeout, None))
             self._unit = unit
         if self._dropped_at is not None:
             await asyncio.sleep(max(0.0, self._dropped_at + RECONNECT_SETTLE_S - time.monotonic()))
@@ -166,39 +183,41 @@ class HaUnitTransport:
         self._open = False
 
     async def _disconnect(self) -> None:
-        try:
-            await self._unit.disconnect()
-        except ModbusError as err:
-            _LOGGER.debug("Dropping the Modbus connection failed: %s", err)
+        await drop_connection(self._unit)
         self._dropped_at = time.monotonic()
 
-    async def _failed(self, what: str, address: int, err: Exception) -> None:
-        """A failed request; without an answer the connection is dropped (see above)."""
+    def _failed(self, what: str, address: int, err: Exception) -> None:
+        """A failed request; unless the device answered, the next ones fail until ``connect`` (see above)."""
         _LOGGER.debug("%s of register %d failed: %s", what, address, err)
-        if not isinstance(err, ModbusExceptionError) and self._open:
-            self._open = False
-            await self._disconnect()
+        if isinstance(err, ModbusExceptionError):
+            return
+        self._open = False
+        if isinstance(err, FAILED_ANSWER_ERRORS):
+            # ha_modbus.request dropped the connection.
+            self._dropped_at = time.monotonic()
 
     async def read(self, address: int, count: int, *, input_registers: bool = False) -> list[int] | None:
         if not self._open:
             return None
         method = self._unit.read_input_registers if input_registers else self._unit.read_holding_registers
         try:
-            return list(await method(address, count))
+            return list(await request(self._unit, partial(method, address, count), f"Read of register {address}"))
         except (ModbusError, OSError) as err:
-            await self._failed("Read", address, err)
+            self._failed("Read", address, err)
             return None
 
     async def write(self, address: int, value: int | list[int]) -> bool:
+        """Write the value; asked again on a lost connection (the profile writes absolute values only)."""
         if not self._open:
             return False
+        if isinstance(value, list):
+            call = partial(self._unit.write_registers, address, value)
+        else:
+            call = partial(self._unit.write_register, address, value)
         try:
-            if isinstance(value, list):
-                await self._unit.write_registers(address, value)
-            else:
-                await self._unit.write_register(address, value)
+            await request(self._unit, call, f"Write of register {address}")
         except (ModbusError, OSError) as err:
-            await self._failed("Write", address, err)
+            self._failed("Write", address, err)
             return False
         return True
 

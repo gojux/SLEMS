@@ -89,4 +89,5 @@ def _profile_transport(
         lambda: async_get_unit(hass, entry, ModbusTcpParams(host=host, port=port), unit_id),
         message_spacing_s=profile.connection.message_spacing_s,
         timeout_s=profile.connection.timeout_s,
+        on_unload=entry.async_on_unload,
     )

@@ -14,6 +14,14 @@
 - Code comments contain only lasting information (what, conventions, hardware
   facts, reasons for non-obvious decisions), never development history or
   status notes; those belong here or in commit messages.
+- Code kept only for older versions of Home Assistant or a library gets a
+  comment at the line itself:
+  `# Compat: <Home Assistant | library> < <version> (<what differs>); remove once that is the minimum version.`
+  Whenever the Home Assistant version of development and tests or the
+  minimum version in `hacs.json` changes, check every such line
+  (`grep -rn "Compat:" custom_components/`) against the minimum version and
+  the library versions it pins (`homeassistant/package_constraints.txt` in
+  its image) and remove those no longer needed.
 - Sign conventions used everywhere:
   - grid power: **+ import / − export**
   - battery power: **+ charge / − discharge**
@@ -170,6 +178,7 @@ custom_components/slems/
   adaptive_gain.py   automatic adaptation of the control gain
   allocation.py      distribution of available power between batteries and consumers
   grid_filter.py     conservative moving average of the grid power without the batteries
+  ha_modbus.py       requests to a unit of HA's Modbus backend: retry on a lost connection, drop after no answer
   efficiency.py      round trip efficiency (battery counters / learned / manual)
   entity.py          base classes (system device, battery devices)
   sensor.py          system and battery sensors
@@ -669,7 +678,11 @@ sends commands.
   cycles).
 - **Grid power over Modbus** (`grid_meter.py`, optional): polls a SunSpec
   meter (total power and scale factor in one request) through
-  `homeassistant.components.modbus.async_get_unit`, each read limited to 1 s.
+  `homeassistant.components.modbus.async_get_unit` and `ha_modbus.request`
+  (see [Home Assistant's Modbus backend](#home-assistants-modbus-backend)),
+  with a required time-out of 1 s (`READ_TIMEOUT_S`, withdrawn when the
+  entry unloads) and each read limited to 4 s (`READ_LIMIT_S`, for another
+  integration requiring longer for the same unit id).
   Every value goes the way of an entity change (meter cadence, grid filter,
   response learners, `request()`); while a Modbus value is fresh
   (max(3 × interval, 5 s)) the entity's reports are ignored, otherwise the
@@ -1962,6 +1975,47 @@ Open points before other brands:
 Until then any battery with SoC and power entities in Home Assistant can be
 added through its entities (`ha_entities`), read-only or controlled.
 
+### Home Assistant's Modbus backend
+
+The grid meter and batteries from a profile with **Home Assistant Modbus**
+use a unit of Home Assistant's Modbus backend
+(`homeassistant.components.modbus.async_get_unit`, library
+`modbus-connection` on top of `tmodbus`); the Venus driver and profiles with
+the own client use `drivers/modbus_client.py`. The backend's behaviour that
+matters (checked in the library source, modbus-connection 4.10 to 4.12):
+
+- No automatic retry and no reconnect after a timeout. A timeout does not
+  drop the connection: requests to a silent device all wait for the timeout
+  until the device closes the connection. A new connection is opened at the
+  next request after the connection was lost or dropped.
+- `ha_modbus.request` handles every request: `ModbusExceptionError` is final;
+  `ModbusTimeoutError` and `ModbusDesyncError` drop the connection
+  (`unit.disconnect()`) and fail; `ModbusConnectionError` is asked again on a
+  new connection after 1 s, at most twice; `ClientClosedError` is final. There
+  is deliberately no retry after a timeout: the next poll or the next write
+  of the controller is the retry, and further timeouts would hold the control
+  cycle up (the controller writes about every 0.5 s and excludes a battery
+  after about 10 s of failing writes).
+- `disconnect()` drops the connection of every integration using the device;
+  their running requests fail with `ModbusConnectionError`. It is called only
+  after a request without an answer, never as a precaution.
+- `unit.require_timeout(s)` (from Home Assistant 2026.10, the minimum
+  version) is stored per unit id; the largest requirement of all unit ids of
+  the device applies, the default without any is 10 s. Another integration
+  using the same unit id replaces SLEMS' requirement and the other way round.
+  A raised timeout reconnects at once, a lowered one applies from the next
+  connection, so it is set before the first request; it is withdrawn with
+  `require_timeout(None)` when the entry unloads.
+- The connection opens at the first request: a connection test has to read a
+  register (the config flow reads the SunSpec chain or the profile's probe
+  register).
+- Late answers are logged by `tmodbus` as WARNING "Received unexpected
+  response with Transaction ID …". The logger is shared by every integration
+  using the backend; the length and content of the answer tell whose request
+  it was. After a reconnect the transaction ids start again at 1.
+- `MockModbusUnit` does not model reconnects or timeouts; the tests use own
+  fakes that raise sequences of errors and count `disconnect()`.
+
 ### Battery profiles (Modbus)
 
 `battery_profiles.py` (no HA dependency): the YAML format of Modbus profiles
@@ -2021,11 +2075,15 @@ profile out:
   Venus exception frames touches no other device) or `HaUnitTransport`, a
   unit of Home Assistant's Modbus backend (`async_get_unit`, shared with other
   integrations; `close` drops the shared connection, the next request opens
-  it again). The backend lets every request of a silent device wait for its
-  time-out (a switched off Venus cost 31–88 s per read); `HaUnitTransport`
-  therefore drops the connection at the first request without an answer,
-  fails the rest of the read at once and is used again only after
-  `RECONNECT_SETTLE_S` (1 s); reconnecting is left to the backend.
+  it again). Every request goes through `ha_modbus.request` (see
+  [Home Assistant's Modbus backend](#home-assistants-modbus-backend)). The
+  backend lets every request of a silent device wait for its time-out (a
+  switched off Venus cost 31–88 s per read); after a request without an
+  answer (the connection dropped) or a connection lost again and again,
+  `HaUnitTransport` fails the rest of the read at once and is used again
+  only after `RECONNECT_SETTLE_S` (1 s) at the next `connect`. The profile's
+  `timeout_s` is required before the first request and withdrawn when the
+  entry unloads.
 - Reading: registers at most `BLOCK_GAP` (5) apart are read in one frame of
   at most `connection.max_read_registers` registers (`read_blocks`; optional,
   default and highest value 125, the Modbus maximum; a Venus D does not
@@ -2843,3 +2901,4 @@ repository (otherwise its *brands* check fails).
 | 2026-11-04 | With the source "surplus only" the release duration keeps a run going but starts none: a release whose consumer does not draw yet closes when the surplus is short and opens again with new surplus. Closing on a dip stops no run and the name promises no draw from the batteries or the grid, while cutting a running compressor would cost more than the dip; the wait of an automation needs a source beyond the surplus. A saturated release kept its release for up to 15 minutes without surplus, so the saturation ends then as well. Without a daily target there is no source to follow: unchanged. |
 | 2026-11-04 | The minimum runtime of a release counts from when its device runs (`RuntimeTracker.note_running`), for all sources: the release alone starts nothing, so counted from the opening a late start lost its protection, and a device not started yet held the release open without surplus. Until the start a release stays open for `RELEASE_START_GRACE_S` (10 minutes, at most the minimum runtime): an automation may wait for minutes and the power sensor of a heat pump shows a start up to 2-3 minutes late, so a short cloud must not take it back. Waiting longer is what the release duration is for. |
 | 2026-11-07 | Simulation tab in two views, *Day plan* (day chart, price chart, key figures: one day on one time axis) and *Recorded months*, instead of all cards one below the other. The card for other hardware is merged into the tariff comparison as a switch *Hardware: current / simulated*: the recorded values plus the model difference (simulated minus current hardware) instead of two model runs side by side. So the current costs have one number (the recorded one, not a second model value), what the model misses on both sides cancels out, and the table answers which tariff fits the other hardware with the usual differences, chips and sum. |
+| 2026-11-15 | Requests over Home Assistant's Modbus backend (grid meter, profiles with **Home Assistant Modbus**) go through `ha_modbus.request`: a lost connection is asked again on a new one after 1 s (at most twice) instead of dropping the shared connection once more and failing the read; a timeout or a late answer drops the connection and fails, without further attempts (they would hold the control cycle up). The grid meter requires a timeout of 1 s instead of cancelling the request after 1 s with the default of 10 s: a silent meter kept its dead connection, and cancelled requests caused late answers. Minimum version Home Assistant 2026.10 (`require_timeout`), which `HaUnitTransport` already used without a check. |

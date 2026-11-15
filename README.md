@@ -75,7 +75,7 @@ you could test it.
 
 What you need:
 
-- Home Assistant 2026.9 or later and HACS.
+- Home Assistant 2026.10 or later and HACS.
 - A smart meter in Home Assistant that reports the grid power (import and
   export) continuously, e.g. a Shelly Pro 3EM. The more often it reports, the
   more precisely SLEMS controls (e.g. every second).
@@ -287,7 +287,7 @@ custom repository; then continue with step 2. Or by hand:
 Copy `custom_components/slems` into the `custom_components` folder of your
 Home Assistant configuration and restart Home Assistant.
 
-Requires Home Assistant 2026.9 or newer.
+Requires Home Assistant 2026.10 or newer.
 
 ## Setup
 
@@ -323,7 +323,11 @@ sooner; the gain is largest with fast batteries.
 - SLEMS uses the shared Modbus connection of Home Assistant. As long as the
   inverter integration keeps the inverter's only Modbus TCP connection to
   itself, a Modbus proxy has to be set up, e.g. the app [Modbus
-  Proxy](https://github.com/TCzerny/ha-modbusproxy).
+  Proxy](https://github.com/TCzerny/ha-modbusproxy). SLEMS asks the shared
+  connection for a timeout of 1 second; if another integration on the same
+  device needs longer, the longer one applies. A meter that does not answer
+  is reconnected at once, which other integrations on the same device notice
+  as a short reconnect.
 - SLEMS finds the meters in the SunSpec model chain; with several meters
   (e.g. export+import and consumption) you choose the one at the grid
   connection point, the current power of each helps to recognise it.

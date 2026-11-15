@@ -19,7 +19,6 @@ https://github.com/ffunes/Omnibattery, GPL-3.0):
 from __future__ import annotations
 
 import asyncio
-import inspect
 import logging
 import time
 
@@ -94,7 +93,6 @@ class ModbusTcpLink:
         self._patch_v3_frames = patch_v3_frames
         self._client: AsyncModbusTcpClient | None = None
         self._lock = asyncio.Lock()
-        self._unit_kwarg = "device_id"
         # Whether the battery answered on the current connection, connections
         # in a row without an answer and the earliest next connect (monotonic).
         self._answered = False
@@ -135,7 +133,6 @@ class ModbusTcpLink:
                 # Only the constructor hands the hook to the transaction layer.
                 trace_packet=fix_v3_exception_frame if self._patch_v3_frames else None,
             )
-            self._unit_kwarg = _detect_unit_kwarg(client)
             self._client = client
             if not await client.connect():
                 self._drop()
@@ -174,7 +171,7 @@ class ModbusTcpLink:
             method = self._client.read_input_registers if input_registers else self._client.read_holding_registers
             try:
                 result = await asyncio.wait_for(
-                    method(address=address, count=count, **{self._unit_kwarg: self._unit_id}),
+                    method(address=address, count=count, device_id=self._unit_id),
                     timeout=self._request_timeout_s,
                 )
             except (ModbusException, TimeoutError) as err:
@@ -197,11 +194,11 @@ class ModbusTcpLink:
                 return False
             if isinstance(value, list):
                 request = self._client.write_registers(
-                    address=address, values=value, **{self._unit_kwarg: self._unit_id}
+                    address=address, values=value, device_id=self._unit_id
                 )
             else:
                 request = self._client.write_register(
-                    address=address, value=value, **{self._unit_kwarg: self._unit_id}
+                    address=address, value=value, device_id=self._unit_id
                 )
             try:
                 result = await asyncio.wait_for(request, timeout=self._request_timeout_s)
@@ -213,9 +210,3 @@ class ModbusTcpLink:
                 await asyncio.sleep(self._message_wait_s)
             self._answered = True
             return not result.isError()
-
-
-def _detect_unit_kwarg(client: AsyncModbusTcpClient) -> str:
-    """Return the keyword pymodbus uses for the unit id ("slave" before 3.9)."""
-    params = inspect.signature(client.read_holding_registers).parameters
-    return "device_id" if "device_id" in params else "slave"

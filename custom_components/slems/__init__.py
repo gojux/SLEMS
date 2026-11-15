@@ -169,6 +169,7 @@ def _last_stored_state(hass: HomeAssistant, entity_id: str) -> StoredState | Non
         restore = async_get_restore_state(hass)
         if hasattr(restore, "async_get_stored_state"):
             return restore.async_get_stored_state(entity_id)
+        # Compat: Home Assistant < 2026.11 (no async_get_stored_state); remove once that is the minimum version.
         return restore.last_states.get(entity_id)
     except Exception:  # noqa: BLE001
         _LOGGER.warning("The last state of %s could not be read", entity_id, exc_info=True)
