@@ -381,6 +381,48 @@ def _optional(key: str, defaults: dict[str, Any]) -> vol.Optional:
     return vol.Optional(key)
 
 
+def _slems_entities(hass: HomeAssistant, entry: ConfigEntry | None) -> list[er.RegistryEntry]:
+    if entry is None:
+        return []
+    return er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+
+
+# Entity fields that may name SLEMS entities of another device, e.g. a consumer
+# blocked while another one runs or until the battery charge is secured.
+_OTHER_SLEMS_ENTITIES_ALLOWED = (CONF_BLOCK_ENTITY,)
+
+
+def _without_entities(
+    schema: vol.Schema, hidden: list[str], hidden_where_allowed: list[str]
+) -> vol.Schema:
+    """``schema`` with its entity fields not offering ``hidden`` (``hidden_where_allowed``
+    in the fields of _OTHER_SLEMS_ENTITIES_ALLOWED)."""
+    fields: dict = {}
+    for key, value in schema.schema.items():
+        excluded = hidden_where_allowed if str(key) in _OTHER_SLEMS_ENTITIES_ALLOWED else hidden
+        if isinstance(value, selector.EntitySelector) and excluded:
+            value = selector.EntitySelector(
+                {**value.config, "exclude_entities": [*value.config.get("exclude_entities", []), *excluded]}
+            )
+        fields[key] = value
+    return vol.Schema(fields)
+
+
+class _HidesSlemsEntities:
+    """Entity fields do not offer SLEMS's own entities: as a source each would read what
+    SLEMS derives from it, or control a battery or consumer SLEMS already controls."""
+
+    def _hidden_entities(self) -> tuple[list[str], list[str]]:
+        """Entities hidden from the entity fields, and from those of
+        _OTHER_SLEMS_ENTITIES_ALLOWED."""
+        raise NotImplementedError
+
+    def async_show_form(self, *, data_schema: vol.Schema | None = None, **kwargs: Any) -> Any:
+        if data_schema is not None:
+            data_schema = _without_entities(data_schema, *self._hidden_entities())
+        return super().async_show_form(data_schema=data_schema, **kwargs)  # type: ignore[misc]
+
+
 async def _async_system_schema(
     hass: HomeAssistant, defaults: dict[str, Any]
 ) -> vol.Schema:
@@ -458,6 +500,25 @@ async def _async_system_schema(
     )
 
 
+# The system settings by the groups the options flow changes one at a time.
+SYSTEM_GROUPS: dict[str, tuple[str, ...]] = {
+    "grid": (
+        CONF_GRID_POWER_ENTITY,
+        CONF_GRID_POWER_INVERTED,
+        *CONF_GRID_PHASE_ENTITIES,
+        CONF_GRID_MODBUS,
+        CONF_GRID_IMPORT_ENERGY_ENTITY,
+        CONF_GRID_EXPORT_ENERGY_ENTITY,
+    ),
+    "pv": (
+        CONF_PV_POWER_ENTITY,
+        CONF_PV_FORECAST_ENTRIES,
+        CONF_WEATHER_ENTITY,
+        CONF_OUTDOOR_TEMPERATURE_ENTITY,
+    ),
+    "consumption": (CONF_HOUSE_HISTORY_ENTITY, CONF_HOLIDAY_REGION),
+}
+
 _GRID_MODBUS_KEYS = (
     CONF_GRID_MODBUS_HOST,
     CONF_GRID_MODBUS_PORT,
@@ -486,7 +547,7 @@ def _meter_label(meter: SunSpecMeter, power: float | None) -> str:
     return f"{name or 'Meter'} (SunSpec {meter.model_id}, {reading})"
 
 
-class _GridModbusSteps:
+class _GridModbusSteps(_HidesSlemsEntities):
     """System steps shared by config and options flow: the devices of the smart meter and
     the PV systems, the system settings suggested from them, and reading the grid power
     over Modbus."""
@@ -506,6 +567,11 @@ class _GridModbusSteps:
 
     def _entry(self) -> ConfigEntry | None:
         return None
+
+    def _hidden_entities(self) -> tuple[list[str], list[str]]:
+        # The entities of SLEMS's batteries and consumers are no loop here.
+        hub = [item.entity_id for item in _slems_entities(self.hass, self._entry()) if item.config_subentry_id is None]
+        return hub, hub
 
     async def _async_devices_step(
         self, step_id: str, user_input: dict[str, Any] | None, current: dict[str, Any]
@@ -537,12 +603,7 @@ class _GridModbusSteps:
         errors: dict[str, str] = {}
         twice: list[str] = []
         if user_input is not None:
-            owners = _own_pv_owners(self._entry())
-            twice = [
-                f"{entity_id} ({owners[entity_id]})"
-                for entity_id in entity_ids(user_input.get(CONF_PV_POWER_ENTITY))
-                if entity_id in owners
-            ]
+            twice = self._own_pv_twice(user_input)
             if not twice:
                 return await self._async_system_done(user_input, self._current)
             errors[CONF_PV_POWER_ENTITY] = "pv_is_own_pv"
@@ -551,10 +612,7 @@ class _GridModbusSteps:
             defaults = {**self._current, **self._suggested}
         else:
             defaults = {**self._suggested, **self._current}
-        if CONF_HOLIDAY_REGION not in defaults:
-            if self._region_lookup is None:
-                self._region_lookup = (await async_suggest_region(self.hass),)
-            defaults = {**defaults, CONF_HOLIDAY_REGION: self._region_lookup[0]}
+        defaults = await self._async_with_region(defaults)
         return self.async_show_form(
             step_id="system",
             data_schema=await _async_system_schema(self.hass, defaults),
@@ -564,6 +622,23 @@ class _GridModbusSteps:
                 "own_pv": ", ".join(twice) or "-",
             },
         )
+
+    def _own_pv_twice(self, user_input: dict[str, Any]) -> list[str]:
+        """PV systems entered that a battery already counts as its own PV."""
+        owners = _own_pv_owners(self._entry())
+        return [
+            f"{entity_id} ({owners[entity_id]})"
+            for entity_id in entity_ids(user_input.get(CONF_PV_POWER_ENTITY))
+            if entity_id in owners
+        ]
+
+    async def _async_with_region(self, defaults: dict[str, Any]) -> dict[str, Any]:
+        """The holiday region suggested from the location when none is stored."""
+        if CONF_HOLIDAY_REGION in defaults:
+            return defaults
+        if self._region_lookup is None:
+            self._region_lookup = (await async_suggest_region(self.hass),)
+        return {**defaults, CONF_HOLIDAY_REGION: self._region_lookup[0]}
 
     async def _async_system_done(
         self, user_input: dict[str, Any], previous: dict[str, Any]
@@ -769,24 +844,93 @@ class SlemsConfigFlow(_GridModbusSteps, ConfigFlow, domain=DOMAIN):
 
 
 class SlemsOptionsFlow(_GridModbusSteps, OptionsFlow):
-    """Change the system settings (the update listener reloads the entry)."""
+    """Change the system settings (the update listener reloads the entry): the devices
+    again as at the first setup, or one group of settings."""
 
     def _async_finish_system(self) -> ConfigFlowResult:
         return self.async_create_entry(data=self._system)
 
+    def _stored(self) -> dict[str, Any]:
+        # Options fully replace the initial data, so a cleared optional field
+        # does not fall back to the value from the first setup.
+        return dict(self.config_entry.options or self.config_entry.data)
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        # Options fully replace the initial data, so a cleared optional field
-        # does not fall back to the value from the first setup.
-        current = dict(self.config_entry.options or self.config_entry.data)
-        return await self._async_devices_step("init", user_input, current)
+        return self.async_show_menu(step_id="init", menu_options=["devices", *SYSTEM_GROUPS])
+
+    async def async_step_devices(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return await self._async_devices_step("devices", user_input, self._stored())
+
+    async def async_step_grid(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return await self._async_group_step("grid", user_input)
+
+    async def async_step_pv(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return await self._async_group_step("pv", user_input)
+
+    async def async_step_consumption(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return await self._async_group_step("consumption", user_input)
+
+    async def _async_group_step(
+        self, group: str, user_input: dict[str, Any] | None
+    ) -> ConfigFlowResult:
+        """One group of the system settings; saved at once, the others stay."""
+        current = self._stored()
+        keys = SYSTEM_GROUPS[group]
+        errors: dict[str, str] = {}
+        twice: list[str] = []
+        if user_input is not None:
+            twice = self._own_pv_twice(user_input)
+            if not twice:
+                data = _merge(current, user_input, keys)
+                if group == "grid":
+                    # Switched on or kept on, the Modbus connection is checked again.
+                    return await self._async_system_done(data, current)
+                self._system = data
+                return self._async_finish_system()
+            errors[CONF_PV_POWER_ENTITY] = "pv_is_own_pv"
+            defaults = {**current, **user_input}
+        else:
+            defaults = current
+        if CONF_HOLIDAY_REGION in keys:
+            defaults = await self._async_with_region(defaults)
+        schema = await _async_system_schema(self.hass, defaults)
+        return self.async_show_form(
+            step_id=group,
+            data_schema=vol.Schema({key: value for key, value in schema.schema.items() if str(key) in keys}),
+            errors=errors,
+            description_placeholders={
+                **_now_placeholders(self.hass, defaults),
+                "own_pv": ", ".join(twice) or "-",
+            },
+        )
 
     def _entry(self) -> ConfigEntry | None:
         return self.config_entry
 
 
-class BatterySubentryFlow(ConfigSubentryFlow):
+class _SubentryHidesSlemsEntities(_HidesSlemsEntities):
+    hass: HomeAssistant
+    source: str
+    _get_entry: Callable[[], ConfigEntry]
+    _get_reconfigure_subentry: Callable[[], Any]
+
+    def _hidden_entities(self) -> tuple[list[str], list[str]]:
+        # Where other devices' entities are allowed, only the subentry's own are hidden.
+        entities = _slems_entities(self.hass, self._get_entry())
+        own = self._get_reconfigure_subentry().subentry_id if self.source == SOURCE_RECONFIGURE else None
+        return (
+            [item.entity_id for item in entities],
+            [item.entity_id for item in entities if own and item.config_subentry_id == own],
+        )
+
+
+class BatterySubentryFlow(_SubentryHidesSlemsEntities, ConfigSubentryFlow):
     """Add or reconfigure a battery."""
 
     def __init__(self) -> None:
@@ -2406,7 +2550,7 @@ def _battery_data(user_input: dict[str, Any], model: BatteryModel) -> dict[str, 
     return data
 
 
-class ConsumerSubentryFlow(ConfigSubentryFlow):
+class ConsumerSubentryFlow(_SubentryHidesSlemsEntities, ConfigSubentryFlow):
     """Add or reconfigure a consumer.
 
     Every consumer must provide its own power and energy sensor. Control via a

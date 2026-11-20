@@ -1719,7 +1719,16 @@ limit the maximum gain.
 
 - One config entry (`single_config_entry`) holds the system settings in `data`;
   the options flow stores the complete settings in `options`, which then fully
-  replace `data` (so clearing an optional field works).
+  replace `data` (so clearing an optional field works). It opens with a menu:
+  `devices` runs the steps of the first setup (devices, then all settings
+  suggested from them); `grid`, `pv` and `consumption` show one group of
+  `SYSTEM_GROUPS` and save it at once, merged into the stored settings
+  (`_merge`). Saving `grid` with Modbus on checks the connection again.
+- Entity fields do not offer SLEMS's own entities (`_HidesSlemsEntities`, applied
+  to every form of the system, battery and consumer flows): the system settings
+  hide those of the SLEMS device, batteries and consumers all of them. A block
+  entity may be another device's (e.g. **Battery charge secured**, a consumer's
+  **Release**), so there only the consumer's own are hidden.
 - Every battery is a **config subentry** of type `battery`. Adding, editing or
   removing a subentry triggers the update listener, which reloads the entry.
   The listener is registered at the very start of `async_setup_entry`, so

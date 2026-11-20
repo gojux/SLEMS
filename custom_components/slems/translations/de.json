@@ -39,7 +39,7 @@
           "weather_entity": "Optional. Verbessert die Verbrauchsprognose (z. B. Bedarf der Wärmepumpe).",
           "pv_forecast_entries": "Integrationen mit Solarprognose (z. B. Forecast.Solar, Solcast). Mehrere Einträge, z. B. einer je Dachfläche, werden addiert.",
           "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entität selbst auf.",
-          "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Wird für die Zeit verwendet, bevor SLEMS eigene Werte aufgezeichnet hat.",
+          "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Die Prognose verwendet ihn für Stunden ohne eigene Werte von SLEMS, also bis zu einem Jahr zurück. Sinnvoll vor allem, wenn deine Batterien schon vor SLEMS liefen: Dann fehlt deren Leistung in der berechneten Historie.",
           "holiday_region": "Bundesland oder Kanton, dessen Feiertage die Verbrauchsprognose wie Wochenendtage plant. Vorgeschlagen aus dem Standort von Home Assistant (OpenStreetMap); mit **Landesweite Feiertage** zählen nur die Feiertage des ganzen Landes.",
           "grid_power_l1_entity": "Optional, zusammen mit L2 und L3: die Leistung jeder Phase am Netzanschlusspunkt, mit demselben Vorzeichen wie die Netzleistung. SLEMS lernt dann die Phase jeder Batterie und jedes Verbrauchers hinter dem Smart Meter (Sensor **Phase**) und meldet, wenn sie sich ändert.",
           "grid_power_l2_entity": "Optional, siehe L1.",
@@ -89,6 +89,22 @@
     "step": {
       "init": {
         "title": "SLEMS-System",
+        "description": "Was möchtest du ändern? Jeder Bereich wird für sich gespeichert, die übrigen Einstellungen bleiben.",
+        "menu_options": {
+          "devices": "Geräte neu erkennen",
+          "grid": "Netz",
+          "pv": "PV & Prognose",
+          "consumption": "Verbrauch & Kalender"
+        },
+        "menu_option_descriptions": {
+          "devices": "Smart Meter und PV-Anlagen auswählen; SLEMS schlägt ihre Sensoren neu vor, danach prüfst du alle Einstellungen.",
+          "grid": "Netzleistung, Vorzeichen, Phasen, Energiezähler, Smart Meter per Modbus.",
+          "pv": "PV-Leistung, PV-Prognose, Wetter, Außentemperatur.",
+          "consumption": "Historie Hausverbrauch, Feiertage."
+        }
+      },
+      "devices": {
+        "title": "Geräte neu erkennen",
         "description": "Wähle das Gerät deines Smart Meters und die deiner PV-Anlagen aus: SLEMS schlägt im nächsten Schritt ihre Sensoren vor, du prüfst und korrigierst sie. Die am besten passenden Geräte stehen oben; was du im Energie-Dashboard von Home Assistant eingetragen hast, ist vorausgewählt. Lass die Felder leer, um die Sensoren selbst auszuwählen.",
         "data": {
           "grid_device": "Smart Meter",
@@ -97,6 +113,57 @@
         "data_description": {
           "grid_device": "Das Gerät, das die Leistung am Netzanschlusspunkt misst, z. B. ein Shelly Pro 3EM, ein Tibber Pulse oder der Zähler an einem SolarEdge-Wechselrichter.",
           "pv_devices": "Eine oder mehrere, z. B. der Wechselrichter am Dach und der eines Balkonkraftwerks. Ihre Leistung wird addiert."
+        }
+      },
+      "grid": {
+        "title": "Netz",
+        "description": "Gerade zeigt die Netzleistung {grid_now}. Einspeisung muss negativ sein; ist sie positiv, schalte **Vorzeichen der Netzleistung umkehren** ein.",
+        "data": {
+          "grid_power_entity": "Netzleistung (Smart Meter)",
+          "grid_power_inverted": "Vorzeichen der Netzleistung umkehren",
+          "grid_power_l1_entity": "Netzleistung L1",
+          "grid_power_l2_entity": "Netzleistung L2",
+          "grid_power_l3_entity": "Netzleistung L3",
+          "grid_modbus": "Smart Meter zusätzlich per Modbus lesen",
+          "grid_import_energy_entity": "Netzbezug (Zähler)",
+          "grid_export_energy_entity": "Netzeinspeisung (Zähler)"
+        },
+        "data_description": {
+          "grid_power_entity": "Leistung am Netzanschlusspunkt. Erwartetes Vorzeichen: positiv = Bezug, negativ = Einspeisung.",
+          "grid_power_inverted": "Aktivieren, wenn dein Zähler Einspeisung positiv meldet.",
+          "grid_power_l1_entity": "Optional, zusammen mit L2 und L3: die Leistung jeder Phase am Netzanschlusspunkt, mit demselben Vorzeichen wie die Netzleistung. SLEMS lernt dann die Phase jeder Batterie und jedes Verbrauchers hinter dem Smart Meter (Sensor **Phase**) und meldet, wenn sie sich ändert.",
+          "grid_power_l2_entity": "Optional, siehe L1.",
+          "grid_power_l3_entity": "Optional, siehe L1.",
+          "grid_modbus": "Optional. Liest die Netzleistung direkt von einem SunSpec-Zähler (z. B. am SolarEdge-Wechselrichter, über einen Modbus-Proxy) im Bruchteil einer Sekunde. Die Regelung sieht jeden Wert früher als über die Entität; die Entität bleibt Rückfallebene und Historie.",
+          "grid_import_energy_entity": "Optional. Energiezähler des Smart Meters für den Bezug (kWh). Für Tarife und Rechnungen; ohne ihn nutzt SLEMS das Stundenmittel der Netzleistung, das Bezug und Einspeisung innerhalb einer Stunde verrechnet.",
+          "grid_export_energy_entity": "Optional. Energiezähler des Smart Meters für die Einspeisung (kWh)."
+        }
+      },
+      "pv": {
+        "title": "PV & Prognose",
+        "description": "Gerade zeigt die PV {pv_now}.",
+        "data": {
+          "pv_power_entity": "PV-Leistung",
+          "pv_forecast_entries": "PV-Prognose",
+          "weather_entity": "Wetter",
+          "outdoor_temperature_entity": "Außentemperatur"
+        },
+        "data_description": {
+          "pv_power_entity": "Aktuelle PV-Erzeugung. Wird für den Energiefluss und die Bilanz des Hausverbrauchs verwendet. Mehrere PV-Anlagen werden addiert.",
+          "pv_forecast_entries": "Integrationen mit Solarprognose (z. B. Forecast.Solar, Solcast). Mehrere Einträge, z. B. einer je Dachfläche, werden addiert.",
+          "weather_entity": "Optional. Verbessert die Verbrauchsprognose (z. B. Bedarf der Wärmepumpe).",
+          "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entität selbst auf."
+        }
+      },
+      "consumption": {
+        "title": "Verbrauch & Kalender",
+        "data": {
+          "house_history_entity": "Historie Hausverbrauch",
+          "holiday_region": "Feiertage"
+        },
+        "data_description": {
+          "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Die Prognose verwendet ihn für Stunden ohne eigene Werte von SLEMS, also bis zu einem Jahr zurück. Sinnvoll vor allem, wenn deine Batterien schon vor SLEMS liefen: Dann fehlt deren Leistung in der berechneten Historie.",
+          "holiday_region": "Bundesland oder Kanton, dessen Feiertage die Verbrauchsprognose wie Wochenendtage plant. Vorgeschlagen aus dem Standort von Home Assistant (OpenStreetMap); mit **Landesweite Feiertage** zählen nur die Feiertage des ganzen Landes."
         }
       },
       "system": {
@@ -125,7 +192,7 @@
           "pv_forecast_entries": "Integrationen mit Solarprognose (z. B. Forecast.Solar, Solcast). Mehrere Einträge, z. B. einer je Dachfläche, werden addiert.",
           "weather_entity": "Optional. Verbessert die Verbrauchsprognose (z. B. Bedarf der Wärmepumpe).",
           "outdoor_temperature_entity": "Optional. Temperatursensor mit Historie für die Prognose der Wärmepumpe. Ohne ihn zeichnet SLEMS die Temperatur der Wetter-Entität selbst auf.",
-          "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Wird für die Zeit verwendet, bevor SLEMS eigene Werte aufgezeichnet hat.",
+          "house_history_entity": "Optional. Leistungssensor des Hausverbrauchs mit vorhandener Historie (z. B. aus einer anderen Integration). Die Prognose verwendet ihn für Stunden ohne eigene Werte von SLEMS, also bis zu einem Jahr zurück. Sinnvoll vor allem, wenn deine Batterien schon vor SLEMS liefen: Dann fehlt deren Leistung in der berechneten Historie.",
           "holiday_region": "Bundesland oder Kanton, dessen Feiertage die Verbrauchsprognose wie Wochenendtage plant. Vorgeschlagen aus dem Standort von Home Assistant (OpenStreetMap); mit **Landesweite Feiertage** zählen nur die Feiertage des ganzen Landes.",
           "grid_power_l1_entity": "Optional, zusammen mit L2 und L3: die Leistung jeder Phase am Netzanschlusspunkt, mit demselben Vorzeichen wie die Netzleistung. SLEMS lernt dann die Phase jeder Batterie und jedes Verbrauchers hinter dem Smart Meter (Sensor **Phase**) und meldet, wenn sie sich ändert.",
           "grid_power_l2_entity": "Optional, siehe L1.",

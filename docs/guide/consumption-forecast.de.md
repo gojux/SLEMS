@@ -24,8 +24,11 @@ wird so nie. Zwei optionale Einstellungen helfen beim Start:
   SLEMS die Temperatur der Wetter-Entität selbst auf; das Wärmepumpenmodell
   nutzt die Temperatur dann nach etwa einer Woche.
 - **Historie Hausverbrauch**: ein Leistungssensor des Hausverbrauchs mit
-  vorhandener Historie (z. B. aus einer anderen Batterie-Integration), für die
-  Zeit, bevor SLEMS eigene Werte aufgezeichnet hat.
+  vorhandener Historie (z. B. aus einer anderen Batterie-Integration). Die
+  Prognose verwendet ihn für jede Stunde ohne eigene Werte von SLEMS, bis zu
+  einem Jahr zurück. Sinnvoll vor allem, wenn deine Batterien schon vor SLEMS
+  liefen: Dem aus Netz und PV berechneten Hausverbrauch fehlt dann deren
+  Leistung, denn SLEMS zeichnet sie erst ab der Einrichtung auf.
 
 ## Feiertage
 

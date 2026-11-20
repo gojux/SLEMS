@@ -18,6 +18,67 @@ def _hass(country: str | None = None, **extra) -> SimpleNamespace:
     return SimpleNamespace(config=SimpleNamespace(country=country), async_add_executor_job=executor, **extra)
 
 
+# The originals, which the fixture in conftest replaces.
+_slems_entities = config_flow._slems_entities
+_subentry_hidden = config_flow._SubentryHidesSlemsEntities._hidden_entities
+
+_HUB = SimpleNamespace(entity_id="sensor.slems_outdoor_temperature", config_subentry_id=None)
+_VENUS = SimpleNamespace(entity_id="sensor.venus_1_temperature", config_subentry_id="b1")
+_PUMP = SimpleNamespace(entity_id="binary_sensor.pump_release", config_subentry_id="c1")
+
+
+def _excluded(schema) -> dict[str, list[str]]:
+    return {
+        str(key): value.config.get("exclude_entities", [])
+        for key, value in schema.schema.items()
+        if isinstance(value, config_flow.selector.EntitySelector)
+    }
+
+
+async def test_system_settings_hide_the_entities_of_the_slems_device() -> None:
+    flow = _options_flow({"grid_power_entity": "sensor.grid"}, entry=SimpleNamespace(entry_id="e"))
+    with (
+        patch.object(config_flow, "_slems_entities", lambda hass, entry: [_HUB, _VENUS]),
+        patch.object(config_flow, "async_forecast_provider_entries", AsyncMock(return_value=[])),
+    ):
+        form = await flow.async_step_pv()
+    assert _excluded(form["data_schema"]) == {
+        "pv_power_entity": ["sensor.slems_outdoor_temperature"],
+        "weather_entity": ["sensor.slems_outdoor_temperature"],
+        "outdoor_temperature_entity": ["sensor.slems_outdoor_temperature"],
+    }
+
+
+def test_subentries_hide_every_slems_entity_but_allow_others_for_blocking() -> None:
+    schema = config_flow.vol.Schema(
+        {
+            config_flow.vol.Optional("power_entity"): config_flow._POWER_SENSOR,
+            config_flow.vol.Optional("block_entity"): config_flow.selector.EntitySelector(
+                config_flow.selector.EntitySelectorConfig(domain="binary_sensor")
+            ),
+        }
+    )
+    flow = config_flow.ConsumerSubentryFlow.__new__(config_flow.ConsumerSubentryFlow)
+    flow.hass = None
+    flow._get_entry = lambda: SimpleNamespace(entry_id="e")
+    flow._get_reconfigure_subentry = lambda: SimpleNamespace(subentry_id="c1")
+    with patch.object(config_flow, "_slems_entities", lambda hass, entry: [_HUB, _VENUS, _PUMP]):
+        flow.context = {"source": "user"}
+        assert _excluded(config_flow._without_entities(schema, *_subentry_hidden(flow))) == {
+            "power_entity": [_HUB.entity_id, _VENUS.entity_id, _PUMP.entity_id],
+            "block_entity": [],
+        }
+        # Reconfigured: the consumer's own release does not block it.
+        flow.context = {"source": "reconfigure"}
+        assert _excluded(config_flow._without_entities(schema, *_subentry_hidden(flow)))["block_entity"] == [
+            _PUMP.entity_id
+        ]
+
+
+def test_slems_entities_at_the_first_setup() -> None:
+    assert _slems_entities(None, None) == []
+
+
 async def test_system_schema_builds_for_a_new_setup() -> None:
     with patch.object(
         config_flow, "async_forecast_provider_entries", AsyncMock(return_value=[])
@@ -68,6 +129,89 @@ async def test_holiday_region_suggested_once_when_not_stored() -> None:
         keys = {str(key): key for key in result["data_schema"].schema}
         assert keys[CONF_HOLIDAY_REGION].default() == "national"
         assert suggest.await_count == 1
+
+
+async def test_system_groups_cover_every_system_setting() -> None:
+    provider = SimpleNamespace(entry_id="f", title="Roof", domain="forecast_solar")
+    with patch.object(config_flow, "async_forecast_provider_entries", AsyncMock(return_value=[provider])):
+        schema = await config_flow._async_system_schema(_hass("AT"), {})
+    grouped = [key for keys in config_flow.SYSTEM_GROUPS.values() for key in keys]
+    assert len(grouped) == len(set(grouped))
+    assert set(grouped) == {str(key) for key in schema.schema}
+
+
+def _options_flow(stored: dict, entry=None):
+    flow = config_flow.SlemsOptionsFlow.__new__(config_flow.SlemsOptionsFlow)
+    flow.hass = _hass("AT", states=SimpleNamespace(get=lambda entity_id: None))
+    flow._entry = lambda: entry
+    flow._stored = lambda: dict(stored)
+    flow._async_finish_system = lambda: ("saved", flow._system)
+    return flow
+
+
+async def test_options_open_a_menu_of_the_groups() -> None:
+    result = await _options_flow({}).async_step_init()
+    assert result["type"] == "menu"
+    assert result["menu_options"] == ["devices", "grid", "pv", "consumption"]
+
+
+async def test_group_saves_its_fields_and_keeps_the_others() -> None:
+    stored = {
+        "grid_power_entity": "sensor.grid",
+        "grid_power_inverted": False,
+        "pv_power_entity": ["sensor.roof"],
+        "weather_entity": "weather.home",
+        "holiday_region": "8",
+        "grid_modbus_host": "proxy",
+    }
+    flow = _options_flow(stored)
+    with patch.object(config_flow, "async_forecast_provider_entries", AsyncMock(return_value=[])):
+        form = await flow.async_step_pv()
+        assert {str(key) for key in form["data_schema"].schema} == {
+            "pv_power_entity", "weather_entity", "outdoor_temperature_entity"
+        }
+        # The weather cleared, the PV changed: the other settings stay.
+        result = await flow.async_step_pv({"pv_power_entity": ["sensor.roof", "sensor.balcony"]})
+    assert result == (
+        "saved",
+        {
+            "grid_power_entity": "sensor.grid",
+            "grid_power_inverted": False,
+            "pv_power_entity": ["sensor.roof", "sensor.balcony"],
+            "holiday_region": "8",
+            "grid_modbus_host": "proxy",
+        },
+    )
+
+
+async def test_grid_group_with_modbus_checks_the_connection() -> None:
+    flow = _options_flow({"grid_power_entity": "sensor.grid", "weather_entity": "weather.home"})
+    done = AsyncMock(return_value="modbus")
+    flow._async_system_done = done
+    with patch.object(config_flow, "async_forecast_provider_entries", AsyncMock(return_value=[])):
+        assert await flow.async_step_grid(
+            {"grid_power_entity": "sensor.grid", "grid_power_inverted": True, "grid_modbus": True}
+        ) == "modbus"
+    data, previous = done.await_args.args
+    assert data == {
+        "grid_power_entity": "sensor.grid",
+        "grid_power_inverted": True,
+        "grid_modbus": True,
+        "weather_entity": "weather.home",
+    }
+    assert previous == {"grid_power_entity": "sensor.grid", "weather_entity": "weather.home"}
+
+
+async def test_consumption_group_suggests_the_holiday_region() -> None:
+    flow = _options_flow({"grid_power_entity": "sensor.grid"})
+    with (
+        patch.object(config_flow, "async_forecast_provider_entries", AsyncMock(return_value=[])),
+        patch.object(config_flow, "async_suggest_region", AsyncMock(return_value="8")),
+    ):
+        form = await flow.async_step_consumption()
+    keys = {str(key): key for key in form["data_schema"].schema}
+    assert set(keys) == {"house_history_entity", "holiday_region"}
+    assert keys["holiday_region"].default() == "8"
 
 
 def test_entity_battery_data_keeps_only_the_chosen_control() -> None:
@@ -200,3 +344,8 @@ async def test_own_pv_of_a_battery_cannot_be_entered_as_pv_system() -> None:
         assert result["description_placeholders"]["own_pv"] == "sensor.output (Balcony)"
         done.assert_not_called()
         assert await flow.async_step_system({"grid_power_entity": "sensor.grid", "pv_power_entity": ["sensor.roof"]}) == "done"
+        # The same in the group of the PV settings.
+        flow._stored = lambda: {"grid_power_entity": "sensor.grid"}
+        result = await flow.async_step_pv({"pv_power_entity": ["sensor.output"]})
+        assert result["errors"] == {"pv_power_entity": "pv_is_own_pv"}
+        assert result["step_id"] == "pv"

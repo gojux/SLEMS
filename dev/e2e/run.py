@@ -775,7 +775,8 @@ def options(token: str) -> None:
         "/api/config/config_entries/options/flow",
         {"handler": entry_id},
         {
-            "init": {},
+            "init": "devices",
+            "devices": {},
             "system": {"grid_modbus": True},
             "grid_modbus": {"grid_modbus_host": "sunspec-meter"},
             "grid_meter": {},
@@ -783,11 +784,24 @@ def options(token: str) -> None:
         "Options: smart meter over Modbus",
     )
     check(token, "Options")
+    for group in ("grid", "pv", "consumption"):
+        run_flow(
+            token,
+            "/api/config/config_entries/options/flow",
+            {"handler": entry_id},
+            {
+                "init": group,
+                group: {},
+                "grid_modbus": {},
+                "grid_meter": {},
+            },
+            f"Options: {group} saved unchanged",
+        )
+    check(token, "Options groups")
     # The output of the plug-in battery is no PV system (it would count twice).
     path = "/api/config/config_entries/options/flow"
     result = request("POST", path, {"handler": entry_id}, token)
-    while result.get("step_id") != "system":
-        result = request("POST", f"{path}/{result['flow_id']}", fill(result, {}), token)
+    result = request("POST", f"{path}/{result['flow_id']}", {"next_step_id": "pv"}, token)
     result = request(
         "POST",
         f"{path}/{result['flow_id']}",

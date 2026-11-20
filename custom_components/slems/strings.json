@@ -39,7 +39,7 @@
           "weather_entity": "Optional. Improves the consumption forecast (e.g. heat pump demand).",
           "pv_forecast_entries": "Solar forecast integrations (e.g. Forecast.Solar, Solcast). Several entries, e.g. one per roof plane, are summed up.",
           "outdoor_temperature_entity": "Optional. Temperature sensor with history for the heat pump forecast. Without it, SLEMS records the temperature of the weather entity itself.",
-          "house_history_entity": "Optional. Power sensor of the house consumption with existing history (e.g. from another integration). Used for the time before SLEMS recorded its own values.",
+          "house_history_entity": "Optional. Power sensor of the house consumption with existing history (e.g. from another integration). The forecast uses it for hours without SLEMS's own values, up to a year back. Useful above all if your batteries ran before SLEMS: their power is then missing in the calculated history.",
           "holiday_region": "State or canton whose public holidays the consumption forecast plans like weekend days. Suggested from the location of Home Assistant (OpenStreetMap); with **National holidays** only the holidays of the whole country count.",
           "grid_power_l1_entity": "Optional, together with L2 and L3: the power of each phase at the grid connection point, with the same sign as the grid power. SLEMS then learns the phase of every battery and consumer behind the smart meter (sensor **Phase**) and reports when it changes.",
           "grid_power_l2_entity": "Optional, see L1.",
@@ -89,6 +89,22 @@
     "step": {
       "init": {
         "title": "SLEMS system",
+        "description": "What do you want to change? Each section is saved on its own; the other settings stay.",
+        "menu_options": {
+          "devices": "Detect devices again",
+          "grid": "Grid",
+          "pv": "PV & forecast",
+          "consumption": "Consumption & calendar"
+        },
+        "menu_option_descriptions": {
+          "devices": "Select the smart meter and the PV systems; SLEMS suggests their sensors again, then you check all settings.",
+          "grid": "Grid power, sign, phases, energy counters, smart meter over Modbus.",
+          "pv": "PV power, PV forecast, weather, outdoor temperature.",
+          "consumption": "House consumption history, public holidays."
+        }
+      },
+      "devices": {
+        "title": "Detect devices again",
         "description": "Select the device of your smart meter and those of your PV systems: SLEMS suggests their sensors in the next step, you check and correct them. The devices that fit best come first; what you entered in the energy dashboard of Home Assistant is preselected. Leave empty to choose the sensors by hand.",
         "data": {
           "grid_device": "Smart meter",
@@ -97,6 +113,57 @@
         "data_description": {
           "grid_device": "The device that measures the power at the grid connection point, e.g. a Shelly Pro 3EM, a Tibber Pulse or the meter at a SolarEdge inverter.",
           "pv_devices": "One or several, e.g. the inverter on the roof and the one of a balcony system. Their power is summed up."
+        }
+      },
+      "grid": {
+        "title": "Grid",
+        "description": "Right now the grid power shows {grid_now}. Export must be negative; if it is positive, turn on **Invert grid power sign**.",
+        "data": {
+          "grid_power_entity": "Grid power (smart meter)",
+          "grid_power_inverted": "Invert grid power sign",
+          "grid_power_l1_entity": "Grid power L1",
+          "grid_power_l2_entity": "Grid power L2",
+          "grid_power_l3_entity": "Grid power L3",
+          "grid_modbus": "Also read the smart meter over Modbus",
+          "grid_import_energy_entity": "Grid import energy (counter)",
+          "grid_export_energy_entity": "Grid export energy (counter)"
+        },
+        "data_description": {
+          "grid_power_entity": "Power at the grid connection point. Expected sign: positive = import, negative = export.",
+          "grid_power_inverted": "Enable if your meter reports export as positive.",
+          "grid_power_l1_entity": "Optional, together with L2 and L3: the power of each phase at the grid connection point, with the same sign as the grid power. SLEMS then learns the phase of every battery and consumer behind the smart meter (sensor **Phase**) and reports when it changes.",
+          "grid_power_l2_entity": "Optional, see L1.",
+          "grid_power_l3_entity": "Optional, see L1.",
+          "grid_modbus": "Optional. Reads the grid power directly from a SunSpec meter (e.g. at a SolarEdge inverter, through a Modbus proxy) every fraction of a second. The control sees each value sooner than through the entity; the entity stays the fallback and the history.",
+          "grid_import_energy_entity": "Optional. Energy counter of the smart meter for the import (kWh). Used for tariffs and bills; without it SLEMS uses the hourly mean of the grid power, which nets import and export within an hour.",
+          "grid_export_energy_entity": "Optional. Energy counter of the smart meter for the export (kWh)."
+        }
+      },
+      "pv": {
+        "title": "PV & forecast",
+        "description": "Right now the PV shows {pv_now}.",
+        "data": {
+          "pv_power_entity": "PV power",
+          "pv_forecast_entries": "PV forecast",
+          "weather_entity": "Weather",
+          "outdoor_temperature_entity": "Outdoor temperature"
+        },
+        "data_description": {
+          "pv_power_entity": "Current PV production. Used for the energy flow and the house consumption balance. Several PV systems are summed up.",
+          "pv_forecast_entries": "Solar forecast integrations (e.g. Forecast.Solar, Solcast). Several entries, e.g. one per roof plane, are summed up.",
+          "weather_entity": "Optional. Improves the consumption forecast (e.g. heat pump demand).",
+          "outdoor_temperature_entity": "Optional. Temperature sensor with history for the heat pump forecast. Without it, SLEMS records the temperature of the weather entity itself."
+        }
+      },
+      "consumption": {
+        "title": "Consumption & calendar",
+        "data": {
+          "house_history_entity": "House consumption history",
+          "holiday_region": "Public holidays"
+        },
+        "data_description": {
+          "house_history_entity": "Optional. Power sensor of the house consumption with existing history (e.g. from another integration). The forecast uses it for hours without SLEMS's own values, up to a year back. Useful above all if your batteries ran before SLEMS: their power is then missing in the calculated history.",
+          "holiday_region": "State or canton whose public holidays the consumption forecast plans like weekend days. Suggested from the location of Home Assistant (OpenStreetMap); with **National holidays** only the holidays of the whole country count."
         }
       },
       "system": {
@@ -125,7 +192,7 @@
           "pv_forecast_entries": "Solar forecast integrations (e.g. Forecast.Solar, Solcast). Several entries, e.g. one per roof plane, are summed up.",
           "weather_entity": "Optional. Improves the consumption forecast (e.g. heat pump demand).",
           "outdoor_temperature_entity": "Optional. Temperature sensor with history for the heat pump forecast. Without it, SLEMS records the temperature of the weather entity itself.",
-          "house_history_entity": "Optional. Power sensor of the house consumption with existing history (e.g. from another integration). Used for the time before SLEMS recorded its own values.",
+          "house_history_entity": "Optional. Power sensor of the house consumption with existing history (e.g. from another integration). The forecast uses it for hours without SLEMS's own values, up to a year back. Useful above all if your batteries ran before SLEMS: their power is then missing in the calculated history.",
           "holiday_region": "State or canton whose public holidays the consumption forecast plans like weekend days. Suggested from the location of Home Assistant (OpenStreetMap); with **National holidays** only the holidays of the whole country count.",
           "grid_power_l1_entity": "Optional, together with L2 and L3: the power of each phase at the grid connection point, with the same sign as the grid power. SLEMS then learns the phase of every battery and consumer behind the smart meter (sensor **Phase**) and reports when it changes.",
           "grid_power_l2_entity": "Optional, see L1.",

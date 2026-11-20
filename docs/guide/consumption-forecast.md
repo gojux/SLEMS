@@ -24,8 +24,11 @@ optional settings help at the start:
   SLEMS records the temperature of the weather entity itself; the heat pump
   model then needs about a week before it uses the temperature.
 - **House consumption history**: a power sensor of the house consumption with
-  existing history (e.g. from another battery integration), used for the time
-  before SLEMS recorded its own values.
+  existing history (e.g. from another battery integration). The forecast uses
+  it for every hour without SLEMS's own values, up to a year back. Above all
+  useful if your batteries ran before SLEMS: the house consumption calculated
+  from grid and PV lacks their power then, since SLEMS records it only from
+  the setup on.
 
 ## Public holidays
 

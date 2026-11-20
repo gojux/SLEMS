@@ -322,6 +322,12 @@ Voraussetzung: Home Assistant 2026.10 oder neuer.
    hinzufügen** und für jeden Verbraucher, der gemessen oder gesteuert werden
    soll, **Verbraucher hinzufügen** wählen.
 
+Um die Systemeinstellungen später zu ändern, das Zahnrad des SLEMS-Eintrags
+auswählen: Ein Menü bietet **Geräte neu erkennen** (die geführten Schritte der
+Ersteinrichtung) oder einen Bereich, **Netz**, **PV & Prognose** oder
+**Verbrauch & Kalender**. Jeder Bereich wird für sich gespeichert, die übrigen
+Einstellungen bleiben.
+
 **Phasen** (optional): Misst dein Smart Meter jede Phase, kannst du in den
 SLEMS-Einstellungen seine **Netzleistung L1**, **L2** und **L3** auswählen.
 SLEMS lernt dann, an welcher Phase jedes Gerät hängt, und zeigt sie an; auf

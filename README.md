@@ -315,6 +315,11 @@ Requires Home Assistant 2026.10 or newer.
 3. On the SLEMS integration page choose **Add battery** for every battery and
    **Add consumer** for every consumer you want to measure or control.
 
+To change the system settings later, select the gear icon of the SLEMS entry:
+a menu offers **Detect devices again** (the guided steps of the first setup)
+or one section, **Grid**, **PV & forecast** or **Consumption & calendar**.
+Each section is saved on its own; the other settings stay.
+
 **Phases** (optional): if your smart meter measures each phase, you can
 select its **Grid power L1**, **L2** and **L3** in the SLEMS settings. SLEMS
 then learns which phase each device is on and shows it; this does not
