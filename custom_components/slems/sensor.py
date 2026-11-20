@@ -141,6 +141,23 @@ def _average_soc(snapshot: SystemSnapshot, coordinator: SlemsCoordinator) -> flo
     return energy / capacity if capacity else None
 
 
+def _soc_limit_total(attribute: str) -> Callable[[SystemSnapshot, SlemsCoordinator], float | None]:
+    """Capacity weighted SoC limit (``min_soc_pct`` / ``max_soc_pct``) over the
+    batteries of ``_average_soc``, for evcc's battery meter."""
+
+    def value(snapshot: SystemSnapshot, coordinator: SlemsCoordinator) -> float | None:
+        weighted = capacity = 0.0
+        for battery in coordinator.batteries:
+            telemetry = snapshot.batteries.get(battery.subentry_id)
+            if not battery.plannable or telemetry is None or telemetry.soc_pct is None:
+                continue
+            weighted += getattr(battery.limits, attribute) * battery.capacity_wh
+            capacity += battery.capacity_wh
+        return weighted / capacity if capacity else None
+
+    return value
+
+
 def _stored_energy_kwh(snapshot: SystemSnapshot, coordinator: SlemsCoordinator) -> float | None:
     """Energy stored in all enabled, readable batteries (kWh)."""
     energy = None
@@ -582,6 +599,18 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
         suggested_display_precision=0,
         value_fn=_average_soc,
     ),
+    *(
+        SystemSensorDescription(
+            key=f"battery_{limit}_soc_total",
+            translation_key=f"battery_{limit}_soc_total",
+            state_class=SensorStateClass.MEASUREMENT,
+            native_unit_of_measurement=PERCENTAGE,
+            suggested_display_precision=0,
+            entity_category=EntityCategory.DIAGNOSTIC,
+            value_fn=_soc_limit_total(f"{limit}_soc_pct"),
+        )
+        for limit in ("min", "max")
+    ),
     SystemSensorDescription(
         **_power("peak_shaving_limit"),
         value_fn=lambda s, _: s.peak_shaving_limit_w,
@@ -883,8 +912,18 @@ class SystemSensor(SlemsSystemEntity, SensorEntity):
     """System level sensor."""
 
     entity_description: SystemSensorDescription
+    # Large or changing with every sample (a new attributes row each time).
     _unrecorded_attributes = frozenset(
-        {"day_plan", "day_plan_tomorrow", "days", "peaks", "exported_today_kwh", "modbus"}
+        {
+            "day_plan",
+            "day_plan_tomorrow",
+            "days",
+            "peaks",
+            "exported_today_kwh",
+            "modbus",
+            "grid_target_samples",
+            "learning_progress",
+        }
     )
 
     def __init__(

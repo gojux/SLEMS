@@ -293,3 +293,29 @@ def test_house_history_sums_several_pv_systems() -> None:
     )
     means = {"sensor.grid": {hour: -500}, "sensor.roof": {hour: 1500}, "sensor.balcony": {hour: 400}}
     assert build_house_history(sources, means) == {hour: 1400}
+
+
+def test_outliers_left_out_of_the_statistics() -> None:
+    from custom_components.slems.forecast import without_outliers
+
+    usual = {hour: 400.0 + (hour.hour % 5) * 100 for hour in hours(28)}
+    # A wallbox charging 22 kW for hours and the reading of a faulty sensor.
+    charging = dict.fromkeys(list(usual)[-30:-27], 22_000.0)
+    keys = list(usual)
+    faulty = {keys[-50]: 78_330_701.0, keys[-60]: -32_991_981.0, keys[-70]: float("nan")}
+    kept = without_outliers({**usual, **charging, **faulty})
+    expected = {**usual, **charging}
+    for hour in faulty:
+        del expected[hour]
+    assert kept == expected
+
+
+def test_outlier_limit_follows_large_connections() -> None:
+    from custom_components.slems.forecast import without_outliers
+
+    # A farm drawing 100 to 400 kW keeps all its hours.
+    farm = {hour: 100_000.0 + (hour.hour % 4) * 100_000 for hour in hours(7)}
+    assert without_outliers(farm) == farm
+    # Temperatures are far below the floor.
+    temperatures = {hour: -15.0 + hour.hour for hour in hours(2)}
+    assert without_outliers(temperatures) == temperatures

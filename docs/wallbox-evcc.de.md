@@ -91,7 +91,8 @@ Ziele ab dem Anstecken stehen auf der [Roadmap](../README.de.md#roadmap).
 - Home Assistant ist von evcc aus erreichbar, und du öffnest evcc im Browser
   über dieselbe Adresse, die evcc selbst verwendet (z. B. `http://192.168.1.20:7070`,
   nicht `localhost`). Sonst schlägt die Anmeldung an Home Assistant fehl.
-- [HACS](https://hacs.xyz), um ha-evcc zu installieren.
+- Den Marktplatz von Home Assistant (ab 2026.11, **Einstellungen →
+  Marktplatz**) oder davor [HACS](https://hacs.xyz), um ha-evcc zu installieren.
 
 ## Schritt 1: evcc liest die Werte von SLEMS
 
@@ -118,13 +119,13 @@ In evcc über **Mehr** (unten rechts) → **Konfiguration**.
 
 ### PV
 
-**PV & Batterie** → **PV oder Speicher hinzufügen** → **PV-Anlage hinzufügen**, Titel
+**PV & Batterie** → **PV oder Hausbatterie hinzufügen** → **PV-Anlage hinzufügen**, Titel
 z. B. „PV“, Hersteller **Home Assistant**, **Leistungsentität**: **SLEMS
 PV-Leistung** (`sensor.slems_pv_power`). **prüfen**, **Speichern**.
 
 ### Hausbatterie
 
-**PV oder Speicher hinzufügen** → **Hausbatterie hinzufügen**:
+**PV oder Hausbatterie hinzufügen** → **Hausbatterie hinzufügen**:
 
 1. Titel z. B. „Hausbatterie (SLEMS)“, Hersteller **Home Assistant**.
 2. **Leistungsentität**: **SLEMS Batterieleistung gesamt (Entladen positiv)**. evcc
@@ -137,6 +138,12 @@ PV-Leistung** (`sensor.slems_pv_power`). **prüfen**, **Speichern**.
 
 3. **Erweiterte Einstellungen anzeigen** → **Batterieladestand**: **SLEMS
    Ladezustand gesamt** (`sensor.slems_battery_state_of_charge_total`).
+   Ab evcc 0.317 zusätzlich **Minimaler Ladestand (Entität)**: **SLEMS
+   Minimaler Ladezustand gesamt** und **Maximaler Ladestand (Entität)**:
+   **SLEMS Maximaler Ladezustand gesamt**. So kennt evcc den nutzbaren Bereich
+   der Batterien, wie er in SLEMS eingestellt ist (über mehrere Batterien nach
+   Kapazität gemittelt). Die Entity-IDs hängen von der Sprache von Home
+   Assistant ab (z. B. `sensor.slems_minimaler_ladezustand_gesamt`).
 4. **Alle Skript-Felder leer lassen** (**Normalbetrieb**, **Halten**, **Netzladung**
    …). Mit ihnen würde evcc die Batterie selbst steuern, und SLEMS und evcc
    würden gegeneinander regeln.
@@ -156,9 +163,16 @@ Betriebsart B nutzt evcc sie für seinen Smart-Modus. **Batterie-Boost** und die
 Entladesperre nicht verwenden: Sie brauchen die Steuer-Skripte, und die Batterie
 steuert SLEMS.
 
+**Optimizer von evcc** (ab 0.318): **Automatische Steuerung** aus lassen. Mit
+**Hausbatterie** plant evcc Batteriemodi wie „Halten“ oder „Laden“, die ohne
+Steuer-Skripte nichts bewirken, sein Plan stimmt dann nicht. Mit **Hausbatterie
+& Ladepunkte** startet und stoppt evcc das Laden im Smart-Modus selbst; in
+Betriebsart B würden dann zwei Planer über die Wallbox entscheiden. Betriebsart A
+schaltet nur zwischen **Schnell** und **Aus**, die der Optimizer nicht ändert.
+
 ## Schritt 2: ha-evcc in Home Assistant
 
-1. In HACS das Repository **evcc ☀️🚘 Solar Charging** (marq24/ha-evcc)
+1. Im Marktplatz (oder in HACS) **evcc ☀️🚘 Solar Charging** (marq24/ha-evcc)
    installieren und Home Assistant neu starten.
 2. **Einstellungen** → **Geräte & Dienste** → **Integration hinzufügen** → **evcc**.
 3. **Deine lokale evcc-Server Adresse**: die Adresse von evcc mit Port, z. B.
@@ -170,7 +184,8 @@ steuert SLEMS.
 Je Ladepunkt (hier „Garage“) entstehen u. a. **Max. Ladestrom**
 (`select.evcc_garage_max_current`), **Modus** (`select.evcc_garage_mode`),
 **Phasen in Verwendung** (`sensor.evcc_garage_phases_active`), **Ladeleistung**
-(`sensor.evcc_garage_charge_power`) sowie **Netzbezug** bzw. **Ladeenergie**.
+(`sensor.evcc_garage_charge_power`) sowie **Geladen (Gesamt)** bzw.
+**Ladeenergie**.
 
 ## Schritt 3: die Wallbox als Verbraucher in SLEMS
 
@@ -183,8 +198,9 @@ Je Ladepunkt (hier „Garage“) entstehen u. a. **Max. Ladestrom**
 
 2. **Verbraucher**
    - **Leistungssensor**: **Ladeleistung** des Ladepunkts.
-   - **Energiesensor**: **Netzbezug** des Ladepunkts (Zählerstand der Wallbox);
-     hat deine Wallbox keinen eigenen Zähler, **Ladeenergie**.
+   - **Energiesensor**: **Geladen (Gesamt)** des Ladepunkts (Zählerstand der
+     Wallbox, bis ha-evcc 2026.9 **Netzbezug**); hat deine Wallbox keinen
+     eigenen Zähler, **Ladeenergie**.
    - **Im Smart Meter enthalten**: an.
    - **Steuerung**: **Stromvorgabe (A)**.
 
@@ -203,7 +219,9 @@ Je Ladepunkt (hier „Garage“) entstehen u. a. **Max. Ladestrom**
    - **Ladestand des Fahrzeugs**: **Fahrzeug Ladestand** des Ladepunkts
      (vorgeschlagen). evcc kennt ihn, wenn das Auto in evcc mit seiner
      Anbindung (Cloud des Herstellers) eingerichtet ist, und weiß, welches Auto
-     angesteckt ist.
+     angesteckt ist. Nach dem Abstecken setzt evcc ihn auf 0 %, bis es den
+     Ladestand des nächsten Autos gelesen hat; SLEMS wertet 0 % als unbekannt
+     und plant ein Tagesziel nach Ladestand erst mit dem echten Wert.
    - **Akkukapazität des Fahrzeugs**: für ein Tagesziel nach Ladestand, z. B.
      60 kWh.
    - **Auto angesteckt**: **Verbunden** des Ladepunkts (vorgeschlagen). Ohne

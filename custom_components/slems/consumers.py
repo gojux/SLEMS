@@ -300,9 +300,11 @@ def read_consumer_state(hass: HomeAssistant, consumer: ConsumerConfig) -> Consum
 
 
 def vehicle_soc_pct(state: State | None) -> float | None:
-    """State of charge of a car (0-100 %); None if unknown or out of range."""
+    """State of charge of a car (above 0, up to 100 %); None if unknown or out
+    of range. 0 counts as unknown: evcc (from 0.319.1) clears the state of
+    charge to 0 when the car is unplugged, until it read the next car's."""
     value = state_as_float(state)
-    return value if value is not None and 0 <= value <= 100 else None
+    return value if value is not None and 0 < value <= 100 else None
 
 
 def plugged_in(state: State | None, plugged_states: tuple[str, ...]) -> bool | None:

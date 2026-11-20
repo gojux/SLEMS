@@ -84,6 +84,34 @@ class BatteryTelemetry:
         return self.grid_side_power_w
 
 
+# A battery power beyond IMPLAUSIBLE_POWER_FACTOR times its largest configured
+# power (at least IMPLAUSIBLE_POWER_FLOOR_W) is a faulty reading, e.g. a
+# register read as 0xFFFF. Generous, as the configured powers may be limits
+# below what the battery can do.
+IMPLAUSIBLE_POWER_FACTOR = 10
+IMPLAUSIBLE_POWER_FLOOR_W = 10_000
+
+
+def implausible_battery_power(telemetry: BatteryTelemetry, capabilities: BatteryCapabilities) -> bool:
+    """True if one of the powers of ``telemetry`` cannot be real (or is not a number)."""
+    largest = max(
+        capabilities.max_charge_power_w,
+        capabilities.max_discharge_power_w,
+        capabilities.max_output_w or 0,
+    )
+    limit = max(IMPLAUSIBLE_POWER_FLOOR_W, IMPLAUSIBLE_POWER_FACTOR * largest)
+    return any(
+        value is not None and not abs(value) <= limit
+        for value in (
+            telemetry.power_w,
+            telemetry.ac_power_w,
+            telemetry.pv_w,
+            telemetry.output_w,
+            telemetry.input_w,
+        )
+    )
+
+
 class BatteryDriverError(Exception):
     """Raised when a driver cannot talk to its battery."""
 

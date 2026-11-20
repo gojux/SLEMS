@@ -1138,6 +1138,12 @@
       "battery_soc_total": {
         "name": "Battery state of charge total"
       },
+      "battery_min_soc_total": {
+        "name": "Battery minimum state of charge total"
+      },
+      "battery_max_soc_total": {
+        "name": "Battery maximum state of charge total"
+      },
       "battery_soc": {
         "name": "State of charge"
       },

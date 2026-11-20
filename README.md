@@ -51,7 +51,7 @@ you could test it.
 - [Why SLEMS?](#why-slems)
 - [Features](#features)
 - [Installation](#installation)
-  - [HACS (custom repository)](#hacs-custom-repository)
+  - [Marketplace or HACS (custom repository)](#marketplace-or-hacs-custom-repository)
   - [Manual](#manual)
 - [Setup](#setup)
   - [Smart meter over Modbus (optional)](#smart-meter-over-modbus-optional)
@@ -75,7 +75,8 @@ you could test it.
 
 What you need:
 
-- Home Assistant 2026.10 or later and HACS.
+- Home Assistant 2026.10 or later; from 2026.11 the built-in Marketplace,
+  before HACS.
 - A smart meter in Home Assistant that reports the grid power (import and
   export) continuously, e.g. a Shelly Pro 3EM. The more often it reports, the
   more precisely SLEMS controls (e.g. every second).
@@ -84,7 +85,7 @@ What you need:
 
 In five steps:
 
-1. Install SLEMS through HACS and restart Home Assistant
+1. Install SLEMS through the Marketplace or HACS and restart Home Assistant
    ([Installation](#installation)).
 2. Add the integration, select the smart meter and the PV systems and check
    the sign of the grid power ([Setup](#setup)).
@@ -271,15 +272,24 @@ state of charge. evcc specialises in EV charging and complements SLEMS well
 
 ## Installation
 
-### HACS (custom repository)
+### Marketplace or HACS (custom repository)
+
+Home Assistant 2026.11 replaced HACS with the built-in **Marketplace**
+(**Settings → Marketplace**); existing HACS installations move over by
+themselves.
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=gojux&repository=SLEMS&category=integration)
 
-The button opens SLEMS in HACS of your Home Assistant instance and adds the
-custom repository; then continue with step 2. Or by hand:
+The button opens SLEMS in the Marketplace (or HACS) of your Home Assistant
+instance and adds the custom repository; then continue with step 2. Or by
+hand:
 
-1. HACS → ⋮ → **Custom repositories** → add `https://github.com/gojux/SLEMS`,
-   type **Integration**.
+1. Marketplace: **Settings → Marketplace**, add the custom repository
+   `https://github.com/gojux/SLEMS`, type **Integration**. Custom repositories
+   need the Marketplace to be connected to GitHub; it asks for it.
+
+   HACS (up to Home Assistant 2026.10): HACS → ⋮ → **Custom repositories** →
+   add `https://github.com/gojux/SLEMS`, type **Integration**.
 2. Install **SLEMS** and restart Home Assistant.
 
 ### Manual

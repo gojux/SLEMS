@@ -91,7 +91,8 @@ from plugging in are on the [roadmap](../README.md#roadmap).
 - Home Assistant is reachable from evcc, and you open evcc in the browser at the
   same address evcc uses itself (e.g. `http://192.168.1.20:7070`, not
   `localhost`); otherwise the login to Home Assistant fails.
-- [HACS](https://hacs.xyz) to install ha-evcc.
+- The Marketplace of Home Assistant (from 2026.11, **Settings →
+  Marketplace**) or before that [HACS](https://hacs.xyz) to install ha-evcc.
 
 ## Step 1: evcc reads the values of SLEMS
 
@@ -135,6 +136,12 @@ manufacturer **Home Assistant**, **Power Entity**: **SLEMS PV power**
 
 3. **Show advanced settings** → **Battery State of Charge**: **SLEMS Battery state of
    charge total** (`sensor.slems_battery_state_of_charge_total`).
+   From evcc 0.317 also **Minimum SoC Entity**: **SLEMS Battery minimum state
+   of charge total** and **Maximum SoC Entity**: **SLEMS Battery maximum state
+   of charge total**. So evcc knows the usable range of the batteries as set in
+   SLEMS (averaged by capacity over several batteries). The entity IDs depend on
+   the language of Home Assistant (e.g.
+   `sensor.slems_battery_minimum_state_of_charge_total`).
 4. **Leave all script fields empty** (**Normal Mode Script**, **Hold Mode Script**,
    grid charge …). With them evcc would control the battery itself, and SLEMS and
    evcc would work against each other.
@@ -153,10 +160,17 @@ matter, since SLEMS decides about start and stop. In mode B evcc uses them for
 its Smart mode. Do not use **battery boost** or the discharge lock: they need the
 control scripts, and the battery is controlled by SLEMS.
 
+**evcc's optimizer** (from 0.318): leave **Automatic control** off. With **Home
+battery** evcc plans battery modes such as hold or charge that do nothing
+without the control scripts, so its plan is wrong. With **Home battery &
+charging points** evcc starts and stops the charging in Smart mode itself; in
+mode B two planners would then decide about the wallbox. Mode A only switches
+between **Fast** and **Off**, which the optimizer does not change.
+
 ## Step 2: ha-evcc in Home Assistant
 
-1. Install the repository **evcc ☀️🚘 Solar Charging** (marq24/ha-evcc) in HACS
-   and restart Home Assistant.
+1. Install **evcc ☀️🚘 Solar Charging** (marq24/ha-evcc) from the Marketplace
+   (or HACS) and restart Home Assistant.
 2. **Settings** → **Devices & services** → **Add integration** → **evcc**.
 3. **Your local evcc-Server URL**: the address of evcc with its port, e.g.
    `http://192.168.1.20:7070`. Keep WebSocket on. SLEMS does not need the admin
@@ -168,7 +182,8 @@ Per loadpoint (here "Garage") it creates among others the maximum charging
 current (`select.evcc_garage_max_current`), the mode
 (`select.evcc_garage_mode`), the active phases
 (`sensor.evcc_garage_phases_active`), the charging power
-(`sensor.evcc_garage_charge_power`) and the imported or charged energy.
+(`sensor.evcc_garage_charge_power`) and **Charged (Total)** or the charged
+energy.
 
 ## Step 3: the wallbox as a consumer in SLEMS
 
@@ -181,8 +196,9 @@ current (`select.evcc_garage_max_current`), the mode
 
 2. **Consumer**
    - **Power sensor**: the **charging power** of the loadpoint.
-   - **Energy sensor**: the **imported energy** of the loadpoint (meter reading of
-     the wallbox); without a meter in the wallbox the **charged energy**.
+   - **Energy sensor**: **Charged (Total)** of the loadpoint (meter reading of
+     the wallbox, **Grid imported** up to ha-evcc 2026.9); without a meter in the
+     wallbox the **charged energy**.
    - **Included in smart meter**: on.
    - **Control**: **Current set point (A)**.
 
@@ -201,6 +217,9 @@ current (`select.evcc_garage_max_current`), the mode
    - **State of charge of the car**: the **Vehicle charge** of the loadpoint
      (suggested). evcc knows it when the car is set up in evcc with its
      connection (the manufacturer's cloud), and knows which car is plugged in.
+     After unplugging evcc sets it to 0 % until it read the next car's state of
+     charge; SLEMS takes 0 % as unknown and plans a daily target by state of
+     charge only with the real value.
    - **Battery capacity of the car**: for a daily target by state of charge,
      e.g. 60 kWh.
    - **Car plugged in**: **Connected** of the loadpoint (suggested). Without a

@@ -51,7 +51,7 @@ Wenn du SLEMS mit einer anderen Batterie nutzen möchtest, erstelle bitte ein
 - [Warum SLEMS?](#warum-slems)
 - [Funktionen](#funktionen)
 - [Installation](#installation)
-  - [HACS (benutzerdefiniertes Repository)](#hacs-benutzerdefiniertes-repository)
+  - [Marktplatz oder HACS (benutzerdefiniertes Repository)](#marktplatz-oder-hacs-benutzerdefiniertes-repository)
   - [Manuell](#manuell)
 - [Einrichtung](#einrichtung)
   - [Smart Meter per Modbus (optional)](#smart-meter-per-modbus-optional)
@@ -75,7 +75,8 @@ Wenn du SLEMS mit einer anderen Batterie nutzen möchtest, erstelle bitte ein
 
 Was du brauchst:
 
-- Home Assistant 2026.10 oder neuer und HACS.
+- Home Assistant 2026.10 oder neuer; ab 2026.11 den eingebauten Marktplatz,
+  davor HACS.
 - Einen Smart Meter in Home Assistant, der die Netzleistung (Bezug und
   Einspeisung) laufend meldet, z. B. ein Shelly Pro 3EM. Je öfter er meldet,
   desto genauer regelt SLEMS (z. B. jede Sekunde).
@@ -84,7 +85,7 @@ Was du brauchst:
 
 In fünf Schritten:
 
-1. SLEMS über HACS installieren und Home Assistant neu starten
+1. SLEMS über den Marktplatz oder HACS installieren und Home Assistant neu starten
    ([Installation](#installation)).
 2. Die Integration hinzufügen, Smart Meter und PV-Anlagen auswählen und das
    Vorzeichen der Netzleistung prüfen ([Einrichtung](#einrichtung)).
@@ -275,16 +276,26 @@ das Laden von E-Autos spezialisiert und ergänzt SLEMS gut (siehe
 
 ## Installation
 
-### HACS (benutzerdefiniertes Repository)
+### Marktplatz oder HACS (benutzerdefiniertes Repository)
+
+Home Assistant 2026.11 hat HACS durch den eingebauten **Marktplatz** ersetzt
+(**Einstellungen → Marktplatz**); bestehende HACS-Installationen ziehen von
+selbst um.
 
 [![Öffne deine Home-Assistant-Instanz und das Repository im Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=gojux&repository=SLEMS&category=integration)
 
-Der Button öffnet SLEMS im HACS deiner Home-Assistant-Instanz und fügt das
-benutzerdefinierte Repository hinzu; danach weiter mit Schritt 2. Oder von
-Hand:
+Der Button öffnet SLEMS im Marktplatz (bzw. HACS) deiner Home-Assistant-Instanz
+und fügt das benutzerdefinierte Repository hinzu; danach weiter mit Schritt 2.
+Oder von Hand:
 
-1. HACS → ⋮ → **Benutzerdefinierte Repositories** →
-   `https://github.com/gojux/SLEMS` eintragen, Typ **Integration**.
+1. Marktplatz: **Einstellungen → Marktplatz**, das benutzerdefinierte
+   Repository `https://github.com/gojux/SLEMS` hinzufügen, Typ
+   **Integration**. Benutzerdefinierte Repositories brauchen eine Verbindung
+   des Marktplatzes mit GitHub; er fragt danach.
+
+   HACS (bis Home Assistant 2026.10): HACS → ⋮ → **Benutzerdefinierte
+   Repositories** → `https://github.com/gojux/SLEMS` eintragen, Typ
+   **Integration**.
 2. **SLEMS** installieren und Home Assistant neu starten.
 
 ### Manuell

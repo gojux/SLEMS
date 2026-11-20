@@ -901,3 +901,15 @@ def test_charging_now_is_planned_up_to_its_state_of_charge() -> None:
     snapshot.consumers["wallbox"] = ConsumerState(power_w=0.0, plugged=False, vehicle_soc_pct=50.0)
     SlemsCoordinator._target_states(coordinator, snapshot, None, None, None, now)
     assert coordinator.target_load == {}
+
+
+def test_vehicle_soc_of_zero_is_unknown() -> None:
+    from homeassistant.core import State
+
+    from custom_components.slems.consumers import vehicle_soc_pct
+
+    assert vehicle_soc_pct(State("sensor.evcc_garage_vehicle_soc", "35.2")) == 35.2
+    assert vehicle_soc_pct(State("sensor.evcc_garage_vehicle_soc", "100")) == 100
+    # evcc clears it to 0 while the next car's is not read yet.
+    assert vehicle_soc_pct(State("sensor.evcc_garage_vehicle_soc", "0")) is None
+    assert vehicle_soc_pct(State("sensor.evcc_garage_vehicle_soc", "unknown")) is None

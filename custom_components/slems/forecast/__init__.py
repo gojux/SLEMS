@@ -27,6 +27,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 import logging
+import math
 from typing import Literal
 
 from homeassistant.components.recorder import get_instance
@@ -58,6 +59,12 @@ NOWCAST_MIN_W = 200.0
 NOWCAST_MIN_RATIO = 1.3
 NOWCAST_HORIZON = timedelta(hours=24)
 MIN_KEPT_DAYS = 7
+# A mean above OUTLIER_FACTOR times the 90th percentile of its statistic (and
+# above OUTLIER_FLOOR_W) is a sensor fault, e.g. a register read as 0xFFFFFFFF
+# W for a minute. Real loads stay far below: a 22 kW wallbox in a house with
+# 500 W base load, or a farm with a 400 kW connection (grid level 6).
+OUTLIER_FACTOR = 100.0
+OUTLIER_FLOOR_W = 50_000.0
 
 
 @dataclass(frozen=True)
@@ -145,7 +152,8 @@ async def async_statistic_means(
     end: datetime,
     period: Literal["5minute", "hour"] = "hour",
 ) -> dict[str, dict[datetime, float]]:
-    """Means per period (default hourly; W is Wh per hour) of the given statistics."""
+    """Means per period (default hourly; W is Wh per hour) of the given
+    statistics, without implausible means (``without_outliers``)."""
     ids = {statistic_id for statistic_id in statistic_ids if statistic_id}
     if not ids:
         return {}
@@ -159,14 +167,32 @@ async def async_statistic_means(
         {"power": UnitOfPower.WATT, "temperature": UnitOfTemperature.CELSIUS},
         {"mean"},
     )
-    return {
-        statistic_id: {
+    result: dict[str, dict[datetime, float]] = {}
+    for statistic_id, statistic_rows in rows.items():
+        means = {
             dt_util.utc_from_timestamp(row["start"]): row["mean"]
             for row in statistic_rows
             if row.get("mean") is not None
         }
-        for statistic_id, statistic_rows in rows.items()
-    }
+        result[statistic_id] = kept = without_outliers(means)
+        if len(kept) < len(means):
+            _LOGGER.debug(
+                "%s: left out implausible means %s",
+                statistic_id,
+                {start.isoformat(): means[start] for start in means.keys() - kept.keys()},
+            )
+    return result
+
+
+def without_outliers(means: HourlySeries) -> dict[datetime, float]:
+    """The means without those far beyond the usual range of the statistic
+    (``OUTLIER_*``); a temperature never comes near the floor."""
+    values = sorted(abs(value) for value in means.values() if math.isfinite(value))
+    if not values:
+        return {}
+    p90 = values[int(0.9 * (len(values) - 1))]
+    limit = max(OUTLIER_FLOOR_W, OUTLIER_FACTOR * p90)
+    return {start: value for start, value in means.items() if abs(value) <= limit}
 
 
 def sum_series(series: Iterable[HourlySeries]) -> dict[datetime, float]:

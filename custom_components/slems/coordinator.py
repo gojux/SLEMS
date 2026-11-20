@@ -125,6 +125,7 @@ from .consumers import (
     temperature_c_of,
 )
 from .drivers import BatteryDriver, BatteryDriverError, BatteryTelemetry
+from .drivers.base import implausible_battery_power
 from .battery_distribution import (
     LEAVE_RAMP_S,
     BatteryDistributor,
@@ -2505,6 +2506,13 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             return None
         finally:
             battery.telemetry_read_s = round(time.monotonic() - read_start, 3)
+        if implausible_battery_power(telemetry, battery.driver.capabilities):
+            _LOGGER.debug(
+                "Battery %s: implausible power in %s, read as unavailable", battery.name, telemetry
+            )
+            if battery.unreadable_since is None:
+                battery.unreadable_since = now
+            return None
         battery.unreadable_since = None
         self._log_battery_state(battery, telemetry)
         if telemetry.extra.get("inverter_state") != "ota_upgrade":
