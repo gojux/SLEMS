@@ -72,7 +72,7 @@ See [Consumers](guide/consumers.md) for all settings.
 In the SLEMS dashboard in the **Settings** tab under **Consumers** › name of the
 heat pump:
 
-![SLEMS: card of the heat pump with the hot water release](images/heat_pump_hot_water_card_en.png)
+![SLEMS: Settings tab, consumer Heat pump with hot water release and hot water daily target](images/heat_pump_hot_water_card_en.png)
 
 **Hot water daily target**
 

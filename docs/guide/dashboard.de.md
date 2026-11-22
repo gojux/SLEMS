@@ -93,7 +93,7 @@ Zellausgleich und die Phase eines laufenden Ausgleichs.
 
 ## Reiter Verbraucher
 
-![Reiter Verbraucher: Wärmepumpe mit Warmwasser-Steuerung, Heizstab mit Einstellungen, zwei Wallboxen](../images/dashboard_consumers_de.png)
+![Reiter Verbraucher: Wärmepumpe mit Warmwasser-Steuerung, Heizstab, zwei Wallboxen](../images/dashboard_consumers_de.png)
 
 Eine Karte je Verbraucher mit den wichtigen Werten: aktuelle Leistung,
 Temperatur, **Freigabe geplant** (das geplante Fenster; sonst **Zeitfenster** mit
@@ -234,6 +234,8 @@ Lauf der simulierten Hardware. Es ist eine Schätzung mit Grenzen:
   Hardware sind nicht eingerechnet.
 
 ## Reiter Einstellungen
+
+![Reiter Einstellungen: Suche, Assistent, Navigation der Bereiche mit je einem Eintrag pro Batterie und Verbraucher, Bereich Betrieb mit den wichtigen Funktionen](../images/dashboard_settings_de.png)
 
 Alle Einstellwerte, direkt änderbar. Die Navigation links listet die Bereiche
 (**Betrieb**, **Laden aus PV**, **Netzanschluss**, **Entladen**, **Preise**,

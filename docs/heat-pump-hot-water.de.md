@@ -73,7 +73,7 @@ Siehe [Verbraucher](guide/consumers.de.md) für alle Einstellungen.
 Im SLEMS-Dashboard im Reiter **Einstellungen** unter **Verbraucher** › Name der
 Wärmepumpe:
 
-![SLEMS: Karte der Wärmepumpe mit Warmwasser-Freigabe](images/heat_pump_hot_water_card_de.png)
+![SLEMS: Reiter Einstellungen, Verbraucher Wärmepumpe mit Warmwasser-Freigabe und Warmwasser-Tagesziel](images/heat_pump_hot_water_card_de.png)
 
 **Warmwasser-Tagesziel**
 

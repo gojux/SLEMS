@@ -30,14 +30,16 @@ input_number:
     step: 50
     unit_of_measurement: W
     initial: 1500
-  # PV modules at the simulated Huawei hybrid inverter (dev/huawei_sim).
+  # PV modules at the simulated Huawei hybrid inverter (dev/huawei_sim). 0 while
+  # the inverter is no battery in SLEMS: its feed-in would be PV unknown to SLEMS
+  # and make the house consumption negative.
   sim_hybrid_pv_power:
     name: Simulated hybrid inverter PV power
     min: 0
     max: 10000
     step: 50
     unit_of_measurement: W
-    initial: 2500
+    initial: 0
   sim_heat_pump_power:
     name: Simulated heat pump power
     min: 0

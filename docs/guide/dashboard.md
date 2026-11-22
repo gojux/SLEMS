@@ -86,7 +86,7 @@ of a running one.
 
 ## Consumers tab
 
-![Consumers tab: heat pump with its hot water control, heating rod with its settings, two wallboxes](../images/dashboard_consumers_en.png)
+![Consumers tab: heat pump with its hot water control, heating rod, two wallboxes](../images/dashboard_consumers_en.png)
 
 One card per consumer with the important values: current power, temperature,
 **Release planned** (the planned window; otherwise **Time window** with the set time), **Energy needed**
@@ -215,6 +215,8 @@ simulated hardware. It is an estimate with limits:
   recorded energy; purchase costs and wear of the hardware are not included.
 
 ## Settings tab
+
+![Settings tab: search, assistant, navigation of the sections with one entry per battery and consumer, section Operation with the main functions](../images/dashboard_settings_en.png)
 
 All settings, editable directly. The navigation on the left lists the
 sections (**Operation**, **Charging from PV**, **Grid connection**,
