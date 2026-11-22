@@ -2346,16 +2346,34 @@ class SlemsPanel extends HTMLElement {
     return this._hass?.themes?.darkMode ? COLORS.dark : COLORS.light;
   }
 
+  /** SLEMS entities by "device|key" and "|key" (any device): [registry
+   * position, entity id] of the first. Built again only when Home Assistant
+   * hands over another entity registry (it keeps the object until it changes). */
+  _entityIndex() {
+    const entities = this._hass.entities || {};
+    if (this._entityIndexOf !== entities) {
+      const index = new Map();
+      let position = 0;
+      for (const e of Object.values(entities)) {
+        if (e.platform !== DOMAIN || !e.translation_key) continue;
+        const item = [position++, e.entity_id];
+        for (const name of [`${e.device_id}|${e.translation_key}`, `|${e.translation_key}`]) {
+          if (!index.has(name)) index.set(name, item);
+        }
+      }
+      this._entityIndexOf = entities;
+      this._entityIndexMap = index;
+    }
+    return this._entityIndexMap;
+  }
+
   _entityId(key, deviceId) {
     const device = deviceId ?? this._config?.system_device_id;
+    const index = this._entityIndex();
+    const prefix = device ? `${device}|` : "|";
     // Daily target and release of a heat pump's hot water are "hot_water_" keys.
-    const entry = Object.values(this._hass.entities || {}).find(
-      (e) =>
-        e.platform === DOMAIN &&
-        (e.translation_key === key || e.translation_key === `hot_water_${key}`) &&
-        (!device || e.device_id === device)
-    );
-    return entry?.entity_id;
+    const found = [index.get(prefix + key), index.get(`${prefix}hot_water_${key}`)].filter(Boolean);
+    return found.sort((a, b) => a[0] - b[0])[0]?.[1];
   }
 
   _state(key, deviceId) {
