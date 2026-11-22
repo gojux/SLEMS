@@ -934,6 +934,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
         self.batteries = batteries
         self.consumers = consumers
+        self._shut_down = False
         # Consumers whose control the user switched off (restored by their switch).
         self.consumer_control_disabled: set[str] = set()
         # Wallboxes charging now at full power (restored by their switch), and
@@ -5969,7 +5970,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
 
     async def async_shutdown(self) -> None:
-        """Save learned data and close all battery connections."""
+        """Save learned data and close all battery connections.
+
+        Runs once: the unload calls it before it returns, so the release is
+        awaited with its retries; Home Assistant calls it again afterwards (it
+        registers every coordinator of an entry for the unload), which must
+        not connect to the released batteries once more.
+        """
+        if self._shut_down:
+            return
+        self._shut_down = True
         self.controller.shutdown()
         await super().async_shutdown()
         await self.market_prices.async_stop()

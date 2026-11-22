@@ -947,3 +947,48 @@ def test_debug_log_names_soc_and_states_only_when_they_change(caplog) -> None:
         "Battery Venus: SoC 7.1 % (BMS register 12 %), inverter state standby, RS485 control True",
         "Battery Venus: SoC 7.0 % (BMS register 12 %), inverter state standby, RS485 control True",
     ]
+
+
+def test_shutdown_releases_and_closes_once(monkeypatch) -> None:
+    import asyncio
+
+    from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+
+    from custom_components.slems.const import OperatingMode
+    from custom_components.slems.coordinator import SlemsCoordinator
+
+    async def nothing(*_args) -> None:
+        return None
+
+    calls: list[str] = []
+
+    async def release(_batteries) -> None:
+        calls.append("release")
+
+    async def close() -> None:
+        calls.append("close")
+
+    monkeypatch.setattr(DataUpdateCoordinator, "async_shutdown", nothing)
+    store = SimpleNamespace(async_save=nothing)
+    coordinator = SlemsCoordinator.__new__(SlemsCoordinator)
+    coordinator.__dict__.update(
+        _shut_down=False,
+        controller=SimpleNamespace(shutdown=lambda: None, async_release=release),
+        market_prices=SimpleNamespace(async_stop=nothing),
+        _quarters_store=store,
+        _pv_forecast_log_store=store,
+        _store=store,
+        _quarters_to_store=lambda: {},
+        pv_forecast_log=SimpleNamespace(as_dict=lambda: {}),
+        _data_to_store=lambda: {},
+        settings=SimpleNamespace(operating_mode=OperatingMode.ACTIVE),
+        batteries=[SimpleNamespace(name="Venus", release_pending_since=None, driver=SimpleNamespace(close=close))],
+    )
+
+    async def unload() -> None:
+        # The unload of the entry, then Home Assistant's own call.
+        await coordinator.async_shutdown()
+        await coordinator.async_shutdown()
+
+    asyncio.run(unload())
+    assert calls == ["release", "close"]
