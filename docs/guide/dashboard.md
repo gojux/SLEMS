@@ -94,8 +94,9 @@ One card per consumer with the important values: current power, temperature,
 of the daily target and the release; for a wallbox the car. A heat pump shows
 its **Status** and today's forecast at the top (with controlled hot water
 **Heating today**: without the hot water energy, only with a single heat pump)
-and the values of the hot water in the section **Hot water control**. **Show
-settings** expands the card (the browser keeps the choice).
+and the values of the hot water in the section **Hot water control**. The
+settings of the consumers are in the **Settings** tab under **Consumers**; the
+card keeps only **Up to** while **Charge now** runs.
 
 The menu (⋮) next to the name, which a consumer's box in the energy flow opens
 as well, switches the control, starts or stops **Charge now**, learns the phase
@@ -215,12 +216,47 @@ simulated hardware. It is an estimate with limits:
 
 ## Settings tab
 
-All settings grouped and editable directly; while a value is learned (switch
-**… automatic**), the learned value is shown instead. The **Control** card also
-shows the smart meter update interval and the battery response time. Settings
-that have no effect right now (no tariff, no controllable battery, fewer than
-two for the change of batteries) follow at the end under **Currently not
-usable**: greyed out, locked and with what they need.
+All settings, editable directly. The navigation on the left lists the
+sections (**Operation**, **Charging from PV**, **Grid connection**,
+**Discharging**, **Prices**, **Batteries**, **Consumers**, **Control**); below
+**Batteries** each battery has an entry of its own with its settings, while
+**Batteries** itself holds what applies to all of them. Below **Consumers**
+each consumer with settings has an entry (control, release, daily target,
+battery support, role in the feed-in cap, learning); **Consumers** opens the
+first one. On phones the navigation is shown
+above the section. **Operation** also shows the **Main functions** as tiles:
+**Grid friendly charging**, **Feed-in cap**, **Night discharge**, **Import
+peak shaving** and, with market prices in the tariff, **Price control**, each
+on or off with its state now (e.g. the feed-in limit). Selecting a tile opens
+its settings.
+
+**Search settings** above the navigation finds settings by their name, their
+block or a word of their explanation (e.g. "buffer"): the hits are shown
+instead of the section, editable right there and each with the way to its
+section. Selecting a section or **Clear search** (or Esc) ends the search.
+
+Below a setting is the value in effect; while a value is learned (switch
+**… automatic**), the learned value is shown instead. The info icon beside a
+name opens its explanation. **Measured values** in **Control** shows the smart
+meter update interval and the battery response time. Settings that have no
+effect right now (no tariff, no controllable battery, fewer than two for the
+change of batteries) follow at the end under **Currently not usable**: greyed
+out, locked and with what they need.
+
+### Assistant
+
+Above the settings, **Assistant** suggests values: **Balanced** from basic
+rules, the tariff and what was observed in the recorded months, or with a goal
+(**Self-consumption**, **Save costs**, **Grid friendly**, **Battery first**,
+**Battery care**) that sets its own values on top. Each suggestion names its
+source (basic rule, tariff, goal, observation). A check mark beside a setting
+means it matches the suggestion; otherwise **Apply** sets the value and **Show
+in the simulation** tries it without changing anything; **Show all suggestions
+in the simulation** tries them together. Notes name what no setting changes, e.g.
+batteries too small for the PV surplus (**Limits of the plant**, with the
+simulation of other batteries), or why a goal leaves out a value. The
+navigation counts the open suggestions and notes per section. The choice is
+kept by the browser; **Off** hides the assistant.
 
 ## Using the dashboard
 

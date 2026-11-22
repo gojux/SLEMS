@@ -49,6 +49,8 @@ class BatteryCapabilities:
     # own modules be curtailed (feed-in cap). A hybrid inverter controlled at
     # its battery passes its PV on by itself.
     controls_output: bool = False
+    # Lowest state of charge the battery discharges to by itself (%); None: unknown.
+    min_soc_pct: float | None = None
 
 
 @dataclass

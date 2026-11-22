@@ -64,6 +64,86 @@ const STRINGS = {
     flowView: "View of the energy flow",
     flowSum: "Summed",
     flowDevices: "By device",
+    capacityNotLearned: "Not learned yet; the configured capacity applies.",
+    nightBuffer: "Keeps {value} safety buffer for the next day, set in",
+    mainFunctions: "Main functions",
+    settingsSearch: "Search settings",
+    settingsSearchClear: "Clear search",
+    settingsSearchHits: "Results: {n}",
+    settingsSearchNone: "No setting found",
+    batteriesAll: "All batteries",
+    featureOn: "On",
+    featureOff: "Off",
+    featureFeedInLimit: "Feed-in limit: {value}",
+    featureLimit: "Limit: {value}",
+    featureNight: "Tonight {power}, down to {soc}",
+    featureNightTarget: "Discharges down to {soc}",
+    capacityLearnedUnused: "Learned: {value}, not used",
+    minPowerInEffect: "In effect: charging from {charge}, discharging from {discharge}",
+    minPowerNone: "any power",
+    minPowerNotLearned: "The losses at small power are not learned yet; until then no threshold applies.",
+    assistantSuggest: "Suggestion: {value}",
+    assistantOn: "on",
+    assistantOff: "off",
+    assistantApply: "Apply",
+    assistantSimulate: "Show in the simulation",
+    assistantSimulateAll: "Show all suggestions in the simulation ({n})",
+    assistantOpen: "{n} suggestions or notes in this section",
+    assistantMatches: "Matches the suggestion",
+    assistantMonth: "last month",
+    assistantMonths: "last {n} months",
+    assistantLimits: "Limits of the plant",
+    assistantLimitsIntro: "No setting changes these; the simulation shows what other batteries would have changed in the recorded months.",
+    assistantHardware: "Show in the simulation",
+    assistantNotes: {
+      capacity_pv: "Batteries full on {days} of {of} days and still on average {kwh} fed in: more capacity would store it.",
+      capacity_night: "Batteries empty on {days} of {of} days with on average {kwh} imported meanwhile: more capacity would cover it.",
+      charge_power: "Charging at full power and still feeding in for {hours} h: up to {kw} charge power would have taken it.",
+      discharge_power: "Discharging at full power and still importing for {hours} h: up to {kw} discharge power would have covered it.",
+      price_spread: "Not due to the setting: the price differences of the tariff hardly cover losses and wear (backtest {months}: about {saving}/month).",
+      goal_no_export: "Not suggested for the goal: **Maximum grid export while discharging** is 0 W, nothing would be fed in from the batteries.",
+    },
+    assistantLabel: "Assistant",
+    assistantModeOff: "Off",
+    assistantModeBalanced: "Balanced",
+    assistantOffHint: "The assistant suggests values for the settings, from the tariff, the plant and what was observed.",
+    assistantBalancedHint: "Basic rules, tariff and observations, without a particular focus.",
+    assistantGoals: {
+      self_consumption: "Self-consumption",
+      costs: "Save costs",
+      grid: "Grid friendly",
+      battery_first: "Battery first",
+      battery_care: "Battery care",
+    },
+    assistantGoalHints: {
+      self_consumption: "As much of your own PV energy used in the house as possible, no trading with the grid.",
+      costs: "Energy costs as low as possible; uses what the tariff allows.",
+      grid: "Relieves the grid: noon peaks into the batteries, feed-in at night, import peaks capped.",
+      battery_first: "The batteries charge first and are full early, with a reserve e.g. for backup power or uncertain forecasts.",
+      battery_care: "Fewer cycles, less time at a high state of charge and at high temperatures.",
+    },
+    assistantSources: {
+      goal: "Goal: {goal}",
+      auto: "Basic rule",
+      full_charge: "Basic rule",
+      learned_capacity: "Basic rule: capacity learned",
+      device_min_soc: "Device: discharges only down to {pct}",
+      export_cap: "Observed: feed-in capped at {kw} on {days} of {of} days",
+      pv_peak: "Observed: PV up to {kw} (hourly mean)",
+      hot: "Observed: {name} {hours} h at {temp} or more",
+      friendly_short: "Observed: not full on {days} of {of} days although energy was fed in (on average {kwh} missing)",
+      not_full: "Observed: {name} not full for {days} days",
+      never_full: "Observed: {name} never full since recorded",
+      dynamic: "Tariff: dynamic",
+      country: "Country: {country}",
+      import_fixed: "Tariff: fixed import price",
+      export_fixed: "Tariff: feed-in credit not by market price",
+      power_price: "Tariff: power price",
+      negative_zero: "Tariff: no credit at negative prices",
+      price_backtest: "Observed ({months}): saves about {saving}/month",
+      peak_backtest: "Observed ({months}): saves about {saving}/month, limit {limit}",
+    },
+    inEffect: "In effect: {value} ({how})",
     deviceOutput: "Output",
     deviceInput: "Input",
     today: "Today",
@@ -217,6 +297,7 @@ const STRINGS = {
       battery: "Needs a controllable battery.",
       anyBattery: "Needs a battery.",
       batteries: "Needs at least two controllable batteries.",
+      pv: "Needs PV: a PV power (gear of the integration, PV & forecast) or a battery with its own PV modules.",
     },
     release: "Release",
     hotWaterRelease: "Hot water release",
@@ -242,6 +323,8 @@ const STRINGS = {
     targetSection: "Daily target",
     hotWaterTargetSection: "Hot water daily target",
     batterySupport: "Battery support",
+    consumerControl: "Control",
+    consumerLearning: "Learning",
     supportBudget: "budget {kwh}",
     supportFromGrid: "the batteries do not cover it",
     supportFromBattery: "the batteries cover it",
@@ -258,8 +341,6 @@ const STRINGS = {
     targetEarliestOn: "Earliest start",
     targetEarliest: "From",
     targetWaiting: "waits until {time}",
-    showSettings: "Show settings",
-    hideSettings: "Hide settings",
     targetMin: "Minimum temperature",
     targetMax: "Target temperature",
     targetMinAgain: "Minimum again within",
@@ -351,7 +432,6 @@ const STRINGS = {
       discharge_not_delivered: "no discharging",
       write_failed: "command not confirmed",
     },
-    batteryLimits: "Limits: {name}",
     feedInLimitReasons: {
       disabled: "off",
       no_forecast: "no forecast",
@@ -828,18 +908,35 @@ const STRINGS = {
     disableBatteryConfirm: "Disable",
     groups: {
       mode: "Operation",
-      control: "Control",
       priority: "Battery priority and grid targets",
-      batteries: "Batteries",
       temperature: "Temperature charge limit",
       feedInCap: "Feed-in cap",
       gridFriendly: "Grid friendly charging",
-      reserve: "Morning reserve",
       night: "Night discharge",
       peak: "Import peak shaving",
       rotation: "Several batteries",
       fullCharge: "Regular full charge",
       price: "Prices",
+      pvPriority: "Battery priority and secured charge",
+      dischargeExport: "Export while discharging",
+      nightReserve: "Night discharge and morning reserve",
+      priceControl: "Price control",
+      gridCharge: "Charging from the grid",
+      batteryExport: "Discharging into the grid",
+      communication: "Communication",
+      gain: "Gain",
+      timing: "Interval and averaging",
+      gridTargets: "Grid targets",
+      measured: "Measured values",
+    },
+    clusters: {
+      operation: "Operation",
+      pvCharging: "Charging from PV",
+      gridConnection: "Grid connection",
+      discharging: "Discharging",
+      prices: "Prices",
+      batteries: "Batteries",
+      control: "Control",
     },
   },
   de: {
@@ -862,6 +959,86 @@ const STRINGS = {
     flowView: "Ansicht des Energieflusses",
     flowSum: "Summiert",
     flowDevices: "Nach Geräten",
+    capacityNotLearned: "Noch nicht gelernt; es gilt die eingestellte Kapazität.",
+    nightBuffer: "Behält {value} Sicherheitspuffer für den nächsten Tag zurück, einstellbar in",
+    mainFunctions: "Wichtige Funktionen",
+    settingsSearch: "Einstellungen durchsuchen",
+    settingsSearchClear: "Suche leeren",
+    settingsSearchHits: "Treffer: {n}",
+    settingsSearchNone: "Keine Einstellung gefunden",
+    batteriesAll: "Alle Batterien",
+    featureOn: "An",
+    featureOff: "Aus",
+    featureFeedInLimit: "Einspeisegrenze: {value}",
+    featureLimit: "Grenze: {value}",
+    featureNight: "Heute Nacht {power}, bis {soc}",
+    featureNightTarget: "Entlädt bis {soc}",
+    capacityLearnedUnused: "Gelernt: {value}, nicht verwendet",
+    minPowerInEffect: "Wirksam: Laden ab {charge}, Entladen ab {discharge}",
+    minPowerNone: "jeder Leistung",
+    minPowerNotLearned: "Die Verluste bei kleiner Leistung sind noch nicht gelernt; bis dahin gilt keine Schwelle.",
+    assistantSuggest: "Vorschlag: {value}",
+    assistantOn: "an",
+    assistantOff: "aus",
+    assistantApply: "Übernehmen",
+    assistantSimulate: "Im Simulator zeigen",
+    assistantSimulateAll: "Alle Vorschläge im Simulator zeigen ({n})",
+    assistantOpen: "{n} Vorschläge oder Hinweise in diesem Bereich",
+    assistantMatches: "Passt zum Vorschlag",
+    assistantMonth: "letzter Monat",
+    assistantMonths: "letzte {n} Monate",
+    assistantLimits: "Grenzen der Anlage",
+    assistantLimitsIntro: "Daran ändert keine Einstellung etwas; die Simulation zeigt, was andere Batterien in den aufgezeichneten Monaten geändert hätten.",
+    assistantHardware: "Im Simulator zeigen",
+    assistantNotes: {
+      capacity_pv: "Batterien an {days} von {of} Tagen voll und trotzdem im Schnitt {kwh} eingespeist: Mehr Kapazität würde das speichern.",
+      capacity_night: "Batterien an {days} von {of} Tagen leer, währenddessen im Schnitt {kwh} Netzbezug: Mehr Kapazität würde das decken.",
+      charge_power: "{hours} h mit voller Leistung geladen und trotzdem eingespeist: Bis zu {kw} Ladeleistung hätten es aufgenommen.",
+      discharge_power: "{hours} h mit voller Leistung entladen und trotzdem Netzbezug: Bis zu {kw} Entladeleistung hätten es gedeckt.",
+      price_spread: "Liegt nicht an der Einstellung: Die Preisunterschiede des Tarifs decken Verluste und Verschleiß kaum (Backtest {months}: ca. {saving}/Monat).",
+      goal_no_export: "Für das Ziel nicht vorgeschlagen: **Maximale Einspeisung beim Entladen** ist 0 W, aus den Batterien würde nichts eingespeist.",
+    },
+    assistantLabel: "Assistent",
+    assistantModeOff: "Aus",
+    assistantModeBalanced: "Ausgewogen",
+    assistantOffHint: "Der Assistent schlägt Werte für die Einstellungen vor, aus Tarif, Anlage und Beobachtungen.",
+    assistantBalancedHint: "Grundregeln, Tarif und Beobachtungen, ohne besonderen Schwerpunkt.",
+    assistantGoals: {
+      self_consumption: "Eigenverbrauch",
+      costs: "Kosten sparen",
+      grid: "Netzdienlich",
+      battery_first: "Batterie zuerst",
+      battery_care: "Batterie schonen",
+    },
+    assistantGoalHints: {
+      self_consumption: "Möglichst viel eigener PV-Strom im Haus, kein Handel mit dem Netz.",
+      costs: "Möglichst niedrige Stromkosten; nutzt, was der Tarif erlaubt.",
+      grid: "Entlastet das Netz: Mittagsspitzen in die Batterien, nachts einspeisen, Bezugsspitzen abfangen.",
+      battery_first: "Die Batterien laden zuerst und sind früh voll, mit Reserve z. B. für Notstrom oder unsichere Prognosen.",
+      battery_care: "Weniger Zyklen, weniger Zeit bei hohem Ladezustand und hoher Temperatur.",
+    },
+    assistantSources: {
+      goal: "Ziel: {goal}",
+      auto: "Grundregel",
+      full_charge: "Grundregel",
+      learned_capacity: "Grundregel: Kapazität gelernt",
+      device_min_soc: "Gerät: entlädt nur bis {pct}",
+      export_cap: "Beobachtung: Einspeisung an {days} von {of} Tagen bei {kw} gedeckelt",
+      pv_peak: "Beobachtung: PV bis {kw} gemessen (Stundenmittel)",
+      hot: "Beobachtung: {name} {hours} h bei {temp} oder mehr",
+      friendly_short: "Beobachtung: an {days} von {of} Tagen nicht voll, obwohl eingespeist wurde (fehlten im Schnitt {kwh})",
+      not_full: "Beobachtung: {name} seit {days} Tagen nicht voll",
+      never_full: "Beobachtung: {name} seit der Aufzeichnung nie voll",
+      dynamic: "Tarif: dynamisch",
+      country: "Land: {country}",
+      import_fixed: "Tarif: fester Bezugspreis",
+      export_fixed: "Tarif: Einspeisung nicht nach Börsenpreis",
+      power_price: "Tarif: Leistungspreis",
+      negative_zero: "Tarif: keine Vergütung bei negativen Preisen",
+      price_backtest: "Beobachtung ({months}): spart ca. {saving}/Monat",
+      peak_backtest: "Beobachtung ({months}): spart ca. {saving}/Monat, Grenze {limit}",
+    },
+    inEffect: "Wirksam: {value} ({how})",
     deviceOutput: "Abgabe",
     deviceInput: "Aufnahme",
     today: "Heute",
@@ -1015,6 +1192,7 @@ const STRINGS = {
       battery: "Braucht eine steuerbare Batterie.",
       anyBattery: "Braucht eine Batterie.",
       batteries: "Braucht mindestens zwei steuerbare Batterien.",
+      pv: "Braucht PV: eine PV-Leistung (Zahnrad der Integration, PV & Prognose) oder eine Batterie mit eigenen PV-Modulen.",
     },
     release: "Freigabe",
     hotWaterRelease: "Warmwasser-Freigabe",
@@ -1040,6 +1218,8 @@ const STRINGS = {
     targetSection: "Tagesziel",
     hotWaterTargetSection: "Warmwasser-Tagesziel",
     batterySupport: "Batterie-Unterstützung",
+    consumerControl: "Steuerung",
+    consumerLearning: "Lernen",
     supportBudget: "Spielraum {kwh}",
     supportFromGrid: "Batterie deckt ihn nicht",
     supportFromBattery: "Batterie deckt ihn",
@@ -1056,8 +1236,6 @@ const STRINGS = {
     targetEarliestOn: "Frühester Beginn",
     targetEarliest: "Ab",
     targetWaiting: "wartet bis {time}",
-    showSettings: "Einstellungen anzeigen",
-    hideSettings: "Einstellungen ausblenden",
     targetMin: "Mindesttemperatur",
     targetMax: "Zieltemperatur",
     targetMinAgain: "Minimum spätestens wieder nach",
@@ -1149,7 +1327,6 @@ const STRINGS = {
       discharge_not_delivered: "entlädt nicht",
       write_failed: "Befehl nicht bestätigt",
     },
-    batteryLimits: "Grenzen: {name}",
     feedInLimitReasons: {
       disabled: "aus",
       no_forecast: "keine Prognose",
@@ -1626,18 +1803,35 @@ const STRINGS = {
     disableBatteryConfirm: "Deaktivieren",
     groups: {
       mode: "Betrieb",
-      control: "Regelung",
       priority: "Batterievorrang und Netz-Zielwerte",
-      batteries: "Batterien",
       temperature: "Ladebegrenzung nach Temperatur",
       feedInCap: "Einspeisebegrenzung",
       gridFriendly: "Netzdienliches Laden",
-      reserve: "Morgenreserve",
       night: "Nachtentladung",
       peak: "Bezugsspitzen abfangen",
       rotation: "Mehrere Batterien",
       fullCharge: "Regelmäßige Vollladung",
       price: "Preise",
+      pvPriority: "Batterievorrang und gesicherte Ladung",
+      dischargeExport: "Einspeisung beim Entladen",
+      nightReserve: "Nachtentladung und Morgenreserve",
+      priceControl: "Preisbewusste Steuerung",
+      gridCharge: "Laden aus dem Netz",
+      batteryExport: "Entladen ins Netz",
+      communication: "Kommunikation",
+      gain: "Verstärkung",
+      timing: "Takt und Mittelung",
+      gridTargets: "Netz-Zielwerte",
+      measured: "Gemessene Werte",
+    },
+    clusters: {
+      operation: "Betrieb",
+      pvCharging: "Laden aus PV",
+      gridConnection: "Netzanschluss",
+      discharging: "Entladen",
+      prices: "Preise",
+      batteries: "Batterien",
+      control: "Regelung",
     },
   },
 };
@@ -1744,6 +1938,22 @@ const SETTINGS_NEED_BATTERY = [
   "full_charge_interval",
 ];
 const SETTINGS_NEED_ANY_BATTERY = ["communication_pause"];
+// Settings without effect without PV (PV power entities or batteries with own PV; PV_SETTINGS in assistant.py).
+const SETTINGS_NEED_PV = [
+  "grid_friendly_charging",
+  "grid_friendly_buffer_auto",
+  "grid_friendly_buffer",
+  "charge_secured_buffer_auto",
+  "charge_secured_buffer",
+  "battery_priority_soc",
+  "battery_share_when_secured",
+  "feed_in_cap",
+  "pv_peak_power",
+  "feed_in_cap_limit",
+  "feed_in_cap_auto_buffer",
+  "feed_in_cap_buffer",
+  "night_discharge",
+];
 const SETTINGS_NEED_BATTERIES = ["rotation_soc_threshold", "rotation_min_interval", "rotation_ramp_rate", "rotation_ramp_max"];
 
 // Power from which a consumer counts as running (RUNNING_W in consumer_targets.py).
@@ -1754,82 +1964,75 @@ const FULL_SOC_PCT = 99;
 // A battery not full for longer than this is named in the overview.
 const FULL_CHARGE_NOTE_DAYS = 14;
 
-const SETTING_GROUPS = [
-  ["mode", ["operating_mode", "vacation"]],
+// Main functions shown as tiles on the first section of the settings tab:
+// switch key, section and block in SETTING_CLUSTERS.
+const SETTING_FEATURES = [
+  ["grid_friendly_charging", "pvCharging", "gridFriendly"],
+  ["feed_in_cap", "gridConnection", "feedInCap"],
+  ["night_discharge", "discharging", "nightReserve"],
+  ["peak_shaving", "discharging", "peak"],
+  ["price_control", "prices", "priceControl"],
+];
+
+// Settings tab: sections (clusters) in the navigation, each with blocks of settings.
+const SETTING_CLUSTERS = [
+  ["operation", [["mode", ["operating_mode", "vacation"]]]],
+  [
+    "pvCharging",
+    [
+      ["pvPriority", ["battery_priority_soc", "battery_share_when_secured", "charge_secured_buffer_auto", "charge_secured_buffer"]],
+      ["gridFriendly", ["grid_friendly_charging", "grid_friendly_buffer_auto", "grid_friendly_buffer"]],
+    ],
+  ],
+  [
+    "gridConnection",
+    [
+      ["feedInCap", ["feed_in_cap", "pv_peak_power", "feed_in_cap_limit", "feed_in_cap_auto_buffer", "feed_in_cap_buffer"]],
+      ["dischargeExport", ["discharge_max_grid_export"]],
+    ],
+  ],
+  [
+    "discharging",
+    [
+      ["nightReserve", ["night_discharge", "night_reserve_auto", "night_reserve", "night_reserve_coverage"]],
+      [
+        "peak",
+        [
+          "peak_shaving",
+          "peak_shaving_mode",
+          "peak_grid_charge",
+          "peak_shaving_grid_limit",
+          "peak_shaving_soc_threshold",
+          "peak_shaving_reserve",
+        ],
+      ],
+    ],
+  ],
+  [
+    "prices",
+    [
+      ["priceControl", ["price_control", "price_min_gain", "price_source", "market_prices"]],
+      ["gridCharge", ["grid_charge", "grid_charge_max_soc", "grid_charge_max_power", "grid_import_max"]],
+      ["batteryExport", ["battery_export"]],
+    ],
+  ],
+  [
+    "batteries",
+    [
+      ["communication", ["communication_pause"]],
+      ["temperature", ["temperature_limit", "temperature_high", "temperature_band", "temperature_floor", "temperature_low"]],
+      ["fullCharge", ["regular_full_charge", "full_charge_interval"]],
+      ["rotation", ["rotation_soc_threshold", "rotation_min_interval", "rotation_ramp_rate", "rotation_ramp_max"]],
+    ],
+  ],
   [
     "control",
     [
-      "auto_gain",
-      "control_gain",
-      "timing_auto",
-      "control_interval",
-      "surplus_average_window",
-      // Learned values (read only).
-      "meter_interval",
-      "battery_response_time",
+      ["gain", ["auto_gain", "control_gain"]],
+      ["timing", ["timing_auto", "control_interval", "surplus_average_window"]],
+      ["gridTargets", ["grid_targets_auto", "grid_targets_no_import", "charge_grid_target", "discharge_grid_target"]],
+      ["measured", ["meter_interval", "battery_response_time"]],
     ],
-  ],
-  [
-    "priority",
-    [
-      "battery_priority_soc",
-      "battery_share_when_secured",
-      "charge_secured_buffer_auto",
-      "charge_secured_buffer",
-      "grid_targets_auto",
-      "grid_targets_no_import",
-      "charge_grid_target",
-      "discharge_grid_target",
-      "discharge_max_grid_export",
-    ],
-  ],
-  [
-    "feedInCap",
-    [
-      "feed_in_cap",
-      "pv_peak_power",
-      "feed_in_cap_limit",
-      "feed_in_cap_auto_buffer",
-      "feed_in_cap_buffer",
-    ],
-  ],
-  ["gridFriendly", ["grid_friendly_charging", "grid_friendly_buffer_auto", "grid_friendly_buffer"]],
-  // Used by the night discharge and the battery support of the consumers.
-  ["reserve", ["night_reserve_auto", "night_reserve", "night_reserve_coverage"]],
-  ["night", ["night_discharge"]],
-  // Needs a tariff (SLEMS integration page); market prices only with consent.
-  [
-    "price",
-    [
-      "price_control",
-      "price_min_gain",
-      "grid_charge",
-      "grid_charge_max_soc",
-      "grid_charge_max_power",
-      "grid_import_max",
-      "battery_export",
-      "market_prices",
-      "price_source",
-    ],
-  ],
-  [
-    "peak",
-    [
-      "peak_shaving",
-      "peak_shaving_mode",
-      "peak_grid_charge",
-      // Read only while calculated (shows the value in effect).
-      "peak_shaving_grid_limit",
-      "peak_shaving_soc_threshold",
-      "peak_shaving_reserve",
-    ],
-  ],
-  ["batteries", ["communication_pause"]],
-  ["temperature", ["temperature_limit", "temperature_high", "temperature_band", "temperature_floor", "temperature_low"]],
-  ["fullCharge", ["regular_full_charge", "full_charge_interval"]],
-  [
-    "rotation",
-    ["rotation_soc_threshold", "rotation_min_interval", "rotation_ramp_rate", "rotation_ramp_max"],
   ],
 ];
 
@@ -1892,8 +2095,6 @@ function greyed(color, grey) {
 // Top cell delta below which balancing is hardly needed (green status limit).
 const BALANCING_NORMAL_MV = 200;
 const HIDDEN_SERIES_KEY = "slems-hidden-series";
-// localStorage key of the consumer cards shown with all their settings.
-const EXPANDED_CONSUMERS_KEY = "slems-expanded-consumers";
 const SHOWN_SERIES_KEY = "slems-shown-series";
 // localStorage key of the limit lines switched on or off in the legend (key -> shown).
 const LIMIT_CHOICE_KEY = "slems-limit-series";
@@ -1918,6 +2119,14 @@ const TARIFF_SUM_KEY = "slems-tariff-sum";
 const SIM_VIEW_KEY = "slems-sim-view";
 // localStorage key: "devices" shows the energy flow by device (see _flowNodes).
 const FLOW_VIEW_KEY = "slems-flow-view";
+// localStorage key of the section shown in the settings tab.
+const SETTINGS_SECTION_KEY = "slems-settings-section";
+// The suggestions of the settings assistant are asked for again after this time (ms).
+const ASSISTANT_REFRESH_MS = 5 * 60 * 1000;
+// Goals of the settings assistant (GOALS in assistant.py) and the localStorage key
+// of the assistant's choice: "off", "balanced" (no goal) or a goal.
+const ASSISTANT_GOALS = ["self_consumption", "costs", "grid", "battery_first", "battery_care"];
+const ASSISTANT_GOAL_KEY = "slems-assistant-goal";
 // Menu id of a flow box: this prefix and the device of its consumer.
 const FLOW_MENU_PREFIX = "flow-";
 // Series hidden until switched on in the legend.
@@ -2032,18 +2241,27 @@ class SlemsPanel extends HTMLElement {
     } catch (err) {
       // Not stored: the default applies.
     }
-    // Consumer cards shown with all their settings (kept in the browser).
-    this._expandedConsumers = new Set();
-    try {
-      this._expandedConsumers = new Set(JSON.parse(localStorage.getItem(EXPANDED_CONSUMERS_KEY) || "[]"));
-    } catch (err) {
-      // Storage not available: all cards collapsed.
-    }
     this._flowView = "sum";
     try {
       if (localStorage.getItem(FLOW_VIEW_KEY) === "devices") this._flowView = "devices";
     } catch (err) {
       // Storage not available: the summed view.
+    }
+    this._settingsSection = null;
+    // Text in the search field of the settings tab (not remembered).
+    this._settingsSearch = "";
+    // Suggestions of the settings assistant (slems/assistant), asked for while shown.
+    this._assistant = { result: null, at: 0, pending: false, goal: "" };
+    // Assistant switched on and its goal ("": balanced, none); only remembered by the browser.
+    this._assistantOn = false;
+    this._assistantGoal = "";
+    try {
+      this._settingsSection = localStorage.getItem(SETTINGS_SECTION_KEY);
+      const mode = localStorage.getItem(ASSISTANT_GOAL_KEY);
+      this._assistantOn = ASSISTANT_GOALS.includes(mode) || mode === "balanced";
+      if (ASSISTANT_GOALS.includes(mode)) this._assistantGoal = mode;
+    } catch (err) {
+      // Storage not available: the first section, the assistant off.
     }
     this._chartDay = "today";
     // Settings whose explanation is shown (translation keys).
@@ -2547,7 +2765,30 @@ class SlemsPanel extends HTMLElement {
   }
 
   /** Keyboard in the ⋮ menu: arrows move, Escape closes it and returns to its button. */
+  /** Empties the search field of the settings tab; ``render`` false when the caller draws anyway. */
+  _clearSettingsSearch(render = true) {
+    this._settingsSearch = "";
+    const field = this.shadowRoot.querySelector("[data-action='settings-search']");
+    if (field) field.value = "";
+    if (render) {
+      this._render();
+      field?.focus();
+    }
+  }
+
+  /** Typing in the search field of the settings tab shows the hits right away. */
+  _onInput(event) {
+    if (event.target.dataset?.action !== "settings-search") return;
+    this._settingsSearch = event.target.value;
+    this._render();
+  }
+
   _onMenuKey(event) {
+    if (event.key === "Escape" && event.target.dataset?.action === "settings-search") {
+      event.preventDefault();
+      this._clearSettingsSearch();
+      return;
+    }
     // A flow box with a menu is no button element.
     if ((event.key === "Enter" || event.key === " ") && event.target.matches?.(".fbox[data-action='battery-menu']")) {
       event.preventDefault();
@@ -3234,6 +3475,7 @@ class SlemsPanel extends HTMLElement {
     content.addEventListener("click", (event) => this._onClick(event));
     content.addEventListener("keydown", (event) => this._onMenuKey(event));
     content.addEventListener("change", (event) => this._onChange(event));
+    content.addEventListener("input", (event) => this._onInput(event));
     // The mouse wheel over a focused number field would change and save its
     // value while scrolling the page; the field loses the focus instead.
     content.addEventListener(
@@ -3304,6 +3546,8 @@ class SlemsPanel extends HTMLElement {
       content.dataset.tab = this._tab;
       content.innerHTML = this._layout();
       this._sections = { tabs: this._sections.tabs };
+      // A new visit of the settings tab starts without search.
+      this._settingsSearch = "";
     }
     if (this._tab === "overview") this._renderOverview();
     else if (this._tab === "batteries") this._renderBatteries();
@@ -3338,6 +3582,13 @@ class SlemsPanel extends HTMLElement {
           </div>
           <section class="card sim-side"><div id="simintro"></div><div id="simcontrols"></div></section>
         </div>`;
+    }
+    if (this._tab === "settings") {
+      // The search field is drawn once: typing never redraws it.
+      // In the columns of the navigation: search and assistant above the section.
+      return `<div class="settings-top"><div></div><div class="settings-top-main">
+        <div id="settingssearch" class="settings-search"></div><div id="settingsview" class="settings-view"></div></div></div>
+        <div id="settings-list"></div>`;
     }
     return `<div id="${this._tab}-list" class="grid cards"></div>`;
   }
@@ -4875,7 +5126,18 @@ class SlemsPanel extends HTMLElement {
       sim.result = result;
       if (!sim.form) {
         sim.form = this._simBaseForm(result.base);
-        this._hwSchedule();
+        if (sim.pending || sim.hardware) {
+          // A suggestion or a plant limit of the settings assistant to show.
+          Object.assign(sim.form.settings, sim.pending || {});
+          for (const [field, added] of Object.entries(sim.hardware || {})) {
+            sim.form.battery[field] = (Number(sim.form.battery[field]) || 0) + added;
+          }
+          sim.pending = null;
+          sim.hardware = null;
+          this._simSchedule();
+        } else {
+          this._hwSchedule();
+        }
       }
     } catch (err) {
       console.error("SLEMS: simulation failed", err);
@@ -5696,19 +5958,6 @@ class SlemsPanel extends HTMLElement {
           const attrs = planned?.attributes || {};
           const control = this._state("consumer_control", c.device_id);
           const hotWater = this._hotWater(c);
-          // Only while the feed-in cap is on.
-          const capMode = this._state("cap_mode", c.device_id);
-          const learning = this._state("consumer_learning", c.device_id);
-          const learnedPower =
-            this._state("learned_power", c.device_id) || this._state("learned_max_power", c.device_id);
-          const settings = [learning, learning?.state === "on" ? learnedPower : null].filter(Boolean);
-          const capOff = control?.state === "off";
-          const storage = this._state("storage_capacity", c.device_id);
-          const capSection = capMode && this._capState()
-            ? `<div class="settings card-setting"><h3 class="card-subheading${capOff ? " disabled" : ""}">${t.capSection}</h3>${this._control(
-                capMode, { label: t.capRole, disabledNote: capOff ? t.onlyWithControl : null }
-              )}${storage ? `<dl>${this._row(t.storageCapacity, escapeHtml(this._storageText(storage)), storage.entity_id)}</dl>` : ""}</div>`
-            : "";
           const chips = [
             !c.controllable ? t.notControlled : "",
             control?.state === "off" ? t.controlOff : "",
@@ -5724,9 +5973,6 @@ class SlemsPanel extends HTMLElement {
             .filter(Boolean)
             .map((chip) => `<span class="chip">${chip}</span>`)
             .join("");
-          // Collapsed: the important values; expanded: all settings too.
-          const expanded = this._expandedConsumers.has(c.id);
-          const support = this._state("battery_support", c.device_id);
           // The car at a wallbox, and up to where it charges now.
           const vehicle = this._vehicleDetail(c);
           const vehicleRow = vehicle ? this._row(t.vehicle, escapeHtml(vehicle.text), planned?.entity_id) : "";
@@ -5734,15 +5980,6 @@ class SlemsPanel extends HTMLElement {
           const chargeNowSoc = chargeNow?.state === "on" ? this._state("charge_now_soc", c.device_id) : null;
           const chargeNowSection = chargeNowSoc
             ? `<div class="settings card-setting">${this._control(chargeNowSoc, { label: t.chargeNowUntil })}</div>`
-            : "";
-          const details = expanded
-            ? `${
-              settings.length ? `<div class="settings card-setting">${settings.map((st) => this._control(st)).join("")}</div>` : ""
-            }${support ? `<div class="settings card-setting">${this._control(support, { label: t.batterySupport })}</div>` : ""}${capSection}${c.controllable ? this._releaseSection(c) + this._targetSection(c) : ""}`
-            : "";
-          const toggle = c.controllable || support
-            ? `<button class="link card-toggle" data-action="toggle-consumer" data-id="${c.id}" aria-expanded="${expanded}">
-                <ha-icon icon="${expanded ? "mdi:chevron-up" : "mdi:chevron-down"}"></ha-icon>${expanded ? t.hideSettings : t.showSettings}</button>`
             : "";
           // Switched on for days by SLEMS but no power: probably off or broken.
           const noPower = attrs.no_power_days
@@ -5771,7 +6008,7 @@ class SlemsPanel extends HTMLElement {
               control && hotWater
                 ? `<div class="settings card-setting">${this._control(control, { label: t.hotWaterControl })}${targetRows ? `<dl class="section-values">${targetRows}</dl>` : ""}</div>`
                 : ""
-            }${chargeNowSection}${details}${toggle}</section>`;
+            }${chargeNowSection}</section>`;
         })
         .join("")
     );
@@ -5911,7 +6148,6 @@ class SlemsPanel extends HTMLElement {
     return parts.join(" · ");
   }
 
-  /** Settings of a consumer's daily target (only the ones of its kind). */
   /** Whether the consumer's daily target is the hot water of a heat pump. */
   _hotWater(c) {
     const id = this._entityId("target_type", c.device_id);
@@ -5922,7 +6158,7 @@ class SlemsPanel extends HTMLElement {
   _releaseSection(c) {
     const t = this._t;
     const window = this._state("release_window", c.device_id);
-    if (!window) return "";
+    if (!window) return null;
     const controls = [[window, t.releaseWindow]];
     const type = this._state("target_type", c.device_id)?.state;
     const source = this._state("target_source", c.device_id)?.state;
@@ -5930,18 +6166,16 @@ class SlemsPanel extends HTMLElement {
       controls.push([this._state("window_before_forced", c.device_id), t.windowBeforeForced]);
     }
     if (type && type !== "none") controls.push([this._state("surplus_window", c.device_id), t.surplusWindow]);
-    const heading = this._hotWater(c) ? t.hotWaterReleaseSection : t.releaseSection;
-    return `<div class="settings card-setting"><h3 class="card-subheading">${heading}</h3>${controls
-      .filter(([st]) => st)
-      .map(([st, label]) => this._control(st, { label }))
-      .join("")}</div>`;
+    const title = this._hotWater(c) ? t.hotWaterReleaseSection : t.releaseSection;
+    return { card: "release", title, rows: controls.map(([st, label]) => [st, { label }]) };
   }
 
+  /** Settings of a consumer's daily target (only the ones of its kind). */
   _targetSection(c) {
     const t = this._t;
     const s = (key) => this._state(key, c.device_id);
     const kind = s("target_type");
-    if (!kind) return "";
+    if (!kind) return null;
     const type = kind.state;
     const controls = [[kind, t.targetKind]];
     if (type === "runtime" || type === "enabled") controls.push([s("target_hours"), t.targetHours]);
@@ -5969,11 +6203,58 @@ class SlemsPanel extends HTMLElement {
           type === "energy" ? t.targetNoFitEnergy : t.targetNoFit
         )}</span></div>`
       : "";
-    const heading = this._hotWater(c) ? t.hotWaterTargetSection : t.targetSection;
-    return `<div class="settings card-setting"><h3 class="card-subheading">${heading}</h3>${warning}${controls
-      .filter(([st]) => st)
-      .map(([st, label]) => this._control(st, { label }))
-      .join("")}</div>`;
+    const title = this._hotWater(c) ? t.hotWaterTargetSection : t.targetSection;
+    return { card: "target", title, note: warning, rows: controls.map(([st, label]) => [st, { label }]) };
+  }
+
+  /**
+   * The settings of a consumer in blocks for the settings tab: [{card, title,
+   * rows: [[state, options of _control]], note}], none without settings.
+   */
+  _consumerBlocks(c) {
+    const t = this._t;
+    const s = (key) => this._state(key, c.device_id);
+    const blocks = [];
+    const control = s("consumer_control");
+    // A heat pump: the switch controls only its hot water.
+    if (control) {
+      blocks.push({ card: "control", title: t.consumerControl, rows: [[control, { label: this._hotWater(c) ? t.hotWaterControl : null }]] });
+    }
+    if (c.controllable) blocks.push(this._releaseSection(c), this._targetSection(c));
+    const support = s("battery_support");
+    if (support) blocks.push({ card: "support", title: t.batterySupport, rows: [[support, { label: t.batterySupport }]] });
+    // Only while the feed-in cap is on.
+    const capMode = s("cap_mode");
+    if (capMode && this._capState()) {
+      const storage = s("storage_capacity");
+      blocks.push({
+        card: "cap",
+        title: t.capSection,
+        rows: [[capMode, { label: t.capRole, disabledNote: control?.state === "off" ? t.onlyWithControl : null }]],
+        note: "",
+        after: storage ? `<dl>${this._row(t.storageCapacity, escapeHtml(this._storageText(storage)), storage.entity_id)}</dl>` : "",
+      });
+    }
+    const learning = s("consumer_learning");
+    if (learning) {
+      const learnedPower = s("learned_power") || s("learned_max_power");
+      blocks.push({
+        card: "learning",
+        title: t.consumerLearning,
+        rows: [[learning, {}], ...(learning.state === "on" && learnedPower ? [[learnedPower, {}]] : [])],
+      });
+    }
+    return blocks
+      .filter(Boolean)
+      .map((block) => ({ ...block, rows: block.rows.filter(([st]) => st) }))
+      .filter((block) => block.rows.length);
+  }
+
+  /** A block of _consumerBlocks as in the other sections. */
+  _consumerBlockHtml(block) {
+    return `<div class="setting-block" data-card="${block.card}"><h3 class="block-title">${escapeHtml(block.title)}</h3>${
+      block.note || ""
+    }<div class="settings">${block.rows.map(([st, options]) => this._control(st, options)).join("")}</div>${block.after || ""}</div>`;
   }
 
   /** "2,5 / 4 h · bis 22:00 · erzwungen ab 19:30" or "43 °C · min. 40 °C · Ziel 55 °C". */
@@ -6070,55 +6351,270 @@ class SlemsPanel extends HTMLElement {
     if (SETTINGS_NEED_BATTERY.includes(key) && !controllable) needs.push("battery");
     if (SETTINGS_NEED_ANY_BATTERY.includes(key) && !batteries.length) needs.push("anyBattery");
     if (SETTINGS_NEED_BATTERIES.includes(key) && controllable < 2) needs.push("batteries");
+    if (SETTINGS_NEED_PV.includes(key) && !(this._config.pv_entities || []).length && !this._ownPvBatteries().length) {
+      needs.push("pv");
+    }
     return needs;
   }
 
+  /**
+   * The settings tab: the assistant on top, a navigation of the sections (below
+   * "batteries" one entry per battery) and the section shown.
+   */
   _renderSettings() {
     const t = this._t;
+    const on = this._assistantOn;
+    const mode = !on ? "off" : this._assistantGoal || "balanced";
+    const option = (key, label) => `<option value="${key}" ${key === mode ? "selected" : ""}>${escapeHtml(label)}</option>`;
+    const select = `<label class="assistant-goal">${escapeHtml(t.assistantLabel)}
+      <select data-action="assistant-goal" class="${on ? "active" : ""}">${option("off", t.assistantModeOff)}${option(
+        "balanced",
+        t.assistantModeBalanced
+      )}${ASSISTANT_GOALS.map((key) => option(key, t.assistantGoals[key])).join("")}</select></label>`;
+    const hint = !on ? t.assistantOffHint : this._assistantGoal ? t.assistantGoalHints[this._assistantGoal] : t.assistantBalancedHint;
+    const open = on ? Object.keys(this._simulableSuggestions()).length : 0;
+    // Always a line of its own (also with the assistant off), so nothing below moves.
+    this._setSection(
+      "settingsview",
+      `${select}<div class="assistant-info"><span class="muted">${escapeHtml(hint)}</span>${
+        open ? `<button class="link" data-action="assistant-sim-all">${escapeHtml(t.assistantSimulateAll.replace("{n}", open))}</button>` : ""
+      }</div>`
+    );
+    if (on) this._assistantFetch();
+    // Never changes: the field keeps what is typed (see _onInput).
+    this._setSection(
+      "settingssearch",
+      `<input type="search" data-action="settings-search" placeholder="${escapeHtml(t.settingsSearch)}" aria-label="${escapeHtml(
+        t.settingsSearch
+      )}" autocomplete="off"><button class="search-clear" data-action="settings-search-clear" aria-label="${escapeHtml(
+        t.settingsSearchClear
+      )}" title="${escapeHtml(t.settingsSearchClear)}"><ha-icon icon="mdi:close"></ha-icon></button>`
+    );
+    // Drawn again (e.g. another language): the field keeps the search.
+    const field = this.shadowRoot.querySelector("[data-action='settings-search']");
+    if (field && field.value !== this._settingsSearch) field.value = this._settingsSearch;
     const unavailable = [];
-    const groups = SETTING_GROUPS.map(([group, keys]) => {
-      const shown = keys
-        .filter((key) => !SETTING_SHOWN_WITH[key] || this._state(SETTING_SHOWN_WITH[key])?.state === "on")
-        .filter((key) => !SETTING_HIDDEN_WITH[key] || this._state(SETTING_HIDDEN_WITH[key])?.state !== "on")
-        .filter((key) => !SETTING_HIDDEN_IN[key] || !SETTING_HIDDEN_IN[key][1].includes(this._state(SETTING_HIDDEN_IN[key][0])?.state))
-        .filter((key) => !SETTING_SHOWN_WITH_VALUE[key] || this._number(this._state(SETTING_SHOWN_WITH_VALUE[key])) !== null)
-        .filter((key) => this._state(key));
-      const usable = shown.filter((key) => !this._settingNeeds(key).length);
-      const missing = shown.filter((key) => this._settingNeeds(key).length);
-      if (missing.length) {
-        const needs = [...new Set(missing.flatMap((key) => this._settingNeeds(key)))];
-        // Greyed out and locked; their hints stay readable.
-        const controls = missing.map((key) => this._control(this._state(key))).join("").replace(/<(input|select)\b/g, "<$1 disabled");
-        unavailable.push(`<section class="card unavailable"><h2>${t.groups[group]}</h2>
-          <p class="muted unavailable-note">${needs.map((need) => escapeHtml(t.settingNeeds[need])).join(" ")}</p>
-          <div class="settings">${controls}</div></section>`);
-      }
-      if (!usable.length) return "";
-      return `<section class="card"><h2>${t.groups[group]}</h2>
-          <div class="settings">${usable.map((key) => this._control(this._state(key))).join("")}</div>${
-            group === "priority"
-              ? this._exportNote()
-              : group === "peak"
-                ? this._peakNote()
-                : group === "feedInCap"
-                  ? this._capNote()
-                  : ""
-          }</section>`;
-    }).join("");
-    const batteryLimits = (this._config.batteries || [])
+    const batteryEntries = (this._config.batteries || [])
       .map((b) => {
-        const rows = BATTERY_SETTINGS.map((key) => this._state(key, b.device_id)).filter(Boolean);
-        if (!rows.length) return "";
-        return `<section class="card"><h2>${escapeHtml(t.batteryLimits.replace("{name}", b.name))}</h2>
-              <div class="settings">${rows.map((s) => this._control(s)).join("")}</div></section>`;
+        const rows = this._batteryRows(b);
+        if (!rows.length) return null;
+        const badge = this._clusterBadge("batteries", b.device_id);
+        return {
+          id: `battery:${b.device_id}`,
+          label: b.name,
+          sub: true,
+          badge,
+          heading: `<h2 class="cluster-heading">${escapeHtml(b.name)}${badge}</h2>`,
+          content: `<div class="settings">${rows.map((s) => this._control(s)).join("")}</div>`,
+        };
+      })
+      .filter(Boolean);
+    // One entry per consumer with settings; "consumers" itself opens the first.
+    const consumerEntries = (this._config.consumers || [])
+      .map((c) => {
+        const blocks = this._consumerBlocks(c);
+        if (!blocks.length) return null;
+        const badge = this._clusterBadge("consumers", c.device_id);
+        return {
+          id: `consumer:${c.device_id}`,
+          device: c.device_id,
+          label: c.name,
+          sub: true,
+          badge,
+          heading: `<h2 class="cluster-heading">${escapeHtml(c.name)}${badge}</h2>`,
+          content: blocks.map((block) => this._consumerBlockHtml(block)).join(""),
+        };
+      })
+      .filter(Boolean);
+    const consumersEntry = consumerEntries.length
+      ? {
+          ...consumerEntries[0],
+          id: "consumers",
+          target: consumerEntries[0].id,
+          label: t.consumers,
+          sub: false,
+          badge: this._badge(consumerEntries.reduce((sum, entry) => sum + this._openCount("consumers", entry.device), 0)),
+        }
+      : null;
+    const consumersAll = consumersEntry ? [consumersEntry, ...consumerEntries] : [];
+    const entries = SETTING_CLUSTERS.flatMap(([cluster, cards]) => {
+      let content = cards.map(([card, keys]) => this._settingCard(card, keys, unavailable)).join("");
+      if (cluster === "operation") content += this._featureTiles();
+      // The section "batteries" holds what applies to all batteries.
+      const badge = this._clusterBadge(cluster);
+      const entry = {
+        id: cluster,
+        label: t.clusters[cluster],
+        badge,
+        heading: `<h2 class="cluster-heading">${t.clusters[cluster]}${badge}</h2>`,
+        content,
+      };
+      return cluster === "batteries" ? [entry, ...batteryEntries, ...consumersAll] : [entry];
+    }).filter((entry) => entry.content);
+    const query = this._settingsSearch.trim().toLocaleLowerCase();
+    // While searching the hits take the place of the section.
+    const shown = query ? null : entries.find((entry) => entry.id === this._settingsSection) || entries[0];
+    const nav = entries
+      .map((entry) => {
+        const active = shown && entry.id === shown.id;
+        return `<button data-action="settings-section" data-section="${escapeHtml(entry.target || entry.id)}" class="${active ? "active" : ""}${
+          entry.sub ? " sub" : ""
+        }" aria-pressed="${active}">${escapeHtml(entry.label)}${entry.badge}</button>`;
       })
       .join("");
-    this._setSection(
-      "settings-list",
-      groups +
-        batteryLimits +
-        (unavailable.length ? `<h2 class="unavailable-heading">${t.unavailableSettings}</h2>${unavailable.join("")}` : "")
-    );
+    const html = `<div class="settings-nav-layout"><nav class="settings-nav">${nav}</nav>${
+      query
+        ? this._searchResults(query)
+        : shown
+          ? `<section class="card settings-cluster">${shown.heading}${shown.content}</section>`
+          : ""
+    }</div>`;
+    const rest =
+      unavailable.length && !query
+        ? `<div class="grid cards"><h2 class="unavailable-heading">${t.unavailableSettings}</h2>${unavailable.join("")}</div>`
+        : "";
+    this._setSection("settings-list", this._limitsHtml() + html + rest);
+  }
+
+  /** The settings of a battery shown; the manual minimum power only with the mode manual, the learned capacity with its switch. */
+  _batteryRows(battery) {
+    const manual = this._state("min_power_mode", battery.device_id)?.state === "manual";
+    return BATTERY_SETTINGS.filter((key) => (key !== "min_power" || manual) && key !== "learned_capacity")
+      .map((key) => this._state(key, battery.device_id))
+      .filter(Boolean);
+  }
+
+  /**
+   * Settings whose name or block title (first) or explanation contains ``query``,
+   * each editable with the way to its section.
+   */
+  _searchResults(query) {
+    const t = this._t;
+    const hits = [];
+    const consider = (stateObj, path, section, card, options = {}) => {
+      const key = this._hass.entities?.[stateObj.entity_id]?.translation_key;
+      const title = `${options.label ?? this._name(stateObj)} ${path}`.toLocaleLowerCase();
+      // The hot water entities of a heat pump share the hints of their daily target.
+      const hint = hintPlain(t.settingHints[key] ?? t.settingHints[key?.replace(/^hot_water_/, "")] ?? "").toLocaleLowerCase();
+      const rank = title.includes(query) ? 0 : hint.includes(query) ? 1 : null;
+      if (rank === null) return;
+      const needs = this._settingNeeds(key);
+      let control = this._control(stateObj, options);
+      // Greyed out and locked like at the end of the sections.
+      if (needs.length) {
+        control = `<div class="unavailable"><p class="muted unavailable-note">${needs
+          .map((need) => escapeHtml(t.settingNeeds[need]))
+          .join(" ")}</p>${control.replace(/<(input|select)\b/g, "<$1 disabled")}</div>`;
+      }
+      hits.push({ rank, path, section, card, control });
+    };
+    for (const [cluster, cards] of SETTING_CLUSTERS) {
+      // The section "batteries" holds what applies to all of them.
+      const name = cluster === "batteries" ? t.batteriesAll : t.clusters[cluster];
+      for (const [card, keys] of cards) {
+        for (const key of this._shownKeys(keys)) consider(this._state(key), `${name} · ${t.groups[card]}`, cluster, card);
+      }
+    }
+    for (const battery of this._config.batteries || []) {
+      for (const stateObj of this._batteryRows(battery)) consider(stateObj, battery.name, `battery:${battery.device_id}`, null);
+    }
+    for (const consumer of this._config.consumers || []) {
+      for (const block of this._consumerBlocks(consumer)) {
+        for (const [stateObj, options] of block.rows) {
+          consider(stateObj, `${consumer.name} · ${block.title}`, `consumer:${consumer.device_id}`, block.card, options);
+        }
+      }
+    }
+    // Hits in names first; within a rank the order of the sections. Hits of
+    // one block stand under one heading (at the place of its best hit).
+    hits.sort((a, b) => a.rank - b.rank);
+    const groups = new Map();
+    for (const hit of hits) {
+      if (!groups.has(hit.path)) groups.set(hit.path, { ...hit, controls: [] });
+      groups.get(hit.path).controls.push(hit.control);
+    }
+    const blocks = [...groups.values()]
+      .map(
+        (group) => `<div class="search-hit">
+          <button class="link search-path" data-action="settings-section" data-section="${escapeHtml(group.section)}"${
+            group.card ? ` data-card="${group.card}"` : ""
+          }>${escapeHtml(group.path)}</button><div class="settings">${group.controls.join("")}</div></div>`
+      )
+      .join("");
+    const count = hits.length ? t.settingsSearchHits.replace("{n}", hits.length) : t.settingsSearchNone;
+    return `<section class="card settings-cluster"><h2 class="cluster-heading">${escapeHtml(count)}</h2>
+      <div class="search-hits">${blocks}</div></section>`;
+  }
+
+  /**
+   * Tiles of the main functions on the first section: on or off and their
+   * state now; selecting one opens its section (no switch: set it there).
+   */
+  _featureTiles() {
+    const t = this._t;
+    const tiles = SETTING_FEATURES.map(([key, cluster, card]) => {
+      const stateObj = this._state(key);
+      if (!stateObj) return "";
+      // The price control only where the tariff follows the market.
+      if (key === "price_control" && !this._state("control_status")?.attributes?.market_priced) return "";
+      const on = stateObj.state === "on";
+      let detail = on ? t.featureOn : t.featureOff;
+      if (this._settingNeeds(key).length) {
+        detail = t.unavailableSettings;
+      } else if (on && key === "grid_friendly_charging") {
+        const limit = this._state("feed_in_limit");
+        if (limit) detail = t.featureFeedInLimit.replace("{value}", this._tileValue(limit));
+      } else if (on && key === "feed_in_cap") {
+        const limitW = this._state("feed_in_cap_energy")?.attributes?.limit_w;
+        if (limitW !== null && limitW !== undefined) detail = t.featureLimit.replace("{value}", this._watts(limitW));
+      } else if (on && key === "peak_shaving") {
+        const limit = this._state("peak_shaving_limit");
+        if (limit && this._number(limit) !== null) detail = t.featureLimit.replace("{value}", this._format(limit));
+      } else if (on && key === "night_discharge") {
+        const power = this._number(this._state("night_discharge_power"));
+        const soc = this._number(this._state("night_discharge_target_soc"));
+        if (power && soc !== null) {
+          detail = t.featureNight.replace("{power}", this._watts(power)).replace("{soc}", this._percent(soc));
+        } else if (soc !== null) {
+          detail = t.featureNightTarget.replace("{soc}", this._percent(soc));
+        }
+      }
+      return `<button class="feature-tile${on ? " on" : ""}" data-action="settings-section" data-section="${cluster}" data-card="${card}">
+        <span class="feature-name">${escapeHtml(t.groups[key === "night_discharge" ? "night" : card])}${this._clusterBadge(cluster, null, card)}</span>
+        <span class="feature-state">${escapeHtml(detail)}</span></button>`;
+    }).join("");
+    return tiles ? `<div class="setting-block"><h3 class="block-title">${t.mainFunctions}</h3><div class="feature-tiles">${tiles}</div></div>` : "";
+  }
+
+  /** Block of the settings ``keys`` that have an effect; the others go to ``unavailable``. */
+  /** The ``keys`` shown now (some only with or without another setting) that have an entity. */
+  _shownKeys(keys) {
+    return keys
+      .filter((key) => !SETTING_SHOWN_WITH[key] || this._state(SETTING_SHOWN_WITH[key])?.state === "on")
+      .filter((key) => !SETTING_HIDDEN_WITH[key] || this._state(SETTING_HIDDEN_WITH[key])?.state !== "on")
+      .filter((key) => !SETTING_HIDDEN_IN[key] || !SETTING_HIDDEN_IN[key][1].includes(this._state(SETTING_HIDDEN_IN[key][0])?.state))
+      .filter((key) => !SETTING_SHOWN_WITH_VALUE[key] || this._number(this._state(SETTING_SHOWN_WITH_VALUE[key])) !== null)
+      .filter((key) => this._state(key));
+  }
+
+  _settingCard(card, keys, unavailable) {
+    const t = this._t;
+    const shown = this._shownKeys(keys);
+    const usable = shown.filter((key) => !this._settingNeeds(key).length);
+    const missing = shown.filter((key) => this._settingNeeds(key).length);
+    if (missing.length) {
+      const needs = [...new Set(missing.flatMap((key) => this._settingNeeds(key)))];
+      // Greyed out and locked; their hints stay readable.
+      const controls = missing.map((key) => this._control(this._state(key))).join("").replace(/<(input|select)\b/g, "<$1 disabled");
+      unavailable.push(`<section class="card unavailable"><h2>${t.groups[card]}</h2>
+          <p class="muted unavailable-note">${needs.map((need) => escapeHtml(t.settingNeeds[need])).join(" ")}</p>
+          <div class="settings">${controls}</div></section>`);
+    }
+    if (!usable.length) return "";
+    const note =
+      card === "dischargeExport" ? this._exportNote() : card === "peak" ? this._peakNote() : card === "feedInCap" ? this._capNote() : "";
+    return `<div class="setting-block" data-card="${card}"><h3 class="block-title">${t.groups[card]}</h3>
+      <div class="settings">${usable.map((key) => this._control(this._state(key))).join("")}</div>${note}</div>`;
   }
 
   /** Warning when little energy is left above the minimum SoC for peak shaving. */
@@ -6173,6 +6669,204 @@ class SlemsPanel extends HTMLElement {
     return `<p class="setting-note"><ha-icon icon="mdi:information-outline"></ha-icon>${escapeHtml(text)}</p>`;
   }
 
+  // --- settings assistant (see assistant.py) ------------------------------------
+
+  /** Asks for the suggestions once they are older than ASSISTANT_REFRESH_MS or a setting changed. */
+  _assistantFetch() {
+    const assistant = this._assistant;
+    const goal = this._assistantGoal;
+    if (!this._hass) return;
+    // The suggestions depend on the settings: the states of all SLEMS numbers, switches and selects.
+    const settings = Object.values(this._hass.entities || {})
+      .filter((e) => e.platform === DOMAIN && /^(number|switch|select)\./.test(e.entity_id))
+      .map((e) => `${e.entity_id}=${this._hass.states[e.entity_id]?.state}`)
+      .join("|");
+    const fresh =
+      assistant.result &&
+      assistant.goal === goal &&
+      assistant.settings === settings &&
+      Date.now() - assistant.at < ASSISTANT_REFRESH_MS;
+    if (assistant.pending || fresh) return;
+    assistant.pending = true;
+    this._hass
+      .callWS({ type: `${DOMAIN}/assistant`, ...(goal ? { goal } : {}) })
+      .then((result) => {
+        assistant.result = result;
+      })
+      .catch((err) => {
+        console.error("SLEMS: assistant failed", err);
+        assistant.result = assistant.result || { suggestions: [] };
+      })
+      .finally(() => {
+        // Also after an error: asked again only after the next change or ASSISTANT_REFRESH_MS.
+        assistant.goal = goal;
+        assistant.settings = settings;
+        assistant.at = Date.now();
+        assistant.pending = false;
+        this._queueRender();
+      });
+  }
+
+  /** The suggestion for a setting entity: battery settings by their device, the others of the SLEMS device. */
+  _suggestion(stateObj, key) {
+    const device = this._hass.entities?.[stateObj.entity_id]?.device_id;
+    return (this._assistant.result?.suggestions || []).find(
+      (s) => s.key === key && (s.device_id ? s.device_id === device : device === this._config.system_device_id)
+    );
+  }
+
+  /**
+   * Badge with the open suggestions and notes of a section (SETTING_CLUSTERS) while the assistant is shown,
+   * with ``device`` of the settings of that battery or consumer, with ``card`` of that block of the section.
+   */
+  _clusterBadge(cluster, device = null, card = null) {
+    return this._badge(this._openCount(cluster, device, card));
+  }
+
+  _badge(open) {
+    if (!open) return "";
+    const title = escapeHtml(this._t.assistantOpen.replace("{n}", open));
+    return `<span class="nav-badge" title="${title}" aria-label="${title}">${open}</span>`;
+  }
+
+  /** Open suggestions and notes for _clusterBadge; 0 while the assistant is not shown. */
+  _openCount(cluster, device = null, card = null) {
+    if (!this._assistantOn || !this._assistant.result) return 0;
+    const cards = (SETTING_CLUSTERS.find(([key]) => key === cluster)?.[1] || []).filter(([key]) => !card || key === card);
+    const keys = new Set(device ? [] : cards.flatMap(([, cardKeys]) => cardKeys));
+    let open = 0;
+    for (const suggestion of this._assistant.result.suggestions || []) {
+      const here = suggestion.device_id ? device && suggestion.device_id === device : keys.has(suggestion.key);
+      const stateObj = here ? this._state(suggestion.key, suggestion.device_id || undefined) : null;
+      if (!stateObj) continue;
+      const warned = suggestion.sources.some((source) => source.params?.warn);
+      if (warned || !this._suggestionMatches(stateObj, suggestion)) open += 1;
+    }
+    return open + (this._assistant.result.notes || []).filter((note) => note.key && keys.has(note.key)).length;
+  }
+
+  _suggestionMatches(stateObj, suggestion) {
+    if (stateObj.entity_id.startsWith("switch.")) return (stateObj.state === "on") === suggestion.value;
+    if (typeof suggestion.value === "number") {
+      const value = parseFloat(stateObj.state);
+      return Number.isFinite(value) && Math.abs(value - suggestion.value) < 1e-6;
+    }
+    return String(stateObj.state) === String(suggestion.value);
+  }
+
+  /** Settings field -> value of the suggestions the simulation knows that differ from the setting. */
+  _simulableSuggestions() {
+    const pending = {};
+    for (const suggestion of this._assistant.result?.suggestions || []) {
+      if (!suggestion.field || suggestion.device_id) continue;
+      const stateObj = this._state(suggestion.key);
+      if (stateObj && !this._suggestionMatches(stateObj, suggestion)) pending[suggestion.field] = suggestion.value;
+    }
+    return pending;
+  }
+
+  /** A limit of the plant or the tariff (nothing to set); with hardware changes to try in the simulation. */
+  _noteHtml(note) {
+    const t = this._t;
+    const text = this._fillParams(t.assistantNotes[note.code] || note.code, note.params || {});
+    const hardware = note.hardware
+      ? `<button class="link" data-action="assistant-hw" data-hardware="${escapeHtml(JSON.stringify(note.hardware))}">${t.assistantHardware}</button>`
+      : "";
+    return `<span class="setting-suggest limit"><ha-icon icon="mdi:information-outline"></ha-icon><span>${hintHtml(text)} ${hardware}</span></span>`;
+  }
+
+  /** The limits of the plant not tied to a setting, above the settings. */
+  _limitsHtml() {
+    if (!this._assistantOn) return "";
+    const notes = (this._assistant.result?.notes || []).filter((note) => !note.key);
+    if (!notes.length) return "";
+    return `<section class="card assistant-limits"><h2>${this._t.assistantLimits}</h2>
+      <p class="muted">${escapeHtml(this._t.assistantLimitsIntro)}</p>${notes.map((note) => this._noteHtml(note)).join("")}</section>`;
+  }
+
+  /**
+   * Opens the simulation with the real settings changed by ``pending`` (settings field -> value)
+   * and the batteries by ``hardware`` (battery field -> amount added; then the recorded months).
+   */
+  _openSimulation(pending, hardware = null) {
+    this._sim = { form: null, result: null, serial: this._sim.serial + 1, timer: null, requested: false, pending, hardware };
+    this._tariffs = { result: null, requested: false };
+    clearTimeout(this._hw.timer);
+    this._hw = { key: null, result: null, last: null, serial: this._hw.serial + 1, timer: null };
+    this._simView = hardware ? "months" : "day";
+    this._tab = "simulation";
+    this._sections = {};
+    this._render();
+  }
+
+  _suggestionHtml(stateObj, domain, suggestion) {
+    const t = this._t;
+    const sources = suggestion.sources.map((source) => this._sourceText(source)).join(" · ");
+    const warnings = suggestion.sources.filter((source) => source.params?.warn);
+    if (warnings.length && this._suggestionMatches(stateObj, suggestion)) {
+      // Set as suggested, but observed to fall short: shown, not as a check mark.
+      const text = warnings.map((source) => this._sourceText(source)).join(" · ");
+      return `<span class="setting-suggest warn"><ha-icon icon="mdi:alert-outline"></ha-icon>${escapeHtml(text)}</span>`;
+    }
+    if (this._suggestionMatches(stateObj, suggestion)) {
+      const tip = `${t.assistantMatches}: ${sources}`;
+      return `<span class="setting-suggest ok" title="${escapeHtml(tip)}" aria-label="${escapeHtml(tip)}"><ha-icon icon="mdi:check"></ha-icon></span>`;
+    }
+    const language = this._hass?.locale?.language || "en";
+    const value =
+      typeof suggestion.value === "boolean"
+        ? suggestion.value
+          ? t.assistantOn
+          : t.assistantOff
+        : typeof suggestion.value === "number"
+          ? `${new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(suggestion.value)} ${stateObj.attributes.unit_of_measurement || ""}`.trim()
+          : this._hass.formatEntityState
+          ? this._hass.formatEntityState(stateObj, String(suggestion.value))
+          : String(suggestion.value);
+    const data = escapeHtml(JSON.stringify(suggestion.value));
+    const simulate = suggestion.field
+      ? `<button class="link" data-action="assistant-sim" data-field="${suggestion.field}" data-value="${data}">${t.assistantSimulate}</button>`
+      : "";
+    return `<span class="setting-suggest">${escapeHtml(t.assistantSuggest.replace("{value}", value))} · ${escapeHtml(sources)}
+      <span class="suggest-actions"><button class="link" data-action="assistant-apply" data-entity="${stateObj.entity_id}" data-value="${data}">${t.assistantApply}</button>${simulate}</span></span>`;
+  }
+
+  /** Text of a source of a suggestion (kind and code from assistant.py). */
+  _sourceText(source) {
+    const t = this._t;
+    const p = source.params || {};
+    if (source.kind === "goal") return t.assistantSources.goal.replace("{goal}", t.assistantGoals[p.goal] || p.goal);
+    let text = t.assistantSources[source.code] || source.code;
+    if (source.code === "not_full" && (p.days === null || p.days === undefined)) text = t.assistantSources.never_full;
+    return this._fillParams(text, p);
+  }
+
+  /** ``text`` with the parameters of a source or note of the assistant put in. */
+  _fillParams(text, p) {
+    const t = this._t;
+    const language = this._hass?.locale?.language || "en";
+    const money = (v) => new Intl.NumberFormat(language, { style: "currency", currency: this._currency() }).format(v);
+    let country = p.country || "";
+    try {
+      if (country) country = new Intl.DisplayNames([language], { type: "region" }).of(country) || country;
+    } catch (err) {
+      // Unknown region code: the code itself.
+    }
+    return text
+      .replace("{name}", p.name ?? "")
+      .replace("{days}", p.days ?? "")
+      .replace("{country}", country)
+      .replace("{pct}", p.pct === undefined || p.pct === null ? "–" : this._percent(p.pct))
+      .replace("{kw}", p.kw === undefined || p.kw === null ? "–" : this._watts(p.kw * 1000))
+      .replace("{of}", p.of ?? "")
+      .replace("{kwh}", p.kwh === undefined || p.kwh === null ? "–" : this._kwh(p.kwh * 1000))
+      .replace("{hours}", p.hours ?? "")
+      .replace("{temp}", p.temp === undefined || p.temp === null ? "–" : `${new Intl.NumberFormat(language).format(p.temp)} °C`)
+      .replace("{saving}", p.saving === undefined || p.saving === null ? "–" : money(p.saving))
+      .replace("{months}", p.months === 1 ? t.assistantMonth : t.assistantMonths.replace("{n}", p.months ?? ""))
+      .replace("{limit}", p.limit_kw === undefined || p.limit_kw === null ? "–" : this._watts(p.limit_kw * 1000));
+  }
+
   _toggle(stateObj, label, confirmOffName = null) {
     const confirm = confirmOffName ? ` data-confirm-off="${escapeHtml(confirmOffName)}"` : "";
     return `<label class="switch" title="${escapeHtml(label)}">
@@ -6189,13 +6883,73 @@ class SlemsPanel extends HTMLElement {
     const hint = this._t.settingHints[key] ?? this._t.settingHints[key?.replace(/^hot_water_/, "")];
     // Title for the mouse, a click on the icon opens the text (touch screens).
     const title = label ?? this._name(stateObj);
+    // The value in effect and the assistant below a setting (settings tab).
+    const effective = this._tab === "settings";
+    const assistant = effective && this._assistantOn;
+    const inEffect = (value, how) =>
+      `<span class="setting-effective">${escapeHtml(this._t.inEffect.replace("{value}", value).replace("{how}", how))}</span>`;
     let name = hint
-      ? `${escapeHtml(title)}<button class="info" data-action="toggle-hint" data-key="${key}" title="${escapeHtml(hintPlain(hint))}" aria-label="${escapeHtml(hintPlain(hint))}"><ha-icon icon="mdi:information-outline"></ha-icon></button>${
-          this._openHints.has(key) ? `<span class="setting-hint">${hintHtml(hint)}</span>` : ""
-        }`
+      ? `${escapeHtml(title)}<button class="info" data-action="toggle-hint" data-key="${key}" title="${escapeHtml(hintPlain(hint))}" aria-label="${escapeHtml(hintPlain(hint))}"><ha-icon icon="mdi:information-outline"></ha-icon></button>`
       : escapeHtml(title);
+    // Lines below the row over its full width: opening them does not move the control.
+    let extra = hint && this._openHints.has(key) ? `<span class="setting-hint">${hintHtml(hint)}</span>` : "";
+    const out = (control, cls = "") =>
+      `<div class="setting-row"><div class="setting${cls}"><span>${name}</span>${control}</div>${
+        extra ? `<div class="setting-extra">${extra}</div>` : ""
+      }</div>`;
+    const suggestion = assistant ? this._suggestion(stateObj, key) : null;
+    if (suggestion) {
+      const html = this._suggestionHtml(stateObj, domain, suggestion);
+      // The check mark beside the name, a suggestion or a warning below.
+      const check = this._suggestionMatches(stateObj, suggestion) && !suggestion.sources.some((s) => s.params?.warn);
+      if (check) name += html;
+      else extra += html;
+    }
+    if (assistant) {
+      for (const note of this._assistant.result?.notes || []) if (note.key === key) extra += this._noteHtml(note);
+    }
+    if (effective && key === "control_gain" && this._state("auto_gain")?.state === "on") {
+      const current = this._state("control_gain_current");
+      if (current && this._number(current) !== null) extra += inEffect(this._format(current), this._t.automatic);
+    }
+    if (effective && key === "learn_capacity") {
+      const device = this._hass.entities?.[stateObj.entity_id]?.device_id;
+      const learnedCapacity = this._number(this._state("learned_capacity", device));
+      const kwh = learnedCapacity === null ? "" : this._kwh(learnedCapacity * 1000);
+      extra +=
+        learnedCapacity === null
+          ? `<span class="setting-hint">${escapeHtml(this._t.capacityNotLearned)}</span>`
+          : stateObj.state === "on"
+            ? inEffect(kwh, this._t.learned)
+            : `<span class="setting-hint">${escapeHtml(this._t.capacityLearnedUnused.replace("{value}", kwh))}</span>`;
+    }
+    if (effective && key === "night_discharge") {
+      // The buffer kept for the next day is set in another section.
+      const buffer = this._state("learned_values")?.attributes?.night_buffer_in_effect_kwh;
+      if (buffer !== null && buffer !== undefined) {
+        extra += `<span class="setting-effective">${escapeHtml(this._t.nightBuffer.replace("{value}", this._kwh(buffer * 1000)))}
+          <button class="link" data-action="settings-section" data-section="pvCharging">${escapeHtml(this._t.clusters.pvCharging)}</button></span>`;
+      }
+    }
     if (domain === "switch") {
-      return `<div class="setting"><span>${name}</span>${this._toggle(stateObj, title)}</div>`;
+      return out(this._toggle(stateObj, title));
+    }
+    if (effective && key === "min_power_mode" && stateObj.state !== "manual" && stateObj.state !== "off") {
+      const a = stateObj.attributes;
+      const watts = (w) => (w === null || w === undefined || w <= 0 ? this._t.minPowerNone : this._watts(w));
+      if (a.losses_learned === false) {
+        extra += `<span class="setting-hint">${escapeHtml(this._t.minPowerNotLearned)}</span>`;
+      } else if (a.charge_threshold_w !== undefined || a.discharge_threshold_w !== undefined) {
+        extra += `<span class="setting-effective">${escapeHtml(
+          this._t.minPowerInEffect.replace("{charge}", watts(a.charge_threshold_w)).replace("{discharge}", watts(a.discharge_threshold_w))
+        )}</span>`;
+      }
+    }
+    if (effective && key === "feed_in_cap_buffer") {
+      const a = this._state("feed_in_cap_energy")?.attributes || {};
+      if (a.buffer_source === "auto" && a.buffer_pct !== null && a.buffer_pct !== undefined) {
+        extra += inEffect(`${a.buffer_pct > 0 ? "+" : ""}${this._percent(a.buffer_pct)}`, this._t.learned);
+      }
     }
     const learned = LEARNED_SETTINGS[key];
     if (learned && this._state(learned[0])?.state === "on") {
@@ -6205,63 +6959,77 @@ class SlemsPanel extends HTMLElement {
       const language = this._hass?.locale?.language || "en";
       const digits = unit === "W" ? 0 : 2;
       const format = (v) => `${new Intl.NumberFormat(language, { maximumFractionDigits: digits }).format(v)} ${unit}`.trim();
-      if (value !== null && value !== undefined) {
-        return `<div class="setting"><span>${name}</span><span class="readonly">${escapeHtml(format(value))} (${this._t.learned})</span></div>`;
+      if (value !== null && value !== undefined && !effective) {
+        return out(`<span class="readonly">${escapeHtml(format(value))} (${this._t.learned})</span>`);
       }
-      // Not enough data yet: the set value applies and stays editable; what is missing.
-      const missing = (learned[2] || [])
-        .map((basis) => [basis, (attributes.learning_progress || {})[basis]])
-        .filter(([, progress]) => progress && progress[0] < progress[1])
-        .map(([basis, [have, need]]) => this._t.learnedBasis[basis].replace("{have}", have).replace("{need}", need))
-        .join(", ");
-      const partial = key === "charge_secured_buffer" ? attributes.charge_secured_buffer_partial_kwh : null;
-      const hint =
-        partial !== null && partial !== undefined
-          ? this._t.learnedPartial.replace("{value}", format(partial)).replace("{missing}", missing)
-          : missing
-            ? this._t.learnedProgress.replace("{missing}", missing)
-            : this._t.learnedWaiting;
-      name += `<span class="setting-hint">${hintHtml(hint)}</span>`;
+      if (value !== null && value !== undefined) {
+        // The set value stays editable; it applies again when learning is switched off.
+        extra += inEffect(format(value), this._t.learned);
+      } else {
+        // Not enough data yet: the set value applies and stays editable; what is missing.
+        const missing = (learned[2] || [])
+          .map((basis) => [basis, (attributes.learning_progress || {})[basis]])
+          .filter(([, progress]) => progress && progress[0] < progress[1])
+          .map(([basis, [have, need]]) => this._t.learnedBasis[basis].replace("{have}", have).replace("{need}", need))
+          .join(", ");
+        const partial = key === "charge_secured_buffer" ? attributes.charge_secured_buffer_partial_kwh : null;
+        const hint =
+          partial !== null && partial !== undefined
+            ? this._t.learnedPartial.replace("{value}", format(partial)).replace("{missing}", missing)
+            : missing
+              ? this._t.learnedProgress.replace("{missing}", missing)
+              : this._t.learnedWaiting;
+        extra += `<span class="setting-hint">${hintHtml(hint)}</span>`;
+      }
     }
     const peakMode = this._state("peak_shaving_mode")?.state;
     if (key === "peak_shaving_grid_limit" && (peakMode === "auto_limit" || peakMode === "economic")) {
-      const effective = this._state("peak_shaving_limit");
-      return `<div class="setting"><span>${name}</span><span class="readonly">${escapeHtml(
-        effective ? this._format(effective) : "–"
-      )} (${this._t.automatic})</span></div>`;
+      const limit = this._state("peak_shaving_limit");
+      const text = limit ? this._format(limit) : "–";
+      if (!effective) {
+        return out(`<span class="readonly">${escapeHtml(text)} (${this._t.automatic})</span>`);
+      }
+      extra += inEffect(text, this._t.automatic);
     }
     if (key === "peak_shaving_soc_threshold" && (peakMode === "auto_threshold" || peakMode === "economic")) {
       const threshold = this._state("peak_shaving_limit")?.attributes?.threshold_pct;
-      return `<div class="setting"><span>${name}</span><span class="readonly">${escapeHtml(
-        threshold === null || threshold === undefined ? "–" : this._percent(threshold)
-      )} (${this._t.automatic})</span></div>`;
+      const text = threshold === null || threshold === undefined ? "–" : this._percent(threshold);
+      if (!effective) {
+        return out(`<span class="readonly">${escapeHtml(text)} (${this._t.automatic})</span>`);
+      }
+      extra += inEffect(text, this._t.automatic);
     }
     if (domain === "time") {
       const value = (stateObj.state || "").slice(0, 5);
-      return `<div class="setting"><span>${name}</span><input type="time" data-entity="${stateObj.entity_id}" data-kind="time" aria-label="${escapeHtml(title)}" value="${escapeHtml(value)}"></div>`;
+      return out(
+        `<input type="time" data-entity="${stateObj.entity_id}" data-kind="time" aria-label="${escapeHtml(title)}" value="${escapeHtml(value)}">`
+      );
     }
     if (domain === "sensor") {
-      return `<div class="setting"><span>${name}</span><span class="readonly">${escapeHtml(this._format(stateObj))}</span></div>`;
+      return out(`<span class="readonly">${escapeHtml(this._format(stateObj))}</span>`);
     }
     if (domain === "select") {
       const options = stateObj.attributes.options || [];
       const label = (option) =>
         this._hass.formatEntityState ? this._hass.formatEntityState(stateObj, option) : option;
-      if (disabledNote) name += `<span class="setting-hint">${escapeHtml(disabledNote)}</span>`;
+      if (disabledNote) extra += `<span class="setting-hint">${escapeHtml(disabledNote)}</span>`;
       // The economic peak shaving needs a power price in the tariff.
       const unavailable = (o) => key === "peak_shaving_mode" && o === "economic" && this._number(this._state("power_peak")) === null;
-      return `<div class="setting${disabledNote ? " disabled" : ""}"><span>${name}</span><select data-entity="${stateObj.entity_id}" data-kind="select" aria-label="${escapeHtml(title)}"${disabledNote ? " disabled" : ""}>
+      return out(
+        `<select data-entity="${stateObj.entity_id}" data-kind="select" aria-label="${escapeHtml(title)}"${disabledNote ? " disabled" : ""}>
         ${options.map((o) => `<option value="${escapeHtml(o)}" ${o === stateObj.state ? "selected" : ""}${unavailable(o) ? ` disabled title="${escapeHtml(this._t.peakEconomicUnavailable)}"` : ""}>${escapeHtml(label(o))}</option>`).join("")}
-        </select></div>`;
+        </select>`,
+        disabledNote ? " disabled" : ""
+      );
     }
     const a = stateObj.attributes;
     // As many decimals as the step has (7000, 12, 0.5).
     const decimals = String(a.step ?? 1).split(".")[1]?.length ?? 0;
     const numeric = parseFloat(stateObj.state);
     const value = Number.isFinite(numeric) ? numeric.toFixed(decimals) : stateObj.state;
-    return `<div class="setting"><span>${name}</span><span class="number">
+    return out(`<span class="number">
       <input type="number" data-entity="${stateObj.entity_id}" data-kind="number" aria-label="${escapeHtml(title)}" value="${escapeHtml(value)}"
-        min="${a.min}" max="${a.max}" step="${a.step}"><span class="unit">${escapeHtml(a.unit_of_measurement || "")}</span></span></div>`;
+        min="${a.min}" max="${a.max}" step="${a.step}"><span class="unit">${escapeHtml(a.unit_of_measurement || "")}</span></span>`);
   }
 
   // --- events ------------------------------------------------------------------
@@ -6365,16 +7133,48 @@ class SlemsPanel extends HTMLElement {
       this._simSchedule();
       return;
     }
-    const consumerToggle = event.target.closest("[data-action='toggle-consumer']");
-    if (consumerToggle) {
-      const id = consumerToggle.dataset.id;
-      if (!this._expandedConsumers.delete(id)) this._expandedConsumers.add(id);
+    const assistantApply = event.target.closest("[data-action='assistant-apply']");
+    if (assistantApply) {
+      const entityId = assistantApply.dataset.entity;
+      const value = JSON.parse(assistantApply.dataset.value);
+      const domain = entityId.split(".")[0];
+      if (domain === "switch") this._hass.callService("switch", value ? "turn_on" : "turn_off", { entity_id: entityId });
+      else if (domain === "select") this._hass.callService("select", "select_option", { entity_id: entityId, option: String(value) });
+      else if (domain === "number") this._hass.callService("number", "set_value", { entity_id: entityId, value });
+      return;
+    }
+    const assistantSim = event.target.closest("[data-action='assistant-sim']");
+    if (assistantSim) {
+      this._openSimulation({ [assistantSim.dataset.field]: JSON.parse(assistantSim.dataset.value) });
+      return;
+    }
+    const assistantHw = event.target.closest("[data-action='assistant-hw']");
+    if (assistantHw) {
+      this._openSimulation({}, JSON.parse(assistantHw.dataset.hardware));
+      return;
+    }
+    if (event.target.closest("[data-action='assistant-sim-all']")) {
+      this._openSimulation(this._simulableSuggestions());
+      return;
+    }
+    if (event.target.closest("[data-action='settings-search-clear']")) {
+      this._clearSettingsSearch();
+      return;
+    }
+    const settingsSection = event.target.closest("[data-action='settings-section']");
+    if (settingsSection) {
+      // Choosing a section (also from a hit) ends the search.
+      if (this._settingsSearch) this._clearSettingsSearch(false);
+      this._settingsSection = settingsSection.dataset.section;
       try {
-        localStorage.setItem(EXPANDED_CONSUMERS_KEY, JSON.stringify([...this._expandedConsumers]));
+        localStorage.setItem(SETTINGS_SECTION_KEY, this._settingsSection);
       } catch (err) {
         // Not stored: the choice lasts until the page is reloaded.
       }
       this._render();
+      // A tile of the main functions leads to its block in the section.
+      const card = settingsSection.dataset.card;
+      if (card) this.shadowRoot.querySelector(`.setting-block[data-card="${card}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" });
       return;
     }
     const flowView = event.target.closest("[data-action='flow-sum'], [data-action='flow-devices']");
@@ -6448,6 +7248,18 @@ class SlemsPanel extends HTMLElement {
 
   _onChange(event) {
     const target = event.target;
+    if (target.dataset?.action === "assistant-goal") {
+      const mode = target.value;
+      this._assistantOn = mode !== "off";
+      this._assistantGoal = ASSISTANT_GOALS.includes(mode) ? mode : "";
+      try {
+        localStorage.setItem(ASSISTANT_GOAL_KEY, mode);
+      } catch (err) {
+        // Not stored: the choice lasts until the page is reloaded.
+      }
+      this._render();
+      return;
+    }
     if (target.dataset?.sim) {
       this._onSimChange(target);
       return;
@@ -6748,10 +7560,84 @@ const STYLE = `
   .card.unavailable .switch span { cursor: not-allowed; }
   .unavailable-note { margin: 0 0 10px; font-size: 13px; }
   .unavailable-heading { grid-column: 1 / -1; margin: 12px 0 0; font-size: 16px; font-weight: 500; color: var(--secondary-text-color); }
+  .settings-top { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; margin-bottom: 12px; }
+  .settings-top-main { display: flex; align-items: flex-start; gap: 8px 16px; flex-wrap: wrap; }
+  .settings-search { position: relative; flex: 0 1 360px; min-width: 200px; }
+  .settings-search input { box-sizing: border-box; width: 100%; padding: 6px 30px 6px 10px; font: inherit; font-size: 14px;
+    color: var(--primary-text-color); background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 8px; }
+  .settings-search input:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+  .settings-search input::-webkit-search-cancel-button { display: none; }
+  .search-clear { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none; border: none;
+    padding: 2px; cursor: pointer; color: var(--secondary-text-color); --mdc-icon-size: 18px; }
+  .settings-search input:placeholder-shown + .search-clear { display: none; }
+  .settings-view { flex: 1 1 320px; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+  .search-hit { padding: 12px 0 16px; border-top: 1px solid var(--divider-color); }
+  .search-hit:first-child { border-top: none; padding-top: 0; }
+  .search-path { display: block; padding: 0; margin-bottom: 10px; font-size: 13px; font-weight: 500; text-align: left; }
+  .search-hit .unavailable { opacity: 0.7; }
+  .search-hits { max-width: 760px; }
+  .cluster-heading { margin: 8px 0 10px; font-size: 18px; font-weight: 500; }
+  .card.settings-cluster { margin-bottom: 16px; }
+  .card.settings-cluster .cluster-heading { margin-top: 0; }
+  .setting-block { border-top: 1px solid var(--divider-color); padding: 12px 0 16px; }
+  .block-title { margin: 0 0 10px; font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--secondary-text-color); }
+  .settings-nav-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .settings-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 8px; }
+  .settings-nav button { background: none; border: none; border-radius: 8px; font: inherit; font-size: 14px; text-align: left;
+    padding: 8px 12px; cursor: pointer; color: var(--primary-text-color); }
+  .settings-nav button.active { color: var(--slems-accent); background: color-mix(in srgb, var(--primary-color) 12%, transparent); }
+  .settings-nav-layout .setting-block, .settings-cluster > .settings { max-width: 760px; }
+  .settings-nav button.sub { padding-left: 28px; font-size: 13px; }
+  .setting-suggest { display: block; margin-top: 2px; font-size: 12px; line-height: 1.35; color: var(--warning-color, #ffa600); }
+  .setting-suggest.ok { display: inline-flex; margin: 0 0 0 4px; vertical-align: middle; color: var(--success-color, #43a047); }
+  .setting-suggest.ok ha-icon, .setting-suggest.warn ha-icon { --mdc-icon-size: 16px; }
+  .setting-suggest.warn { display: flex; gap: 4px; align-items: flex-start; }
+  .setting-suggest.limit { display: flex; gap: 4px; align-items: flex-start; color: var(--info-color, #039be5); }
+  .setting-suggest.limit ha-icon { --mdc-icon-size: 16px; flex: none; }
+  .assistant-limits { margin-bottom: 16px; }
+  .assistant-limits .setting-suggest.limit { font-size: 13px; margin-top: 8px; }
+  .assistant-goal { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--secondary-text-color); }
+  /* Like the segmented buttons beside it; the arrow from two gradients in the text colour. */
+  .assistant-goal select { appearance: none; -webkit-appearance: none; font: inherit; font-size: 13px; line-height: inherit;
+    color: var(--secondary-text-color); background-color: transparent; border: 1px solid var(--divider-color);
+    border-radius: 8px; padding: 4px 30px 4px 12px; cursor: pointer;
+    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position: calc(100% - 15px) 55%, calc(100% - 10px) 55%; background-size: 5px 5px; background-repeat: no-repeat; }
+  .assistant-goal select:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+  .assistant-goal select.active { color: var(--slems-accent); background-color: color-mix(in srgb, var(--primary-color) 12%, transparent);
+    box-shadow: inset 0 -2px 0 var(--primary-color); }
+  .assistant-goal option { color: var(--primary-text-color); background: var(--card-background-color); }
+  .assistant-info { flex-basis: 100%; display: flex; justify-content: flex-end; align-items: center; gap: 4px 16px;
+    flex-wrap: wrap; min-height: 28px; font-size: 13px; }
+  .nav-badge { display: inline-block; min-width: 18px; padding: 0 6px; margin-left: 8px; border-radius: 9px; font-size: 12px;
+    line-height: 18px; text-align: center; color: #fff; background: var(--warning-color, #ffa600); vertical-align: middle; }
+  .suggest-actions { display: inline-flex; flex-wrap: wrap; gap: 0 4px; }
+  .suggest-actions button.link { font-size: 12px; padding: 0 4px; }
+  .setting-effective button.link { padding: 0; text-decoration: underline; }
+  .feature-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+  .feature-tile { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; text-align: left; font: inherit;
+    cursor: pointer; color: var(--primary-text-color); background: none; border: 1px solid var(--divider-color); border-radius: 8px; }
+  .feature-tile:hover { border-color: var(--primary-color); }
+  .feature-tile:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+  .feature-tile.on { border-left: 3px solid var(--slems-accent); }
+  .feature-name { font-size: 14px; font-weight: 500; }
+  .feature-state { font-size: 13px; color: var(--secondary-text-color); }
+  .feature-tile.on .feature-state { color: var(--slems-accent); }
+  .setting-effective { display: block; margin-top: 2px; font-size: 12px; color: var(--slems-accent); line-height: 1.35; }
+  @media (max-width: 700px) {
+    .settings-nav-layout { grid-template-columns: minmax(0, 1fr); }
+    .settings-nav { flex-direction: row; flex-wrap: wrap; position: static; }
+    .settings-top { grid-template-columns: minmax(0, 1fr); }
+    .settings-top > :first-child { display: none; }
+    .settings-search { flex-basis: 100%; }
+  }
   .chip { font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--divider-color);
     color: var(--secondary-text-color); margin-left: 4px; }
   .settings { display: flex; flex-direction: column; gap: 10px; }
   .setting { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .setting-extra { margin-top: 2px; }
+  .setting-extra > :first-child { margin-top: 0; }
   .tile button.info, .setting button.info { background: none; border: none; padding: 0 0 0 4px; cursor: pointer; color: var(--secondary-text-color);
     vertical-align: middle; line-height: 0; }
   .tile button.info ha-icon, .setting button.info ha-icon { --mdc-icon-size: 16px; }

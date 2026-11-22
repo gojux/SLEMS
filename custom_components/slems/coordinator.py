@@ -3482,8 +3482,22 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             allocation.strategy = Strategy.BELOW_MIN_POWER
         return result
 
+    def min_power_thresholds_now(self, battery: BatteryRuntime) -> tuple[float | None, float | None]:
+        """Charge and discharge threshold of the battery's minimum power now, for
+        showing them (the control computes them only for the battery it gives a
+        small power)."""
+        allocation = self.data.allocation if self.data is not None else None
+        secured = bool(allocation and allocation.charge_secured)
+        return self._min_power_thresholds(battery, secured, self.settings, dt_util.now(), store=False)
+
     def _min_power_thresholds(
-        self, battery: BatteryRuntime, secured: bool, settings: ControlSettings, wall_now: datetime
+        self,
+        battery: BatteryRuntime,
+        secured: bool,
+        settings: ControlSettings,
+        wall_now: datetime,
+        *,
+        store: bool = True,
     ) -> tuple[float | None, float | None]:
         """Charge and discharge threshold of the battery's minimum power now."""
         limits = battery.limits
@@ -3509,7 +3523,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 charge_efficiency=efficiency,
             ),
         )
-        self.min_power_thresholds[battery.subentry_id] = thresholds
+        if store:
+            self.min_power_thresholds[battery.subentry_id] = thresholds
         return thresholds
 
     def _prices_now(self, wall_now: datetime) -> Prices | None:

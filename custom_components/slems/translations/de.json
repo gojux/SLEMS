@@ -1737,7 +1737,7 @@
         "name": "Warmwasser-Minimum spätestens wieder nach"
       },
       "min_power": {
-        "name": "Mindestleistung"
+        "name": "Mindestleistung manuell"
       },
       "charge_now_soc": {
         "name": "Sofort laden bis"

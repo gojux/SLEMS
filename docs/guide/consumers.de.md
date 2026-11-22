@@ -84,7 +84,8 @@ Ein/Aus-Verbraucher mit der eingestellten Leistung und stellt bereit:
 - **Spätester Start** (Sensor, Zeitpunkt): wann das Tagesziel spätestens
   starten muss; leer, wenn es erreicht ist.
 
-Auf der Verbraucherkarte unter **Freigabe**:
+Im Reiter **Einstellungen** unter **Verbraucher** › Name des Verbrauchers, Block
+**Freigabe**:
 - **Freigabedauer** (Minuten, 0 = aus): Einmal geöffnet, bleibt die Freigabe
   mindestens so lange offen, auch ohne Überschuss, bis das Tagesziel
   erreicht oder seine Frist vorbei ist. Für eine Automation, die auf den
@@ -302,7 +303,8 @@ mit seiner Ist-Temperatur.
   und wann er voll ist. Welcher Fühler den Thermostat schaltet und wo sie
   sitzen, spielt keine Rolle. Werden andere Fühler ausgewählt, lernt SLEMS
   neu.
-- Ab drei Heizläufen und zwei Taktbeginnen zeigt die Verbraucherkarte, wie
+- Ab drei Heizläufen und zwei Taktbeginnen zeigt der Block
+  **Einspeisebegrenzung** des Verbrauchers im Reiter **Einstellungen**, wie
   viel der Speicher noch aufnehmen kann, und die Einspeisebegrenzung plant den
   Verbraucher nur mit 80 % davon ein.
 - Seine Box im Energiefluss zeigt mit einem Boiler-Symbol die Temperatur des
@@ -310,9 +312,9 @@ mit seiner Ist-Temperatur.
 
 ## Batterie-Unterstützung
 
-Auswahl je Verbraucher hinter dem Smart Meter (auch nur gemessene), auf seiner
-Karte unter **Einstellungen anzeigen**: wie weit die Batterien ihn decken
-dürfen, wenn kein PV-Überschuss da ist.
+Auswahl je Verbraucher hinter dem Smart Meter (auch nur gemessene), im Reiter
+**Einstellungen** unter **Verbraucher** › Name des Verbrauchers: wie weit die
+Batterien ihn decken dürfen, wenn kein PV-Überschuss da ist.
 
 - **Immer** (Standard): wie jede andere Last.
 - **Nie**: Seine Leistung kommt immer aus dem Netz; die Batterien decken nur
@@ -349,8 +351,9 @@ Durchlauferhitzer, Heizstab mit Quelle **Netz**, später eine Wallbox.
 
 ## Einsatz in der Einspeisebegrenzung
 
-Auswahl je gesteuertem Verbraucher, auf seiner Karte im Dashboard unter
-**Einspeisebegrenzung**, solange sie an ist. Innerhalb eines Einsatzes
+Auswahl je gesteuertem Verbraucher, im Reiter **Einstellungen** unter
+**Verbraucher** › Name des Verbrauchers, Block **Einspeisebegrenzung**, solange
+sie an ist. Innerhalb eines Einsatzes
 entscheidet die Priorität. Wirkt nur, solange **Steuerung aktiv** an ist (sonst
 ausgegraut). Siehe **Einspeisebegrenzung**.
 
@@ -367,7 +370,8 @@ ausgegraut). Siehe **Einspeisebegrenzung**.
 
 ## Tagesziel
 
-Je gesteuertem Verbraucher, auf seiner Karte unter **Tagesziel**.
+Je gesteuertem Verbraucher, im Reiter **Einstellungen** unter **Verbraucher** ›
+Name des Verbrauchers, Block **Tagesziel**.
 
 - **Art**: **Laufzeit** (Zeit, in der er Leistung zieht), **Freigabezeit** (Zeit,
   in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung wie

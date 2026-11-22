@@ -518,8 +518,9 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu:
 - **Simulation**: andere Einstellungen ausprobieren und mit den aktuellen
   vergleichen, ohne etwas zu ändern; auch, was andere Batterien oder mehr PV
   im aufgezeichneten Jahr geändert hätten.
-- **Einstellungen**: alle Einstellwerte gruppiert und direkt änderbar, mit den
-  gelernten Werten.
+- **Einstellungen**: alle Einstellwerte nach Bereichen und direkt änderbar, mit
+  den wirksamen Werten; ein Assistent schlägt Werte aus Tarif, Anlage und einem
+  wählbaren Ziel vor.
 
 Alles im Detail: [Dashboard](docs/guide/dashboard.de.md).
 

@@ -32,6 +32,8 @@ TIMEOUT_S = 3.0
 
 # Hardware ceiling of the set point registers.
 HARDWARE_MAX_POWER_W = 2500
+# The battery stops discharging at this state of charge by itself.
+HARDWARE_MIN_SOC_PCT = 12.0
 
 # Control registers.
 REG_RS485_CONTROL = 42000
@@ -178,6 +180,7 @@ class MarstekVenusE3Driver(BatteryDriver):
             max_charge_power_w=min(max_charge_power_w, HARDWARE_MAX_POWER_W),
             max_discharge_power_w=min(max_discharge_power_w, HARDWARE_MAX_POWER_W),
             controllable=True,
+            min_soc_pct=HARDWARE_MIN_SOC_PCT,
         )
 
     @property

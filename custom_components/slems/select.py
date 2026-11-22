@@ -161,9 +161,22 @@ class BatteryMinPowerModeSelect(SlemsBatteryEntity, SelectEntity, RestoreEntity)
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_options = [mode.value for mode in MinPowerMode]
+    # The thresholds in effect follow the prices: not recorded.
+    _unrecorded_attributes = frozenset({"charge_threshold_w", "discharge_threshold_w", "losses_learned"})
 
     def __init__(self, coordinator: SlemsCoordinator, battery: BatteryRuntime) -> None:
         super().__init__(coordinator, battery, "min_power_mode")
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """The charge and discharge threshold in effect (None: none)."""
+        charge, discharge = self.coordinator.min_power_thresholds_now(self.battery)
+        return {
+            "charge_threshold_w": None if charge is None else round(charge),
+            "discharge_threshold_w": None if discharge is None else round(discharge),
+            # The automatic modes need the losses at small power (see LowLossTable).
+            "losses_learned": bool(self.battery.low_loss.points("charge")),
+        }
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()

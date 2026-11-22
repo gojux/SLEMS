@@ -1737,7 +1737,7 @@
         "name": "Hot water minimum again within"
       },
       "min_power": {
-        "name": "Minimum power"
+        "name": "Manual minimum power"
       },
       "charge_now_soc": {
         "name": "Charge now up to"

@@ -79,7 +79,8 @@ the configured power and provides:
 - **Latest start** (sensor, timestamp): when the daily target has to start
   at the latest; empty once it is met.
 
-On the consumer card under **Release**:
+In the **Settings** tab under **Consumers** › name of the consumer, block
+**Release**:
 - **Release duration** (minutes, 0 = off): once opened, the release stays open at
   least this long, also without surplus, until the daily target is met or
   its deadline has passed. For an automation that waits for the right
@@ -283,17 +284,18 @@ current temperature.
   starts cycling, its mean power while cycling and when it is full. Which
   sensor switches the thermostat and where they sit does not matter. With
   other sensors selected, it learns anew.
-- From three heating runs and two starts of the cycling on, the consumer card
-  shows how much the storage can still take, and the feed-in cap plans the
+- From three heating runs and two starts of the cycling on, the consumer's
+  block **Feed-in cap** in the **Settings** tab shows how much the storage can
+  still take, and the feed-in cap plans the
   consumer only with 80 % of that.
 - Its box in the energy flow shows the temperature of the sensor chosen for
   the daily target (the mean by default) with a boiler symbol.
 
 ## Battery support
 
-Select per consumer behind the smart meter (also measured only ones), on its
-card under **Show settings**: how far the batteries may cover it when there is
-no PV surplus.
+Select per consumer behind the smart meter (also measured only ones), in the
+**Settings** tab under **Consumers** › name of the consumer: how far the
+batteries may cover it when there is no PV surplus.
 
 - **Always** (default): like any other load.
 - **Never**: its power always comes from the grid; the batteries cover only
@@ -329,8 +331,8 @@ wallbox.
 
 ## Role in the feed-in cap
 
-Select per controlled consumer, on its card in the dashboard under **Feed-in
-cap** while the cap is on. Within a role the priority decides. Applies only
+Select per controlled consumer, in the **Settings** tab under **Consumers** ›
+name of the consumer, block **Feed-in cap**, while the cap is on. Within a role the priority decides. Applies only
 while **Control active** is on (greyed out otherwise). See **Feed-in cap**.
 
 - **Supporting**: gets no other surplus while the feed-in cap is on, only the
@@ -345,7 +347,8 @@ while **Control active** is on (greyed out otherwise). See **Feed-in cap**.
 
 ## Daily target
 
-Per controlled consumer, on its card under **Daily target**.
+Per controlled consumer, in the **Settings** tab under **Consumers** › name of
+the consumer, block **Daily target**.
 
 - **Kind**: **runtime** (time it draws power), **enabled time** (time SLEMS has it
   switched on, for devices with their own control such as a dehumidifier with

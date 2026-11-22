@@ -70,7 +70,8 @@ Siehe [Verbraucher](guide/consumers.de.md) für alle Einstellungen.
 
 ## Schritt 2: Tagesziel und Freigabe einstellen
 
-Im SLEMS-Dashboard unter **Verbraucher** auf der Karte der Wärmepumpe:
+Im SLEMS-Dashboard im Reiter **Einstellungen** unter **Verbraucher** › Name der
+Wärmepumpe:
 
 ![SLEMS: Karte der Wärmepumpe mit Warmwasser-Freigabe](images/heat_pump_hot_water_card_de.png)
 

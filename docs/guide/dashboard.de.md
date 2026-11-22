@@ -103,8 +103,9 @@ Periode), Stand des Tagesziels und die Freigabe; bei einer Wallbox das Auto.
 Eine Wärmepumpe zeigt oben ihren **Status** und die Prognose des Tages (mit
 gesteuertem Warmwasser **Heizen heute**: ohne die Warmwasser-Energie, nur bei
 einer einzigen Wärmepumpe) und die Werte des Warmwassers im Abschnitt
-**Warmwasser-Steuerung**. Über **Einstellungen anzeigen** klappt die Karte auf
-(der Browser merkt sich die Auswahl).
+**Warmwasser-Steuerung**. Die Einstellungen der Verbraucher stehen im Reiter
+**Einstellungen** unter **Verbraucher**; auf der Karte bleibt nur **Bis**,
+solange **Sofort laden** läuft.
 
 Das Menü (⋮) neben dem Namen, das auch eine Verbraucher-Box im Energiefluss
 öffnet, schaltet die Steuerung, startet oder beendet **Sofort laden**, lernt die
@@ -234,13 +235,50 @@ Lauf der simulierten Hardware. Es ist eine Schätzung mit Grenzen:
 
 ## Reiter Einstellungen
 
-Alle Einstellwerte gruppiert und direkt änderbar; wird ein Wert gelernt
-(Schalter **… automatisch**), steht dort der gelernte Wert. Die Karte
-**Regelung** zeigt auch das Aktualisierungsintervall des Smart Meters und die
-Reaktionszeit der Batterie. Einstellungen, die gerade nichts bewirken (kein
-Tarif, keine steuerbare Batterie, für den Batteriewechsel weniger als zwei),
-folgen am Ende unter **Aktuell nicht nutzbar**: ausgegraut, gesperrt und mit dem
-Hinweis, was sie brauchen.
+Alle Einstellwerte, direkt änderbar. Die Navigation links listet die Bereiche
+(**Betrieb**, **Laden aus PV**, **Netzanschluss**, **Entladen**, **Preise**,
+**Batterien**, **Verbraucher**, **Regelung**); unter **Batterien** hat jede
+Batterie einen eigenen Eintrag mit ihren Einstellungen, **Batterien** selbst
+enthält, was für alle gilt. Unter **Verbraucher** hat jeder Verbraucher mit
+Einstellungen einen Eintrag (Steuerung, Freigabe, Tagesziel,
+Batterie-Unterstützung, Einsatz in der Einspeisebegrenzung, Lernen);
+**Verbraucher** öffnet den ersten. Am Handy steht die Navigation über dem Bereich. **Betrieb** zeigt
+außerdem den Block **Wichtige Funktionen** mit Kacheln für **Netzdienliches
+Laden**, **Einspeisebegrenzung**, **Nachtentladung**, **Bezugsspitzen
+abfangen** und, mit Marktpreisen im Tarif, **Preisbewusste Steuerung**, jeweils
+an oder aus mit ihrem aktuellen Stand (z. B. der Einspeisegrenze). Eine Kachel
+auswählen öffnet ihre Einstellungen.
+
+**Einstellungen durchsuchen** über der Navigation findet Einstellungen nach
+Name, Block oder einem Wort ihrer Erklärung (z. B. „Puffer“): Die Treffer stehen
+statt des Bereichs da, sind direkt änderbar und zeigen jeweils den Weg zu ihrem
+Bereich. Einen Bereich auswählen oder **Suche leeren** (bzw. Esc) beendet die
+Suche.
+
+Unter einer Einstellung steht der wirksame Wert; wird ein Wert gelernt
+(Schalter **… automatisch**), steht dort der gelernte Wert. Das Info-Symbol
+neben einem Namen öffnet die Erklärung. **Gemessene Werte** in **Regelung**
+zeigt das Aktualisierungsintervall des Smart Meters und die Reaktionszeit der
+Batterie. Einstellungen, die gerade nichts bewirken (kein Tarif, keine
+steuerbare Batterie, für den Batteriewechsel weniger als zwei), folgen am Ende
+unter **Aktuell nicht nutzbar**: ausgegraut, gesperrt und mit dem Hinweis, was
+sie brauchen.
+
+### Assistent
+
+Über den Einstellungen schlägt der **Assistent** Werte vor: **Ausgewogen** aus
+Grundregeln, dem Tarif und den Beobachtungen der aufgezeichneten Monate, oder
+mit einem Ziel (**Eigenverbrauch**, **Kosten sparen**, **Netzdienlich**,
+**Batterie zuerst**, **Batterie schonen**), das eigene Werte dazu setzt. Jeder
+Vorschlag nennt seine Quelle (Grundregel, Tarif, Ziel, Beobachtung). Ein Häkchen
+neben einer Einstellung heißt, dass sie zum Vorschlag passt; sonst setzt
+**Übernehmen** den Wert und **Im Simulator zeigen** probiert ihn aus, ohne etwas
+zu ändern; **Alle Vorschläge im Simulator zeigen** probiert sie gemeinsam aus.
+Hinweise nennen, woran keine Einstellung etwas ändert, z. B. zu kleine Batterien
+für den PV-Überschuss (**Grenzen der Anlage**, mit der Simulation anderer
+Batterien), oder warum ein Ziel einen Wert auslässt. Die Navigation zählt die
+offenen Vorschläge und Hinweise je Bereich. Die Auswahl merkt sich der Browser;
+**Aus** blendet den Assistenten aus.
 
 ## Bedienung des Dashboards
 

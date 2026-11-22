@@ -503,8 +503,9 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar:
 - **Simulation**: try other settings and compare them with the current ones,
   without changing anything; also what other batteries or more PV would have
   changed in the recorded year.
-- **Settings**: all settings grouped and directly editable, with the learned
-  values.
+- **Settings**: all settings by section and directly editable, with the values
+  in effect; an assistant suggests values from the tariff, the plant and an
+  optional goal.
 
 Everything in detail: [Dashboard](docs/guide/dashboard.md).
 

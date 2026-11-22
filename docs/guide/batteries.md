@@ -643,8 +643,12 @@ Every controllable battery has these settings (dashboard: **Settings**):
     pays off when import price × efficiency of discharging with P > feed-in
     credit / typical charge efficiency (Venus: from about 25 W, practically no
     limit). Without a tariff or with a credit of 0 or less: like energetic.
-  - **Manual**: the **Minimum power** in W for both directions.
+  - **Manual**: the **Manual minimum power** in W for both directions (shown
+    only with **Manual**).
   - **Off**.
+
+  With the automatic modes the **Settings** tab shows the thresholds in
+  effect below it.
 
   Both automatic modes need the losses below 300 W, which SLEMS learns per
   direction in 50 W steps from 40 W (diagnostics, `min_power`); until then

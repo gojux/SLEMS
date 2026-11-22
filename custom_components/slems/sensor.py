@@ -46,6 +46,7 @@ from .grid_friendly import correction_weight
 from .learning import CONSUMPTION_MIN_DAYS, MORNING_MIN_DAYS, PV_MIN_DAYS, TARGET_MIN_SAMPLES
 from .problems import CAP_EXCEEDED_AFTER_S
 from .pv_forecast import energy_on_day
+from .tariff import Role
 from .tariff_comparison import configured_tariffs
 from .trial import TrialStatus
 
@@ -340,6 +341,8 @@ def _learned_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
         "night_buffer_kwh": kwh(
             pv_share * next_pv + consumption_share * next_consumption if both else None
         ),
+        # What the night discharge keeps for the next day: learned, partly learned or set.
+        "night_buffer_in_effect_kwh": kwh(c.secured_buffer_wh(c.settings, next_pv, next_consumption)),
         "charge_grid_target_w": c.grid_targets.target_w(True),
         "discharge_grid_target_w": c.grid_targets.target_w(False, c.settings.grid_targets_no_import),
         "grid_target_samples": [len(c.grid_targets.charge), len(c.grid_targets.discharge)],
@@ -481,6 +484,11 @@ SYSTEM_SENSORS: tuple[SystemSensorDescription, ...] = (
             "gain_auto": c.settings.auto_gain,
             "gain_setting": c.settings.control_gain,
             "has_tariff": bool(configured_tariffs(c.config_entry)),
+            # Prices of the current tariff follow the market: the price control can pay.
+            "market_priced": any(
+                tariff.role is Role.CURRENT and any(item.unit.dynamic for item in tariff.items)
+                for tariff in configured_tariffs(c.config_entry).values()
+            ),
         },
     ),
     SystemSensorDescription(

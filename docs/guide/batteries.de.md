@@ -680,8 +680,12 @@ Jede steuerbare Batterie hat diese Einstellungen (Dashboard: **Einstellungen**):
     Entladen mit P > Einspeisevergütung / typischer Wirkungsgrad beim Laden
     (Venus: schon ab etwa 25 W, praktisch keine Grenze). Ohne Tarif oder mit
     einer Vergütung von 0 oder weniger: wie energetisch.
-  - **Manuell**: die **Mindestleistung** in W für beide Richtungen.
+  - **Manuell**: die **Mindestleistung manuell** in W für beide Richtungen
+    (nur mit **Manuell** angezeigt).
   - **Aus**.
+
+  Mit den automatischen Modi zeigt der Tab **Einstellungen** darunter die
+  Schwellen, die gerade gelten.
 
   Beide Automatiken brauchen die Verluste unter 300 W, die SLEMS je Richtung
   in Stufen von 50 W ab 40 W lernt (in der Diagnose unter `min_power`); bis
