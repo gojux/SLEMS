@@ -183,3 +183,32 @@ async def test_an_answer_ends_the_back_off(clock: Clock) -> None:
     # Only the settle time of the TCP slot: the battery answered before.
     assert link.retry_in_s == pytest.approx(1.0)
     assert await link.connect()
+
+
+async def test_a_connect_that_waited_for_another_one_uses_it(
+    clock: Clock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    gate = asyncio.Event()
+
+    async def slow_connect(self: FakeClient) -> bool:
+        await gate.wait()
+        self.connected = True
+        return True
+
+    async def tick() -> None:
+        # asyncio.sleep is patched: let the other tasks run once.
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        loop.call_soon(future.set_result, None)
+        await future
+
+    monkeypatch.setattr(FakeClient, "connect", slow_connect)
+    link = make_link()
+    # The poll and the control find the link closed at the same time.
+    first = asyncio.create_task(link.connect())
+    second = asyncio.create_task(link.connect())
+    await tick()
+    gate.set()
+    assert await first and await second
+    assert link.connected and FakeClient.created == 1
+    assert link.retry_in_s == 0

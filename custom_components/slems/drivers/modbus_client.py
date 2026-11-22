@@ -98,6 +98,8 @@ class ModbusTcpLink:
         self._answered = False
         self._silent_count = 0
         self._connect_at = 0.0
+        # Counts the connections opened, so a connect that waited for another one uses it.
+        self._opened = 0
 
     @property
     def connected(self) -> bool:
@@ -114,8 +116,13 @@ class ModbusTcpLink:
 
         Returns False without trying while connections stay unanswered (see
         ``retry_in_s``); after a closed socket waits until its slot is free.
+        A connection another caller opened while this one waited (the poll and
+        the control run in their own tasks) is used, not dropped as silent.
         """
+        opened = self._opened
         async with self._lock:
+            if self._opened != opened and self.connected:
+                return True
             if self._client is not None:
                 self._drop()
             wait = self.retry_in_s
@@ -137,6 +144,7 @@ class ModbusTcpLink:
             if not await client.connect():
                 self._drop()
                 return False
+            self._opened += 1
             return True
 
     async def close(self) -> None:
