@@ -2150,7 +2150,11 @@ profile out:
   block become repairs (`profile_persistent_frequent`, `_blocked`). A
   persistent step whose read-back differs (the device changed it, e.g. a
   Sungrow falling back from External EMS) is forgotten and written again
-  with the next command, counting as a change.
+  with the next command, counting as a change. At a take-over (also after a
+  reconnect, when the values in the device are unknown) the check of the
+  ranges at rest reads them: one that already holds the value to write is
+  not written (`PersistentGuard.known`), so time-outs on a weak link do not
+  wear the flash or block the register.
   `BatteryDriver.issues()` hands driver problems to `problems.py`.
 - `setpoint: connection` with own PV: `OwnPvPorts` in `own_pv.py` (shared with
   the control **Output** of entity batteries: ports, probe for curtailed PV,

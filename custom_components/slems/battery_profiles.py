@@ -512,6 +512,12 @@ class PersistentGuard:
         self._written[address] = raw
         self._changes[address].append(now)
 
+    def known(self, address: int, raw: float) -> None:
+        """The register was read with ``raw``: not written while that is wanted,
+        and no change counted (nothing was written)."""
+        if address in self._steps:
+            self._written[address] = raw
+
     def forget(self, address: int | None = None) -> None:
         """The values in the device are unknown again (e.g. after a reconnect),
         or only that of the register ``address`` (changed by the device)."""

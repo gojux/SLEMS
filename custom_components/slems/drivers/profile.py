@@ -31,7 +31,8 @@ Checks before writing (see the profile concept, section 6):
   a warning (repair ``profile_persistent_frequent`` for an hour), more than
   ``max_changes_per_day`` in 24 h are not written (``profile_persistent_blocked``).
   One the device changed by itself (seen when reading back) is written again
-  with the next command, as a change.
+  with the next command, as a change. At a take-over (also after a
+  reconnect) one that already holds its value is not written.
 
 A battery with own PV whose set point refers to its AC connection
 (``setpoint: connection``) gets the input and the output from own_pv, like
@@ -788,6 +789,12 @@ class ProfileDriver(BatteryDriver):
                 self._profile.name, ", ".join(self._outside_rest.values()),
             )
             return False
+        # What the persistent registers hold now: a value they hold already is
+        # not written again (flash), another one is written as a change.
+        for step in self._profile.control.apply:
+            if step.persistent and (value := values.get(step.address)) is not None:
+                self._guard.known(step.address, value)
+                self._written[step.address] = encode(value, step.type, step.word_order)
         self._take_over = False
         return True
 

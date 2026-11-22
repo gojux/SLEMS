@@ -450,6 +450,26 @@ async def test_persistent_register_changed_by_the_device_is_written_again() -> N
         assert driver.issues() == {}
 
 
+async def test_persistent_register_holding_its_value_is_not_written_after_a_reconnect() -> None:
+    link = RegisterLink(Registers({100: 50, 101: 0, 200: 0, 201: 0, 300: 0}))
+    driver = ProfileDriver(
+        parse_profile(FLASH_MODE), link, capacity_wh=5000, max_charge_power_w=2000, max_discharge_power_w=2000
+    )
+    now = [1000.0]
+    with patch.object(profile_driver.time, "monotonic", lambda: now[0]):
+        await driver.connect()
+        assert await driver.apply_power(500)
+        assert link.model.registers[300] == 3
+        # Many reconnects (e.g. time-outs over WiFi): the mode is read, not written again.
+        for _ in range(150):
+            now[0] += 30
+            await driver.connect()
+            link.frames.clear()
+            assert await driver.apply_power(500)
+            assert 300 not in [address for address, _ in link.writes()]
+        assert driver.issues() == {}
+
+
 OWN_PV = """
 slems_battery_profile: 1
 id: own_pv
