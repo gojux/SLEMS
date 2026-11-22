@@ -16,6 +16,7 @@ connection:
 limits:
   max_charge_w: 2500
   max_discharge_w: 2500
+  min_soc_pct: 12  # stops discharging there by itself (as the driver)
 
 # Measured on a Venus E 3.0 (2026-10-12/13), see the driver.
 timing:

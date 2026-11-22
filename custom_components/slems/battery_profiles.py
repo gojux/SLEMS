@@ -165,6 +165,10 @@ ERROR_CODES = (
 )
 # Keys that only describe a profile: changing them does not change its content hash.
 DESCRIPTIVE_KEYS = ("name", "manufacturer", "notes", "verified")
+# Keys of ``limits`` that do not change the control (only the settings
+# assistant uses them): left out of the content hash too, so adding one does
+# not ask for a passed trial again.
+DESCRIPTIVE_LIMITS = ("min_soc_pct",)
 
 _ID_PATTERN = re.compile(r"[a-z0-9][a-z0-9_]*")
 _FORMAT_LINE = re.compile(rf"^\s*{FORMAT_KEY}\s*:", re.M)
@@ -293,6 +297,8 @@ class Limits:
     max_discharge_w: int
     # Smallest power the battery accepts; smaller commands become 0.
     min_power_w: int = 0
+    # Lowest state of charge the battery discharges to by itself (%); None: unknown.
+    min_soc_pct: float | None = None
 
 
 @dataclass(frozen=True)
@@ -566,6 +572,7 @@ def parse_profile(text: str, *, bundled: bool = False) -> BatteryProfile:
         raise ProfileError("not_profile")
     profile = _Parser(bundled).profile(document)
     content = {key: value for key, value in document.items() if key not in DESCRIPTIVE_KEYS}
+    content["limits"] = {key: value for key, value in content["limits"].items() if key not in DESCRIPTIVE_LIMITS}
     digest = hashlib.sha256(_canonical(content).encode()).hexdigest()[:12]
     return dataclasses.replace(profile, content_hash=digest)
 
@@ -774,12 +781,16 @@ class _Parser:
         )
 
     def _limits(self, doc: _LineDict) -> Limits:
-        keys = ("max_charge_w", "max_discharge_w", "min_power_w")
+        keys = ("max_charge_w", "max_discharge_w", "min_power_w", "min_soc_pct")
         m = self._mapping(self._required(doc, "limits", ""), "limits", keys, doc, "limits")
+        min_soc = self._number(m, "min_soc_pct", "limits", default=None)
+        if min_soc is not None and min_soc >= 100:
+            raise self._fail("invalid", "limits.min_soc_pct", m, "min_soc_pct", "must be < 100")
         return Limits(
             max_charge_w=self._number(m, "max_charge_w", "limits", integer=True, exclusive=True),
             max_discharge_w=self._number(m, "max_discharge_w", "limits", integer=True, exclusive=True),
             min_power_w=self._number(m, "min_power_w", "limits", default=0, integer=True),
+            min_soc_pct=None if min_soc is None else float(min_soc),
         )
 
     def _verified(self, doc: _LineDict) -> tuple[Verification, ...]:

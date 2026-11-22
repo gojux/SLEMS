@@ -712,3 +712,21 @@ def test_persistent_guard() -> None:
     # After a reconnect the value in the device is unknown again.
     guard.forget()
     assert guard.decide(203, 2, 24 * 3600) == PersistentGuard.WRITE
+
+
+def test_lowest_soc_of_the_device() -> None:
+    assert parse_profile(MINIMAL).limits.min_soc_pct is None
+    text = MINIMAL.replace("max_discharge_w: 1500}", "max_discharge_w: 1500, min_soc_pct: 12}")
+    profile = parse_profile(text)
+    assert profile.limits.min_soc_pct == 12.0
+    # Not part of the control: a passed trial still holds.
+    assert profile.content_hash == parse_profile(MINIMAL).content_hash
+    for value in ("100", "-1", "low"):
+        bad = MINIMAL.replace("max_discharge_w: 1500}", f"max_discharge_w: 1500, min_soc_pct: {value}}}")
+        assert error(bad).code == "invalid"
+
+
+def test_shipped_venus_profile_names_the_lowest_soc_of_the_driver() -> None:
+    from custom_components.slems.drivers.marstek_venus_e3 import HARDWARE_MIN_SOC_PCT
+
+    assert bundled_profiles()["marstek_venus_e3"].limits.min_soc_pct == HARDWARE_MIN_SOC_PCT

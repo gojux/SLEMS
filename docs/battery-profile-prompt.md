@@ -86,6 +86,7 @@ limits:
   max_charge_w: <highest charge power in W, integer>
   max_discharge_w: <highest discharge power in W, integer>
   min_power_w: <smallest power the battery accepts in W>   # optional
+  min_soc_pct: <state of charge in % the battery discharges to by itself>   # optional
 timing:                                       # optional, see the rules
   start_delay_s: <s, e.g. 2.5>                # from a set point until the power shows
   start_extra_s: <s, e.g. 2.5>                # extra time out of standby
@@ -353,6 +354,9 @@ Rules:
   - for auto, remote control off.
 - confirm: true on every write register the manual says can be read back.
 - min_power_w only if the manual names a least power; never estimate it.
+- min_soc_pct only if the manual names a fixed state of charge at which the
+  battery stops discharging by itself (discharge cut-off, SOC protection);
+  never estimate it, and not a lower limit that can be set.
 - keepalive_s: if the manual names a time after which the battery falls
   back to its own logic without a new set point (time-out, watchdog,
   heartbeat), set keepalive_s clearly below it (e.g. half): SLEMS then

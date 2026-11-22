@@ -2158,7 +2158,12 @@ profile out:
   from `trial.device_info`, the date from `trial.since`. A profile counts as
   verified (concept: at least one, better two batteries with the firmware
   noted) once it also has its write registers checked against the manual
-  and a test in the repository. `verified` does not change the content hash.
+  and a test in the repository. `verified` does not change the content hash,
+  nor does `limits.min_soc_pct` (`DESCRIPTIVE_LIMITS`): the lowest state of
+  charge the battery discharges to by itself (`BatteryCapabilities.min_soc_pct`,
+  the Marstek Venus E 3.0 driver and its shipped profile: 12 %) is only used by
+  the settings assistant (a minimum SoC below it is suggested up to it), so
+  adding it does not ask for a passed trial again.
   An entry holds for the content it was reported with: a report counts only
   if its `trial.profile_key` is the current key of the profile, and a change
   that changes the key (content or revision) removes all entries, so the

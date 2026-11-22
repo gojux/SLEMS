@@ -91,6 +91,7 @@ limits:
   max_charge_w: <höchste Ladeleistung in W, ganze Zahl>
   max_discharge_w: <höchste Entladeleistung in W, ganze Zahl>
   min_power_w: <kleinste Leistung, die die Batterie annimmt, in W>   # optional
+  min_soc_pct: <Ladezustand in %, bis zu dem die Batterie selbst entlädt>   # optional
 timing:                                       # optional, siehe Regeln
   start_delay_s: <s, z. B. 2.5>               # von einer Vorgabe, bis die Leistung sichtbar ist
   start_extra_s: <s, z. B. 2.5>               # zusätzlich aus dem Standby
@@ -367,6 +368,9 @@ Regeln:
   zurücklesen lässt.
 - min_power_w nur, wenn das Handbuch eine kleinste Leistung nennt; nie
   schätzen.
+- min_soc_pct nur, wenn das Handbuch einen festen Ladezustand nennt, bei dem
+  die Batterie das Entladen selbst beendet (Entladeschluss, SOC-Schutz); nie
+  schätzen, keine einstellbare Untergrenze.
 - keepalive_s: Nennt das Handbuch eine Zeit, nach der die Batterie ohne
   neue Vorgabe in ihre eigene Logik zurückfällt (Timeout, Watchdog,
   Heartbeat), setz keepalive_s deutlich darunter (z. B. die Hälfte):

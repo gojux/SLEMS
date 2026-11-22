@@ -720,3 +720,9 @@ async def test_block_failing_while_the_device_was_silent_is_not_refused() -> Non
     link.frames.clear()
     await driver.read_telemetry()
     assert ("read", 30001, 6) in link.frames and ("read", 30001, 1) not in link.frames
+
+
+def test_lowest_soc_of_the_profile_and_the_driver() -> None:
+    profile_driver_ = venus_profile_driver(RegisterLink(Registers({})))
+    native = venus_driver(RegisterLink(Registers({})))
+    assert profile_driver_.capabilities.min_soc_pct == native.capabilities.min_soc_pct == 12.0
