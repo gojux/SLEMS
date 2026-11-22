@@ -11,7 +11,7 @@ werden über die Außentemperatur des Tages prognostiziert, ein warmer Tag in
 der Heizsaison ergibt also sofort weniger Heizenergie. Der Anteil ohne
 Temperaturabhängigkeit (vor allem Warmwasser) kommt nur aus den letzten zwei
 Wochen, die Abhängigkeit von der Temperatur aus dem ganzen Jahr: Heizt im
-Sommer eine Heizpatrone das Warmwasser und im Winter die Wärmepumpe, folgt die
+Sommer ein Heizstab das Warmwasser und im Winter die Wärmepumpe, folgt die
 Prognose dem Wechsel in wenigen Tagen. Nach einem plötzlichen
 Anstieg (z. B. wenn die Wärmepumpe die Heizsaison beginnt) hebt SLEMS die
 Prognose sofort an: Lagen die letzten drei Stunden im Mittel mindestens 200 W
@@ -92,6 +92,6 @@ noch nicht an ihre eigene Logik zurückgegeben ist, zählt sie weiter mit ihrer
 zuletzt gemessenen Leistung, nach der Freigabe mit 0 W. Mit dem Zustand
 **Automatik** bei der Freigabe lädt oder entlädt sie womöglich selbst: Sie
 zählt bis zu 5 Minuten mit ihrer zuletzt gemessenen Leistung, danach mit 0 W,
-und eine Reparatur weist darauf hin, dass der Hausverbrauch ungenau ist.
+und ein Reparaturhinweis weist darauf hin, dass der Hausverbrauch ungenau ist.
 Stunden, in denen der Statistik einer Batterie ein Wert fehlt, lässt die
 Verbrauchsprognose aus.

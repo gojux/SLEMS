@@ -51,7 +51,7 @@ zwei Regelkreise arbeiteten gegeneinander.
    Faktor. ⚠ markiert unwahrscheinliche Werte (Temperatur, Zellspannungen,
    Leistungen über dem Doppelten der Grenze, negative Zähler oder
    Leistungen, unbekannte Zustände, eine Leistung gegen den gelesenen
-   Zustand, nicht lesbare Werte). In Ruhe ist die Leistung 0 W: Lass die Batterie laden oder
+   Zustand, nicht lesbare Werte). Im Standby ist die Leistung 0 W: Lass die Batterie laden oder
    entladen (eigene Logik oder ihre App) und wähl **Erneut lesen**, dann
    zeigt sich auch ein falsches Vorzeichen der Leistung. Gib falsche Werte
    mit den gelesenen Werten an die KI zurück. **Weiter** gibt es nur, wenn
@@ -77,7 +77,7 @@ zwei Regelkreise arbeiteten gegeneinander.
    startet ihr Selbsttest mit den Prüfungen des Profils von selbst und dauert
    etwa 8–9 Minuten (länger, wenn er zuerst Platz im Ladezustand schafft,
    siehe [Selbsttest](batteries.de.md#selbsttest-einer-batterie)), in denen die anderen
-   Batterien und die Verbraucher gehalten werden: Die Schreibregister werden eine Minute in Ruhe gelesen,
+   Batterien und die Verbraucher gehalten werden: Die Schreibregister werden eine Minute im Standby gelesen,
    bevor etwas geschrieben wird (springen Ladezustand oder Probe-Register
    dabei, markiert SLEMS eine vermutlich verschobene Adresse), jede Richtung beginnt mit 100 W, danach
    folgt die Leistung des Selbsttests, wobei die Register bis zu 90 s ohne

@@ -89,5 +89,5 @@ never makes the house consumption unknown: while it is not yet handed back to
 its own logic it keeps counting with its last measured power, once released it
 counts with 0 W. In release state **Automatic** it may charge or discharge on
 its own: it counts with its last measured power for up to 5 minutes, then with
-0 W, and a repair points out that the house consumption is inaccurate. The consumption forecast leaves out hours in which the statistics
+0 W, and a repair issue points out that the house consumption is inaccurate. The consumption forecast leaves out hours in which the statistics
 of a battery lack a value.

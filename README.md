@@ -247,7 +247,7 @@ state of charge. evcc specialises in EV charging and complements SLEMS well
 | Planning and control | Status |
 |---|---|
 | Distribution of surplus between batteries and consumers (priorities, split, minimum runtime/pause); battery priority set automatically from the coming night's consumption | ✅ |
-| Real-time control of batteries and consumers (operating mode **active**) | ✅ |
+| Real-time control of batteries and consumers (operating mode **Active**) | ✅ |
 | Averaged grid surplus (0–300 s) | ✅ |
 | Grid surplus targets for charging/discharging, maximum export while discharging | ✅ |
 | Grid friendly charging: absorb PV feed-in peaks | ✅ |

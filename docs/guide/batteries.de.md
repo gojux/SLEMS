@@ -76,7 +76,7 @@ stoppen.
 
 Für jede Batterie, die eine andere Integration in Home Assistant einbindet;
 die Steuerung ist experimentell. Zuerst das Gerät der Batterie wählen: SLEMS
-schlägt seine Entitäten vor (Ladezustand, Leistung, Sollwerte, Modus, optional
+schlägt seine Entitäten vor (Ladezustand, Leistung, Vorgaben, Modus, optional
 Temperatur, Zellspannungen und Energiezähler); bitte prüfen und korrigieren.
 Ohne Gerät wählst du alles selbst. Die Batterie eines Hybrid-Wechselrichters,
 den du als PV-Anlage eingerichtet hast, oder eine Batterie aus dem
@@ -157,7 +157,7 @@ Batterie (z. B. eine Forecast.Solar-Fläche des Balkons). Er zählt zur
 PV-Prognose der Anlage, auch wenn er in den Systemeinstellungen nicht
 ausgewählt ist. In der Prognose des Ladezustands, der Einspeisebegrenzung, dem
 Preisplan, der Nachtentladung (Wiederaufladen am nächsten Tag), der
-automatischen Grenze der Spitzenkappung und der Simulation lädt die Batterie
+automatischen Grenze des Spitzenabfangs und der Simulation lädt die Batterie
 höchstens diese Prognose und nur aus ihr;
 ohne den Eintrag lädt sie dort nicht, und ihre eigene PV bleibt aus der
 PV-Korrektur (Ist / Prognose) heraus.
@@ -293,7 +293,7 @@ eingespeichert und wieder abgegeben wird: Preis ÷ (Zyklen × nutzbare
 Kapazität), z. B. 1200 € ÷ (6000 × 5 kWh) = 4 ct/kWh. Preisbewusste Aktionen
 mit zusätzlichem Zyklus (Laden aus dem Netz) finden nur statt, wenn sie mehr
 einbringen. Ein Preis von 0 bedeutet keine Verschleißkosten: Feldmessungen an
-Heimspeichern zeigen, dass sie vor allem mit der Zeit, der Temperatur und dem
+Heimbatterien zeigen, dass sie vor allem mit der Zeit, der Temperatur und dem
 Ladezustand altern und oft ihr Lebensende erreichen, bevor ihre Zyklen
 aufgebraucht sind. Ohne Angaben nimmt SLEMS einen niedrigen Schätzwert von
 1 ct/kWh an; die **Details** der Batterie weisen dann darauf hin. Der Sensor
@@ -416,12 +416,12 @@ SLEMS im Betriebsmodus **Aktiv** ist. Jederzeit lässt er sich im Batterie-Menü
 Ablauf, zusammen etwa 5–10 Minuten:
 
 1. Entlädt die Batterie gerade, übergibt sie zuerst sanft.
-2. 60 Sekunden Ruhe (0 W): der Bezugswert.
+2. 60 Sekunden Standby (0 W): der Bezugswert.
 3. Laden mit einem Viertel der kleineren Höchstleistung, mindestens 300 W,
    höchstens 800 W, bis Smart Meter und Batterie mindestens die Hälfte davon
    zeigen, dann noch 45 Sekunden und bis sich der Ladezähler bewegt hat
    (höchstens 4 Minuten).
-4. 60 Sekunden Ruhe, dann Entladen wie beim Laden.
+4. 60 Sekunden Standby, dann Entladen wie beim Laden.
 5. Rückgabe an die eigene Logik der Batterie direkt aus dem Entladen (oder dem
    letzten Schritt), bis zu 60 Sekunden am Smart Meter beobachtet, während die
    anderen weiter halten; danach normale Planung.
@@ -465,7 +465,7 @@ Geprüft wird:
   Richtung.
 - **Rückgabe** an die eigene Logik: Die Batterie bestätigt sie, und der Smart
   Meter zeigt sie. Mit dem Zustand bei Freigabe **Standby** gehen Batterie und
-  Smart Meter zurück auf die Ruhe; bleibt die Batterie bei der Testleistung,
+  Smart Meter zurück in den Standby; bleibt die Batterie bei der Testleistung,
   wird sie noch ferngesteuert (Fehler). Mit **Automatik** verlässt die Batterie
   die Testleistung; will ihre eigene Logik zufällig ungefähr dieselbe
   Leistung, ist die Prüfung unklar.
@@ -574,14 +574,14 @@ Zellausgleich starten oder abbrechen, und **Details** zeigt Modell, Gerätename,
 Firmware-Versionen (EMS, VMS, BMS, Kommunikationsmodul; Sensor **Firmware**),
 MAC-Adresse, Kapazität, Ladezyklen, die insgesamt geladene und entladene
 Energie, die letzte Vollladung, das aktuelle Zell-Delta, wann das Zell-Delta am
-oberen Ladeende zuletzt gemessen wurde und die Phase (siehe **Phasen**).
+oberen Ladeende zuletzt gemessen wurde und die Phase (siehe [Reaktionszeit und Phase messen](#reaktionszeit-und-phase-messen)).
 **Gerät in Home Assistant öffnen** führt zur Geräteseite der Batterie mit allen
 ihren Entitäten.
 
 Die letzte Vollladung (Sensor **Letzte Vollladung**) ist der Zeitpunkt, an dem
 die Batterie zuletzt oben angekommen ist: höchste Zelle auf der
 Ladeschlussspannung, der Ladezustand, den das BMS bei voll meldet, oder das
-BMS beendet die Ladung schon vorher (siehe Ladezustandsfenster oben), auch
+BMS beendet die Ladung schon vorher (siehe [minimaler und maximaler Ladezustand](#grenzen-und-schutz-der-batterien)), auch
 wenn sie
 gleich danach wieder entladen wurde. Eine neue Vollladung zählt, wenn die
 Batterie den oberen Bereich verlassen hat (höchste Zelle unter 3,40 V, ohne
@@ -684,7 +684,7 @@ Jede steuerbare Batterie hat diese Einstellungen (Dashboard: **Einstellungen**):
     (nur mit **Manuell** angezeigt).
   - **Aus**.
 
-  Mit den automatischen Modi zeigt der Tab **Einstellungen** darunter die
+  Mit den automatischen Modi zeigt der Reiter **Einstellungen** darunter die
   Schwellen, die gerade gelten.
 
   Beide Automatiken brauchen die Verluste unter 300 W, die SLEMS je Richtung
@@ -729,7 +729,7 @@ nicht, wird sie für 5 Minuten ausgeschlossen (wie eine deaktivierte Batterie,
 an ihre eigene Logik übergeben, die anderen übernehmen) und danach wieder
 versucht. Eine Batterie am oberen Ladeende, die nicht mehr lädt, oder eine
 Batterie bei höchstens 20 %, die nicht mehr entlädt, zählt nicht (das BMS
-schützt sie, siehe Ladezustandsfenster). Die
+schützt sie, siehe minimaler und maximaler Ladezustand oben). Die
 Venus liest außerdem nach jedem vollständigen Schreiben (erster Befehl und
 alle 60 s) ihre Steuerregister zurück; ein nicht bestätigter oder nicht
 gesendeter Befehl zählt ebenfalls, höchstens einmal alle 5 Sekunden (ein kurzer

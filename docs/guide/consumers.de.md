@@ -323,7 +323,7 @@ Batterien ihn decken dürfen, wenn kein PV-Überschuss da ist.
   haben, dem **Spielraum**: die niedrigste gespeicherte Energie bis zur nächsten
   Ladung aus PV (aus der Prognose von Hausverbrauch und PV, ohne
   Nachtentladung) minus minimalem Ladezustand, **Morgenreserve** und
-  Sicherheitspuffer; mit Bezugsspitzen-Kappung auch deren SoC-Schwelle. „Bis
+  Sicherheitspuffer; mit Spitzenabfang auch dessen SoC-Schwelle. „Bis
   zur nächsten Ladung“ heißt nachts bis zum kommenden Morgen, während eines
   Überschusses bis zum Morgen nach der kommenden Nacht, an einem Tag, dessen
   prognostizierter PV-Überschuss die Batterien vom minimalen bis zum

@@ -49,7 +49,7 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
     (orange-grau), die **Grenze netzdienliches Laden** (grün-grau, heute ab
     jetzt, solange PV erwartet wird: Darüber laden die Batterien) und die
     **Grenze Bezugsspitzen** (blau-grau, unter der Nulllinie). Sind mehrere
-    davon aktiv, sind alle ausgeblendet, bis man sie in der Legende einschaltet;
+    davon aktiv, sind alle ausgeblendet, bis du sie in der Legende einschaltest;
     eine einzelne ist sichtbar. Die Auswahl in der Legende merkt sich der
     Browser. Die Simulation zeichnet die Grenzen mit ihren eigenen
     Einstellungen.
@@ -69,7 +69,7 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
     Antippen, Tippen daneben schließt sie); das Auswählen eines Eintrags der
     Legende blendet diese Kurve aus oder ein (die Skala folgt den angezeigten
     Kurven; der Browser merkt sich die Auswahl; **PV über der Grenze** der
-    Einspeisebegrenzung ist ausgeblendet, bis man es einschaltet); **Tabelle
+    Einspeisebegrenzung ist ausgeblendet, bis du es einschaltest); **Tabelle
     anzeigen** schaltet auf eine Tabelle um.
 - **Preisdiagramm** (nur mit einem [Tarif](../../README.de.md#tarife-optional), dessen Preise
   sich über den Tag ändern, mit Börsenpreisen oder mit preisbewusster

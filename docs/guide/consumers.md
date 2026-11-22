@@ -206,7 +206,7 @@ actions:
   again.
 - **Control active** (switch per controllable consumer, in the dashboard
   ⋮ → **Turn control on** or **Turn control off**): off means SLEMS only measures the consumer. Switching it off
-  in operating mode **active** sets it to 0 W (or off) once; afterwards SLEMS
+  in operating mode **Active** sets it to 0 W (or off) once; afterwards SLEMS
   leaves it alone and plans it like an uncontrolled load: its daily target is
   paused and nothing of it enters the forecast (the card shows **control off**);
   if it runs by itself, the control sees it live.
@@ -293,7 +293,7 @@ current temperature.
 
 ## Battery support
 
-Select per consumer behind the smart meter (also measured only ones), in the
+Select per consumer behind the smart meter (also measurement-only ones), in the
 **Settings** tab under **Consumers** › name of the consumer: how far the
 batteries may cover it when there is no PV surplus.
 

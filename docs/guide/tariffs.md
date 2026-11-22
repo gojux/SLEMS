@@ -32,21 +32,21 @@ Prices are in the currency set in Home Assistant under **Settings → System →
 General** (hundredths per kWh, e.g. ct or Rp., and whole amounts per year);
 market prices come in euro.
 
-1. Name, role (**current tariff** or **comparison tariff**) and VAT: for the
+1. Name, role (**Current tariff** or **Comparison tariff**) and VAT: for the
    consumption bill, for the feed-in energy (often 0 % for private PV) and for
    the other feed-in items. Separate contracts for import and feed-in: add
-   both as **current tariff**, they count together as one. A comparison tariff
+   both as **Current tariff**, they count together as one. A comparison tariff
    with items for only one side (e.g. a dynamic supply tariff) takes the other
    side from the current tariffs, so the comparison always shows total costs.
-2. The lines of the bill one by one: name, side (**consumption** or
-   **feed-in**), group (**energy**, **grid**, **levies**) and the net price (without
+2. The lines of the bill one by one: name, side (**Consumption** or
+   **Feed-in**), group (**Energy**, **Grid**, **Levies**) and the net price (without
    VAT; SLEMS adds the VAT of step 1) in ct/kWh or €/year (charged per day; a
    discount is negative). If the bill only shows gross prices, enter those and
    set the VAT to 0 %. Optionally only in some
    months, on some weekdays or in a time window of the day, e.g. a cheaper
    grid price at noon in summer: a line with a window replaces the line of the
    same name in its window. A price change is the same line again with
-   **valid from**. On the feed-in side the energy price is your credit.
+   **Valid from**. On the feed-in side the energy price is your credit.
 3. **Check against a bill**: enter its period and amounts; SLEMS computes the
    period with the tariff and your recorded grid import and export and shows
    both amounts and the deviation, per side and group.
@@ -185,7 +185,7 @@ the default follows the country set in Home Assistant. Swiss prices are in euro
 like all exchange prices. At the moment SLEMS only supports market prices in
 euro: with another currency set in Home Assistant, the tariff comparison and
 **Check against a bill** leave out tariffs that follow the market price, and a
-repair notice says so if the current tariff is one of them. SLEMS then loads the last 12 months once, stores them
+repair issue says so if the current tariff is one of them. SLEMS then loads the last 12 months once, stores them
 locally and fetches the next day after the day-ahead auction (from 13:00).
 The sensor **Market price** shows the price of the current quarter hour in
 ct/kWh without fees and VAT, with the source as attribution.

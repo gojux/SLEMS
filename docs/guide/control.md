@@ -41,7 +41,7 @@ possible and keeps it over the next night:
 
 ## How the control works
 
-In operating mode **active** SLEMS reacts to every new value of the smart meter:
+In operating mode **Active** SLEMS reacts to every new value of the smart meter:
 
 1. From the energy balance it calculates which battery power would bring the
    grid power exactly to the target (e.g. 100 W export while charging).
@@ -124,9 +124,9 @@ possible, e.g. for backup power.
 
 ![Night discharge](../images/night_discharge_en.svg)
 
-Energy still in the batteries in the morning is fed in over night, down to a
+Energy still in the batteries in the morning is fed in overnight, down to a
 reserve that the PV forecast can refill the next day (here **Morning reserve**
-10 %: about 2.9 kWh are fed in over night, and 3.2 kWh less at noon,
+10 %: about 2.9 kWh are fed in overnight, and 3.2 kWh less at noon,
 because the batteries have more room for the PV). Useful if the batteries are
 still well charged in the morning (large battery, low night consumption,
 summer):
@@ -421,7 +421,7 @@ attributes.
 |---|---|---|
 | Grid friendly charging buffer | recorded PV forecasts: the share by which the PV forecast was too high, not exceeded for 85 % of the forecast energy of all days (a day with at least the forecast PV counts with 0, every day weighted by its forecast: dull days with a small forecast so do not set the buffer of a clear day), applied to the PV still expected today; plus, once learned, the share of the consumption forecast being too low as for the safety buffer, applied to the consumption while PV is still produced today | 14 recorded days |
 | Charge secured safety buffer (also the night discharge target) | the same for the PV plus the consumption forecast being too low (backtest: of the days with a too low forecast the error not exceeded on 85 % of them), applied to the rest of the day or the next 24 hours; while only one part is learned, the larger of it and the set buffer | 14 PV days, 7 consumption days |
-| Grid surplus targets while charging and discharging | how far the grid power the control follows swings towards import while the batteries control it, every 5 s over about the last 4 hours of charging or discharging (short load pulses the control leaves alone on purpose do not count); charging: the target keeps the grid on the export side 90 % of the time (20–1000 W); discharging: the grid swings around the target, half of the time each side (−100 to 300 W, with **No negative grid surplus target** 0 to 300 W), as a short import costs little there but a permanent export gives battery energy away | some controlling in operating mode **active** |
+| Grid surplus targets while charging and discharging | how far the grid power the control follows swings towards import while the batteries control it, every 5 s over about the last 4 hours of charging or discharging (short load pulses the control leaves alone on purpose do not count); charging: the target keeps the grid on the export side 90 % of the time (20–1000 W); discharging: the grid swings around the target, half of the time each side (−100 to 300 W, with **No negative grid surplus target** 0 to 300 W), as a short import costs little there but a permanent export gives battery energy away | some controlling in operating mode **Active** |
 | Control interval and surplus averaging window | the learned report interval of the smart meter (0.8 × and 3 ×) | a few meter reports |
 | Usable capacity (per battery, **Use learned capacity**) | charge and discharge legs over at least 20 % state of charge: DC energy / change of the state of charge (legs with a jump of the state of charge are discarded), median of the last ten | three legs |
 | Power of an on/off consumer by the outdoor temperature | the mean power and outdoor temperature (own sensor, else the weather entity) of each run of 10 minutes or more, the last 60 runs; a straight line, used only with a span of at least 8 K and a change of the power of at least 10 % over it (a ground source heat pump or a heating rod shows none, then it has no effect); attributes of the sensor **Learned power** | 6 runs |
@@ -487,21 +487,23 @@ does not use it yet.
   The share only applies without **Grid friendly charging** (and is only shown
   then): with it the batteries take the surplus above its feed-in limit, the
   consumers the surplus below it.
-- **Automatic battery priority** (switch, on for new installations; off on
-  installations from before it, which keep their threshold) – sets the
-  threshold every day when PV takes over in the morning (the first hour in
-  which the PV forecast exceeds the consumption forecast): the minimum state
-  of charge plus what the house needs from the end of today's PV surplus
-  until PV takes over tomorrow, divided by the efficiency, at least 10 % above
-  the minimum state of charge and at most 90 % (100 % would never leave the
-  surplus to grid friendly charging). The night counts the consumption
-  forecast and the planned runs of the daily targets, without the runs of
-  consumers on battery support **Never** or **Automatic** and without the
-  heat pumps' forecast while none of them has battery support **Always**.
-  The value then stays until the next morning, so the threshold does not
-  move during the day; on a day on which PV never takes over, the last one
-  stays. Until it is computed the first time, the set threshold applies; the
-  settings tab shows the value in effect below the threshold.
+- **Automatic battery priority** (switch; on for new installations, off for
+  those set up before it, which keep their set threshold) – sets the threshold
+  every day when PV takes over in the morning (the first hour in which the PV
+  forecast exceeds the consumption forecast).
+  - The threshold is the minimum state of charge plus the energy the house
+    needs from the end of today's PV surplus until PV takes over tomorrow
+    (divided by the efficiency), as a share of the capacity: at least 10 %
+    above the minimum state of charge and at most 90 % (100 % would never
+    leave the surplus to grid friendly charging).
+  - The night counts the consumption forecast and the planned runs of the
+    daily targets, without the runs of consumers on battery support **Never**
+    or **Automatic** and without the heat pumps' forecast while none of them
+    has battery support **Always**.
+  - The value then stays until the next morning, so the threshold does not
+    move during the day; on a day on which PV never takes over, the last one
+    stays. Until it is computed the first time, the set threshold applies.
+    The **Settings** tab shows the value in effect below the threshold.
 - **Grid surplus target while charging** (0–5000 W, default 100 W) – the
   batteries only charge from the surplus above this value.
 - **Grid surplus target while discharging** (−1000…+1000 W, default 50 W;
@@ -516,7 +518,7 @@ does not use it yet.
   that should remain above the minimum state of charge in the morning, for
   mornings when PV takes over later than forecast; used by the night
   discharge and the [battery support](consumers.md#battery-support).
-- **Night discharge** (switch, off by default) – over night the batteries
+- **Night discharge** (switch, off by default) – overnight the batteries
   discharge evenly down to the reserve (usable energy above the minimum state
   of charge of the batteries) until PV production exceeds the consumption
   again, ignoring the discharge grid target (the maximum grid export still
@@ -545,14 +547,15 @@ does not use it yet.
 Ongoing problems appear under **Settings → Repairs** and disappear by themselves
 when they are solved:
 
-- a battery does not respond (excluded, see above),
+- a battery does not respond (left out of the control, see
+  [battery limits and protection](batteries.md#battery-limits-and-protection)),
 - a battery could not be read for more than 5 minutes,
 - a disabled battery in release state **Automatic** could not be read for more
   than 5 minutes (it counts with 0 W, so the house consumption is inaccurate),
 - a battery could not be handed back to its own logic for more than 5
   minutes (it may still run with the last set point; SLEMS keeps trying,
   every release is confirmed by reading the battery back),
-- the smart meter does not report while SLEMS is in operating mode **active**,
+- the smart meter does not report while SLEMS is in operating mode **Active**,
 - the smart meter could not be read over Modbus for more than 5 minutes
   (SLEMS uses the entity meanwhile),
 - the consumers behind the smart meter report clearly more power together
@@ -560,9 +563,9 @@ when they are solved:
   is not behind the meter; base load and consumption forecast are wrong
   meanwhile),
 - the current tariff follows the market price while Home Assistant is set to
-  another currency than euro (see market prices),
+  another currency than euro (see [market prices](tariffs.md#dynamic-tariffs-and-market-prices)),
 - a battery or consumer seems to be on another phase, or learning its phase
-  anew gave the same one (with a dialog to answer, see **Phases**),
+  anew gave the same one (with a dialog to answer, see [phase of batteries and consumers](#phase-of-batteries-and-consumers)),
 - the energy counters of the smart meter do not net the phases: in several
   quarter hours the import and the export counter both ran by about the same
   amount more than the grid power shows (e.g. a Shelly Pro 3EM, which counts
@@ -586,5 +589,5 @@ internal state as a file: measurements, plans, battery limits, the last
 register values, the state of the cell delta measurement and of a balancing
 run. IP and MAC addresses are removed. The warnings of the feed-in cap
 (batteries too small, not enough time to make room, charge power too low,
-feed-in above the limit, see **Feed-in cap**) are notifications too; they
+feed-in above the limit, see [feed-in cap](#feed-in-cap)) are notifications too; they
 disappear by themselves when the problem is gone.

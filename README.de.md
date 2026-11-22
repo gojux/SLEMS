@@ -4,7 +4,7 @@
 
 # SLEMS
 
-SLEMS ist eine Home-Assistant-Integration, die Heimspeicher und regelbare
+SLEMS ist eine Home-Assistant-Integration, die Heimbatterien und regelbare
 Verbraucher steuert. Ziel ist ein netzdienlicher Betrieb der Batterien, z. B.
 durch Verschieben des Ladezeitpunkts, damit die tägliche Einspeisespitze
 abgefangen wird. Grundlage dafür sind Prognosen für Verbrauch und PV-Ertrag.
@@ -111,7 +111,7 @@ Batterien sind darin geschwärzt.
 
 ## Warum SLEMS?
 
-Die meisten Speichersteuerungen reagieren auf den Moment: Sie halten die
+Die meisten Batteriesteuerungen reagieren auf den Moment: Sie halten die
 Netzleistung bei null und laden, sobald Überschuss da ist. Die Batterie ist
 dann am späten Vormittag voll, und die Mittagsspitze geht trotzdem ins Netz.
 SLEMS plant voraus und regelt genau:

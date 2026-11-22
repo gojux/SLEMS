@@ -35,7 +35,7 @@ ct oder Rp., und ganze Beträge je Jahr); Börsenpreise kommen in Euro.
 1. Name, Rolle (**aktueller Tarif** oder **Vergleichstarif**) und Umsatzsteuer:
    für die Bezugsrechnung, für die eingespeiste Energie (bei privaten
    PV-Anlagen oft 0 %) und für die anderen Einspeise-Posten. Getrennte
-   Verträge für Bezug und Einspeisung: beide als **aktueller Tarif** anlegen, sie
+   Verträge für Bezug und Einspeisung: beide als **Aktueller Tarif** anlegen, sie
    zählen zusammen als einer. Ein Vergleichstarif mit Posten nur für eine Seite
    (z. B. ein dynamischer Stromtarif) übernimmt die andere Seite von den
    aktuellen Tarifen, der Vergleich zeigt so immer die Gesamtkosten.
@@ -63,7 +63,7 @@ Quelle). **Als YAML exportieren** im Menü der Posten zeigt einen Tarif als
 solche Datei, z. B. zum Sichern oder für ein anderes SLEMS. Eine KI kann eine
 Rechnung in eine solche Datei umwandeln:
 [Prompt und Anleitung](../tariff-prompt.de.md). Eine Datei mit neuerer
-Formatversion lehnt SLEMS mit dem Hinweis ab, SLEMS zu aktualisieren; ältere
+Formatversion lehnt SLEMS mit dem Hinweis ab, es zu aktualisieren; ältere
 Versionen werden umgewandelt.
 
 ## Vorlagen
@@ -195,7 +195,7 @@ Schweizer Börsenpreise sind wie alle Börsenpreise in Euro. SLEMS unterstützt
 zum aktuellen Zeitpunkt nur Börsenpreise in Euro: Ist in Home Assistant eine
 andere Währung eingestellt, lassen Tarifvergleich und **Mit einer Rechnung
 vergleichen** Tarife aus, die vom Börsenpreis abhängen; hängt der aktuelle
-Tarif davon ab, weist eine Reparaturmeldung darauf hin. SLEMS lädt dann einmal die letzten
+Tarif davon ab, weist ein Reparaturhinweis darauf hin. SLEMS lädt dann einmal die letzten
 12 Monate, speichert sie lokal und holt nach der Day-Ahead-Auktion (ab 13 Uhr)
 den nächsten Tag. Der Sensor **Börsenpreis** zeigt den Preis der aktuellen
 Viertelstunde in ct/kWh ohne Gebühren und Steuern, mit der Quelle als
@@ -267,7 +267,7 @@ und nur was für die teuren Stunden noch fehlt, wird aus dem Netz geladen
 Tag). Laden muss sich nach
 Lade- und Entladeverlusten, den
 [Verschleißkosten](batteries.de.md#verschleißkosten-der-batterie) und dem Mindestgewinn
-lohnen; bei gleichen Kosten gewinnt das spätere Laden, weil Heimspeicher vor
+lohnen; bei gleichen Kosten gewinnt das spätere Laden, weil Heimbatterien vor
 allem mit der Zeit bei hohem Ladezustand altern. Grenzen: **Höchster
 Ladezustand aus dem Netz** (Standard 90 %), **Höchste Netzladeleistung** (0 =
 Ladeleistung der Batterien), die Bezugsgrenze von Bezugsspitzen abfangen und

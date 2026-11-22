@@ -354,7 +354,7 @@ recommends active cell balancing.
 
 Active cell balancing (switch **Active cell balancing**, or the button in the
 dashboard) follows the Omnibattery balancing blueprint. It can only be started
-in operating mode **active**:
+in operating mode **Active**:
 
 1. If the battery is discharging, it first hands over smoothly (as when it is
    disabled). It then leaves the normal planning; the other batteries take
@@ -383,7 +383,7 @@ The discharge of the balancing battery is fed into the grid; the other
 batteries do not store it (they keep charging only if they charge anyway). Its
 expected charge is taken into account in the expected PV surplus and in grid
 friendly charging. It stops with an error if the battery cannot be read or the
-final discharge has not finished 2 hours after the 24 hours; it pauses outside operating mode **active** and
+final discharge has not finished 2 hours after the 24 hours; it pauses outside operating mode **Active** and
 continues after a restart of Home Assistant. When it ends, the battery is
 handed back to its own logic and then returns to the normal planning. The
 sensor **Cell balancing phase** shows the phase and the result of the last run.
@@ -547,13 +547,13 @@ balancing and opens **Details**: model, device name, firmware versions (EMS,
 VMS, BMS, communication module; sensor **Firmware**), MAC address, capacity,
 charge cycles, the total charged and discharged energy, the last full charge,
 the current cell delta, when the cell delta at top of charge was last measured
-and the phase (see **Phases**). **Open device in Home Assistant**
+and the phase (see [measuring response time and phase](#measuring-response-time-and-phase)). **Open device in Home Assistant**
 leads to the device page of the battery with all its entities.
 
 The last full charge (sensor **Last full charge**) is the moment the battery
 last reached the top: the highest cell at the charge stop voltage, the SoC the
-BMS reports when full, or the BMS ending the charge below that (see the SoC
-window above), also if it was discharged again right away. A new full charge
+BMS reports when full, or the BMS ending the charge below that (see
+[minimum and maximum state of charge](#battery-limits-and-protection)), also if it was discharged again right away. A new full charge
 counts once the battery has left the top (highest cell below 3.40 V, without
 cell voltages below 97 %). LFP batteries recalibrate their state of charge
 only when full, so it should happen regularly.
@@ -682,14 +682,14 @@ percent; the surplus meanwhile goes to the other batteries or the consumers.
 The sensor **Allowed charge power** has the reason `top`; batteries without cell
 voltages are not limited.
 
-In operating mode **active** SLEMS checks, like Omnibattery, whether every
+In operating mode **Active** SLEMS checks, like Omnibattery, whether every
 battery delivers the commanded power. A battery that delivers less than 10 %
 of a command of at least 100 W (after 30 s in that direction) three polls in a
 row first gets all control registers written again; if that does not help, it
 is excluded for 5 minutes (like a disabled battery, handed back to its own
 logic, the others take over) and then retried. A battery at the top that stops
 charging or a battery at 20 % or less that stops discharging does not count
-(the BMS protects it, see the SoC window). The Venus also reads its control registers back after
+(the BMS protects it, see the minimum and maximum state of charge above). The Venus also reads its control registers back after
 every complete write (first command and every 60 s); a write that is not
 confirmed or cannot be sent counts as well, at most once every 5 seconds (a
 short network outage does not exclude a battery). The binary sensor **Not responding** and the dashboard

@@ -377,7 +377,7 @@ Leistungspreis sichtbar): Bezug unter der Grenze kostet keinen
 Leistungspreis. Liegt der Ladezustand unter der Schwelle, laden die Batterien
 deshalb vor der nächsten erwarteten Spitze aus dem Netz nach, bis zur
 Schwelle: in den günstigsten Viertelstunden (mit dynamischem Tarif), mit
-festem Preis möglichst spät (Heimspeicher altern vor allem mit der Zeit bei
+festem Preis möglichst spät (Heimbatterien altern vor allem mit der Zeit bei
 hohem Ladezustand), und nur so weit, dass der prognostizierte Bezug unter der
 Grenze bleibt; ein PV-Überschuss davor zählt mit. Die Energie für Spitzen
 muss dann nur bis zum Ende des nächsten Spitzenblocks reichen (zwei Stunden
@@ -515,21 +515,23 @@ Regelung verwendet sie noch nicht.
   **Netzdienliches Laden** (und wird nur dann angezeigt): Mit ihm bekommen die
   Batterien den Überschuss über seiner Einspeisegrenze, die Verbraucher den
   darunter.
-- **Batterievorrang automatisch** (Schalter, bei neuen Installationen an; bei
-  Installationen von vorher aus, sie behalten ihre Schwelle): Stellt die
-  Schwelle jeden Tag ein, wenn morgens die PV übernimmt (die erste Stunde, in
-  der die PV-Prognose die Verbrauchsprognose übersteigt): Mindest-SoC plus das,
-  was das Haus vom Ende des PV-Überschusses heute bis zur Übernahme durch die
-  PV morgen braucht, geteilt durch den Wirkungsgrad, mindestens 10 % über dem
-  Mindest-SoC und höchstens 90 % (bei 100 % bliebe für netzdienliches Laden nie
-  Überschuss). Die Nacht zählt die Verbrauchsprognose und die geplanten Läufe
-  der Tagesziele, ohne die Läufe von Verbrauchern mit Batterie-Unterstützung
-  **Nie** oder **Automatisch** und ohne die Prognose der Wärmepumpen, solange
-  keine davon Batterie-Unterstützung **Immer** hat. Der Wert bleibt dann bis
-  zum nächsten Morgen, die Schwelle wandert also nicht den Tag über; an einem
-  Tag, an dem die PV nie übernimmt, bleibt der letzte. Bis zur ersten
-  Berechnung gilt die eingestellte Schwelle; der Einstellungen-Tab zeigt den
-  wirksamen Wert unter der Schwelle.
+- **Batterievorrang automatisch** (Schalter; bei neuen Installationen an, bei
+  vorher eingerichteten aus, sie behalten ihre eingestellte Schwelle): Stellt
+  die Schwelle jeden Tag ein, wenn morgens die PV übernimmt (die erste Stunde,
+  in der die PV-Prognose die Verbrauchsprognose übersteigt).
+  - Die Schwelle ist der minimale Ladezustand plus die Energie, die das Haus
+    vom Ende des PV-Überschusses heute bis zur Übernahme durch die PV morgen
+    braucht (geteilt durch den Wirkungsgrad), als Anteil der Kapazität:
+    mindestens 10 % über dem minimalen Ladezustand und höchstens 90 % (bei
+    100 % bliebe für netzdienliches Laden nie Überschuss).
+  - Die Nacht zählt die Verbrauchsprognose und die geplanten Läufe der
+    Tagesziele, ohne die Läufe von Verbrauchern mit Batterie-Unterstützung
+    **Nie** oder **Automatisch** und ohne die Prognose der Wärmepumpen,
+    solange keine davon Batterie-Unterstützung **Immer** hat.
+  - Der Wert bleibt dann bis zum nächsten Morgen, die Schwelle wandert also
+    nicht den Tag über; an einem Tag, an dem die PV nie übernimmt, bleibt der
+    letzte. Bis zur ersten Berechnung gilt die eingestellte Schwelle. Der
+    Reiter **Einstellungen** zeigt den wirksamen Wert unter der Schwelle.
 - **Ziel-Netzüberschuss beim Laden** (0–5000 W, Standard 100 W): Die Batterien
   laden nur aus dem Überschuss oberhalb dieses Werts.
 - **Ziel-Netzüberschuss beim Entladen** (−1000…+1000 W, Standard 50 W; positiv =
@@ -577,7 +579,8 @@ Regelung verwendet sie noch nicht.
 Laufende Probleme erscheinen unter **Einstellungen → Reparaturen** und
 verschwinden von selbst, sobald sie behoben sind:
 
-- eine Batterie reagiert nicht (ausgeschlossen, siehe oben),
+- eine Batterie reagiert nicht (aus der Regelung genommen, siehe
+  [Grenzen und Schutz der Batterien](batteries.de.md#grenzen-und-schutz-der-batterien)),
 - eine Batterie kann seit mehr als 5 Minuten nicht gelesen werden,
 - eine deaktivierte Batterie mit dem Zustand **Automatik** bei der Freigabe
   kann seit mehr als 5 Minuten nicht gelesen werden (sie zählt mit 0 W, der
@@ -594,10 +597,10 @@ verschwinden von selbst, sobald sie behoben sind:
   falsch oder hängt nicht hinter dem Zähler; Grundverbrauch und
   Verbrauchsprognose stimmen so lange nicht),
 - der aktuelle Tarif hängt vom Börsenpreis ab, Home Assistant ist aber auf eine
-  andere Währung als Euro eingestellt (siehe Börsenpreise),
+  andere Währung als Euro eingestellt (siehe [Börsenpreise](tariffs.de.md#dynamische-tarife-und-börsenpreise)),
 - eine Batterie oder ein Verbraucher scheint an einer anderen Phase zu hängen,
   oder das Neu-Lernen der Phase hat wieder dieselbe ergeben (mit einem Dialog
-  zum Beantworten, siehe **Phasen**),
+  zum Beantworten, siehe [Phase von Batterien und Verbrauchern](#phase-von-batterien-und-verbrauchern)),
 - die Energiezähler des Smart Meters saldieren nicht über die Phasen: In
   mehreren Viertelstunden sind Bezugs- und Einspeisezähler beide um etwa
   denselben Betrag mehr gelaufen, als die Netzleistung zeigt (z. B. ein Shelly
@@ -623,6 +626,6 @@ Zustand als Datei: Messwerte, Pläne, Grenzen der Batterien, die letzten
 Registerwerte, den Stand der Zell-Delta-Messung und eines Zellausgleichs. IP-
 und MAC-Adressen werden entfernt. Die Warnungen der Einspeisebegrenzung
 (Batterien zu klein, zu wenig Zeit für Platz, Ladeleistung zu gering,
-Einspeisung über der Grenze, siehe **Einspeisebegrenzung**) sind ebenfalls
+Einspeisung über der Grenze, siehe [Einspeisebegrenzung](#einspeisebegrenzung)) sind ebenfalls
 Benachrichtigungen; sie verschwinden von selbst, sobald das Problem behoben
 ist.
