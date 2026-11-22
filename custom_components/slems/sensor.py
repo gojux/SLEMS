@@ -350,6 +350,11 @@ def _learned_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
         "surplus_average_window_s": timing[1] if timing else None,
         "control_gain": round(c.controller.gain, 2),
         "night_reserve_pct": c.morning_gap.reserve_pct(c.settings.night_reserve_coverage_pct),
+        # Automatic battery priority: the night consumption kept at the last
+        # PV takeover, its day and the threshold from it (None until computed).
+        "battery_priority_night_kwh": kwh(c.battery_priority_day.night_wh),
+        "battery_priority_day": c.battery_priority_day.day.isoformat() if c.battery_priority_day.day else None,
+        "battery_priority_soc_pct": _battery_priority_pct(s, c),
         "morning_days": len(c.morning_gap.days),
         # Data per basis of the learned values: [recorded, needed].
         "learning_progress": {
@@ -360,6 +365,13 @@ def _learned_attributes(s: SystemSnapshot, c: SlemsCoordinator) -> dict:
             "grid_target_discharge": [len(c.grid_targets.discharge), TARGET_MIN_SAMPLES],
         },
     }
+
+
+def _battery_priority_pct(s: SystemSnapshot, c: SlemsCoordinator) -> float | None:
+    battery = c._battery_group(s, planning=True)
+    if battery is None or c.battery_priority_day.night_wh is None:
+        return None
+    return round(c.battery_priority_soc_pct(replace(c.settings, battery_priority_auto=True), battery), 1)
 
 
 def _learned_in_use(s: SystemSnapshot, c: SlemsCoordinator) -> int:

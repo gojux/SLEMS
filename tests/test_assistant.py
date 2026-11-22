@@ -52,7 +52,7 @@ def battery(**changes) -> BatteryFacts:
 
 def test_basic_rules_without_tariff() -> None:
     result = by_key(context())
-    for key in ("auto_gain", "timing_auto", "night_reserve_auto", "feed_in_cap_auto_buffer"):
+    for key in ("auto_gain", "timing_auto", "night_reserve_auto", "feed_in_cap_auto_buffer", "battery_priority_auto"):
         assert result[(key, None)].value is True
         assert result[(key, None)].sources[0].kind == "rule"
     # The learned grid targets are under review.
@@ -201,11 +201,14 @@ def test_no_goal_no_goal_suggestions() -> None:
 def test_goal_self_consumption() -> None:
     result = by_key(context(goal="self_consumption"))
     assert result[("night_discharge", None)].value is False
-    assert result[("battery_priority_soc", None)].value == 50.0
     assert result[("night_discharge", None)].sources[0].params == {"goal": "self_consumption"}
-    # The simulation knows the night discharge, not the battery priority.
+    # No fixed battery priority: the basic rule's automatic one.
+    assert ("battery_priority_soc", None) not in result
+    assert result[("battery_priority_auto", None)].value is True
+    assert result[("battery_priority_auto", None)].sources[0].kind == "rule"
+    # The simulation knows both.
     assert result[("night_discharge", None)].field == "night_discharge"
-    assert result[("battery_priority_soc", None)].field is None
+    assert result[("battery_priority_auto", None)].field == "battery_priority_auto"
 
 
 def test_goal_costs_follows_the_tariff() -> None:
@@ -254,6 +257,11 @@ def test_goal_battery_first_wins_over_a_tariff_preference() -> None:
     assert result[("grid_friendly_charging", None)].value is False
     assert result[("battery_share_when_secured", None)].value == 100.0
     assert result[("max_soc", "dev1")].value == 100.0
+    # A fixed, high battery priority instead of the automatic one of the basic rules.
+    assert result[("battery_priority_auto", None)].value is False
+    assert result[("battery_priority_auto", None)].sources[0].kind == "goal"
+    assert result[("battery_priority_soc", None)].value == 80.0
+    assert result[("battery_priority_soc", None)].field == "battery_priority_soc_pct"
     # Without the goal the tariff suggests it.
     assert by_key(context(tariff=tariff))[("grid_friendly_charging", None)].value is True
 

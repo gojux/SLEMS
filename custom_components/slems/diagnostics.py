@@ -353,6 +353,7 @@ def _system(coordinator: SlemsCoordinator) -> dict:
             "control_interval_s": coordinator.control_interval_s,
             "grid_hold_s": coordinator.grid_hold_s,
             "morning_gap": coordinator.morning_gap.as_dict(),
+            "battery_priority": coordinator.battery_priority_day.as_dict(),
             "vacation_days": coordinator.vacation_days.as_list(),
             "outdoor_power": {
                 subentry_id: {**learner.as_dict(), "model": learner.model()}

@@ -194,6 +194,7 @@ from .forecast import (
 from .forecast.accuracy import PvAccuracyTracker
 from .bad_weather import BadWeatherMode
 from .battery_wear import ESTIMATED_CT_PER_KWH, Wear
+from .battery_priority import BatteryPriorityDay, night_energy_wh, priority_soc_pct
 from .battery_support import BatterySupport, SupportBudget, next_refill, support_budget_wh
 from .grid_filter import MAX_HOLD_S, GridPowerFilter
 from .grid_meter import READ_TIMEOUT_S as GRID_READ_TIMEOUT_S, ModbusGridMeter
@@ -350,6 +351,9 @@ FULL_COMMAND_SHARE = 0.9
 # response time (some devices take several seconds to follow).
 CONSUMER_SETTLE_S = 15.0
 MORNING_GAP_STORE_KEY = "morning_gap"
+BATTERY_PRIORITY_STORE_KEY = "battery_priority"
+# Seconds between two checks whether the battery priority of today is due.
+BATTERY_PRIORITY_CHECK_S = 60.0
 PRICE_SAVINGS_STORE_KEY = "price_savings"
 PLAN_CHANGES_STORE_KEY = "price_plan_changes"
 VACATION_DAYS_STORE_KEY = "vacation_days"
@@ -546,6 +550,9 @@ class ControlSettings:
     # Averaging window of the grid power; 0 disables averaging.
     surplus_average_window_s: float = DEFAULT_SURPLUS_AVERAGE_WINDOW_S
     battery_priority_soc_pct: float = DEFAULT_BATTERY_PRIORITY_SOC_PCT
+    # From the consumption of the coming night instead of the fixed value
+    # (see battery_priority); off for installations from before it existed.
+    battery_priority_auto: bool = True
     battery_share_when_secured_pct: float = DEFAULT_BATTERY_SHARE_WHEN_SECURED_PCT
     charge_secured_buffer_kwh: float = DEFAULT_CHARGE_SECURED_BUFFER_KWH
     charge_grid_target_w: float = DEFAULT_CHARGE_GRID_TARGET_W
@@ -852,6 +859,9 @@ class ForecastPlan:
     grid_charge: GridChargePlan | None = None
     day_plan: list[dict] = field(default_factory=list)
     day_plan_tomorrow: list[dict] = field(default_factory=list)
+    # Battery priority threshold (%) of today and, when automatic, of tomorrow.
+    battery_priority_pct: float | None = None
+    battery_priority_tomorrow_pct: float | None = None
 
 
 class HousePowerHold:
@@ -1017,6 +1027,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.cap_exceeded_since: float | None = None
         self.grid_targets = GridTargetLearner()
         self.morning_gap = MorningGapLearner()
+        self.battery_priority_day = BatteryPriorityDay()
+        self._battery_priority_checked: float | None = None
         # Power of the on/off consumers' runs against the outdoor temperature.
         self.outdoor_power = {c.subentry_id: OutdoorPowerLearner() for c in consumers if c.control_mode.on_off}
         # Days left out of the learned consumption (see forecast).
@@ -1099,6 +1111,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.pv_accuracy.restore(stored.get(PV_ACCURACY_STORE_KEY))
         self.pv_forecast_log = PvForecastLog.from_dict(await self._pv_forecast_log_store.async_load())
         self.morning_gap = MorningGapLearner.from_dict(stored.get(MORNING_GAP_STORE_KEY))
+        self.battery_priority_day = BatteryPriorityDay.from_dict(stored.get(BATTERY_PRIORITY_STORE_KEY))
         self.price_savings = PriceSavings.from_dict(stored.get(PRICE_SAVINGS_STORE_KEY))
         self.plan_changes = PlanChanges.from_dict(stored.get(PLAN_CHANGES_STORE_KEY))
         self.vacation_days = VacationDays.from_list(stored.get(VACATION_DAYS_STORE_KEY))
@@ -1690,6 +1703,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         }
         data[PV_ACCURACY_STORE_KEY] = self.pv_accuracy.as_dict()
         data[MORNING_GAP_STORE_KEY] = self.morning_gap.as_dict()
+        data[BATTERY_PRIORITY_STORE_KEY] = self.battery_priority_day.as_dict()
         data[PRICE_SAVINGS_STORE_KEY] = self.price_savings.as_dict()
         data[PLAN_CHANGES_STORE_KEY] = self.plan_changes.as_dict()
         data[VACATION_DAYS_STORE_KEY] = self.vacation_days.as_list()
@@ -2026,6 +2040,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         snapshot.unread_battery_power_w = self._unread_battery_power_w(snapshot, now)
         self._house_hold.check(snapshot, now)
         self._learn_morning_gap(snapshot, now)
+        self._update_battery_priority(snapshot, now)
         snapshot.saturated = self.controller.saturated
         snapshot.resting = self.controller.resting
         snapshot.running_on_its_own = self.controller.running_on_its_own
@@ -3351,6 +3366,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             requests,
             replace(
                 settings.allocation_settings(),
+                battery_priority_soc_pct=self.battery_priority_soc_pct(settings, battery),
                 peak_shaving_grid_limit_w=control_limit_w,
                 peak_shaving_soc_threshold_pct=peak_threshold_pct,
                 charge_secured_buffer_wh=self.secured_buffer_wh(
@@ -3642,6 +3658,76 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 learner.plan(takeover, consumption.energy_on_day(takeover.date()))
         learner.update(now, local_now, snapshot.pv_power_w, snapshot.total_consumption_w)
 
+    def battery_priority_soc_pct(
+        self, settings: ControlSettings, battery: BatteryGroup | None, consumption_factor: float = 1.0
+    ) -> float:
+        """Battery priority threshold in %: from the night consumption kept at
+        the last PV takeover (times ``consumption_factor``, simulation) or set."""
+        night = self.battery_priority_day.night_wh
+        if settings.battery_priority_auto and battery is not None and night is not None:
+            return priority_soc_pct(
+                night * consumption_factor, battery.min_soc_pct, battery.capacity_wh, battery.charge_efficiency
+            )
+        return settings.battery_priority_soc_pct
+
+    def _battery_priority_tomorrow(
+        self,
+        settings: ControlSettings,
+        battery: BatteryGroup,
+        wall_now: datetime,
+        pv_hourly: dict[datetime, float],
+        consumption: ConsumptionForecast | None,
+    ) -> tuple[tuple[date, float], ...]:
+        """Threshold of tomorrow as the takeover tomorrow will compute it from
+        the forecasts now; nothing without automatic or without a surplus tomorrow."""
+        if not settings.battery_priority_auto or consumption is None:
+            return ()
+        tomorrow = dt_util.as_local(wall_now).date() + timedelta(days=1)
+        night = night_energy_wh(tomorrow, pv_hourly, self._night_consumption(consumption))
+        if night is None:
+            return ()
+        return (
+            (tomorrow, priority_soc_pct(night, battery.min_soc_pct, battery.capacity_wh, battery.charge_efficiency)),
+        )
+
+    def _night_consumption(self, consumption: ConsumptionForecast) -> dict[datetime, float]:
+        """Hourly consumption the batteries cover (see battery_priority): with the
+        forced runs of the daily targets, without those of consumers on battery
+        support never or automatic, and without the heat pump forecast while no
+        heat pump has the battery support always."""
+        grid_load, budget_load = self._support_loads()
+        heat_pumps = [
+            c for c in self.consumers if c.consumer_type is ConsumerType.HEAT_PUMP and c.included_in_meter
+        ]
+        heat_pump = (
+            hourly(consumption.heat_pump)
+            if heat_pumps and all(self.support_of(c.subentry_id) is not BatterySupport.ALWAYS for c in heat_pumps)
+            else {}
+        )
+        return {
+            hour: max(0.0, wh - grid_load.get(hour, 0.0) - budget_load.get(hour, 0.0) - heat_pump.get(hour, 0.0))
+            for hour, wh in self._with_target_load(consumption.total).items()
+        }
+
+    def _update_battery_priority(self, snapshot: SystemSnapshot, now: float) -> None:
+        """Compute the night consumption of the battery priority at today's PV
+        takeover (checked at most every BATTERY_PRIORITY_CHECK_S)."""
+        local_now = dt_util.now()
+        day = self.battery_priority_day
+        consumption = snapshot.consumption_forecast
+        if (
+            day.day == local_now.date()
+            or snapshot.pv_forecast is None
+            or consumption is None
+            or (
+                self._battery_priority_checked is not None
+                and now - self._battery_priority_checked < BATTERY_PRIORITY_CHECK_S
+            )
+        ):
+            return
+        self._battery_priority_checked = now
+        day.update(local_now, hourly(self._pv_native(snapshot, local_now)), self._night_consumption(consumption))
+
     def grid_friendly_buffer_wh(
         self, settings: ControlSettings, pv_remaining_wh: float, consumption_wh: float
     ) -> float:
@@ -3807,6 +3893,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         power_w: tuple[float, float] | None = None,
         tariff: Tariff | None = None,
         background: bool = False,
+        consumption_factor: float = 1.0,
     ) -> ForecastPlan:
         """Plans from the forecasts with ``settings``: feed-in limit, feed-in
         cap, peak shaving and the SoC projection with the day plans.
@@ -3814,7 +3901,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         Used for the real planning and, with other settings, battery,
         forecasts and ``tariff`` (instead of the current one), for the
         simulation. ``power_w`` replaces the charge and discharge power of the
-        batteries for the feed-in cap.
+        batteries for the feed-in cap; ``consumption_factor`` is the change of
+        the consumption forecast in the simulation (for the night consumption
+        kept for today's battery priority).
         """
         result = ForecastPlan()
         consumption = snapshot.consumption_forecast
@@ -3861,6 +3950,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         if pv_forecast is None:
             return result
         if battery is not None:
+            result.battery_priority_pct = self.battery_priority_soc_pct(settings, battery, consumption_factor)
+            priority_days = self._battery_priority_tomorrow(settings, battery, wall_now, pv_hourly, consumption)
+            if priority_days:
+                result.battery_priority_tomorrow_pct = priority_days[0][1]
             projection_settings = ProjectionSettings(
                     grid_friendly_charging=settings.grid_friendly_charging,
                     # Like the feed-in limit: only with grid friendly charging.
@@ -3883,7 +3976,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     night_reserve_pct=self.night_reserve_pct(settings),
                     discharge_max_grid_export_w=settings.discharge_max_grid_export_w,
                     bad_weather_until=self.bad_weather.until,
-                    battery_priority_soc_pct=settings.battery_priority_soc_pct,
+                    battery_priority_soc_pct=result.battery_priority_pct,
+                    battery_priority_days=priority_days,
                 )
             grid_load, budget_load = self._support_loads()
             until = (

@@ -34,6 +34,7 @@ SETTING_SWITCHES: dict[str, str] = {
     "grid_targets_no_import": "grid_targets_no_import",
     "timing_auto": "timing_auto",
     "night_reserve_auto": "night_reserve_auto",
+    "battery_priority_auto": "battery_priority_auto",
     "regular_full_charge": "regular_full_charge",
     "price_control": "price_control",
     "grid_charge": "grid_charge",

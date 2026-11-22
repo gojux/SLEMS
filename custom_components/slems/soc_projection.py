@@ -51,7 +51,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from homeassistant.util import dt as dt_util
 
@@ -83,6 +83,8 @@ class ProjectionSettings:
     bad_weather_until: datetime | None = None
     # Below it the whole surplus is charged, without the feed-in limit.
     battery_priority_soc_pct: float = 0.0
+    # Other thresholds per local day (automatic battery priority of tomorrow).
+    battery_priority_days: tuple[tuple[date, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -259,7 +261,8 @@ def project_soc(
         allowed = full - cap.space_needed_at(hour_end) if cap is not None else full
         if pv_w > load:
             charge = charge_plan(hour, start).get(hour, 0.0)
-            priority_wh = settings.battery_priority_soc_pct / 100 * capacity - stored
+            priority_pct = dict(settings.battery_priority_days).get(hour.date(), settings.battery_priority_soc_pct)
+            priority_wh = priority_pct / 100 * capacity - stored
             surplus_w = min(pv_w - load, battery.max_charge_w)
             if priority_wh > 0 and surplus_w > charge:
                 # Battery priority: the whole surplus until its SoC is reached,

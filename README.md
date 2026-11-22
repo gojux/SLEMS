@@ -126,7 +126,8 @@ controls precisely:
   charge for today and tomorrow.
 - **Batteries and consumers in one plan.** The surplus is distributed between
   batteries and controllable consumers (heating rod, heat pump, …) with
-  priorities, battery priority until the charge is secured, minimum runtimes,
+  priorities, battery priority until the charge is secured (automatically
+  from the consumption of the coming night), minimum runtimes,
   external blocking and thermostat pauses. Daily targets (runtime, energy or
   temperature by a time of day) are met from the surplus first and only if
   needed from the batteries or the grid; per consumer you decide whether the

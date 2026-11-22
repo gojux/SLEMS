@@ -107,6 +107,18 @@ def test_battery_priority_before_grid_friendly_charging() -> None:
     assert result.soc_pct[at(16)] == pytest.approx(100, abs=0.5)
 
 
+def test_battery_priority_of_tomorrow() -> None:
+    pv, consumption = forecasts()
+    tomorrow = ((at(0, day=1).date(), 30.0),)
+    today_only = settings(grid_friendly_charging=True, battery_priority_soc_pct=0.0)
+    with_tomorrow = settings(grid_friendly_charging=True, battery_priority_soc_pct=0.0, battery_priority_days=tomorrow)
+    normal = project_soc(at(20), battery(10), pv, consumption, None, today_only, None)
+    result = project_soc(at(20), battery(10), pv, consumption, None, with_tomorrow, None)
+    # Empty after the night: tomorrow's threshold gives it the whole surplus at first.
+    assert normal.planned_charge_w[at(8, day=1)] == 0
+    assert result.planned_charge_w[at(8, day=1)] == pytest.approx(100)
+
+
 def test_peak_shaving_keeps_the_low_battery() -> None:
     pv, consumption = forecasts(load_w=800)
     result = project_soc(

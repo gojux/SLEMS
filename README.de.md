@@ -127,7 +127,8 @@ SLEMS plant voraus und regelt genau:
   Ladezustands für heute und morgen.
 - **Batterien und Verbraucher in einem Plan.** Der Überschuss wird auf
   Batterien und steuerbare Verbraucher (Heizstab, Wärmepumpe, …) verteilt, mit
-  Prioritäten, Batterievorrang bis zur gesicherten Ladung, Mindestlaufzeiten,
+  Prioritäten, Batterievorrang bis zur gesicherten Ladung (automatisch aus dem
+  Verbrauch der kommenden Nacht), Mindestlaufzeiten,
   externer Sperre und Thermostat-Pausen. Tagesziele (Laufzeit, Energie oder
   Temperatur bis zu einer Uhrzeit) erfüllt SLEMS möglichst aus dem Überschuss
   und erst wenn nötig aus Batterie oder Netz; je Verbraucher legst du fest, ob

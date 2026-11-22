@@ -120,8 +120,9 @@ if it differs); the settings next to them count for both.
   the feed-in cap can be switched on and off; their values appear below each
   switch as in the settings. The batteries (capacity, minimum/maximum state of
   charge, charge and discharge power; the default is the power of the
-  batteries without the momentary limits of their state of charge), the night
-  discharge buffer, the maximum
+  batteries without the momentary limits of their state of charge), the
+  battery priority (automatic or a fixed state of charge; below it the
+  threshold in effect today and tomorrow), the night discharge buffer, the maximum
   grid export while discharging and the PV and consumption forecasts (±%) can
   be changed too. With comparison [tariffs](../../README.md#tariffs-optional) the group
   **Tariff** at the top chooses another **Tariff for import** and **Tariff
@@ -145,8 +146,10 @@ if it differs); the settings next to them count for both.
   afternoon a note suggests **Tomorrow** for a whole simulated day.
 - The daily targets of the consumers are planned anew with the simulated
   settings and tariff (e.g. a run in the cheaper window of another tariff);
-  otherwise consumers controlled by SLEMS and the battery priority (which acts
-  in the real-time distribution) are not simulated.
+  otherwise consumers controlled by SLEMS are not simulated.
+- **Automatic battery priority**: today the night consumption computed when PV
+  took over this morning applies, changed by the consumption forecast (±%) and
+  with the simulated batteries; tomorrow the value the forecasts give now.
 
 **Tariff comparison**: with [tariffs](../../README.md#tariffs-optional)
 **Recorded months** shows per month of the last year (and the current month
@@ -202,9 +205,10 @@ simulated hardware. It is an estimate with limits:
 - **Hourly values**: peaks within an hour are averaged, so more charge or
   discharge power tends to bring a little more than shown, a larger battery
   a little less.
-- **Without grid friendly charging and the feed-in cap**: the model feeds in
-  every surplus, so with more PV the feed-in credit comes out too high where
-  a feed-in cap would curtail.
+- **Without grid friendly charging and the feed-in cap**: the batteries take
+  every surplus first (as below the battery priority) and the model feeds in
+  the rest, so with more PV the feed-in credit comes out too high where a
+  feed-in cap would curtail.
 - **Price aware control**: its plan knows consumption and PV exactly, so its
   saving is an upper bound; switched off in the simulation it is not included,
   and with a dynamic tariff a larger battery can then bring more than shown.

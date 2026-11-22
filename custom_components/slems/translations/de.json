@@ -1548,6 +1548,9 @@
       "night_reserve_auto": {
         "name": "Morgenreserve automatisch"
       },
+      "battery_priority_auto": {
+        "name": "Batterievorrang automatisch"
+      },
       "regular_full_charge": {
         "name": "Regelmäßige Vollladung"
       },

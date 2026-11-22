@@ -230,6 +230,8 @@ const STRINGS = {
     automatic: "automatic",
     learned: "learned",
     learnedWaiting: "Not enough data to learn yet; this value applies.",
+    batteryPriorityWaiting: "Computed when PV takes over next; until then this value applies.",
+    simBatteryPriority: "In effect: today {today}, tomorrow {tomorrow}",
     learnedProgress: "Not enough data to learn yet ({missing}); this value applies.",
     learnedPartial: "One part is learned ({value}); until the rest is ({missing}), the larger of it and this value applies.",
     learnedBasis: {
@@ -652,8 +654,10 @@ const STRINGS = {
         "Minimum time between two control cycles: SLEMS controls at every report of the smart meter, but at most this often. Best just below the report interval of the smart meter; **Automatic control timing** sets it by itself (0.8 × report interval).",
       surplus_average_window:
         "Period over which SLEMS averages the grid power. The less favourable of the average and the current value counts: if PV drops suddenly, the control follows at once; if it rises, only after the window. This prevents overshooting with changing clouds. 0 s: no averaging. **Automatic control timing** sets it to 3 × the report interval of the smart meter.",
+      battery_priority_auto:
+        "Sets **Battery priority below SoC** every day when PV takes over in the morning: the minimum SoC plus what the house needs from the end of today's PV surplus until PV takes over tomorrow (consumption forecast and the planned runs of the daily targets, without consumers on battery support **Never** or **Automatic**), at least 10 % above the minimum SoC and at most 90 %. The value then stays for the day. Off: the set value applies.",
       battery_priority_soc:
-        "Below this state of charge (of all batteries together) the batteries get the whole surplus, regardless of the forecast; grid friendly charging and the battery share only apply above it. Above it the charge counts as secured as soon as the PV surplus expected for the rest of the day covers filling the batteries plus the **Charge secured safety buffer**. A daily target short on time and the feed-in cap take precedence.",
+        "Below this state of charge (of all batteries together) the batteries get the whole surplus, regardless of the forecast; grid friendly charging and the battery share only apply above it. Above it the charge counts as secured as soon as the PV surplus expected for the rest of the day covers filling the batteries plus the **Charge secured safety buffer**. A daily target short on time and the feed-in cap take precedence. With **Automatic battery priority** the value from the coming night applies.",
       charge_secured_buffer:
         "Reserve against too optimistic forecasts, in three places: the charge only counts as secured when the expected PV surplus covers filling the batteries plus this buffer; the night discharge only goes down so far that the next day's PV surplus minus this buffer fills the batteries again; and the battery support **Automatic** of the consumers keeps it back. Larger: the batteries get full more reliably, but less is left for consumers and the night discharge.",
       grid_friendly_charging:
@@ -1125,6 +1129,8 @@ const STRINGS = {
     automatic: "automatisch",
     learned: "gelernt",
     learnedWaiting: "Noch zu wenig Daten zum Lernen; dieser Wert gilt.",
+    batteryPriorityWaiting: "Wird berechnet, wenn die PV das nächste Mal übernimmt; bis dahin gilt dieser Wert.",
+    simBatteryPriority: "Wirksam: heute {today}, morgen {tomorrow}",
     learnedProgress: "Noch zu wenig Daten zum Lernen ({missing}); dieser Wert gilt.",
     learnedPartial: "Ein Teil ist gelernt ({value}); bis auch der Rest gelernt ist ({missing}), gilt der größere Wert aus diesem und dem eingestellten.",
     learnedBasis: {
@@ -1547,8 +1553,10 @@ const STRINGS = {
         "Mindestabstand zwischen zwei Regelzyklen: SLEMS regelt bei jeder Meldung des Smart Meters, aber höchstens so oft. Sinnvoll knapp unter dem Meldeintervall des Smart Meters; das stellt **Regelzeiten automatisch** selbst ein (0,8 × Meldeintervall).",
       surplus_average_window:
         "Zeitraum, über den SLEMS die Netzleistung mittelt. Es zählt der ungünstigere Wert aus Mittel und aktuellem: Sinkt die PV plötzlich, folgt die Regelung sofort, steigt sie, erst nach dem Fenster. Das verhindert Überschwingen bei wechselnder Bewölkung. 0 s: keine Mittelung. **Regelzeiten automatisch** stellt es auf 3 × Meldeintervall des Smart Meters.",
+      battery_priority_auto:
+        "Stellt **Batterievorrang unter Ladezustand** jeden Tag ein, wenn morgens die PV übernimmt: Mindest-SoC plus das, was das Haus vom Ende des PV-Überschusses heute bis zur Übernahme durch die PV morgen braucht (Verbrauchsprognose und geplante Läufe der Tagesziele, ohne Verbraucher mit Batterie-Unterstützung **Nie** oder **Automatisch**), mindestens 10 % über dem Mindest-SoC und höchstens 90 %. Der Wert bleibt dann den Tag über. Aus: Der eingestellte Wert gilt.",
       battery_priority_soc:
-        "Unter diesem Ladezustand (aller Batterien zusammen) bekommen die Batterien den gesamten Überschuss, unabhängig von der Prognose; netzdienliches Laden und der Batterieanteil gelten erst darüber. Darüber gilt die Ladung als gesichert, sobald der erwartete PV-Überschuss des restlichen Tages das Füllen der Batterien plus den **Sicherheitspuffer gesicherte Ladung** deckt. Ein knappes Tagesziel und die Einspeisebegrenzung haben Vorrang.",
+        "Unter diesem Ladezustand (aller Batterien zusammen) bekommen die Batterien den gesamten Überschuss, unabhängig von der Prognose; netzdienliches Laden und der Batterieanteil gelten erst darüber. Darüber gilt die Ladung als gesichert, sobald der erwartete PV-Überschuss des restlichen Tages das Füllen der Batterien plus den **Sicherheitspuffer gesicherte Ladung** deckt. Ein knappes Tagesziel und die Einspeisebegrenzung haben Vorrang. Mit **Batterievorrang automatisch** gilt der Wert aus der kommenden Nacht.",
       charge_secured_buffer:
         "Reserve gegen zu optimistische Prognosen, an drei Stellen: Die Ladung gilt erst als gesichert, wenn der erwartete PV-Überschuss das Füllen der Batterien plus diesen Puffer deckt; die Nachtentladung entlädt nur so weit, dass der PV-Überschuss des nächsten Tages abzüglich dieses Puffers die Batterien wieder füllt; und die Batterie-Unterstützung **Automatisch** der Verbraucher hält ihn zurück. Größer: Die Batterien werden sicherer voll, dafür bleibt weniger für Verbraucher und Nachtentladung.",
       grid_friendly_charging:
@@ -1896,6 +1904,7 @@ const SETTINGS_NEED_BATTERY = [
   "auto_gain",
   "control_gain",
   "battery_response_time",
+  "battery_priority_auto",
   "battery_priority_soc",
   "battery_share_when_secured",
   "charge_secured_buffer_auto",
@@ -1945,6 +1954,7 @@ const SETTINGS_NEED_PV = [
   "grid_friendly_buffer",
   "charge_secured_buffer_auto",
   "charge_secured_buffer",
+  "battery_priority_auto",
   "battery_priority_soc",
   "battery_share_when_secured",
   "feed_in_cap",
@@ -1980,7 +1990,7 @@ const SETTING_CLUSTERS = [
   [
     "pvCharging",
     [
-      ["pvPriority", ["battery_priority_soc", "battery_share_when_secured", "charge_secured_buffer_auto", "charge_secured_buffer"]],
+      ["pvPriority", ["battery_priority_auto", "battery_priority_soc", "battery_share_when_secured", "charge_secured_buffer_auto", "charge_secured_buffer"]],
       ["gridFriendly", ["grid_friendly_charging", "grid_friendly_buffer_auto", "grid_friendly_buffer"]],
     ],
   ],
@@ -5704,6 +5714,17 @@ class SlemsPanel extends HTMLElement {
       </select></div>`;
   }
 
+  /** The battery priority threshold the simulation plans with today and tomorrow. */
+  _simBatteryPriority() {
+    const r = this._sim.result;
+    if (!r || r.battery_priority_pct === null || r.battery_priority_pct === undefined) return "";
+    const tomorrow = r.battery_priority_tomorrow_pct ?? r.battery_priority_pct;
+    const text = this._t.simBatteryPriority
+      .replace("{today}", this._percent(r.battery_priority_pct))
+      .replace("{tomorrow}", this._percent(tomorrow));
+    return `<div class="setting-extra"><span class="setting-effective">${escapeHtml(text)}</span></div>`;
+  }
+
   _simControls() {
     const t = this._t;
     const s = this._sim.form?.settings || {};
@@ -5734,7 +5755,10 @@ class SlemsPanel extends HTMLElement {
       )}
       ${group(
         t.groups.priority,
-        setting("charge_secured_buffer_kwh", "charge_secured_buffer") +
+        setting("battery_priority_auto", "battery_priority_auto") +
+          setting("battery_priority_soc_pct", "battery_priority_soc", { disabled: s.battery_priority_auto }) +
+          this._simBatteryPriority() +
+          setting("charge_secured_buffer_kwh", "charge_secured_buffer") +
           setting("discharge_max_grid_export_w", "discharge_max_grid_export", { max: 100000 })
       )}
       ${option(t.groups.gridFriendly, "grid_friendly_charging", "grid_friendly_charging",
@@ -6998,6 +7022,17 @@ class SlemsPanel extends HTMLElement {
         return out(`<span class="readonly">${escapeHtml(text)} (${this._t.automatic})</span>`);
       }
       extra += inEffect(text, this._t.automatic);
+    }
+    if (key === "battery_priority_soc" && this._state("battery_priority_auto")?.state === "on") {
+      // Computed when PV takes over; until the first time the set value applies.
+      const value = this._state("learned_values")?.attributes?.battery_priority_soc_pct;
+      if (value === null || value === undefined) {
+        if (effective) extra += `<span class="setting-hint">${escapeHtml(this._t.batteryPriorityWaiting)}</span>`;
+      } else if (!effective) {
+        return out(`<span class="readonly">${escapeHtml(this._percent(value))} (${this._t.automatic})</span>`);
+      } else {
+        extra += inEffect(this._percent(value), this._t.automatic);
+      }
     }
     if (domain === "time") {
       const value = (stateObj.state || "").slice(0, 5);

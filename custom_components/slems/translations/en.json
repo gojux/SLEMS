@@ -1548,6 +1548,9 @@
       "night_reserve_auto": {
         "name": "Automatic morning reserve"
       },
+      "battery_priority_auto": {
+        "name": "Automatic battery priority"
+      },
       "regular_full_charge": {
         "name": "Regular full charge"
       },

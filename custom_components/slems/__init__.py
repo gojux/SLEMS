@@ -124,6 +124,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SlemsConfigEntry) -> boo
     ]
     coordinator = SlemsCoordinator(hass, entry, batteries, consumers, system_device.id)
     coordinator.unusable_profiles = unusable
+    _defaults_of_existing_installation(hass, entry, coordinator)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
 
@@ -161,6 +162,19 @@ def _remove_old_settings(hass: HomeAssistant, entry: SlemsConfigEntry) -> None:
         if last is not None:
             entry.runtime_data.legacy_peak_shaving_auto = last.state.state == STATE_ON
         registry.async_remove(entity_id)
+
+
+def _defaults_of_existing_installation(
+    hass: HomeAssistant, entry: SlemsConfigEntry, coordinator: SlemsCoordinator
+) -> None:
+    """New settings that keep the behaviour of an installation from before them
+    (they have no state to restore there): the automatic battery priority is
+    off where the fixed threshold already existed."""
+    registry = er.async_get(hass)
+    if registry.async_get_entity_id(
+        Platform.SWITCH, DOMAIN, f"{entry.entry_id}_battery_priority_auto"
+    ) is None and registry.async_get_entity_id(Platform.NUMBER, DOMAIN, f"{entry.entry_id}_battery_priority_soc"):
+        coordinator.settings.battery_priority_auto = False
 
 
 def _last_stored_state(hass: HomeAssistant, entity_id: str) -> StoredState | None:

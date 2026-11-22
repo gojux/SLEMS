@@ -16,7 +16,13 @@ charge and the current forecasts:
   (planned anew with the simulated settings, see
   SlemsCoordinator.simulated_targets) and peak shaving with a power price.
 
-The reply contains the day plans of today and tomorrow, key figures per day
+The automatic battery priority of today comes from the night consumption kept
+at today's PV takeover, changed by ``consumption_pct``, with the simulated
+batteries; tomorrow's from the forecasts now, as the takeover tomorrow will
+compute it (see battery_priority).
+
+The reply contains the day plans of today and tomorrow, the battery priority
+threshold of both days, key figures per day
 for the simulation and for the real plan (with a tariff also the import costs
 and the feed-in credit of the planned grid energy: per kWh items incl. VAT,
 the simulation with its tariff, the real plan with the current one; with a
@@ -50,6 +56,8 @@ if TYPE_CHECKING:
 
 # Settings that change the plans (the others act in the real-time allocation).
 SETTINGS = (
+    "battery_priority_auto",
+    "battery_priority_soc_pct",
     "grid_friendly_charging",
     "grid_friendly_buffer_kwh",
     "night_discharge",
@@ -127,6 +135,10 @@ def _metrics(
         result["import_cost"] = None if cost is None else round(cost, 2)
         result["export_credit"] = None if credit is None else round(credit, 2)
     return result
+
+
+def _round(pct: float | None) -> float | None:
+    return None if pct is None else round(pct, 1)
 
 
 def _add_cost(total: float | None, wh: float, ct_per_kwh: float | None) -> float | None:
@@ -247,7 +259,11 @@ def simulate(coordinator: SlemsCoordinator, request: dict[str, Any]) -> dict[str
         },
         consumption_forecast=None
         if forecast is None
-        else replace(forecast, total={k: v * load_factor for k, v in forecast.total.items()}),
+        else replace(
+            forecast,
+            total={k: v * load_factor for k, v in forecast.total.items()},
+            heat_pump={k: v * load_factor for k, v in forecast.heat_pump.items()},
+        ),
     )
     tariff = chosen_tariff(
         coordinator.config_entry, request.get("import_tariff"), request.get("export_tariff")
@@ -264,12 +280,16 @@ def simulate(coordinator: SlemsCoordinator, request: dict[str, Any]) -> dict[str
             settings,
             power_w=(values["max_charge_w"], values["max_discharge_w"]),
             tariff=tariff,
+            consumption_factor=load_factor,
         )
     return {
         "available": True,
         "base": base,
         "day_plan": plan.day_plan,
         "day_plan_tomorrow": plan.day_plan_tomorrow,
+        # Battery priority threshold in effect today and (automatic) tomorrow.
+        "battery_priority_pct": _round(plan.battery_priority_pct),
+        "battery_priority_tomorrow_pct": _round(plan.battery_priority_tomorrow_pct),
         "cap_limit_w": settings.feed_in_cap_limit_w if settings.feed_in_cap else None,
         # Limit lines of the day chart with the simulated settings.
         "feed_in_limit_w": plan.feed_in_limit_w,

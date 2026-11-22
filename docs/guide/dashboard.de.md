@@ -131,7 +131,8 @@ für beide.
   wie in den Einstellungen unter dem jeweiligen Schalter. Auch die Batterien
   (Kapazität, minimaler/maximaler Ladezustand, Lade- und Entladeleistung;
   vorgegeben ist die Leistung der Batterien ohne die momentanen Grenzen durch
-  den Ladezustand), der
+  den Ladezustand), der Batterievorrang (automatisch oder ein fester
+  Ladezustand; darunter die heute und morgen wirksame Schwelle), der
   Sicherheitspuffer der Nachtentladung, die maximale Einspeisung beim Entladen
   und die PV- und Verbrauchsprognose (±%) lassen sich ändern. Mit
   Vergleichstarifen ([Tarife](../../README.de.md#tarife-optional)) wählt die Gruppe **Tarif**
@@ -158,8 +159,11 @@ für beide.
 - Die Tagesziele der Verbraucher werden mit den simulierten Einstellungen und
   dem simulierten Tarif neu geplant (z. B. ein Lauf im günstigeren Fenster
   eines anderen Tarifs); sonst
-  werden von SLEMS gesteuerte Verbraucher und der Batterievorrang (er wirkt in
-  der Echtzeit-Verteilung) nicht simuliert.
+  werden von SLEMS gesteuerte Verbraucher nicht simuliert.
+- **Batterievorrang automatisch**: Heute gilt der Nachtverbrauch, den SLEMS
+  heute früh bei der Übernahme durch die PV berechnet hat, geändert um die
+  Verbrauchsprognose (±%) und mit den simulierten Batterien; morgen der Wert
+  aus den jetzigen Prognosen.
 
 **Tarifvergleich**: Mit [Tarifen](../../README.de.md#tarife-optional) zeigt
 **Aufgezeichnete Monate** für jeden Monat des letzten Jahres (und den
@@ -219,9 +223,10 @@ Lauf der simulierten Hardware. Es ist eine Schätzung mit Grenzen:
 - **Stundenwerte**: Spitzen innerhalb einer Stunde werden gemittelt; mehr
   Lade- oder Entladeleistung bringt daher eher etwas mehr als angezeigt, eine
   größere Batterie eher etwas weniger.
-- **Ohne netzdienliches Laden und Einspeisebegrenzung**: Das Modell speist
-  jeden Überschuss ein; mit mehr PV fällt die Einspeisevergütung daher zu
-  hoch aus, wo eine Einspeisebegrenzung abregeln würde.
+- **Ohne netzdienliches Laden und Einspeisebegrenzung**: Die Batterien nehmen
+  jeden Überschuss zuerst (wie unter dem Batterievorrang), das Modell speist
+  den Rest ein; mit mehr PV fällt die Einspeisevergütung daher zu hoch aus, wo
+  eine Einspeisebegrenzung abregeln würde.
 - **Preissteuerung**: Ihr Plan kennt Verbrauch und PV genau, ihre Ersparnis
   ist daher eine Obergrenze; in der Simulation ausgeschaltet ist sie nicht
   enthalten, und mit einem dynamischen Tarif kann eine größere Batterie dann

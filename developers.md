@@ -233,6 +233,23 @@ sensors. Inputs:
   is the filtered value plus the current battery power.
 - **Charge secured**: SoC ≥ *battery priority SoC* and expected PV surplus
   today ≥ energy to full (divided by the charge efficiency) + *safety buffer* (kWh).
+  With *automatic battery priority* (`battery_priority.py`) the threshold is
+  the minimum SoC + the night consumption ÷ efficiency ÷ capacity, between the
+  minimum SoC + 10 % and 90 %. The night runs from the end of today's PV
+  surplus to the takeover tomorrow (first hour with PV above consumption; a
+  missing forecast of tomorrow: today's takeover time; a missing consumption
+  hour: the one a day earlier) and counts the consumption forecast with the
+  forced runs of the daily targets, without the runs on battery support never
+  or automatic (`_support_loads`) and without the heat pump series while no
+  heat pump has support always. It is computed at today's takeover (at once
+  if nothing is kept yet; then again at the takeover) and stored as Wh with
+  its day (store key `battery_priority`), so the threshold holds over the day
+  and over restarts and the simulation derives it with its batteries and its
+  consumption change. The day plan of tomorrow uses tomorrow's value from the
+  forecasts now (`ProjectionSettings.battery_priority_days`). An installation
+  from before the switch keeps it off: on setup, a registered number
+  `battery_priority_soc` without a registered switch `battery_priority_auto`
+  sets it off before the switch restores (none to restore there).
   The expected surplus is the remaining PV forecast today minus the current
   uncontrolled load until the end of PV production (persistence forecast; the
   consumption forecast will replace it).
@@ -2923,3 +2940,4 @@ repository (otherwise its *brands* check fails).
 | 2026-11-15 | Requests over Home Assistant's Modbus backend (grid meter, profiles with **Home Assistant Modbus**) go through `ha_modbus.request`: a lost connection is asked again on a new one after 1 s (at most twice) instead of dropping the shared connection once more and failing the read; a timeout or a late answer drops the connection and fails, without further attempts (they would hold the control cycle up). The grid meter requires a timeout of 1 s instead of cancelling the request after 1 s with the default of 10 s: a silent meter kept its dead connection, and cancelled requests caused late answers. Minimum version Home Assistant 2026.10 (`require_timeout`), which `HaUnitTransport` already used without a check. |
 | 2026-11-20 | Implausible values are left out where they would spread. `async_statistic_means` drops means above 100 × the 90th percentile of their statistic (at least 50 kW): one hour with 78 MWh from a faulty sensor reading had made the consumption forecast of a whole day 111 MWh; the percentile is relative so a farm with a 400 kW connection (grid level 6) keeps its hours, the 90th rather than the 99th so a short series with several faults still finds its usual range. A battery reading beyond 10 × its largest configured power (at least 10 kW) counts as a failed read (`implausible_battery_power`), so a register read as 0xFFFF does not enter the house consumption; generous, as the configured powers may be limits below the hardware. A car's state of charge of 0 % is unknown: evcc 0.319.1 clears it to 0 on unplugging, which would have planned a full charge for a daily target by state of charge. Sensors *Battery minimum / maximum state of charge total* (capacity weighted over the batteries of the state of charge total) for evcc's `minSocEntity` / `maxSocEntity` (from 0.317). `grid_target_samples` and `learning_progress` are not recorded: they changed with every sample and made the learned values sensor the largest attributes table of the recorder. Checked against evcc 0.319.1 and ha-evcc 2026.11.2 (no renamed entities; the energy of a loadpoint is now named *Charged (Total)*). |
 | 2026-11-22 | The learned grid surplus targets sample the filtered grid power at most every 5 s and are stored. Before, they sampled the raw grid power every control cycle (0.5 s) and started from nothing after a restart: 3000 samples were 25 min of charging, and on two November days of a production log the 90 % quantile of such a window ranged from 28 to 886 W, a single hour with load steps deciding (a learned 700 W had made the user switch it off). Over 4 h of filtered samples it stayed at 76–105 W. The raw power also contained the load pulses the grid filter leaves alone on purpose; a target raised for them fed in for good what the filter keeps. The 90 % quantile itself stays for now (an economic one from prices and efficiency would be lower; to check with measurements on sunny days). |
+| 2026-11-22 | The battery priority can follow the coming night instead of being suggested from statistics: a fixed threshold is either too low on long winter nights or keeps surplus from the consumers in summer. Computed once at the morning takeover and held, as a threshold moving with every forecast update would hand the surplus back and forth during the day; held as Wh so the simulation can apply its batteries and consumption change. Runs the batteries do not cover (battery support never or automatic) are left out: the automatic ones only get what the batteries can spare, a threshold charging for them would chase its own budget. Off for existing installations, so an update does not change their behaviour; the settings assistant suggests it as a basic rule, except for the goal battery first (fixed 80 %). |

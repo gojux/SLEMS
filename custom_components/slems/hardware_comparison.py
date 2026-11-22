@@ -17,7 +17,8 @@ include it, and its share (the planned run's costs minus the usual one's) is
 given apart.
 
 Limits: hourly values; grid friendly charging and the feed-in cap are not
-modelled, the price plan knows consumption and PV exactly; the PV factor
+modelled (the batteries take every surplus first, so the battery priority
+changes nothing either), the price plan knows consumption and PV exactly; the PV factor
 scales the recorded curve (another orientation of the modules changes its
 shape, not only its height).
 """

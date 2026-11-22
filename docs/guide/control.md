@@ -486,6 +486,21 @@ does not use it yet.
   The share only applies without **Grid friendly charging** (and is only shown
   then): with it the batteries take the surplus above its feed-in limit, the
   consumers the surplus below it.
+- **Automatic battery priority** (switch, on for new installations; off on
+  installations from before it, which keep their threshold) – sets the
+  threshold every day when PV takes over in the morning (the first hour in
+  which the PV forecast exceeds the consumption forecast): the minimum state
+  of charge plus what the house needs from the end of today's PV surplus
+  until PV takes over tomorrow, divided by the efficiency, at least 10 % above
+  the minimum state of charge and at most 90 % (100 % would never leave the
+  surplus to grid friendly charging). The night counts the consumption
+  forecast and the planned runs of the daily targets, without the runs of
+  consumers on battery support **Never** or **Automatic** and without the
+  heat pumps' forecast while none of them has battery support **Always**.
+  The value then stays until the next morning, so the threshold does not
+  move during the day; on a day on which PV never takes over, the last one
+  stays. Until it is computed the first time, the set threshold applies; the
+  settings tab shows the value in effect below the threshold.
 - **Grid surplus target while charging** (0–5000 W, default 100 W) – the
   batteries only charge from the surplus above this value.
 - **Grid surplus target while discharging** (−1000…+1000 W, default 50 W;

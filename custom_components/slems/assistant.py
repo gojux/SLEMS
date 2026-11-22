@@ -101,6 +101,7 @@ PV_SETTINGS = frozenset(
         "grid_friendly_buffer",
         "charge_secured_buffer_auto",
         "charge_secured_buffer",
+        "battery_priority_auto",
         "battery_priority_soc",
         "battery_share_when_secured",
         "feed_in_cap",
@@ -468,6 +469,9 @@ def _field(key: str) -> str | None:
 def _rules(ctx: Context) -> list[Suggestion]:
     """Basic rules (always)."""
     result = [Suggestion(key, True, [Source("rule", "auto")]) for key in AUTO_SWITCHES]
+    if ctx.goal != "battery_first":
+        # Battery first needs a fixed, high threshold.
+        result.append(Suggestion("battery_priority_auto", True, [Source("rule", "auto")]))
     full_sources = [Source("rule", "full_charge")]
     interval = ctx.settings.full_charge_interval_days
     for battery in ctx.batteries:
@@ -544,7 +548,6 @@ def _goal_values(ctx: Context) -> list[tuple[str, bool | float]]:
         # nothing gained for the own use, only conversion losses.
         return [
             ("night_discharge", False),
-            ("battery_priority_soc", 50.0),
             ("price_control", False),
             ("grid_charge", False),
             ("battery_export", False),
@@ -574,6 +577,7 @@ def _goal_values(ctx: Context) -> list[tuple[str, bool | float]]:
             ("night_reserve_coverage", 110.0),
             # Batteries full as early as possible.
             ("grid_friendly_charging", False),
+            ("battery_priority_auto", False),
             ("battery_priority_soc", 80.0),
             ("battery_share_when_secured", 100.0),
             ("price_control", False),

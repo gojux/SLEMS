@@ -514,6 +514,21 @@ Regelung verwendet sie noch nicht.
   **Netzdienliches Laden** (und wird nur dann angezeigt): Mit ihm bekommen die
   Batterien den Überschuss über seiner Einspeisegrenze, die Verbraucher den
   darunter.
+- **Batterievorrang automatisch** (Schalter, bei neuen Installationen an; bei
+  Installationen von vorher aus, sie behalten ihre Schwelle): Stellt die
+  Schwelle jeden Tag ein, wenn morgens die PV übernimmt (die erste Stunde, in
+  der die PV-Prognose die Verbrauchsprognose übersteigt): Mindest-SoC plus das,
+  was das Haus vom Ende des PV-Überschusses heute bis zur Übernahme durch die
+  PV morgen braucht, geteilt durch den Wirkungsgrad, mindestens 10 % über dem
+  Mindest-SoC und höchstens 90 % (bei 100 % bliebe für netzdienliches Laden nie
+  Überschuss). Die Nacht zählt die Verbrauchsprognose und die geplanten Läufe
+  der Tagesziele, ohne die Läufe von Verbrauchern mit Batterie-Unterstützung
+  **Nie** oder **Automatisch** und ohne die Prognose der Wärmepumpen, solange
+  keine davon Batterie-Unterstützung **Immer** hat. Der Wert bleibt dann bis
+  zum nächsten Morgen, die Schwelle wandert also nicht den Tag über; an einem
+  Tag, an dem die PV nie übernimmt, bleibt der letzte. Bis zur ersten
+  Berechnung gilt die eingestellte Schwelle; der Einstellungen-Tab zeigt den
+  wirksamen Wert unter der Schwelle.
 - **Ziel-Netzüberschuss beim Laden** (0–5000 W, Standard 100 W): Die Batterien
   laden nur aus dem Überschuss oberhalb dieses Werts.
 - **Ziel-Netzüberschuss beim Entladen** (−1000…+1000 W, Standard 50 W; positiv =
