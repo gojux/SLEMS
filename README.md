@@ -118,7 +118,7 @@ controls precisely:
 - **Grid friendly instead of full by 10 o'clock.** From the PV and consumption
   forecasts SLEMS calculates a feed-in limit and charges the batteries with
   the surplus above it, so they absorb the feed-in peak and are still full in
-  the evening. The limit is recalculated continuously and drops by itself when
+  the afternoon. The limit is recalculated continuously and drops by itself when
   the day turns out worse than forecast.
 - **Its own consumption forecast.** Learned from the long-term statistics of
   your house, with the weather and a separate heat pump model; vacation mode,
@@ -246,7 +246,7 @@ state of charge. evcc specialises in EV charging and complements SLEMS well
 
 | Planning and control | Status |
 |---|---|
-| Distribution of surplus between batteries and consumers (priorities, split, minimum runtime/pause) | ✅ |
+| Distribution of surplus between batteries and consumers (priorities, split, minimum runtime/pause); battery priority set automatically from the coming night's consumption | ✅ |
 | Real-time control of batteries and consumers (operating mode **active**) | ✅ |
 | Averaged grid surplus (0–300 s) | ✅ |
 | Grid surplus targets for charging/discharging, maximum export while discharging | ✅ |
@@ -310,7 +310,7 @@ Requires Home Assistant 2026.10 or newer.
    already knows, including the sign of its grid power, the PV forecast
    entries and the weather entity. Check the grid power entity (positive =
    import, negative = export; the form shows its current value; enable
-   **invert** if your meter uses the opposite sign), and optionally PV power,
+   **Invert grid power sign** if your meter uses the opposite sign), and optionally PV power,
    PV forecast and weather. Several PV systems (e.g. roof and balcony) are
    summed up.
 3. On the SLEMS integration page choose **Add battery** for every battery and
@@ -429,7 +429,7 @@ SLEMS also works without any battery: add the consumers only.
 - **Works**: directing the PV surplus into controlled consumers (heating rod,
   wallbox also with evcc, dehumidifier, heat pump through a switch input) with
   priorities, minimum runtime and pause, **Avoid short runs** and external
-  blocking; daily targets with the sources **surplus only** and **+ grid** (also
+  blocking; daily targets with the sources **Surplus only** and **Surplus + batteries + grid** (also
   in the cheapest window with price aware control); tariffs, bill check,
   market prices, tariff comparison and price chart; energy flow, consumption
   and PV forecast with their accuracy.

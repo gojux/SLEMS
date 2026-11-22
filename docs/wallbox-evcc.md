@@ -85,7 +85,7 @@ from plugging in are on the [roadmap](../README.md#roadmap).
 
 ## Prerequisites
 
-- SLEMS with current control (A) and the consumer type **wallbox**.
+- SLEMS with the control **Current set point (A)** and the consumer type **Wallbox**.
 - evcc 0.316 or later, set up in its web interface, with your wallbox as a
   loadpoint.
 - Home Assistant is reachable from evcc, and you open evcc in the browser at the
@@ -239,19 +239,22 @@ the planned power with current and phases, e.g. **10,440 W (15 A, 3 phases)**.
 
 ![SLEMS: wallbox card](images/slems_wallbox_card_en.png)
 
-- **Battery support**: **automatic** is preset for a wallbox. The batteries cover
+Set it up in the **Settings** tab under **Consumers** › the wallbox (**Charge
+now** is on its card):
+
+- **Battery support**: **Automatic** is preset for a wallbox. The batteries cover
   the charging only with the budget they can spare until the next charge from
   PV; the grid delivers the rest. **Never** charges the car without surplus from
-  the grid only, **always** also from the batteries. See
+  the grid only, **Always** also from the batteries. See
   [battery support](guide/consumers.md#battery-support).
 - **Daily target** instead of an evcc charging plan (mode A): e.g. **state of
-  charge** 80 % or **energy** 10 kWh until 07:00 with the source **grid**. SLEMS
+  charge** 80 % or **energy** 10 kWh until 07:00 with the source **Surplus + batteries + grid**. SLEMS
   charges with surplus first and in time from the grid what is still missing.
   See [daily target](guide/consumers.md#daily-target).
 - **Charge now** instead of evcc's mode **Fast** (mode A): charges at full power
   until the car is unplugged or reaches the state of charge **Charge now up
   to**. See [car at the wallbox](guide/consumers.md#car-at-the-wallbox).
-- **Feed-in cap**: with the role **supporting** the wallbox absorbs midday peaks
+- **Feed-in cap**: with the role **Supporting** the wallbox absorbs midday peaks
   while a car is plugged in.
 
 ## What SLEMS does exactly

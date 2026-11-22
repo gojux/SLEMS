@@ -8,7 +8,7 @@ battery profile for SLEMS. Paste the result in SLEMS under
 **Settings → Devices & services → SLEMS → Add battery** with the model
 **Battery from a Modbus profile (experimental)**.
 The whole way from the manual to a controlled battery is described in the
-README under
+guide
 [Battery from a Modbus profile](guide/battery-modbus-profile.md).
 
 How to do it:

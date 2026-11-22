@@ -8,7 +8,7 @@ Hybrid-Wechselrichters lesen und daraus ein Batterieprofil für SLEMS
 erstellen. Füge das Ergebnis in SLEMS unter
 **Einstellungen → Geräte & Dienste → SLEMS → Batterie hinzufügen** mit dem
 Modell **Batterie aus einem Modbus-Profil (experimentell)** ein. Den ganzen
-Weg vom Handbuch bis zur geregelten Batterie beschreibt die README unter
+Weg vom Handbuch bis zur geregelten Batterie beschreibt die Anleitung
 [Batterie aus einem Modbus-Profil](guide/battery-modbus-profile.de.md).
 
 So geht's:

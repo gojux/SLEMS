@@ -54,7 +54,10 @@ other.
    (`at_rest`); a register outside usually holds something else (a shifted
    address). Otherwise **Edit the profile** or **Change the connection**.
 5. **Limits** as for the other batteries; **State when SLEMS releases the
-   battery** offers only the states of the profile.
+   battery** offers only the states of the profile. If the profile names the
+   lowest state of charge the battery discharges to by itself
+   (`limits.min_soc_pct`), the **Assistant** in the settings tab suggests a
+   minimum state of charge from it.
 6. **Write preview**: what SLEMS writes in the trial, register by register
    with the value now and then: charging, discharging and the release.
    Compare every write register with the manual or the sources named in the

@@ -85,7 +85,7 @@ Ziele ab dem Anstecken stehen auf der [Roadmap](../README.de.md#roadmap).
 
 ## Voraussetzungen
 
-- SLEMS mit Stromvorgabe (A) und Verbrauchertyp **Wallbox**.
+- SLEMS mit der Steuerung **Stromvorgabe (A)** und Verbrauchertyp **Wallbox**.
 - evcc ab Version 0.316, eingerichtet über die Weboberfläche, mit deiner Wallbox
   als Ladepunkt.
 - Home Assistant ist von evcc aus erreichbar, und du öffnest evcc im Browser
@@ -131,7 +131,7 @@ PV-Leistung** (`sensor.slems_pv_power`). **prüfen**, **Speichern**.
 2. **Leistungsentität**: **SLEMS Batterieleistung gesamt (Entladen positiv)**. evcc
    erwartet beim Entladen einen positiven Wert; der Sensor **Batterieleistung
    gesamt** hat das umgekehrte Vorzeichen und passt deshalb nicht. Die
-   Entity-ID hängt von der Sprache von Home Assistant ab (z. B.
+   Entitäts-ID hängt von der Sprache von Home Assistant ab (z. B.
    `sensor.slems_batterieleistung_gesamt_entladen_positiv`).
 
    ![evcc: Hausbatterie mit der SLEMS-Batterieleistung](images/evcc_battery_top_de.png)
@@ -142,7 +142,7 @@ PV-Leistung** (`sensor.slems_pv_power`). **prüfen**, **Speichern**.
    Minimaler Ladezustand gesamt** und **Maximaler Ladestand (Entität)**:
    **SLEMS Maximaler Ladezustand gesamt**. So kennt evcc den nutzbaren Bereich
    der Batterien, wie er in SLEMS eingestellt ist (über mehrere Batterien nach
-   Kapazität gemittelt). Die Entity-IDs hängen von der Sprache von Home
+   Kapazität gemittelt). Die Entitäts-IDs hängen von der Sprache von Home
    Assistant ab (z. B. `sensor.slems_minimaler_ladezustand_gesamt`).
 4. **Alle Skript-Felder leer lassen** (**Normalbetrieb**, **Halten**, **Netzladung**
    …). Mit ihnen würde evcc die Batterie selbst steuern, und SLEMS und evcc
@@ -207,12 +207,12 @@ Je Ladepunkt (hier „Garage“) entstehen u. a. **Max. Ladestrom**
    ![SLEMS: Wallbox als Verbraucher](images/slems_wallbox_step1_de.png)
 
 3. **Steuerung**
-   - **Steuer-Entity**: **Max. Ladestrom** des Ladepunkts.
+   - **Steuer-Entität**: **Max. Ladestrom** des Ladepunkts.
    - **Mindeststrom** / **Höchststrom**: wie in evcc (meist 6 / 16 A).
    - **Phasen**: wie die Wallbox angeschlossen ist (meist 3).
-   - **Entity der aktiven Phasen**: **Phasen in Verwendung**. Schaltet evcc
+   - **Entität der aktiven Phasen**: **Phasen in Verwendung**. Schaltet evcc
      zwischen 1 und 3 Phasen um, folgt SLEMS dem.
-   - **Start/Stopp-Entity**: Betriebsart A: **Modus** des Ladepunkts
+   - **Start/Stopp-Entität**: Betriebsart A: **Modus** des Ladepunkts
      (vorgeschlagen); Betriebsart B: leeren.
    - **Mindestlaufzeit** / **Mindestpause**: 5 Minuten sind vorgegeben, damit die
      Wallbox bei Wolken nicht ständig startet und stoppt.
@@ -242,19 +242,22 @@ Phasen)**.
 
 ![SLEMS: Karte der Wallbox](images/slems_wallbox_card_de.png)
 
+Eingestellt wird im Reiter **Einstellungen** unter **Verbraucher** › die Wallbox
+(**Sofort laden** ist auf ihrer Karte):
+
 - **Batterie-Unterstützung**: Für eine Wallbox ist **Automatisch** vorgegeben. Die
   Batterien decken das Laden nur mit dem Spielraum, den sie bis zur nächsten
   Ladung aus PV übrig haben; den Rest liefert das Netz. **Nie** lädt das Auto ohne
   Überschuss nur aus dem Netz, **Immer** auch aus den Batterien. Siehe
   [Batterie-Unterstützung](guide/consumers.de.md#batterie-unterstützung).
 - **Tagesziel** statt Ladeplan in evcc (Betriebsart A): z. B. **Ladestand** 80 %
-  oder **Energie** 10 kWh bis 07:00 mit Quelle **Netz**. SLEMS lädt zuerst mit
+  oder **Energie** 10 kWh bis 07:00 mit Quelle **Überschuss + Batterie + Netz**. SLEMS lädt zuerst mit
   Überschuss und rechtzeitig aus dem Netz, was noch fehlt. Siehe
   [Tagesziel](guide/consumers.de.md#tagesziel).
 - **Sofort laden** statt evcc-Modus **Schnell** (Betriebsart A): lädt mit voller
   Leistung, bis das Auto abgesteckt wird oder den Ladestand **Sofort laden
   bis** erreicht. Siehe [Auto an der Wallbox](guide/consumers.de.md#auto-an-der-wallbox).
-- **Einspeisebegrenzung**: Mit der Rolle **Unterstützend** nimmt die Wallbox
+- **Einspeisebegrenzung**: Mit dem Einsatz **Unterstützend** nimmt die Wallbox
   Mittagsspitzen auf, wenn ein Auto angesteckt ist.
 
 ## Was SLEMS genau tut

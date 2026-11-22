@@ -60,7 +60,10 @@ zwei Regelkreise arbeiteten gegeneinander.
    ein Register außerhalb enthält meist etwas anderes (eine verschobene
    Adresse). Sonst **Profil bearbeiten** oder **Verbindung ändern**.
 5. **Grenzen** wie bei den anderen Batterien; **Zustand, wenn SLEMS die
-   Batterie freigibt** bietet nur die Zustände des Profils an.
+   Batterie freigibt** bietet nur die Zustände des Profils an. Nennt das Profil
+   den niedrigsten Ladezustand, bis zu dem sich die Batterie selbst entlädt
+   (`limits.min_soc_pct`), schlägt der **Assistent** im Reiter **Einstellungen**
+   daraus einen minimalen Ladezustand vor.
 6. **Schreibvorschau**: was SLEMS im Probebetrieb schreibt, Register für
    Register mit dem Wert jetzt und dann: Laden, Entladen und die Freigabe.
    Vergleiche jedes Schreibregister mit dem Handbuch oder den Quellen im

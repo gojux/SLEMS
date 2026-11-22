@@ -200,7 +200,8 @@ peak:
   of the sensor). After a restart SLEMS takes the production so far from the
   statistics of the PV sensor, so nothing is lost.
 - As long as the charge is not secured (state of charge below **Battery
-  priority below state of charge** or the forecast is not sufficient), SLEMS
+  priority below state of charge**, or its automatic value, or the forecast is
+  not sufficient), SLEMS
   charges at once as before.
 
 How much of the peak can be absorbed depends on the battery size compared to

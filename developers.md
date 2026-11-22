@@ -450,15 +450,16 @@ select `price_source` defaults by `hass.config.country`. `MarketPrices` keeps
 the last 365 days in a store (dense array from the first quarter hour),
 fetches the missing days newest first (first request only today and
 tomorrow) and checks every hour at :17, the next day from 13:00. Dynamic
-tariff units `spot` and `market_month` use the hourly means; the monthly
-market price is the mean weighted by the export unless entered per month.
+tariff units `spot` and `market_month` use the stored prices of each period
+(the means over it, `period_means`, for periods longer than the prices); the
+monthly market price is the mean weighted by the export unless entered per month.
 
 ### Tariff comparison
 
 `tariff_comparison.py` (websocket `slems/tariff_comparison`): the hourly
 import / export of the last 12 months (`energy_history`) split per local month
 and priced with each tariff (`compute_bill` in the executor, dynamic items with
-the stored hourly market prices). The result is cached for 10 minutes on the
+the stored market prices as means per period). The result is cached for 30 minutes on the
 coordinator; a changed tariff clears it (`tariffs_changed`).
 
 Backtest (`price_backtest.play`): hourly house consumption (first house
@@ -1334,7 +1335,8 @@ Integration:
 Role of each consumer: select *Role with feed-in cap* per controllable
 consumer (`ConsumerCapModeSelect`, restored, stored values of earlier versions
 mapped by `LEGACY_CAP_MODES`; `coordinator.consumer_cap_modes`, default
-`normal`), shown on the consumer card under *Feed-in cap* while the cap is on.
+`normal`), set in the settings tab under the consumer (block *Feed-in cap*)
+while the cap is on.
 While the cap is on, `allocate` leaves `support` consumers out of the normal
 surplus distribution; `normal` and `never` consumers get the normal surplus as
 usual. The planning does not count on consumers to make room: planned
@@ -1554,10 +1556,9 @@ field of the consumer subentry, default on). The panel is removed on unload and 
   `hass` updates. When a section is replaced, the focused control is found
   again by its data attributes (`focusSelector`) and focused, with a value
   being typed kept. Events are delegated on the content element.
-- Consumer cards show the current values (`_consumerTargetRows`); *Show
-  settings* expands the settings (`_expandedConsumers`, localStorage
-  `slems-expanded-consumers`), ⋮ → *Details* holds the rest
-  (`_renderConsumerDetails`). A consumer's flow box opens the same menu
+- Consumer cards show the current values (`_consumerTargetRows`); their
+  settings are in the settings tab (one navigation entry per consumer),
+  ⋮ → *Details* holds the rest (`_renderConsumerDetails`). A consumer's flow box opens the same menu
   (`_consumerMenuItems`) in one place of the flow (`.flow-menu`), so a greyed
   out box does not grey its menu too.
 - *Heating today* of a heat pump is the forecast of the day minus the hot water
@@ -1915,8 +1916,9 @@ CH395 can be sent from the simulator container to test it.
   first, then the other number, then the mode option; `script` calls
   `script.turn_on` with `variables: {power_w}`. A remote control entity
   (switch or select with on/off options) is switched on before commands.
-  Unchanged values are not written again unless `refresh`. Service calls are
-  not blocking; an unavailable entity fails the command (`BatteryDriverError`).
+  Unchanged values are not written again unless `refresh`. Service calls wait
+  for the result (`util.async_call_service`, 10 s time-out); a failed call or
+  an unavailable entity fails the command (`BatteryDriverError`).
 - **Timing**: `BatteryDriver.min_command_interval_s` (the controller keeps
   the previous set point until it passed) and `keepalive_s` (replaces
   `BATTERY_KEEPALIVE_S` for that battery).

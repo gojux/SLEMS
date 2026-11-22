@@ -173,7 +173,7 @@ darüber). Wie SLEMS die Spitze niedrig hält: siehe
 ## Dynamische Tarife und Börsenpreise
 
 Ein Posten kann auch dem
-Day-Ahead-Markt folgen: **Börsenpreis (stündlich)** oder **Monatsmarktpreis**,
+Day-Ahead-Markt folgen: **Börsenpreis (viertelstündlich)** oder **Monatsmarktpreis**,
 jeweils als Marktpreis + Aufschlag in % seines Betrags + Preis in ct/kWh, z. B.
 „Börsenpreis + 5 % + 1,2 ct“ oder „Monatsmarktpreis − 0,5 ct“ für die
 Einspeisung; ein Aufschlag in % bleibt auch bei negativem Marktpreis ein
@@ -230,7 +230,7 @@ eines festen Tarifs. Bezugsspitzen abfangen gilt weiter. Die Strategie zeigt
 Simulation berücksichtigen es. Die Preispläne arbeiten in Viertelstunden
 (Börsenpreise wechseln je Viertelstunde): Die stündliche Verbrauchsprognose
 wird gleichmäßig auf ihre Viertelstunden verteilt, die PV kommt aus der
-Prognose; das Tagesdiagramm zeigt ihre Stundenmittel. Tagesziele mit der Quelle **+ Netz**: Reicht der
+Prognose; das Tagesdiagramm zeigt ihre Stundenmittel. Tagesziele mit der Quelle **Überschuss + Batterie + Netz**: Reicht der
 prognostizierte Überschuss ohnehin nicht, startet der erzwungene Lauf im
 Fenster mit den niedrigsten Kosten vor der Frist (um mindestens den
 Mindestgewinn je kWh günstiger als zum spätesten Start); die

@@ -112,7 +112,7 @@ Im Reiter **Einstellungen** unter **Verbraucher** › Name des Verbrauchers, Blo
   Warmwasserladung bis zu ihrem Ende. **Nach Überschuss**: freigegeben,
   sobald genug Überschuss da ist, dann für die **Freigabedauer** und
   anschließend solange er reicht, ohne geplantes Fenster. **Nach Prognose**:
-  Karte (Zeile **Freigabe geplant**, mit der Quelle **Nur Überschuss**
+  Karte (Zeile **Freigabe geplant**, mit der Quelle **Nur Überschuss** die Zeile
   **Überschuss-Fenster**) und Tagesdiagramm zeigen es, und es wird
   zusätzlich für das geplante Fenster freigegeben, auch wenn der Überschuss
   kurz fehlt, damit die Automation auf ihren Moment warten kann; dann kann ein
@@ -335,9 +335,10 @@ Batterien ihn decken dürfen, wenn kein PV-Überschuss da ist.
   Verbraucher auf Automatisch teilen sich den Spielraum. Energie, die die
   Nachtentladung einspeisen würde, dürfen sie stattdessen nutzen.
 
-Der PV-Überschuss ist nicht betroffen, die Bezugsspitzen-Kappung deckt Spitzen
-weiter, und ein Zwangslauf eines Tagesziels mit der Quelle **Batterie** darf die
-Batterien nutzen. Die Zwangsläufe von Tageszielen mit der Quelle **Netz**
+Der PV-Überschuss ist nicht betroffen, der Spitzenabfang deckt Spitzen weiter,
+und ein erzwungener Lauf eines Tagesziels mit der Quelle **Überschuss + Batterie**
+darf die Batterien nutzen. Die erzwungenen Läufe von Tageszielen mit der Quelle
+**Überschuss + Batterie + Netz**
 folgen der Einstellung auch im Prognose-Diagramm (bei Automatisch bis zur
 nächsten Ladung aus PV; spätere werden wie **Immer** geplant); nur gemessene
 Verbraucher stecken in der Verbrauchsprognose, bei ihnen wirkt die Einstellung
@@ -347,7 +348,8 @@ trägt seine Box im Energiefluss das Abzeichen **Netz**. Der Spielraum ist auch
 das Attribut `support_budget_kwh` von **Gespeicherte Energie gesamt**.
 
 Nützlich für Lasten, die abends die Batterien leeren würden: Sauna,
-Durchlauferhitzer, Heizstab mit Quelle **Netz**, später eine Wallbox.
+Durchlauferhitzer, Heizstab mit Quelle **Überschuss + Batterie + Netz**, später
+eine Wallbox.
 
 ## Einsatz in der Einspeisebegrenzung
 

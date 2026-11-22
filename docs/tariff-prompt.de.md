@@ -50,7 +50,7 @@ items:
   - name: <Bezeichnung wie auf der Rechnung>
     side: import            # import = Bezug, export = Einspeisung
     group: energy           # energy = Energie (Lieferant), grid = Netz (Netzbetreiber), levies = Steuern und Abgaben
-    unit: kwh               # kwh = ct/kWh, year = €/Jahr, spot = Börsenpreis (stündlich), market_month = Monatsmarktpreis, percent = % der Gruppe, kw_month = €/kW und Monat der Spitzenleistung
+    unit: kwh               # kwh = ct/kWh, year = €/Jahr, spot = Börsenpreis (viertelstündlich), market_month = Monatsmarktpreis, percent = % der Gruppe, kw_month = €/kW und Monat der Spitzenleistung
     price: 12.34
 
 Optionale Felder je Posten:

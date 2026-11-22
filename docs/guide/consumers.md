@@ -104,7 +104,7 @@ In the **Settings** tab under **Consumers** › name of the consumer, block
   it up to the minimum runtime, a hot water charge until it ends. **By surplus**: released
   as soon as there is enough surplus, then for the **Release duration** and
   afterwards while it lasts, no window planned. **By forecast**: the card
-  (row **Release planned**, with the source **Surplus only** **Surplus
+  (row **Release planned**, with the source **Surplus only** the row **Surplus
   window**) and the day chart show it, and it is also released for
   the planned window, also while the surplus dips, so the automation can wait
   for its moment; a part may then come from the batteries or the grid. With
@@ -315,8 +315,9 @@ batteries may cover it when there is no PV surplus.
   discharge would feed in may go to them instead.
 
 The PV surplus is not affected, import peak shaving still covers peaks, and a
-forced run of a daily target with the source **battery** may use the batteries.
-The forced runs of daily targets with the source **grid** follow the setting in
+forced run of a daily target with the source **Surplus + batteries** may use the
+batteries. The forced runs of daily targets with the source **Surplus +
+batteries + grid** follow the setting in
 the forecast chart as well (on automatic until the next charge from PV;
 later ones are planned like **always**); measured only consumers are part of the
 consumption forecast, there the setting acts only in the control. The card
@@ -326,7 +327,8 @@ the energy flow carries the badge **grid**. The budget is also the attribute
 `support_budget_kwh` of **Stored energy total**.
 
 Useful for loads that would empty the batteries in the evening: a sauna, an
-instantaneous water heater, a heating rod with the source **grid**, later a
+instantaneous water heater, a heating rod with the source **Surplus + batteries +
+grid**, later a
 wallbox.
 
 ## Role in the feed-in cap

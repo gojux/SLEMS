@@ -118,7 +118,7 @@ SLEMS plant voraus und regelt genau:
 
 - **Netzdienlich statt um 10 Uhr voll.** Aus PV- und Verbrauchsprognose
   berechnet SLEMS eine Einspeisegrenze und lädt die Batterien mit dem
-  Überschuss darüber. So fangen sie die Einspeisespitze ab und sind am Abend
+  Überschuss darüber. So fangen sie die Einspeisespitze ab und sind am Nachmittag
   trotzdem voll. Die Grenze wird laufend neu berechnet und sinkt von selbst,
   wenn der Tag schlechter wird als vorhergesagt.
 - **Eigene Verbrauchsprognose.** Gelernt aus den Langzeitstatistiken deines
@@ -250,7 +250,7 @@ das Laden von E-Autos spezialisiert und ergänzt SLEMS gut (siehe
 
 | Planung und Regelung | Status |
 |---|---|
-| Verteilung des Überschusses auf Batterien und Verbraucher (Priorität, Aufteilung, Mindestlaufzeit/-pause) | ✅ |
+| Verteilung des Überschusses auf Batterien und Verbraucher (Priorität, Aufteilung, Mindestlaufzeit/-pause); Batterievorrang automatisch aus dem Verbrauch der kommenden Nacht | ✅ |
 | Echtzeit-Regelung von Batterien und Verbrauchern (Betriebsmodus **Aktiv**) | ✅ |
 | Gemittelter Netzüberschuss (0–300 s) | ✅ |
 | Ziel-Netzüberschuss beim Laden/Entladen, maximale Einspeisung beim Entladen | ✅ |
@@ -316,7 +316,7 @@ Voraussetzung: Home Assistant 2026.10 oder neuer.
    das Energie-Dashboard schon kennt, auch das Vorzeichen seiner
    Netzleistung, die PV-Prognose und das Wetter. Die Netzleistungs-Entität
    prüfen (positiv = Bezug, negativ = Einspeisung; das Formular zeigt ihren
-   aktuellen Wert; **Vorzeichen umkehren** aktivieren, wenn dein Zähler es
+   aktuellen Wert; **Vorzeichen der Netzleistung umkehren** aktivieren, wenn dein Zähler es
    umgekehrt meldet), optional PV-Leistung, PV-Prognose und Wetter. Mehrere
    PV-Anlagen (z. B. Dach und Balkon) werden addiert.
 3. Auf der Seite der SLEMS-Integration für jede Batterie **Batterie
@@ -440,7 +440,7 @@ SLEMS funktioniert auch ohne Batterie: einfach nur die Verbraucher anlegen.
   (Heizstab, Wallbox auch mit evcc, Luftentfeuchter, Wärmepumpe über einen
   Schalteingang) mit Prioritäten, Mindestlaufzeit und -pause, **Takten
   vermeiden** und externer Sperre; Tagesziele mit den Quellen **Nur Überschuss**
-  und **+ Netz** (mit preisbewusster Steuerung auch im günstigsten Fenster);
+  und **Überschuss + Batterie + Netz** (mit preisbewusster Steuerung auch im günstigsten Fenster);
   Tarife, Rechnungsprüfung, Börsenpreise, Tarifvergleich und Preisdiagramm;
   Energiefluss, Verbrauchs- und PV-Prognose mit ihrer Güte.
 - **Nicht ohne Batterien**: alles, was eine Batterie lädt, entlädt oder plant

@@ -165,7 +165,7 @@ above the billed power (its mean × 4 is above it). How SLEMS keeps the peak low
 ## Dynamic tariffs and market prices
 
 A line can also follow the day-ahead
-market: **spot price (hourly)** or **monthly market price**, each as market price
+market: **Spot price (quarter-hourly)** or **Monthly market price**, each as market price
 + share in % of its amount + price in ct/kWh, e.g. "spot + 5 % + 1.2 ct" or
 "monthly market price − 0.5 ct" for the feed-in; a markup in % stays a markup
 at negative market prices. **Market price at most** caps the market price
@@ -217,7 +217,7 @@ The strategy shows **Price hold** with the hours concerned, the day chart and
 the simulation include it. The price plans work in quarter hours (market
 prices change every quarter hour): the hourly consumption forecast is spread
 evenly over its quarters, PV comes from the forecast; the day chart shows
-their hourly means. Daily targets with the source **+ grid**: if the
+their hourly means. Daily targets with the source **Surplus + batteries + grid**: if the
 forecast surplus is short for them anyway, the forced run starts in the
 window with the lowest cost before the deadline (cheaper by at least the
 minimum gain per kWh than at the latest start); the consumer card shows

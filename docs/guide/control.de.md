@@ -213,7 +213,8 @@ in die Spitze:
   Neustart übernimmt SLEMS die bisherige Erzeugung aus den Statistiken des
   PV-Sensors, es geht also nichts verloren.
 - Solange die Ladung nicht gesichert ist (Ladezustand unter **Batterievorrang
-  unter Ladezustand** oder die Prognose reicht nicht), lädt SLEMS wie bisher
+  unter Ladezustand** bzw. dessen automatischem Wert oder die Prognose reicht
+  nicht), lädt SLEMS wie bisher
   sofort.
 
 Wie viel der Spitze abgefangen werden kann, hängt von der Batteriegröße im

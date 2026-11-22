@@ -48,7 +48,7 @@ items:
   - name: <label as on the bill>
     side: import            # import = consumption, export = feed-in
     group: energy           # energy = supplier, grid = grid operator, levies = taxes and levies
-    unit: kwh               # kwh = ct/kWh, year = €/year, spot = market price (hourly), market_month = monthly market price, percent = % of the group, kw_month = €/kW and month of the peak power
+    unit: kwh               # kwh = ct/kWh, year = €/year, spot = market price (quarter-hourly), market_month = monthly market price, percent = % of the group, kw_month = €/kW and month of the peak power
     price: 12.34
 
 Optional fields per item:
