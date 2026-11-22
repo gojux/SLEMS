@@ -635,12 +635,14 @@ class ProfileDriver(BatteryDriver):
         ac_power = values.get("ac_power_w")
         pv = output = grid_input = None
         if self._own_pv is not None:
-            pv = max(0.0, values.get("pv_power_w", 0.0))
+            if ac_power is None or "pv_power_w" not in values:
+                # 0 W instead would move the house balance by the battery's power.
+                raise BatteryDriverError(f"{self._profile.name}: PV or AC power not read")
+            pv = max(0.0, values["pv_power_w"])
             if self._profile.read["ac_power_w"].sides is None:
-                connection = ac_power or 0.0
-                grid_input, output = max(0.0, connection), max(0.0, -connection)
+                grid_input, output = max(0.0, ac_power), max(0.0, -ac_power)
             else:
-                pair = sides.get("ac_power_w", {})
+                pair = sides["ac_power_w"]
                 output = max(0.0, pair.get("output") or 0.0)
                 grid_input = max(0.0, value) if (value := pair.get("input")) is not None else None
             ac_power = pv + (grid_input or 0.0) - output

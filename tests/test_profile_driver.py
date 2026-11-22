@@ -515,6 +515,19 @@ async def test_own_pv_with_the_set_point_at_the_connection() -> None:
     assert not driver.needs_write(300)
 
 
+async def test_own_pv_without_its_ac_power_is_not_read() -> None:
+    registers = Registers({10000: 60, 10002: 300, 10003: 0, 10004: 200, 10012: 100})
+    driver = ProfileDriver(
+        parse_profile(OWN_PV), RegisterLink(registers), capacity_wh=5000,
+        max_charge_power_w=2500, max_discharge_power_w=2500,
+    )
+    assert (await driver.read_telemetry()).power_w == 400
+    # The connection is not read: no 0 W output, which would be the whole PV charging.
+    del registers.registers[10012]
+    with pytest.raises(BatteryDriverError, match="not read"):
+        await driver.read_telemetry()
+
+
 # Like a plug-in battery that gives every power without a sign: the battery
 # power as a pair, the output into the house as the sum of two outputs.
 PAIRS = """
