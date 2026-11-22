@@ -53,6 +53,17 @@ def _energy(forecast: Mapping[datetime, float], start: datetime) -> float:
     return forecast.get(start, 0.0)
 
 
+def consumption_at(consumption: Mapping[datetime, float], start: datetime) -> float:
+    """Forecast consumption (Wh) of the hour at ``start``. The forecast covers
+    today and tomorrow; a later hour takes the one a day earlier, so the PV of
+    that day is not compared with no consumption at all (PV forecasts often
+    reach further)."""
+    wh = consumption.get(start)
+    if wh is None:
+        wh = consumption.get(start - timedelta(days=1))
+    return wh or 0.0
+
+
 def pv_takeover(
     now: datetime,
     pv_forecast: Mapping[datetime, float],
@@ -68,7 +79,7 @@ def pv_takeover(
     period_start = dt_util.as_local(now).replace(minute=0, second=0, microsecond=0)
     start = period_start
     while start < period_start + MAX_LOOKAHEAD:
-        if _energy(pv_forecast, start) > _energy(consumption_forecast, start):
+        if _energy(pv_forecast, start) > consumption_at(consumption_forecast, start):
             return start if start > period_start else None
         start = next_start(start, PERIOD)
     return None
@@ -114,13 +125,15 @@ def plan_night_discharge(
 
     day_start = dt_util.start_of_local_day(dt_util.as_local(crossover))
     day_end = day_start + timedelta(days=1)
-    daily_consumption = sum(
-        wh for start, wh in consumption_forecast.items() if day_start <= start < day_end
-    )
+    daily_consumption = 0.0
+    start = day_start
+    while start < day_end:
+        daily_consumption += consumption_at(consumption_forecast, start)
+        start = next_start(start, PERIOD)
     surplus = chargeable = 0.0
     start = crossover
     while start < day_end:
-        hour_surplus = max(0.0, _energy(pv_forecast, start) - _energy(consumption_forecast, start))
+        hour_surplus = max(0.0, _energy(pv_forecast, start) - consumption_at(consumption_forecast, start))
         surplus += hour_surplus
         limit = charge_limit(start) if charge_limit is not None else max_charge_w
         chargeable += hour_surplus if limit is None else min(hour_surplus, limit)

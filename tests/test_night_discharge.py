@@ -7,7 +7,7 @@ import pytest
 from homeassistant.util import dt as dt_util
 
 from custom_components.slems.consumer_targets import SurplusDemand
-from custom_components.slems.night_discharge import plan_night_discharge
+from custom_components.slems.night_discharge import plan_night_discharge, pv_takeover
 from custom_components.slems.pv_forecast import hourly
 
 
@@ -103,6 +103,17 @@ def test_no_discharge_below_target() -> None:
 
 def test_not_applicable_while_pv_exceeds_consumption() -> None:
     assert plan(soc=80, pv_per_hour=2400, now=_day().replace(hour=12, minute=30)) is None
+
+
+def test_takeover_beyond_the_consumption_forecast() -> None:
+    # A dull tomorrow; the PV forecast reaches a day further and rises from
+    # 06:00 on, the consumption forecast ends with tomorrow.
+    pv, consumption = _forecasts(pv_per_hour=300)
+    after = _day(2)
+    pv |= {after.replace(hour=6): 50, after.replace(hour=7): 200}
+    pv |= {after.replace(hour=hour): 2400 for hour in range(8, 16)}
+    # Compared with tomorrow's consumption, not with none at all.
+    assert pv_takeover(_day().replace(hour=22), pv, consumption) == after.replace(hour=8)
 
 
 def test_half_hour_periods_are_summed() -> None:

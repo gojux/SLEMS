@@ -65,6 +65,20 @@ def test_a_later_takeover_tomorrow_makes_the_night_longer() -> None:
     assert night_energy_wh(at(0).date(), pv, consumption) == pytest.approx(17 * 400)
 
 
+def test_pv_beyond_the_consumption_forecast_is_compared_with_the_day_before() -> None:
+    # The PV forecast reaches a day further and rises from 06:00 on; the
+    # consumption forecast ends with tomorrow.
+    pv, consumption = forecasts(days=(0, 1))
+    for day in range(3):
+        for hour, wh in ((6, 50.0), (7, 200.0)):
+            pv[at(hour, day)] = wh
+    for hour in range(8, 17):
+        pv[at(hour, 2)] = 1500.0
+    assert takeover(at(0, 2).date(), pv, consumption) == at(8, 2)
+    # Tomorrow's night: 17:00-08:00 as today's, not until the first PV at 06:00.
+    assert night_energy_wh(at(0, 1).date(), pv, consumption) == pytest.approx(15 * 400)
+
+
 def test_no_night_without_a_surplus_on_the_day() -> None:
     pv, consumption = forecasts(pv_days=(1,))
     assert night_energy_wh(at(0).date(), pv, consumption) is None

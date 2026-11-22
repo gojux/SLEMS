@@ -24,6 +24,8 @@ from datetime import date, datetime, time, timedelta
 
 from homeassistant.util import dt as dt_util
 
+from .night_discharge import consumption_at
+
 PERIOD = timedelta(hours=1)
 # Used where the sun neither rises nor sets on a day.
 FALLBACK_SUNRISE_HOUR = 6
@@ -39,7 +41,7 @@ def _surplus_hours(
 ) -> list[datetime]:
     if pv is None or consumption is None:
         return []
-    return sorted(hour for hour, wh in pv.items() if wh > consumption.get(hour, 0.0))
+    return sorted(hour for hour, wh in pv.items() if wh > consumption_at(consumption, hour))
 
 
 def _local(day: date, hour: int) -> datetime:
