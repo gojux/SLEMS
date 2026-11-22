@@ -264,7 +264,7 @@ evcc oder einer go-e schlägt SLEMS die Entitäten des Geräts vor.
   Wallbox selbst kennt ihn beim AC-Laden nicht; er kommt aus evcc (der
   **Fahrzeug Ladestand** eines Ladepunkts; evcc weiß, welches Auto
   angesteckt ist) oder aus der Integration des Autos.
-- **Akkukapazität des Fahrzeugs** (kWh): nötig für ein Tagesziel
+- **Batteriekapazität des Autos** (kWh): nötig für ein Tagesziel
   **Ladestand**.
 - **Auto angesteckt**: ein Binärsensor (an = angesteckt, z. B. **Verbunden**
   eines evcc-Ladepunkts) oder der Fahrzeugstatus der Wallbox, z. B. einer
@@ -288,7 +288,7 @@ evcc oder einer go-e schlägt SLEMS die Entitäten des Geräts vor.
   aus, wenn das Auto abgesteckt wird oder den Ladestand **Sofort laden bis**
   erreicht (Standard 100 %, nur mit Ladestand-Sensor); eingeschaltet, bevor
   ein Auto angesteckt ist, wartet er darauf. Die Planung rechnet mit der
-  Ladung bis zu diesem Ladestand, wenn Ladestand und Akkukapazität bekannt
+  Ladung bis zu diesem Ladestand, wenn Ladestand und Batteriekapazität bekannt
   sind. Die Box im Energiefluss zeigt dann **lädt sofort**.
 
 ## Temperaturfühler des Speichers
@@ -379,7 +379,7 @@ Name des Verbrauchers, Block **Tagesziel**.
   Temperaturfühlern: Mindest- und Zieltemperatur seines Speichers; mit zwei
   Fühlern wählt **Fühler** den Mittelwert, Fühler 1 oder Fühler 2, in der
   Reihenfolge der Konfiguration des Verbrauchers) oder **Ladestand** (eine
-  Wallbox mit dem Ladestand und der Akkukapazität des Autos, siehe
+  Wallbox mit dem Ladestand und der Batteriekapazität des Autos, siehe
   [Auto an der Wallbox](#auto-an-der-wallbox)).
 - **Zeitraum**: gezählt von Frist (**Bis**, Standard 22:00, auch über
   Mitternacht) zu Frist und zuerst aus dem Überschuss erfüllt.
@@ -451,7 +451,7 @@ Name des Verbrauchers, Block **Tagesziel**.
   erzwungenen Lauf dafür, und die Bahn unter dem Tagesdiagramm das Ersatzziel
   gestrichelt umrandet mit einem gestrichelten Strich an seinem Ende.
 - **Ladestand**: Ziel-Ladestand des Autos bis zur Frist (Standard 80 %). Die
-  noch nötige Energie ist der fehlende Ladestand × Akkukapazität, mit 10 %
+  noch nötige Energie ist der fehlende Ladestand × Batteriekapazität, mit 10 %
   Ladeverlusten (z. B. 40 % von 60 kWh: ca. 26,7 kWh aus dem Netz); daraus
   folgt die späteste Startzeit wie bei einem Energieziel. Ohne bekannten
   Ladestand lädt die Wallbox nur mit Überschuss. Ist der Ziel-Ladestand

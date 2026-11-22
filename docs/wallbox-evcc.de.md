@@ -222,7 +222,7 @@ Je Ladepunkt (hier „Garage“) entstehen u. a. **Max. Ladestrom**
      angesteckt ist. Nach dem Abstecken setzt evcc ihn auf 0 %, bis es den
      Ladestand des nächsten Autos gelesen hat; SLEMS wertet 0 % als unbekannt
      und plant ein Tagesziel nach Ladestand erst mit dem echten Wert.
-   - **Akkukapazität des Fahrzeugs**: für ein Tagesziel nach Ladestand, z. B.
+   - **Batteriekapazität des Autos**: für ein Tagesziel nach Ladestand, z. B.
      60 kWh.
    - **Auto angesteckt**: **Verbunden** des Ladepunkts (vorgeschlagen). Ohne
      Auto steuert SLEMS die Wallbox nicht und plant nichts für sie ein.

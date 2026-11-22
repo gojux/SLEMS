@@ -14,6 +14,11 @@ FLOWS = {
 }
 
 
+def test_english_translation_is_strings_json() -> None:
+    english = json.loads((Path(config_flow.__file__).parent / "translations" / "en.json").read_text())
+    assert english == STRINGS
+
+
 def test_steps_and_menu_options_have_methods() -> None:
     for name, flow in FLOWS.items():
         steps = STRINGS["config_subentries"][name]["step"]

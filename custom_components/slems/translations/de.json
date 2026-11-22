@@ -622,7 +622,7 @@
             "temperature_entity": "Temperaturfühler des Speichers",
             "temperature_2_entity": "Zweiter Temperaturfühler",
             "vehicle_soc_entity": "Ladestand des Fahrzeugs",
-            "vehicle_capacity_kwh": "Akkukapazität des Fahrzeugs",
+            "vehicle_capacity_kwh": "Batteriekapazität des Autos",
             "plugged_entity": "Auto angesteckt",
             "min_current_a": "Mindeststrom",
             "max_current_a": "Höchststrom",
@@ -642,8 +642,8 @@
             "min_off_minutes": "Optional. Nach dem Ausschalten durch SLEMS bleibt der Verbraucher mindestens so lange aus.",
             "temperature_entity": "Optional, z. B. der Fühler des Boilers am Heizstab, oder ein Water Heater (seine Ist-Temperatur). SLEMS lernt aus dem Mittel der Fühler, wie viel Energie der Speicher je Grad aufnimmt und ab welcher Temperatur der Thermostat taktet, und plant den Verbraucher bei der Einspeisebegrenzung nur so weit ein, wie er noch Energie aufnehmen kann.",
             "temperature_2_entity": "Optional, z. B. ein Fühler weiter oben im Boiler; macht die Schätzung genauer.",
-            "vehicle_soc_entity": "Optional. Sensor mit dem Ladestand des Autos in %, z. B. eines evcc-Ladepunkts (evcc weiß, welches Auto angesteckt ist) oder der Integration des Autos. Wird in der Kachel der Wallbox im Energiefluss angezeigt; mit der Akkukapazität ist ein Tagesziel nach Ladestand möglich.",
-            "vehicle_capacity_kwh": "Optional. Nutzbare Akkukapazität des Autos; nötig für ein Tagesziel nach Ladestand.",
+            "vehicle_soc_entity": "Optional. Sensor mit dem Ladestand des Autos in %, z. B. eines evcc-Ladepunkts (evcc weiß, welches Auto angesteckt ist) oder der Integration des Autos. Wird in der Kachel der Wallbox im Energiefluss angezeigt; mit der Batteriekapazität des Autos ist ein Tagesziel nach Ladestand möglich.",
+            "vehicle_capacity_kwh": "Optional. Nutzbare Batteriekapazität des Autos; nötig für ein Tagesziel nach Ladestand.",
             "plugged_entity": "Optional. Zeigt, ob ein Auto angesteckt ist: ein Binärsensor (an = angesteckt, z. B. **Verbunden** eines evcc-Ladepunkts) oder der Fahrzeugstatus der Wallbox (z. B. einer go-e; die Zustände für „angesteckt“ werden als Nächstes abgefragt). Ohne Auto steuert SLEMS die Wallbox nicht und plant nichts für sie ein.",
             "min_current_a": "Unter diesem Strom wird der Verbraucher gestoppt (Fahrzeuge: meist 6 A).",
             "max_current_a": "Höchster Strom, den SLEMS vorgibt.",
@@ -842,7 +842,7 @@
             "valid_from": "Optional. Bei einer Preisänderung: den Posten mit dem neuen Preis und diesem Datum noch einmal anlegen.",
             "valid_to": "Optional: der letzte Tag des Postens, z. B. wenn ein Preisstand endet.",
             "months": "Optional, z. B. für einen günstigeren Sommerpreis.",
-            "time_from": "Optional, mit „Nur bis“: ein Zeitfenster am Tag (Ortszeit), z. B. ein günstigerer Netzpreis zu Mittag. Ein Posten mit Fenster ersetzt in seinem Fenster den gleichnamigen Posten."
+            "time_from": "Optional, mit **Nur bis**: ein Zeitfenster am Tag (Ortszeit), z. B. ein günstigerer Netzpreis zu Mittag. Ein Posten mit Fenster ersetzt in seinem Fenster den gleichnamigen Posten."
           }
         },
         "check": {
@@ -1791,7 +1791,7 @@
   },
   "exceptions": {
     "balancing_requires_active": {
-      "message": "Der aktive Zellausgleich kann nur in der Betriebsmodus „Aktiv“ gestartet werden."
+      "message": "Der aktive Zellausgleich kann nur im Betriebsmodus „Aktiv“ gestartet werden."
     },
     "target_missed_title": {
       "message": "Tagesziel von {name} verfehlt"
@@ -1827,7 +1827,7 @@
       "message": "Batterien zu klein für die Einspeisebegrenzung"
     },
     "feed_in_cap_battery_too_small_message": {
-      "message": "Um den prognostizierten Überschuss über der Einspeisegrenze von {limit} W aufzunehmen, bräuchten die Batterien um {peak} {required} kWh freien Platz, mehr als sie über dem minimalen Ladestand haben. Der Rest wird abgeregelt. Stelle einen Verbraucher bei der Einspeisebegrenzung auf „Einkalkulieren“. {missing}"
+      "message": "Um den prognostizierten Überschuss über der Einspeisegrenze von {limit} W aufzunehmen, bräuchten die Batterien um {peak} {required} kWh freien Platz, mehr als sie über dem minimalen Ladestand haben. Der Rest wird abgeregelt. Stelle bei einem Verbraucher **Einsatz bei Einspeisebegrenzung** auf **Unterstützend**. {missing}"
     },
     "feed_in_cap_too_late_title": {
       "message": "Einspeisebegrenzung: zu wenig Zeit, um Platz zu schaffen"
@@ -1839,7 +1839,7 @@
       "message": "Einspeisebegrenzung: Ladeleistung zu gering"
     },
     "feed_in_cap_charge_power_message": {
-      "message": "Der Überschuss über der Einspeisegrenze von {limit} W ist laut Prognose höher, als die Batterien laden können; etwa {curtailed} kWh würden abgeregelt. Stelle einen Verbraucher bei der Einspeisebegrenzung auf „Einkalkulieren“ oder „Statt Abregeln“, um ihn zu nutzen. {missing}"
+      "message": "Der Überschuss über der Einspeisegrenze von {limit} W ist laut Prognose höher, als die Batterien laden können; etwa {curtailed} kWh würden abgeregelt. Stelle bei einem Verbraucher **Einsatz bei Einspeisebegrenzung** auf **Unterstützend** oder **Normal**, um ihn zu nutzen. {missing}"
     },
     "feed_in_cap_exceeded_title": {
       "message": "Einspeisung über der Grenze"
@@ -1995,7 +1995,7 @@
       "message": "Register bleiben ohne Schreiben unverändert"
     },
     "self_test_check_trial_quiet_values": {
-      "message": "Ladezustand und Probe-Register springen in Ruhe nicht"
+      "message": "Ladezustand und Probe-Register springen im Standby nicht"
     },
     "self_test_check_trial_small_charge": {
       "message": "Kleiner erster Ladeschritt"
@@ -2083,7 +2083,7 @@
     },
     "tariff_expired": {
       "title": "{name} ist nicht mehr gültig",
-      "description": "Die Preise des Tarifs {name} galten bis {date}. Trage die neuen Preise ein (Einstellungen → Geräte & Dienste → SLEMS → der Tarif → ⋮ → Neu konfigurieren), z. B. als Posten mit „Gültig ab“, oder lege den neuen Tarif an."
+      "description": "Die Preise des Tarifs {name} galten bis {date}. Trage die neuen Preise ein (Einstellungen → Geräte & Dienste → SLEMS → der Tarif → ⋮ → Neu konfigurieren), z. B. als Posten mit **Gültig ab**, oder lege den neuen Tarif an."
     },
     "tariff_successor": {
       "title": "Nachfolgetarif für {name}",

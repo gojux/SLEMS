@@ -656,7 +656,7 @@ const STRINGS = {
       surplus_average_window:
         "Period over which SLEMS averages the grid power. The less favourable of the average and the current value counts: if PV drops suddenly, the control follows at once; if it rises, only after the window. This prevents overshooting with changing clouds. 0 s: no averaging. **Automatic control timing** sets it to 3 × the report interval of the smart meter.",
       battery_priority_auto:
-        "Sets **Battery priority below SoC** every day when PV takes over in the morning: the minimum SoC plus what the house needs from the end of today's PV surplus until PV takes over tomorrow (consumption forecast and the planned runs of the daily targets, without consumers on battery support **Never** or **Automatic**), at least 10 % above the minimum SoC and at most 90 %. The value then stays for the day. Off: the set value applies.",
+        "Sets **Battery priority below state of charge** every day when PV takes over in the morning: the minimum state of charge plus what the house needs from the end of today's PV surplus until PV takes over tomorrow (consumption forecast and the planned runs of the daily targets, without consumers on battery support **Never** or **Automatic**, and without the heat pumps while none has **Always**), at least 10 % above the minimum state of charge and at most 90 %. The value then stays for the day. Off: the set value applies.",
       battery_priority_soc:
         "Below this state of charge (of all batteries together) the batteries get the whole surplus, regardless of the forecast; grid friendly charging and the battery share only apply above it. Above it the charge counts as secured as soon as the PV surplus expected for the rest of the day covers filling the batteries plus the **Charge secured safety buffer**. A daily target short on time and the feed-in cap take precedence. With **Automatic battery priority** the value from the coming night applies.",
       charge_secured_buffer:
@@ -1460,7 +1460,7 @@ const STRINGS = {
     tariffSumSides: "Bezug und Einspeisung summieren",
     tariffSidesHint: "Je Tarif die Kosten des Bezugs und die Vergütung der Einspeisung (abzüglich ihrer Gebühren).",
     tariffSigns: "Kosten: Bezug minus Einspeisevergütung; positiv zahlst du, negativ bekommst du Geld.",
-    tariffDiffHint: "Unter jedem Vergleichstarif der Unterschied zum aktuellen: grün besser, rot schlechter. Wähle einen Tarif, um ihn ein- oder auszublenden.",
+    tariffDiffHint: "Unter jedem Vergleichstarif der Unterschied zum aktuellen: grün besser, rot schlechter. Wähle einen Tarif aus, um ihn ein- oder auszublenden.",
     tariffSavingHint:
       "Ersparnis Preissteuerung: Schätzung der Ersparnis durch {actions}, aus aufgezeichnetem Verbrauch und PV mit einem einfachen Batteriemodell und perfekter Prognose (eine Obergrenze).",
     tariffSavingHold: "das Zurückhalten der Batterieenergie für die teuren Stunden",
@@ -1488,7 +1488,7 @@ const STRINGS = {
     hwLoading: "Simulierte Hardware wird berechnet …",
     hwReloading: "Simulierte Hardware wird neu berechnet … Bis dahin zeigt die Tabelle abgeblendet den letzten Stand.",
     hwChanges: "Simuliert: {changes}",
-    hwChangesOff: "Simuliert: {changes}; wähle **Simuliert**, um die Änderung einzurechnen.",
+    hwChangesOff: "Simuliert: {changes}; wähle **Simuliert** aus, um die Änderung einzurechnen.",
     hwView: "Hardware",
     hwViewCurrent: "Heute",
     hwViewSimulated: "Simuliert",
@@ -1556,7 +1556,7 @@ const STRINGS = {
       surplus_average_window:
         "Zeitraum, über den SLEMS die Netzleistung mittelt. Es zählt der ungünstigere Wert aus Mittel und aktuellem: Sinkt die PV plötzlich, folgt die Regelung sofort, steigt sie, erst nach dem Fenster. Das verhindert Überschwingen bei wechselnder Bewölkung. 0 s: keine Mittelung. **Regelzeiten automatisch** stellt es auf 3 × Meldeintervall des Smart Meters.",
       battery_priority_auto:
-        "Stellt **Batterievorrang unter Ladezustand** jeden Tag ein, wenn morgens die PV übernimmt: Mindest-SoC plus das, was das Haus vom Ende des PV-Überschusses heute bis zur Übernahme durch die PV morgen braucht (Verbrauchsprognose und geplante Läufe der Tagesziele, ohne Verbraucher mit Batterie-Unterstützung **Nie** oder **Automatisch**), mindestens 10 % über dem Mindest-SoC und höchstens 90 %. Der Wert bleibt dann den Tag über. Aus: Der eingestellte Wert gilt.",
+        "Stellt **Batterievorrang unter Ladezustand** jeden Tag ein, wenn morgens die PV übernimmt: minimaler Ladezustand plus das, was das Haus vom Ende des PV-Überschusses heute bis zur Übernahme durch die PV morgen braucht (Verbrauchsprognose und geplante Läufe der Tagesziele, ohne Verbraucher mit Batterie-Unterstützung **Nie** oder **Automatisch** und ohne die Wärmepumpen, solange keine **Immer** hat), mindestens 10 % über dem minimalen Ladezustand und höchstens 90 %. Der Wert bleibt dann den Tag über. Aus: Der eingestellte Wert gilt.",
       battery_priority_soc:
         "Unter diesem Ladezustand (aller Batterien zusammen) bekommen die Batterien den gesamten Überschuss, unabhängig von der Prognose; netzdienliches Laden und der Batterieanteil gelten erst darüber. Darüber gilt die Ladung als gesichert, sobald der erwartete PV-Überschuss des restlichen Tages das Füllen der Batterien plus den **Sicherheitspuffer gesicherte Ladung** deckt. Ein knappes Tagesziel und die Einspeisebegrenzung haben Vorrang. Mit **Batterievorrang automatisch** gilt der Wert aus der kommenden Nacht.",
       charge_secured_buffer:
@@ -1652,7 +1652,7 @@ const STRINGS = {
       target_hours:
         "Wie viele Stunden das Tagesziel je Zeitraum braucht (von einer Frist zur nächsten), in halben Stunden. Bei Laufzeit zählt die Zeit, in der der Verbraucher Leistung zieht (ab 50 W; bei einer Wärmepumpe mit Warmwasser-Freigabe nur im Warmwasserbetrieb). Bei Freigabezeit zählt die Zeit, in der SLEMS ihn eingeschaltet bzw. freigegeben hat, auch wenn er dabei nichts zieht (z. B. weil sein eigener Thermostat oder deine Automation ihn noch nicht gestartet hat).",
       target_type:
-        "Laufzeit: Zeit, in der der Verbraucher Leistung zieht. Freigabezeit: Zeit, in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung (Luftentfeuchter mit Hygrostat). Energie: kWh. Temperatur: Mindest- und Zieltemperatur seines Speichers (Temperaturfühler). Ladestand: der des Autos an einer Wallbox (sein Sensor und die Akkukapazität); erreicht, bleibt die Wallbox bis zur Frist aus. Gezählt von Frist zu Frist; zuerst aus dem Überschuss. Ein Temperaturziel gilt von Mitternacht (oder dem frühesten Beginn) bis zur Frist: Nach der Frist bleibt der Verbraucher bis dahin aus, auch mit Überschuss (außer **Minimum spätestens wieder nach** ist gesetzt und die Temperatur fällt unter das Minimum).",
+        "Laufzeit: Zeit, in der der Verbraucher Leistung zieht. Freigabezeit: Zeit, in der SLEMS ihn eingeschaltet hat, für Geräte mit eigener Regelung (Luftentfeuchter mit Hygrostat). Energie: kWh. Temperatur: Mindest- und Zieltemperatur seines Speichers (Temperaturfühler). Ladestand: der des Autos an einer Wallbox (sein Sensor und die Batteriekapazität des Autos); erreicht, bleibt die Wallbox bis zur Frist aus. Gezählt von Frist zu Frist; zuerst aus dem Überschuss. Ein Temperaturziel gilt von Mitternacht (oder dem frühesten Beginn) bis zur Frist: Nach der Frist bleibt der Verbraucher bis dahin aus, auch mit Überschuss (außer **Minimum spätestens wieder nach** ist gesetzt und die Temperatur fällt unter das Minimum).",
       release_window:
         "Einmal geöffnet, bleibt die Freigabe mindestens so lange offen, auch ohne Überschuss, bis das Tagesziel erreicht oder seine Frist vorbei ist (z. B. damit deine Automation auf einen Kompressorlauf der Wärmepumpe warten kann). Startet sie in dieser Zeit, kann ein Teil aus Batterien oder Netz kommen. Mit der Quelle **Nur Überschuss** gilt das nur, solange der Verbraucher läuft: Bis dahin schließt die Freigabe ohne Überschuss und öffnet bei neuem Überschuss wieder. SLEMS plant nur die Energie, die der Verbraucher wirklich aufnimmt; anders als die Mindestlaufzeit zählt die Freigabedauer nicht für **Takten vermeiden**. 0: aus.",
       surplus_window:

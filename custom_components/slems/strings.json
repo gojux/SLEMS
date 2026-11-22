@@ -428,7 +428,7 @@
             "remove_from_pv": "Remove them from the PV systems"
           },
           "data_description": {
-            "own_pv_entity": "Power of the modules at the battery's PV inputs (DC, e.g. \"Total input\").",
+            "own_pv_entity": "Power of the modules at the battery's PV inputs (DC, e.g. “Total input”).",
             "output_entity": "Power the unit feeds into the house (AC, positive while feeding).",
             "output_inverted": "Enable if the sensor reports feeding the house as negative. SLEMS counts a negative output as 0.",
             "input_entity": "Power the unit takes from the grid to charge (AC, positive while charging). Required for an input set point.",
@@ -636,7 +636,7 @@
           "data_description": {
             "control_entity": "Switch for on/off consumers, number entity in W for power controlled ones, in A for current controlled ones (e.g. the charging current of a wallbox); with current control also a select with ampere options (e.g. **Max. charging current** of an evcc loadpoint in ha-evcc). Turn off the device's own surplus control (e.g. **Auto control** of a my-PV ELWA 2), otherwise it works against SLEMS.",
             "nominal_power_w": "A rough estimate is enough if **Use learned values** is on: SLEMS then measures the real power while it runs the consumer (operating mode active) and uses it after about 15 minutes of running (the median of its last hour of running). Rather estimate a little too low than too high: too high, SLEMS waits for a larger surplus and may never switch the consumer on, so nothing is learned. For a heat pump with **Release**: its power for hot water; SLEMS learns it in hot water mode, so it follows the coefficient of performance.",
-            "block_entity": "SLEMS does not control the consumer while it is blocked (e.g. by the device or an automation): a water heater while its operation mode is \"off\", other entities while they are \"on\".",
+            "block_entity": "SLEMS does not control the consumer while it is blocked (e.g. by the device or an automation): a water heater while its operation mode is “off”, other entities while they are “on”.",
             "priority": "1 = highest priority when distributing surplus power.",
             "min_on_minutes": "Optional. Once switched on by SLEMS, the consumer keeps running at least this long. For a release it counts from the start of the device.",
             "min_off_minutes": "Optional. Once switched off by SLEMS, the consumer stays off at least this long.",
@@ -842,7 +842,7 @@
             "valid_from": "Optional. For a price change: add the line again with the new price and this date.",
             "valid_to": "Optional: the last day of the line, e.g. when a price level ends.",
             "months": "Optional, e.g. for a reduced summer price.",
-            "time_from": "Optional, with \"Only until\": a time window of the day (local time), e.g. a reduced grid price at noon. A line with a window replaces the line of the same name in its window."
+            "time_from": "Optional, with **Only until**: a time window of the day (local time), e.g. a reduced grid price at noon. A line with a window replaces the line of the same name in its window."
           }
         },
         "check": {
@@ -882,7 +882,7 @@
         "time_window_incomplete": "Enter both times of the window or none.",
         "period_invalid": "The end must not be before the start.",
         "month_prices_invalid": "Enter the monthly market prices as \"2026-01: 8.5; 2026-02: 7.9\".",
-        "kw_to_invalid": "\"Charged up to\" has to be above \"Charged from\".",
+        "kw_to_invalid": "“Charged up to” has to be above “Charged from”.",
         "yaml_syntax": "The text is not valid YAML (line {detail}).",
         "yaml_not_tariff": "This is not a SLEMS tariff: the line \"format: slems-tariff\" is missing.",
         "yaml_version_missing": "The line \"version: …\" with the format version is missing.",
@@ -1069,15 +1069,15 @@
       "surplus_window": {
         "name": "Surplus window",
         "state": {
-          "off": "Off",
-          "release": "Release"
+          "off": "By surplus",
+          "release": "By forecast"
         }
       },
       "hot_water_surplus_window": {
         "name": "Hot water surplus window",
         "state": {
-          "off": "Off",
-          "release": "Release"
+          "off": "By surplus",
+          "release": "By forecast"
         }
       },
       "operating_mode": {
@@ -1791,7 +1791,7 @@
   },
   "exceptions": {
     "balancing_requires_active": {
-      "message": "Active cell balancing can only be started in operating mode active."
+      "message": "Active cell balancing can only be started in operating mode “Active”."
     },
     "target_missed_title": {
       "message": "Daily target of {name} missed"
@@ -1827,7 +1827,7 @@
       "message": "Batteries too small for the feed-in cap"
     },
     "feed_in_cap_battery_too_small_message": {
-      "message": "To absorb the forecast surplus above the feed-in limit of {limit} W, the batteries would need {required} kWh of free space at {peak}, more than they have above the minimum state of charge. The rest is curtailed. Set a consumer to \"Plan with\" for the feed-in cap. {missing}"
+      "message": "To absorb the forecast surplus above the feed-in limit of {limit} W, the batteries would need {required} kWh of free space at {peak}, more than they have above the minimum state of charge. The rest is curtailed. Set the **Role with feed-in cap** of a consumer to **Supporting**. {missing}"
     },
     "feed_in_cap_too_late_title": {
       "message": "Feed-in cap: not enough time to make room"
@@ -1839,7 +1839,7 @@
       "message": "Feed-in cap: charge power too low"
     },
     "feed_in_cap_charge_power_message": {
-      "message": "The surplus above the feed-in limit of {limit} W is forecast to be higher than the batteries can charge; about {curtailed} kWh would be curtailed. Set a consumer to \"Plan with\" or \"Instead of curtailing\" for the feed-in cap to use it. {missing}"
+      "message": "The surplus above the feed-in limit of {limit} W is forecast to be higher than the batteries can charge; about {curtailed} kWh would be curtailed. Set the **Role with feed-in cap** of a consumer to **Supporting** or **Normal** to use it. {missing}"
     },
     "feed_in_cap_exceeded_title": {
       "message": "Feed-in above the limit"
@@ -1893,7 +1893,7 @@
       "message": "This battery is only read, not controlled; a self-test is not possible."
     },
     "self_test_requires_active": {
-      "message": "The self-test can only be started in operating mode \"Active\"."
+      "message": "The self-test can only be started in operating mode “Active”."
     },
     "self_test_disabled": {
       "message": "The battery is disabled."
@@ -1920,7 +1920,7 @@
       "message": "The self-test of {name} found nothing wrong, but could not check everything: the house consumption changed too much for some steps, or a step was small because the battery was nearly full or empty. Repeat it at a quieter time and with a battery neither full nor empty; the SLEMS dashboard shows the details: on the battery card ⋮ → **Details**.\n\n{checks}"
     },
     "self_test_warning_message": {
-      "message": "The self-test of {name} found something conspicuous. The SLEMS dashboard explains it: on the battery card ⋮ → **Details**. \"Unclear\" means the house consumption changed too much during the test; repeat it at a quieter time then.\n\n{checks}"
+      "message": "The self-test of {name} found something conspicuous. The SLEMS dashboard explains it: on the battery card ⋮ → **Details**. “Unclear” means the house consumption changed too much during the test; repeat it at a quieter time then.\n\n{checks}"
     },
     "self_test_failed_message": {
       "message": "The self-test of {name} found errors. Check the settings of the battery; the SLEMS dashboard explains them: on the battery card ⋮ → **Details**.\n\n{checks}"
@@ -1929,7 +1929,7 @@
       "message": "The self-test of {name} was stopped: {reason}. The battery is back in normal operation."
     },
     "self_test_reason_not_active": {
-      "message": "SLEMS is no longer in operating mode \"Active\""
+      "message": "SLEMS is no longer in operating mode “Active”"
     },
     "self_test_reason_paused": {
       "message": "the communication with the battery was paused"
@@ -2046,7 +2046,7 @@
       "message": "This battery accepts set points too rarely for the measurement (minimum time between set points above 1 s)."
     },
     "probe_not_active": {
-      "message": "The response time can only be measured in operating mode active."
+      "message": "The response time can only be measured in operating mode “Active”."
     },
     "probe_not_participating": {
       "message": "The battery does not take part in the control right now (disabled, communication paused, self-test, cell balancing or not delivering)."
@@ -2083,7 +2083,7 @@
     },
     "tariff_expired": {
       "title": "{name} is no longer valid",
-      "description": "The prices of the tariff {name} were valid until {date}. Enter the new prices (Settings → Devices & services → SLEMS → the tariff → ⋮ → Reconfigure), e.g. as lines with \"valid from\", or add the new tariff."
+      "description": "The prices of the tariff {name} were valid until {date}. Enter the new prices (Settings → Devices & services → SLEMS → the tariff → ⋮ → Reconfigure), e.g. as lines with **Valid from**, or add the new tariff."
     },
     "tariff_successor": {
       "title": "Successor for {name}",
