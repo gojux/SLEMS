@@ -2464,10 +2464,58 @@ class SlemsPanel extends HTMLElement {
     return [...(a.problems || []), ...(a.limit_exceeded ? ["limit_exceeded"] : [])];
   }
 
+  /** Time zone of the times shown, as chosen in the user profile of Home
+   * Assistant (server or browser; undefined: the browser's). */
+  _displayZone() {
+    return this._hass?.locale?.time_zone === "server" ? this._hass?.config?.time_zone : undefined;
+  }
+
+  /** Date (YYYY-MM-DD) and hour of day (with the minutes as a fraction) of a
+   * moment in the time zone of Home Assistant: the plans, the chart axes and
+   * the days of the backend count in it, whatever the browser's is. */
+  _serverParts(moment) {
+    const zone = this._hass?.config?.time_zone;
+    if (this._serverFormat?.zone !== zone) {
+      this._serverFormat = {
+        zone,
+        format: new Intl.DateTimeFormat("en-CA", {
+          timeZone: zone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+        }),
+      };
+    }
+    const parts = Object.fromEntries(this._serverFormat.format.formatToParts(moment).map((part) => [part.type, part.value]));
+    return { date: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) + Number(parts.minute) / 60 };
+  }
+
+  /** Date (YYYY-MM-DD) of today or tomorrow in the time zone of Home Assistant. */
+  _serverDate(day) {
+    const today = this._serverParts(new Date()).date;
+    if (day !== "tomorrow") return today;
+    const [year, month, date] = today.split("-").map(Number);
+    return new Date(Date.UTC(year, month - 1, date + 1)).toISOString().slice(0, 10);
+  }
+
+  /** Hour on the axis of the day chart (``day``: "today" or "tomorrow") of
+   * an ISO timestamp: hours from that day's midnight on its wall clock. */
+  _chartHour(iso, day = this._chartDay) {
+    const { date, hour } = this._serverParts(new Date(iso));
+    const days = (Date.parse(date) - Date.parse(this._serverDate(day))) / 86400000;
+    return hour + 24 * days;
+  }
+
+  /** Clock text of an hour on a chart axis (wall clock of the plan's day). */
+  _axisClock(hour) {
+    return new Date(Date.UTC(2000, 0, 1) + hour * 3600000).toLocaleTimeString(this._hass?.locale?.language, {
+      hour: "2-digit", minute: "2-digit", timeZone: "UTC",
+    });
+  }
+
   /** Time of day of an ISO timestamp. */
   _time(iso) {
     if (!iso) return "–";
-    return new Date(iso).toLocaleTimeString(this._hass?.locale?.language, { hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleTimeString(this._hass?.locale?.language, {
+      hour: "2-digit", minute: "2-digit", timeZone: this._displayZone(),
+    });
   }
 
   /** Time of an ISO timestamp; with the weekday when it is not today. */
@@ -2475,8 +2523,10 @@ class SlemsPanel extends HTMLElement {
     if (!iso) return "–";
     const date = new Date(iso);
     const time = this._time(iso);
-    if (date.toDateString() === new Date().toDateString()) return time;
-    return `${date.toLocaleDateString(this._hass?.locale?.language, { weekday: "short" })} ${time}`;
+    const zone = this._displayZone();
+    const day = (moment) => moment.toLocaleDateString("en-CA", { timeZone: zone });
+    if (day(date) === day(new Date())) return time;
+    return `${date.toLocaleDateString(this._hass?.locale?.language, { weekday: "short", timeZone: zone })} ${time}`;
   }
 
   /** Overview tile of the feed-in cap: energy to absorb and export before the peak. */
@@ -2515,7 +2565,7 @@ class SlemsPanel extends HTMLElement {
     const language = this._hass?.locale?.language || "en";
     const kw = (value) => new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(value);
     const money = new Intl.NumberFormat(language, { style: "currency", currency: this._currency() });
-    const day = (iso) => new Date(iso).toLocaleDateString(language, { day: "numeric", month: "numeric" });
+    const day = (iso) => new Date(iso).toLocaleDateString(language, { day: "numeric", month: "numeric", timeZone: this._displayZone() });
     const running =
       a.interval_counted === false
         ? t.peakNotCounted
@@ -4191,8 +4241,10 @@ class SlemsPanel extends HTMLElement {
     const gridId = this._entityId("grid_power");
     const ids = [pvId, houseId, socId, batteryId, gridId].filter(Boolean);
     if (!ids.length) return;
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
+    // From before midnight of Home Assistant's day (an hour more for a clock
+    // change); the half hours below keep only that day.
+    const today = this._serverDate("today");
+    const start = new Date(Date.now() - (this._serverParts(new Date()).hour + 1) * 3600000);
     try {
       const result = await this._hass.callWS({
         type: "recorder/statistics_during_period",
@@ -4208,8 +4260,9 @@ class SlemsPanel extends HTMLElement {
         const sums = {};
         for (const row of rows || []) {
           if (row.mean === null || row.mean === undefined) continue;
-          const start = new Date(row.start);
-          const slot = start.getHours() * 2 + Math.floor(start.getMinutes() / 30);
+          const { date, hour } = this._serverParts(new Date(row.start));
+          if (date !== today) continue;
+          const slot = Math.floor(hour * 2);
           const entry = (sums[slot] ||= [0, 0]);
           entry[0] += map(row.mean);
           entry[1] += 1;
@@ -4260,8 +4313,7 @@ class SlemsPanel extends HTMLElement {
     // (Wh per hour = mean W); PV and the feed-in cap also come per half hour.
     const perHalf = (wh) => (wh === null || wh === undefined ? null : wh * 2);
     // Limit lines: grid friendly charging today from now while PV is forecast, peak shaving all day.
-    const now = new Date();
-    const nowSlot = now.getHours() * 2 + Math.floor(now.getMinutes() / 30);
+    const nowSlot = Math.floor(this._serverParts(new Date()).hour * 2);
     const gridFriendlyW = today ? limits.gridFriendlyW ?? null : null;
     const peakW = limits.peakW ?? null;
     return plan.flatMap((row, hour) =>
@@ -4350,9 +4402,8 @@ class SlemsPanel extends HTMLElement {
   /** Where the projected state of charge line starts: [hour of day, %]. */
   _socStart(todayPlan = this._realPlans().today) {
     if (this._chartDay === "today") {
-      const now = new Date();
       const soc = this._number(this._state("battery_soc_total"));
-      return soc === null ? null : [now.getHours() + now.getMinutes() / 60, soc];
+      return soc === null ? null : [this._serverParts(new Date()).hour, soc];
     }
     const last = todayPlan[todayPlan.length - 1]?.soc_pct;
     return last === null || last === undefined ? null : [0, last];
@@ -4609,8 +4660,7 @@ class SlemsPanel extends HTMLElement {
       greyed(c.pv, c.muted),
       LIMIT_DASH.capLine
     );
-    const now = new Date();
-    const nowHour = now.getHours() + now.getMinutes() / 60;
+    const nowHour = this._serverParts(new Date()).hour;
     const showNow = this._chartDay === "today";
     return `
       <div class="chart-wrap"><svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="chart" role="img" aria-label="${this._t.dayChart}">
@@ -4659,10 +4709,7 @@ class SlemsPanel extends HTMLElement {
     const t = this._t;
     const c = this._colors;
     const { pad, plotW, width } = geometry;
-    const dayStart = new Date();
-    dayStart.setHours(0, 0, 0, 0);
-    if (this._chartDay === "tomorrow") dayStart.setDate(dayStart.getDate() + 1);
-    const hourOf = (iso) => (new Date(iso) - dayStart) / 3600000;
+    const hourOf = (iso) => this._chartHour(iso);
     const x = (hour) => pad.left + (Math.max(0, Math.min(24, hour)) / 24) * plotW;
     const visible = (from, until) => until > 0 && from < 24 && until > from;
     const lanes = [];
@@ -4684,7 +4731,7 @@ class SlemsPanel extends HTMLElement {
       const latest = source !== "surplus" && attrs.target_latest_start ? hourOf(attrs.target_latest_start) : null;
       const opens = latest !== null && attrs.target_window_opens ? hourOf(attrs.target_window_opens) : null;
       const runEnd = latest !== null ? Math.min(runTo, latest + (attrs.target_run_s ? attrs.target_run_s / 3600 : runTo - latest)) : null;
-      const clock = (hour) => this._time(new Date(dayStart.getTime() + hour * 3600000).toISOString());
+      const clock = (hour) => this._axisClock(hour);
       const label = (template, from, until) => template.replace("{from}", clock(from)).replace("{until}", clock(until));
       const surplus = attrs.target_surplus_window ? attrs.target_surplus_window.map(hourOf) : null;
       // A hot water charge running in the period (not one the heat pump started on its own before it).
@@ -4960,14 +5007,6 @@ class SlemsPanel extends HTMLElement {
     );
   }
 
-  /** Date (YYYY-MM-DD) of today or tomorrow in the time zone of Home Assistant,
-   * in which the backend counts its days (the browser may be in another one). */
-  _serverDate(day) {
-    const today = new Intl.DateTimeFormat("en-CA", { timeZone: this._hass?.config?.time_zone }).format(new Date());
-    if (day !== "tomorrow") return today;
-    const [year, month, date] = today.split("-").map(Number);
-    return new Date(Date.UTC(year, month - 1, date + 1)).toISOString().slice(0, 10);
-  }
 
   /** Currency set in Home Assistant (Settings → System → General). */
   _currency() {
@@ -5048,8 +5087,7 @@ class SlemsPanel extends HTMLElement {
     const lines = [...series].reverse().map(([key, color, , dashed]) => stepLine(key, color, dashed)).join("");
     let now = "";
     if (this._chartDay === "today") {
-      const date = new Date();
-      const nx = x(date.getHours() + date.getMinutes() / 60);
+      const nx = x(this._serverParts(new Date()).hour);
       now = `<line x1="${nx}" x2="${nx}" y1="${pad.top}" y2="${pad.top + plotH}" stroke="${c.muted}" stroke-width="1" stroke-dasharray="2 3"/>`;
     }
     return `<svg class="price-chart" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${escapeHtml(this._t.priceTitle)}">
@@ -5351,7 +5389,7 @@ class SlemsPanel extends HTMLElement {
       return;
     }
     // In the afternoon most of today is already measured, not simulated.
-    const afternoon = this._chartDay === "today" && new Date().getHours() >= 12;
+    const afternoon = this._chartDay === "today" && this._serverParts(new Date()).hour >= 12;
     this._setSection(
       "simnote",
       afternoon
@@ -5462,8 +5500,7 @@ class SlemsPanel extends HTMLElement {
   /** "2026-05" as a short month name, the current month marked "to date". */
   _monthLabel(month) {
     const language = this._hass?.locale?.language || "en";
-    const today = new Date();
-    const thisMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+    const thisMonth = this._serverDate("today").slice(0, 7);
     const [year, number] = month.split("-").map(Number);
     const label = new Date(year, number - 1, 1).toLocaleDateString(language, { month: "short", year: "numeric" });
     return month === thisMonth ? `${label} (${this._t.tariffToDate})` : label;
@@ -5847,9 +5884,7 @@ class SlemsPanel extends HTMLElement {
           const cancelTest = `<button class="link" data-action="self-test-off" data-entity="${s("self_test")?.entity_id}">${t.selfTestCancel}</button>`;
           const pause = s("communication_paused");
           if (pause?.state === "on") {
-            const until = pause.attributes.paused_until
-              ? new Date(pause.attributes.paused_until).toLocaleTimeString(this._hass.locale?.language, { hour: "2-digit", minute: "2-digit" })
-              : "–";
+            const until = this._time(pause.attributes.paused_until);
             const text = (pause.attributes.reason === "firmware_update" ? t.pausedFirmware : t.pausedManual).replace("{time}", until);
             problem = `<div class="info-box"><ha-icon icon="mdi:pause-circle-outline"></ha-icon><span>${escapeHtml(text)}</span>
               <button class="link" data-action="menu-resume" data-entity="${pause.entity_id}">${t.resume}</button>
@@ -5866,7 +5901,7 @@ class SlemsPanel extends HTMLElement {
             }</span>${running ? cancelTest : ""}</div>`;
           } else if (notResponding?.state === "on") {
             const attrs = notResponding.attributes;
-            const retry = attrs.retry_at ? new Date(attrs.retry_at).toLocaleTimeString(this._hass.locale?.language, { hour: "2-digit", minute: "2-digit" }) : "–";
+            const retry = this._time(attrs.retry_at);
             const text = t.notRespondingText
               .replace("{reason}", t.notRespondingReasons[attrs.reason] || attrs.reason || "–")
               .replace("{time}", retry);
@@ -6119,21 +6154,26 @@ class SlemsPanel extends HTMLElement {
     if (attrs.target_net_until) return this._t.targetNetUntil.replace("{time}", this._clock(attrs.target_net_until));
     if (!attrs.target_deadline) return "";
     // A temperature target applies from midnight without an earliest start.
-    const earliest = attrs.target_earliest ? new Date(attrs.target_earliest) : null;
-    if (earliest && (earliest.getHours() || earliest.getMinutes())) return range(attrs.target_earliest, attrs.target_deadline);
+    if (attrs.target_earliest && this._serverParts(new Date(attrs.target_earliest)).hour) {
+      return range(attrs.target_earliest, attrs.target_deadline);
+    }
     return this._t.targetUntil.replace("{time}", this._clock(attrs.target_deadline));
   }
 
   /** Whether a daily target waits for its earliest start on a later day (after the deadline until midnight or that start). */
   _targetWaitsForTomorrow(attrs) {
-    return attrs.target_mode === "waiting" && Boolean(attrs.target_earliest) && new Date(attrs.target_earliest).toDateString() !== new Date().toDateString();
+    return (
+      attrs.target_mode === "waiting" &&
+      Boolean(attrs.target_earliest) &&
+      this._serverParts(new Date(attrs.target_earliest)).date !== this._serverDate("today")
+    );
   }
 
   /** Energy still needed, once reached that of the coming period: "noch ca. 2,5 kWh", "morgen ca. 3 kWh". */
   _targetEnergyText(attrs) {
     const t = this._t;
     const text = (template, wh) => template.replace("{energy}", this._kwh(wh));
-    const isToday = (iso) => new Date(iso).toDateString() === new Date().toDateString();
+    const isToday = (iso) => this._serverParts(new Date(iso)).date === this._serverDate("today");
     const energy = attrs.target_energy_wh;
     if (attrs.target_mode === "done" || energy === 0) {
       const next = attrs.target_energy_next_wh;
@@ -6292,8 +6332,7 @@ class SlemsPanel extends HTMLElement {
     const t = this._t;
     const language = this._hass?.locale?.language || "en";
     const number = (v) => new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(v);
-    const clock = (iso) =>
-      iso ? new Date(iso).toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" }) : "–";
+    const clock = (iso) => this._time(iso);
     const mode = attrs.target_mode;
     const parts = [];
     if (attrs.target_type === "temperature") {
