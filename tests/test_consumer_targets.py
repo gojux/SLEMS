@@ -51,6 +51,17 @@ def test_period_from_deadline_to_deadline() -> None:
     assert period_end(local(20), time(6, 0)) == local(6, day=2)
 
 
+def test_changed_deadline_is_taken_over_also_while_declined() -> None:
+    settings = TargetSettings(type=TargetType.RUNTIME, hours=1.0, deadline=time(22, 0))
+    progress = TargetProgress()
+    progress.update(0.0, local(10), settings, 0.0, False)
+    assert progress.end == local(22)
+    # Moved to 06:00 while the storage is satisfied (declines): the period ends then.
+    later = TargetSettings(type=TargetType.RUNTIME, hours=1.0, deadline=time(6, 0))
+    progress.update(60.0, local(10, 1), later, 0.0, False, declined=True)
+    assert progress.end == local(6, day=2)
+
+
 def test_counting_and_rollover() -> None:
     settings = TargetSettings(type=TargetType.RUNTIME, hours=1.0)
     progress = TargetProgress()

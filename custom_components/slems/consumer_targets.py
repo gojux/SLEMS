@@ -252,7 +252,7 @@ class TargetProgress:
         if declined:
             self.declined = True
             self.net_declined = self.net_declined or net
-        elif end != self.end:
+        if end != self.end:
             # The deadline was changed: the counters stay.
             self.end = end
         previous, self._last = self._last, (now, power_w, commanded_on, blocked, unplugged)
