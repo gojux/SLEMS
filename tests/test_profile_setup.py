@@ -674,6 +674,23 @@ async def test_changed_profile_is_offered_to_the_batteries_with_the_same(sim) ->
     assert [(sub_id, data["profile_yaml"]) for sub_id, _, data in flow.hass.config_entries.updated] == [("p2", changed)]
 
 
+async def test_cleared_purchase_price_is_removed(sim, dev_profiles) -> None:
+    data = {
+        "model": "modbus_profile", "profile_id": "marstek_venus_e3", **ADDRESS, **LIMITS,
+        "purchase_price_eur": 3000, "rated_cycles": 6000,
+    }
+    flow = make_flow([subentry("p1", "Pack", **data)], reconfigure="p1")
+    finished: list[dict] = []
+    flow._async_finish = lambda user_input: finished.append(user_input) or {"type": "abort"}
+    await flow.async_step_profile_reconfigure()
+    await flow.async_step_profile_settings()
+    # Only name and limits: the price field emptied, the cycles changed.
+    await flow.async_step_profile_limits({**LIMITS, "rated_cycles": 5000})
+    assert "purchase_price_eur" not in finished[0]
+    assert finished[0]["rated_cycles"] == 5000
+    assert finished[0]["host"] == "venus"
+
+
 async def test_other_battery_not_at_rest_is_left_out(sim) -> None:
     changed = OWN_TEXT.replace("revision: 1", "revision: 2")
     batteries = [

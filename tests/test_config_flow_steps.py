@@ -36,6 +36,30 @@ def test_battery_limits_show_the_currency_of_home_assistant() -> None:
     assert price.config["unit_of_measurement"] == "CHF"
 
 
+def test_cleared_purchase_price_of_an_entity_battery_is_removed() -> None:
+    import asyncio
+    from types import SimpleNamespace
+
+    from custom_components.slems.config_flow import BatterySubentryFlow
+
+    flow = BatterySubentryFlow.__new__(BatterySubentryFlow)
+    flow.hass = SimpleNamespace(config=SimpleNamespace(currency="EUR"))
+    flow._data = {
+        "name": "Nexa", "battery_control": "none", "capacity_wh": 2000,
+        "purchase_price_eur": 900, "rated_cycles": 6000,
+    }
+    flow._remove_pv_systems = lambda: None
+    finished: list[dict] = []
+    flow._async_finish = lambda user_input: finished.append(user_input) or {"type": "abort"}
+    limits = {
+        "capacity_wh": 2000, "max_charge_power_w": 800, "max_discharge_power_w": 800,
+        "efficiency_mode": "learned", "round_trip_efficiency_pct": 88, "rated_cycles": 6000,
+    }
+    asyncio.run(flow.async_step_ha_limits(limits))
+    assert "purchase_price_eur" not in finished[0]
+    assert finished[0]["rated_cycles"] == 6000 and finished[0]["name"] == "Nexa"
+
+
 def test_no_static_method_uses_self() -> None:
     import ast
     from pathlib import Path

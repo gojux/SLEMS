@@ -374,6 +374,10 @@ _CAPACITY = selector.NumberSelector(
 )
 
 
+# Optional fields of the battery limits: cleared, they are missing in the input.
+_OPTIONAL_LIMITS = (CONF_PURCHASE_PRICE_EUR, CONF_RATED_CYCLES)
+
+
 def _optional(key: str, defaults: dict[str, Any]) -> vol.Optional:
     """Optional field that can be cleared again in the UI."""
     if defaults.get(key) is not None:
@@ -1544,7 +1548,8 @@ class BatterySubentryFlow(_SubentryHidesSlemsEntities, ConfigSubentryFlow):
             base: dict[str, Any] = {CONF_NAME: current.title, **current.data}
         else:
             base = {}
-        user_input = {**base, **self._connection, **self._limits, CONF_PROFILE_ID: self._profile.id}
+        base = _merge(base, self._limits, _OPTIONAL_LIMITS)
+        user_input = {**base, **self._connection, CONF_PROFILE_ID: self._profile.id}
         user_input.pop(CONF_PROFILE_YAML, None)
         if self._yaml and not self._profile.bundled:
             user_input[CONF_PROFILE_YAML] = self._yaml
@@ -1933,7 +1938,7 @@ class BatterySubentryFlow(_SubentryHidesSlemsEntities, ConfigSubentryFlow):
         control = BatteryControl(data.get(CONF_BATTERY_CONTROL, BatteryControl.NONE))
         errors: dict[str, str] = {}
         if user_input is not None:
-            candidate = _entity_battery_data({**data, **user_input})
+            candidate = _entity_battery_data(_merge(data, user_input, _OPTIONAL_LIMITS))
             if (
                 control is not BatteryControl.NONE
                 and candidate.get(CONF_RELEASE_STATE) == ReleaseState.AUTO
