@@ -3073,12 +3073,14 @@ class SlemsPanel extends HTMLElement {
     this.shadowRoot.getElementById("details-close").textContent = t.close;
     // Estimated wear costs: where to enter the real values.
     const wearHint = s("wear_cost")?.attributes?.estimated ? `<dd class="muted dl-note">${escapeHtml(t.wearHint)}</dd>` : "";
-    this.shadowRoot.getElementById("details-body").innerHTML =
+    this._setSection(
+      "details-body",
       (rows.length
         ? rows.map(([label, value, entityId]) => this._row(label, escapeHtml(String(value)), entityId)).join("") + wearHint
         : `<dd class="muted">${t.noDetails}</dd>`) +
-      this._phaseRow(deviceId, battery?.name) +
-      this._selfTestDetails(s("self_test_result"));
+        this._phaseRow(deviceId, battery?.name) +
+        this._selfTestDetails(s("self_test_result"))
+    );
   }
 
   /** Details dialog of a consumer: what its card leaves out. */
@@ -3110,7 +3112,7 @@ class SlemsPanel extends HTMLElement {
     ].join("");
     this.shadowRoot.getElementById("details-title").textContent = `${t.details}: ${c.name}`;
     this.shadowRoot.getElementById("details-close").textContent = t.close;
-    this.shadowRoot.getElementById("details-body").innerHTML = rows || `<dd class="muted">${t.noDetails}</dd>`;
+    this._setSection("details-body", rows || `<dd class="muted">${t.noDetails}</dd>`);
   }
 
   /** Dead time of the battery's last probe step (see response_probe). */
@@ -3249,8 +3251,10 @@ class SlemsPanel extends HTMLElement {
     ]);
     this.shadowRoot.getElementById("details-title").textContent = t.controlDetails;
     this.shadowRoot.getElementById("details-close").textContent = t.close;
-    this.shadowRoot.getElementById("details-body").innerHTML =
-      section(t.sectionControl) + control + section(t.sectionMeter) + meterRows + section(t.sectionBatteries) + batteryRows;
+    this._setSection(
+      "details-body",
+      section(t.sectionControl) + control + section(t.sectionMeter) + meterRows + section(t.sectionBatteries) + batteryRows
+    );
   }
 
   /** "1 h 5 min" / "5 min" / "40 s" for a duration in seconds. */
