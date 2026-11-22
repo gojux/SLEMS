@@ -5667,37 +5667,6 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self._peak_month = (key, state)
             return state
         return cached[1].running(self.grid_quarters, now)
-        threshold = max(threshold, battery.min_soc_pct)
-        profile = self.forecaster.peak_profile
-        if (
-            settings.peak_shaving_auto
-            and profile is not None
-            and not profile.is_empty
-            and pv_hourly is not None
-            and consumption_hourly is not None
-        ):
-            usable_wh = (
-                max(0.0, min(battery.soc_pct, threshold) - battery.min_soc_pct)
-                / 100
-                * battery.capacity_wh
-                * battery.charge_efficiency
-            )
-            # AC energy that charges the batteries from the minimum back to the threshold.
-            refill_wh = (
-                max(0.0, threshold - battery.min_soc_pct)
-                / 100
-                * battery.capacity_wh
-                / battery.charge_efficiency
-            )
-            limit = auto_limit(
-                profile,
-                hours_until_refill(
-                    wall_now, pv_hourly, consumption_hourly, refill_wh, own_charge_limit(own, battery.max_charge_w)
-                ),
-                usable_wh,
-                settings.peak_shaving_reserve_pct / 100,
-            )
-        return threshold, limit
 
     @staticmethod
     def _day_plan(
