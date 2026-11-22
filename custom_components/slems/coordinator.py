@@ -3672,7 +3672,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             )
         return settings.battery_priority_soc_pct
 
-    def _battery_priority_tomorrow(
+    def _battery_priority_days(
         self,
         settings: ControlSettings,
         battery: BatteryGroup,
@@ -3680,17 +3680,24 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         pv_hourly: dict[datetime, float],
         consumption: ConsumptionForecast | None,
     ) -> tuple[tuple[date, float], ...]:
-        """Threshold of tomorrow as the takeover tomorrow will compute it from
-        the forecasts now; nothing without automatic or without a surplus tomorrow."""
+        """Thresholds as the takeovers of today (while still to come, as the
+        surplus hours of today follow it) and tomorrow will compute them from
+        the forecasts now; a day without a surplus keeps the threshold in
+        effect. Nothing without automatic."""
         if not settings.battery_priority_auto or consumption is None:
             return ()
-        tomorrow = dt_util.as_local(wall_now).date() + timedelta(days=1)
-        night = night_energy_wh(tomorrow, pv_hourly, self._night_consumption(consumption))
-        if night is None:
-            return ()
-        return (
-            (tomorrow, priority_soc_pct(night, battery.min_soc_pct, battery.capacity_wh, battery.charge_efficiency)),
-        )
+        today = dt_util.as_local(wall_now).date()
+        days = [today + timedelta(days=1)]
+        if self.battery_priority_day.day != today:
+            days.insert(0, today)
+        night_consumption = self._night_consumption(consumption)
+        result = []
+        for day in days:
+            night = night_energy_wh(day, pv_hourly, night_consumption)
+            if night is not None:
+                pct = priority_soc_pct(night, battery.min_soc_pct, battery.capacity_wh, battery.charge_efficiency)
+                result.append((day, pct))
+        return tuple(result)
 
     def _night_consumption(self, consumption: ConsumptionForecast) -> dict[datetime, float]:
         """Hourly consumption the batteries cover (see battery_priority): with the
@@ -3953,9 +3960,10 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             return result
         if battery is not None:
             result.battery_priority_pct = self.battery_priority_soc_pct(settings, battery, consumption_factor)
-            priority_days = self._battery_priority_tomorrow(settings, battery, wall_now, pv_hourly, consumption)
-            if priority_days:
-                result.battery_priority_tomorrow_pct = priority_days[0][1]
+            priority_days = self._battery_priority_days(settings, battery, wall_now, pv_hourly, consumption)
+            result.battery_priority_tomorrow_pct = dict(priority_days).get(
+                dt_util.as_local(wall_now).date() + timedelta(days=1)
+            )
             projection_settings = ProjectionSettings(
                     grid_friendly_charging=settings.grid_friendly_charging,
                     # Like the feed-in limit: only with grid friendly charging.

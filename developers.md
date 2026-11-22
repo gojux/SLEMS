@@ -255,8 +255,10 @@ sensors. Inputs:
   if nothing is kept yet; then again at the takeover) and stored as Wh with
   its day (store key `battery_priority`), so the threshold holds over the day
   and over restarts and the simulation derives it with its batteries and its
-  consumption change. The day plan of tomorrow uses tomorrow's value from the
-  forecasts now (`ProjectionSettings.battery_priority_days`). An installation
+  consumption change. The day plan uses the values the takeovers still to
+  come (today's before it, tomorrow's) will compute from the forecasts now
+  (`ProjectionSettings.battery_priority_days`); the surplus hours of a day
+  follow its takeover. An installation
   from before the switch keeps it off: on setup, a registered number
   `battery_priority_soc` without a registered switch `battery_priority_auto`
   sets it off before the switch restores (none to restore there).

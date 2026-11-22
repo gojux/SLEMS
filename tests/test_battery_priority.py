@@ -205,3 +205,24 @@ def test_threshold_in_effect() -> None:
     # Switched off: the set value.
     off = ControlSettings(battery_priority_soc_pct=30.0, battery_priority_auto=False)
     assert c.battery_priority_soc_pct(off, group) == 30.0
+
+
+def test_thresholds_of_the_takeovers_still_to_come() -> None:
+    c = coordinator([], {})
+    group = BatteryGroup(
+        soc_pct=50, capacity_wh=10000, max_charge_w=5000, max_discharge_w=5000,
+        charge_efficiency=1.0, min_soc_pct=10,
+    )
+    settings = ControlSettings()
+    pv, consumption = forecasts(days=(0, 1, 2))
+    forecast = ConsumptionForecast(total=consumption)
+    # Yesterday's night kept; before today's takeover today's surplus hours
+    # get the value it will compute (17:00-08:00: 6 kWh -> 70 %).
+    c.battery_priority_day = BatteryPriorityDay(at(0, -1).date(), 2000.0)
+    days = dict(c._battery_priority_days(settings, group, at(6), pv, forecast))
+    assert days == {at(0).date(): pytest.approx(70), at(0, 1).date(): pytest.approx(70)}
+    # After it, today's value is the kept one.
+    c.battery_priority_day = BatteryPriorityDay(at(0).date(), 6000.0)
+    days = dict(c._battery_priority_days(settings, group, at(9), pv, forecast))
+    assert list(days) == [at(0, 1).date()]
+    assert c._battery_priority_days(ControlSettings(battery_priority_auto=False), group, at(6), pv, forecast) == ()
