@@ -4914,7 +4914,7 @@ class SlemsPanel extends HTMLElement {
       state.tariffs !== tariffKey ||
       state.day !== day ||
       Date.now() - state.at > 15 * 60 * 1000 ||
-      (state.result?.slots?.length && !state.result.slots[0].start.startsWith(this._localDate(day)));
+      (state.result?.slots?.length && !state.result.slots[0].start.startsWith(this._serverDate(day)));
     if (stale && !state.loading && this._hass) {
       state.switches = switches;
       state.tariffs = tariffKey;
@@ -4960,11 +4960,13 @@ class SlemsPanel extends HTMLElement {
     );
   }
 
-  /** Local date (YYYY-MM-DD) of today or tomorrow. */
-  _localDate(day) {
-    const date = new Date();
-    if (day === "tomorrow") date.setDate(date.getDate() + 1);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  /** Date (YYYY-MM-DD) of today or tomorrow in the time zone of Home Assistant,
+   * in which the backend counts its days (the browser may be in another one). */
+  _serverDate(day) {
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: this._hass?.config?.time_zone }).format(new Date());
+    if (day !== "tomorrow") return today;
+    const [year, month, date] = today.split("-").map(Number);
+    return new Date(Date.UTC(year, month - 1, date + 1)).toISOString().slice(0, 10);
   }
 
   /** Currency set in Home Assistant (Settings → System → General). */
