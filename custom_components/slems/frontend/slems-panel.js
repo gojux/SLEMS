@@ -2780,7 +2780,7 @@ class SlemsPanel extends HTMLElement {
   /** Charge now; with the car's state of charge first asks up to which one. */
   _startChargeNow(entityId, socEntityId, name) {
     const t = this._t;
-    const start = () => this._hass.callService("switch", "turn_on", { entity_id: entityId });
+    const start = () => this._call("switch", "turn_on", { entity_id: entityId });
     const soc = socEntityId ? this._hass.states[socEntityId] : null;
     if (!soc) {
       start();
@@ -2797,10 +2797,11 @@ class SlemsPanel extends HTMLElement {
       async () => {
         const value = parseFloat(this.shadowRoot.getElementById("charge-now-soc")?.value);
         if (Number.isFinite(value)) {
-          await this._hass.callService("number", "set_value", {
+          const set = await this._call("number", "set_value", {
             entity_id: socEntityId,
             value: Math.min(a.max, Math.max(a.min, value)),
           });
+          if (!set) return;
         }
         start();
       },
@@ -2918,14 +2919,14 @@ class SlemsPanel extends HTMLElement {
     const entityId = item.dataset.entity;
     switch (item.dataset.action) {
       case "menu-enable":
-        this._hass.callService("switch", "turn_on", { entity_id: entityId });
+        this._call("switch", "turn_on", { entity_id: entityId });
         break;
       case "menu-disable":
         this._confirm(
           t.disableBatteryTitle.replace("{name}", item.dataset.name),
           t.disableBatteryText,
           t.disableBatteryConfirm,
-          () => this._hass.callService("switch", "turn_off", { entity_id: entityId })
+          () => this._call("switch", "turn_off", { entity_id: entityId })
         );
         break;
       case "menu-pause":
@@ -2933,39 +2934,39 @@ class SlemsPanel extends HTMLElement {
           t.pauseTitle.replace("{name}", item.dataset.name),
           t.pauseText.replace("{min}", this._number(this._state("communication_pause")) ?? 20),
           t.pauseConfirm,
-          () => this._hass.callService("switch", "turn_on", { entity_id: entityId }),
+          () => this._call("switch", "turn_on", { entity_id: entityId }),
           false
         );
         break;
       case "menu-resume":
-        this._hass.callService("switch", "turn_off", { entity_id: entityId });
+        this._call("switch", "turn_off", { entity_id: entityId });
         break;
       case "menu-probe":
-        this._hass.callService("button", "press", { entity_id: entityId });
+        this._call("button", "press", { entity_id: entityId });
         break;
       case "self-test-on":
         this._confirm(
           t.selfTestTitle.replace("{name}", item.dataset.name),
           t.selfTestText.replaceAll("{power}", item.dataset.power),
           t.selfTestConfirm,
-          () => this._hass.callService("switch", "turn_on", { entity_id: entityId }),
+          () => this._call("switch", "turn_on", { entity_id: entityId }),
           false
         );
         break;
       case "self-test-off":
-        this._hass.callService("switch", "turn_off", { entity_id: entityId });
+        this._call("switch", "turn_off", { entity_id: entityId });
         break;
       case "menu-extend":
         // Switching the pause on again extends it.
-        this._hass.callService("switch", "turn_on", { entity_id: entityId });
+        this._call("switch", "turn_on", { entity_id: entityId });
         break;
       case "hub-bad-weather-on":
         this._confirm(t.badWeatherTitle, t.badWeatherText, t.badWeatherConfirm, () =>
-          this._hass.callService("switch", "turn_on", { entity_id: entityId })
+          this._call("switch", "turn_on", { entity_id: entityId })
         , false);
         break;
       case "hub-bad-weather-off":
-        this._hass.callService("switch", "turn_off", { entity_id: entityId });
+        this._call("switch", "turn_off", { entity_id: entityId });
         break;
       case "hub-details":
         this._detailsDevice = "control";
@@ -2976,11 +2977,11 @@ class SlemsPanel extends HTMLElement {
         this._moreInfo(entityId);
         break;
       case "menu-control-on":
-        this._hass.callService("switch", "turn_on", { entity_id: entityId });
+        this._call("switch", "turn_on", { entity_id: entityId });
         break;
       case "menu-control-off":
       case "charge-now-off":
-        this._hass.callService("switch", "turn_off", { entity_id: entityId });
+        this._call("switch", "turn_off", { entity_id: entityId });
         break;
       case "charge-now-on":
         this._startChargeNow(entityId, item.dataset.soc, item.dataset.name);
@@ -3343,7 +3344,7 @@ class SlemsPanel extends HTMLElement {
       t.relearnPhaseTitle.replace("{name}", button.dataset.name),
       t.relearnPhaseText,
       t.relearnPhase,
-      () => this._hass.callService("button", "press", { entity_id: button.dataset.entity }),
+      () => this._call("button", "press", { entity_id: button.dataset.entity }),
       false
     );
   }
@@ -3442,6 +3443,25 @@ class SlemsPanel extends HTMLElement {
       return `${new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(value / 1000)} kW`;
     }
     return `${new Intl.NumberFormat(language, { maximumFractionDigits: 0 }).format(value)} W`;
+  }
+
+  /** A service call; resolves to whether it went through. Home Assistant shows
+   * a refusal itself (e.g. a value out of range); then ``control`` gets back
+   * the value it was drawn with and everything is drawn again from the
+   * states, so no control keeps a value that was not applied. */
+  async _call(domain, service, data, control = null) {
+    try {
+      await this._hass.callService(domain, service, data);
+      return true;
+    } catch (err) {
+      console.warn(`SLEMS: ${domain}.${service} refused`, err);
+      if (control?.type === "checkbox") control.checked = control.defaultChecked;
+      else if (control?.tagName === "SELECT") control.value = [...control.options].find((o) => o.defaultSelected)?.value ?? control.value;
+      else if (control) control.value = control.getAttribute("value") ?? "";
+      this._sections = {};
+      this._queueRender();
+      return false;
+    }
   }
 
   _setSection(name, html) {
@@ -7187,7 +7207,7 @@ class SlemsPanel extends HTMLElement {
     if (balancingButton) {
       const entityId = balancingButton.dataset.entity;
       if (balancingButton.dataset.action === "balancing-off") {
-        this._hass.callService("switch", "turn_off", { entity_id: entityId });
+        this._call("switch", "turn_off", { entity_id: entityId });
       } else {
         const t = this._t;
         // The last top measurement in the normal range: balancing is hardly needed.
@@ -7200,7 +7220,7 @@ class SlemsPanel extends HTMLElement {
           t.startBalancingTitle.replace("{name}", balancingButton.dataset.name),
           notNeeded + t.startBalancingText,
           t.startBalancingConfirm,
-          () => this._hass.callService("switch", "turn_on", { entity_id: entityId }),
+          () => this._call("switch", "turn_on", { entity_id: entityId }),
           false
         );
       }
@@ -7253,9 +7273,9 @@ class SlemsPanel extends HTMLElement {
       const entityId = assistantApply.dataset.entity;
       const value = JSON.parse(assistantApply.dataset.value);
       const domain = entityId.split(".")[0];
-      if (domain === "switch") this._hass.callService("switch", value ? "turn_on" : "turn_off", { entity_id: entityId });
-      else if (domain === "select") this._hass.callService("select", "select_option", { entity_id: entityId, option: String(value) });
-      else if (domain === "number") this._hass.callService("number", "set_value", { entity_id: entityId, value });
+      if (domain === "switch") this._call("switch", value ? "turn_on" : "turn_off", { entity_id: entityId });
+      else if (domain === "select") this._call("select", "select_option", { entity_id: entityId, option: String(value) });
+      else if (domain === "number") this._call("number", "set_value", { entity_id: entityId, value });
       return;
     }
     const assistantSim = event.target.closest("[data-action='assistant-sim']");
@@ -7390,20 +7410,20 @@ class SlemsPanel extends HTMLElement {
         t.disableBatteryTitle.replace("{name}", target.dataset.confirmOff),
         t.disableBatteryText,
         t.disableBatteryConfirm,
-        () => this._hass.callService("switch", "turn_off", { entity_id: entityId })
+        () => this._call("switch", "turn_off", { entity_id: entityId })
       );
       return;
     }
     if (kind === "switch") {
-      this._hass.callService("switch", target.checked ? "turn_on" : "turn_off", { entity_id: entityId });
+      this._call("switch", target.checked ? "turn_on" : "turn_off", { entity_id: entityId }, target);
     } else if (kind === "select") {
-      this._hass.callService("select", "select_option", { entity_id: entityId, option: target.value });
+      this._call("select", "select_option", { entity_id: entityId, option: target.value }, target);
     } else if (kind === "time") {
-      if (target.value) this._hass.callService("time", "set_value", { entity_id: entityId, time: `${target.value}:00` });
+      if (target.value) this._call("time", "set_value", { entity_id: entityId, time: `${target.value}:00` }, target);
     } else if (kind === "number") {
       const value = parseFloat(target.value);
       if (Number.isFinite(value)) {
-        this._hass.callService("number", "set_value", { entity_id: entityId, value });
+        this._call("number", "set_value", { entity_id: entityId, value }, target);
       }
     }
   }
