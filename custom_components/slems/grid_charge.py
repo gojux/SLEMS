@@ -43,6 +43,8 @@ import math
 
 from homeassistant.util import dt as dt_util
 
+from .local_time import next_start
+
 HOUR = timedelta(hours=1)
 QUARTER = timedelta(minutes=15)
 STEP_PCT = 1.0
@@ -263,7 +265,7 @@ def plan_grid_charge(
     while hour < end and prices.get(hour) is not None:
         share = (hour + period - local_now) / period if hour == first else 1.0
         hours.append((hour, share, prices[hour]))
-        hour += period
+        hour = next_start(hour, period)
     if not hours:
         return None
     refilled = until is not None and hour >= until

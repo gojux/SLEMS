@@ -52,6 +52,8 @@ import math
 
 from homeassistant.util import dt as dt_util
 
+from .local_time import next_start
+
 PERIOD = timedelta(hours=1)
 MAX_HORIZON = timedelta(hours=36)
 SAMPLE_HOURS = 5 / 60
@@ -162,7 +164,7 @@ def hours_until_refill(
         return pv.get(start, 0.0) - consumption.get(start, 0.0)
 
     while hour < end and surplus_wh(hour) > 0:
-        hour += PERIOD
+        hour = next_start(hour, PERIOD)
     result: list[tuple[int, float]] = []
     charged = 0.0
     while hour < end:
@@ -175,7 +177,7 @@ def hours_until_refill(
                 break
         else:
             result.append((hour.hour, share(hour)))
-        hour += PERIOD
+        hour = next_start(hour, PERIOD)
     return result
 
 

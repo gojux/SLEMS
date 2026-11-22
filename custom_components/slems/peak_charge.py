@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 from homeassistant.util import dt as dt_util
 
 from .grid_charge import QUARTER, slot_start
+from .local_time import next_start
 
 
 def plan_peak_charge(
@@ -45,7 +46,7 @@ def plan_peak_charge(
         power = min(max_charge_w, max(0.0, room_w.get(start, 0.0)))
         if power > 0 and share > 0:
             periods.append((start, power * share * QUARTER / timedelta(hours=1)))
-        start += QUARTER
+        start = next_start(start, QUARTER)
     order = sorted(
         periods,
         key=lambda entry: (

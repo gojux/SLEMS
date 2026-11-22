@@ -30,6 +30,8 @@ from enum import StrEnum
 
 from homeassistant.util import dt as dt_util
 
+from .local_time import next_start
+
 PERIOD = timedelta(hours=1)
 LOOKAHEAD = timedelta(hours=48)
 RESUME_WH = 200.0
@@ -71,7 +73,7 @@ def next_refill(
                 return hour
             hour = next_day
             continue
-        hour += PERIOD
+        hour = next_start(hour, PERIOD)
     return None
 
 
@@ -86,7 +88,7 @@ def _day_surplus(
     while start < end:
         surplus = max(0.0, pv.get(start, 0.0) - consumption.get(start, 0.0))
         total += surplus if max_charge_w is None else min(surplus, max_charge_w * PERIOD.total_seconds() / 3600)
-        start += PERIOD
+        start = next_start(start, PERIOD)
     return total
 
 

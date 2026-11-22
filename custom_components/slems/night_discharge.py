@@ -29,6 +29,7 @@ from datetime import datetime, timedelta
 from homeassistant.util import dt as dt_util
 
 from .consumer_targets import SurplusDemand
+from .local_time import next_start
 from .pv_forecast import hourly
 
 PERIOD = timedelta(hours=1)
@@ -69,7 +70,7 @@ def pv_takeover(
     while start < period_start + MAX_LOOKAHEAD:
         if _energy(pv_forecast, start) > _energy(consumption_forecast, start):
             return start if start > period_start else None
-        start += PERIOD
+        start = next_start(start, PERIOD)
     return None
 
 
@@ -123,7 +124,7 @@ def plan_night_discharge(
         surplus += hour_surplus
         limit = charge_limit(start) if charge_limit is not None else max_charge_w
         chargeable += hour_surplus if limit is None else min(hour_surplus, limit)
-        start += PERIOD
+        start = next_start(start, PERIOD)
     # Daily targets taking surplus that day: what is left besides the refill
     # must cover them, otherwise the refill is short by the difference.
     demand = sum(d.energy_wh for d in demands if d.end > crossover and d.start < day_end)

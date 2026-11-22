@@ -253,6 +253,7 @@ from .consumer_targets import (
     window_start,
     without_own_charge,
 )
+from .local_time import HOUR, next_start
 from .night_discharge import NightDischargePlan, plan_night_discharge, pv_takeover
 from .price_chart import hourly_import_prices, period_import_prices
 from .grid_charge import MIN_STEP_WH as GRID_CHARGE_STEP_WH
@@ -1571,11 +1572,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             hour = start
             while hour < end:
                 hours.append(hour)
-                hour += timedelta(hours=1)
+                hour = next_start(hour, HOUR)
             saving = measured_saving(
                 hours,
-                {dt_util.as_local(h): max(0.0, v) for h, v in load.items()},
-                {dt_util.as_local(h): max(0.0, v) for h, v in pv.items()},
+                hourly({h: max(0.0, v) for h, v in load.items()}),
+                hourly({h: max(0.0, v) for h, v in pv.items()}),
                 battery,
                 run.start_wh,
                 imported,
@@ -6052,7 +6053,7 @@ def _quarter_nets(
         if hour in consumption_hourly:
             load = (consumption_hourly[hour] - grid_load.get(hour, 0.0)) * share
             nets[start] = load - mean_power(power, start, QUARTER) * share
-        start += QUARTER
+        start = next_start(start, QUARTER)
     return nets
 
 

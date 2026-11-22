@@ -53,6 +53,7 @@ import math
 from homeassistant.util import dt as dt_util
 
 from .allocation import BatteryGroup
+from .local_time import next_start
 from .pv_forecast import power_lookup
 
 STEP = timedelta(minutes=15)
@@ -320,7 +321,7 @@ def _steps(
         elif surplus < 0:
             step.drained_w = min(-surplus, max_discharge_w)
         steps.append(step)
-        start += STEP
+        start = next_start(start, STEP)
     return steps
 
 

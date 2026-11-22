@@ -25,6 +25,7 @@ from datetime import date, datetime, timedelta
 
 from homeassistant.util import dt as dt_util
 
+from ..local_time import hours_of_day
 from .models import (
     BASE_LOOKBACK_DAYS,
     BaseLoadProfile,
@@ -119,7 +120,7 @@ def backtest_consumption(
     abs_error = actual_total = 0.0
     for offset in range(BACKTEST_DAYS, 0, -1):
         day_start = today - timedelta(days=offset)
-        hours = [day_start + timedelta(hours=h) for h in range(24)]
+        hours = hours_of_day(day_start)
         actual = {
             h: base_history[h] + (heat_pump_history or {}).get(h, 0.0)
             for h in hours
@@ -142,7 +143,7 @@ def backtest_consumption(
         )
         forecast = {
             h: base_model.predict(h)
-            + (heat_pump_model.hourly(day_energy, h.hour) if heat_pump_model else 0.0)
+            + (heat_pump_model.hourly(day_energy, dt_util.as_local(h).hour) if heat_pump_model else 0.0)
             for h in actual
         }
         actual_wh = sum(actual.values())

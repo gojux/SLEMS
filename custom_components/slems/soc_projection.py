@@ -59,6 +59,7 @@ from .allocation import BatteryGroup
 from .consumer_targets import SurplusDemand
 from .feed_in_cap import CapPlan
 from .grid_friendly import feed_in_limit, planned_charging, remaining_surplus_by_hour
+from .local_time import next_start
 from .night_discharge import plan_night_discharge
 from .pv_forecast import PvForecast, hourly
 
@@ -255,7 +256,7 @@ def project_soc(
         share = (hour + PERIOD - start) / PERIOD
         pv_w = pv.get(hour, 0.0)
         load = consumption.get(hour, load_w or 0.0) if consumption is not None else load_w or 0.0
-        hour_end = hour + PERIOD
+        hour_end = next_start(hour, PERIOD)
         stored_before = stored
         # Highest stored energy that leaves the space the feed-in cap needs.
         allowed = full - cap.space_needed_at(hour_end) if cap is not None else full
@@ -349,7 +350,7 @@ def project_soc(
         change = (stored - stored_before) / share
         battery_ac = change / efficiency if change > 0 else change * efficiency
         result.grid_w[hour] = load + result.consumer_w.get(hour, 0.0) - pv_w + battery_ac
-        hour += PERIOD
+        hour = next_start(hour, PERIOD)
     return result
 
 

@@ -31,6 +31,7 @@ from datetime import datetime, timedelta
 from homeassistant.util import dt as dt_util
 
 from .grid_charge import HOUR, QUARTER, hourly_means, slot_start
+from .local_time import next_start
 
 @dataclass(frozen=True)
 class PriceHold:
@@ -100,7 +101,7 @@ def cheapest_start(
     candidates = [first]
     quarter = slot_start(first, HOUR)
     while quarter < latest:
-        quarter += QUARTER
+        quarter = next_start(quarter, QUARTER)
         if first < quarter < latest:
             candidates.append(quarter)
     best: tuple[float, datetime] | None = None
@@ -144,7 +145,7 @@ def plan_price_hold(
             deficit *= first_share
         if deficit > 0:
             needs[hour] = deficit
-        hour += period
+        hour = next_start(hour, period)
     if not needs or usable_wh >= sum(needs.values()):
         return None
     if any(prices.get(hour) is None for hour in needs):

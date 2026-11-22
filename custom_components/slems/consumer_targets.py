@@ -71,6 +71,7 @@ from enum import StrEnum
 from homeassistant.util import dt as dt_util
 
 from .const import SurplusWindow, TargetSensor, TargetSource, TargetType
+from .local_time import HOUR, next_start, real_duration
 
 TIME_FACTOR = 1.2
 START_MARGIN = timedelta(minutes=10)
@@ -634,8 +635,8 @@ def plan_surplus_window(
             moment, until = begin, min(begin + run, max(closes, begin + runs_on))
             while moment < until:
                 hour = moment.replace(minute=0, second=0, microsecond=0)
-                step = min(hour + timedelta(hours=1), until)
-                hours = (step - moment) / timedelta(hours=1)
+                step = min(next_start(hour, HOUR), until)
+                hours = real_duration(moment, step) / HOUR
                 forecast = surplus_w.get(hour, 0.0)
                 covered_wh += min(forecast, power_w) * hours
                 surplus_wh += forecast * hours
@@ -881,8 +882,8 @@ def run_load(start: datetime, end: datetime | None, *, energy_wh: float, power_w
     moment = start
     while energy_wh > 0 and power_w > 0 and (end is None or moment < end):
         hour = moment.replace(minute=0, second=0, microsecond=0)
-        until = hour + timedelta(hours=1) if end is None else min(hour + timedelta(hours=1), end)
-        wh = min(energy_wh, power_w * (until - moment) / timedelta(hours=1))
+        until = next_start(hour, HOUR) if end is None else min(next_start(hour, HOUR), end)
+        wh = min(energy_wh, power_w * real_duration(moment, until) / HOUR)
         result[hour] = result.get(hour, 0.0) + wh
         energy_wh -= wh
         moment = until

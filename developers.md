@@ -31,6 +31,16 @@
     then unknown (`HousePowerHold`; the control does not use it)
   - base load = house power − consumers inside the smart meter
   - total consumption = house power + consumers outside the smart meter
+- Local time: adding a timedelta to a local datetime counts on the wall
+  clock, and two local datetimes in the same zone compare and subtract on it
+  too. Plans step through local hours and quarter hours with
+  `local_time.next_start`, which turns the time the clock skips in spring
+  (02:00) into the real one; the local buckets (`pv_forecast.hourly`, which
+  sums, never a dict comprehension, which overwrites) hold both runs of the
+  hour repeated in autumn, which the wall clock visits once. Real durations
+  across a clock change with `local_time.real_duration`; series that must
+  have every hour of a local day (23 to 25) are built from
+  `local_time.hours_of_day` with UTC keys.
 - License: GPL-3.0 (compatible with Omnibattery, from which the Marstek
   register map and control sequence are taken).
 

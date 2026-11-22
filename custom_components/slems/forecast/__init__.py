@@ -37,6 +37,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 
+from ..local_time import hours_of_day
 from ..peak_shaving import PROFILE_DAYS, PeakProfile
 from ..public_holidays import PublicHolidays
 from .accuracy import ConsumptionAccuracy, backtest_consumption
@@ -365,15 +366,12 @@ class ConsumptionForecaster:
             result.temperature[day] = _mean_temperature(
                 day, temperature_history, forecast_temperatures, daily_temperature
             )
-            start = day_start
-            while start < day_start + timedelta(days=1):
-                base_wh = base_model.predict(start, vacation)
-                hp_wh = heat_pump_wh(start)
-                key = dt_util.as_utc(start)
+            for key in hours_of_day(day_start):
+                base_wh = base_model.predict(key, vacation)
+                hp_wh = heat_pump_wh(key)
                 result.base[key] = base_wh
                 result.heat_pump[key] = hp_wh
                 result.total[key] = base_wh + hp_wh
-                start += timedelta(hours=1)
         result.nowcast_w = recent_excess_w(
             now,
             {start: wh + heat_pump_history.get(start, 0.0) for start, wh in base_history.items()},
@@ -442,8 +440,8 @@ def _forecast_temperatures(entries: list[dict], forecast_type: str) -> dict[date
         low = entry.get("templow")
         mean = (float(temperature) + float(low)) / 2 if low is not None else float(temperature)
         day_start = dt_util.start_of_local_day(dt_util.as_local(start))
-        for hour in range(24):
-            result[dt_util.as_utc(day_start + timedelta(hours=hour))] = mean
+        for hour in hours_of_day(day_start):
+            result[hour] = mean
     return result
 
 

@@ -32,21 +32,20 @@ from typing import Any
 
 from homeassistant.util import dt as dt_util
 
+from .local_time import next_start
+from .pv_forecast import hourly
+
 PERIOD = timedelta(hours=1)
 MIN_ABOVE_PCT = 10.0
 MAX_PCT = 90.0
-
-
-def _local_hours(series: Mapping[datetime, float]) -> dict[datetime, float]:
-    return {dt_util.as_local(start): wh for start, wh in series.items()}
 
 
 def surplus_hours(day: date, pv: Mapping[datetime, float], consumption: Mapping[datetime, float]) -> list[datetime]:
     """Starts of the hours of the local ``day`` in which PV exceeds the consumption.
 
     Both forecasts are hourly (period start -> Wh)."""
-    pv = _local_hours(pv)
-    consumption = _local_hours(consumption)
+    pv = hourly(pv)
+    consumption = hourly(consumption)
     return sorted(
         start for start, wh in pv.items() if start.date() == day and wh > consumption.get(start, 0.0)
     )
@@ -76,7 +75,7 @@ def night_energy_wh(
     end = takeover(next_day, pv, consumption) or dt_util.as_local(
         datetime.combine(next_day, hours[0].time(), tzinfo=hours[0].tzinfo)
     )
-    consumption = _local_hours(consumption)
+    consumption = hourly(consumption)
     total = 0.0
     hour = start
     while hour < end:
@@ -84,7 +83,7 @@ def night_energy_wh(
         if wh is None:
             wh = consumption.get(dt_util.as_local(hour - timedelta(days=1)), 0.0)
         total += wh
-        hour = dt_util.as_local(hour + PERIOD)
+        hour = next_start(hour, PERIOD)
     return total
 
 
