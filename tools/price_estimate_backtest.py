@@ -32,7 +32,8 @@ import statistics
 from homeassistant.util import dt as dt_util
 
 from custom_components.slems import market_prices
-from custom_components.slems.market_prices import SLOT_S, ZoneHolidays, day_bounds
+from custom_components.slems.market_prices import SLOT_S, day_bounds
+from custom_components.slems.public_holidays import PublicHolidays
 
 
 def load(path: str) -> dict[int, float]:
@@ -98,7 +99,8 @@ def main() -> None:
     first = dt_util.as_local(dt_util.utc_from_timestamp(min(prices))).date() + timedelta(days=15)
     days = [d for d in (last - timedelta(days=n) for n in range(args.days)) if d >= first]
 
-    public = ZoneHolidays(args.country)
+    public = PublicHolidays(args.country)
+    public.load(range(first.year - 1, last.year + 1))
     if args.holidays_only:
         days = [d for d in days if d in public]
 
