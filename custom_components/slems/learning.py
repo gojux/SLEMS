@@ -14,13 +14,17 @@ the value set by the user applies.
   on ``ERROR_QUANTILE`` of the days it was too low at all.
 * Usable capacity of a battery (``CapacityLearner``): DC energy of a charge or
   discharge divided by the change of the state of charge.
-* Grid surplus targets (``GridTargetLearner``): the deviation of the grid
-  power towards import while the batteries control the grid. Charging: the
-  target keeps the grid on the export side for ``TARGET_QUANTILE`` of the
-  time (an import buys grid energy for the batteries). Discharging: the
-  median, the grid swings around zero; a short import costs little there
-  (the batteries keep that energy for later), a permanent export would give
-  battery energy away for the feed-in credit.
+* Grid surplus targets (``GridTargetLearner``): the deviation of the
+  filtered grid power towards import while the batteries control the grid,
+  at most every ``TARGET_SAMPLE_S`` (hours of control in the samples kept, so
+  a single hour with large load steps does not decide). The filtered power is
+  what the control follows: a load pulse shorter than the hold time of the
+  grid filter is left alone on purpose, a target raised for it would feed in
+  for good what the filter keeps. Charging: the target keeps the grid on the
+  export side for ``TARGET_QUANTILE`` of the time (an import buys grid energy
+  for the batteries). Discharging: the median, the grid swings around zero; a
+  short import costs little there (the batteries keep that energy for later),
+  a permanent export would give battery energy away for the feed-in credit.
 * Control interval and averaging window (``auto_timing``): from the learned
   report interval of the smart meter.
 * Consumers (``ConsumerLearner``): power while switched on (a power
@@ -207,7 +211,9 @@ class CapacityLearner:
 # --- grid surplus targets ---------------------------------------------------------
 
 TARGET_QUANTILE = 0.9
+# 3000 samples every 5 s: about 4 h of charging (discharging) in the samples.
 TARGET_KEEP = 3000
+TARGET_SAMPLE_S = 5.0
 TARGET_MIN_SAMPLES = 300
 TARGET_LIMITS_W = (20.0, 1000.0)
 DISCHARGE_TARGET_QUANTILE = 0.5
@@ -216,18 +222,37 @@ DISCHARGE_TARGET_LIMITS_W = (-100.0, 300.0)
 
 @dataclass
 class GridTargetLearner:
-    """Deviation of the grid power towards import while the batteries control it."""
+    """Deviation of the filtered grid power towards import while the batteries control it."""
 
     charge: deque = field(default_factory=lambda: deque(maxlen=TARGET_KEEP))
     discharge: deque = field(default_factory=lambda: deque(maxlen=TARGET_KEEP))
+    # Monotonic time of the last sample per direction (not stored).
+    _last: dict = field(default_factory=dict)
 
-    def add(self, charging: bool, grid_w: float, target_w: float) -> None:
-        """``target_w`` is the grid surplus aimed at (+export), ``grid_w`` +import."""
+    def add(self, charging: bool, grid_w: float, target_w: float, now: float | None = None) -> None:
+        """``target_w`` is the grid surplus aimed at (+export), ``grid_w`` +import;
+        with ``now`` (monotonic) at most one sample per ``TARGET_SAMPLE_S``."""
+        if now is not None:
+            last = self._last.get(charging)
+            if last is not None and now - last < TARGET_SAMPLE_S:
+                return
+            self._last[charging] = now
         deviation = grid_w + target_w
         if charging:
             self.charge.append(max(0.0, deviation))
         else:
             self.discharge.append(deviation)
+
+    def as_dict(self) -> dict:
+        return {"charge": [round(v) for v in self.charge], "discharge": [round(v) for v in self.discharge]}
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> GridTargetLearner:
+        data = data or {}
+        return cls(
+            charge=deque((float(v) for v in data.get("charge", [])), maxlen=TARGET_KEEP),
+            discharge=deque((float(v) for v in data.get("discharge", [])), maxlen=TARGET_KEEP),
+        )
 
     def target_w(self, charging: bool, no_import: bool = False) -> float | None:
         """``no_import``: the discharge target aims at no grid import (at least 0 W)."""

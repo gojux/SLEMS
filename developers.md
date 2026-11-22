@@ -1407,12 +1407,17 @@ known):
   (allocation), next 24 h for the night discharge buffer (real plan and
   projection).
 - `grid_target_w(settings, charging)`: `GridTargetLearner` samples
-  `grid + target` in `plan()` during controller cycles (active mode,
-  control status active, strategy battery priority, shared or self
-  consumption, battery power not near its limit; the discharge target capped
-  by the maximum grid export, as the control aims at that), from 300 of the last 3000 samples. Charging: 90 %
-  quantile of `max(0, grid + target)`, 20–1000 W. Discharging: median,
-  −100 to 300 W (0 to 300 W with `grid_targets_no_import`). Not stored (relearned within an hour).
+  `grid + target` in `plan()` during controller cycles, at most every 5 s per
+  direction (active mode, control status active, strategy battery priority,
+  shared or self consumption, battery power not near its limit; the discharge
+  target capped by the maximum grid export, as the control aims at that), from
+  300 of the last 3000 samples (about 4 h of charging or discharging). `grid`
+  is the filtered grid power (`grid_power_filtered_w`), what the control
+  follows: a load pulse shorter than the hold time of the grid filter is left
+  alone on purpose, and a target raised for it would feed in for good what the
+  filter keeps. Charging: 90 % quantile of `max(0, grid + target)`,
+  20–1000 W. Discharging: median, −100 to 300 W (0 to 300 W with
+  `grid_targets_no_import`). Stored (`control.grid_targets`, rounded to W).
 - `control_interval_s` / `average_window_s`: `auto_timing` of
   `controller.meter.interval_s`; used by the controller and the grid filter.
 - `BatteryRuntime.capacity_wh`: learned capacity if `learn_capacity` and
@@ -2912,3 +2917,4 @@ repository (otherwise its *brands* check fails).
 | 2026-11-07 | Simulation tab in two views, *Day plan* (day chart, price chart, key figures: one day on one time axis) and *Recorded months*, instead of all cards one below the other. The card for other hardware is merged into the tariff comparison as a switch *Hardware: current / simulated*: the recorded values plus the model difference (simulated minus current hardware) instead of two model runs side by side. So the current costs have one number (the recorded one, not a second model value), what the model misses on both sides cancels out, and the table answers which tariff fits the other hardware with the usual differences, chips and sum. |
 | 2026-11-15 | Requests over Home Assistant's Modbus backend (grid meter, profiles with **Home Assistant Modbus**) go through `ha_modbus.request`: a lost connection is asked again on a new one after 1 s (at most twice) instead of dropping the shared connection once more and failing the read; a timeout or a late answer drops the connection and fails, without further attempts (they would hold the control cycle up). The grid meter requires a timeout of 1 s instead of cancelling the request after 1 s with the default of 10 s: a silent meter kept its dead connection, and cancelled requests caused late answers. Minimum version Home Assistant 2026.10 (`require_timeout`), which `HaUnitTransport` already used without a check. |
 | 2026-11-20 | Implausible values are left out where they would spread. `async_statistic_means` drops means above 100 × the 90th percentile of their statistic (at least 50 kW): one hour with 78 MWh from a faulty sensor reading had made the consumption forecast of a whole day 111 MWh; the percentile is relative so a farm with a 400 kW connection (grid level 6) keeps its hours, the 90th rather than the 99th so a short series with several faults still finds its usual range. A battery reading beyond 10 × its largest configured power (at least 10 kW) counts as a failed read (`implausible_battery_power`), so a register read as 0xFFFF does not enter the house consumption; generous, as the configured powers may be limits below the hardware. A car's state of charge of 0 % is unknown: evcc 0.319.1 clears it to 0 on unplugging, which would have planned a full charge for a daily target by state of charge. Sensors *Battery minimum / maximum state of charge total* (capacity weighted over the batteries of the state of charge total) for evcc's `minSocEntity` / `maxSocEntity` (from 0.317). `grid_target_samples` and `learning_progress` are not recorded: they changed with every sample and made the learned values sensor the largest attributes table of the recorder. Checked against evcc 0.319.1 and ha-evcc 2026.11.2 (no renamed entities; the energy of a loadpoint is now named *Charged (Total)*). |
+| 2026-11-22 | The learned grid surplus targets sample the filtered grid power at most every 5 s and are stored. Before, they sampled the raw grid power every control cycle (0.5 s) and started from nothing after a restart: 3000 samples were 25 min of charging, and on two November days of a production log the 90 % quantile of such a window ranged from 28 to 886 W, a single hour with load steps deciding (a learned 700 W had made the user switch it off). Over 4 h of filtered samples it stayed at 76–105 W. The raw power also contained the load pulses the grid filter leaves alone on purpose; a target raised for them fed in for good what the filter keeps. The 90 % quantile itself stays for now (an economic one from prices and efficiency would be lower; to check with measurements on sunny days). |

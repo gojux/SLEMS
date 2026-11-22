@@ -553,3 +553,28 @@ def test_cooling_needs_whole_hours_read_throughout() -> None:
     assert set(learner.drops) == {12}
     stored = CoolingLearner.from_dict(learner.as_dict())
     assert {h: list(v) for h, v in stored.drops.items()} == {12: [pytest.approx(59 / 60, abs=0.01)]}
+
+
+def test_grid_target_samples_at_most_every_5_s() -> None:
+    learner = GridTargetLearner()
+    # A cycle every 0.5 s for a minute: 12 samples, charging and discharging each on their own.
+    for i in range(120):
+        learner.add(True, 0, 100, now=i * 0.5)
+        learner.add(False, 0, 0, now=i * 0.5)
+    assert len(learner.charge) == 12
+    assert len(learner.discharge) == 12
+    # Without a time: every sample.
+    learner.add(True, 0, 100)
+    assert len(learner.charge) == 13
+
+
+def test_grid_target_samples_are_stored() -> None:
+    learner = GridTargetLearner()
+    for i in range(400):
+        learner.add(True, -200 + (i % 8) * 50, 100)
+        learner.add(False, -150 + (i % 8) * 50, 0)
+    restored = GridTargetLearner.from_dict(learner.as_dict())
+    assert restored.target_w(charging=True) == learner.target_w(charging=True)
+    assert restored.target_w(charging=False) == learner.target_w(charging=False)
+    assert restored.charge.maxlen == learner.charge.maxlen
+    assert GridTargetLearner.from_dict(None).target_w(charging=True) is None

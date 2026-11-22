@@ -358,7 +358,8 @@ def test_grid_target_samples_the_target_aimed_at() -> None:
     coordinator.controller = SimpleNamespace(status=ControlStatus.ACTIVE)
     settings = ControlSettings(operating_mode=OperatingMode.ACTIVE, discharge_grid_target_w=50.0)
     battery = SimpleNamespace(max_charge_w=2500.0, max_discharge_w=2500.0)
-    snapshot = SimpleNamespace(grid_power_w=0.0)
+    # The filtered grid power counts (a short load pulse in the raw value does not).
+    snapshot = SimpleNamespace(grid_power_w=900.0, grid_power_filtered_w=0.0)
 
     # Discharging with the maximum grid export at 0 W: the batteries aim at
     # 0 W, the grid at 0 W is no deviation.
@@ -372,6 +373,10 @@ def test_grid_target_samples_the_target_aimed_at() -> None:
     charge = Allocation(strategy=Strategy.GRID_FRIENDLY, battery_power_w=500.0)
     coordinator._learn_grid_target(snapshot, charge, battery, settings, 5000.0)
     assert not coordinator.grid_targets.charge
+
+    # Without a filtered grid power: nothing.
+    coordinator._learn_grid_target(SimpleNamespace(grid_power_w=0.0, grid_power_filtered_w=None), discharge, battery, settings, 5000.0)
+    assert len(coordinator.grid_targets.discharge) == 2
 
 
 def test_run_costs_follow_the_outdoor_temperature_and_the_surplus() -> None:

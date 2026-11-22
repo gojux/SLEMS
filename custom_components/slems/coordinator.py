@@ -1158,6 +1158,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                     names.get(battery_id, battery_id), kind,
                 )
         self.controller.battery_starts.restore(control.get("battery_starts") or {})
+        self.grid_targets = GridTargetLearner.from_dict(control.get("grid_targets"))
         for battery in self.batteries:
             data = stored.get(battery.subentry_id) or {}
             if integrator := data.get("integrator"):
@@ -1683,6 +1684,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 **self.controller.battery_responses.samples_as_dict(),
             },
             "battery_starts": self.controller.battery_starts.as_dict(),
+            "grid_targets": self.grid_targets.as_dict(),
             "grid_source": self.grid_source_configured,
             "bad_weather": self.bad_weather.as_dict(),
         }
@@ -3416,7 +3418,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
                 allocation.battery_power_w, enabled_battery_w, snapshot.grid_power_w, max_export_w
             )
         if previous_total_w is not None:
-            self._learn_grid_target(snapshot, allocation, battery, settings, max_export_w)
+            self._learn_grid_target(snapshot, allocation, battery, settings, max_export_w, now)
         for subentry_id, power in allocation.consumer_power_w.items():
             self._runtime.update(subentry_id, power > 0, now)
         snapshot.allocation = allocation
@@ -3767,14 +3769,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         battery: BatteryGroup | None,
         settings: ControlSettings,
         max_export_w: float,
+        now: float | None = None,
     ) -> None:
         """Sample the grid deviation while the batteries control the grid (active mode).
 
-        The deviation is taken from the target the batteries really aim at: the
-        maximum grid export while discharging lowers the discharge target, and
-        grid friendly charging holds the batteries back on purpose (not sampled).
+        The deviation is taken from the filtered grid power the control follows
+        and from the target the batteries really aim at: the maximum grid export
+        while discharging lowers the discharge target, and grid friendly
+        charging holds the batteries back on purpose (not sampled).
         """
-        grid = snapshot.grid_power_w
+        grid = snapshot.grid_power_filtered_w
         if (
             grid is None
             or battery is None
@@ -3786,11 +3790,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # Not at a limit, otherwise the batteries cannot correct the deviation.
         if allocation.strategy in (Strategy.BATTERY_PRIORITY, Strategy.SHARED):
             if 50 < power < 0.9 * battery.max_charge_w:
-                self.grid_targets.add(True, grid, self.grid_target_w(settings, charging=True))
+                self.grid_targets.add(True, grid, self.grid_target_w(settings, charging=True), now)
         elif allocation.strategy is Strategy.SELF_CONSUMPTION:
             if -0.9 * battery.max_discharge_w < power < -50:
                 target = min(self.grid_target_w(settings, charging=False), max_export_w)
-                self.grid_targets.add(False, grid, target)
+                self.grid_targets.add(False, grid, target, now)
 
     def forecast_plan(
         self,
