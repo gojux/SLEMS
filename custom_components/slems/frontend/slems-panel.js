@@ -104,6 +104,7 @@ const STRINGS = {
       goal_no_export: "Not suggested for the goal: **Maximum grid export while discharging** is 0 W, nothing would be fed in from the batteries.",
     },
     assistantLabel: "Assistant",
+    assistantLoading: "Calculating suggestions …",
     assistantModeOff: "Off",
     assistantModeBalanced: "Balanced",
     assistantOffHint: "The assistant suggests values for the settings, from the tariff, the plant and what was observed.",
@@ -1003,6 +1004,7 @@ const STRINGS = {
       goal_no_export: "Für das Ziel nicht vorgeschlagen: **Maximale Einspeisung beim Entladen** ist 0 W, aus den Batterien würde nichts eingespeist.",
     },
     assistantLabel: "Assistent",
+    assistantLoading: "Vorschläge werden berechnet …",
     assistantModeOff: "Aus",
     assistantModeBalanced: "Ausgewogen",
     assistantOffHint: "Der Assistent schlägt Werte für die Einstellungen vor, aus Tarif, Anlage und Beobachtungen.",
@@ -2133,6 +2135,7 @@ const FLOW_VIEW_KEY = "slems-flow-view";
 const SETTINGS_SECTION_KEY = "slems-settings-section";
 // The suggestions of the settings assistant are asked for again after this time (ms).
 const ASSISTANT_REFRESH_MS = 5 * 60 * 1000;
+const ASSISTANT_SPINNER_MS = 300;
 // Goals of the settings assistant (GOALS in assistant.py) and the localStorage key
 // of the assistant's choice: "off", "balanced" (no goal) or a goal.
 const ASSISTANT_GOALS = ["self_consumption", "costs", "grid", "battery_first", "battery_care"];
@@ -2261,7 +2264,7 @@ class SlemsPanel extends HTMLElement {
     // Text in the search field of the settings tab (not remembered).
     this._settingsSearch = "";
     // Suggestions of the settings assistant (slems/assistant), asked for while shown.
-    this._assistant = { result: null, at: 0, pending: false, goal: "" };
+    this._assistant = { result: null, at: 0, pending: false, slow: false, goal: "" };
     // Assistant switched on and its goal ("": balanced, none); only remembered by the browser.
     this._assistantOn = false;
     this._assistantGoal = "";
@@ -6394,7 +6397,14 @@ class SlemsPanel extends HTMLElement {
       <select data-action="assistant-goal" class="${on ? "active" : ""}">${option("off", t.assistantModeOff)}${option(
         "balanced",
         t.assistantModeBalanced
-      )}${ASSISTANT_GOALS.map((key) => option(key, t.assistantGoals[key])).join("")}</select></label>`;
+      )}${ASSISTANT_GOALS.map((key) => option(key, t.assistantGoals[key])).join("")}</select>${
+      // After the select, so nothing moves when it appears.
+      on && this._assistant.slow
+        ? `<ha-icon class="spin" icon="mdi:loading" role="status" title="${escapeHtml(t.assistantLoading)}" aria-label="${escapeHtml(
+            t.assistantLoading
+          )}"></ha-icon>`
+        : ""
+    }</label>`;
     const hint = !on ? t.assistantOffHint : this._assistantGoal ? t.assistantGoalHints[this._assistantGoal] : t.assistantBalancedHint;
     const open = on ? Object.keys(this._simulableSuggestions()).length : 0;
     // Always a line of its own (also with the assistant off), so nothing below moves.
@@ -6712,6 +6722,12 @@ class SlemsPanel extends HTMLElement {
       Date.now() - assistant.at < ASSISTANT_REFRESH_MS;
     if (assistant.pending || fresh) return;
     assistant.pending = true;
+    // The spinner only from ASSISTANT_SPINNER_MS on, so a quick answer does not make it flash.
+    setTimeout(() => {
+      if (!assistant.pending) return;
+      assistant.slow = true;
+      this._queueRender();
+    }, ASSISTANT_SPINNER_MS);
     this._hass
       .callWS({ type: `${DOMAIN}/assistant`, ...(goal ? { goal } : {}) })
       .then((result) => {
@@ -6727,6 +6743,7 @@ class SlemsPanel extends HTMLElement {
         assistant.settings = settings;
         assistant.at = Date.now();
         assistant.pending = false;
+        assistant.slow = false;
         this._queueRender();
       });
   }
@@ -7642,6 +7659,7 @@ const STYLE = `
   .assistant-goal select:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
   .assistant-goal select.active { color: var(--slems-accent); background-color: color-mix(in srgb, var(--primary-color) 12%, transparent);
     box-shadow: inset 0 -2px 0 var(--primary-color); }
+  .assistant-goal ha-icon.spin { --mdc-icon-size: 18px; color: var(--secondary-text-color); animation: spin 1s linear infinite; }
   .assistant-goal option { color: var(--primary-text-color); background: var(--card-background-color); }
   .assistant-info { flex-basis: 100%; display: flex; justify-content: flex-end; align-items: center; gap: 4px 16px;
     flex-wrap: wrap; min-height: 28px; font-size: 13px; }
