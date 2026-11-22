@@ -314,7 +314,7 @@ many batteries run: for that SLEMS learns a separate loss curve per battery
 from the difference of AC and DC power at every power level (fixed loss of a
 running inverter plus losses rising with the power). From it the distribution
 calculates the number of batteries with the lowest total loss: at low power
-one battery, above the break-even point several (see **Distribution between batteries**). This
+one battery, above the break-even point several (see [distribution between batteries](#distribution-between-batteries)). This
 works with every efficiency source, but only for batteries that report AC and
 DC power (Marstek Venus E 3.0).
 
@@ -615,7 +615,7 @@ Every controllable battery has these settings (dashboard: **Settings**):
   2 %). A battery that alternates between charging and standby every few
   seconds counts as charging again only after three charging polls in a row.
   Such an early end often comes from a large cell delta; it is measured at
-  that moment (see cell delta).
+  that moment (see [cell delta](#cell-delta-and-active-cell-balancing)).
   Independently, the control counts a battery that measurably does not follow
   its set point with its measured power, so the house consumption and the
   consumption forecast do not contain power that does not flow.

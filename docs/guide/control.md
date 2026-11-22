@@ -26,9 +26,9 @@ possible and keeps it over the next night:
 - The batteries charge every surplus at once instead of charging grid
   friendly, and the night discharge is off.
 - The target grid surplus, the feed-in cap and the battery limits stay.
-- It ends by itself in the morning after the next evening: switched on during
-  the day the next morning, switched on at night (after the evening or before
-  the morning) the morning after next.
+- It ends by itself in the morning after the next evening. Switched on during
+  the day, it ends the next morning; switched on at night (after the evening
+  or before the morning), the morning after next.
 - The evening is the end of the last hour in which the PV forecast is above
   the consumption forecast (without such an hour the sunset). The morning is
   the start of the first hour after it in which the PV forecast is above the

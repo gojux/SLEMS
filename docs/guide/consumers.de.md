@@ -25,7 +25,7 @@ prognostiziert). Andere Geräte nur zum Messen anzulegen, z. B. Waschmaschine
 oder Geschirrspüler, verbessert die Planung derzeit nicht: Ihr Verbrauch ist
 bereits im Hausverbrauch enthalten, und dessen Prognose (ein Profil je
 Wochentag und Stunde) enthält ihren durchschnittlichen Verbrauch. Sie
-bekommen nur eine eigene Karte und ein Feld im Energiefluss.
+bekommen nur eine eigene Karte und eine Box im Energiefluss.
 
 ## Einstellungen
 
@@ -394,7 +394,7 @@ Name des Verbrauchers, Block **Tagesziel**.
 - **Keine Leistung**: Nimmt ein Verbraucher mit Tagesziel an 3 Tagen in Folge
   keine Leistung auf, obwohl SLEMS ihn eingeschaltet hat (mindestens 30
   Minuten am Tag, weniger, wenn das Ziel oder sein Zeitfenster kürzer ist),
-  zeigen seine Karte und sein Feld im Energiefluss einen Hinweis
+  zeigen seine Karte und seine Box im Energiefluss einen Hinweis
   (ausgeschaltet, Sicherung oder defekt?), bis er wieder Leistung aufnimmt.
 - **Quelle** bestimmt, was den Rest rechtzeitig decken darf:
   - **Nur Überschuss** (Standard; das Ziel kann verfehlt werden, dann meldet es

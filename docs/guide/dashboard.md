@@ -2,6 +2,18 @@
 
 [Back to the README](../../README.md#dashboard) · [Deutsch](dashboard.de.md)
 
+<!-- toc -->
+
+- [Overview](#overview)
+- [Batteries tab](#batteries-tab)
+- [Consumers tab](#consumers-tab)
+- [Simulation](#simulation)
+- [Settings tab](#settings-tab)
+  - [Assistant](#assistant)
+- [Using the dashboard](#using-the-dashboard)
+
+<!-- /toc -->
+
 SLEMS adds the entry **SLEMS** to the Home Assistant sidebar.
 
 ## Overview

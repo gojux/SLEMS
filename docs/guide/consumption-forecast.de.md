@@ -70,7 +70,7 @@ Verbrauchsprognose** und **Treffsicherheit PV-Prognose**):
   Wärmepumpe und Temperatur) und die Prognose für morgen mit ihrer erwarteten
   Abweichung. Die Wärmepumpe wird mit der gemessenen Temperatur des Tages
   nachgerechnet; ihr Anteil wirkt dadurch etwas besser, als er war.
-- PV: Vergangene Prognosen liefert die Solarprognose-Integration nicht mehr,
+- PV: Vergangene Prognosen liefert die Solarprognose-Integration nicht,
   daher speichert SLEMS die Prognose jedes Tages zu Tagesbeginn und vergleicht
   sie abends mit der Erzeugung. Die Karte zeigt Treffsicherheit und erwartete
   Abweichung ab 7 verglichenen Tagen (vorher: **sammelt noch Daten**), weil

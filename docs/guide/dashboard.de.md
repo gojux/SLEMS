@@ -2,6 +2,18 @@
 
 [Zurück zur README](../../README.de.md#dashboard) · [English](dashboard.md)
 
+<!-- toc -->
+
+- [Übersicht](#übersicht)
+- [Reiter Batterien](#reiter-batterien)
+- [Reiter Verbraucher](#reiter-verbraucher)
+- [Simulation](#simulation)
+- [Reiter Einstellungen](#reiter-einstellungen)
+  - [Assistent](#assistent)
+- [Bedienung des Dashboards](#bedienung-des-dashboards)
+
+<!-- /toc -->
+
 SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
 
 ## Übersicht
@@ -28,7 +40,7 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
 - **Kennzahlen**: Status (zuerst Probleme – Smart Meter ohne Werte, Batterie
   nicht lesbar oder reagiert nicht –, sonst der Betriebsmodus), Strategie
   (ein Wechsel erscheint erst, wenn er 30 Sekunden besteht; die Regelung
-  wechselt sofort), Ladezustand, gespeicherte Energie und Kapazität, Einspeisegrenze, Prognosen
+  wechselt sofort), Ladezustand, Einspeisegrenze, gespeicherte Energie und Kapazität, Prognosen
   und die **erwartete Einspeisung heute**: die seit Mitternacht gemessene
   Einspeisung plus die, die der Plan noch erwartet (die blaue Linie des
   Diagramms).

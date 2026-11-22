@@ -326,7 +326,7 @@ eigene Verlustkurve aus dem Unterschied von AC- und DC-Leistung bei jeder
 Leistung (fester Verlust eines laufenden Wechselrichters plus mit der Leistung
 steigende Verluste). Daraus berechnet die Aufteilung die Anzahl Batterien mit
 dem geringsten Gesamtverlust: bei kleiner Leistung eine Batterie, oberhalb des
-Break-even-Punkts mehrere (siehe **Aufteilung auf die Batterien**). Das funktioniert mit
+Break-even-Punkts mehrere (siehe [Aufteilung auf die Batterien](#aufteilung-auf-die-batterien)). Das funktioniert mit
 jeder Wirkungsgrad-Quelle, aber nur für Batterien, die AC- und DC-Leistung
 melden (Marstek Venus E 3.0).
 
@@ -650,7 +650,7 @@ Jede steuerbare Batterie hat diese Einstellungen (Dashboard: **Einstellungen**):
   Eine Batterie, die alle paar Sekunden zwischen Laden und Standby wechselt,
   gilt erst nach drei Abfragen in Folge mit Ladeleistung wieder als ladend.
   Ein solches frühes Ende kommt oft von einem großen Zell-Delta; es wird in
-  diesem Moment gemessen (siehe Zell-Delta).
+  diesem Moment gemessen (siehe [Zell-Delta](#zell-delta-und-aktiver-zellausgleich)).
   Unabhängig
   davon rechnet die Regelung eine Batterie, die ihrer Vorgabe messbar nicht
   folgt, mit ihrer gemessenen Leistung, damit Hausverbrauch und

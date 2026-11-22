@@ -181,14 +181,17 @@ SLEMS only fetches market prices from the internet once you switch on
 **Fetch market prices** (off by default). **Price source** selects where from:
 APG (Austria), SMARD of the Bundesnetzagentur (Germany/Luxembourg) or
 Energy-Charts of Fraunhofer ISE (Austria, Germany/Luxembourg and Switzerland);
-the default follows the country set in Home Assistant. Swiss prices are in euro
-like all exchange prices. At the moment SLEMS only supports market prices in
-euro: with another currency set in Home Assistant, the tariff comparison and
-**Check against a bill** leave out tariffs that follow the market price, and a
-repair issue says so if the current tariff is one of them. SLEMS then loads the last 12 months once, stores them
-locally and fetches the next day after the day-ahead auction (from 13:00).
-The sensor **Market price** shows the price of the current quarter hour in
-ct/kWh without fees and VAT, with the source as attribution.
+the default follows the country set in Home Assistant. SLEMS then loads the
+last 12 months once, stores them locally and fetches the next day after the
+day-ahead auction (from 13:00). The sensor **Market price** shows the price of
+the current quarter hour in ct/kWh without fees and VAT, with the source as
+attribution.
+
+Swiss prices are in euro like all exchange prices. At the moment SLEMS only
+supports market prices in euro: with another currency set in Home Assistant,
+the tariff comparison and **Check against a bill** leave out tariffs that
+follow the market price, and a repair issue says so if the current tariff is
+one of them.
 
 ## Price aware control
 

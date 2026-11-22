@@ -27,9 +27,9 @@ im Menü des SLEMS-Logos im Energiefluss) möglichst viel des heutigen
   und die Nachtentladung ist aus.
 - Ziel-Netzüberschuss, Einspeisebegrenzung und die Grenzen der Batterien
   bleiben.
-- Er endet von selbst am Morgen nach dem nächsten Abend: tagsüber
-  eingeschaltet am nächsten Morgen, nachts eingeschaltet (nach dem Abend oder
-  vor dem Morgen) am übernächsten Morgen.
+- Er endet von selbst am Morgen nach dem nächsten Abend. Tagsüber
+  eingeschaltet endet er am nächsten Morgen, nachts eingeschaltet (nach dem
+  Abend oder vor dem Morgen) am übernächsten Morgen.
 - Der Abend ist das Ende der letzten Stunde, in der die PV-Prognose über der
   Verbrauchsprognose liegt (ohne eine solche Stunde der Sonnenuntergang). Der
   Morgen ist der Beginn der ersten Stunde danach, in der die PV-Prognose
@@ -617,8 +617,7 @@ Das Dashboard zeigt sie ebenfalls: ein roter Hinweis auf der Batteriekarte
 (**nicht lesbar**, **reagiert nicht**), im Energiefluss und für den Smart Meter
 oben in der Übersicht. Das Ende eines aktiven Zellausgleichs (im normalen
 Bereich, ohne weiteren Fortschritt, nach 24 Stunden oder mit einem Fehler)
-erzeugt eine
-Benachrichtigung mit dem Zell-Delta vorher und nachher und der Dauer; ein
+erzeugt eine Benachrichtigung mit dem Zell-Delta vorher und nachher und der Dauer; ein
 selbst abgebrochener Ausgleich nicht. Für eine Fehlermeldung speichert
 **Einstellungen → Geräte & Dienste → SLEMS → ⋮ → Diagnosedaten herunterladen**
 (oder dasselbe bei einem Batterie-Gerät) die Konfiguration und den internen

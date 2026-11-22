@@ -16,8 +16,8 @@ prompt.
 | [marstek_venus_a.yaml](marstek_venus_a.yaml) | Marstek Venus A | set point with own PV, 32 registers per read, RS485 control ending by itself |
 | [marstek_venus_d.yaml](marstek_venus_d.yaml) | Marstek Venus D | set point with own PV, highest powers reading 0 after a restart |
 | [sigenergy_sigenstor.yaml](sigenergy_sigenstor.yaml) | Sigenergy plant with a battery (SigenStor, Sigen Hybrid) | no fall-back documented if SLEMS fails, limits possibly stored in flash, limit on discharging, sign of the AC power, 1 s between requests |
-| [sungrow_sh10rt.yaml](sungrow_sh10rt.yaml) | Sungrow SH10RT with SBR128 | set point in the External EMS mode, heartbeat, sign of the battery power, AC power |
 | [solaredge_storedge.yaml](solaredge_storedge.yaml) | SolarEdge StorEdge with a 48 V battery (SE10K-RWB48) | remote control falling back, sign of the battery power |
+| [sungrow_sh10rt.yaml](sungrow_sh10rt.yaml) | Sungrow SH10RT with SBR128 | set point in the External EMS mode, heartbeat, sign of the battery power, AC power |
 
 **Using a candidate**
 
