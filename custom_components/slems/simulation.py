@@ -84,6 +84,16 @@ SETTINGS = (
     "grid_import_max_w",
 )
 BATTERY_KEYS = ("capacity_kwh", "min_soc_pct", "max_soc_pct", "max_charge_w", "max_discharge_w")
+# Lowest and highest simulated value of each battery key and of the changes of
+# PV and consumption in % (as the dashboard offers them; a plan needs a capacity).
+BATTERY_BOUNDS = {
+    "capacity_kwh": (0.1, 1000.0),
+    "min_soc_pct": (0.0, 100.0),
+    "max_soc_pct": (0.0, 100.0),
+    "max_charge_w": (0.0, 1_000_000.0),
+    "max_discharge_w": (0.0, 1_000_000.0),
+}
+CHANGE_BOUNDS_PCT = (-100.0, 1000.0)
 HOUR = timedelta(hours=1)
 
 
@@ -205,8 +215,12 @@ def simulated_settings(real: ControlSettings, values: dict[str, Any]) -> Control
 
 
 def battery_values(base: dict[str, float], values: dict[str, Any]) -> dict[str, float]:
-    """The starting values ``base`` with the simulated battery ``values``."""
-    return base | {key: float(value) for key, value in values.items() if key in BATTERY_KEYS}
+    """The starting values ``base`` with the simulated battery ``values`` (within ``BATTERY_BOUNDS``)."""
+    return base | {
+        key: min(max(float(value), BATTERY_BOUNDS[key][0]), BATTERY_BOUNDS[key][1])
+        for key, value in values.items()
+        if key in BATTERY_KEYS
+    }
 
 
 def simulated_group(group: BatteryGroup, base: dict[str, float], values: dict[str, float]) -> BatteryGroup:
@@ -357,8 +371,8 @@ def async_register_websocket(hass: HomeAssistant) -> None:
         vol.Required("type"): f"{DOMAIN}/simulate",
         vol.Optional("settings", default={}): dict,
         vol.Optional("battery", default={}): dict,
-        vol.Optional("pv_pct", default=0): vol.Coerce(float),
-        vol.Optional("consumption_pct", default=0): vol.Coerce(float),
+        vol.Optional("pv_pct", default=0): vol.All(vol.Coerce(float), vol.Clamp(*CHANGE_BOUNDS_PCT)),
+        vol.Optional("consumption_pct", default=0): vol.All(vol.Coerce(float), vol.Clamp(*CHANGE_BOUNDS_PCT)),
         vol.Optional("import_tariff", default=""): str,
         vol.Optional("export_tariff", default=""): str,
     }

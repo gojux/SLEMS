@@ -5880,6 +5880,10 @@ class SlemsPanel extends HTMLElement {
     else {
       value = parseFloat(target.value);
       if (!Number.isFinite(value)) return;
+      // Typed values are not held to min and max by the browser.
+      const [min, max] = [parseFloat(target.min), parseFloat(target.max)];
+      if (Number.isFinite(min)) value = Math.max(min, value);
+      if (Number.isFinite(max)) value = Math.min(max, value);
     }
     if (group) form[group][key] = value;
     else form[key] = value;

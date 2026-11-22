@@ -6,7 +6,7 @@ import pytest
 
 from homeassistant.util import dt as dt_util
 
-from custom_components.slems.simulation import _metrics
+from custom_components.slems.simulation import _metrics, battery_values
 
 
 @pytest.fixture(autouse=True)
@@ -54,3 +54,11 @@ def test_costs_of_the_planned_grid_energy() -> None:
     result = _metrics(plan, day, None, (import_prices, credits))
     assert result["import_cost"] is None and result["export_credit"] == pytest.approx(0.2)
     assert "import_cost" not in _metrics(plan, day, None)
+
+
+def test_simulated_battery_values_stay_within_their_bounds() -> None:
+    base = {"capacity_kwh": 5.0, "min_soc_pct": 10.0, "max_soc_pct": 100.0, "max_charge_w": 2500.0, "max_discharge_w": 2500.0}
+    values = battery_values(base, {"capacity_kwh": 0, "min_soc_pct": -5, "max_soc_pct": 150, "max_charge_w": -100, "other": 1})
+    assert values == {
+        "capacity_kwh": 0.1, "min_soc_pct": 0.0, "max_soc_pct": 100.0, "max_charge_w": 0.0, "max_discharge_w": 2500.0,
+    }
