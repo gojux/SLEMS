@@ -1,6 +1,6 @@
 # Verbrauchsprognose
 
-[Zurück zur README](../../README.de.md#verbrauchsprognose) · [English](consumption-forecast.md)
+[Zurück zur README](../../README.de.md#prognosen) · [English](consumption-forecast.md)
 
 ## So entsteht die Prognose
 

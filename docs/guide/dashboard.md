@@ -77,7 +77,7 @@ SLEMS adds the entry **SLEMS** to the Home Assistant sidebar.
     series (the scale follows the series shown; the browser keeps the choice;
     **PV above the limit** of the feed-in cap is hidden until switched on);
     **Show table** switches to a table.
-- **Price chart** (only with a [tariff](../../README.md#tariffs-optional) whose prices change
+- **Price chart** (only with a [tariff](tariffs.md) whose prices change
   over the day, with market prices or with price aware control), below the
   forecast chart on the same time axis: per quarter hour the price of an
   imported kWh with the current tariff and the feed-in credit (ct/kWh incl.
@@ -136,7 +136,7 @@ if it differs); the settings next to them count for both.
   battery priority (automatic or a fixed state of charge; below it the
   threshold in effect today and tomorrow), the night discharge buffer, the maximum
   grid export while discharging and the PV and consumption forecasts (±%) can
-  be changed too. With comparison [tariffs](../../README.md#tariffs-optional) the group
+  be changed too. With comparison [tariffs](tariffs.md) the group
   **Tariff** at the top chooses another **Tariff for import** and **Tariff
   for feed-in** (e.g. a dynamic tariff, one with a reduced grid price at noon
   or one with a power price). Everything that uses prices plans with it: the
@@ -163,7 +163,7 @@ if it differs); the settings next to them count for both.
   took over this morning applies, changed by the consumption forecast (±%) and
   with the simulated batteries; tomorrow the value the forecasts give now.
 
-**Tariff comparison**: with [tariffs](../../README.md#tariffs-optional)
+**Tariff comparison**: with [tariffs](tariffs.md)
 **Recorded months** shows per month of the last year (and the current month
 to date) the recorded grid import and feed-in and, per tariff including VAT,
 the costs of the import and the credit for the feed-in (less its fees; a
@@ -174,7 +174,7 @@ comparison: the recorded energy priced differently, not what SLEMS would have
 done with another tariff (e.g. charging the batteries in cheap hours).
 Dynamic tariffs use the stored market prices; energy without a market price
 is marked. With batteries a line below the costs of a tariff adds an estimate
-of what the [price aware control](../../README.md#tariffs-optional) would have
+of what the [price aware control](tariffs.md) would have
 saved: the recorded hourly house consumption and PV are played through a
 simple battery model, once as usual and once planned like the price aware
 control (with charging from the grid and feeding in from the batteries if

@@ -83,7 +83,7 @@ SLEMS fügt der Seitenleiste von Home Assistant den Eintrag **SLEMS** hinzu.
     Kurven; der Browser merkt sich die Auswahl; **PV über der Grenze** der
     Einspeisebegrenzung ist ausgeblendet, bis du es einschaltest); **Tabelle
     anzeigen** schaltet auf eine Tabelle um.
-- **Preisdiagramm** (nur mit einem [Tarif](../../README.de.md#tarife-optional), dessen Preise
+- **Preisdiagramm** (nur mit einem [Tarif](tariffs.de.md), dessen Preise
   sich über den Tag ändern, mit Börsenpreisen oder mit preisbewusster
   Steuerung), unter dem
   Prognose-Diagramm auf derselben Zeitachse: je Viertelstunde der Preis einer
@@ -147,7 +147,7 @@ für beide.
   Ladezustand; darunter die heute und morgen wirksame Schwelle), der
   Sicherheitspuffer der Nachtentladung, die maximale Einspeisung beim Entladen
   und die PV- und Verbrauchsprognose (±%) lassen sich ändern. Mit
-  Vergleichstarifen ([Tarife](../../README.de.md#tarife-optional)) wählt die Gruppe **Tarif**
+  Vergleichstarifen ([Tarife](tariffs.de.md)) wählt die Gruppe **Tarif**
   ganz oben einen anderen **Tarif für Bezug** und **Tarif für Einspeisung**
   (z. B. einen dynamischen Tarif, einen mit günstigerem Netzpreis zu Mittag
   oder einen mit Leistungspreis). Alles, was Preise nutzt, plant damit: die
@@ -177,7 +177,7 @@ für beide.
   Verbrauchsprognose (±%) und mit den simulierten Batterien; morgen der Wert
   aus den jetzigen Prognosen.
 
-**Tarifvergleich**: Mit [Tarifen](../../README.de.md#tarife-optional) zeigt
+**Tarifvergleich**: Mit [Tarifen](tariffs.de.md) zeigt
 **Aufgezeichnete Monate** für jeden Monat des letzten Jahres (und den
 laufenden Monat bis heute) den aufgezeichneten Netzbezug und die Einspeisung
 und je Tarif inklusive Umsatzsteuer die Kosten des Bezugs und die Vergütung
@@ -190,7 +190,7 @@ mit einem anderen Tarif anders gemacht hätte (z. B. die Batterien in
 günstigen Stunden laden). Dynamische Tarife nutzen die gespeicherten
 Börsenpreise; Energie ohne Börsenpreis wird markiert. Mit Batterien steht
 unter den Kosten eines Tarifs eine Schätzung, was die
-[preisbewusste Steuerung](../../README.de.md#tarife-optional) gespart hätte:
+[preisbewusste Steuerung](tariffs.de.md) gespart hätte:
 Aufgezeichneter Hausverbrauch und PV laufen stündlich durch ein einfaches
 Batteriemodell, einmal wie üblich und einmal geplant wie die preisbewusste
 Steuerung (mit Laden aus dem Netz und Einspeisen aus den Batterien, wenn sie

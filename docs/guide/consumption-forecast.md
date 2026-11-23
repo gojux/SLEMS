@@ -1,6 +1,6 @@
 # Consumption forecast
 
-[Back to the README](../../README.md#consumption-forecast) · [Deutsch](consumption-forecast.de.md)
+[Back to the README](../../README.md#forecasts) · [Deutsch](consumption-forecast.de.md)
 
 ## How the forecast is made
 

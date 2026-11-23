@@ -1,6 +1,6 @@
 # Tarife und Preise
 
-[Zurück zur README](../../README.de.md#tarife-optional) · [English](tariffs.md)
+[Zurück zur README](../../README.de.md#tarife-und-preise) · [English](tariffs.md)
 
 <!-- toc -->
 
@@ -110,6 +110,10 @@ veröffentlichte Folgejahr bietet SLEMS als neue Preise an, im Hintergrund nur
 mit eingeschaltetem **Börsenpreise abrufen**.
 
 ### Österreich
+
+23 Stromtarife und 2 PV-Einspeisetarife von 11 Lieferanten (Burgenland
+Energie, Energie AG Oberösterreich, Energie Steiermark, EVN, IKB, illwerke
+vkw, Kelag, LINZ AG, Salzburg AG, TIWAG, Wien Energie).
 
 Die Netzentgelte aller Netzbereiche (Netzebene 7, aus der Systemnutzungsentgelte-Verordnung, mit dem günstigeren
 Preis von April bis September 10–16 Uhr) und die bundesweiten Abgaben; das

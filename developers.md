@@ -6,8 +6,12 @@
   `strings.json` / `translations/*.json` (English and German).
 - Both READMEs (`README.md`, `README.de.md`) are kept in sync, as are the
   user guides in `docs/guide/` (`<topic>.md` / `<topic>.de.md`). The README
-  gives an overview with the use and benefit of each feature; details longer
-  than about a screen go into a guide, linked from the README. Longer guides
+  is written for someone seeing SLEMS for the first time: what it does for
+  them, whether it fits their installation, how to start, and a short
+  overview per area. Terms are explained where they first appear; details go
+  into a guide, linked from the README: installation and setup into
+  `setup`, the complete feature list into `features` (a new feature is added
+  there, and to the README only if it changes the overview). Longer guides
   have a table of contents between `<!-- toc -->` and `<!-- /toc -->`; after
   changing their headings run `python3 dev/guide_toc.py` (`--check` reports
   an outdated one).

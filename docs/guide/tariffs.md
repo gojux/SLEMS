@@ -1,6 +1,6 @@
 # Tariffs and prices
 
-[Back to the README](../../README.md#tariffs-optional) · [Deutsch](tariffs.de.md)
+[Back to the README](../../README.md#tariffs-and-prices) · [Deutsch](tariffs.de.md)
 
 <!-- toc -->
 
@@ -104,6 +104,10 @@ in September, is offered as new prices, in the background only with
 **Fetch market prices** switched on.
 
 ### Austria
+
+23 supply tariffs and 2 PV feed-in tariffs of 11 suppliers (Burgenland
+Energie, Energie AG Oberösterreich, Energie Steiermark, EVN, IKB, illwerke
+vkw, Kelag, LINZ AG, Salzburg AG, TIWAG, Wien Energie).
 
 The grid fees of every grid area (network level 7, from the grid fee
 ordinance, with the reduced price from April to September 10–16 h)

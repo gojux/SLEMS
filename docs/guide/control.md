@@ -332,7 +332,7 @@ threshold are recalculated continuously; above the threshold as if it were
 reached, during the day for the coming evening and night.
 
 **With a power price** (a tariff line "per kW and month", see
-[Tariffs](../../README.md#tariffs-optional)) SLEMS works with what the bill counts:
+[Tariffs](tariffs.md)) SLEMS works with what the bill counts:
 
 - **Quarter hour budget**: the limit holds on average over the quarter hour
   (or hour) the tariff measures, on the wall clock as the smart meter counts.

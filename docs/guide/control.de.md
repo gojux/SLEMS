@@ -350,7 +350,7 @@ Grenze und Schwelle werden laufend neu berechnet; über der Schwelle so, als
 wäre sie erreicht, tagsüber für den kommenden Abend und die Nacht.
 
 **Mit Leistungspreis** (Tarifposten mit „pro kW und Monat“, siehe
-[Tarife](../../README.de.md#tarife-optional)) arbeitet SLEMS mit dem, was die Rechnung zählt:
+[Tarife](tariffs.de.md)) arbeitet SLEMS mit dem, was die Rechnung zählt:
 
 - **Viertelstunden-Budget**: Die Grenze gilt im Mittel über die Viertelstunde
   (oder Stunde), die der Tarif misst, nach der Uhr wie beim Smart Meter. Eine
