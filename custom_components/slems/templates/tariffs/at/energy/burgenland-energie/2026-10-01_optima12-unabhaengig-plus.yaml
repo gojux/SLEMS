@@ -9,7 +9,8 @@ year: 2026
 parts: [energy]
 offer: true
 valid_from: 2026-10-01
-source: "Informations- und Preisblatt Privatstrom Optima12 Unabhängig+ 5.0, Vertragsabschluss Oktober 2026 (burgenlandenergie.at)"
+valid_to: 2027-11-30
+source: "Informations- und Preisblatt Privatstrom Optima12 Unabhängig+ 5.0, Vertragsabschluss Oktober 2026, unverändert für November 2026 (burgenlandenergie.at)"
 suggest: {grid_operator: Netz Burgenland GmbH}
 vat_pct:
   import: {energy: 20, grid: 20, levies: 20}

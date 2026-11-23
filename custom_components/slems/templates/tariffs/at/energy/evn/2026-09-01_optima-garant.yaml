@@ -9,6 +9,7 @@ year: 2026
 parts: [energy]
 offer: true
 valid_from: 2026-09-01
+valid_to: 2027-10-31
 source: "Informations- und Preisblatt Strom Optima Garant, Preisgarantie ab September 2026, Ausgabe 26.08.2026 (evn.at)"
 suggest: {grid_operator: Netz Niederösterreich GmbH}
 vat_pct:

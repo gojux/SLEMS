@@ -9,6 +9,7 @@ year: 2026
 parts: [energy]
 offer: true
 valid_from: 2026-10-01
+valid_to: 2027-10-31
 source: "Informations- und Preisblatt Strom OPTIMA Entspannt plus, Vertragsbeginn Oktober 2026 (dokumente.wienenergie.at/link/soptb_0002-w)"
 suggest: {grid_operator: Wiener Netze GmbH}
 vat_pct:
