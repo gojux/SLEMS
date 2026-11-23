@@ -251,7 +251,8 @@ sensors. Inputs:
   hour: the one a day earlier) and counts the consumption forecast with the
   forced runs of the daily targets, without the runs on battery support never
   or automatic (`_support_loads`) and without the heat pump series while no
-  heat pump has support always. It is computed at today's takeover (at once
+  heat pump has support always. It is computed at today's takeover (from
+  today's PV forecast corrected by the production so far, as the day plan; at once
   if nothing is kept yet; then again at the takeover) and stored as Wh with
   its day (store key `battery_priority`), so the threshold holds over the day
   and over restarts and the simulation derives it with its batteries and its

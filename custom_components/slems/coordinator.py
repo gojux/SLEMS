@@ -3232,8 +3232,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         consumption = snapshot.consumption_forecast
         pv_forecast = snapshot.pv_forecast
         if pv_forecast is not None:
-            snapshot.pv_correction = pv_correction(pv_forecast, wall_now, self._pv_today_wh)
-            snapshot.pv_elapsed_share = pv_elapsed_share(pv_forecast, wall_now)
+            self._set_pv_correction(snapshot, wall_now)
             pv_forecast = self._pv_native(snapshot, wall_now)
         # Balancing batteries take the PV surplus first.
         balancing_wh = self._balancing_charge_wh(snapshot)
@@ -3735,7 +3734,16 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         ):
             return
         self._battery_priority_checked = now
+        # The corrected forecast, as the day plan: this check runs before the plan.
+        self._set_pv_correction(snapshot, local_now)
         day.update(local_now, hourly(self._pv_native(snapshot, local_now)), self._night_consumption(consumption))
+
+    def _set_pv_correction(self, snapshot: SystemSnapshot, wall_now: datetime) -> None:
+        """Correction of today's PV forecast by the production so far (into ``snapshot``)."""
+        if snapshot.pv_forecast is None:
+            return
+        snapshot.pv_correction = pv_correction(snapshot.pv_forecast, wall_now, self._pv_today_wh)
+        snapshot.pv_elapsed_share = pv_elapsed_share(snapshot.pv_forecast, wall_now)
 
     def grid_friendly_buffer_wh(
         self, settings: ControlSettings, pv_remaining_wh: float, consumption_wh: float

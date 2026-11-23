@@ -226,3 +226,24 @@ def test_thresholds_of_the_takeovers_still_to_come() -> None:
     days = dict(c._battery_priority_days(settings, group, at(9), pv, forecast))
     assert list(days) == [at(0, 1).date()]
     assert c._battery_priority_days(ControlSettings(battery_priority_auto=False), group, at(6), pv, forecast) == ()
+
+
+def test_takeover_check_uses_the_corrected_pv_forecast(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from custom_components.slems import coordinator as module
+
+    c = coordinator([], {})
+    c._battery_priority_checked = None
+    # Up to 12:00 only half of the forecast PV came: today counts with about half.
+    c._pv_day, c._pv_complete = (at(0).date(), 0.5 * 4 * 1500), True
+    pv, consumption = forecasts()
+    snapshot = SimpleNamespace(
+        pv_forecast=pv, consumption_forecast=ConsumptionForecast(total=consumption),
+        pv_correction=1.0, pv_elapsed_share=0.0,
+    )
+    monkeypatch.setattr(module.dt_util, "now", lambda: at(12))
+    c._update_battery_priority(snapshot, 0.0)
+    assert snapshot.pv_correction == pytest.approx(0.5)
+    assert snapshot.pv_elapsed_share > 0
+    assert c.battery_priority_day.night_wh is not None
