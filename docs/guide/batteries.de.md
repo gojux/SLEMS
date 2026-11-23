@@ -103,7 +103,7 @@ werden übernommen.
 ### Eigene PV-Module an der Batterie
 
 Für eine Batterie, deren PV-Module nur über den Ausgang der Batterie ins Haus
-liefern, z. B. ein Balkonspeicher (Marstek B2500, Zendure SolarFlow, Anker
+liefern, z. B. ein Balkonkraftwerk mit Batterie (Marstek B2500, Zendure SolarFlow, Anker
 Solarbank) oder ein Hybrid-Wechselrichter. Wähle die Leistung der Module, den
 Ausgang ins Haus und den höchsten Ausgang (z. B. 800 W). SLEMS zählt die
 Module als PV und die Batterieleistung als eigene PV + Eingang − Ausgang,

@@ -29,7 +29,7 @@ Tiere](https://en.wikipedia.org/wiki/Sea_slug)) und *EMS*
 | Batterie | Unterstützung |
 |---|---|
 | AC-Batterie (eigener Wechselrichter, an der Steckdose oder im Verteiler) | Marstek Venus E 3.0 direkt über Modbus TCP; andere Modelle über ein [Modbus-Profil](docs/guide/battery-modbus-profile.de.md) oder die Entitäten ihrer Home-Assistant-Integration (Steuerung experimentell) |
-| Balkonspeicher mit PV-Modulen (z. B. Marstek B2500, Zendure SolarFlow, Anker Solarbank) | über die Entitäten seiner Integration mit **Eigene PV-Module an der Batterie** (experimentell, Tester und Feedback willkommen) |
+| Steckerbatterie mit PV-Modulen (Balkonkraftwerk mit Batterie, z. B. Marstek B2500, Zendure SolarFlow, Anker Solarbank) | über die Entitäten ihrer Integration mit **Eigene PV-Module an der Batterie** (experimentell, Tester und Feedback willkommen) |
 | Hybrid-Wechselrichter (PV und Batterie an einem Wechselrichter) | seine Batterie über die Entitäten seiner Integration (experimentell, Tester und Feedback willkommen) |
 | Keine Batterie | PV-Überschuss nur in Verbraucher ([ohne Batterien](#ohne-batterien)) |
 
@@ -461,7 +461,8 @@ Wegen einbinden:
   Die Venus erlaubt nur eine Modbus-Verbindung.
 - **Vorhandene Home-Assistant-Entitäten** (Steuerung experimentell): jede
   Batterie, die eine andere Integration einbindet, z. B. über Omnibattery,
-  auch ein Balkonspeicher oder Hybrid-Wechselrichter mit eigenen PV-Modulen.
+  auch ein Balkonkraftwerk mit Batterie oder ein Hybrid-Wechselrichter mit
+  eigenen PV-Modulen.
 - **Batterie aus einem Modbus-Profil** (experimentell): eine Batterie mit
   Modbus TCP, beschrieben durch ein Profil, das eine KI aus ihrem Handbuch
   erstellt.

@@ -406,7 +406,7 @@
           "data_description": {
             "power_entity": "Pflicht, wenn SLEMS die Batterie steuert: sie geht in die für die Regelung verfügbare Leistung ein. Mit **Eigene PV-Module an der Batterie** optional: SLEMS nimmt eigene PV − Ausgang.",
             "power_inverted": "SLEMS erwartet positiv = Laden. Aktivieren, wenn der Sensor Entladen positiv meldet.",
-            "own_pv": "Aktivieren für eine Batterie, deren PV-Module nur über den Ausgang der Batterie ins Haus liefern (Balkonspeicher wie Marstek B2500 oder Zendure SolarFlow, Hybrid-Wechselrichter). Ihre Erzeugung zählt als PV; trag sie nicht zusätzlich als PV-Anlage ein.",
+            "own_pv": "Aktivieren für eine Batterie, deren PV-Module nur über den Ausgang der Batterie ins Haus liefern (Balkonkraftwerk mit Batterie wie Marstek B2500 oder Zendure SolarFlow, Hybrid-Wechselrichter). Ihre Erzeugung zählt als PV; trag sie nicht zusätzlich als PV-Anlage ein.",
             "battery_control": "Sollwert: eine Number-Entität mit der Leistung mit Vorzeichen. Getrennt: je eine Number für Laden und Entladen, optional eine Modus-Auswahl. Skript: ein Skript erhält die Leistung als Variable power_w (+Laden / -Entladen). Ausgang: eine Number mit dem Ausgang ins Haus, nur mit **Eigene PV-Module an der Batterie**.",
             "battery_temperature_entity": "Optional: ermöglicht die Ladebegrenzung nach Temperatur.",
             "max_cell_voltage_entity": "Optional, zusammen mit der niedrigsten Zellspannung: sanftes Laden nahe voll, Zell-Delta und Zellausgleich (LFP-Zellen).",
