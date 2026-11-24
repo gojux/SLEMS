@@ -81,7 +81,6 @@ Es gibt zwei Betriebsarten:
 
 Auch Betriebsart A kennt ein Tagesziel nach Ladestand („80 % bis 7:00“, mit
 dem Ladestand des Autos aus evcc) und **Sofort laden** mit voller Leistung.
-Ziele ab dem Anstecken stehen auf der [Roadmap](../README.de.md#roadmap).
 
 ## Voraussetzungen
 

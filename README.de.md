@@ -79,6 +79,11 @@ Was du brauchst:
 | Hybrid-Wechselrichter (PV und Batterie an einem Wechselrichter) | seine Batterie über die Entitäten seiner Integration (experimentell, Tester und Feedback willkommen) |
 | Keine Batterie | PV-Überschuss in Verbraucher, mit Tageszielen, Tarifen und Prognosen ([was ohne Batterien geht](docs/guide/features.de.md#ohne-batterien)) |
 
+Für einige weitere Batterien gibt es
+[Kandidaten für Profile](docs/battery-profiles/README.de.md), zu denen uns
+noch Rückmeldungen aus dem Betrieb fehlen. Hast du eine davon, freuen wir uns
+über deinen Test und dein Feedback.
+
 Wenn du SLEMS mit einer anderen Batterie nutzen möchtest, erstelle bitte ein
 [Issue](https://github.com/gojux/SLEMS/issues/new?template=feature_request.yml) mit dem Modell, der Anbindung
 (Modbus, lokale API, Home-Assistant-Integration) und ob du testen könntest.
@@ -266,80 +271,8 @@ Batterien sind darin geschwärzt.
 
 ## Roadmap
 
-Mögliche Erweiterungen, nach Themen geordnet. Gesucht: Rückmeldungen von
-Nutzern mit einer echten Wallbox zur [evcc-Anleitung](docs/wallbox-evcc.de.md).
-
-**Elektroauto**
-
-- Ziele, die ab dem Anstecken des Autos gelten („in 3 Stunden 80 %“).
-- Batterien mit Verfügbarkeit (z. B. „Auto angesteckt“) und einer Reserve bis
-  zu einer Uhrzeit: Grundlage für ein Auto, das das Haus versorgt (V2H).
-- Gelernte Anwesenheit des Autos für die Planung.
-
-**Planung und Preise**
-
-- Eine gemeinsame Planung für alle Batterieziele: Laden, Entladen und
-  Einspeisen je Viertelstunde nach Kosten über die nächsten 36–48 Stunden
-  (Preise, Nachtentladung, Einspeisebegrenzung, netzdienliches Laden) statt
-  getrennter Regeln mit jeweils eigenem Horizont. Dazu gehören:
-  - die Tagesziele der Verbraucher gemeinsam mit den Batterien geplant,
-  - ein stabilerer Plan der preisbewussten Steuerung (nur bei deutlicher
-    Verbesserung geändert).
-- Verbraucher bei sehr günstigen oder negativen Preisen bevorzugen: eine
-  Preisschwelle je Verbraucher (z. B. Heizstab oder Boiler), gemessen am
-  gesamten Bezugspreis mit Netzentgelten, nicht nur am Börsenpreis.
-- Geschätzte Preise nach dem Wetter: die Prognose von Wind, Sonne und Last des
-  Marktgebiets (Energy-Charts) verschiebt die Schätzung; bei genau bekannten
-  Werten wäre die Abweichung im letzten Jahr um etwa ein Drittel gesunken.
-
-**Tarife**
-
-- Preise aus einer Home-Assistant-Entität des Lieferanten (z. B. die
-  Tibber-Integration, Octopus Deutschland, Ostrom): eine Posten-Art mit
-  Adaptern für die verbreiteten Vorschau-Formate, mit der Angabe, ob der Preis
-  Netzentgelte und Abgaben schon enthält.
-- Index-Tarife (z. B. nach dem Österreichischen Strompreisindex ÖSPI): eine
-  Posten-Art mit der Formel des Lieferanten, die Monatswerte des Index mit
-  Zustimmung von der Energieagentur abgerufen; damit auch Vorlagen für
-  Index-Tarife.
-
-**Prognose**
-
-- Eigene Prognose für den Urlaub: ein Grundlastprofil, gelernt aus ganzen
-  Urlaubstagen (alle Urlaube zusammen), und ein Faktor für die Wärmepumpe aus
-  denselben Tagen; bis etwa drei Urlaubstage gelernt sind, die heutige
-  Schätzung.
-- Programmgeräte (Waschmaschine, Geschirrspüler, Trockner): den Verlauf eines
-  Programms lernen und den Rest eines laufenden Programms in die Prognose der
-  nächsten Stunden aufnehmen (hilft der Abend- und Nachtplanung); später
-  eventuell bei Überschuss starten, wenn das Gerät einen Fernstart erlaubt.
-
-**Verbraucher**
-
-- SG Ready / Smart Grid der Wärmepumpe: bei PV-Überschuss oder günstigen
-  Preisen die Solltemperatur anheben (Gebäude, Pufferspeicher, Warmwasser als
-  Wärmespeicher), über die SG-Ready-Zustände oder eine Offset-Entität;
-  Vorheizen und Vorkühlen als Freigabe mit Grenzen (höchste Temperatur,
-  Offset, Dauer), nicht als Tagesziel. Die Prognose weiß, dass die vorgezogene
-  Wärme später fehlt.
-
-**Batterien und Anlagen**
-
-- Batteriegruppen mit gemeinsamer Absicherung: mehrere Batterien an einem
-  Stromkreis (z. B. zwei Venus hinter einem Leitungsschutzschalter) bekommen
-  eine gemeinsame Höchstleistung, die sich die aktiven Batterien der Gruppe
-  teilen, statt fest der Hälfte für jede.
-- Batterien mit eigener PV: die ersten echten Geräte (Marstek B2500, Zendure
-  SolarFlow) und Hybrid-Wechselrichter über ihre Integrationen oder über
-  Modbus-Profile (Kandidaten zum Testen vorhanden) und ein
-  gemeinsamer höchster Ausgang für mehrere Einheiten an einem Wechselrichter.
-- Weitere Anlagenarten: Batterien mit eigenem Zähler oder einem
-  Notstromausgang mit Lasten dahinter, und Batterien an mehreren
-  Wechselrichtern.
-- Weitere Batteriemodelle: mitgelieferte Modbus-Profile aus eigenen Profilen
-  und [Kandidaten](docs/battery-profiles/README.de.md), die bei Nutzern dieser
-  Batterien ihren Probebetrieb bestanden haben; ein eigener Treiber nur für
-  Modelle, die nicht in ein Profil passen.
+- Bidirektionales Laden mit der Wallbox: das Auto als weitere Batterie, die
+  auch das Haus versorgt (V2H).
 
 ## Der Name
 

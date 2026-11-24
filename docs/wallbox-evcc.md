@@ -80,8 +80,7 @@ There are two ways to run it:
   turns on the surplus, as both controllers react to the same grid power.
 
 Mode A also has a daily target by state of charge ("80 % by 7:00", with the
-car's state of charge from evcc) and **Charge now** at full power. Targets
-from plugging in are on the [roadmap](../README.md#roadmap).
+car's state of charge from evcc) and **Charge now** at full power.
 
 ## Prerequisites
 

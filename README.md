@@ -77,6 +77,11 @@ What you need:
 | Hybrid inverter (PV and battery at one inverter) | its battery through the entities of its integration (experimental, testers and feedback welcome) |
 | No battery | PV surplus into consumers, with daily targets, tariffs and forecasts ([what works without batteries](docs/guide/features.md#without-batteries)) |
 
+For some further batteries there are
+[candidate profiles](docs/battery-profiles/README.md) for which we still lack
+feedback from real use. If you have one of them, we would be glad about your
+test and your feedback.
+
 If you would like to use SLEMS with another battery, please
 [open an issue](https://github.com/gojux/SLEMS/issues/new?template=feature_request.yml) with the model and how
 it is connected (Modbus, local API, Home Assistant integration), and whether
@@ -259,77 +264,8 @@ redacted in them.
 
 ## Roadmap
 
-Possible extensions, grouped by topic. Wanted: feedback from users with a real
-wallbox on the [evcc guide](docs/wallbox-evcc.md).
-
-**Electric car**
-
-- Targets that apply from plugging in the car ("80 % in 3 hours").
-- Batteries with an availability (e.g. "car plugged in") and a reserve until
-  a time of day: the basis for a car supplying the house (V2H).
-- Learned presence of the car for the planning.
-
-**Planning and prices**
-
-- One planning for all battery goals: charging, discharging and feeding in
-  per quarter hour by costs over the next 36–48 hours (prices, night
-  discharge, feed-in cap, grid friendly charging), instead of separate rules
-  each with its own horizon. Part of it:
-  - the daily targets of the consumers planned together with the batteries,
-  - a more stable plan of the price aware control (changed only when clearly
-    better).
-- Consumers preferred at very cheap or negative prices: a price threshold per
-  consumer (e.g. the heating rod or a boiler), based on the total import
-  price including grid fees, not only the exchange price.
-- Estimated prices from the weather: the forecast of wind, solar and load of
-  the bidding zone (Energy-Charts) moves the estimate; with them known
-  exactly, the deviation of the last year would have dropped by about a
-  third.
-
-**Tariffs**
-
-- Prices from a Home Assistant entity of the supplier (e.g. the Tibber
-  integration, Octopus Germany, Ostrom): a line type with adapters for the
-  common forecast formats, stating whether the price already includes the
-  grid fees and levies.
-- Index tariffs (e.g. on the Austrian electricity price index ÖSPI): a line
-  type with the supplier's formula, the monthly index values fetched (with
-  consent) from the Austrian Energy Agency; templates for index tariffs too.
-
-**Forecast**
-
-- Own forecast for vacations: a base load profile learned from whole vacation
-  days (all vacations together) and a factor for the heat pump from the same
-  days; until about three vacation days are learned the estimate of today.
-- Program devices (washing machine, dishwasher, dryer): learn the course of a
-  program and add the rest of a running program to the forecast of the next
-  hours (helps the evening and night planning); later possibly starting them
-  with surplus if the device allows a remote start.
-
-**Consumers**
-
-- SG Ready / smart grid of the heat pump: raise the set temperature with PV
-  surplus or at cheap prices (building, buffer tank, hot water as heat
-  storage), through the SG Ready states or an offset entity; heating and
-  cooling ahead as a release with limits (highest temperature, offset,
-  duration), not as a daily target. The forecast knows that the heat drawn
-  ahead is missing later.
-
-**Batteries and installations**
-
-- Battery groups with a shared fuse: several batteries on one circuit (e.g.
-  two Venus behind one circuit breaker) get a highest power together, which
-  the active batteries of the group share, instead of a fixed half for each.
-- Batteries with their own PV: the first real devices (Marstek B2500,
-  Zendure SolarFlow) and hybrid inverters through their integrations or
-  through Modbus profiles (candidates to test are available), and a
-  shared highest output for several units at one inverter.
-- Further kinds of installations: batteries with their own meter or a backup
-  output with loads behind it, and batteries serving several inverters.
-- Further battery models: shipped Modbus profiles from own profiles and
-  [candidates](docs/battery-profiles/README.md) that passed their trial with
-  users of these batteries; a driver of its own only for models that do not
-  fit a profile.
+- Bidirectional charging with a wallbox: the car as a further battery that
+  also supplies the house (V2H).
 
 ## The name
 
