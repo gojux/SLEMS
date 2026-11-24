@@ -614,6 +614,20 @@ def limit_discharge_export(
     return min(0.0, max(planned_w, lowest))
 
 
+def damped_battery_power(target_w: float, previous_w: float, gain: float, deadband_w: float) -> float:
+    """The battery power of this cycle: ``gain`` of the way from the last command to the target.
+
+    Towards a target of 0 W the rest below ``deadband_w`` is dropped at once:
+    the control does not write a change within the deadband, so the last
+    steps (e.g. 29 -> 14 -> 7 W) would only go out with each keep-alive and
+    hold the batteries at a useless power for minutes.
+    """
+    power = previous_w + gain * (target_w - previous_w)
+    if target_w == 0 and abs(power) < deadband_w:
+        return 0.0
+    return power
+
+
 def limit_charge_to_surplus(planned_w: float, surplus_w: float, charge_grid_target_w: float) -> float:
     """Reduce a planned charge to what is left at the meter right now.
 

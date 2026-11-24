@@ -726,6 +726,14 @@ def test_probe_step_starts_when_due_and_begins_once_the_grid_is_quiet() -> None:
     coordinator._update_probes(0.0)
     assert battery.probe is None
     battery.probe_record.check({"config": {"key": "a"}})
+    # Due, but the battery stands still: no probe step that waits for it (it
+    # would keep those of the other batteries from starting).
+    running = coordinator.controller.latest_command
+    for command in (None, 0.0):
+        coordinator.controller.latest_command = lambda _id, command=command: command
+        coordinator._update_probes(0.0)
+        assert battery.probe is None
+    coordinator.controller.latest_command = running
     coordinator._update_probes(0.0)
     assert battery.probe is not None and battery.probe.reason == "new"
     # Not quiet yet: nothing held.

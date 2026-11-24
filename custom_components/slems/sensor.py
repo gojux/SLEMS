@@ -54,6 +54,9 @@ from .trial import TrialStatus
 ATTRIBUTES_INTERVAL_S = 60.0
 # The running interval of the peak power: often enough to follow it on the overview.
 POWER_PEAK_ATTRIBUTES_S = 10.0
+# The energy counters of a battery keep their value while the device reports
+# up to this much less.
+ENERGY_COUNTER_MAX_DIP_KWH = 0.1
 
 
 def rounded_state(value, precision: int | None):
@@ -70,6 +73,20 @@ def rounded_state(value, precision: int | None):
     if precision <= 0:
         return int(round(value))
     return round(float(value), precision) + 0.0
+
+
+def without_small_dip(value, held: float | None, max_dip: float) -> float | None:
+    """A counter value, or ``held`` while the value is at most ``max_dip`` below it.
+
+    Some devices step their energy counters back a little (a Venus by
+    0.01-0.04 kWh); Home Assistant then warns about a total that is not
+    increasing. A larger drop passes: the counter was reset.
+    """
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    if held is not None and held - max_dip <= value < held:
+        return held
+    return value
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -89,6 +106,9 @@ class BatterySensorDescription(SensorEntityDescription):
     """Describes a per battery sensor."""
 
     value_fn: Callable[[BatteryTelemetry], float | str | bool | None]
+    # A counter that keeps its value while the device reports up to this much
+    # less (see without_small_dip).
+    max_dip: float | None = None
 
 
 def _power(key: str, **kwargs) -> dict:
@@ -823,6 +843,7 @@ BATTERY_EXTRA_SENSORS: tuple[BatterySensorDescription, ...] = (
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         suggested_display_precision=2,
         value_fn=lambda t: t.extra.get("total_charging_energy"),
+        max_dip=ENERGY_COUNTER_MAX_DIP_KWH,
     ),
     BatterySensorDescription(
         key="total_discharging_energy",
@@ -832,6 +853,7 @@ BATTERY_EXTRA_SENSORS: tuple[BatterySensorDescription, ...] = (
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         suggested_display_precision=2,
         value_fn=lambda t: t.extra.get("total_discharging_energy"),
+        max_dip=ENERGY_COUNTER_MAX_DIP_KWH,
     ),
 )
 
@@ -1008,13 +1030,19 @@ class BatterySensor(SlemsBatteryEntity, SensorEntity):
     def __init__(self, coordinator, battery, description: BatterySensorDescription) -> None:
         super().__init__(coordinator, battery, description.key)
         self.entity_description = description
+        self._held: float | None = None
 
     @property
     def native_value(self) -> float | str | bool | None:
         telemetry = self.coordinator.data.batteries.get(self.battery.subentry_id)
         if telemetry is None:
             return None
-        return rounded_state(self.entity_description.value_fn(telemetry), self.suggested_display_precision)
+        value = self.entity_description.value_fn(telemetry)
+        if (max_dip := self.entity_description.max_dip) is not None:
+            value = without_small_dip(value, self._held, max_dip)
+            if value is not None:
+                self._held = value
+        return rounded_state(value, self.suggested_display_precision)
 
 
 class FirmwareSensor(SlemsBatteryEntity, SensorEntity):

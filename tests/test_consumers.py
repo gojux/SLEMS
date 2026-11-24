@@ -159,6 +159,11 @@ def test_avoid_cycling_starts_only_with_lasting_surplus_and_bridges_dips() -> No
     # Longer than the bridge: let go.
     keep_on, _, _ = cycling_holds(True, 300, 100.0 + AVOID_CYCLING_BRIDGE_S + 1, since, 120, None, 1800)
     assert not keep_on
+    # Drawing nothing (a release whose heat pump finished its run): no run to
+    # keep. Held, it was saturated and, with the source "surplus only", let go
+    # again every 50 s until the bridge ended.
+    keep_on, _, since = cycling_holds(True, 2800, 100.0, None, 1100, None, 1800, drawing=False)
+    assert not keep_on and since == 100.0
 
 
 def test_saturation_ends_when_the_consumer_draws_again() -> None:

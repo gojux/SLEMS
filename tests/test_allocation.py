@@ -15,6 +15,7 @@ from custom_components.slems.allocation import (
     Strategy,
     allocate,
     battery_full,
+    damped_battery_power,
     expected_surplus_wh,
     limit_charge_to_surplus,
     limit_discharge_export,
@@ -561,6 +562,20 @@ def test_release_is_planned_like_a_switch() -> None:
     assert result.consumer_power_w["boiler"] == 1500
     result = allocate(1000, battery(100), [release], SETTINGS, expected_surplus_wh=0)
     assert result.consumer_power_w["boiler"] == 0
+
+
+def test_the_rest_towards_zero_is_dropped_within_the_deadband() -> None:
+    # Half the way to the target with every cycle.
+    assert damped_battery_power(1000, 400, 0.5, 25) == 700
+    assert damped_battery_power(0, 469, 0.5, 25) == 234.5
+    # After a protection charge the command went 58 -> 29 W and then only with
+    # each keep-alive on to 14, 7, 4, 2, 1 W: a step below the deadband is
+    # not written.
+    assert damped_battery_power(0, 58, 0.5, 25) == 29
+    assert damped_battery_power(0, 29, 0.5, 25) == 0
+    assert damped_battery_power(0, -40, 0.5, 25) == 0
+    # A small target other than 0 W is approached as before.
+    assert damped_battery_power(10, 30, 0.5, 25) == 20
 
 
 def test_charging_stays_within_the_surplus_at_the_meter() -> None:

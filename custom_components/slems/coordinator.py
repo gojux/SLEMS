@@ -45,6 +45,7 @@ from .allocation import (
     Strategy,
     allocate,
     battery_full,
+    damped_battery_power,
     drawn_power_w,
     expected_surplus_wh,
     limit_charge_to_surplus,
@@ -111,7 +112,7 @@ from .const import (
     PeakShavingMode,
     ReleaseState,
 )
-from .controller import ControlStatus, RealTimeController
+from .controller import BATTERY_DEADBAND_W, ControlStatus, RealTimeController
 from .consumers import (
     AVOID_CYCLING_RUN_S,
     RUNNING_AT_START_RATIO,
@@ -2817,6 +2818,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             reason = battery.probe_record.due(wall)
             if reason is None or self.probe_blocked(battery) is not None:
                 continue
+            # Only a running battery is probed: a waiting probe step keeps
+            # those of the other batteries from starting. One asked for by
+            # hand starts at once and reports a battery that does not run.
+            if reason != "manual" and not self.controller.latest_command(battery.subentry_id):
+                continue
             _LOGGER.debug("Battery %s: probe step (%s)", battery.name, reason)
             battery.probe = ResponseProbe(reason, now)
             return
@@ -3421,8 +3427,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             else None
         )
         if previous_total_w is not None:
-            allocation.battery_power_w = previous_total_w + gain * (
-                allocation.battery_power_w - previous_total_w
+            allocation.battery_power_w = damped_battery_power(
+                allocation.battery_power_w, previous_total_w, gain, BATTERY_DEADBAND_W
             )
         if gate is not None:
             if gate.stop:
@@ -4706,10 +4712,12 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         mode: TargetMode,
         available_w: float | None,
         run_surplus: Callable[[float], float] | None,
+        drawing_w: float | None = None,
     ) -> tuple[bool, bool]:
         """(keep on, keep off) of a consumer that avoids short runs (see
         consumers.cycling_holds); a run is the minimum runtime, or what its
-        daily target still needs if less."""
+        daily target still needs if less. ``drawing_w`` is its power, None if
+        unknown."""
         subentry_id = consumer.subentry_id
         if not consumer.avoid_cycling or mode in (
             TargetMode.FORCED, TargetMode.WINDOW, TargetMode.PLANNED, TargetMode.BOOST
@@ -4738,6 +4746,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             available_w,
             run_surplus,
             run_s,
+            drawing=drawing_w is None or drawing_w >= RUNNING_W,
         )
         if since is None:
             self._short_since.pop(subentry_id, None)
@@ -4760,7 +4769,9 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         # Charging now: full power regardless of the surplus and its daily target.
         charge_now = consumer.subentry_id in self.charge_now
         keep_on, keep_off = (
-            (False, False) if charge_now else self._cycling_holds(consumer, now, mode, available_w, run_surplus)
+            (False, False)
+            if charge_now
+            else self._cycling_holds(consumer, now, mode, available_w, run_surplus, drawing_w)
         )
         must_stay_on = self._runtime.must_stay_on(consumer, now) or keep_on or self._window_holds(consumer, now, mode, drawing_w)
         forced = charge_now or mode in (TargetMode.FORCED, TargetMode.WINDOW, TargetMode.PLANNED)

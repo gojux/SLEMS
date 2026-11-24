@@ -434,18 +434,21 @@ def cycling_holds(
     available_w: float | None,
     run_surplus_w: Callable[[float], float] | None,
     run_s: float,
+    drawing: bool = True,
 ) -> tuple[bool, bool, float | None]:
     """(keep on, keep off, short since) of a consumer that avoids short runs.
 
     Running: kept on while the surplus (``available_w``, including its own
     power) is short for less than ``AVOID_CYCLING_BRIDGE_S``; the batteries or
-    the grid bridge the dip. Off: only started when the mean forecast surplus
-    of the next ``run_s`` (``run_surplus_w``) covers its power.
+    the grid bridge the dip. Not while it draws nothing (``drawing``): there
+    is no run to keep, e.g. a release whose device finished. Off: only started
+    when the mean forecast surplus of the next ``run_s`` (``run_surplus_w``)
+    covers its power.
     """
     if running:
         if available_w is not None and available_w < power_w:
             since = now if short_since is None else short_since
-            return now - since < AVOID_CYCLING_BRIDGE_S, False, since
+            return drawing and now - since < AVOID_CYCLING_BRIDGE_S, False, since
         return False, False, None
     if run_surplus_w is None or power_w <= 0:
         return False, False, None

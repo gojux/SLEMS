@@ -43,7 +43,9 @@ a new battery, a changed configuration, firmware, smart meter or controlling
 integration (``fingerprint``; the learned response times are dropped then),
 more than ``EARLY_SHARE`` of the last ``EARLY_COUNT`` measurements dropped as
 too early, ``MAX_AGE_S`` after the last one, or by hand. A probe that ends
-unclear or stopped is tried again after ``RETRY_S``.
+unclear or stopped is tried again after ``RETRY_S``; a due probe starts once
+the battery runs, and one whose battery stopped while it waited
+(``not_running``) with its next run.
 
 ``ProbeHints`` only logs signs that the result may be outdated, at most once
 per ``HINT_INTERVAL_S`` each: the meter cadence differs by more than
@@ -512,7 +514,8 @@ class ProbeRecord:
             self.tried_at = None
             self.failed = None
             return
-        self.tried_at = wall
+        # A battery that stopped meanwhile is probed again as soon as it runs.
+        self.tried_at = None if probe.result == "not_running" else wall
         self.failed = probe.result
         if probe.reason == "manual":
             self.requested = None

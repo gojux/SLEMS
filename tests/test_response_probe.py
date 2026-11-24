@@ -237,6 +237,11 @@ def test_record_retries_an_unclear_probe_after_an_hour() -> None:
     assert record.failed == "not_quiet" and record.due(102.0 + RETRY_S) == "new"
     record.finished(_finished("ok", "new", 0.7), 200.0)
     assert record.failed is None and record.dead_time_s == 0.7 and record.due(201.0) is None
+    # The battery stopped while the probe waited: again with its next run, no hour to wait.
+    record.request("early")
+    record.finished(_finished("not_running", "early"), 201.0)
+    assert record.failed == "not_running" and record.due(201.0) == "early"
+    record.finished(_finished("ok", "early", 0.7), 201.0)
     # Asked for by hand alone: tried once.
     record.request("manual")
     assert record.due(201.0) == "manual"
