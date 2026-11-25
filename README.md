@@ -133,7 +133,8 @@ protects them along the way. A battery can be added in three ways:
   that another integration brings in, also balcony solar with a battery or a
   hybrid inverter.
 - **Modbus profile** (experimental): a battery with Modbus TCP, described by a
-  profile an AI creates from its manual.
+  profile an AI creates from its manual. For some batteries there are ready
+  [candidate profiles](docs/battery-profiles/README.md) to paste.
 
 What SLEMS brings for every battery:
 

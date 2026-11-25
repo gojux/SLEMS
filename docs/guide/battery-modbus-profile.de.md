@@ -9,6 +9,11 @@ die Register, die das Profil dafür angibt; das Format kennt keine freien
 Schreibbefehle. Batterien aus einem Profil sind experimentell: Bitte berichte
 deine Erfahrungen in einem [Issue](https://github.com/gojux/SLEMS/issues).
 
+**Gibt es schon ein Profil?** Ein mit SLEMS geliefertes Profil wählst du in
+Schritt 2 aus. Für einige weitere Batterien gibt es
+[Kandidaten für Profile](../battery-profiles/README.de.md) zum Einfügen. In
+beiden Fällen entfällt Schritt 1.
+
 **Voraussetzungen**: Modbus TCP (eine Batterie nur mit RS485 / Modbus RTU
 braucht einen Modbus-TCP-Adapter); Register für Ladezustand, Leistung (mit
 Vorzeichen oder je Richtung ein Register) sowie Lade- und Entladeleistung (oder eine Leistung mit Vorzeichen, oder eine

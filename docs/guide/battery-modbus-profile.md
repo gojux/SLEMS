@@ -9,6 +9,11 @@ profile declares for that; the format has no free write commands. Batteries
 from a profile are experimental: please report your experience in an
 [issue](https://github.com/gojux/SLEMS/issues).
 
+**Is there a profile already?** A profile shipped with SLEMS is selected in
+step 2. For some more batteries there are
+[candidate profiles](../battery-profiles/README.md) to paste. In both cases
+step 1 is not needed.
+
 **Requirements**: Modbus TCP (a battery with only RS485 / Modbus RTU needs a
 Modbus TCP adapter); registers for the state of charge, the power (with a
 sign, or one register per direction) and the charge and discharge power (or

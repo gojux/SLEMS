@@ -137,7 +137,9 @@ und schützt sie dabei. Eine Batterie lässt sich auf drei Wegen einbinden:
   Batterie, die eine andere Integration einbindet, auch ein Balkonkraftwerk
   mit Batterie oder ein Hybrid-Wechselrichter.
 - **Modbus-Profil** (experimentell): eine Batterie mit Modbus TCP, beschrieben
-  durch ein Profil, das eine KI aus ihrem Handbuch erstellt.
+  durch ein Profil, das eine KI aus ihrem Handbuch erstellt. Für einige
+  Batterien gibt es fertige
+  [Kandidaten für Profile](docs/battery-profiles/README.de.md) zum Einfügen.
 
 Was SLEMS für jede Batterie mitbringt:
 
