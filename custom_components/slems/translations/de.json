@@ -1434,6 +1434,18 @@
       "price_saving": {
         "name": "Ersparnis Preissteuerung"
       },
+      "import_price": {
+        "name": "Bezugspreis"
+      },
+      "export_price": {
+        "name": "Einspeisepreis"
+      },
+      "import_cost": {
+        "name": "Bezugskosten"
+      },
+      "export_compensation": {
+        "name": "Einspeisevergütung"
+      },
       "self_test_result": {
         "name": "Selbsttest Ergebnis",
         "state": {
@@ -2182,6 +2194,14 @@
     "grid_counters_not_netted": {
       "title": "Energiezähler des Smart Meters saldieren nicht über die Phasen",
       "description": "Bezugs- und Einspeisezähler des Smart Meters sind in mehreren Viertelstunden beide gelaufen, während die Netzleistung weniger zeigte: Sie zählen je Phase, während dein Zähler des Netzbetreibers meist über die Phasen saldiert (in Deutschland und Österreich). Tarife und Rechnungen von SLEMS würden dann Energie zählen, die nie über den Zähler ging. Für einen Shelly Pro 3EM liefert die Integration Shelly Phase Netting saldierte Zähler (mehr erfahren); bei anderen Zählern teile die Netzleistung mit Template-Sensoren und Helfern **Integral** in Bezug und Einspeisung auf. Oder entferne die Zähler in den SLEMS-Einstellungen: SLEMS verwendet dann seine eigenen saldierten Werte. Ignoriere den Hinweis, wenn auch dein Zähler des Netzbetreibers je Phase zählt."
+    },
+    "import_cost_no_counter": {
+      "title": "Bezugskosten: kein Energiezähler für den Netzbezug",
+      "description": "Der Sensor **Bezugskosten** ist aktiviert, in den SLEMS-Optionen ist bei **Netzbezug (Zähler)** aber kein Energiezähler ausgewählt. Der Sensor rechnet die Energie dieses Zählers mit deinem Tarif ab und bleibt bis dahin nicht verfügbar. Wähle dort den Zähler aus, den auch das Energie-Dashboard verwendet, oder deaktiviere den Sensor."
+    },
+    "export_compensation_no_counter": {
+      "title": "Einspeisevergütung: kein Energiezähler für die Netzeinspeisung",
+      "description": "Der Sensor **Einspeisevergütung** ist aktiviert, in den SLEMS-Optionen ist bei **Netzeinspeisung (Zähler)** aber kein Energiezähler ausgewählt. Der Sensor rechnet die Energie dieses Zählers mit deinem Tarif ab und bleibt bis dahin nicht verfügbar. Wähle dort den Zähler aus, den auch das Energie-Dashboard verwendet, oder deaktiviere den Sensor."
     },
     "profile_unusable": {
       "title": "{name}: Profil nicht nutzbar",

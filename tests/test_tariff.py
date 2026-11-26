@@ -88,6 +88,25 @@ def test_year_items_per_day_and_vat_per_group() -> None:
     assert bill.side_gross(tariff, Side.EXPORT) == pytest.approx(-3.0 + 0.24)
 
 
+def test_yearly_items_of_a_day() -> None:
+    from custom_components.slems.tariff import yearly_per_day
+
+    items = (
+        TariffItem("Base fee", Side.IMPORT, Group.ENERGY, Unit.YEAR, 36.5),
+        TariffItem("Levy", Side.IMPORT, Group.ENERGY, Unit.PERCENT, 10.0),
+        TariffItem("Winter fee", Side.IMPORT, Group.GRID, Unit.YEAR, 73.0, months=(12, 1, 2)),
+        TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.KWH, 20.0),
+        TariffItem("Meter", Side.EXPORT, Group.GRID, Unit.YEAR, 7.3),
+        TariffItem("Bonus", Side.EXPORT, Group.ENERGY, Unit.YEAR, 3.65),
+    )
+    tariff = Tariff("T", Role.CURRENT, items, {(Side.IMPORT, Group.ENERGY): 20.0, (Side.EXPORT, Group.GRID): 20.0})
+    # 0.10 € a day, plus the levy of 10 % and 20 % VAT.
+    assert yearly_per_day(tariff, Side.IMPORT, date(2026, 6, 1)) == pytest.approx(0.1 * 1.1 * 1.2)
+    assert yearly_per_day(tariff, Side.IMPORT, date(2026, 1, 1)) == pytest.approx(0.1 * 1.1 * 1.2 + 0.2)
+    # Export: what the day earns, the bonus minus the meter with its VAT.
+    assert yearly_per_day(tariff, Side.EXPORT, date(2026, 6, 1)) == pytest.approx(0.01 - 0.02 * 1.2)
+
+
 def test_window_price_applies_only_inside_it() -> None:
     items = (
         TariffItem("Grid", Side.IMPORT, Group.GRID, Unit.KWH, 8.0,

@@ -19,6 +19,7 @@ themselves when the problem is gone:
 * the phase of a battery or consumer seems to have changed, or learning it
   anew gave the same phase (both with a dialog to answer, see ``repairs``),
 * the smart meter's energy counters do not net the phases (``netting``),
+* a cost sensor is enabled but its energy counter is not chosen (``grid_costs``),
 * problems a battery driver reports (``BatteryDriver.issues``, e.g. a profile
   register outside its range at rest, or a power sensor of a battery from
   entities with the opposite sign, with a dialog to change it, see ``repairs``),
@@ -62,6 +63,7 @@ from .drivers.ha_entities import SIGN_ISSUES
 from .drivers.profile import ISSUES as PROFILE_ISSUES
 from .phases import label
 from .self_test import Check, Outcome
+from .tariff import Side
 from .trial import TrialStatus
 
 if TYPE_CHECKING:
@@ -80,6 +82,11 @@ CONSUMERS_EXCEED_ISSUE = "consumers_exceed_house"
 PHASE_ISSUE_PREFIX = "phase_"
 NOT_NETTED_ISSUE = "grid_counters_not_netted"
 NETTING_URL = "https://github.com/gojux/shelly_phase_netting"
+# An enabled cost sensor without its energy counter (issue id and translation key).
+COST_COUNTER_ISSUES = {
+    Side.IMPORT: "import_cost_no_counter",
+    Side.EXPORT: "export_compensation_no_counter",
+}
 # The consumers behind the meter draw more than the whole house: impossible for
 # longer than the different delays of the sensors, so one of them measures
 # wrong or is not behind the meter.
@@ -178,7 +185,7 @@ class ProblemReporter:
         # Feed-in cap problems are notifications; issues with their ids are removed.
         possible = {
             GRID_STALE_ISSUE, GRID_MODBUS_ISSUE, MARKET_CURRENCY_ISSUE, CONSUMERS_EXCEED_ISSUE,
-            *CAP_NOTIFICATIONS.values(), NOT_NETTED_ISSUE,
+            *CAP_NOTIFICATIONS.values(), NOT_NETTED_ISSUE, *COST_COUNTER_ISSUES.values(),
             # Phase issues are named after what they ask about.
             *(issue_id for issue_id in self._active or () if issue_id.startswith(PHASE_ISSUE_PREFIX)),
         }
@@ -246,6 +253,8 @@ class ProblemReporter:
                     fixable[issue_id] = {"subentry_id": subentry_id}
         if coordinator.netting.not_netted:
             wanted[NOT_NETTED_ISSUE] = ("grid_counters_not_netted", {})
+        for side in coordinator.grid_cost_missing:
+            wanted[COST_COUNTER_ISSUES[side]] = (COST_COUNTER_ISSUES[side], {})
         if self._consumers_exceed(now, snapshot):
             wanted[CONSUMERS_EXCEED_ISSUE] = ("consumers_exceed_house", self._exceed_values or {})
         if not market_prices_usable(self._hass) and coordinator.market_prices.enabled:

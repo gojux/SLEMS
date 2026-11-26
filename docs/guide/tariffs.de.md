@@ -21,6 +21,7 @@
   - [Überschussstunden und negative Preise](#überschussstunden-und-negative-preise)
   - [Batterien ins Netz entladen](#batterien-ins-netz-entladen)
   - [Gemessene Ersparnis](#gemessene-ersparnis)
+- [Kosten im Energie-Dashboard](#kosten-im-energie-dashboard)
 
 <!-- /toc -->
 
@@ -328,3 +329,44 @@ eingespeist hat, vergleicht SLEMS die aufgezeichneten Kosten mit denselben
 Stunden *wie üblich*, gerechnet mit dem Batteriemodell ab dem gemessenen
 Ladezustand. Nächte ohne solche Aktion zählen nichts. Der Tarifvergleich
 zeigt den Wert neben der Schätzung.
+
+## Kosten im Energie-Dashboard
+
+SLEMS bietet vier Sensoren für die Kosten im Energie-Dashboard von Home
+Assistant, berechnet mit deinem aktuellen Tarif. Sie sind standardmäßig
+deaktiviert, und SLEMS berechnet sie erst, wenn du sie aktivierst. Im
+Energie-Dashboard wählst du je Energiezähler einen von zwei Wegen:
+
+- **Bezugspreis** und **Einspeisepreis** für **Eine Entität mit dem aktuellen
+  Preis verwenden** (Einspeisung: **Eine Entität mit der aktuellen Vergütung
+  verwenden**): was eine kWh in der aktuellen Viertelstunde kostet oder
+  einbringt, inklusive USt. Home Assistant multipliziert den Preis selbst mit
+  der Energie. Jahresposten wie ein Grundpreis und der
+  [Leistungspreis](#leistungspreis) sind nicht enthalten.
+- **Bezugskosten** und **Einspeisevergütung** für **Eine Entität verwenden,
+  die die Gesamtkosten erfasst** (Einspeisung: **Eine Entität verwenden, die
+  die Gesamtvergütung erfasst**): laufende Summen des ganzen Tarifs. Die
+  Energie wird je Viertelstunde bewertet. Fixkosten kommen nach der
+  vergangenen Zeit dazu: Jahresposten und der Leistungspreis der
+  Mindestleistung, verteilt über den Monat. Der Leistungspreis über der
+  Mindestleistung kommt in voller Höhe dazu, sobald die verrechnete Spitze des
+  Monats steigt. Die Einspeisevergütung ist die Vergütung abzüglich der Kosten
+  der Einspeisung.
+
+Für die beiden Summen gilt:
+
+- Sie bewerten die Energie der Zähler, die in den SLEMS-Optionen ausgewählt
+  sind (**Netzbezug (Zähler)** / **Netzeinspeisung (Zähler)**). Wähle die
+  Zähler aus, die auch das Energie-Dashboard verwendet, damit Energie und Geld
+  aus derselben Quelle stammen. Ohne Zähler bleibt der Sensor nicht verfügbar,
+  und ein Reparaturhinweis weist darauf hin.
+- Sie zählen ab dem Moment, in dem du sie aktivierst, nicht rückwirkend, und
+  zählen nichts, solange sie deaktiviert sind: Mitten im Monat aktiviert,
+  enthalten sie nur die Fixkosten des restlichen Monats und vom Leistungspreis
+  nur, was die Spitze ab dann steigt. Energie und Fixkosten aus einer Zeit, in
+  der Home Assistant nicht lief, werden danach nachgetragen.
+- SLEMS misst die Spitzenleistung selbst, sie kann daher etwas vom Zähler
+  deines Netzbetreibers abweichen.
+- Ein noch nicht bekannter Monatsmarktpreis zählt mit dem Mittel des bisherigen
+  Monats. Energie ohne Börsenpreis wartet bis zu zwei Tage darauf; danach
+  wird sie ausgelassen und im Attribut `unpriced_kwh` angezeigt.

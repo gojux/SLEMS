@@ -631,6 +631,26 @@ def _day_in_window(item: TariffItem, day: date) -> bool:
     return not item.weekdays or day.weekday() in item.weekdays
 
 
+def yearly_per_day(tariff: Tariff, side: Side, day: date) -> float:
+    """What the yearly items of a side cost on ``day`` (€ incl. their percent
+    items and VAT); export: what they earn, so costs of the feed-in are negative."""
+    active = tariff.active_items(day)
+    groups: dict[Group, float] = {}
+    for item in active:
+        if item.unit is Unit.YEAR and item.side is side and _day_in_window(item, day):
+            groups[item.group] = groups.get(item.group, 0.0) + item.price / DAYS_PER_YEAR
+    total = 0.0
+    for group, amount in groups.items():
+        percent = sum(
+            item.price
+            for item in active
+            if item.unit is Unit.PERCENT and item.side is side and item.group is group and _day_in_window(item, day)
+        )
+        sign = -1.0 if side is Side.EXPORT and group is Group.ENERGY else 1.0
+        total += sign * amount * (1 + percent / 100) * (1 + tariff.vat(side, group) / 100)
+    return total if side is Side.IMPORT else -total
+
+
 def tariff_from_data(name: str, data: Mapping[str, Any]) -> Tariff:
     """Tariff from the data of its config subentry."""
     vat = {

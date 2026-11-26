@@ -204,6 +204,9 @@ Anleitung: [Dashboard](dashboard.de.md).
   Netz und Einspeisen aus den Batterien.
 - Geschätzte Börsenpreise, bis die Preise des Folgetags erscheinen (Profil der
   letzten Tage, Wochenende und Feiertage).
+- Sensoren für das Energie-Dashboard von Home Assistant (standardmäßig
+  deaktiviert): der aktuelle Bezugs- und Einspeisepreis je kWh sowie laufende
+  Bezugskosten und Einspeisevergütung inklusive Grundpreis und Leistungspreis.
 
 Anleitung: [Tarife und Preise](tariffs.de.md).
 

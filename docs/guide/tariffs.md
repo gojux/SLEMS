@@ -21,6 +21,7 @@
   - [Surplus hours and negative prices](#surplus-hours-and-negative-prices)
   - [Feed in from the batteries](#feed-in-from-the-batteries)
   - [Measured saving](#measured-saving)
+- [Costs in the energy dashboard](#costs-in-the-energy-dashboard)
 
 <!-- /toc -->
 
@@ -306,3 +307,42 @@ over) in which it held, charged or fed in, SLEMS compares the recorded costs
 with the same hours played *as usual* through the battery model, starting from
 the measured state of charge. Nights without such an action count nothing.
 The tariff comparison shows the value next to the estimate.
+
+## Costs in the energy dashboard
+
+SLEMS offers four sensors for the costs in the energy dashboard of Home
+Assistant, computed with your current tariff. They are disabled by default,
+and SLEMS only computes them once you enable them. In the energy dashboard
+you choose one of two ways per energy counter:
+
+- **Import price** and **Feed-in price** for **Use an entity with current
+  price** (feed-in: **Use an entity with current rate**): what a kWh costs or
+  earns in the current quarter hour, including VAT. Home Assistant multiplies
+  the price by the energy itself. Yearly items such as a base price and the
+  [power price](#power-price) are not part of it.
+- **Import costs** and **Feed-in compensation** for **Use an entity tracking
+  the total costs** (feed-in: **Use an entity tracking the total amount of
+  money received**): running totals of the whole tariff. The energy is priced
+  per quarter hour. Fixed costs are added by the time passed: yearly items,
+  and the power price of the minimum power spread over the month. The power
+  price above the minimum is added in full as soon as the billed peak of the
+  month rises. The feed-in compensation is the credit minus the costs of the
+  feed-in.
+
+For the two totals:
+
+- They price the energy of the counters chosen in the SLEMS options (**Grid
+  import energy (counter)** / **Grid export energy (counter)**). Choose the
+  counters the energy dashboard uses, so energy and money come from the same
+  source. Without a counter the sensor stays unavailable and a repair issue
+  says so.
+- They count from the moment you enable them, not backwards, and add nothing
+  while they are disabled: enabled in the middle of a month, they hold the
+  fixed costs of the rest of the month only, and of the power price only what
+  the peak rises by from then on. Energy and fixed costs of a time Home
+  Assistant did not run are added afterwards.
+- SLEMS measures the peak power itself, so it can differ a little from the
+  meter of your grid operator.
+- A monthly market price that is not known yet counts with the mean of the
+  month so far. Energy without a market price waits for it for up to two
+  days; after that it is left out and shown in the attribute `unpriced_kwh`.

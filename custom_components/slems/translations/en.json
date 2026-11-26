@@ -1434,6 +1434,18 @@
       "price_saving": {
         "name": "Saving price control"
       },
+      "import_price": {
+        "name": "Import price"
+      },
+      "export_price": {
+        "name": "Feed-in price"
+      },
+      "import_cost": {
+        "name": "Import costs"
+      },
+      "export_compensation": {
+        "name": "Feed-in compensation"
+      },
       "self_test_result": {
         "name": "Self-test result",
         "state": {
@@ -2182,6 +2194,14 @@
     "grid_counters_not_netted": {
       "title": "Energy counters of the smart meter do not net the phases",
       "description": "The import and the export counter of the smart meter both ran in several quarter hours while the grid power showed less: they count per phase, while your utility meter usually nets the phases (in Germany and Austria). Tariffs and bills of SLEMS would then count energy that never crossed the meter. For a Shelly Pro 3EM the Shelly Phase Netting integration provides netted counters (learn more); with other meters, split the grid power into import and export with template sensors and **Integral** helpers. Or remove the counters in the SLEMS settings: SLEMS then uses its own netted values. Ignore this if your utility meter counts per phase as well."
+    },
+    "import_cost_no_counter": {
+      "title": "Import costs: no energy counter for the grid import",
+      "description": "The sensor **Import costs** is enabled, but no energy counter is chosen at **Grid import energy (counter)** in the SLEMS options. The sensor prices the energy of this counter with your tariff and stays unavailable until then. Select the counter the energy dashboard uses there, or disable the sensor."
+    },
+    "export_compensation_no_counter": {
+      "title": "Feed-in compensation: no energy counter for the grid export",
+      "description": "The sensor **Feed-in compensation** is enabled, but no energy counter is chosen at **Grid export energy (counter)** in the SLEMS options. The sensor prices the energy of this counter with your tariff and stays unavailable until then. Select the counter the energy dashboard uses there, or disable the sensor."
     },
     "profile_unusable": {
       "title": "{name}: profile cannot be used",

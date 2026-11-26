@@ -199,6 +199,7 @@ from .battery_priority import BatteryPriorityDay, night_energy_wh, priority_soc_
 from .battery_support import BatterySupport, SupportBudget, next_refill, support_budget_wh
 from .grid_filter import MAX_HOLD_S, GridPowerFilter
 from .grid_meter import READ_TIMEOUT_S as GRID_READ_TIMEOUT_S, ModbusGridMeter
+from .grid_costs import CostCounter, fixed_per_day
 from .grid_quarters import GridQuarters
 from .ha_modbus import holding_reader
 from .netting import NettingCheck
@@ -256,7 +257,7 @@ from .consumer_targets import (
 )
 from .local_time import HOUR, next_start
 from .night_discharge import NightDischargePlan, plan_night_discharge, pv_takeover
-from .price_chart import hourly_import_prices, period_import_prices
+from .price_chart import hourly_import_prices, period_import_prices, slot_price
 from .grid_charge import MIN_STEP_WH as GRID_CHARGE_STEP_WH
 from .grid_charge import (
     QUARTER,
@@ -313,6 +314,8 @@ MIN_POWER_STRATEGIES = frozenset(
     }
 )
 STORAGE_SAVE_DELAY_S = 600
+# Prices per side and quarter hour kept at most (see SlemsCoordinator._slot_price).
+SLOT_PRICES_KEPT = 2000
 # Protection charge: starts this far below the minimum SoC, charges each battery
 # with this power from the grid until it is back at its minimum. The Venus E 3.0
 # does the same in its own modes (at 11 %), not under remote control.
@@ -357,6 +360,12 @@ BATTERY_PRIORITY_STORE_KEY = "battery_priority"
 # Seconds between two checks whether the battery priority of today is due.
 BATTERY_PRIORITY_CHECK_S = 60.0
 PRICE_SAVINGS_STORE_KEY = "price_savings"
+GRID_COSTS_STORE_KEY = "grid_costs"
+# Sensor key and energy counter setting of the cost sensor of each side (see grid_costs).
+GRID_COST_SENSORS = {
+    Side.IMPORT: ("import_cost", CONF_GRID_IMPORT_ENERGY_ENTITY),
+    Side.EXPORT: ("export_compensation", CONF_GRID_EXPORT_ENERGY_ENTITY),
+}
 PLAN_CHANGES_STORE_KEY = "price_plan_changes"
 VACATION_DAYS_STORE_KEY = "vacation_days"
 OUTDOOR_POWER_STORE_KEY = "outdoor_power"
@@ -980,6 +989,14 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         )
         # Measured saving of the price aware control (see price_savings).
         self.price_savings = PriceSavings()
+        # Running costs of the import and credit of the feed-in (see grid_costs),
+        # and the sides whose enabled cost sensor has no energy counter.
+        self.grid_costs: dict[Side, CostCounter] = {side: CostCounter() for side in Side}
+        self.grid_cost_missing: frozenset[Side] = frozenset()
+        # The current contract (None without one) and its prices per side and
+        # quarter hour, for the market prices of the update they were computed with.
+        self._contract_cache: tuple[Tariff | None] | None = None
+        self._slot_prices: tuple[datetime | None, dict[tuple[Side, int], float | None]] = (None, {})
         # Hourly prices per side (import, feed-in credit): (quarter hour, end, prices update), prices.
         self._import_price_cache: dict[tuple[Side, bool], tuple[tuple, dict]] = {}
         # Power price of the current tariff per day and the month part of the
@@ -1116,6 +1133,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self.morning_gap = MorningGapLearner.from_dict(stored.get(MORNING_GAP_STORE_KEY))
         self.battery_priority_day = BatteryPriorityDay.from_dict(stored.get(BATTERY_PRIORITY_STORE_KEY))
         self.price_savings = PriceSavings.from_dict(stored.get(PRICE_SAVINGS_STORE_KEY))
+        costs = stored.get(GRID_COSTS_STORE_KEY) or {}
+        self.grid_costs = {side: CostCounter.from_dict(costs.get(side.value)) for side in Side}
         self.plan_changes = PlanChanges.from_dict(stored.get(PLAN_CHANGES_STORE_KEY))
         self.vacation_days = VacationDays.from_list(stored.get(VACATION_DAYS_STORE_KEY))
         for subentry_id, data in (stored.get(OUTDOOR_POWER_STORE_KEY) or {}).items():
@@ -1311,6 +1330,8 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         """A tariff was added, changed or removed (no reload needed): forget what
         was computed with the old tariffs."""
         self._import_price_cache.clear()
+        self._contract_cache = None
+        self._slot_prices = (None, {})
         self._power_price_cache = None
         self._peak_month = None
         self._grid_charge_cache.clear()
@@ -1708,6 +1729,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         data[MORNING_GAP_STORE_KEY] = self.morning_gap.as_dict()
         data[BATTERY_PRIORITY_STORE_KEY] = self.battery_priority_day.as_dict()
         data[PRICE_SAVINGS_STORE_KEY] = self.price_savings.as_dict()
+        data[GRID_COSTS_STORE_KEY] = {side.value: counter.as_dict() for side, counter in self.grid_costs.items()}
         data[PLAN_CHANGES_STORE_KEY] = self.plan_changes.as_dict()
         data[VACATION_DAYS_STORE_KEY] = self.vacation_days.as_list()
         data[OUTDOOR_POWER_STORE_KEY] = {
@@ -1878,6 +1900,77 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             self.grid_quarters,
         )
         if len(self.netting.per_phase) != found:
+            self._schedule_save(STORAGE_SAVE_DELAY_S)
+
+    def _contract(self) -> Tariff | None:
+        """The current contract (several current tariffs together), None without one."""
+        if self._contract_cache is None:
+            tariffs = configured_tariffs(self.config_entry)
+            self._contract_cache = (next((tariff for tariff in tariffs.values() if tariff.role is Role.CURRENT), None),)
+        return self._contract_cache[0]
+
+    def _slot_price(self, tariff: Tariff, side: Side, slot: int) -> float | None:
+        """Price of a kWh (export: its credit; ct incl. VAT) in the quarter hour
+        starting at ``slot`` (unix time); None without its market price."""
+        stamp, cache = self._slot_prices
+        if stamp != self.market_prices.last_update or len(cache) > SLOT_PRICES_KEPT:
+            cache = {}
+            self._slot_prices = (self.market_prices.last_update, cache)
+        key = (side, slot)
+        if key not in cache:
+            cache[key] = slot_price(tariff, self.market_prices, dt_util.utc_from_timestamp(slot), side)
+        return cache[key]
+
+    def kwh_price_now(self, side: Side) -> float | None:
+        """What a kWh costs now with the current contract (export: what it
+        earns; ct incl. VAT, without yearly items and the power price); None
+        without per kWh items of that side or without the market price."""
+        tariff = self._contract()
+        if tariff is None or not any(item.side is side and item.unit.per_kwh for item in tariff.items):
+            return None
+        now = int(time.time())
+        return self._slot_price(tariff, side, now - now % 900)
+
+    def grid_cost_ready(self, side: Side) -> bool:
+        """Whether the costs of ``side`` can be counted: a current contract and its energy counter."""
+        return self._contract() is not None and bool(self._config.get(GRID_COST_SENSORS[side][1]))
+
+    def _own_sensor_enabled(self, key: str) -> bool:
+        registry = er.async_get(self.hass)
+        entity_id = registry.async_get_entity_id("sensor", DOMAIN, f"{self.config_entry.entry_id}_{key}")
+        entry = registry.async_get(entity_id) if entity_id else None
+        return entry is not None and not entry.disabled
+
+    def _update_grid_costs(self) -> None:
+        """Add to the costs of each side whose sensor is enabled (see grid_costs)."""
+        tariff = self._contract()
+        now = time.time()
+        missing: set[Side] = set()
+        changed = False
+        for side, (key, setting) in GRID_COST_SENSORS.items():
+            counter = self.grid_costs[side]
+            entity_id = self._config.get(setting)
+            enabled = self._own_sensor_enabled(key)
+            if enabled and not entity_id:
+                missing.add(side)
+            if not enabled or not entity_id or tariff is None:
+                counter.pause()
+                continue
+            before = counter.total
+            state = self.hass.states.get(entity_id)
+            kwh = state_as_kwh(state)
+            if state is not None and kwh is not None:
+                counter.add_energy(
+                    entity_id, kwh, state.last_reported.timestamp(), lambda slot: self._slot_price(tariff, side, slot)
+                )
+            counter.add_fixed(now, lambda day: fixed_per_day(tariff, side, day))
+            if side is Side.IMPORT:
+                peak = self.peak_state(now)
+                month = dt_util.as_local(dt_util.utc_from_timestamp(now)).strftime("%Y-%m")
+                counter.add_peak(month, peak.extra_cost if peak else 0.0)
+            changed |= counter.total != before
+        self.grid_cost_missing = frozenset(missing)
+        if changed:
             self._schedule_save(STORAGE_SAVE_DELAY_S)
 
     @callback
@@ -2081,6 +2174,7 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
         self._check_cap_exceeded(snapshot, now)
         self._observe_phases(snapshot, now)
         self._observe_netting()
+        self._update_grid_costs()
         # Runs after the new data has been stored.
         self.hass.loop.call_soon(self.controller.request)
         self.problems.update(now, snapshot)

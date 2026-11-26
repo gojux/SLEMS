@@ -35,6 +35,7 @@ def coordinator(batteries, unusable_profiles=None) -> SimpleNamespace:
         phase_devices={},
         phase_learners={},
         netting=SimpleNamespace(not_netted=False),
+        grid_cost_missing=frozenset(),
     )
 
 
@@ -237,6 +238,27 @@ def test_phase_and_netting_issues() -> None:
         moved.choose(Phase.L2, manual=False)
         reporter.update(1.0)
     assert (DOMAIN, "phase_changed_venus_l2") not in registry.issues
+
+
+def test_cost_sensor_without_its_energy_counter() -> None:
+    from custom_components.slems.tariff import Side
+
+    state = coordinator([])
+    state.grid_cost_missing = frozenset({Side.EXPORT})
+    registry = FakeIssues(set())
+    reporter = problems.ProblemReporter(None, state)
+    with (
+        patch.object(problems, "ir", registry),
+        patch.object(reporter, "_update_cap_notifications", lambda *_: None),
+    ):
+        reporter.update(0.0)
+        issue = registry.issues[(DOMAIN, "export_compensation_no_counter")]
+        assert issue["translation_key"] == "export_compensation_no_counter" and not issue["is_fixable"]
+        assert (DOMAIN, "import_cost_no_counter") not in registry.issues
+        # The counter is chosen or the sensor disabled: the issue goes.
+        state.grid_cost_missing = frozenset()
+        reporter.update(1.0)
+    assert (DOMAIN, "export_compensation_no_counter") not in registry.issues
 
 
 def test_driver_issues_become_repairs() -> None:

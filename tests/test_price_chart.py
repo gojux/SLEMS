@@ -66,6 +66,25 @@ def test_prices_per_quarter_hour_and_per_hour() -> None:
     assert list(hourly.values()) == pytest.approx([25.0])
 
 
+def test_price_of_a_quarter_hour() -> None:
+    from custom_components.slems.price_chart import slot_price
+
+    tariff = Tariff(
+        "T",
+        Role.CURRENT,
+        (
+            TariffItem("Energy", Side.IMPORT, Group.ENERGY, Unit.SPOT, 2.0),
+            TariffItem("Feed-in", Side.EXPORT, Group.ENERGY, Unit.SPOT, -1.0),
+        ),
+        {(Side.IMPORT, Group.ENERGY): 20.0},
+    )
+    slot = datetime(2026, 11, 3, 18, 15, tzinfo=dt_util.get_default_time_zone())
+    prices = fake_prices({int(slot.timestamp()): 200.0})
+    assert slot_price(tariff, prices, slot) == pytest.approx((20.0 + 2.0) * 1.2)
+    assert slot_price(tariff, prices, slot, Side.EXPORT) == pytest.approx(19.0)
+    assert slot_price(tariff, fake_prices({}), slot) is None
+
+
 def test_estimated_prices_after_the_last_known_one() -> None:
     from datetime import timedelta
 

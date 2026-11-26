@@ -591,6 +591,51 @@ tariff against `play(..., prices=None)` from the start energy. The monthly
 total is kept in the coordinator store (`price_savings`), sensor
 `price_saving`.
 
+### Costs for the energy dashboard
+
+Four sensors of the system device, disabled by default
+(`sensor.KwhPriceSensor`, `sensor.GridCostSensor`), with the current
+contract (the current tariffs together):
+
+- `import_price` / `export_price` (currency per kWh, as the energy dashboard
+  expects a price): `coordinator.kwh_price_now`, the `price_chart.slot_price`
+  of the running quarter hour (incl. VAT, without yearly items and the power
+  price); unknown without per kWh items of the side or without the market
+  price.
+- `import_cost` / `export_compensation` (monetary, state class `total`, as
+  the feed-in total can fall): a `grid_costs.CostCounter` per side, kept in
+  the coordinator store (`grid_costs`).
+
+`coordinator._update_grid_costs` runs every update and looks the two cost
+sensors up in the entity registry: only an enabled one is counted, a
+disabled one pauses its counter (the total stays, the starting points are
+forgotten). A counter adds:
+
+- the energy of the configured energy counter
+  (`grid_import_energy_entity` / `grid_export_energy_entity`): the rise
+  between two reported values (`State.last_reported`), spread evenly over
+  that time and priced per quarter hour. A step back below 90 % of the last
+  value is a reset (new starting point), a smaller one waits until it is
+  made up. Without a price (missing market price) the energy waits up to
+  `MAX_WAIT_S` (2 days), then it is left out (`unpriced_kwh`).
+- the fixed costs by the time passed (`grid_costs.fixed_per_day`, per local
+  day): the yearly items (`tariff.yearly_per_day`, as `compute_bill` does,
+  with percent items and VAT) and, for the import, the power price of the
+  minimum power (`PowerPrice.minimum_cost`) in equal parts over the days of
+  its month.
+- the power price above the minimum (import only): the difference between
+  `PeakState.extra_cost` and what was already added in the month, so every
+  rise of the billed peak in full when it happens.
+
+The stored counter holds the total together with its starting points
+(counter value and time, time of the fixed costs, power price added in the
+month). After a restart the counter therefore goes on from a consistent
+state, even from a store written 10 minutes earlier: nothing is added twice
+or left out.
+
+An enabled cost sensor without its energy counter is unavailable and has a
+repair issue (`import_cost_no_counter`, `export_compensation_no_counter`).
+
 ### Price chart
 
 `price_chart.py` (websocket `slems/price_chart`, `day` today / tomorrow): per
@@ -2969,3 +3014,4 @@ repository (otherwise its *brands* check fails).
 | 2026-11-22 | The battery priority can follow the coming night instead of being suggested from statistics: a fixed threshold is either too low on long winter nights or keeps surplus from the consumers in summer. Computed once at the morning takeover and held, as a threshold moving with every forecast update would hand the surplus back and forth during the day; held as Wh so the simulation can apply its batteries and consumption change. Runs the batteries do not cover (battery support never or automatic) are left out: the automatic ones only get what the batteries can spare, a threshold charging for them would chase its own budget. Off for existing installations, so an update does not change their behaviour; the settings assistant suggests it as a basic rule, except for the goal battery first (fixed 80 %). |
 | 2026-11-24 | Offers for new contracts whose price or discount holds for a limited time get `valid_to`: the end of that time for the latest contract month the price sheet covers (an unchanged sheet of the next month extends it instead of adding a file). A tariff made from it then reports its end, and the file is removed a month after `valid_to` at the earliest. Offers whose price holds without a limit stay, as do running offers with a period from the contract start that do not change monthly. |
 | 2026-11-25 | Four findings of a production debug log (24 November). (1) Towards a target of 0 W the damped battery power below the deadband of 25 W becomes 0 W at once (`allocation.damped_battery_power`): a step within the deadband is not written, so after a protection charge the command went 58 → 29 W and then only with each keep-alive (60 s) on to 14, 7, 4, 2, 1 W, over four minutes at a power that stores nothing; the minimum power does not act on a target of 0 W. (2) "Avoid short runs" bridges a dip of the surplus only while the consumer draws power (`cycling_holds(drawing=…)`, as the release window): a release whose heat pump had finished its run was kept for the bridge of 5 min, counted as saturated after 50 s and, with the source surplus only, let go again at once, six times until the bridge ended. (3) A due probe step starts only while its battery runs, and after `not_running` with the next run instead of an hour later: with three batteries of which mostly one runs, the window of 15 min every 75 min seldom met the battery (one probe stayed open for days), and a waiting probe keeps those of the others from starting. (4) The sensors of the batteries' energy counters keep their value while the device reports up to 0.1 kWh less (`sensor.without_small_dip`): a Venus steps its counters back by 0.01–0.04 kWh, and the recorder then asks the user to report a bug; a larger drop passes as a reset. |
+| 2026-11-26 | Sensors for the costs in the energy dashboard, disabled by default and computed only while enabled. The price sensors hold the per kWh prices only: spreading a base price or the power price over the kWh would need an assumed consumption, and Home Assistant multiplies the price by the real one. Fixed costs are in the total cost sensors, by the time passed (as on a bill, and days stay comparable; a lump sum at the start of the month would not): the yearly items and the power price of the minimum power, which is due in any case. The power price above the minimum is added in full whenever the billed peak rises, so it shows in the hour that caused it and the month is never below what is owed; spreading a rise over the rest of the month would need a new split at every further rise. The totals price the energy of the configured energy counters instead of counting it themselves, so energy and money in the dashboard come from the same source and a time without Home Assistant is added afterwards. An enabled total without its counter gets a repair issue instead of a second way of counting: the dashboard needs a counter for the costs anyway. |

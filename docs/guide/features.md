@@ -193,6 +193,9 @@ Guide: [Dashboard](dashboard.md).
   and feeding in from the batteries.
 - Estimated day-ahead prices until the next day's prices are published
   (profile of the last days, weekends and public holidays).
+- Sensors for the energy dashboard of Home Assistant (disabled by default):
+  the current import and feed-in price per kWh, and running import costs and
+  feed-in compensation including base price and power price.
 
 Guide: [Tariffs and prices](tariffs.md).
 

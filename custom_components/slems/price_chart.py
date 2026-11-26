@@ -39,6 +39,15 @@ def _month_ct(tariff: Tariff, prices: MarketPrices, day: date, end: datetime) ->
     return sum(means.values()) / len(means) / 10 if means else None
 
 
+def slot_price(tariff: Tariff, prices: MarketPrices, slot: datetime, side: Side = Side.IMPORT) -> float | None:
+    """Import price (or with ``side`` export the credit; ct/kWh incl. VAT) of the
+    quarter hour starting at ``slot``; None without its market price."""
+    local = dt_util.as_local(slot)
+    spot = prices.price_at(slot)
+    month_ct = _month_ct(tariff, prices, local.date(), slot + timedelta(seconds=SLOT_S))
+    return kwh_price(tariff, side, local, None if spot is None else spot / 10, month_ct, prices.references)
+
+
 def hourly_import_prices(
     tariff: Tariff, prices: MarketPrices, start: datetime, end: datetime, side: Side = Side.IMPORT
 ) -> dict[datetime, float | None]:

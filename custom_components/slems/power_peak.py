@@ -67,6 +67,11 @@ class PowerPrice:
         net = sum(item.charged_kw(billed_kw) * item.price for item in self.items)
         return net * (1 + self.percent_pct / 100) * (1 + self.vat_pct / 100)
 
+    @property
+    def minimum_cost(self) -> float:
+        """Power price of a month without any import: the minimum power."""
+        return self.cost(self.base.billed_kw(0.0))
+
 
 def power_price(tariff: Tariff | None, day: date) -> PowerPrice | None:
     """The power price of ``tariff`` on ``day``, None without one."""
@@ -177,7 +182,6 @@ def peak_state(price: PowerPrice, quarters: GridQuarters, now: float) -> PeakSta
     billed = price.billed_kw(powers)
     peak = max(powers.items(), key=lambda entry: entry[1], default=(None, 0.0))
     cost = price.cost(billed)
-    minimum = price.base.billed_kw(0.0)
     return PeakState(
         billed_kw=billed,
         measured_kw=peak[1],
@@ -185,7 +189,7 @@ def peak_state(price: PowerPrice, quarters: GridQuarters, now: float) -> PeakSta
         min_kw=price.base.min_kw or 0.0,
         free_kw=free_kw(price, powers, interval_start),
         cost=cost,
-        extra_cost=max(0.0, cost - price.cost(minimum)),
+        extra_cost=max(0.0, cost - price.minimum_cost),
         interval_start=interval_start,
         interval_s=interval_s,
         counted=price.counts(interval_start),

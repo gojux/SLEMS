@@ -30,7 +30,7 @@ from homeassistant.util import dt as dt_util
 from .currency import currency_code, symbols
 from .display_hold import STRATEGY_HOLD_S, DisplayHold
 from .const import CONF_PV_FORECAST_ENTRIES, CONF_WEATHER_ENTITY, FEED_IN_CAP_MIN_BUFFER_PCT
-from .coordinator import SlemsConfigEntry, SlemsCoordinator, SystemSnapshot
+from .coordinator import GRID_COST_SENSORS, SlemsConfigEntry, SlemsCoordinator, SystemSnapshot
 from .drivers import BatteryTelemetry
 from .allocation import Strategy
 from .battery_distribution import LossModel
@@ -46,7 +46,7 @@ from .grid_friendly import correction_weight
 from .learning import CONSUMPTION_MIN_DAYS, MORNING_MIN_DAYS, PV_MIN_DAYS, TARGET_MIN_SAMPLES
 from .problems import CAP_EXCEEDED_AFTER_S
 from .pv_forecast import energy_on_day
-from .tariff import Role
+from .tariff import Role, Side
 from .tariff_comparison import configured_tariffs
 from .trial import TrialStatus
 
@@ -884,6 +884,13 @@ async def async_setup_entry(
         for key, day_offset in (("consumption_forecast_today", 0), ("consumption_forecast_tomorrow", 1))
     )
     async_add_entities([MarketPriceSensor(coordinator), PriceSavingSensor(coordinator)])
+    async_add_entities(
+        [
+            KwhPriceSensor(coordinator, "import_price", Side.IMPORT),
+            KwhPriceSensor(coordinator, "export_price", Side.EXPORT),
+            *(GridCostSensor(coordinator, side) for side in GRID_COST_SENSORS),
+        ]
+    )
     for battery in coordinator.batteries:
         extra_keys = battery.driver.extra_telemetry_keys
         descriptions = BATTERY_SENSORS + tuple(
@@ -1480,6 +1487,63 @@ class PriceSavingSensor(SlemsSystemEntity, SensorEntity):
             "last_run": savings.last,
             "pending_runs": len(savings.pending),
         }
+
+
+class KwhPriceSensor(SlemsSystemEntity, SensorEntity):
+    """What a kWh costs now with the current contract (export: what it earns),
+    for the energy dashboard ("entity with the current price"): incl. VAT,
+    without yearly items and the power price."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 4
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, coordinator: SlemsCoordinator, key: str, side: Side) -> None:
+        super().__init__(coordinator, key)
+        self._side = side
+        self._attr_icon = "mdi:cash-minus" if side is Side.IMPORT else "mdi:cash-plus"
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        """The Home Assistant currency per kWh (the energy dashboard expects whole units)."""
+        return f"{currency_code(self.coordinator.hass)}/kWh"
+
+    @property
+    def native_value(self) -> float | None:
+        price = self.coordinator.kwh_price_now(self._side)
+        return None if price is None else round(price / 100, 5)
+
+
+class GridCostSensor(SlemsSystemEntity, SensorEntity):
+    """Running costs of the grid import or credit of the feed-in (see grid_costs),
+    for the energy dashboard ("entity tracking the total costs")."""
+
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_suggested_display_precision = 2
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, coordinator: SlemsCoordinator, side: Side) -> None:
+        super().__init__(coordinator, GRID_COST_SENSORS[side][0])
+        self._side = side
+        self._attr_icon = "mdi:cash-minus" if side is Side.IMPORT else "mdi:cash-plus"
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        """The Home Assistant currency (the tariffs are in it)."""
+        return currency_code(self.coordinator.hass)
+
+    @property
+    def available(self) -> bool:
+        return super().available and self.coordinator.grid_cost_ready(self._side)
+
+    @property
+    def native_value(self) -> float:
+        return round(self.coordinator.grid_costs[self._side].total, 4)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"unpriced_kwh": round(self.coordinator.grid_costs[self._side].unpriced_kwh, 3)}
 
 
 class ConsumptionForecastSensor(SlemsSystemEntity, SensorEntity):
