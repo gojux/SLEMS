@@ -15,7 +15,11 @@ side adds up, with the current tariff:
   per day as on a bill, and the power price of the minimum power, which is
   due in any case, in equal parts over the days of its month,
 * the power price above the minimum whenever the billed peak of the month
-  rises (import only), in full when it happens.
+  rises (import only), in full once the interval that raised it is over;
+  for the last interval of a month that is the start of the next month.
+
+Times are unix times; quarter hours, days and months are the local ones
+(a local day has 23 to 25 hours, each with the same share of its fixed costs).
 
 A counter only follows while its sensor is enabled; ``pause`` forgets where
 it stood, so nothing is added for the time in between and the total goes on
@@ -37,7 +41,8 @@ from typing import Any
 
 from homeassistant.util import dt as dt_util
 
-from .power_peak import power_price
+from .grid_quarters import GridQuarters
+from .power_peak import month_extra_cost, power_price
 from .tariff import Side, Tariff, yearly_per_day
 
 SLOT_S = 900
@@ -55,6 +60,15 @@ def fixed_per_day(tariff: Tariff, side: Side, day: date) -> float:
     if side is Side.IMPORT and (price := power_price(tariff, day)) is not None:
         amount += price.minimum_cost / monthrange(day.year, day.month)[1]
     return amount
+
+
+def ended_month_extra(tariff: Tariff, quarters: GridQuarters, month: str) -> float:
+    """Power price above the minimum (€) of the whole month ``month`` ("YYYY-MM")
+    with the tariff of its last day; 0 without a power price."""
+    year, number = (int(part) for part in month.split("-"))
+    last = date(year, number, monthrange(year, number)[1])
+    price = power_price(tariff, last)
+    return 0.0 if price is None else month_extra_cost(price, quarters, last)
 
 
 def spread_cost(kwh: float, start: float, end: float, price: Callable[[int], float | None]) -> float | None:
@@ -130,13 +144,23 @@ class CostCounter:
             self.total += per_day(day) * (until - start) / (day_end - day_start)
             start = until
 
-    def add_peak(self, month: str, cost: float) -> None:
-        """The power price above the minimum of ``month`` as billed so far (€)."""
+    def add_peak(self, month: str, cost: float, ended: Callable[[str], float] | None = None) -> None:
+        """The power price above the minimum of ``month`` as billed so far (€).
+
+        ``ended``: that amount of a whole month that is over. The last interval
+        of a month only ends when the next one starts, so a peak in it is
+        added then.
+        """
         if self.peak_month is None:
             self.peak_month, self.peak_added = month, cost
             return
         if month != self.peak_month:
+            if ended is not None:
+                self._raise_peak(ended(self.peak_month))
             self.peak_month, self.peak_added = month, 0.0
+        self._raise_peak(cost)
+
+    def _raise_peak(self, cost: float) -> None:
         if cost > self.peak_added:
             self.total += cost - self.peak_added
             self.peak_added = cost

@@ -625,7 +625,18 @@ forgotten). A counter adds:
   its month.
 - the power price above the minimum (import only): the difference between
   `PeakState.extra_cost` and what was already added in the month, so every
-  rise of the billed peak in full when it happens.
+  rise of the billed peak in full once its interval is over (the cycle after
+  its end, so the amount is in the statistics hour that follows a full
+  hour). The last interval of a month ends when the next month starts: at
+  the change `grid_costs.ended_month_extra` gives the amount of the whole
+  month that ended (`power_peak.month_extra_cost`), and what is missing is
+  added before the new month starts at 0.
+
+All times of a counter are unix times. Quarter hours are the unix ones
+(market prices and `GridQuarters` use the same); the price of one is that of
+its local time (`price_chart.slot_price`), so the hour repeated in autumn
+has two runs with their own market prices. Days and months are local: a day
+of 23 or 25 hours gets the same fixed costs as any other.
 
 The stored counter holds the total together with its starting points
 (counter value and time, time of the fixed costs, power price added in the

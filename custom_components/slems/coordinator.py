@@ -199,7 +199,7 @@ from .battery_priority import BatteryPriorityDay, night_energy_wh, priority_soc_
 from .battery_support import BatterySupport, SupportBudget, next_refill, support_budget_wh
 from .grid_filter import MAX_HOLD_S, GridPowerFilter
 from .grid_meter import READ_TIMEOUT_S as GRID_READ_TIMEOUT_S, ModbusGridMeter
-from .grid_costs import CostCounter, fixed_per_day
+from .grid_costs import CostCounter, ended_month_extra, fixed_per_day
 from .grid_quarters import GridQuarters
 from .ha_modbus import holding_reader
 from .netting import NettingCheck
@@ -1967,7 +1967,11 @@ class SlemsCoordinator(DataUpdateCoordinator[SystemSnapshot]):
             if side is Side.IMPORT:
                 peak = self.peak_state(now)
                 month = dt_util.as_local(dt_util.utc_from_timestamp(now)).strftime("%Y-%m")
-                counter.add_peak(month, peak.extra_cost if peak else 0.0)
+                counter.add_peak(
+                    month,
+                    peak.extra_cost if peak else 0.0,
+                    lambda ended: ended_month_extra(tariff, self.grid_quarters, ended),
+                )
             changed |= counter.total != before
         self.grid_cost_missing = frozenset(missing)
         if changed:

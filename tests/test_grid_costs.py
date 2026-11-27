@@ -8,7 +8,15 @@ import pytest
 from homeassistant.util import dt as dt_util
 
 from custom_components.slems.const import CONF_GRID_IMPORT_ENERGY_ENTITY
-from custom_components.slems.grid_costs import MAX_WAIT_S, CostCounter, fixed_per_day, spread_cost
+from custom_components.slems.grid_costs import (
+    MAX_WAIT_S,
+    CostCounter,
+    ended_month_extra,
+    fixed_per_day,
+    spread_cost,
+)
+from custom_components.slems.grid_quarters import SLOT_S, GridQuarters
+from custom_components.slems.power_peak import peak_state, power_price
 from custom_components.slems.tariff import Group, Role, Side, Tariff, TariffItem, Unit
 
 
@@ -30,6 +38,23 @@ def test_energy_is_priced_per_quarter_hour() -> None:
     # 1 kWh over 18:10 to 18:20: half of it in each quarter hour.
     assert spread_cost(1.0, ts(3, 18, 10), ts(3, 18, 20), prices.get) == pytest.approx(0.30)
     assert spread_cost(1.0, ts(3, 18, 10), ts(3, 18, 40), prices.get) is None
+
+
+def test_the_hour_repeated_in_autumn_has_its_own_quarter_hours() -> None:
+    zone = dt_util.get_default_time_zone()
+    # 25 October 2026, 02:00 summer time until 03:00 winter time: two hours.
+    start = datetime(2026, 10, 25, 2, 0, tzinfo=zone, fold=0).timestamp()
+    end = datetime(2026, 10, 25, 3, 0, tzinfo=zone).timestamp()
+    assert end - start == 7200
+    seen: list[int] = []
+
+    def price(slot: int) -> float:
+        seen.append(slot)
+        return 10.0 if len(seen) <= 4 else 30.0
+
+    # 2 kWh evenly: 1 kWh in the first run of the hour, 1 kWh in the second.
+    assert spread_cost(2.0, start, end, price) == pytest.approx(0.10 + 0.30)
+    assert len(set(seen)) == 8
 
 
 def test_counter_follows_the_reported_values() -> None:
@@ -113,6 +138,28 @@ def test_power_price_above_the_minimum_is_added_when_the_peak_rises() -> None:
     counter.add_peak("2026-12", 0.0)
     counter.add_peak("2026-12", 0.8)
     assert counter.total == pytest.approx(3.6 + 0.8)
+    # The last interval of a month ends with it: its rise is added with the new month.
+    counter.add_peak("2027-01", 0.0, {"2026-12": 1.5}.__getitem__)
+    assert counter.total == pytest.approx(3.6 + 1.5) and counter.peak_added == 0.0
+
+
+def test_peak_in_the_last_interval_of_a_month() -> None:
+    tariff = Tariff(
+        "Grid",
+        Role.CURRENT,
+        (TariffItem("Power", Side.IMPORT, Group.GRID, Unit.KW_MONTH, 3.0, min_kw=2.0),),
+        {(Side.IMPORT, Group.GRID): 20.0},
+    )
+    grid = GridQuarters()
+    for slot in range(int(ts(1, 0)), int(ts(1, 0, month=12)), SLOT_S):
+        grid.covered[slot] = SLOT_S
+    # 23:45 to 24:00 on 30 November: 1250 Wh in the quarter hour are 5 kW.
+    grid.imported[int(ts(30, 23, 45))] = 1250.0
+    assert ended_month_extra(tariff, grid, "2026-11") == pytest.approx((5.0 - 2.0) * 3.0 * 1.2)
+    # While the month runs the interval is not over yet.
+    price = power_price(tariff, date(2026, 11, 30))
+    assert peak_state(price, grid, ts(30, 23, 59)).extra_cost == 0.0
+    assert ended_month_extra(Tariff("Fix", Role.CURRENT, (), {}), grid, "2026-11") == 0.0
 
 
 def test_pause_keeps_the_total_and_round_trip() -> None:

@@ -21,7 +21,7 @@ the time window of the power price does not count: it has no budget.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import math
 
 from homeassistant.util import dt as dt_util
@@ -143,9 +143,23 @@ def month_powers(quarters: GridQuarters, now: float, interval_s: int) -> dict[da
     """Mean import power (kW) of the finished, recorded intervals of the local month of ``now``."""
     local = dt_util.as_local(dt_util.utc_from_timestamp(now))
     first = int(local.replace(day=1, hour=0, minute=0, second=0, microsecond=0).timestamp())
-    running = int(now - now % interval_s)
+    return _recorded_powers(quarters, first, int(now - now % interval_s), interval_s)
+
+
+def month_extra_cost(price: PowerPrice, quarters: GridQuarters, month: date) -> float:
+    """Power price above the minimum of the whole local month of ``month``, with
+    all its recorded intervals (its last one ends when the next month starts)."""
+    first = dt_util.start_of_local_day(month.replace(day=1))
+    following = dt_util.start_of_local_day((month.replace(day=28) + timedelta(days=4)).replace(day=1))
+    powers = _recorded_powers(quarters, int(first.timestamp()), int(following.timestamp()), price.interval_s)
+    billed = price.billed_kw({start: power for start, power in powers.items() if price.counts(start)})
+    return max(0.0, price.cost(billed) - price.minimum_cost)
+
+
+def _recorded_powers(quarters: GridQuarters, first: int, end: int, interval_s: int) -> dict[datetime, float]:
+    """Mean import power (kW) of the recorded intervals from ``first`` until ``end`` (unix time)."""
     powers: dict[datetime, float] = {}
-    for start in range(first, running, interval_s):
+    for start in range(first, end, interval_s):
         slots = range(start, start + interval_s, SLOT_S)
         if not all(quarters.complete(slot) for slot in slots):
             continue
