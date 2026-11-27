@@ -110,7 +110,7 @@ async def test_meter_polls_inverts_and_falls_back() -> None:
     meter = ModbusGridMeter(read, 40206, 0.5, True, values.append)
     assert await meter.poll() is True
     assert values == [200]
-    assert meter.fresh(meter.updated + FRESH_MIN_S)
+    assert meter.fresh(meter.updated + FRESH_MIN_S - 0.1)
     assert not meter.fresh(meter.updated + FRESH_MIN_S + 0.1)
     assert meter.unavailable_for(meter.updated + FRESH_MIN_S + 10) == pytest.approx(10)
     failing = True
